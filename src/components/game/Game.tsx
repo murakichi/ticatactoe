@@ -653,6 +653,7 @@ export const Game = (props: GameProps) => {
     const [circleUseAssault, setCircleUseAssault] = useState<number>(0);
     const onClickTotalAssault = () => {
         addLog('「全軍突撃」を使用（3ターンの間ターン終了時にトークン設置）');
+        playEffect('assault');
         if (heartTurn) {
             setHeartUseAssault(3);
             setHeartMagic(heartMagic - totalAssaultCost);
@@ -749,6 +750,7 @@ export const Game = (props: GameProps) => {
 
     const onClickToggleYingYang = () => {
         addLog('「陰陽転化」を使用（陰陽モードを切替）');
+        playEffect('yinyang');
         if (heartTurn) {
             if (heartYinYangMode === 'yang') {
                 setHeartYingYangMode('ying');
@@ -817,7 +819,7 @@ export const Game = (props: GameProps) => {
         spendMagic(yingYangSkllCost, false);
         addCorpses(destroyed);
         flashCells(affected);
-        playEffect(currentYinYangMode === 'yang' ? 'auraGreen' : 'auraRed');
+        playEffect(currentYinYangMode === 'yang' ? 'harvest' : 'famine');
         setCurrentBoard(board);
     };
 
@@ -849,6 +851,7 @@ export const Game = (props: GameProps) => {
             board[idx] = { player: currentTurnPlayer, bind: necromancyReviveLife, effects: [] };
         }
         setCurrentBoard(board);
+        playEffect('necromancy');
         addLog(`「蘇生」を使用（墓地から${summonCount}体召喚 / ${necromancyDuration}ターン吸収）`);
         if (heartTurn) {
             setHeartMagic(heartMagic - currentHeartNecroCost);
@@ -1094,7 +1097,7 @@ export const Game = (props: GameProps) => {
                 {playerPanel('💙')}
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={heartTurn ? '💙' : '⭕'} life={life} />
-                    <div className={styles.boardArea}>
+                    <div className={`${styles.boardArea}${boardEffect?.type === 'stomp' ? ` ${styles.shake}` : ''}`}>
                         <Board
                             squares={currentBoard}
                             onPlay={onCellClick}

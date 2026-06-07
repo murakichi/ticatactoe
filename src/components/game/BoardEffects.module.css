@@ -197,3 +197,154 @@
         transform: scale(1);
     }
 }
+
+/* --- 全軍突撃: 各所への着弾 + 突撃旗 --- */
+.impact {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border-radius: 50%;
+    border: 3px solid var(--color-accent);
+    box-shadow: 0 0 16px 5px var(--color-accent-glow);
+    opacity: 0;
+    animation: impactPop 460ms var(--ease) forwards;
+}
+
+@keyframes impactPop {
+    0% {
+        transform: scale(0.2);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+
+.bannerCharge {
+    position: absolute;
+    left: 50%;
+    bottom: 8%;
+    transform: translateX(-50%);
+    font-size: 46px;
+    animation: chargeIn 560ms var(--ease);
+}
+
+@keyframes chargeIn {
+    0% {
+        transform: translate(-180%, 0) rotate(-20deg);
+        opacity: 0;
+    }
+    45% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, 0) rotate(0);
+        opacity: 0;
+    }
+}
+
+/* --- 蘇生: 闇のオーラ + 立ち昇る魂 --- */
+.necroGlow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 95%, rgba(95, 208, 106, 0.5), rgba(150, 80, 220, 0.4) 45%, transparent 75%);
+    animation: hazeOut 800ms var(--ease);
+    opacity: 0;
+}
+
+.necroSigil {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 64px;
+    animation: sigilPulse 800ms var(--ease);
+    opacity: 0;
+    filter: drop-shadow(0 0 10px rgba(150, 80, 220, 0.9));
+}
+
+@keyframes sigilPulse {
+    0% {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 0;
+    }
+    40% {
+        transform: translate(-50%, -50%) scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+}
+
+/* --- 陰陽転化: 回転する太極図 --- */
+.yinyang {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 92px;
+    animation: yyspin 700ms var(--ease);
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.7));
+}
+
+@keyframes yyspin {
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(0.3);
+        opacity: 0;
+    }
+    40% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(360deg) scale(1.15);
+        opacity: 0;
+    }
+}
+
+/* --- 上昇 / 落下パーティクル --- */
+.particle {
+    position: absolute;
+    font-size: 22px;
+    opacity: 0;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.rise {
+    animation: riseUp 820ms var(--ease) forwards;
+}
+
+.fall {
+    animation: fallDown 820ms var(--ease) forwards;
+}
+
+@keyframes riseUp {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.6);
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-130px) scale(1.1);
+    }
+}
+
+@keyframes fallDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.6);
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(130px) scale(1.1);
+    }
+}
