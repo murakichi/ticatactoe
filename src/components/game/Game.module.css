@@ -21,6 +21,10 @@
     gap: var(--space-3);
 }
 
+.boardArea {
+    position: relative;
+}
+
 /* ===== プレイヤーパネル ===== */
 .panel {
     width: 150px;

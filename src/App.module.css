@@ -1,0 +1,153 @@
+.prep {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-6) var(--space-4);
+}
+
+.title {
+    font-size: 30px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(120deg, var(--color-heart), #8e7bff 50%, var(--color-circle));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.subtitle {
+    color: var(--color-text-dim);
+    margin-top: -12px;
+    font-size: 13px;
+}
+
+.players {
+    display: flex;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.playerCard {
+    width: 380px;
+    max-width: 90vw;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-top-width: 3px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-1);
+}
+
+.playerCardHeart {
+    border-top-color: var(--color-heart);
+}
+
+.playerCardCircle {
+    border-top-color: var(--color-circle);
+}
+
+.playerHead {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: var(--space-3);
+}
+
+.seg {
+    display: inline-flex;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+    margin-bottom: var(--space-3);
+}
+
+.segBtn {
+    padding: 6px 18px;
+    background: transparent;
+    color: var(--color-text-dim);
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.segBtnActive {
+    background: var(--color-surface-3);
+    color: var(--color-text);
+}
+
+.charGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+}
+
+.charCard {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
+        background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.charCard:hover {
+    transform: translateY(-1px);
+    border-color: var(--color-border-strong);
+}
+
+.charCardActive {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent), 0 0 16px var(--color-accent-glow);
+    background: var(--color-surface-3);
+}
+
+.charIcon {
+    font-size: 22px;
+    line-height: 1.2;
+}
+
+.charName {
+    display: block;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.charDesc {
+    display: block;
+    font-size: 11px;
+    color: var(--color-text-dim);
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.start {
+    margin-top: var(--space-3);
+    padding: 14px 52px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(135deg, var(--color-heart), #6c5cff 60%, var(--color-circle));
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 10px 28px rgba(108, 92, 255, 0.5);
+    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.start:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 14px 34px rgba(108, 92, 255, 0.6);
+}

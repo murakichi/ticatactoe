@@ -6,6 +6,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, calculateLife } from '../../util';
 import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
 import { Board } from './Board';
+import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange } from './boardGeometry';
 import { skillCosts } from './skillCosts';
@@ -44,6 +45,12 @@ export const Game = (props: GameProps) => {
     const [highlightedCells, setHighlightedCells] = useState<number[]>([]);
     // ホバー時に破壊範囲をレモン色でプレビューするためのインデックス
     const [previewCells, setPreviewCells] = useState<number[]>([]);
+    // スキル発動時の盤面エフェクト
+    const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
+    const playEffect = (type: SkillEffectType, index?: number) => {
+        setBoardEffect((prev) => ({ type, index, nonce: (prev?.nonce ?? 0) + 1 }));
+        setTimeout(() => setBoardEffect(null), 850);
+    };
     const flashCells = (indexes: number[]) => {
         // スキル実行時はホバープレビューを消して破壊演出に切り替える
         setPreviewCells([]);
@@ -521,6 +528,7 @@ export const Game = (props: GameProps) => {
             }
         });
         flashCells(affected);
+        playEffect('opium');
         setCurrentBoard(board);
         spendMagic(calculateCost(skillCosts.onClickOpium));
         setCurrentTurn(currentTurn + 1);
@@ -537,6 +545,7 @@ export const Game = (props: GameProps) => {
             }
         }
         flashCells(affected);
+        playEffect('slash');
         setCurrentBoard(board);
         spendMagic(calculateCost(skillCosts.onClickSlash));
     };
@@ -552,6 +561,7 @@ export const Game = (props: GameProps) => {
             }
         }
         flashCells(affected);
+        playEffect('backslash');
         setCurrentBoard(board);
         spendMagic(calculateCost(skillCosts.onClickBackSlash));
     };
@@ -620,6 +630,7 @@ export const Game = (props: GameProps) => {
         addLog('「チューチュートレイン」を使用（相手のマジックを0に・ターン終了）');
         if (heartTurn) setCircleMagic(0);
         else setHeartMagic(0);
+        playEffect('tsunami');
         spendMagic(calculateCost(skillCosts.onClickTsunami));
         setCurrentTurn(currentTurn + 1);
     };
@@ -633,6 +644,7 @@ export const Game = (props: GameProps) => {
             }
         }
         setCurrentBoard(board);
+        playEffect('auraGreen');
         spendMagic(calculateCost(skillCosts.onClickWalpurgisNight));
     };
 
@@ -677,6 +689,7 @@ export const Game = (props: GameProps) => {
         }
         addLog(`${posName(i)}を中心にストンプを実行`);
         flashCells(stompIndexes);
+        playEffect('stomp', i);
         setCurrentBoard(currentBoard);
         setUseStomp(false);
     };
@@ -728,6 +741,7 @@ export const Game = (props: GameProps) => {
         board[i] = { player: currentTurnPlayer, bind: 2, effects: [{ effect: '🌱' }] };
         addLog(`${posName(i)}を中心に審判の日を実行`);
         flashCells(judgeIndexes);
+        playEffect('judge');
         setCurrentBoard(board);
         setUseJudgeDay(false);
         setCurrentTurn(currentTurn + 1);
@@ -803,6 +817,7 @@ export const Game = (props: GameProps) => {
         spendMagic(yingYangSkllCost, false);
         addCorpses(destroyed);
         flashCells(affected);
+        playEffect(currentYinYangMode === 'yang' ? 'auraGreen' : 'auraRed');
         setCurrentBoard(board);
     };
 
@@ -1017,6 +1032,7 @@ export const Game = (props: GameProps) => {
         setStepRequest(0);
         setRestartCount((c) => c + 1);
         setPreviewCells([]);
+        setBoardEffect(null);
         setHeartLockedSkills([]);
         setCircleLockedSkills([]);
     };
@@ -1078,14 +1094,17 @@ export const Game = (props: GameProps) => {
                 {playerPanel('💙')}
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={heartTurn ? '💙' : '⭕'} life={life} />
-                    <Board
-                        squares={currentBoard}
-                        onPlay={onCellClick}
-                        destroyCells={highlightedCells}
-                        previewCells={previewCells}
-                        onCellHover={onCellHover}
-                        onCellLeave={onCellLeave}
-                    />
+                    <div className={styles.boardArea}>
+                        <Board
+                            squares={currentBoard}
+                            onPlay={onCellClick}
+                            destroyCells={highlightedCells}
+                            previewCells={previewCells}
+                            onCellHover={onCellHover}
+                            onCellLeave={onCellLeave}
+                        />
+                        <BoardEffects effect={boardEffect} />
+                    </div>
                     <div className={styles.controls}>
                         <button className={styles.btn} onClick={onClickRestart}>
                             リスタート
