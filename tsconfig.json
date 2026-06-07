@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "jsx": "react",
+        "module": "ES2022",
+        "noImplicitAny": true,
+        "noEmitOnError": true,
+        "sourceMap": true,
+        "target": "ES5",
+        "lib": ["ES2022", "DOM"],
+        "typeRoots": ["./node_modules/@types"],
+        "strict": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "allowJs": true,
+        "outDir": "",
+        "noFallthroughCasesInSwitch": true
+    },
+    "compileOnSave": true,
+    "include": ["src/**/*"]
+}
