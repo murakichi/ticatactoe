@@ -262,7 +262,7 @@ function advanceTurn(s) {
     if (s.heartTurn && s.heartChar === 'necromancer' && s.remainHeartNecro > 0) s.remainHeartNecro--;
     if (!s.heartTurn && s.circleChar === 'necromancer' && s.remainCircleNecro > 0) s.remainCircleNecro--;
     const nextIsHeart = judgeNextIsHeart(s);
-    const magicCharacter = ['magician', 'giant'];
+    const magicCharacter = ['magician'];
     if (nextIsHeart) {
         let nextMagic = s.heartMagic + 1 + budsCount(s.board, HEART);
         if (magicCharacter.includes(s.heartChar)) nextMagic++;

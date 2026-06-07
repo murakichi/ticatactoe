@@ -1086,7 +1086,7 @@ export const Game = (props: GameProps) => {
                 <div className='game-board' style={{ display: 'inline-block', alignItems: 'center' }}>
                     <Status winner={winner} nextPlayer={heartTurn ? '💙' : '⭕'} statusText={`,Life:${life}`} />
                     <Board
-                        squaresInfo={currentBoard.map((x) => `${x.player ?? ''}${x.bind}\n${x.effects.map((effect) => effect.effect).join('')}`)}
+                        squares={currentBoard}
                         onPlay={onCellClick}
                         destroyCells={highlightedCells}
                         previewCells={previewCells}
