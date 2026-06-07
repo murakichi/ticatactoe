@@ -10,6 +10,7 @@ import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange } from './boardGeometry';
 import { skillCosts } from './skillCosts';
 import { Status } from './Status';
+import styles from './Game.module.css';
 
 type GameProps = {
     heartSelectedCharacter: CharacterId;
@@ -235,7 +236,9 @@ export const Game = (props: GameProps) => {
         }
         const nextIsHeart = judgeNextIsHeart();
         let nextLife: number;
-        const magicCharacter: CharacterId[] = ['magician', 'giant'];
+        // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
+        // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
+        const magicCharacter: CharacterId[] = ['magician'];
         if (nextIsHeart) {
             let nextMagic: number = heartMagic + 1 + budsCount('💙');
             if (magicCharacter.includes(props.heartSelectedCharacter)) {
@@ -916,46 +919,36 @@ export const Game = (props: GameProps) => {
         return labels;
     };
 
-    const effectBadgeStyle: React.CSSProperties = {
-        display: 'inline-block',
-        marginLeft: '6px',
-        padding: '1px 6px',
-        fontSize: '12px',
-        borderRadius: '8px',
-        background: '#ffe9a8',
-        color: '#000',
-    };
-
     // 盤面の両サイドに表示するプレイヤー情報パネル
     const playerPanel = (player: Player) => {
         const isHeart = player === '💙';
         const character = isHeart ? props.heartSelectedCharacter : props.circleSelectedCharacter;
         const isAI = isHeart ? props.heartIsAI : props.circleIsAI;
         const magic = isHeart ? heartMagic : circleMagic;
+        const wins = isHeart ? heartWins : circleWins;
         const isCurrent = currentTurnPlayer === player && !winner;
+        const effects = continuousEffects(player);
         return (
-            <div
-                style={{
-                    width: '130px',
-                    padding: '8px',
-                    boxSizing: 'border-box',
-                    border: isCurrent ? '2px solid #ffb300' : '2px solid transparent',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                }}
-            >
-                <div style={{ fontSize: '22px' }}>{player}</div>
-                <div style={{ fontWeight: 'bold' }}>{CHARACTER_NAMES[character]}</div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>{isAI ? 'AI' : '人間'}</div>
-                <div style={{ marginTop: '6px' }}>勝利数: {isHeart ? heartWins : circleWins}</div>
-                <div style={{ marginTop: '6px' }}>マジック: {magic}</div>
-                <div style={{ marginTop: '6px' }}>
-                    {continuousEffects(player).map((label) => (
-                        <span key={label} style={{ ...effectBadgeStyle, marginLeft: 0, marginTop: '4px' }}>
-                            {label}
-                        </span>
-                    ))}
+            <div className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}>
+                <div className={`${styles.avatar} ${isHeart ? styles.avatarHeart : styles.avatarCircle}`}>{player}</div>
+                <div className={styles.name}>{CHARACTER_NAMES[character]}</div>
+                <div className={styles.tags}>
+                    <span className={styles.tag}>{isAI ? 'AI' : '人間'}</span>
+                    {isCurrent && <span className={styles.turnBadge}>手番</span>}
                 </div>
+                <div className={styles.stats}>
+                    <span className={styles.chip}>🏆 {wins}</span>
+                    <span className={`${styles.chip} ${styles.chipMagic}`}>⚡ {magic}</span>
+                </div>
+                {effects.length > 0 && (
+                    <div className={styles.effects}>
+                        {effects.map((label) => (
+                            <span key={label} className={styles.effectBadge}>
+                                {label}
+                            </span>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     };
@@ -1080,11 +1073,11 @@ export const Game = (props: GameProps) => {
     ];
 
     return (
-        <div className='game'>
-            <div className='game-main' style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '8px' }}>
+        <div className={styles.game}>
+            <div className={styles.main}>
                 {playerPanel('💙')}
-                <div className='game-board' style={{ display: 'inline-block', alignItems: 'center' }}>
-                    <Status winner={winner} nextPlayer={heartTurn ? '💙' : '⭕'} statusText={`,Life:${life}`} />
+                <div className={styles.boardWrap}>
+                    <Status winner={winner} nextPlayer={heartTurn ? '💙' : '⭕'} life={life} />
                     <Board
                         squares={currentBoard}
                         onPlay={onCellClick}
@@ -1093,66 +1086,54 @@ export const Game = (props: GameProps) => {
                         onCellHover={onCellHover}
                         onCellLeave={onCellLeave}
                     />
+                    <div className={styles.controls}>
+                        <button className={styles.btn} onClick={onClickRestart}>
+                            リスタート
+                        </button>
+                        {isBothAI && (
+                            <>
+                                <label className={styles.check}>
+                                    <input type='checkbox' checked={autoPlay} onChange={(e) => setAutoPlay(e.target.checked)} />
+                                    自動進行
+                                </label>
+                                <button
+                                    className={styles.btn}
+                                    onClick={() => setStepRequest((c) => c + 1)}
+                                    disabled={autoPlay || !!winner || pendingAIMove !== null}
+                                >
+                                    次の手番
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
                 {playerPanel('⭕')}
-            </div>
-            <div
-                className='game-log'
-                style={{ position: 'fixed', top: '12px', right: '12px', width: '260px', textAlign: 'left', zIndex: 10 }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: '#000' }}>
-                    <span style={{ fontWeight: 'bold' }}>操作ログ</span>
-                    <button onClick={onClickCopyLog} disabled={gameLog.length === 0}>
-                        {copied ? 'コピーしました' : 'コピー'}
-                    </button>
-                    <button onClick={onClickDownloadLog} disabled={gameLog.length === 0}>
-                        ダウンロード
-                    </button>
-                </div>
-                <div
-                    style={{
-                        height: '168px',
-                        overflowY: 'auto',
-                        border: '1px solid #ccc',
-                        padding: '4px 8px',
-                        fontSize: '13px',
-                        background: '#fafafa',
-                        color: '#000',
-                        boxSizing: 'border-box',
-                        wordBreak: 'break-word',
-                    }}
-                >
-                    {gameLog.length === 0 ? (
-                        <div style={{ color: '#999' }}>まだ操作はありません</div>
-                    ) : (
-                        [...gameLog].reverse().map((entry, idx) => (
-                            <div key={gameLog.length - idx} style={{ borderBottom: '1px solid #eee', padding: '2px 0' }}>
-                                {entry}
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-            <div>
-                <button onClick={onClickRestart}>Restart</button>
-                {isBothAI && (
-                    <span style={{ marginLeft: '12px' }}>
-                        <label style={{ marginRight: '8px' }}>
-                            <input type='checkbox' checked={autoPlay} onChange={(e) => setAutoPlay(e.target.checked)} />
-                            自動進行
-                        </label>
-                        <button
-                            onClick={() => setStepRequest((c) => c + 1)}
-                            disabled={autoPlay || !!winner || pendingAIMove !== null}
-                        >
-                            次の手番
+                <div className={styles.log}>
+                    <div className={styles.logHead}>
+                        <span className={styles.logTitle}>操作ログ</span>
+                        <button className={styles.logBtn} onClick={onClickCopyLog} disabled={gameLog.length === 0}>
+                            {copied ? 'コピー済' : 'コピー'}
                         </button>
-                    </span>
-                )}
+                        <button className={styles.logBtn} onClick={onClickDownloadLog} disabled={gameLog.length === 0}>
+                            DL
+                        </button>
+                    </div>
+                    <div className={styles.logBody}>
+                        {gameLog.length === 0 ? (
+                            <div className={styles.logEmpty}>まだ操作はありません</div>
+                        ) : (
+                            [...gameLog].reverse().map((entry, idx) => (
+                                <div key={gameLog.length - idx} className={styles.logEntry}>
+                                    {entry}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
-            <div className='skills'>
-                <ol>スキル</ol>
-                <div style={{ display: 'flex' }}>
+            <div className={styles.skills}>
+                <div className={styles.skillsTitle}>スキル</div>
+                <div className={styles.skillGrid}>
                     <SkillButton onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
                     <SkillButton
                         onClick={onClickShuffle}

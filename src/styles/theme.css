@@ -17,13 +17,15 @@
     --color-text-dim: #95a3c0;
     --color-text-muted: #64718f;
 
-    /* --- プレイヤーカラー --- */
-    --color-heart: #46a6ff;
-    --color-heart-soft: rgba(70, 166, 255, 0.16);
-    --color-heart-grad: linear-gradient(160deg, #5cb3ff 0%, #2f7fe0 100%);
-    --color-circle: #ff6b6b;
-    --color-circle-soft: rgba(255, 107, 107, 0.16);
-    --color-circle-grad: linear-gradient(160deg, #ff8a8a 0%, #e24747 100%);
+    /* --- プレイヤーカラー (鮮やかなネオン系) --- */
+    --color-heart: #29b6ff;
+    --color-heart-soft: rgba(41, 182, 255, 0.2);
+    --color-heart-grad: linear-gradient(150deg, #58e0ff 0%, #2f8bff 52%, #4b46ff 100%);
+    --color-heart-glow: rgba(56, 160, 255, 0.65);
+    --color-circle: #ff4d79;
+    --color-circle-soft: rgba(255, 77, 121, 0.2);
+    --color-circle-grad: linear-gradient(150deg, #ff7eb3 0%, #ff3b6b 52%, #ff1f5a 100%);
+    --color-circle-glow: rgba(255, 60, 110, 0.6);
 
     /* --- アクセント / 状態 --- */
     --color-accent: #ffc24a;

@@ -1,0 +1,58 @@
+.status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    min-height: 34px;
+    font-weight: 700;
+}
+
+.turn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    color: var(--color-text);
+}
+
+.player {
+    font-size: 20px;
+}
+
+.lifeChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    font-size: 13px;
+    color: var(--color-text-dim);
+}
+
+.lifeChip b {
+    color: var(--color-text);
+}
+
+.winner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--color-accent);
+    text-shadow: 0 0 18px var(--color-accent-glow);
+    animation: winPop 360ms var(--ease);
+}
+
+@keyframes winPop {
+    0% {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

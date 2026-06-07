@@ -1,0 +1,247 @@
+/* ===== レイアウト ===== */
+.game {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-5) var(--space-4);
+}
+
+.main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.boardWrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+/* ===== プレイヤーパネル ===== */
+.panel {
+    width: 150px;
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.panelCurrent {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent), 0 0 26px var(--color-accent-glow);
+}
+
+.avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+}
+
+.avatarHeart {
+    background: var(--color-heart-soft);
+    box-shadow: inset 0 0 0 2px var(--color-heart);
+}
+
+.avatarCircle {
+    background: var(--color-circle-soft);
+    box-shadow: inset 0 0 0 2px var(--color-circle);
+}
+
+.name {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.tags {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-height: 18px;
+}
+
+.tag {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-3);
+    color: var(--color-text-dim);
+}
+
+.turnBadge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    color: #3a2a00;
+}
+
+.stats {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.chipMagic {
+    color: var(--color-accent);
+}
+
+.effects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+}
+
+.effectBadge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 194, 74, 0.16);
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+    font-weight: 700;
+}
+
+/* ===== コントロール ===== */
+.controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.btn {
+    padding: 7px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+        transform var(--dur-fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+    background: var(--color-surface-3);
+    transform: translateY(-1px);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--color-text-dim);
+    cursor: pointer;
+}
+
+/* ===== 操作ログ ===== */
+.log {
+    width: 240px;
+}
+
+.logHead {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.logTitle {
+    font-weight: 700;
+    font-size: 14px;
+    margin-right: auto;
+}
+
+.logBody {
+    height: 304px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
+    font-size: 12.5px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.logEmpty {
+    color: var(--color-text-muted);
+}
+
+.logEntry {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-dim);
+}
+
+.logBtn {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.logBtn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* ===== スキル ===== */
+.skills {
+    margin-top: var(--space-6);
+    width: 100%;
+}
+
+.skillsTitle {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: var(--space-3);
+    text-align: center;
+}
+
+.skillGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: center;
+}

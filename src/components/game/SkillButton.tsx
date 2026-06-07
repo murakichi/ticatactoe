@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './SkillButton.module.css';
 
 type SkillButtonProps = {
     onClick: () => void;
@@ -13,29 +14,30 @@ type SkillButtonProps = {
 }
 
 export const SkillButton = (props: SkillButtonProps) => {
-    return <div style={{ height: '50px', maxWidth: '100px', display: 'inline-block', marginLeft: props.hidden ? 0 : '5px', marginRight: props.hidden ? 0 : '5px' }} hidden={props.hidden}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-            <button
-                onClick={props.onClick}
-                disabled={props.disabled}
-                hidden={props.hidden}
-                onMouseEnter={props.onHoverStart}
-                onMouseLeave={props.onHoverEnd}
-            >
-                {props.buttonText}
-            </button>
-            {props.onToggleLock && !props.hidden && (
+    if (props.hidden) return null;
+    return (
+        <div className={styles.wrap}>
+            <div className={styles.row}>
                 <button
-                    onClick={props.onToggleLock}
-                    title={props.locked ? 'ロック解除' : 'ロック（シャッフルで固定）'}
-                    style={{ fontSize: '12px', padding: '0 2px', cursor: 'pointer', background: props.locked ? '#ffe08a' : 'transparent', border: '1px solid #ccc' }}
+                    className={styles.btn}
+                    onClick={props.onClick}
+                    disabled={props.disabled}
+                    onMouseEnter={props.onHoverStart}
+                    onMouseLeave={props.onHoverEnd}
                 >
-                    {props.locked ? '🔒' : '🔓'}
+                    {props.buttonText}
                 </button>
-            )}
+                {props.onToggleLock && (
+                    <button
+                        className={`${styles.lock}${props.locked ? ` ${styles.lockOn}` : ''}`}
+                        onClick={props.onToggleLock}
+                        title={props.locked ? 'ロック解除' : 'ロック（シャッフルで固定）'}
+                    >
+                        {props.locked ? '🔒' : '🔓'}
+                    </button>
+                )}
+            </div>
+            <p className={styles.desc}>{props.paragraph}</p>
         </div>
-        <p style={{ margin: 0, fontSize: '10px' }} hidden={props.hidden}>
-            {props.paragraph}
-        </p>
-    </div>
-}
+    );
+};
