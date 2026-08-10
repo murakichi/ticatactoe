@@ -11,7 +11,6 @@ export type AIResult = {
     move: number | null;
     skills: string[];
     lockTargets?: number[];
-    needsShuffle?: boolean;
     stompTarget?: number;
 };
 
@@ -528,7 +527,6 @@ class AIPlayer {
         necroRemain: number = 0,
         necroCost: number = 0,
         judgeCost: number = 99,
-        afterShuffle: boolean = false,
         assaultCost: number = 99,
         proliferateActive: boolean = false
     ): AIResult {
@@ -570,12 +568,10 @@ class AIPlayer {
                     lockTargets,
                 };
             }
-            // 必要数を1つのロックでカバーできない場合、シャッフルで手札を引き直す
-            const shuffleCost = this.calculateAICost(costs.onClickShuffle);
-            if (!afterShuffle && needed > 1 && magic >= shuffleCost + lockOptions[0].cost) {
-                return { move: null, skills: [], needsShuffle: true };
-            }
-            // シャッフル済み or シャッフル不可: 単ロックで最低1つは塞ぐ
+            // 必要数を1つのロックでカバーできない場合: 単ロックで最低1つは塞ぐ
+            // (かつてここに「シャッフルで防御札を引き直す」分岐があったが、発火条件が
+            //  同時脅威3つ以上で実測 3,631手番中1回(0.03%)。閾値を2つに緩めても直接対決
+            //  980試合で 49.1%±3.1pt と効果が無く、削除した。詳細は issue #10)
             if (magic >= lockOptions[0].cost) {
                 return {
                     move: threatSquares[1],

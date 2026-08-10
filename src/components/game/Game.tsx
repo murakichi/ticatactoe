@@ -113,27 +113,14 @@ export const Game = (props: GameProps) => {
 
     const runAIMove = () => {
         const ai = heartTurn ? heartAI! : circleAI!;
-        let currentMagic = heartTurn ? heartMagic : circleMagic;
+        const currentMagic = heartTurn ? heartMagic : circleMagic;
         const oppMagic = heartTurn ? circleMagic : heartMagic;
-        let currentSkills = skills;
+        const currentSkills = skills;
 
         const aiNecroRemain = heartTurn ? remainHeartNecro : remainCircleNecro;
         const aiNecroCost = heartTurn ? currentHeartNecroCost : currentCircleNecroCost;
         const aiProliferate = heartTurn ? heartProliferate : circleProliferate;
-        let result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, false, totalAssaultCost, aiProliferate);
-
-        if (result.needsShuffle && currentMagic >= skillCosts.onClickShuffle) {
-            currentMagic -= skillCosts.onClickShuffle;
-            if (heartTurn) setHeartMagic(currentMagic);
-            else setCircleMagic(currentMagic);
-            // 器用な防御: 防御スキルを引くためロックを解除してから引き直す
-            if (heartTurn) setHeartLockedSkills([]);
-            else setCircleLockedSkills([]);
-            // プールは全21スキル。8 だと 12/13 (ダブル/トリプルロック) を引けず空振りしていた
-            currentSkills = reshuffledSkills(21, []);
-            setSkills(currentSkills);
-            result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, true, totalAssaultCost, aiProliferate);
-        }
+        const result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate);
 
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);

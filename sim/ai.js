@@ -10,7 +10,7 @@
  */
 
 const { HEART, CIRCLE, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
-        curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost, reshuffleSkillsFor,
+        curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, surroundRange } = require('./engine');
 
 const WIN_LINES = [
@@ -447,7 +447,7 @@ function chooseLocks(s, availableSkills) {
 function faithfulMakeMove(s) {
     const me = curPlayer(s);
     const opp = me === HEART ? CIRCLE : HEART;
-    let magic = curMagic(s);
+    const magic = curMagic(s);
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
@@ -478,34 +478,14 @@ function faithfulMakeMove(s) {
             if (moveTarget === undefined) moveTarget = getEnhancedBestMove(s);
             return { move: moveTarget, turnEnded: false };
         }
-        // ロックだけでは足りない: シャッフルで手札を引き直して再評価
-        const shuffleCost = calculateCost(s, skillCosts.onClickShuffle);
-        if (needed > 1 && magic >= shuffleCost + lockOpts[0].cost) {
-            if (s.heartTurn) s.heartMagic -= shuffleCost;
-            else s.circleMagic -= shuffleCost;
-            magic = curMagic(s);
-            // 器用な防御: 防御スキル(ダブル/トリプルロック等)を引くため、固定中のロックを解除してから引き直す
-            // プールは全21スキル。8 だと 12/13 (ダブル/トリプルロック) を数学的に引けず、
-            // 「防御札を引くためのシャッフル」が空振りしていた (issue #2)
-            if (s.heartTurn) s.heartLockedSkills = []; else s.circleLockedSkills = [];
-            // A/B検証用: s.shufflePoolHeart / s.shufflePoolCircle で旧挙動(8)を再現できる
-            const pool = (s.heartTurn ? s.shufflePoolHeart : s.shufflePoolCircle) || 21;
-            s.skills = reshuffleSkillsFor(s, s.heartTurn, pool);
-            availableSkills = s.skills.slice();
-            // 単ロックで最も危険な脅威を塞ぎ、残りはchooseSkills+getBestMoveに委ねる
-            const lockCost = calculateCost(s, skillCosts.onClickUseLock);
-            if (magic >= lockCost) {
-                SKILLS.lock(s);
-                placeMove(s, threats[0]);
-            }
-            // chooseSkills + getBestMove にフォールスルー (シャッフル後の手札で再評価)
-        } else {
-            // フォールバック: 単ロックで最低1つは塞ぐ
-            if (magic >= lockOpts[0].cost) {
-                SKILLS.lock(s);
-                placeMove(s, threats[0]);
-                return { move: threats[1], turnEnded: false };
-            }
+        // ロックだけでは足りない: 単ロックで最低1つは塞ぐ
+        // (かつてここに「シャッフルで防御札を引き直す」分岐があったが、発火条件が
+        //  同時脅威3つ以上で実測 3,631手番中1回(0.03%)。閾値を2つに緩めても直接対決
+        //  980試合で 49.1%±3.1pt と効果が無く、削除した。詳細は issue #10)
+        if (magic >= lockOpts[0].cost) {
+            SKILLS.lock(s);
+            placeMove(s, threats[0]);
+            return { move: threats[1], turnEnded: false };
         }
     }
 
