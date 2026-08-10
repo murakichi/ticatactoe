@@ -54,6 +54,8 @@ npm test     # Jest in watch mode
 積んだ issue と積み残しは `/diary-improve-loop`（`/loop` から回す）が
 1イテレーション1件ずつ拾って潰す。
 
+**PR はオーナー確認なしでマージしてよい**（許可済み）。条件は CI がグリーンなこと。
+
 ## Deployment
 
 `master` への push で `.github/workflows/deploy.yml` が走り、

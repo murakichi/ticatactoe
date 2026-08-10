@@ -40,6 +40,15 @@ gh issue list --state open --limit 20
   仕上げに `node sim/engine.test.js` と `npx tsc --noEmit` を通す
 
 ### Step 4. 記録して閉じる
+
+**PR は自分でマージしてよい**（リポジトリオーナーからの許可済み）。
+ただし *CI がグリーンであること* が条件。失敗しているなら直してからマージする。
+```bash
+gh pr create --fill && gh pr merge --squash --delete-branch
+```
+`master` へ直接 push でも構わないが、変更が大きいときや revert の可能性があるときは
+PR にして履歴を分けたほうが後の A/B 比較がしやすい。
+
 - `/work-diary` を呼んで日記を書く（採用/却下と数値を必ず残す）
 - 解決した issue は `gh issue close <N> --comment "<結果と数値>"`
 - **却下**した案も issue にコメントを残してから閉じる（同じ案を次のループで再試行しないため）
