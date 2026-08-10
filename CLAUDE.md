@@ -41,3 +41,22 @@ npm test     # Jest in watch mode
 - Functional components with hooks only (no class components)
 - Event handlers: `onClickXxx` or `exeXxx`; components: PascalCase
 - Life values use normal distribution RNG (`normRand` in `util.ts`)
+
+## Workflow
+
+**作業のまとまりが終わったら、必ず作業日記を書く。** `/work-diary` を使い、
+`docs/diary/YYYY-MM-DD.md`（Obsidian vault）に「なぜそう判断したか・何を測ったか・
+何が残ったか」を残す。git log と diff で分かることは書かない。
+
+積み残しのうち、**未検証のバランスリスク / スコープ外のバグ / 試行数を増やせば結論が
+変わる保留**は `gh issue create` で issue にし、日記に番号を残す。
+
+積んだ issue と積み残しは `/diary-improve-loop`（`/loop` から回す）が
+1イテレーション1件ずつ拾って潰す。
+
+## Deployment
+
+`master` への push で `.github/workflows/deploy.yml` が走り、
+GitHub Pages（https://murakichi.github.io/ticatactoe/）へ自動デプロイされる。
+アセットは `/ticatactoe/` 配下に置かれる（`package.json` の `homepage`）。
+CRA は `CI=true` だと警告もエラー扱いにするため、ワークフローでは `CI: false` を指定している。
