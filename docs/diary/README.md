@@ -39,4 +39,5 @@ issues: []
 
 ## エントリ
 
-- [[2026-08-10]] — 増殖スキルの追加と GitHub Pages 公開
+- [[2026-08-10]] — 増殖スキルの追加と GitHub Pages 公開 / loop iteration 1-2
+- [[2026-08-11]] — loop iteration 3: 増殖ループの終息検証（懸念を棄却）
