@@ -1,8 +1,10 @@
-name: Deploy to GitHub Pages
+name: CI & Deploy
 
 on:
   push:
     branches: [master]
+  # PR にもチェックを出す (master に入る前に落とすため)
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,14 +12,18 @@ permissions:
   pages: write
   id-token: write
 
-# 同時デプロイを1本に絞る (実行中のものはキャンセルしない)
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  # master のデプロイは直列化し、PR は新しい push で古い実行を打ち切る
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  # PR でも master でも走る検証。ここが赤ければ deploy に進まない
+  test:
     runs-on: ubuntu-latest
+    # master への push のときだけ Pages 用の成果物を残す
+    env:
+      IS_RELEASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,17 +37,21 @@ jobs:
       - run: npm test -- --watchAll=false
         env:
           CI: true
+      # 型チェックはここで落ちる (jest は babel 経由なので .tsx の型エラーを拾えない)
       - run: npm run build
         env:
           # CRA は CI=true だと警告もエラー扱いにするため無効化
           CI: false
       - uses: actions/configure-pages@v5
+        if: env.IS_RELEASE == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: env.IS_RELEASE == 'true'
         with:
           path: build
 
   deploy:
-    needs: build
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
