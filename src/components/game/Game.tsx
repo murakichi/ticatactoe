@@ -129,7 +129,8 @@ export const Game = (props: GameProps) => {
             // 器用な防御: 防御スキルを引くためロックを解除してから引き直す
             if (heartTurn) setHeartLockedSkills([]);
             else setCircleLockedSkills([]);
-            currentSkills = reshuffledSkills(8, []);
+            // プールは全21スキル。8 だと 12/13 (ダブル/トリプルロック) を引けず空振りしていた
+            currentSkills = reshuffledSkills(21, []);
             setSkills(currentSkills);
             result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, true, totalAssaultCost, aiProliferate);
         }
@@ -570,7 +571,8 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        setSkills(reshuffledSkills(8, currentLockedSkills));
+        // プールは全21スキル。8 だと毒スキル(15-19)と増殖(20)を永久に引けなかった
+        setSkills(reshuffledSkills(21, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
 

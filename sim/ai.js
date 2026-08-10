@@ -485,8 +485,12 @@ function faithfulMakeMove(s) {
             else s.circleMagic -= shuffleCost;
             magic = curMagic(s);
             // 器用な防御: 防御スキル(ダブル/トリプルロック等)を引くため、固定中のロックを解除してから引き直す
+            // プールは全21スキル。8 だと 12/13 (ダブル/トリプルロック) を数学的に引けず、
+            // 「防御札を引くためのシャッフル」が空振りしていた (issue #2)
             if (s.heartTurn) s.heartLockedSkills = []; else s.circleLockedSkills = [];
-            s.skills = reshuffleSkillsFor(s, s.heartTurn, 8);
+            // A/B検証用: s.shufflePoolHeart / s.shufflePoolCircle で旧挙動(8)を再現できる
+            const pool = (s.heartTurn ? s.shufflePoolHeart : s.shufflePoolCircle) || 21;
+            s.skills = reshuffleSkillsFor(s, s.heartTurn, pool);
             availableSkills = s.skills.slice();
             // 単ロックで最も危険な脅威を塞ぎ、残りはchooseSkills+getBestMoveに委ねる
             const lockCost = calculateCost(s, skillCosts.onClickUseLock);
