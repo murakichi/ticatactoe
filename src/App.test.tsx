@@ -1,3 +1,5 @@
+// tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
+import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { App } from './App';
 
