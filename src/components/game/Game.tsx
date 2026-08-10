@@ -921,7 +921,9 @@ export const Game = (props: GameProps) => {
                 setHeartYingYangMode('yang');
             }
         } else {
-            if (heartYinYangMode === 'ying') {
+            // 自分(⭕)のモードを見て反転する。以前は heartYinYangMode を見ており、
+            // 💙が陰のままだと⭕が永久に陽へ切り替えられなかった (issue #12)
+            if (circleYinYangMode === 'yang') {
                 setCircleYingYangMode('ying');
             } else {
                 setCircleYingYangMode('yang');
@@ -1155,14 +1157,10 @@ export const Game = (props: GameProps) => {
             }
         }
 
-        if (characterId === 'yinYangMaster') {
-            if (heartTurn && heartYinYangMode === 'yang') {
-                return cost + 1;
-            }
-
-            if (heartTurn && circleYinYangMode === 'yang') {
-                return cost + 1;
-            }
+        // 陰陽師: 陽は「手番プレイヤー自身のモード」で判定する。以前は両分岐とも heartTurn 条件付きで、
+        // ⭕側は陽のライフを得ながらコスト増を免れ、💙側は⭕のモードで+1される誤りがあった (issue #12)
+        if (characterId === 'yinYangMaster' && (heartTurn ? heartYinYangMode : circleYinYangMode) === 'yang') {
+            return cost + 1;
         }
 
         return cost;
