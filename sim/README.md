@@ -40,6 +40,14 @@ node sim/cli.js bench   --games 1500 --char you --seed 1       # AIの強さ(対
 `metrics` の主な値: `drawRate` / `firstAdvantage` / `nonGiantSpread`（非giantキャラの
 均衡度, 0=横並び）/ `giantGap`（giantの弱さ）/ `charWinRate`。
 
+### 5. 増殖ループの終息テスト
+```bash
+node sim/probe-proliferate.js 60      # n=60/側。約5分
+```
+増殖は AI の発動率が1手番あたり約4%しかなく**勝率にシグナルが乗らない**。
+「ループが終息するか」を見たいときは勝率ではなくこちらを使う（強制発動させて
+ループ到達回数の分布を直接測る統制実験）。`cap到達% = 0` なら暴走していない。
+
 この一連を自動で回すスキルが **`/balance-loop`**（`.claude/skills/balance-loop/`）。
 バランス調整ノブは **`sim/config.js`**（ライフ平均・std・巨人の手番スキップ・増殖の
 `cost`/`tokenLife`/`upkeepStep`/`maxStacks`）。増殖のノブを変えたら
