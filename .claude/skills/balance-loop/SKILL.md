@@ -39,6 +39,13 @@ to append the snapshot for comparison.
    `proliferate`(増殖: `cost`/`tokenLife`/`upkeepStep`/`maxStacks`)。
    **Lowest risk; start here.** 増殖のノブは `src/.../skillCosts.ts` と
    `Game.tsx` の `proliferate*` 定数にも同じ値をミラーすること。
+   ライフ平均は `src/util.ts` の **`LIFE_MEANS`** が src 側の唯一の出典
+   （キャラ選択画面の説明文もここを参照して描画される）。
+
+   > **ノブを変えたら必ず `docs/characters.md` も更新する。**
+   > 説明文の数値は `LIFE_MEANS` から埋め込まれるので自動追随するが、
+   > 「5ターンに1回休み」「トークン系-1」のような**文章で書いた仕様は追随しない**。
+   > 過去に6箇所ズレて issue #13 になった。
 2. `sim/engine.js` `skillCosts` — magic costs. AIがスキルを使うので効く。キャラ固有の
    コスト(蘇生/全軍突撃/審判)や per-bud 魔力(魔法使い+3)も `engine.js`/`Game.tsx` に。
 3. `sim/engine.js` `judgeNextIsHeart` — turn order / giant cadence。巨人が強い今は

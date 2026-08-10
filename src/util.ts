@@ -2,24 +2,32 @@ import { CharacterId, YingYangMode } from './types/Character';
 import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 
-const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0): number => {
-    let m:number;
-    if (nextCharacterId === 'magician') {
-        m = 4;
-    } else if (nextCharacterId === 'tactician') {
-        m = 5;
-    } else if (nextCharacterId === 'giant') {
-        m = 8;
-    } else if (nextCharacterId === 'yinYangMaster') {
-        if (yingYangMode === 'yang') {
-            m = 7;
-        } else {
-            m = 4;
-        }
-    } else {
-        m = 5;
+/**
+ * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
+ * ここが唯一の出典で、キャラ選択画面の説明文もこの値を参照する（説明文と実装のズレ防止 / issue #13）。
+ * バランス調整時は sim/config.js の lifeMeans も同じ値に揃えること。
+ */
+export const LIFE_MEANS = {
+    magician: 4,
+    tactician: 5,
+    giant: 8,
+    yinYangMaster_yang: 7,
+    yinYangMaster_ying: 4,
+    default: 5,
+} as const;
+
+export const LIFE_STD = 3;
+
+/** キャラ(と陰陽モード)に対応するライフ平均を返す */
+const lifeMeanOf = (characterId: CharacterId, yingYangMode?: YingYangMode): number => {
+    if (characterId === 'yinYangMaster') {
+        return yingYangMode === 'yang' ? LIFE_MEANS.yinYangMaster_yang : LIFE_MEANS.yinYangMaster_ying;
     }
-    return Math.floor(normRand(m + lifeBonus, 3));
+    return (LIFE_MEANS as Record<string, number>)[characterId] ?? LIFE_MEANS.default;
+};
+
+const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0): number => {
+    return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, LIFE_STD));
 };
 
 const calculateWinner = (squares: (Player | undefined)[]) => {
@@ -79,4 +87,4 @@ const range = (start: number, count: number): number[] => Array.from({ length: c
 const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) =>
     ary.map((x, i) => (x?.player === undefined && x?.effects.filter((effect) => effect.effect === '🔑').length === 0 ? i : -1)).filter((x) => x !== -1);
 
-export {calculateLife, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };
+export {calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };

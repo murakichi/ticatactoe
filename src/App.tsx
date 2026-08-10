@@ -2,6 +2,7 @@ import './App.css';
 import React, { useState } from 'react';
 import { Game } from './components/game/Game';
 import { CharacterId } from './types/Character';
+import { LIFE_MEANS } from './util';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -11,14 +12,22 @@ type CharacterDef = {
     passive: string;
 };
 
+// 説明文は実装と一致させること。ライフ平均は util.ts の LIFE_MEANS を参照して埋め込む
+// （数値のズレを構造的に防ぐ / issue #13）。詳細は docs/characters.md
+const L = LIFE_MEANS;
 const CHARACTERS: CharacterDef[] = [
-    { id: 'you', name: 'あなた', icon: '🧑', passive: '何者にもなれなかったお前' },
-    { id: 'tactician', name: '軍師', icon: '🎖️', passive: 'トークン系のコストを-2、それ以外のコストを+1。トークンのライフを+2' },
-    { id: 'magician', name: '魔法使い', icon: '🧙', passive: 'ターン開始時のマジック+1。ライフの期待値-1' },
-    { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフ3倍。2ターンに一度しか行動できない。3x3を破壊する鉄槌' },
-    { id: 'yinYangMaster', name: '陰陽師', icon: '☯️', passive: '陰陽を切替。陽=ライフ+1/コスト+1、陰=マジック+1/ライフ-1' },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: '死者を蘇らせる。ライフ-1。ライフ0の敵を味方として復活' },
-    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒セルが0/破壊で周囲に毒拡散。自陣の毒だけライフ+1。毒スキル-1/他+1' },
+    { id: 'you', name: 'あなた', icon: '🧑', passive: `補正も固有スキルも無い基準点。ライフ平均${L.default}` },
+    { id: 'tactician', name: '軍師', icon: '🎖️', passive: `トークン系コスト-1/他+2。自分のトークンはライフ6。固有:全軍突撃` },
+    { id: 'magician', name: '魔法使い', icon: '🧙', passive: `毎ターン魔力+1、自陣バッズ1個ごとに更に+2。ライフ平均${L.magician}。固有:審判の日` },
+    { id: 'giant', name: '巨人', icon: '👹', passive: `ライフ平均${L.giant}。5ターンに1回休み。ライフの残る敵も殴れる。固有:ストンプ` },
+    {
+        id: 'yinYangMaster',
+        name: '陰陽師',
+        icon: '☯️',
+        passive: `陰陽を切替。陽=ライフ平均${L.yinYangMaster_yang}/全スキル+1、陰=ライフ平均${L.yinYangMaster_ying}/魔力+1`,
+    },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: `コマが消えるたび墓地+1→蘇生が安く強くなる。ライフ平均${L.default}。固有:蘇生` },
+    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: `毒スキル-1/他+1。自陣の毒の数だけライフ+1。毒で死んだマスから周囲へ毒が拡散` },
 ];
 
 export const App = () => {
