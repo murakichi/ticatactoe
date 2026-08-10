@@ -26,3 +26,6 @@ export const JUDGE_AREA: Record<number, number[]> = {
 
 export const stompRange = (i: number): number[] => STOMP_AREA[i] ?? [];
 export const judgeRange = (i: number): number[] => JUDGE_AREA[i] ?? [];
+
+/** 周囲1マス（クリックしたマスを除く8近傍） */
+export const surroundRange = (i: number): number[] => (STOMP_AREA[i] ?? []).filter((x) => x !== i);

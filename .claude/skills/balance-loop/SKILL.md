@@ -35,8 +35,10 @@ to append the snapshot for comparison.
 
 ## Balance knobs (edit these, then re-measure)
 
-1. `sim/config.js` — `lifeMeans` per character, `lifeStd`, `giantSkipModulo`.
-   **Lowest risk; start here.**
+1. `sim/config.js` — `lifeMeans` per character, `lifeStd`, `giantSkipModulo`,
+   `proliferate`(増殖: `cost`/`tokenLife`/`upkeepStep`/`maxStacks`)。
+   **Lowest risk; start here.** 増殖のノブは `src/.../skillCosts.ts` と
+   `Game.tsx` の `proliferate*` 定数にも同じ値をミラーすること。
 2. `sim/engine.js` `skillCosts` — magic costs. AIがスキルを使うので効く。キャラ固有の
    コスト(蘇生/全軍突撃/審判)や per-bud 魔力(魔法使い+3)も `engine.js`/`Game.tsx` に。
 3. `sim/engine.js` `judgeNextIsHeart` — turn order / giant cadence。巨人が強い今は

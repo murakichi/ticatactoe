@@ -2,14 +2,14 @@ import { CharacterId, YingYangMode } from './types/Character';
 import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 
-const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined): number => {
+const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0): number => {
     let m:number;
     if (nextCharacterId === 'magician') {
         m = 4;
     } else if (nextCharacterId === 'tactician') {
         m = 5;
     } else if (nextCharacterId === 'giant') {
-        m = 10;
+        m = 8;
     } else if (nextCharacterId === 'yinYangMaster') {
         if (yingYangMode === 'yang') {
             m = 7;
@@ -19,7 +19,7 @@ const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode 
     } else {
         m = 5;
     }
-    return Math.floor(normRand(m, 3));
+    return Math.floor(normRand(m + lifeBonus, 3));
 };
 
 const calculateWinner = (squares: (Player | undefined)[]) => {

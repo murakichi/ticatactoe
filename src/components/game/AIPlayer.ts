@@ -310,13 +310,14 @@ class AIPlayer {
                 case 14: return myPieces >= 3;                                  // ワルプルギスの夜
                 case 0: case 1: return life <= 2;                               // ライフ3/バイバイン
                 case 2: case 10: return empties >= 8;                           // バッズ系(序盤)
+                case 20: return empties >= 6;                                   // 増殖(空きが多いほどループが伸びる)
                 default: return false;
             }
         };
 
         const locks: number[] = [];
         for (const idx of availableSkills) {
-            if (idx < 0 || idx > 14) continue;
+            if (idx < 0 || idx > 20) continue;
             if (preferred(idx) || valued(idx)) locks.push(idx);
         }
         // キャラ専用シナジーを優先して残す。守備の余地のため最大2つ
@@ -341,7 +342,8 @@ class AIPlayer {
         tokenUsed: boolean,
         necroRemain: number = 0,
         necroCost: number = 0,
-        assaultCost: number = 99
+        assaultCost: number = 99,
+        proliferateActive: boolean = false
     ): string[] {
         const skills: string[] = [];
         let remaining = magic;
@@ -382,6 +384,16 @@ class AIPlayer {
             // 軍師: 全軍突撃 (実コストは「9−使用トークン×2」。calculateAICostの+2ペナルティは誤りなので使わない)
             if (this.character === 'tactician') {
                 if (remaining >= assaultCost && myPieces >= 2) spend(assaultCost, 'onClickTotalAssault');
+            }
+
+            // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
+            // (発動が遅いほど盤面が埋まりループの旨味が減るため、序盤〜中盤限定)
+            if (!proliferateActive && availableSkills.includes(20)) {
+                const proliferateCost = this.calculateAICost(costs.onClickProliferate);
+                const emptyCount = board.filter((sq) => !sq.player).length;
+                if (remaining >= proliferateCost + 1 && emptyCount >= 5) {
+                    spend(proliferateCost, 'onClickProliferate');
+                }
             }
         }
 
@@ -517,7 +529,8 @@ class AIPlayer {
         necroCost: number = 0,
         judgeCost: number = 99,
         afterShuffle: boolean = false,
-        assaultCost: number = 99
+        assaultCost: number = 99,
+        proliferateActive: boolean = false
     ): AIResult {
         this.necroActive = necroRemain > 0;
 
@@ -604,7 +617,7 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost);
+        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive);
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {

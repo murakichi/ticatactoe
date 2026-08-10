@@ -14,7 +14,9 @@ export type SkillEffectType =
     | 'harvest'
     | 'famine'
     | 'auraGreen'
-    | 'auraRed';
+    | 'auraRed'
+    | 'poison'
+    | 'proliferate';
 
 export type SkillEffect = {
     type: SkillEffectType;
@@ -128,6 +130,23 @@ export const BoardEffects: React.FC<Props> = ({ effect }) => {
                     <>
                         <div className={`${styles.aura} ${styles.auraRed}`} />
                         {fallParticles('🥀')}
+                    </>
+                );
+            case 'poison':
+                // 毒系スキル: 紫の瘴気 + 立ち昇る毒
+                return (
+                    <>
+                        <div className={styles.haze} />
+                        {riseParticles('☠')}
+                    </>
+                );
+            case 'proliferate':
+                // 増殖: 緑のオーラから増え続ける芽が湧き上がり、中央に無限記号
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {riseParticles('🌿')}
+                        <div className={styles.proliferateSigil}>♾️</div>
                     </>
                 );
             case 'auraGreen':

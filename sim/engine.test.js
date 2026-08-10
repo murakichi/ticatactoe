@@ -71,6 +71,56 @@ test('tactician token discount is -1 (post-nerf)', () => {
     assert.strictEqual(e.calculateCost(s, 4, false), 6); // 4 + 2 (non-token penalty)
 });
 
+test('増殖: 発動後の着手でコマ(奇数回)→アイテム(偶数回)を交互に追加', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20; s.life = 5;
+    e.SKILLS.proliferate(s);
+    assert.strictEqual(s.heartProliferate, true);
+
+    const before = s.board.filter((x) => x.player === '💙').length;
+    e.placeMove(s, 0); // 着手1 → ループ1回目(奇数)=コマ追加
+    assert.strictEqual(s.heartProliferateCount, 1);
+    assert.strictEqual(s.board.filter((x) => x.player === '💙').length, before + 2); // 着手分 + 増殖分
+
+    s.heartTurn = true; // 相手の手番を飛ばして先手の2手目へ
+    const buds = () => s.board.flatMap((x) => x.effects).filter((eff) => eff.effect === '🌱').length;
+    const budsBefore = buds();
+    e.placeMove(s, 1); // ループ2回目(偶数)=アイテム追加
+    assert.strictEqual(s.heartProliferateCount, 2);
+    assert.strictEqual(buds(), budsBefore + 1);
+});
+
+test('増殖: 維持コストを払えないと手番開始時に途切れる', () => {
+    const s = game();
+    s.heartTurn = false; s.currentTurn = 2;
+    s.heartProliferate = true; s.heartProliferateCount = 5; // 次の維持コスト5
+    s.heartMagic = 0; // +1(ターン) だけでは 5 を払えない
+    e.advanceTurn(s);
+    assert.strictEqual(s.heartProliferate, false);
+    assert.strictEqual(s.heartMagic, 1); // 途切れるだけでマジックは減らない
+});
+
+test('増殖: 維持コストを払える間はループが続く', () => {
+    const s = game();
+    s.heartTurn = false; s.currentTurn = 2;
+    s.heartProliferate = true; s.heartProliferateCount = 2;
+    s.heartMagic = 5;
+    e.advanceTurn(s);
+    assert.strictEqual(s.heartProliferate, true);
+    assert.strictEqual(s.heartMagic, 4); // 5 +1(ターン) -2(維持)
+});
+
+test('増殖(毒使い): アイテム追加は敵コマへの毒になる', () => {
+    const s = e.newGame({ heartChar: 'poisoner', circleChar: 'you', rng: e.makeRng(42) });
+    s.heartTurn = true; s.heartMagic = 20; s.life = 5;
+    s.heartProliferate = true; s.heartProliferateCount = 1; // 次は偶数回=アイテム
+    s.board[3] = { player: '⭕', bind: 9, effects: [] };
+    s.board[7] = { player: '⭕', bind: 9, effects: [] };
+    e.placeMove(s, 0);
+    const enemyPoison = [3, 7].reduce((n, i) => n + s.board[i].effects.filter((eff) => eff.effect === '☠').length, 0);
+    assert.strictEqual(enemyPoison, 1);
+});
+
 test('calculateWinner detects 4-in-a-row', () => {
     const syms = Array(16).fill(undefined);
     [0, 1, 2, 3].forEach((i) => (syms[i] = '💙'));

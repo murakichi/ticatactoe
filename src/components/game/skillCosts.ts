@@ -22,7 +22,14 @@ export const skillCosts = {
     onClickBackSlash: 6,
     onClickTsunami: 9,
     onClickOpium: 6,
-    onClickWalpurgisNight: 9
+    onClickWalpurgisNight: 9,
+    onClickMiasma: 6,
+    onClickInjection: 2,
+    onClickPoisonToken: 2,
+    onClickSerum: 4,
+    onClickIntensify: 8,
+    onClickPandemic: 6,
+    onClickProliferate: 6
 };
 
 export type SkillCosts = typeof skillCosts;

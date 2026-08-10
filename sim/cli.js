@@ -228,6 +228,8 @@ function play(args) {
         if (s.useStomp) console.log(`  (pending STOMP: choose a cell)`);
         if (s.useJudgeDay) console.log(`  (pending JUDGE DAY: choose a cell)`);
         if (s.useBuds[0]) console.log(`  (pending BUDS x${s.useBuds[1]} on next placement)`);
+        if (s.heartProliferate) console.log(`  (💙 PROLIFERATE loop ${s.heartProliferateCount}, next upkeep ${engine.proliferateUpkeep(s.heartProliferateCount)})`);
+        if (s.circleProliferate) console.log(`  (⭕ PROLIFERATE loop ${s.circleProliferateCount}, next upkeep ${engine.proliferateUpkeep(s.circleProliferateCount)})`);
     }
     function aiTurnsIfNeeded() {
         let guard = 0;

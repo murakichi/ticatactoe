@@ -22,7 +22,7 @@ const HEART = '💙';
 const CIRCLE = '⭕';
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -39,6 +39,9 @@ function makeRng(seed) {
 
 const config = require('./config');
 
+// [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
+const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
+
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
     const c = Math.sqrt(-2 * Math.log(rng()));
@@ -50,12 +53,13 @@ function normRand(m, s, rng) {
 }
 
 // [FAITHFUL] util.ts calculateLife — means/std come from config.js (balance knobs)
-function calculateLife(characterId, yinYangMode, rng) {
+// lifeBonus: 毒使いの「自陣の毒の数だけライフ期待値+1」用
+function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0) {
     const L = config.lifeMeans;
     let m;
     if (characterId === 'yinYangMaster') m = yinYangMode === 'yang' ? L.yinYangMaster_yang : L.yinYangMaster_ying;
     else m = L[characterId] != null ? L[characterId] : L.default;
-    return Math.floor(normRand(m, config.lifeStd, rng));
+    return Math.floor(normRand(m + lifeBonus, config.lifeStd, rng));
 }
 
 const WIN_LINES = [
@@ -131,6 +135,14 @@ const skillCosts = {
     onClickTsunami: 9,
     onClickOpium: 6,
     onClickWalpurgisNight: 9,
+    onClickMiasma: 6,
+    onClickInjection: 2,
+    onClickPoisonToken: 2,
+    onClickSerum: 4,
+    onClickIntensify: 8,
+    onClickPandemic: 6,
+    // 増殖のコストだけは config.js のノブから引く (バランス調整ループ用)
+    onClickProliferate: PROLIFERATE.cost,
 };
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -144,6 +156,35 @@ function addCorpses(s, n) {
     if (n <= 0) return;
     if (s.heartChar === 'necromancer') s.currentHeartNecroCost = Math.max(0, s.currentHeartNecroCost - n);
     if (s.circleChar === 'necromancer') s.currentCircleNecroCost = Math.max(0, s.currentCircleNecroCost - n);
+}
+
+// ---- 毒（毒使い）ヘルパー --------------------------------------------------
+function poisonStacks(sq) {
+    return sq.effects.filter((e) => e.effect === '☠').length;
+}
+function boardPoisonCount(board) {
+    let n = 0;
+    for (const sq of board) n += poisonStacks(sq);
+    return n;
+}
+function poisonCountFor(board, player) {
+    let n = 0;
+    for (const sq of board) if (sq.player === player) n += poisonStacks(sq);
+    return n;
+}
+function poisonerInPlay(s) {
+    return s.heartChar === 'poisoner' || s.circleChar === 'poisoner';
+}
+// 周囲1マス（クリックしたマスを除く8近傍）— STOMP_AREA を流用
+function surroundRange(i) {
+    return (STOMP_AREA[i] || []).filter((x) => x !== i);
+}
+// 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与（毒拡散パッシブ）
+function spreadPoisonAround(board, idx, rng) {
+    const targets = surroundRange(idx).filter((j) => board[j].player);
+    if (!targets.length) return;
+    const t = randomPick(targets, rng);
+    board[t].effects.push({ effect: '☠' });
 }
 
 // ---- Game state -----------------------------------------------------------
@@ -180,9 +221,17 @@ function newGame(opts = {}) {
         useLock: 0,
         useStomp: false,
         useJudgeDay: false,
+        useMiasma: false,
+        useInjection: 0,
+        usePandemic: false,
         useBuds: [false, 0],
         heartUseAssault: 0,
         circleUseAssault: 0,
+        // 増殖(ループ召喚): active=発動中 / count=これまでのループ回数(=次の維持コストの基準)
+        heartProliferate: false,
+        heartProliferateCount: 0,
+        circleProliferate: false,
+        circleProliferateCount: 0,
         usedTokenThisTurn: false,
         // necromancer 蘇生 state
         remainHeartNecro: 0,
@@ -197,7 +246,7 @@ function newGame(opts = {}) {
         log: [],
     };
     state.life = Math.max(1, calculateLife(heartChar, heartYY, rng));
-    state.skills = reshuffleSkillsFor(state, true, 16); // 先手(heart)の初期スキル
+    state.skills = reshuffleSkillsFor(state, true, 21); // 先手(heart)の初期スキル
     return state;
 }
 
@@ -226,8 +275,10 @@ function bumpMagicCount(s) {
 }
 
 // [FAITHFUL] Game.tsx calculateCost
-function calculateCost(s, cost, isToken = false) {
+function calculateCost(s, cost, isToken = false, isPoison = false) {
     const c = curChar(s);
+    // 毒使い: 毒系スキルは-1、それ以外は+1
+    if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
     if (c === 'tactician') return isToken ? cost - 1 : cost + 2;
     if (c === 'yinYangMaster' && curYY(s) === 'yang') return cost + 1;
     return cost;
@@ -269,8 +320,14 @@ function advanceTurn(s) {
         if (s.heartChar === 'yinYangMaster' && s.heartYY === 'ying') nextMagic++;
         // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
         if (s.heartChar === 'magician') nextMagic += budsCount(s.board, HEART) * 2;
+        // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
+        if (s.heartProliferate) {
+            const upkeep = proliferateUpkeep(s.heartProliferateCount);
+            if (nextMagic >= upkeep) nextMagic -= upkeep;
+            else { s.heartProliferate = false; s.heartProliferateCount = 0; }
+        }
         s.heartMagic = nextMagic;
-        s.life = calculateLife(s.heartChar, s.heartYY, s.rng);
+        s.life = calculateLife(s.heartChar, s.heartYY, s.rng, s.heartChar === 'poisoner' ? poisonCountFor(s.board, HEART) : 0);
     } else {
         // Game.tsx と同じく円プレイヤー自身の魔力・バッズから計算する
         let nextMagic = s.circleMagic + 1 + budsCount(s.board, CIRCLE);
@@ -278,14 +335,20 @@ function advanceTurn(s) {
         if (s.circleChar === 'yinYangMaster' && s.circleYY === 'ying') nextMagic++;
         // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
         if (s.circleChar === 'magician') nextMagic += budsCount(s.board, CIRCLE) * 2;
+        // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
+        if (s.circleProliferate) {
+            const upkeep = proliferateUpkeep(s.circleProliferateCount);
+            if (nextMagic >= upkeep) nextMagic -= upkeep;
+            else { s.circleProliferate = false; s.circleProliferateCount = 0; }
+        }
         s.circleMagic = nextMagic;
-        s.life = calculateLife(s.circleChar, s.circleYY, s.rng);
+        s.life = calculateLife(s.circleChar, s.circleYY, s.rng, s.circleChar === 'poisoner' ? poisonCountFor(s.board, CIRCLE) : 0);
     }
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.heartTurn = nextIsHeart;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
-    s.skills = reshuffleSkillsFor(s, nextIsHeart, 16);
+    s.skills = reshuffleSkillsFor(s, nextIsHeart, 21);
 }
 
 /**
@@ -301,6 +364,19 @@ function placeMove(s, i) {
         board[i].effects.push({ effect: '🔑' });
         if (board[i].bind < 6) board[i].bind = 6;
         s.useLock -= 1;
+        return true;
+    }
+    if (s.useInjection > 0) {
+        board[i].effects.push({ effect: '☠' });
+        s.useInjection -= 1;
+        return true;
+    }
+    if (s.useMiasma) {
+        exeMiasma(s, i);
+        return true;
+    }
+    if (s.usePandemic) {
+        exePandemic(s, i);
         return true;
     }
     if (s.useStomp) {
@@ -322,11 +398,18 @@ function placeMove(s, i) {
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
 
-    // decay step
-    for (const sq of board) {
+    // decay step (+ 毒: スタック数だけ追加で bind を減らす)
+    const spreadOrigins = [];
+    for (let k = 0; k < board.length; k++) {
+        const sq = board[k];
+        const hadLife = sq.bind > 0;
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0) sq.bind--;
+        const poison = sq.effects.filter((e) => e.effect === '☠').length;
+        if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
+        if (poison > 0 && hadLife && sq.bind === 0 && k !== i) spreadOrigins.push(k);
     }
+    const hadPoisonAtTarget = board[i].effects.some((e) => e.effect === '☠');
 
     const cur = curPlayer(s);
     const life = s.life;
@@ -347,6 +430,8 @@ function placeMove(s, i) {
             newPlayer = board[i].player;
             newBind = calc;
         }
+        // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
+        if (calc <= 0 && hadPoisonAtTarget) spreadOrigins.push(i);
         newEffects = [];
         // 敵味方問わずコマが奪われる/消えるたびに墓地+1
         if (calc <= 0) addCorpses(s, 1);
@@ -374,6 +459,20 @@ function placeMove(s, i) {
         s.circleUseAssault -= 1;
     }
 
+    // 増殖発動中: 着手のたびにコマ→アイテムを交互に1つずつ追加し続ける
+    if (s.heartTurn ? s.heartProliferate : s.circleProliferate) {
+        const nextCount = (s.heartTurn ? s.heartProliferateCount : s.circleProliferateCount) + 1;
+        if (applyProliferate(s, nextCount)) {
+            if (s.heartTurn) s.heartProliferateCount = nextCount;
+            else s.circleProliferateCount = nextCount;
+            // 上限に達したら自然収束
+            if (nextCount >= PROLIFERATE.maxStacks) {
+                if (s.heartTurn) { s.heartProliferate = false; s.heartProliferateCount = 0; }
+                else { s.circleProliferate = false; s.circleProliferateCount = 0; }
+            }
+        }
+    }
+
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
         const opp2 = cur === HEART ? CIRCLE : HEART;
@@ -389,6 +488,10 @@ function placeMove(s, i) {
         if (absorbed > 0) addCorpses(s, absorbed);
     }
 
+    // 毒拡散パッシブ: 毒で死んだ/毒持ちが奪取破壊されたマスの周囲へ毒を拡散
+    if (poisonerInPlay(s) && spreadOrigins.length) {
+        for (const o of spreadOrigins) spreadPoisonAround(board, o, s.rng);
+    }
 
     s.currentTurn += 1;
     advanceTurn(s);
@@ -628,6 +731,39 @@ function onClickTotalAssault(s) {
     else { s.circleUseAssault = 3; s.circleMagic -= totalAssaultCost(s); s.circleUseTokenCount = 0; }
 }
 
+// ---- 増殖 (ループ召喚) ----
+// [FAITHFUL] Game.tsx proliferateUpkeep / applyProliferate / onClickProliferate
+function proliferateUpkeep(count) {
+    return count * PROLIFERATE.upkeepStep;
+}
+// 1ループ分を盤面に適用。奇数回=コマ(キャラ)、偶数回=アイテム。追加できなければ false（回数を進めない）
+function applyProliferate(s, step) {
+    const me = curPlayer(s);
+    if (step % 2 === 1) {
+        const empties = findEmptyIndexes(s.board);
+        if (!empties.length) return false;
+        s.board[randomPick(empties, s.rng)] = { player: me, bind: PROLIFERATE.tokenLife, effects: [] };
+        return true;
+    }
+    // 毒使いだけは敵コマへの毒がアイテムになる (毒拡散パッシブとつながる)
+    const isPoisoner = curChar(s) === 'poisoner';
+    const targets = [];
+    for (let i = 0; i < s.board.length; i++) {
+        const sq = s.board[i];
+        if (sq.effects.some((e) => e.effect === '🔑')) continue;
+        if (isPoisoner ? sq.player && sq.player !== me : sq.player === me) targets.push(i);
+    }
+    if (!targets.length) return false;
+    s.board[randomPick(targets, s.rng)].effects.push({ effect: isPoisoner ? '☠' : '🌱' });
+    return true;
+}
+function onClickProliferate(s) {
+    if (s.heartTurn) { s.heartProliferate = true; s.heartProliferateCount = 0; }
+    else { s.circleProliferate = true; s.circleProliferateCount = 0; }
+    spendMagic(s, calculateCost(s, skillCosts.onClickProliferate));
+    bumpMagicCount(s);
+}
+
 // necromancer: activate 蘇生 (墓地から召喚 + 4ターンの自動吸収窓)
 function necromancyCost(s) {
     return s.heartTurn ? s.currentHeartNecroCost : s.currentCircleNecroCost;
@@ -653,8 +789,68 @@ function onClickNecromancy(s) {
     }
 }
 
+// ---- 毒使い スキル ----
+function miasmaCost(s) {
+    return Math.max(0, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
+}
+function onClickMiasma(s) {
+    s.useMiasma = true;
+    spendMagic(s, miasmaCost(s));
+}
+function exeMiasma(s, i) {
+    const cur = curPlayer(s);
+    const targets = surroundRange(i).filter(
+        (j) => s.board[j].player && s.board[j].player !== cur && !s.board[j].effects.some((e) => e.effect === '🔑')
+    );
+    for (const t of targets) s.board[t].effects.push({ effect: '☠' });
+    s.useMiasma = false;
+}
+function onClickInjection(s) {
+    s.useInjection += 1;
+    spendMagic(s, calculateCost(s, skillCosts.onClickInjection, false, true));
+    bumpMagicCount(s);
+}
+function onClickPoisonToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '☠' }] };
+    spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+}
+function onClickSerum(s) {
+    const cur = curPlayer(s);
+    for (const sq of s.board) if (sq.player === cur) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
+    spendMagic(s, calculateCost(s, skillCosts.onClickSerum, false, true));
+    bumpMagicCount(s);
+}
+function onClickIntensify(s) {
+    for (const sq of s.board) {
+        const p = poisonStacks(sq);
+        for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
+    }
+    spendMagic(s, calculateCost(s, skillCosts.onClickIntensify, false, true));
+    bumpMagicCount(s);
+}
+function onClickPandemic(s) {
+    s.usePandemic = true;
+    spendMagic(s, calculateCost(s, skillCosts.onClickPandemic, false, true));
+    bumpMagicCount(s);
+}
+function exePandemic(s, i) {
+    const targets = STOMP_AREA[i].filter((j) => s.board[j].player && !s.board[j].effects.some((e) => e.effect === '🔑'));
+    for (const t of targets) s.board[t].effects.push({ effect: '☠' });
+    s.usePandemic = false;
+}
+
 const SKILLS = {
     charge: onClickCharge,
+    miasma: onClickMiasma,
+    injection: onClickInjection,
+    poisonToken: onClickPoisonToken,
+    serum: onClickSerum,
+    intensify: onClickIntensify,
+    pandemic: onClickPandemic,
     addLife: onClickAddLife,
     bibine: onClickBibine,
     depressionCherry: onClickDepressionCherry,
@@ -678,6 +874,7 @@ const SKILLS = {
     judgeDay: onClickJudgeDay,
     totalAssault: onClickTotalAssault,
     necromancy: onClickNecromancy,
+    proliferate: onClickProliferate,
 };
 
 // ---- Rendering ------------------------------------------------------------
@@ -701,4 +898,6 @@ module.exports = {
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextIsHeart, renderBoard,
     curPlayer, curChar, curMagic, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
+    miasmaCost, boardPoisonCount, surroundRange,
+    PROLIFERATE, proliferateUpkeep,
 };

@@ -8,7 +8,7 @@ import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
-import { stompRange, judgeRange } from './boardGeometry';
+import { stompRange, judgeRange, surroundRange } from './boardGeometry';
 import { skillCosts } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
@@ -29,6 +29,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     giant: '巨人',
     yinYangMaster: '陰陽師',
     necromancer: 'ネクロマンサー',
+    poisoner: '毒使い',
 };
 export const Game = (props: GameProps) => {
     const initialBoard = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
@@ -95,6 +96,7 @@ export const Game = (props: GameProps) => {
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
+            case 'onClickProliferate': onClickProliferate(); break;
         }
     };
 
@@ -117,7 +119,8 @@ export const Game = (props: GameProps) => {
 
         const aiNecroRemain = heartTurn ? remainHeartNecro : remainCircleNecro;
         const aiNecroCost = heartTurn ? currentHeartNecroCost : currentCircleNecroCost;
-        let result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, false, totalAssaultCost);
+        const aiProliferate = heartTurn ? heartProliferate : circleProliferate;
+        let result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, false, totalAssaultCost, aiProliferate);
 
         if (result.needsShuffle && currentMagic >= skillCosts.onClickShuffle) {
             currentMagic -= skillCosts.onClickShuffle;
@@ -128,7 +131,7 @@ export const Game = (props: GameProps) => {
             else setCircleLockedSkills([]);
             currentSkills = reshuffledSkills(8, []);
             setSkills(currentSkills);
-            result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, true, totalAssaultCost);
+            result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, true, totalAssaultCost, aiProliferate);
         }
 
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
@@ -230,6 +233,18 @@ export const Game = (props: GameProps) => {
         return [...keep, ...randomAnyPick(pool, Math.max(0, 3 - keep.length))];
     };
 
+    // --- 増殖（ループ召喚） ---
+    // 発動後は自分が着手するたびに「コマ→アイテム」を交互に追加し続ける。
+    // 追加のたび維持コストが +1 され、手番開始時に払えなくなるとループが途切れる（自己終息）。
+    const proliferateTokenLife = 2;
+    const proliferateUpkeepStep = 1;
+    const proliferateMaxStacks = 8;
+    const [heartProliferate, setHeartProliferate] = useState<boolean>(false);
+    const [heartProliferateCount, setHeartProliferateCount] = useState<number>(0);
+    const [circleProliferate, setCircleProliferate] = useState<boolean>(false);
+    const [circleProliferateCount, setCircleProliferateCount] = useState<number>(0);
+    const proliferateUpkeep = (count: number): number => count * proliferateUpkeepStep;
+
     const [heartYinYangMode, setHeartYingYangMode] = useState<YingYangMode | undefined>('ying');
     const heartYinYangModeName = heartYinYangMode === 'yang' ? '陽' : '陰';
     const [circleYinYangMode, setCircleYingYangMode] = useState<YingYangMode | undefined>('ying');
@@ -261,8 +276,24 @@ export const Game = (props: GameProps) => {
                 nextMagic += budsCount('💙') * 2;
             }
 
+            // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
+            if (heartProliferate) {
+                const upkeep = proliferateUpkeep(heartProliferateCount);
+                if (nextMagic >= upkeep) {
+                    nextMagic -= upkeep;
+                } else {
+                    setHeartProliferate(false);
+                    setHeartProliferateCount(0);
+                    setGameLog((prev) => [...prev, `ターン${currentTurn} 💙: 増殖の維持コスト(${upkeep})を払えず途切れた`]);
+                }
+            }
+
             setHeartMagic(nextMagic);
-            nextLife = calculateLife(props.heartSelectedCharacter, heartYinYangMode);
+            nextLife = calculateLife(
+                props.heartSelectedCharacter,
+                heartYinYangMode,
+                props.heartSelectedCharacter === 'poisoner' ? poisonCount('💙') : 0
+            );
         } else {
             let nextMagic: number = circleMagic + 1 + budsCount('⭕');
             if (magicCharacter.includes(props.circleSelectedCharacter)) {
@@ -278,8 +309,24 @@ export const Game = (props: GameProps) => {
                 nextMagic += budsCount('⭕') * 2;
             }
 
+            // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
+            if (circleProliferate) {
+                const upkeep = proliferateUpkeep(circleProliferateCount);
+                if (nextMagic >= upkeep) {
+                    nextMagic -= upkeep;
+                } else {
+                    setCircleProliferate(false);
+                    setCircleProliferateCount(0);
+                    setGameLog((prev) => [...prev, `ターン${currentTurn} ⭕: 増殖の維持コスト(${upkeep})を払えず途切れた`]);
+                }
+            }
+
             setCircleMagic(nextMagic);
-            nextLife = calculateLife(props.circleSelectedCharacter, circleYinYangMode);
+            nextLife = calculateLife(
+                props.circleSelectedCharacter,
+                circleYinYangMode,
+                props.circleSelectedCharacter === 'poisoner' ? poisonCount('⭕') : 0
+            );
         }
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
         if (heartTurn && props.heartSelectedCharacter === 'necromancer' && remainHeartNecro > 0) {
@@ -296,7 +343,7 @@ export const Game = (props: GameProps) => {
     useEffect(() => {
         // 次に手番が来るプレイヤーのロックを固定して再シャッフル
         const next = judgeNextIsHeart();
-        setSkills(reshuffledSkills(16, next ? heartLockedSkills : circleLockedSkills));
+        setSkills(reshuffledSkills(21, next ? heartLockedSkills : circleLockedSkills));
     }, [history]);
 
     const onCellClick = (i: number) => {
@@ -314,6 +361,25 @@ export const Game = (props: GameProps) => {
             addLog(`${posName(i)}をロック`);
             setUseLock(useLock - 1);
             setCurrentBoard(nextBoard);
+            return;
+        }
+
+        if (useInjection > 0) {
+            nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '☠' }] };
+            addLog(`${posName(i)}に毒を注入`);
+            setUseInjection(useInjection - 1);
+            playEffect('poison', i);
+            setCurrentBoard(nextBoard);
+            return;
+        }
+
+        if (useMiasma) {
+            exeMiasma(i);
+            return;
+        }
+
+        if (usePandemic) {
+            exePandemic(i);
             return;
         }
 
@@ -341,11 +407,20 @@ export const Game = (props: GameProps) => {
 
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
 
-        for (const square of nextBoard) {
+        // 毒で bind が 0 になったマス（拡散パッシブの起点）
+        const spreadOrigins: number[] = [];
+        for (let s = 0; s < nextBoard.length; s++) {
+            const square = nextBoard[s];
+            const hadLife = square.bind > 0;
             if ((square.player || square.effects.filter((x) => x.effect === '🔑').length !== 0) && square.bind > 0) square.bind--;
+            // 毒: スタック数だけ追加で bind を減らす（毎ターン bind-1 × 毒の数）
+            const poison = square.effects.filter((x) => x.effect === '☠').length;
+            if (poison > 0 && square.bind > 0) square.bind = Math.max(0, square.bind - poison);
             if (square.bind === 0) {
                 square.effects = square.effects.filter((x) => x.effect !== '🔑');
             }
+            // 毒持ちのマスが 0 に落ちた瞬間に拡散の起点として記録
+            if (poison > 0 && hadLife && square.bind === 0 && s !== i) spreadOrigins.push(s);
         }
 
         let newBind: number;
@@ -366,6 +441,10 @@ export const Game = (props: GameProps) => {
             } else {
                 newPlayer = nextBoard[i].player;
                 newBind = calculatedBind;
+            }
+            // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
+            if (calculatedBind <= 0 && nextBoard[i].effects.some((e) => e.effect === '☠')) {
+                spreadOrigins.push(i);
             }
             newEffects = [];
             // 敵味方問わずコマが奪われる/消えるたびに墓地+1
@@ -413,6 +492,29 @@ export const Game = (props: GameProps) => {
             setCircleUseAssault(circleUseAssault - 1);
         }
 
+        // 増殖発動中: 着手のたびにコマ→アイテムを交互に1つずつ追加し続ける
+        if (heartTurn ? heartProliferate : circleProliferate) {
+            const nextCount = (heartTurn ? heartProliferateCount : circleProliferateCount) + 1;
+            const added = applyProliferate(nextBoard, nextCount);
+            if (added) {
+                addLog(`増殖(${nextCount}回目): ${added}`);
+                playEffect('proliferate');
+                if (heartTurn) setHeartProliferateCount(nextCount);
+                else setCircleProliferateCount(nextCount);
+                // 上限に達したら自然収束（維持コストの暴走とループの無限化を防ぐ）
+                if (nextCount >= proliferateMaxStacks) {
+                    addLog('増殖が限界に達して収束した');
+                    if (heartTurn) {
+                        setHeartProliferate(false);
+                        setHeartProliferateCount(0);
+                    } else {
+                        setCircleProliferate(false);
+                        setCircleProliferateCount(0);
+                    }
+                }
+            }
+        }
+
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
         if (necroActive) {
             const opp: Player = currentTurnPlayer === '💙' ? '⭕' : '💙';
@@ -429,6 +531,13 @@ export const Game = (props: GameProps) => {
                 addCorpses(absorbed);
             }
         }
+
+        // 毒拡散パッシブ: 毒で死んだ/毒持ちが奪取破壊されたマスの周囲へ毒を拡散
+        if (poisonerInPlay && spreadOrigins.length > 0) {
+            for (const o of spreadOrigins) spreadPoisonAround(nextBoard, o);
+            addLog('毒が周囲に拡散');
+        }
+
         setCurrentBoard(nextBoard);
 
         setHistory(nextHistory);
@@ -470,6 +579,31 @@ export const Game = (props: GameProps) => {
         setLife(life * 2);
         spendMagic(calculateCost(skillCosts.onClickBibine));
     };
+
+    // --- 毒（毒使い）関連 ---
+    // どちらかが毒使いなら、毒セルが死んだ時の「周囲へ毒拡散」パッシブが有効になる
+    const poisonerInPlay = props.heartSelectedCharacter === 'poisoner' || props.circleSelectedCharacter === 'poisoner';
+    // 指定プレイヤーの自陣にある毒スタック数
+    const poisonCount = (player: Player): number =>
+        currentBoard
+            .filter((x) => x.player === player)
+            .map((x) => x.effects)
+            .flat()
+            .filter((e) => e.effect === '☠').length;
+    // 盤面全体の毒スタック数
+    const boardPoisonCount = (board: SquareInfo[]): number => board.flatMap((x) => x.effects).filter((e) => e.effect === '☠').length;
+    // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与する（毒拡散パッシブ）
+    const spreadPoisonAround = (board: SquareInfo[], idx: number) => {
+        const targets = surroundRange(idx).filter((j) => board[j].player);
+        if (targets.length === 0) return;
+        const t = randomPick(targets);
+        board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+    };
+    const [useMiasma, setUseMiasma] = useState<boolean>(false);
+    const [useInjection, setUseInjection] = useState<number>(0);
+    const [usePandemic, setUsePandemic] = useState<boolean>(false);
+    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、0未満は0
+    const miasmaCost = (): number => Math.max(0, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true));
 
     const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);
@@ -663,6 +797,46 @@ export const Game = (props: GameProps) => {
             setCircleMagic(circleMagic - totalAssaultCost);
             setCircleUseTokenCount(0);
         }
+    };
+
+    // 増殖の1ループ分を盤面に適用する。奇数回=コマ(キャラ)、偶数回=アイテムを追加。
+    // 何も追加できなかった場合は null を返し、ループ回数を進めない（維持コストを不当に上げないため）
+    const applyProliferate = (board: SquareInfo[], step: number): string | null => {
+        const me = currentTurnPlayer;
+        if (step % 2 === 1) {
+            const empties = findEmptyIndexes(board);
+            if (empties.length === 0) return null;
+            const index = randomPick(empties);
+            board[index] = { player: me, bind: proliferateTokenLife, effects: [] };
+            return `${posName(index)}にライフ${proliferateTokenLife}のコマを追加`;
+        }
+        // 毒使いだけは敵コマへの毒がアイテムになる（毒拡散パッシブとつながる）
+        const isPoisoner = (heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) === 'poisoner';
+        const item: Effect = isPoisoner ? { effect: '☠' } : { effect: '🌱' };
+        const targets = board
+            .map((_, idx) => idx)
+            .filter((idx) => {
+                const sq = board[idx];
+                if (sq.effects.some((e) => e.effect === '🔑')) return false;
+                return isPoisoner ? !!sq.player && sq.player !== me : sq.player === me;
+            });
+        if (targets.length === 0) return null;
+        const index = randomPick(targets);
+        board[index] = { ...board[index], effects: [...board[index].effects, item] };
+        return `${posName(index)}に${item.effect}を追加`;
+    };
+
+    const onClickProliferate = () => {
+        addLog(`「増殖」を使用（以後の着手ごとにコマ⇄アイテムを追加。維持コストが毎回+${proliferateUpkeepStep}）`);
+        playEffect('proliferate');
+        if (heartTurn) {
+            setHeartProliferate(true);
+            setHeartProliferateCount(0);
+        } else {
+            setCircleProliferate(true);
+            setCircleProliferateCount(0);
+        }
+        spendMagic(calculateCost(skillCosts.onClickProliferate));
     };
 
     const [useStomp, setUseStomp] = useState<boolean>(false);
@@ -866,6 +1040,90 @@ export const Game = (props: GameProps) => {
         }
     };
 
+    // --- 毒使い 固有スキル「ミアズマ」 ---
+    const onClickMiasma = () => {
+        addLog('「ミアズマ」を使用（自陣を選択）');
+        setUseMiasma(true);
+        spendMagic(miasmaCost(), false);
+    };
+    const exeMiasma = (i: number) => {
+        const board = currentBoard.slice();
+        // 周囲1マスの敵セル(ロック以外)すべてに毒を1付与
+        const targets = surroundRange(i).filter(
+            (j) => board[j].player && board[j].player !== currentTurnPlayer && !board[j].effects.some((e) => e.effect === '🔑')
+        );
+        for (const t of targets) board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+        addLog(`${posName(i)}を中心にミアズマ（敵${targets.length}マスに毒）`);
+        flashCells(targets);
+        playEffect('poison', i);
+        setCurrentBoard(board);
+        setUseMiasma(false);
+    };
+
+    // --- 通常枠 毒スキル ---
+    const onClickInjection = () => {
+        addLog('「インジェクション」を使用（マスを選択）');
+        setUseInjection(useInjection + 1);
+        spendMagic(calculateCost(skillCosts.onClickInjection, false, true));
+    };
+
+    const onClickPoisonToken = () => {
+        const board = currentBoard.slice();
+        const emptyIndexes = findEmptyIndexes(board);
+        const index = randomPick(emptyIndexes);
+        board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] };
+        addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
+        setCurrentBoard(board);
+        spendMagic(calculateCost(skillCosts.onClickPoisonToken, true, true));
+        setUseToken(true);
+    };
+
+    const onClickSerum = () => {
+        addLog('「血清」を使用（自陣の毒をすべて除去）');
+        const board = currentBoard.slice();
+        board.forEach((sq, idx) => {
+            if (sq.player === currentTurnPlayer && sq.effects.some((e) => e.effect === '☠')) {
+                board[idx] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '☠') };
+            }
+        });
+        setCurrentBoard(board);
+        spendMagic(calculateCost(skillCosts.onClickSerum, false, true));
+    };
+
+    const onClickIntensify = () => {
+        addLog('「猛毒化」を使用（毒の数を倍化）');
+        const board = currentBoard.slice();
+        const affected: number[] = [];
+        board.forEach((sq, idx) => {
+            const poison = sq.effects.filter((e) => e.effect === '☠').length;
+            if (poison > 0) {
+                board[idx] = { ...sq, effects: [...sq.effects, ...Array<Effect>(poison).fill({ effect: '☠' })] };
+                affected.push(idx);
+            }
+        });
+        flashCells(affected);
+        playEffect('poison');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(skillCosts.onClickIntensify, false, true));
+    };
+
+    const onClickPandemic = () => {
+        addLog('「パンデミック」を使用（マスを選択）');
+        setUsePandemic(true);
+        spendMagic(calculateCost(skillCosts.onClickPandemic, false, true));
+    };
+    const exePandemic = (i: number) => {
+        const board = currentBoard.slice();
+        // 選択マスと周囲1マス(3x3)のコマに毒を1付与（敵味方問わず）
+        const targets = stompRange(i).filter((j) => board[j].player && !board[j].effects.some((e) => e.effect === '🔑'));
+        for (const t of targets) board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+        addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
+        flashCells(targets);
+        playEffect('poison', i);
+        setCurrentBoard(board);
+        setUsePandemic(false);
+    };
+
     const judgeNextIsHeart = (): boolean => {
         if (currentTurn === 1) {
             return true;
@@ -888,14 +1146,18 @@ export const Game = (props: GameProps) => {
         return heartTurn;
     };
 
-    const checkSkillDisable = (cost: number, isToken: boolean = false): boolean => {
+    const checkSkillDisable = (cost: number, isToken: boolean = false, isPoison: boolean = false): boolean => {
         const magic = heartTurn ? heartMagic : circleMagic;
-        const calculatedCost: number = calculateCost(cost, isToken);
+        const calculatedCost: number = calculateCost(cost, isToken, isPoison);
         return magic < calculatedCost || (isToken && useToken);
     };
 
-    const calculateCost = (cost: number, isToken: boolean = false) => {
+    const calculateCost = (cost: number, isToken: boolean = false, isPoison: boolean = false) => {
         const characterId = heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter;
+        // 毒使い: 毒系スキルは-1、それ以外は+1
+        if (characterId === 'poisoner') {
+            return isPoison ? cost - 1 : cost + 1;
+        }
         if (characterId === 'tactician') {
             if (isToken) {
                 return cost - 1;
@@ -934,6 +1196,11 @@ export const Game = (props: GameProps) => {
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         const necro = player === '💙' ? remainHeartNecro : remainCircleNecro;
         if (necro > 0) labels.push(`蘇生 残り${necro}ターン`);
+        const proliferate = player === '💙' ? heartProliferate : circleProliferate;
+        if (proliferate) {
+            const count = player === '💙' ? heartProliferateCount : circleProliferateCount;
+            labels.push(`増殖 ${count}回目 (次の維持${proliferateUpkeep(count)})`);
+        }
         return labels;
     };
 
@@ -1019,10 +1286,17 @@ export const Game = (props: GameProps) => {
         setUseToken(false);
         setHeartUseAssault(0);
         setCircleUseAssault(0);
+        setHeartProliferate(false);
+        setHeartProliferateCount(0);
+        setCircleProliferate(false);
+        setCircleProliferateCount(0);
         setUseStomp(false);
         setUseJudgeDay(false);
         setUseBuds([false, 0]);
         setUseLock(0);
+        setUseMiasma(false);
+        setUseInjection(0);
+        setUsePandemic(false);
         setRemainHeartNecro(0);
         setRemainCircleNecro(0);
         setCurrentHeartNecroCost(baseNecromancyCost);
@@ -1057,9 +1331,12 @@ export const Game = (props: GameProps) => {
     const onCellHover = (i: number) => {
         if (useStomp) setPreviewCells(stompRange(i));
         else if (useJudgeDay) setPreviewCells(judgeRange(i));
+        else if (usePandemic) setPreviewCells(stompRange(i));
+        else if (useMiasma) setPreviewCells(surroundRange(i));
+        else if (useInjection > 0) setPreviewCells([i]);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0) setPreviewCells([]);
     };
 
     const currentYinYangMode = heartTurn ? heartYinYangMode : circleYinYangMode;
@@ -1089,6 +1366,18 @@ export const Game = (props: GameProps) => {
         { idx: 12, onClick: onClickUseDoubleLock, buttonText: `ダブルロック-${calculateCost(skillCosts.onClickDoubleLock)}`, paragraph: `マスを2つ選択し、6ターン以上ロックします`, disabled: checkSkillDisable(skillCosts.onClickDoubleLock) },
         { idx: 13, onClick: onClickUseTripleLock, buttonText: `トリプルロック-${calculateCost(skillCosts.onClickTripleLock)}`, paragraph: `マスを3つ選択し、6ターン以上ロックします`, disabled: checkSkillDisable(skillCosts.onClickTripleLock) },
         { idx: 14, onClick: onClickWalpurgisNight, buttonText: `ワルプルギスの夜-${calculateCost(skillCosts.onClickWalpurgisNight)}`, paragraph: `全コマにバッズを植えます`, disabled: checkSkillDisable(skillCosts.onClickWalpurgisNight) },
+        { idx: 15, onClick: onClickInjection, buttonText: `インジェクション-${calculateCost(skillCosts.onClickInjection, false, true)}`, paragraph: `マスを選択し、毒を1付与します（毒は毎ターンbind-1・重複可）`, disabled: checkSkillDisable(skillCosts.onClickInjection, false, true) },
+        { idx: 16, onClick: onClickPoisonToken, buttonText: `ポイズントークン-${calculateCost(skillCosts.onClickPoisonToken, true, true)}`, paragraph: `毒付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickPoisonToken, true, true) },
+        { idx: 17, onClick: onClickSerum, buttonText: `血清-${calculateCost(skillCosts.onClickSerum, false, true)}`, paragraph: `自陣のコマの毒をすべて除去します`, disabled: checkSkillDisable(skillCosts.onClickSerum, false, true) },
+        { idx: 18, onClick: onClickIntensify, buttonText: `猛毒化-${calculateCost(skillCosts.onClickIntensify, false, true)}`, paragraph: `毒が付与されている全マスの毒の数を倍にします`, disabled: checkSkillDisable(skillCosts.onClickIntensify, false, true) },
+        { idx: 19, onClick: onClickPandemic, buttonText: `パンデミック-${calculateCost(skillCosts.onClickPandemic, false, true)}`, paragraph: `マスを選択し、そのマスと周囲1マス(3x3)のコマに毒を1付与します`, disabled: checkSkillDisable(skillCosts.onClickPandemic, false, true) },
+        {
+            idx: 20,
+            onClick: onClickProliferate,
+            buttonText: `増殖-${calculateCost(skillCosts.onClickProliferate)}`,
+            paragraph: `発動後は着手のたびに「ライフ${proliferateTokenLife}のコマ」→「アイテム(🌱/毒使いは敵に☠)」を交互に追加し続けます\n維持コストは手番開始時に払い、追加のたび+${proliferateUpkeepStep}増加。払えなくなるか${proliferateMaxStacks}回で終了`,
+            disabled: checkSkillDisable(skillCosts.onClickProliferate) || (heartTurn ? heartProliferate : circleProliferate),
+        },
     ];
 
     return (
@@ -1205,6 +1494,13 @@ export const Game = (props: GameProps) => {
                         paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
                         hidden={(heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) !== 'necromancer'}
                         disabled={checkSkillDisable(necroCost)}
+                    />
+                    <SkillButton
+                        onClick={onClickMiasma}
+                        buttonText={`ミアズマ-${miasmaCost()}`}
+                        paragraph={'自陣を選択し、周囲1マスの敵コマすべてに毒を1付与します コストは盤面の毒の数だけ軽減されます'}
+                        hidden={(heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) !== 'poisoner'}
+                        disabled={(heartTurn ? heartMagic : circleMagic) < miasmaCost()}
                     />
                     <SkillButton
                         onClick={onClickYingYangSkll}

@@ -280,6 +280,18 @@
     }
 }
 
+/* --- 増殖: 中央で脈打つ無限記号 --- */
+.proliferateSigil {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 56px;
+    animation: sigilPulse 800ms var(--ease);
+    opacity: 0;
+    filter: drop-shadow(0 0 10px rgba(95, 208, 106, 0.9));
+}
+
 /* --- 陰陽転化: 回転する太極図 --- */
 .yinyang {
     position: absolute;

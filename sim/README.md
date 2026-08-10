@@ -41,9 +41,11 @@ node sim/cli.js bench   --games 1500 --char you --seed 1       # AIの強さ(対
 均衡度, 0=横並び）/ `giantGap`（giantの弱さ）/ `charWinRate`。
 
 この一連を自動で回すスキルが **`/balance-loop`**（`.claude/skills/balance-loop/`）。
-バランス調整ノブは **`sim/config.js`**（ライフ平均・std・巨人の手番スキップ）。
+バランス調整ノブは **`sim/config.js`**（ライフ平均・std・巨人の手番スキップ・増殖の
+`cost`/`tokenLife`/`upkeepStep`/`maxStacks`）。増殖のノブを変えたら
+`src/components/game/skillCosts.ts` と `Game.tsx` の定数も同じ値に合わせること。
 
-キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer`
+キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner`
 
 ## ファイル
 - `engine.js` — ゲームエンジン（盤面・ライフ・マジック・手番・全スキル）。移植の

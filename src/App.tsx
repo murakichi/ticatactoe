@@ -18,6 +18,7 @@ const CHARACTERS: CharacterDef[] = [
     { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフ3倍。2ターンに一度しか行動できない。3x3を破壊する鉄槌' },
     { id: 'yinYangMaster', name: '陰陽師', icon: '☯️', passive: '陰陽を切替。陽=ライフ+1/コスト+1、陰=マジック+1/ライフ-1' },
     { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: '死者を蘇らせる。ライフ-1。ライフ0の敵を味方として復活' },
+    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒セルが0/破壊で周囲に毒拡散。自陣の毒だけライフ+1。毒スキル-1/他+1' },
 ];
 
 export const App = () => {

@@ -10,7 +10,8 @@
  */
 
 const { HEART, CIRCLE, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
-        curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost, reshuffleSkillsFor } = require('./engine');
+        curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost, reshuffleSkillsFor,
+        miasmaCost, surroundRange } = require('./engine');
 
 const WIN_LINES = [
     [0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15],
@@ -66,6 +67,18 @@ function bestJudgeTarget(board, me, opp) {
         if (net > bestNet) { bestNet = net; bestIdx = i; }
     }
     return bestNet >= 2 ? bestIdx : null;
+}
+
+// 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ (敵1体以上で価値あり)。なければ null
+function bestMiasmaTarget(board, me, opp) {
+    let bestIdx = null, bestEnemies = 0;
+    for (let i = 0; i < 16; i++) {
+        if (board[i].player !== me) continue; // 自陣を選択
+        let enemies = 0;
+        for (const j of surroundRange(i)) if (board[j].player === opp && !board[j].effects.some(e => e.effect === '🔑')) enemies++;
+        if (enemies > bestEnemies) { bestEnemies = enemies; bestIdx = i; }
+    }
+    return bestEnemies >= 1 ? bestIdx : null;
 }
 
 // ---- helpers ----
@@ -317,6 +330,15 @@ function chooseSkills(s, availableSkills) {
             const taCost = totalAssaultCost(s);
             if (remaining >= taCost && myPieces >= 2) spend(taCost, 'totalAssault');
         }
+
+        // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
+        const proliferateActive = me === HEART ? s.heartProliferate : s.circleProliferate;
+        if (!proliferateActive && availableSkills.includes(20)) {
+            const pCost = cost(skillCosts.onClickProliferate);
+            let emptyCount = 0;
+            for (const sq of board) if (!sq.player) emptyCount++;
+            if (remaining >= pCost + 1 && emptyCount >= 5) spend(pCost, 'proliferate');
+        }
     }
 
     // Opiumはリーチ防御に使わない (bindを下げるだけで空きマスは塞げない)
@@ -364,7 +386,10 @@ function chooseSkills(s, availableSkills) {
 
     // --- トークン系 ---
     if (!tokenUsed) {
-        if (availableSkills.includes(11) && remaining >= cost(skillCosts.onClickDoubleToken, true)) {
+        const poisonTokenCost = calculateCost(s, skillCosts.onClickPoisonToken, true, true);
+        if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
+            spend(poisonTokenCost, 'poisonToken');
+        } else if (availableSkills.includes(11) && remaining >= cost(skillCosts.onClickDoubleToken, true)) {
             spend(cost(skillCosts.onClickDoubleToken, true), 'doubleToken');
         } else if (availableSkills.includes(9) && remaining >= cost(skillCosts.onClickBudsToken, true)) {
             spend(cost(skillCosts.onClickBudsToken, true), 'budsToken');
@@ -406,11 +431,12 @@ function chooseLocks(s, availableSkills) {
             case 14: return myPieces >= 3;
             case 0: case 1: return life <= 2;
             case 2: case 10: return empties >= 8;
+            case 20: return empties >= 6;   // 増殖(空きが多いほどループが伸びる)
             default: return false;
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx > 14) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx > 20) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -498,6 +524,16 @@ function faithfulMakeMove(s) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
                 return { move: null, turnEnded: true };
+            }
+        }
+        // 毒使い ミアズマ: 周囲に敵がいる自陣マスを選び、隣接敵に毒を撒く (手番は進まない→通常着手)
+        if (ch === 'poisoner' && magic >= miasmaCost(s)) {
+            const target = bestMiasmaTarget(s.board, me, opp);
+            if (target !== null) {
+                SKILLS.miasma(s);
+                placeMove(s, target);
+                const move = getEnhancedBestMove(s);
+                return { move, turnEnded: false };
             }
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
