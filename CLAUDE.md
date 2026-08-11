@@ -54,6 +54,9 @@ npm test     # Jest in watch mode
 積んだ issue と積み残しは `/diary-improve-loop`（`/loop` から回す）が
 1イテレーション1件ずつ拾って潰す。
 
+拾う issue が尽きたら `/propose-game` で新スキル/新キャラを提案し、
+採用基準を満たしたものだけ起票する（提案と実装は分ける。実装はループ側の仕事）。
+
 **PR はオーナー確認なしでマージしてよい**（許可済み）。条件は CI がグリーンなこと。
 
 ## Deployment
