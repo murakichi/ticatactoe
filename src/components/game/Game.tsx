@@ -9,7 +9,7 @@ import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange, surroundRange } from './boardGeometry';
-import { skillCosts } from './skillCosts';
+import { skillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
 
@@ -591,8 +591,8 @@ export const Game = (props: GameProps) => {
     const [useMiasma, setUseMiasma] = useState<boolean>(false);
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
-    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、0未満は0
-    const miasmaCost = (): number => Math.max(0, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true));
+    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、下限は MIASMA_MIN_COST
+    const miasmaCost = (): number => Math.max(MIASMA_MIN_COST, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true));
 
     const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);

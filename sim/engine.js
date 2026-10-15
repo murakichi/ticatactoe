@@ -790,8 +790,9 @@ function onClickNecromancy(s) {
 }
 
 // ---- 毒使い スキル ----
+const MIASMA_MIN_COST = 2; // Game.tsx / skillCosts.ts と同値
 function miasmaCost(s) {
-    return Math.max(0, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
+    return Math.max(MIASMA_MIN_COST, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
 }
 function onClickMiasma(s) {
     s.useMiasma = true;
