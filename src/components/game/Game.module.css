@@ -253,6 +253,50 @@
     cursor: default;
 }
 
+/* ===== モバイル: 両プレイヤーのパネルを盤面の上に横並びで表示 ===== */
+@media (max-width: 720px) {
+    .game {
+        padding: var(--space-3) var(--space-2);
+    }
+
+    .main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
+        justify-items: stretch;
+    }
+
+    /* パネルは行1(💙=左 / ⭕=右)に自動配置され、盤面は行2、ログは行3に固定する */
+    .boardWrap {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        align-items: center;
+    }
+
+    .log {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        width: 100%;
+    }
+
+    .panel {
+        width: auto;
+        min-width: 0;
+        padding: var(--space-2);
+        gap: 4px;
+    }
+
+    .avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 22px;
+    }
+
+    .name {
+        font-size: 13px;
+    }
+}
+
 /* ===== スキル ===== */
 .skills {
     margin-top: var(--space-6);
