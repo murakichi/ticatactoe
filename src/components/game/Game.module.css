@@ -255,28 +255,36 @@
 
 /* ===== モバイル: 両プレイヤーのパネルを盤面の上に横並びで表示 ===== */
 @media (max-width: 720px) {
+    /* .main を display: contents にして、パネル/盤面/スキル/ログを .game の直接のグリッド項目として並べ替える */
     .game {
         padding: var(--space-3) var(--space-2);
-    }
-
-    .main {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: var(--space-2);
-        justify-items: stretch;
     }
 
-    /* パネルは行1(💙=左 / ⭕=右)に自動配置され、盤面は行2、ログは行3に固定する */
+    .main {
+        display: contents;
+    }
+
+    /* パネルは行1(💙=左 / ⭕=右)に自動配置。盤面→スキル→ログの順に固定する(ログが一番下) */
     .boardWrap {
         grid-column: 1 / -1;
         grid-row: 2;
         align-items: center;
     }
 
-    .log {
+    .skills {
         grid-column: 1 / -1;
         grid-row: 3;
+        margin-top: var(--space-3);
+    }
+
+    .log {
+        grid-column: 1 / -1;
+        grid-row: 4;
         width: 100%;
+        margin-top: var(--space-3);
     }
 
     .panel {
