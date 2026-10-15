@@ -34,6 +34,6 @@ export const skillCosts = {
 
 export type SkillCosts = typeof skillCosts;
 
-// ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと毎ターン連打で
-// 敵マスを確実に0にできてしまうため、毒使いの魔力獲得(+1/ターン)で2ターンに1回までに抑える
-export const MIASMA_MIN_COST = 2;
+// ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
+// 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）
+export const MIASMA_MIN_COST = 1;
