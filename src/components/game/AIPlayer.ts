@@ -355,7 +355,13 @@ class AIPlayer {
         }
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
+        // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える
+        // (sim/ai.js chooseSkills と同一。A/B: ネクロ +2〜6pt。巨人は誤差内、軍師は大幅悪化で対象外)
+        let reserve = 0;
+        if (this.character === 'necromancer' && necroRemain === 0) reserve = necroCost;
+        const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
+            if (reserve > 0 && RESERVE_SKIP.includes(skill) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
         };

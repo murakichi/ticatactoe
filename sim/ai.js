@@ -323,7 +323,17 @@ function chooseSkills(s, availableSkills) {
     function cost(base, isToken) { return calculateCost(s, base, isToken || false); }
 
     const skills = [];
+    // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える。
+    // A/B(約1200試合×seed1-3): ネクロ +2.1/+5.2/+5.8pt。巨人(ストンプ)は +0.8/+1.1/+1.0pt と誤差内で対象外、
+    // 軍師は全軍突撃のコストをトークンで下げるため温存すると 0.468→0.198 と大幅悪化
+    let reserve = 0;
+    if (character === 'necromancer') {
+        const active = me === HEART ? s.remainHeartNecro > 0 : s.remainCircleNecro > 0;
+        if (!active) reserve = me === HEART ? s.currentHeartNecroCost : s.currentCircleNecroCost;
+    }
+    const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
+        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
     }
