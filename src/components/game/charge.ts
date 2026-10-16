@@ -3,6 +3,7 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { CHARGE_MIN_COST } from './skillCosts';
 
 /** 席ごとのキャラ（添字 = 席番号。シンボルからは seatOf で引く）。sim/engine.js の s.chars と同じ */
 export type PlayerCharacters = readonly CharacterId[];
@@ -89,4 +90,53 @@ export const withCharge = (board: SquareInfo[], cells: number[]): SquareInfo[] =
     const next = board.slice();
     for (const k of cells) next[k] = { ...next[k], effects: [...next[k].effects, { effect: '⚡' }] };
     return next;
+};
+
+/** 盤面全体の⚡の数（スタック込み）。sim/engine.js の boardChargeCount と同じ */
+export const boardChargeCount = (board: SquareInfo[]): number => board.reduce((n, sq) => n + chargeStacks(sq), 0);
+
+/**
+ * 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ基礎コストを軽減してからキャラ補正（calc）をかけ、
+ * 下限は CHARGE_MIN_COST (#43)。sim/engine.js の chargeOneCost / chargeSpreadCost と同じ
+ */
+export const reducedChargeCost = (baseCost: number, board: SquareInfo[], calc: (cost: number) => number): number =>
+    Math.max(CHARGE_MIN_COST, calc(baseCost - boardChargeCount(board)));
+
+/** ランダム帯電の候補マス: 空きマス含む全マスから、無敵マスと🔑ロック中のマスを除く */
+export const randomChargeCandidates = (board: SquareInfo[], chars: PlayerCharacters): number[] =>
+    board.map((sq, i) => (!isShielded(sq, chars) && !hasLock(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** ジャマーが選べるマスか: ⚡があり、無敵マスなら自分のものだけ（弱点を解く唯一の手段）。他人の無敵マスは不可 */
+export const canJam = (board: SquareInfo[], i: number, current: Player, chars: PlayerCharacters): boolean =>
+    chargeStacks(board[i]) > 0 && !(isShielded(board[i], chars) && board[i].player !== current);
+
+/** ジャマーのダメージ対象: i の縦横隣接の敵コマ（ライフ>0・🔑なし。current 以外のコマ） */
+export const jammerTargets = (board: SquareInfo[], i: number, size: number, current: Player): number[] =>
+    orthoNeighbors(i, size).filter((j) => {
+        const sq = board[j];
+        return !!sq.player && sq.player !== current && sq.bind > 0 && !hasLock(sq);
+    });
+
+export type JammerResult = {
+    /** ライフを減らされたマス */
+    damaged: number[];
+    /** ライフが0になったマス */
+    zeroed: number[];
+};
+
+/**
+ * ジャマー: i の⚡のスタック数ぶん、縦横隣接の敵コマのライフを減らし（最小0）、i の⚡を全部消す。
+ * 自分のコマ・🔑付きのコマは対象外。board を直接書き換える。sim/engine.js の exeJammer と同じ
+ */
+export const applyJammer = (board: SquareInfo[], i: number, size: number, current: Player): JammerResult => {
+    const stacks = chargeStacks(board[i]);
+    const damaged = jammerTargets(board, i, size, current);
+    const zeroed: number[] = [];
+    for (const j of damaged) {
+        const bind = Math.max(0, board[j].bind - stacks);
+        board[j] = { ...board[j], bind };
+        if (bind === 0) zeroed.push(j);
+    }
+    board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
+    return { damaged, zeroed };
 };

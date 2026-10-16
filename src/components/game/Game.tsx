@@ -10,7 +10,7 @@ import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge } from './charge';
+import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer } from './charge';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
@@ -148,6 +148,10 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
+            case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
+            case 'onClickChargeArea': onClickChargeArea(); break;
+            case 'onClickChargeRandom': onClickChargeRandom(); break;
+            case 'onClickJammer': onClickJammer(); break;
         }
     };
 
@@ -338,6 +342,13 @@ export const Game = (props: GameProps) => {
 
     const onCellClick = (i: number) => {
         setPreviewCells([]);
+        // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。
+        // ⚡のないマス・他人の無敵マスは無視（選び直せる）。無敵の早期リターンより前に判定する
+        if (useJammer) {
+            if (!canJam(currentBoard, i, currentTurnPlayer, characters)) return;
+            exeJammer(i);
+            return;
+        }
         // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)。対象選択スキルも含めて受け付けない
         if (isShielded(currentBoard[i], characters)) return;
         const prevPlayer = currentBoard[i].player;
@@ -349,6 +360,16 @@ export const Game = (props: GameProps) => {
             playEffect('zap', i);
             setUseChargeOne(false);
             setCurrentBoard(nextBoard);
+            return;
+        }
+
+        if (useChargeArea) {
+            const cells = geo.stompRange(i);
+            addLog(`${posName(i)}を中心に範囲帯電（${cells.length}マスに⚡）`);
+            flashCells(cells);
+            playEffect('zap', i);
+            setUseChargeArea(false);
+            setCurrentBoard(withCharge(currentBoard, cells));
             return;
         }
 
@@ -580,7 +601,7 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全23スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)を永久に引けなかった
+        // プールは全27スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)を永久に引けなかった
         setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
@@ -1078,6 +1099,13 @@ export const Game = (props: GameProps) => {
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
+    const [useChargeArea, setUseChargeArea] = useState<boolean>(false);
+    const [useJammer, setUseJammer] = useState<boolean>(false);
+    // 帯電付与・帯電拡散の実コスト: 基礎 - 盤面の⚡の数（キャラ補正後）、下限は CHARGE_MIN_COST (#43)
+    const chargeOneCost = (player: Player = currentTurnPlayer): number =>
+        reducedChargeCost(skillCosts.onClickChargeOne, currentBoard, (c) => calculateCost(c, false, false, player));
+    const chargeSpreadCost = (player: Player = currentTurnPlayer): number =>
+        reducedChargeCost(skillCosts.onClickChargeSpread, currentBoard, (c) => calculateCost(c, false, false, player));
     // 帯電トークン: 空きマスにランダムに⚡付きのコマを置く（トークン扱い。発火はしない）
     const onClickChargeToken = () => {
         const board = currentBoard.slice();
@@ -1096,13 +1124,60 @@ export const Game = (props: GameProps) => {
     const onClickChargeOne = () => {
         addLog('「帯電付与」を使用（マスを選択）');
         setUseChargeOne(true);
-        spendMagic(calculateCost(skillCosts.onClickChargeOne));
+        spendMagic(chargeOneCost());
     };
     // 固有スキル 帯電拡散: コマのあるマスだけを縦横に辿って届く全マスに⚡を付与する
     const onClickChargeSpread = () => {
         addLog('「帯電拡散」を使用（コマを選択）');
         setUseChargeSpread(true);
-        spendMagic(skillCosts.onClickChargeSpread, false);
+        spendMagic(chargeSpreadCost(), false);
+    };
+    // 帯電ダブルトークン: 空きマスにランダムに⚡付きのコマを2つ置く（トークン扱い。発火はしない）
+    const onClickDoubleChargeToken = () => {
+        const board = currentBoard.slice();
+        const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
+        for (const idx of picks) {
+            board[idx] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
+        }
+        addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
+        if (picks.length > 0) playEffect('zap', picks[0]);
+        setCurrentBoard(board);
+        spendMagic(calculateCost(skillCosts.onClickDoubleChargeToken, true));
+        setUseToken(true);
+    };
+    // 範囲帯電: 選んだマスを中心に3x3（空きマス含む）へ⚡を1つずつ付与する。ターンは終わらず、ダメージもない
+    const onClickChargeArea = () => {
+        addLog('「範囲帯電」を使用（中心のマスを選択）');
+        setUseChargeArea(true);
+        spendMagic(calculateCost(skillCosts.onClickChargeArea));
+    };
+    // ランダム帯電: ランダムな1〜4マス（空きマス可。無敵マス・🔑ロック中は除く）に⚡を付与する。クリック不要
+    const onClickChargeRandom = () => {
+        const cands = randomChargeCandidates(currentBoard, characters);
+        const n = Math.min(cands.length, 1 + Math.floor(Math.random() * 4));
+        const picks = randomAnyPick(cands, n);
+        addLog(`「ランダム帯電」を使用（${picks.map(posName).join('・')}に⚡）`);
+        if (picks.length > 0) {
+            flashCells(picks);
+            playEffect('zap', picks[0]);
+        }
+        setCurrentBoard(withCharge(currentBoard, picks));
+        spendMagic(calculateCost(skillCosts.onClickChargeRandom));
+    };
+    // ジャマー: ⚡のあるマスを選び、縦横隣接の敵コマのライフを⚡の数だけ減らして⚡を取り除く
+    const onClickJammer = () => {
+        addLog('「ジャマー」を使用（⚡のマスを選択）');
+        setUseJammer(true);
+        spendMagic(calculateCost(skillCosts.onClickJammer));
+    };
+    const exeJammer = (i: number) => {
+        const board = currentBoard.slice();
+        const r = applyJammer(board, i, geo.size, currentTurnPlayer);
+        addLog(`${posName(i)}のジャマー（${r.damaged.length}コマのライフを減少${r.zeroed.length > 0 ? `・${r.zeroed.length}コマがライフ0` : ''}）`);
+        flashCells(r.damaged);
+        playEffect('zap', i);
+        setUseJammer(false);
+        setCurrentBoard(board);
     };
 
     // 次の手番の席。基本は席順どおりで、次が巨人のときだけ5ターンに1回その席を飛ばす
@@ -1194,7 +1269,7 @@ export const Game = (props: GameProps) => {
             case 'poisoner':
                 return [{ name: 'ミアズマ', cost: miasmaCost(symbols[seat]) }];
             case 'electrician':
-                return [{ name: '帯電拡散', cost: skillCosts.onClickChargeSpread }];
+                return [{ name: '帯電拡散', cost: chargeSpreadCost(symbols[seat]) }];
             default:
                 return [];
         }
@@ -1301,6 +1376,8 @@ export const Game = (props: GameProps) => {
         setUsePandemic(false);
         setUseChargeOne(false);
         setUseChargeSpread(false);
+        setUseChargeArea(false);
+        setUseJammer(false);
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
@@ -1336,9 +1413,11 @@ export const Game = (props: GameProps) => {
         else if (useInjection > 0) setPreviewCells([i]);
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
+        else if (useChargeArea) setPreviewCells(geo.stompRange(i));
+        else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer) setPreviewCells([]);
     };
 
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
@@ -1379,7 +1458,11 @@ export const Game = (props: GameProps) => {
             disabled: checkSkillDisable(skillCosts.onClickProliferate) || proliferate[turnSeat],
         },
         { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(skillCosts.onClickChargeToken, true)}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickChargeToken, true) },
-        { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${calculateCost(skillCosts.onClickChargeOne)}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeOne) },
+        { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${chargeOneCost()}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n付与しただけではダメージは出ません\nコストは盤面の⚡の数だけ軽減されます`, disabled: magic[turnSeat] < chargeOneCost() },
+        { idx: 23, onClick: onClickDoubleChargeToken, buttonText: `帯電ダブルトークン-${calculateCost(skillCosts.onClickDoubleChargeToken, true)}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickDoubleChargeToken, true) },
+        { idx: 24, onClick: onClickChargeArea, buttonText: `範囲帯電-${calculateCost(skillCosts.onClickChargeArea)}`, paragraph: `マスを選択し、そのマスと周囲1マス(3x3)に⚡を1つずつ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeArea) },
+        { idx: 25, onClick: onClickChargeRandom, buttonText: `ランダム帯電-${calculateCost(skillCosts.onClickChargeRandom)}`, paragraph: `ランダムな1〜4マスに⚡を1つずつ付与します（空きマスも可）\n無敵のマスと🔑ロック中のマスは対象外です`, disabled: checkSkillDisable(skillCosts.onClickChargeRandom) },
+        { idx: 26, onClick: onClickJammer, buttonText: `ジャマー-${calculateCost(skillCosts.onClickJammer)}`, paragraph: `⚡のあるマスを選択し、縦横に隣接する相手のコマのライフを⚡の数だけ減らして、そのマスの⚡を取り除きます\n自分のコマと🔑ロック中のコマは影響を受けません\n自分の無敵マスも選べます（弱点を解除できます）`, disabled: checkSkillDisable(skillCosts.onClickJammer) || boardChargeCount(currentBoard) === 0 },
     ];
 
     return (
@@ -1508,10 +1591,10 @@ export const Game = (props: GameProps) => {
                     />
                     <SkillButton
                         onClick={onClickChargeSpread}
-                        buttonText={`帯電拡散-${skillCosts.onClickChargeSpread}`}
-                        paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します'}
+                        buttonText={`帯電拡散-${chargeSpreadCost()}`}
+                        paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します コストは盤面の⚡の数だけ軽減されます'}
                         hidden={currentCharacter !== 'electrician'}
-                        disabled={magic[turnSeat] < skillCosts.onClickChargeSpread}
+                        disabled={magic[turnSeat] < chargeSpreadCost()}
                     />
                     <SkillButton
                         onClick={onClickYingYangSkll}

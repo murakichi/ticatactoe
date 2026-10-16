@@ -62,8 +62,8 @@ function shouldDecay(placements, n) {
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
-// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 23; // SIM_POOL_SIZE: A/B検証用の上書き
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 27; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -156,7 +156,13 @@ const skillCosts = {
     onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
+    onClickDoubleChargeToken: (config.charge && config.charge.doubleTokenCost) || 6,
+    onClickChargeArea: (config.charge && config.charge.areaCost) || 5,
+    onClickChargeRandom: (config.charge && config.charge.randomCost) || 3,
+    onClickJammer: (config.charge && config.charge.jammerCost) || 4,
 };
+// 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
+const CHARGE_MIN_COST = (config.charge && config.charge.minCost) || 1;
 
 // [FAITHFUL] Game.tsx necromancer constants
 const baseNecromancyCost = 10;
@@ -235,6 +241,19 @@ function isShielded(s, sq) {
 // 🔑ロックまたは⚡の無敵＝ダメージ系スキルの対象外にするマス
 function isGuarded(s, sq) {
     return sq.effects.some((e) => e.effect === '🔑') || isShielded(s, sq);
+}
+// 盤面全体の⚡の数（スタック込み）
+function boardChargeCount(board) {
+    let n = 0;
+    for (const sq of board) n += chargeStacks(sq);
+    return n;
+}
+// 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ軽減、下限 CHARGE_MIN_COST (#43。ミアズマと同じ流儀)
+function chargeOneCost(s) {
+    return Math.max(CHARGE_MIN_COST, calculateCost(s, skillCosts.onClickChargeOne - boardChargeCount(s.board)));
+}
+function chargeSpreadCost(s) {
+    return Math.max(CHARGE_MIN_COST, calculateCost(s, skillCosts.onClickChargeSpread - boardChargeCount(s.board)));
 }
 function bumpStat(s, key, n = 1) {
     s.stats[key] = (s.stats[key] || 0) + n;
@@ -345,6 +364,8 @@ function newGame(opts = {}) {
         lockedSkills: Array.from({ length: n }, () => []),
         useChargeOne: false,
         useChargeSpread: false,
+        useChargeArea: false,
+        useJammer: false,
         stats: {},
         winner: undefined,
         log: [],
@@ -459,6 +480,14 @@ function advanceTurn(s) {
 function placeMove(s, i) {
     const board = s.board;
 
+    // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。他人の無敵マスは選べない
+    if (s.useJammer) {
+        if (chargeStacks(board[i]) === 0) return false;
+        if (isShielded(s, board[i]) && board[i].player !== curPlayer(s)) return false;
+        exeJammer(s, i);
+        return true;
+    }
+
     // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)
     if (isShielded(s, board[i])) return false;
 
@@ -470,6 +499,10 @@ function placeMove(s, i) {
     }
     if (s.useChargeSpread) {
         exeChargeSpread(s, i);
+        return true;
+    }
+    if (s.useChargeArea) {
+        exeChargeArea(s, i);
         return true;
     }
     if (s.useLock > 0) {
@@ -932,14 +965,14 @@ function onClickChargeToken(s) {
 }
 function onClickChargeOne(s) {
     s.useChargeOne = true;
-    spendMagic(s, calculateCost(s, skillCosts.onClickChargeOne));
+    spendMagic(s, chargeOneCost(s));
     bumpMagicCount(s);
     bumpStat(s, 'chargeOne');
 }
 // 固有スキル: 選んだコマのあるマスから、コマのあるマスだけを縦横に辿ってすべてに⚡を付与（発火はしない）
 function onClickChargeSpread(s) {
     s.useChargeSpread = true;
-    spendMagic(s, skillCosts.onClickChargeSpread);
+    spendMagic(s, chargeSpreadCost(s));
     bumpStat(s, 'chargeSpread');
 }
 function exeChargeSpread(s, i) {
@@ -947,6 +980,67 @@ function exeChargeSpread(s, i) {
     for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
     bumpStat(s, 'spreadCells', cells.length);
     s.useChargeSpread = false;
+}
+
+// ---- 雷霆の巫 スキル2 (#40) ----
+// 帯電ダブルトークン: ⚡付きのコマを2つ設置（ターン1回）
+function onClickDoubleChargeToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    for (const idx of randomAnyPick(empties, 2, s.rng)) {
+        if (idx != null) s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
+    }
+    spendMagic(s, calculateCost(s, skillCosts.onClickDoubleChargeToken, true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'doubleChargeToken');
+}
+// 範囲帯電: 選んだマスを中心に3x3へ⚡を付与（発火はしない）
+function onClickChargeArea(s) {
+    s.useChargeArea = true;
+    spendMagic(s, calculateCost(s, skillCosts.onClickChargeArea));
+    bumpMagicCount(s);
+    bumpStat(s, 'chargeArea');
+}
+function exeChargeArea(s, i) {
+    const cells = geometryOf(s.size).stompRange(i);
+    for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
+    bumpStat(s, 'areaCells', cells.length);
+    s.useChargeArea = false;
+}
+// ランダム帯電: ランダムな1〜4マスに⚡（空きマス可。無敵マス・ロック中のマスは除く）
+function onClickChargeRandom(s) {
+    const cands = [];
+    for (let k = 0; k < s.board.length; k++) {
+        if (!isShielded(s, s.board[k]) && !s.board[k].effects.some((e) => e.effect === '🔑')) cands.push(k);
+    }
+    const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
+    for (const k of randomAnyPick(cands, n, s.rng)) s.board[k].effects.push({ effect: '⚡' });
+    spendMagic(s, calculateCost(s, skillCosts.onClickChargeRandom));
+    bumpMagicCount(s);
+    bumpStat(s, 'chargeRandom');
+}
+// ジャマー: 選んだマスの⚡を発散。縦横に隣接する**敵**コマ(ライフ>0・ロックなし)に⚡のスタック数だけダメージ、⚡は消える
+function onClickJammer(s) {
+    s.useJammer = true;
+    spendMagic(s, calculateCost(s, skillCosts.onClickJammer));
+    bumpMagicCount(s);
+    bumpStat(s, 'jammer');
+}
+function exeJammer(s, i) {
+    const cur = curPlayer(s);
+    const stacks = chargeStacks(s.board[i]);
+    for (const j of orthoNeighbors(i, s.size)) {
+        const sq = s.board[j];
+        if (!sq.player || sq.player === cur || sq.bind <= 0) continue;
+        if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
+        const before = sq.bind;
+        sq.bind = Math.max(0, sq.bind - stacks);
+        bumpStat(s, 'jammerDmg', before - sq.bind);
+        if (sq.bind === 0) bumpStat(s, 'jammerZeroed');
+    }
+    s.board[i].effects = s.board[i].effects.filter((e) => e.effect !== '⚡');
+    s.useJammer = false;
 }
 
 const SKILLS = {
@@ -984,6 +1078,10 @@ const SKILLS = {
     chargeToken: onClickChargeToken,
     chargeOne: onClickChargeOne,
     chargeSpread: onClickChargeSpread,
+    doubleChargeToken: onClickDoubleChargeToken,
+    chargeArea: onClickChargeArea,
+    chargeRandom: onClickChargeRandom,
+    jammer: onClickJammer,
 };
 
 // ---- Rendering ------------------------------------------------------------
@@ -1010,5 +1108,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, boardPoisonCount, surroundRange,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };
