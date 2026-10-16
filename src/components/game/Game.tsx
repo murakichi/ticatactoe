@@ -1429,13 +1429,6 @@ export const Game = (props: GameProps) => {
                         onHoverStart={currentYinYangMode === 'ying' ? () => showPreview(kyokoPreview()) : undefined}
                         onHoverEnd={currentYinYangMode === 'ying' ? clearPreview : undefined}
                     />
-                    <SkillButton
-                        onClick={onClickSerum}
-                        buttonText={`血清-${calculateCost(skillCosts.onClickSerum, false, true)}`}
-                        paragraph='自陣のコマの毒をすべて除去します'
-                        hidden={currentCharacter === 'poisoner'}
-                        disabled={checkSkillDisable(skillCosts.onClickSerum, false, true)}
-                    />
                     {shuffleSkillDefs.map((s) => (
                         <SkillButton
                             key={s.idx}

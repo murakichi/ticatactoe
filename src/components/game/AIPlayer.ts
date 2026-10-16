@@ -485,8 +485,8 @@ class AIPlayer {
         }
 
         // 血清: 自陣の毒で次の減衰までに消えそうなコマ(毒数>=bind)があれば除去
-        // (毒使いはランダム枠に出ているときのみ。それ以外は常設ボタン)
-        if (this.character !== 'poisoner' || availableSkills.includes(17)) {
+        // (ランダム枠に出ているときのみ)
+        if (availableSkills.includes(17)) {
             const doomed = board.filter(sq => sq.player === this.playerSymbol
                 && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
                 && sq.effects.some(e => e.effect === '☠')).length;

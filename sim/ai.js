@@ -460,7 +460,7 @@ function chooseSkills(s, availableSkills) {
     }
 
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
-    if ((character !== 'poisoner' || availableSkills.includes(17))) {
+    if (availableSkills.includes(17)) {
         const serumCost = calculateCost(s, skillCosts.onClickSerum, false, true);
         let doomed = 0;
         for (const sq of board) {
