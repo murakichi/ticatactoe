@@ -59,6 +59,16 @@ function shouldDecay(placements, n) {
     return n < DECAY_PER_ROUND_MIN_PLAYERS || placements % n === 0;
 }
 
+// 長引く多人数戦の打ち切り: この人数以上では、interval ターンごとに手番開始時の魔力が全員+1ずつ増える。
+// src/components/game/lateMagic.ts と同じ規則。環境変数 LATE_MAGIC_INTERVAL=0 で無効化（A/B検証用）
+const LATE_MAGIC_MIN_PLAYERS = config.lateGameMagicMinPlayers != null ? config.lateGameMagicMinPlayers : 3;
+const LATE_MAGIC_INTERVAL = process.env.LATE_MAGIC_INTERVAL != null
+    ? parseInt(process.env.LATE_MAGIC_INTERVAL, 10)
+    : config.lateGameMagicInterval != null ? config.lateGameMagicInterval : 50;
+function lateMagicBonus(turn, n) {
+    return n < LATE_MAGIC_MIN_PLAYERS || !LATE_MAGIC_INTERVAL ? 0 : Math.floor(turn / LATE_MAGIC_INTERVAL);
+}
+
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
@@ -431,7 +441,7 @@ function advanceTurn(s) {
     const ch = s.chars[next];
     const magicCharacter = ['magician'];
     // Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
-    let nextMagic = s.magic[next] + 1 + budsCount(s.board, sym);
+    let nextMagic = s.magic[next] + 1 + lateMagicBonus(s.currentTurn, seatCount(s)) + budsCount(s.board, sym);
     if (magicCharacter.includes(ch)) nextMagic++;
     if (ch === 'yinYangMaster' && s.yy[next] === 'ying') nextMagic++;
     // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
@@ -1006,7 +1016,7 @@ function renderBoard(s) {
 module.exports = {
     HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
-    newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, renderBoard,
+    newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, boardPoisonCount, surroundRange,
     PROLIFERATE, proliferateUpkeep,

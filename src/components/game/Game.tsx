@@ -10,6 +10,7 @@ import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
+import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge } from './charge';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
@@ -294,7 +295,8 @@ export const Game = (props: GameProps) => {
         // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
         // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
         const magicCharacter: CharacterId[] = ['magician'];
-        let nextMagic: number = magic[nextSeat] + 1 + budsCount(nextSymbol);
+        // 3人以上は50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
+        let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + budsCount(nextSymbol);
         if (magicCharacter.includes(nextCharacter)) {
             nextMagic++;
         }
@@ -1387,7 +1389,7 @@ export const Game = (props: GameProps) => {
             <div className={styles.main}>
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
-                    <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} />
+                    <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
                     <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
                         <Board
                             size={geo.size}

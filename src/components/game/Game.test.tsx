@@ -165,3 +165,26 @@ test('雷霆の巫: 固有スキル(帯電拡散)がパネルとスキルボタ�
     expect(container.textContent).toContain('帯電拡散⚡ 7');
     expect(screen.getByRole('button', { name: '帯電拡散-7' })).toBeInTheDocument();
 });
+
+describe('終盤の魔力ボーナス', () => {
+    const chargeTimes = (n: number) => {
+        for (let k = 0; k < n; k++) fireEvent.click(screen.getByRole('button', { name: /チャージ/ }));
+    };
+
+    it('3人戦: 50ターン目から手番開始時の魔力が+1される（表示と実際の魔力）', () => {
+        const { container } = render(<Game players={cfg('you', 'you', 'you')} />);
+        chargeTimes(48);
+        expect(screen.queryByText(/魔力ボーナス/)).not.toBeInTheDocument();
+        chargeTimes(1); // ターン50の開始
+        expect(screen.getByText(/魔力ボーナス/)).toHaveTextContent('+1');
+        // 50ターン目の手番は席1。初期2 + チャージ3×16回 + 手番開始+1×17回(ターン2,5,…,47,50) + ボーナス+1 = 68
+        const chips = Array.from(container.querySelectorAll('[class*="chipMagic"]')).map((el) => Number((el.textContent ?? '').replace(/\D/g, '')));
+        expect(chips[1]).toBe(68);
+    });
+
+    it('2人戦は増えない', () => {
+        render(<Game players={cfg('you', 'you')} />);
+        chargeTimes(60);
+        expect(screen.queryByText(/魔力ボーナス/)).not.toBeInTheDocument();
+    });
+});

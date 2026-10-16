@@ -19,6 +19,10 @@ module.exports = {
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。
     // 99 にすると全人数で従来どおり着手ごと（A/B検証用）
     "decayPerRoundMinPlayers": 3,
+    // 長引く多人数戦の打ち切り: この人数以上で、interval ターンごとに手番開始時の魔力が全員+1ずつ増える。
+    // src/components/game/lateMagic.ts の LATE_MAGIC_MIN_PLAYERS / LATE_MAGIC_INTERVAL と同じ値に
+    "lateGameMagicMinPlayers": 3,
+    "lateGameMagicInterval": 50,
     // 帯電（雷霆の巫, #39）のコスト。Game.tsx / skillCosts.ts の値と一致させること
     "charge": {
         "tokenCost": 3,
