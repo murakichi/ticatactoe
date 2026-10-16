@@ -21,7 +21,7 @@ module.exports = {
     "decayPerRoundMinPlayers": 3,
     // 長引く多人数戦の打ち切り: この人数以上で、interval ターンごとに手番開始時の魔力が全員+1ずつ増える。
     // src/components/game/lateMagic.ts の LATE_MAGIC_MIN_PLAYERS / LATE_MAGIC_INTERVAL と同じ値に
-    "lateGameMagicMinPlayers": 3,
+    "lateGameMagicMinPlayers": 2,
     "lateGameMagicInterval": 50,
     // 帯電（雷霆の巫, #39）のコスト。Game.tsx / skillCosts.ts の値と一致させること
     "charge": {

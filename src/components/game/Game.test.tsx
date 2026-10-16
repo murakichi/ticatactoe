@@ -182,9 +182,14 @@ describe('終盤の魔力ボーナス', () => {
         expect(chips[1]).toBe(68);
     });
 
-    it('2人戦は増えない', () => {
-        render(<Game players={cfg('you', 'you')} />);
-        chargeTimes(60);
+    it('2人戦でも50ターン目から増える', () => {
+        const { container } = render(<Game players={cfg('you', 'you')} />);
+        chargeTimes(48);
         expect(screen.queryByText(/魔力ボーナス/)).not.toBeInTheDocument();
+        chargeTimes(1); // ターン50の開始（席1の手番）
+        expect(screen.getByText(/魔力ボーナス/)).toHaveTextContent('+1');
+        // 席1: 初期2 + チャージ3×24回 + 手番開始+1×25回(ターン2,4,…,50) + ボーナス+1 = 100
+        const chips = Array.from(container.querySelectorAll('[class*="chipMagic"]')).map((el) => Number((el.textContent ?? '').replace(/\D/g, '')));
+        expect(chips[1]).toBe(100);
     });
 });

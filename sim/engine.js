@@ -61,7 +61,7 @@ function shouldDecay(placements, n) {
 
 // 長引く多人数戦の打ち切り: この人数以上では、interval ターンごとに手番開始時の魔力が全員+1ずつ増える。
 // src/components/game/lateMagic.ts と同じ規則。環境変数 LATE_MAGIC_INTERVAL=0 で無効化（A/B検証用）
-const LATE_MAGIC_MIN_PLAYERS = config.lateGameMagicMinPlayers != null ? config.lateGameMagicMinPlayers : 3;
+const LATE_MAGIC_MIN_PLAYERS = config.lateGameMagicMinPlayers != null ? config.lateGameMagicMinPlayers : 2;
 const LATE_MAGIC_INTERVAL = process.env.LATE_MAGIC_INTERVAL != null
     ? parseInt(process.env.LATE_MAGIC_INTERVAL, 10)
     : config.lateGameMagicInterval != null ? config.lateGameMagicInterval : 50;
