@@ -178,16 +178,23 @@ function poisonCountFor(board, player) {
 function poisonerInPlay(s) {
     return s.heartChar === 'poisoner' || s.circleChar === 'poisoner';
 }
+// 実験(POISON_DOUBLE=1: 毒トークンも倍 / =2: トークンは倍にしない): 毒使いの駒に毒が付いた瞬間、そのマスのライフが倍になる
+function poisonStrike(s, sq) {
+    if (!['1', '2'].includes(process.env.POISON_DOUBLE) || !s || !sq.player) return;
+    const ch = sq.player === HEART ? s.heartChar : s.circleChar;
+    if (ch === 'poisoner') sq.bind *= 2;
+}
 // 周囲1マス（クリックしたマスを除く8近傍）— STOMP_AREA を流用
 function surroundRange(i) {
     return (STOMP_AREA[i] || []).filter((x) => x !== i);
 }
 // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与（毒拡散パッシブ）
-function spreadPoisonAround(board, idx, rng) {
+function spreadPoisonAround(board, idx, rng, s) {
     const targets = surroundRange(idx).filter((j) => board[j].player);
     if (!targets.length) return;
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
+    poisonStrike(s, board[t]);
 }
 
 // ---- Game state -----------------------------------------------------------
@@ -371,6 +378,7 @@ function placeMove(s, i) {
     }
     if (s.useInjection > 0) {
         board[i].effects.push({ effect: '☠' });
+        poisonStrike(s, board[i]);
         s.useInjection -= 1;
         return true;
     }
@@ -499,7 +507,7 @@ function placeMove(s, i) {
 
     // 毒拡散パッシブ: 毒で死んだ/毒持ちが奪取破壊されたマスの周囲へ毒を拡散
     if (poisonerInPlay(s) && spreadOrigins.length) {
-        for (const o of spreadOrigins) spreadPoisonAround(board, o, s.rng);
+        for (const o of spreadOrigins) spreadPoisonAround(board, o, s.rng, s);
     }
 
     s.currentTurn += 1;
@@ -763,7 +771,9 @@ function applyProliferate(s, step) {
         if (isPoisoner ? sq.player && sq.player !== me : sq.player === me) targets.push(i);
     }
     if (!targets.length) return false;
-    s.board[randomPick(targets, s.rng)].effects.push({ effect: isPoisoner ? '☠' : '🌱' });
+    const pick = s.board[randomPick(targets, s.rng)];
+    pick.effects.push({ effect: isPoisoner ? '☠' : '🌱' });
+    if (isPoisoner) poisonStrike(s, pick);
     return true;
 }
 function onClickProliferate(s) {
@@ -812,7 +822,7 @@ function exeMiasma(s, i) {
     const targets = surroundRange(i).filter(
         (j) => s.board[j].player && s.board[j].player !== cur && !s.board[j].effects.some((e) => e.effect === '🔑')
     );
-    for (const t of targets) s.board[t].effects.push({ effect: '☠' });
+    for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     s.useMiasma = false;
 }
 function onClickInjection(s) {
@@ -822,7 +832,7 @@ function onClickInjection(s) {
 }
 function onClickPoisonToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '☠' }] };
+    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s) * (process.env.POISON_DOUBLE === '1' && curChar(s) === 'poisoner' ? 2 : 1), effects: [{ effect: '☠' }] };
     spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -838,6 +848,7 @@ function onClickIntensify(s) {
     for (const sq of s.board) {
         const p = poisonStacks(sq);
         for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
+        if (p > 0) poisonStrike(s, sq);
     }
     spendMagic(s, calculateCost(s, skillCosts.onClickIntensify, false, true));
     bumpMagicCount(s);
@@ -849,7 +860,7 @@ function onClickPandemic(s) {
 }
 function exePandemic(s, i) {
     const targets = STOMP_AREA[i].filter((j) => s.board[j].player && !s.board[j].effects.some((e) => e.effect === '🔑'));
-    for (const t of targets) s.board[t].effects.push({ effect: '☠' });
+    for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     s.usePandemic = false;
 }
 
