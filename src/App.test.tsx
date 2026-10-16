@@ -8,7 +8,7 @@ test('起動時はキャラクター選択画面が描画される', () => {
     render(<App />);
     expect(screen.getByText('戦術三目並べ')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /対戦スタート/ })).toBeInTheDocument();
-    // 両プレイヤー分のキャラカードが並ぶ (7キャラ × 2枠)
+    // 両プレイヤー分のキャラカードが並ぶ (8キャラ × 2枠)
     expect(screen.getAllByText('軍師')).toHaveLength(2);
     expect(screen.getAllByText('毒使い')).toHaveLength(2);
 });

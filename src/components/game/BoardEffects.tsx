@@ -16,7 +16,8 @@ export type SkillEffectType =
     | 'auraGreen'
     | 'auraRed'
     | 'poison'
-    | 'proliferate';
+    | 'proliferate'
+    | 'zap';
 
 export type SkillEffect = {
     type: SkillEffectType;
@@ -149,6 +150,26 @@ export const BoardEffects: React.FC<Props> = ({ effect }) => {
                         <div className={styles.proliferateSigil}>♾️</div>
                     </>
                 );
+            case 'zap': {
+                // 電気使い「帯電」: 対象マスに電光が走る。マス指定なしなら盤面全体に短い閃光
+                if (effect.index === undefined) {
+                    return (
+                        <>
+                            <div className={styles.flash} />
+                            <div className={styles.bolt}>⚡</div>
+                        </>
+                    );
+                }
+                const pos = cellCenter(effect.index);
+                return (
+                    <>
+                        <div className={styles.zapRing} style={{ left: pos.left, top: pos.top }} />
+                        <div className={styles.zapBolt} style={{ left: pos.left, top: pos.top }}>
+                            ⚡
+                        </div>
+                    </>
+                );
+            }
             case 'auraGreen':
                 return <div className={`${styles.aura} ${styles.auraGreen}`} />;
             case 'auraRed':

@@ -11,7 +11,7 @@
 
 const { HEART, CIRCLE, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, surroundRange } = require('./engine');
+        miasmaCost, surroundRange, POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 
 const WIN_LINES = [
     [0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15],
@@ -40,6 +40,7 @@ const JUDGE_AREA = {
 function bestStompTarget(board, me, opp) {
     let bestIdx = null, bestEnemies = 0, bestEmptyCenter = false;
     for (let i = 0; i < 16; i++) {
+        if (shield.has(i)) continue;
         let enemies = 0;
         for (const idx of STOMP_AREA[i]) if (board[idx].player === opp) enemies++;
         const emptyCenter = !board[i].player; // 中心が空なら巨人のコマを配置できる
@@ -54,6 +55,7 @@ function bestStompTarget(board, me, opp) {
 function bestJudgeTarget(board, me, opp) {
     let bestIdx = null, bestNet = 0;
     for (let i = 0; i < 16; i++) {
+        if (shield.has(i)) continue;
         let enemy = 0, mine = 0;
         for (const idx of JUDGE_AREA[i]) {
             const sq = board[idx];
@@ -90,7 +92,7 @@ function inOppReachLine(board, i, me, opp) {
 function bestMiasmaTarget(board, me, opp) {
     let bestIdx = null, bestScore = 0;
     for (let i = 0; i < 16; i++) {
-        if (board[i].player !== me) continue; // 自陣を選択
+        if (board[i].player !== me || shield.has(i)) continue; // 自陣を選択
         let enemies = 0, critical = 0;
         for (const j of surroundRange(i)) {
             if (board[j].player === opp && !board[j].effects.some(e => e.effect === '🔑')) {
@@ -105,6 +107,99 @@ function bestMiasmaTarget(board, me, opp) {
 }
 
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
+
+// ---- 帯電（電気使い）AI ----
+// 無敵(⚡付き電気使い自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙から除外する
+let shield = new Set();
+function updateShield(s) {
+    shield = new Set();
+    for (let i = 0; i < 16; i++) if (isShielded(s, s.board[i])) shield.add(i);
+}
+
+// 着手マス i が発火させる⚡の損得。敵コマ(ライフ>0)を削れば加点、自コマを削れば減点。
+// ライフ1のコマは0になる(=奪取可能になる/守りが剥がれる)ので重く見る
+function fireGain(board, i, me, opp) {
+    let gain = 0;
+    const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
+    for (const k of orthoNeighbors(i)) {
+        if (chargeStacks(board[k]) === 0) continue;
+        for (const n of orthoNeighbors(k)) {
+            const sq = board[n];
+            if (!sq.player || sq.bind <= 0) continue;
+            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            const w = 3 + (sq.bind === 1 ? 4 : 0);
+            gain += (sq.player === opp ? w : -w) * W;
+        }
+    }
+    return gain;
+}
+
+// 自コマ i が入っている列のうち、敵コマが無く自コマが最も多い列の自コマ数 (i を含む)
+function bestOwnLineCount(board, i, me, opp) {
+    let best = 0;
+    for (const line of WIN_LINES) {
+        if (!line.includes(i)) continue;
+        let mine = 0, bad = false;
+        for (const idx of line) {
+            if (board[idx].player === me) mine++;
+            else if (board[idx].player === opp) bad = true;
+        }
+        if (!bad && mine > best) best = mine;
+    }
+    return best;
+}
+
+// 帯電付与の対象。2通りの価値の大きいほう:
+//  攻め: 縦横隣接の (敵コマ数 − 自コマ数)（ライフ>0のコマのみ）
+//  守り: ライフ0〜1(奪われやすい)の自コマが、敵のいない列で自コマ2つ以上(リーチ列なら3つ)の一部なら、
+//        ⚡の無敵で守る (電気使いのパッシブ)
+// 値が MIN 以上なら撃つ。ロック中・無敵マス・すでに帯電したマスは除く
+const CHARGE_ONE_MIN_SCORE = Number(process.env.CHG_ONE_MIN) || 2; // CHG_ONE_MIN: A/B検証用の上書き
+function bestChargeOneTarget(board, me, opp) {
+    let bestIdx = null, bestScore = 0;
+    for (let i = 0; i < 16; i++) {
+        if (shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
+        if (chargeStacks(board[i]) > 0) continue;
+        let attack = 0;
+        for (const n of orthoNeighbors(i)) {
+            const sq = board[n];
+            if (!sq.player || sq.bind <= 0) continue;
+            if (sq.player === opp) attack++; else attack--;
+        }
+        let defend = 0;
+        if (board[i].player === me && board[i].bind <= 1) {
+            const own = bestOwnLineCount(board, i, me, opp);
+            if (own >= 3) defend = 4; else if (own === 2) defend = 2;
+        }
+        const score = Math.max(attack, defend);
+        if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestScore >= CHARGE_ONE_MIN_SCORE ? bestIdx : null;
+}
+
+// 固有スキル(帯電拡散): 辿れる範囲(コマのあるマスだけ)が
+//  - 敵のいない列で自コマ3つ(リーチ列)を含む → 無敵で守る、または
+//  - 自コマ3つ以上で、範囲内/縦横隣接に敵コマ(ライフ>0)が2体以上
+// のとき、その起点を選ぶ
+function bestChargeSpreadTarget(board, me, opp) {
+    let bestIdx = null, bestScore = 0;
+    for (let i = 0; i < 16; i++) {
+        if (!board[i].player || shield.has(i)) continue;
+        const cells = connectedPieces(board, i);
+        const mine = cells.filter((k) => board[k].player === me).length;
+        let reach = false;
+        for (const k of cells) if (board[k].player === me && bestOwnLineCount(board, k, me, opp) >= 3) reach = true;
+        const adj = new Set();
+        for (const k of cells) for (const n of orthoNeighbors(k)) if (board[n].player === opp && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+        // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
+        for (const k of cells) if (board[k].player === opp && board[k].bind > 0) adj.add(k);
+        const ok = reach || (mine >= 3 && adj.size >= 2);
+        if (!ok) continue;
+        const score = adj.size + mine + (reach ? 10 : 0);
+        if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestIdx;
+}
 
 // ---- helpers ----
 
@@ -198,6 +293,7 @@ function getValidMoves(board, me, opp, character, necroActive) {
     const moves = [];
     for (let i = 0; i < 16; i++) {
         const sq = board[i];
+        if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
         if (!sq.player) {
             if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
@@ -213,6 +309,7 @@ function getMovesFor(board, player, life) {
     const moves = [];
     for (let i = 0; i < 16; i++) {
         const sq = board[i];
+        if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
         if (!sq.player) {
             if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
@@ -296,6 +393,8 @@ function getEnhancedBestMove(s) {
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (board[i].player === opp && board[i].bind <= 0) score += 30;
+        // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
+        score += fireGain(board, i, me, opp);
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
@@ -424,8 +523,11 @@ function chooseSkills(s, availableSkills) {
     // --- トークン系 ---
     if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, skillCosts.onClickPoisonToken, true, true);
+        const chargeTokenCost = calculateCost(s, skillCosts.onClickChargeToken, true);
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
             spend(poisonTokenCost, 'poisonToken');
+        } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
+            spend(chargeTokenCost, 'chargeToken');
         } else if (availableSkills.includes(11) && remaining >= cost(skillCosts.onClickDoubleToken, true)) {
             spend(cost(skillCosts.onClickDoubleToken, true), 'doubleToken');
         } else if (availableSkills.includes(9) && remaining >= cost(skillCosts.onClickBudsToken, true)) {
@@ -469,11 +571,12 @@ function chooseLocks(s, availableSkills) {
             case 0: case 1: return life <= 2;
             case 2: case 10: return empties >= 8;
             case 20: return empties >= 6;   // 増殖(空きが多いほどループが伸びる)
+            case 21: return character === 'electrician' && empties >= 3; // 帯電トークン
             default: return false;
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx > 20) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= POOL_SIZE) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -485,6 +588,8 @@ function faithfulMakeMove(s) {
     const me = curPlayer(s);
     const opp = me === HEART ? CIRCLE : HEART;
     const magic = curMagic(s);
+
+    updateShield(s);
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
@@ -523,6 +628,19 @@ function faithfulMakeMove(s) {
             SKILLS.lock(s);
             placeMove(s, threats[0]);
             return { move: threats[1], turnEnded: false };
+        }
+    }
+
+    // 電気使い: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
+    // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
+    if (curChar(s) === 'electrician' && countReaches(s.board, opp, me) === 0) {
+        if (curMagic(s) >= skillCosts.onClickChargeSpread) {
+            const start = bestChargeSpreadTarget(s.board, me, opp);
+            if (start !== null) { SKILLS.chargeSpread(s); placeMove(s, start); updateShield(s); }
+        }
+        if (availableSkills.includes(22) && curMagic(s) >= calculateCost(s, skillCosts.onClickChargeOne)) {
+            const target = bestChargeOneTarget(s.board, me, opp);
+            if (target !== null) { SKILLS.chargeOne(s); placeMove(s, target); updateShield(s); }
         }
     }
 

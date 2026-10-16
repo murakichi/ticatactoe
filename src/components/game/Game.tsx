@@ -9,6 +9,7 @@ import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange, surroundRange } from './boardGeometry';
+import { PlayerCharacters, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge } from './charge';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
@@ -30,7 +31,11 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     yinYangMaster: '陰陽師',
     necromancer: 'ネクロマンサー',
     poisoner: '毒使い',
+    electrician: '電気使い',
 };
+// 汎用スキルプールの大きさ (idx 0..22)。sim/config.js の poolSize と揃えること
+const SKILL_POOL_SIZE = 23;
+
 export const Game = (props: GameProps) => {
     const initialBoard = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
     const [history, setHistory] = useState<SquareInfo[][]>([initialBoard]);
@@ -68,7 +73,8 @@ export const Game = (props: GameProps) => {
     const heartAI = props.heartIsAI ? new AIPlayer('💙', props.heartSelectedCharacter, props.circleSelectedCharacter) : null;
     const circleAI = props.circleIsAI ? new AIPlayer('⭕', props.circleSelectedCharacter, props.heartSelectedCharacter) : null;
     const isBothAI = !!heartAI && !!circleAI;
-    const [pendingAIMove, setPendingAIMove] = useState<number[] | null>(null);
+    // AIの実行キュー。number=そのマスをクリック / string=そのスキルを実行（帯電系は「スキル→クリック」を順に並べる）
+    const [pendingAIMove, setPendingAIMove] = useState<(number | string)[] | null>(null);
     // AI同士の対戦時のステップ実行制御 (autoPlay=false なら「次の手番」ボタンで1ターンずつ進める)
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
     const [stepRequest, setStepRequest] = useState<number>(0);
@@ -98,6 +104,9 @@ export const Game = (props: GameProps) => {
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
+            case 'onClickChargeToken': onClickChargeToken(); break;
+            case 'onClickChargeOne': onClickChargeOne(); break;
+            case 'onClickChargeSpread': onClickChargeSpread(); break;
         }
     };
 
@@ -105,7 +114,8 @@ export const Game = (props: GameProps) => {
         if (pendingAIMove !== null && pendingAIMove.length > 0) {
             const timer = setTimeout(() => {
                 const [next, ...rest] = pendingAIMove;
-                onCellClick(next);
+                if (typeof next === 'string') executeSkillForAI(next);
+                else onCellClick(next);
                 setPendingAIMove(rest.length > 0 ? rest : null);
             }, 200);
             return () => clearTimeout(timer);
@@ -127,6 +137,19 @@ export const Game = (props: GameProps) => {
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         if (heartTurn) setHeartLockedSkills(aiLocks);
         else setCircleLockedSkills(aiLocks);
+
+        // 電気使い: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
+        // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
+        if (result.chargeClicks && result.chargeClicks.length > 0) {
+            const steps: (number | string)[] = [];
+            for (const c of result.chargeClicks) steps.push(c.skill, c.target);
+            steps.push(...result.skills);
+            if (result.lockTargets) steps.push(...result.lockTargets);
+            if (result.stompTarget !== undefined) steps.push(result.stompTarget);
+            if (result.move !== null) steps.push(result.move);
+            setPendingAIMove(steps);
+            return;
+        }
 
         for (const sk of result.skills) {
             executeSkillForAI(sk);
@@ -174,6 +197,7 @@ export const Game = (props: GameProps) => {
         runAIMove();
     }, [stepRequest]);
     const currentTurnPlayer = heartTurn ? '💙' : '⭕';
+    const chars: PlayerCharacters = { '💙': props.heartSelectedCharacter, '⭕': props.circleSelectedCharacter };
     const currentPlayerCharacter = heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter;
 
     const [heartMagic, setHeartMagic] = useState<number>(2);
@@ -184,12 +208,13 @@ export const Game = (props: GameProps) => {
 
     // 現在の手番プレイヤーのマジックを cost 消費する共通処理。bumpCount=true でスキル使用回数も+1
     const spendMagic = (cost: number, bumpCount: boolean = true) => {
+        // 関数形式で更新する: AIが同じ描画内で複数スキルを続けて実行しても消費が上書きされない
         if (heartTurn) {
-            setHeartMagic(heartMagic - cost);
-            if (bumpCount) setHeartUseMagicCount(heartUseMagicCount + 1);
+            setHeartMagic((m) => m - cost);
+            if (bumpCount) setHeartUseMagicCount((c) => c + 1);
         } else {
-            setCircleMagic(circleMagic - cost);
-            if (bumpCount) setCircleUseMagicCount(circleUseMagicCount + 1);
+            setCircleMagic((m) => m - cost);
+            if (bumpCount) setCircleUseMagicCount((c) => c + 1);
         }
     };
 
@@ -332,7 +357,7 @@ export const Game = (props: GameProps) => {
     useEffect(() => {
         // 次に手番が来るプレイヤーのロックを固定して再シャッフル
         const next = judgeNextIsHeart();
-        setSkills(reshuffledSkills(21, next ? heartLockedSkills : circleLockedSkills));
+        setSkills(reshuffledSkills(SKILL_POOL_SIZE, next ? heartLockedSkills : circleLockedSkills));
     }, [history]);
 
     const onCellClick = (i: number) => {
@@ -341,7 +366,29 @@ export const Game = (props: GameProps) => {
         const necroActive =
             (heartTurn && props.heartSelectedCharacter === 'necromancer' && remainHeartNecro > 0) ||
             (!heartTurn && props.circleSelectedCharacter === 'necromancer' && remainCircleNecro > 0);
+        // 電気使いの⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)。対象選択スキルも含めて受け付けない
+        if (isShielded(currentBoard[i], chars)) return;
         const nextBoard = currentBoard.slice();
+        if (useChargeOne) {
+            nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '⚡' }] };
+            addLog(`${posName(i)}に⚡を付与`);
+            playEffect('zap', i);
+            setUseChargeOne(false);
+            setCurrentBoard(nextBoard);
+            return;
+        }
+
+        if (useChargeSpread) {
+            const cells = connectedPieces(currentBoard, i);
+            if (cells.length === 0) return; // 空きマスは起点にできない。選び直せる
+            addLog(`${posName(i)}から帯電拡散（${cells.length}マスに⚡）`);
+            flashCells(cells);
+            playEffect('zap');
+            setUseChargeSpread(false);
+            setCurrentBoard(withCharge(currentBoard, cells));
+            return;
+        }
+
         if (useLock > 0) {
             nextBoard[i].effects.push({ effect: '🔑' });
             if (nextBoard[i].bind < 6) {
@@ -515,6 +562,14 @@ export const Game = (props: GameProps) => {
             }
         }
 
+        // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ（蘇生の吸収より前）
+        const fire = fireCharges(nextBoard, i);
+        if (fire.fired.length > 0) {
+            addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
+            flashCells(fire.damaged);
+            playEffect('zap', fire.fired[0]);
+        }
+
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
         if (necroActive) {
             const opp: Player = currentTurnPlayer === '💙' ? '⭕' : '💙';
@@ -570,8 +625,8 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全21スキル。8 だと毒スキル(15-19)と増殖(20)を永久に引けなかった
-        setSkills(reshuffledSkills(21, currentLockedSkills));
+        // プールは全23スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)を永久に引けなかった
+        setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
 
@@ -662,7 +717,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const affected: number[] = [];
         board.forEach((square, idx) => {
-            if (square.player !== currentTurnPlayer && square.player && square.bind > 0 && !square.effects.map((x) => x.effect).includes('🔑')) {
+            if (square.player !== currentTurnPlayer && square.player && square.bind > 0 && !isGuarded(square, chars)) {
                 const calclatedBind = square.bind - 2;
                 if (calclatedBind > 1) square.bind = square.bind - 2;
                 else square.bind = 0;
@@ -681,7 +736,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const affected: number[] = [];
         for (const idx of [3, 6, 9, 12]) {
-            if (!board[idx].effects.map((x) => x.effect).includes('🔑')) {
+            if (!isGuarded(board[idx], chars)) {
                 board[idx].bind = 0;
                 affected.push(idx);
             }
@@ -697,7 +752,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const affected: number[] = [];
         for (const idx of [0, 5, 10, 15]) {
-            if (!board[idx].effects.map((x) => x.effect).includes('🔑')) {
+            if (!isGuarded(board[idx], chars)) {
                 board[idx].bind = 0;
                 affected.push(idx);
             }
@@ -1061,7 +1116,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         // 周囲1マスの敵セル(ロック以外)すべてに毒を1付与
         const targets = surroundRange(i).filter(
-            (j) => board[j].player && board[j].player !== currentTurnPlayer && !board[j].effects.some((e) => e.effect === '🔑')
+            (j) => board[j].player && board[j].player !== currentTurnPlayer && !isGuarded(board[j], chars)
         );
         for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         addLog(`${posName(i)}を中心にミアズマ（敵${targets.length}マスに毒）`);
@@ -1126,13 +1181,43 @@ export const Game = (props: GameProps) => {
     const exePandemic = (i: number) => {
         const board = currentBoard.slice();
         // 選択マスと周囲1マス(3x3)のコマに毒を1付与（敵味方問わず）
-        const targets = stompRange(i).filter((j) => board[j].player && !board[j].effects.some((e) => e.effect === '🔑'));
+        const targets = stompRange(i).filter((j) => board[j].player && !isGuarded(board[j], chars));
         for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison', i);
         setCurrentBoard(board);
         setUsePandemic(false);
+    };
+
+    // --- 帯電（電気使い） ---
+    const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
+    const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
+    // 帯電トークン: 空きマスにランダムに⚡付きのコマを置く（トークン扱い。発火はしない）
+    const onClickChargeToken = () => {
+        const board = currentBoard.slice();
+        const emptyIndexes = findEmptyIndexes(board);
+        if (emptyIndexes.length > 0) {
+            const index = randomPick(emptyIndexes);
+            board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
+            addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
+            playEffect('zap', index);
+            setCurrentBoard(board);
+        }
+        spendMagic(calculateCost(skillCosts.onClickChargeToken, true));
+        setUseToken(true);
+    };
+    // 帯電付与: 選んだマス（空きマスも可）に⚡を1つ付与する。付与しただけではダメージは出ない
+    const onClickChargeOne = () => {
+        addLog('「帯電付与」を使用（マスを選択）');
+        setUseChargeOne(true);
+        spendMagic(calculateCost(skillCosts.onClickChargeOne));
+    };
+    // 固有スキル 帯電拡散: コマのあるマスだけを縦横に辿って届く全マスに⚡を付与する
+    const onClickChargeSpread = () => {
+        addLog('「帯電拡散」を使用（コマを選択）');
+        setUseChargeSpread(true);
+        spendMagic(skillCosts.onClickChargeSpread, false);
     };
 
     const judgeNextIsHeart = (): boolean => {
@@ -1234,6 +1319,8 @@ export const Game = (props: GameProps) => {
                 return [{ name: '蘇生', cost: isHeart ? currentHeartNecroCost : currentCircleNecroCost }];
             case 'poisoner':
                 return [{ name: 'ミアズマ', cost: miasmaCost(player) }];
+            case 'electrician':
+                return [{ name: '帯電拡散', cost: skillCosts.onClickChargeSpread }];
             default:
                 return [];
         }
@@ -1343,6 +1430,8 @@ export const Game = (props: GameProps) => {
         setUseMiasma(false);
         setUseInjection(0);
         setUsePandemic(false);
+        setUseChargeOne(false);
+        setUseChargeSpread(false);
         setRemainHeartNecro(0);
         setRemainCircleNecro(0);
         setCurrentHeartNecroCost(baseNecromancyCost);
@@ -1360,7 +1449,7 @@ export const Game = (props: GameProps) => {
         setCircleLockedSkills([]);
     };
 
-    const notLocked = (idx: number) => !currentBoard[idx].effects.map((x) => x.effect).includes('🔑');
+    const notLocked = (idx: number) => !isGuarded(currentBoard[idx], chars);
     const opponentPlayer: Player = currentTurnPlayer === '💙' ? '⭕' : '💙';
 
     // ボタンホバー時に破壊範囲をプレビューするマス
@@ -1380,9 +1469,11 @@ export const Game = (props: GameProps) => {
         else if (usePandemic) setPreviewCells(stompRange(i));
         else if (useMiasma) setPreviewCells(surroundRange(i));
         else if (useInjection > 0) setPreviewCells([i]);
+        else if (useChargeOne) setPreviewCells([i]);
+        else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i));
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread) setPreviewCells([]);
     };
 
     const currentYinYangMode = heartTurn ? heartYinYangMode : circleYinYangMode;
@@ -1424,6 +1515,8 @@ export const Game = (props: GameProps) => {
             paragraph: `発動後は着手のたびに「ライフ${proliferateTokenLife}のコマ」→「アイテム(🌱/毒使いは敵に☠)」を交互に追加し続けます\n維持コストは手番開始時に払い、追加のたび+${proliferateUpkeepStep}増加。払えなくなるか${proliferateMaxStacks}回で終了`,
             disabled: checkSkillDisable(skillCosts.onClickProliferate) || (heartTurn ? heartProliferate : circleProliferate),
         },
+        { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(skillCosts.onClickChargeToken, true)}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickChargeToken, true) },
+        { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${calculateCost(skillCosts.onClickChargeOne)}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeOne) },
     ];
 
     return (
@@ -1438,6 +1531,7 @@ export const Game = (props: GameProps) => {
                             onPlay={onCellClick}
                             destroyCells={highlightedCells}
                             previewCells={previewCells}
+                            shieldedCells={shieldedCells(currentBoard, chars)}
                             onCellHover={onCellHover}
                             onCellLeave={onCellLeave}
                         />
@@ -1547,6 +1641,13 @@ export const Game = (props: GameProps) => {
                         paragraph={'自陣を選択し、周囲1マスの敵コマすべてに毒を1付与します コストは盤面の毒の数だけ軽減されます'}
                         hidden={(heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) !== 'poisoner'}
                         disabled={(heartTurn ? heartMagic : circleMagic) < miasmaCost()}
+                    />
+                    <SkillButton
+                        onClick={onClickChargeSpread}
+                        buttonText={`帯電拡散-${skillCosts.onClickChargeSpread}`}
+                        paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します'}
+                        hidden={(heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) !== 'electrician'}
+                        disabled={(heartTurn ? heartMagic : circleMagic) < skillCosts.onClickChargeSpread}
                     />
                     <SkillButton
                         onClick={onClickYingYangSkll}
