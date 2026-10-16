@@ -14,6 +14,9 @@ import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
 
+// 盤面を揺らすスキル演出
+const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash'];
+
 export type PlayerConfig = {
     character: CharacterId;
     isAI: boolean;
@@ -87,7 +90,7 @@ export const Game = (props: GameProps) => {
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
     const playEffect = (type: SkillEffectType, index?: number) => {
         setBoardEffect((prev) => ({ type, index, nonce: (prev?.nonce ?? 0) + 1 }));
-        setTimeout(() => setBoardEffect(null), 850);
+        setTimeout(() => setBoardEffect(null), 1400);
     };
     const flashCells = (indexes: number[]) => {
         // スキル実行時はホバープレビューを消して破壊演出に切り替える
@@ -1297,7 +1300,7 @@ export const Game = (props: GameProps) => {
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} />
-                    <div className={`${styles.boardArea}${boardEffect?.type === 'stomp' ? ` ${styles.shake}` : ''}`}>
+                    <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
                         <Board
                             size={geo.size}
                             squares={currentBoard}

@@ -27,7 +27,7 @@
 
 /* 巨人のストンプ時に盤面を揺らす */
 .shake {
-    animation: boardShake 420ms var(--ease);
+    animation: boardShake 520ms var(--ease);
 }
 
 @keyframes boardShake {
@@ -36,16 +36,16 @@
         transform: translate(0, 0);
     }
     20% {
-        transform: translate(-5px, 3px);
+        transform: translate(-9px, 5px);
     }
     40% {
-        transform: translate(5px, -3px);
+        transform: translate(9px, -5px);
     }
     60% {
-        transform: translate(-4px, 2px);
+        transform: translate(-7px, 4px);
     }
     80% {
-        transform: translate(4px, -1px);
+        transform: translate(6px, -3px);
     }
 }
 
