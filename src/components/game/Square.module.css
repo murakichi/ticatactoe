@@ -1,7 +1,7 @@
 .square {
     position: relative;
-    width: 64px;
-    height: 64px;
+    width: var(--sq, 64px);
+    height: var(--sq, 64px);
     padding: 0;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
@@ -37,15 +37,55 @@
     color: #fff;
 }
 
+/* 3人目以降のプレイヤー色 (theme.css の --color-seat-N-grad) */
+.seat2,
+.seat3,
+.seat4,
+.seat5,
+.seat6,
+.seat7 {
+    border-color: transparent;
+    color: #fff;
+}
+
+.seat2 { background: var(--color-seat-2-grad); }
+.seat3 { background: var(--color-seat-3-grad); }
+.seat4 { background: var(--color-seat-4-grad); color: #2a1f00; }
+.seat5 { background: var(--color-seat-5-grad); }
+.seat6 { background: var(--color-seat-6-grad); }
+.seat7 { background: var(--color-seat-7-grad); color: #3a0030; }
+
 .heart:hover,
-.circle:hover {
+.circle:hover,
+.seat2:hover,
+.seat3:hover,
+.seat4:hover,
+.seat5:hover,
+.seat6:hover,
+.seat7:hover {
     transform: translateY(-2px) scale(1.03);
 }
 
 /* コマ配置時のポップイン */
 .heart .life,
-.circle .life {
+.circle .life,
+.seat2 .life,
+.seat3 .life,
+.seat4 .life,
+.seat5 .life,
+.seat6 .life,
+.seat7 .life {
     animation: pop var(--dur) var(--ease);
+}
+
+/* コマの記号(色が見分けにくい人向け)。左下に小さく表示 */
+.mark {
+    position: absolute;
+    z-index: 1;
+    left: 3px;
+    bottom: 1px;
+    font-size: 11px;
+    line-height: 1;
 }
 
 .life {
