@@ -22,6 +22,7 @@ const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
+const EXP = { spread: null, lockVs: (process.env.EXP_LOCK_VS || 'necromancer').split(','), lockBind: parseInt(process.env.EXP_LOCK_BIND || '3', 10) };
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -129,7 +130,7 @@ function bestAntiNecroLockTarget(board, me) {
     let bestIdx = null, bestVal = 0;
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
-        if (sq.player !== me || sq.bind > 3 || sq.effects.some(e => e.effect === '🔑')) continue;
+        if (sq.player !== me || sq.bind > EXP.lockBind || sq.effects.some(e => e.effect === '🔑')) continue;
         let val = 1;
         for (const line of geo.winLines) {
             if (!line.includes(i)) continue;
@@ -276,6 +277,16 @@ function evaluateBoard(board, me) {
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
         else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
     }
+    if (EXP.spread) {
+        const geo = geometryForCells(board.length);
+        let worst = 0;
+        for (let c = 0; c < board.length; c++) {
+            let n = 0;
+            for (const idx of EXP.spread.kind === 'judge' ? geo.judgeRange(c) : geo.stompRange(c)) if (board[idx].player === me) n++;
+            if (n > worst) worst = n;
+        }
+        score -= EXP.spread.w * Math.max(0, worst - EXP.spread.free);
+    }
     return score;
 }
 
@@ -393,6 +404,11 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
+    EXP.spread = null;
+    if (process.env.EXP_SPREAD_W) {
+        const vs = process.env.EXP_SPREAD_VS || 'magician';
+        if (otherSeats(s).some((seat) => s.chars[seat] === vs)) EXP.spread = { kind: vs === 'magician' ? 'judge' : 'stomp', w: parseFloat(process.env.EXP_SPREAD_W), free: parseInt(process.env.EXP_SPREAD_FREE || '2', 10) };
+    }
     const opps = opponentsOf(s);
     const opp = opps[0];
     const character = curChar(s);
@@ -689,7 +705,7 @@ function faithfulMakeMove(s) {
     // 対照: 敵が「あなた」なら変化なし(0.686→0.693)、敵が巨人なら悪化(0.493→0.403)で、効果は対ネクロ特有。
     // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
     if (curChar(s) !== 'tactician' && curChar(s) !== 'necromancer'
-        && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
+        && otherSeats(s).some((seat) => EXP.lockVs.includes(s.chars[seat]))
         && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
         const target = bestAntiNecroLockTarget(s.board, me);
         if (target !== null) {
