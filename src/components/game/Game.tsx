@@ -138,6 +138,7 @@ export const Game = (props: GameProps) => {
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
+            case 'onClickInjection': onClickInjection(); break;
         }
     };
 

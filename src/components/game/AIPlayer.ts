@@ -11,7 +11,7 @@ export type AIResult = {
     move: number | null;
     skills: string[];
     lockTargets?: number[];
-    stompTarget?: number;
+    stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
 };
 
 class AIPlayer {
@@ -377,7 +377,13 @@ class AIPlayer {
         const geo = geometryForCells(board.length);
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
+        // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える
+        // (sim/ai.js chooseSkills と同一。A/B: ネクロ +2〜6pt。巨人は誤差内、軍師は大幅悪化で対象外)
+        let reserve = 0;
+        if (this.character === 'necromancer' && necroRemain === 0) reserve = necroCost;
+        const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
+            if (reserve > 0 && RESERVE_SKIP.includes(skill) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
         };
@@ -503,6 +509,37 @@ class AIPlayer {
         return skills;
     }
 
+    /**
+     * 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰(1+毒数)で bind が 0 になれば消える。
+     * 消えるまでの手数が少なく、敵のライン価値が高いコマを狙う。なければ null (sim/ai.js bestInjectionTarget と同一)
+     */
+    findInjectionTarget(board: SquareInfo[], minValue: number): { index: number; kills: boolean } | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: { index: number; kills: boolean } | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player)) continue;
+            const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
+            const turns = Math.ceil(sq.bind / (1 + p));
+            if (turns > 2) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player) oc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(oc, 4)];
+            }
+            if (turns !== 1) val /= 2;
+            if (val > bestVal) { bestVal = val; best = { index: i, kills: turns === 1 }; }
+        }
+        return bestVal >= minValue ? best : null;
+    }
+
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
@@ -612,6 +649,22 @@ class AIPlayer {
                     skills: ['onClickUseLock'],
                     lockTargets: [threatSquares[0]],
                 };
+            }
+        }
+
+        // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+        if (
+            this.character === 'poisoner' &&
+            availableSkills.includes(15) &&
+            magic >= this.calculateAICost(costs.onClickInjection, false, true) &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const inj = this.findInjectionTarget(board, 10);
+            if (inj !== null) {
+                // 消える場合は着手時の減衰で盤面から消えるので、その盤面で通常着手を選ぶ
+                const postBoard = board.map((sq, i) => (inj.kills && i === inj.index ? { ...sq, player: undefined, bind: 0, effects: [] } : sq));
+                const followup = this.getBestMove(postBoard, life);
+                return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
             }
         }
 

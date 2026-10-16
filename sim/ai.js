@@ -21,6 +21,7 @@ const opponentsOf = (s) => otherSeats(s).map((seat) => SYMBOLS[seat]);
 const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 : 1);
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
+const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -74,9 +75,32 @@ function inOppReachLine(board, i, me) {
     return false;
 }
 
+// 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰で bind が 0 になれば消える。
+// 消えるまでの手数が少なく、そのコマが通る敵ライン(自駒・他の敵駒なし)の価値(LINE_SCORES)が高いものを狙う。なければ null
+function bestInjectionTarget(board, me, minValue) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (!isEnemy(sq.player, me)) continue;
+        const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数
+        const turns = Math.ceil(sq.bind / (1 + p)); // 1手ごとに 1+毒数 減る
+        if (turns > 2) continue;
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let oc = 0, foreign = 0;
+            for (const idx of line) { if (board[idx].player === sq.player) oc++; else if (board[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(oc, 4)];
+        }
+        val = turns === 1 ? val : val / 2;
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestVal >= minValue ? bestIdx : null;
+}
+
 // 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ。敵2体以上で価値あり。
 // 敵1体でも、その駒がリーチ列を作っている(どかさないと負ける)なら撃つ。
-// (AIは他の毒付与スキル(インジェクション等)を使わないので「他に手段がない」は常に成立)
 function bestMiasmaTarget(board, me) {
     const geo = geometryForCells(board.length);
     let bestIdx = null, bestScore = 0;
@@ -322,7 +346,16 @@ function chooseSkills(s, availableSkills) {
     function cost(base, isToken) { return calculateCost(s, base, isToken || false); }
 
     const skills = [];
+    // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える。
+    // A/B(約1200試合×seed1-3): ネクロ +2.1/+5.2/+5.8pt。巨人(ストンプ)は +0.8/+1.1/+1.0pt と誤差内で対象外、
+    // 軍師は全軍突撃のコストをトークンで下げるため温存すると 0.468→0.198 と大幅悪化
+    let reserve = 0;
+    if (character === 'necromancer') {
+        if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
+    }
+    const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
+        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
     }
@@ -520,6 +553,19 @@ function faithfulMakeMove(s) {
             SKILLS.lock(s);
             placeMove(s, threats[0]);
             return { move: threats[1], turnEnded: false };
+        }
+    }
+
+    // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+    if (curChar(s) === 'poisoner' && availableSkills.includes(15)
+        && magic >= calculateCost(s, skillCosts.onClickInjection, false, true)
+        && countReaches(s.board, me) === 0) {
+        const target = bestInjectionTarget(s.board, me, INJ_MIN);
+        if (target !== null) {
+            SKILLS.injection(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
         }
     }
 
