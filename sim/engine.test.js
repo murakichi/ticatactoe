@@ -523,8 +523,8 @@ test('打てるマスが無い（無敵の⚡だらけ）AIはチャージでパ
     assert.strictEqual(s.heartTurn, false);
 });
 
-test('全マス⚡で放電（CHG_DISCHARGE）: 全⚡を取り除き、ロック以外の全マスのライフを0にする', () => {
-    // DISCHARGE は読み込み時に決まるため、別プロセスで検証する
+test('過負荷（全マス⚡）: 全⚡と🔑を取り除き、全マスのライフを0にする', () => {
+    // 既定で有効（CHG_DISCHARGE=0 で無効）。環境変数は読み込み時に決まるため、別プロセスで検証する
     const { execFileSync } = require('child_process');
     const code = `
         const e = require('./sim/engine');
@@ -537,13 +537,14 @@ test('全マス⚡で放電（CHG_DISCHARGE）: 全⚡を取り除き、ロッ�
         console.log(JSON.stringify({
             stacks: s.board.reduce((n, sq) => n + e.chargeStacks(sq), 0),
             binds: s.board.map((sq) => sq.bind),
+            locks: s.board.reduce((n, sq) => n + sq.effects.filter((x) => x.effect === '🔑').length, 0),
             discharge: s.stats.discharge,
         }));`;
-    const out = JSON.parse(execFileSync('node', ['-e', code], { cwd: require('path').join(__dirname, '..'), env: { ...process.env, CHG_DISCHARGE: '1' } }).toString());
+    const out = JSON.parse(execFileSync('node', ['-e', code], { cwd: require('path').join(__dirname, '..'), env: { ...process.env } }).toString());
     assert.strictEqual(out.stacks, 0);
     assert.strictEqual(out.discharge, 1);
-    assert.strictEqual(out.binds[3], 6);                       // ロック中は変えない
-    assert.ok(out.binds.every((b, i) => i === 3 || b === 0));  // それ以外は全部0
+    assert.ok(out.binds.every((b) => b === 0));                // ロックのマスも含めて全部0
+    assert.strictEqual(out.locks, 0);                          // ロックも解除
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

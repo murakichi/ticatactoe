@@ -164,9 +164,9 @@ const skillCosts = {
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
 const FIRE_DAMAGE = Number(process.env.CHG_FIRE_DMG) || (config.charge && config.charge.fireDamage) || 1;
-// 全マスが⚡で埋まったら、全⚡を取り除いて全マスのライフを0にする（ユーザー案。既定は無効、A/B検証用）。
-// 環境変数 CHG_DISCHARGE=1 または config.charge.discharge。🔑ロック中のマスのライフは変えない（ロックは貫通しない）
-const DISCHARGE = process.env.CHG_DISCHARGE != null ? process.env.CHG_DISCHARGE === '1' : !!(config.charge && config.charge.discharge);
+// 過負荷: 全マスが⚡で埋まったら、全⚡と🔑ロックを取り除いて全マスのライフを0にする（ユーザー案。ロックも解除する）。
+// 既定は有効。環境変数 CHG_DISCHARGE=0 / config.charge.discharge=false で無効化できる（A/B検証用）
+const DISCHARGE = process.env.CHG_DISCHARGE != null ? process.env.CHG_DISCHARGE === '1' : !(config.charge && config.charge.discharge === false);
 const CHARGE_MIN_COST = (config.charge && config.charge.minCost) || 1;
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -260,13 +260,13 @@ function chargeOneCost(s) {
 function chargeSpreadCost(s) {
     return Math.max(CHARGE_MIN_COST, calculateCost(s, skillCosts.onClickChargeSpread - boardChargeCount(s.board)));
 }
-// ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡を取り除き、(ロック以外の)全マスのライフを0にする
+// ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡と🔑を取り除き、全マスのライフを0にする
 function checkDischarge(s) {
     if (!DISCHARGE) return false;
     if (!s.board.every((sq) => chargeStacks(sq) > 0)) return false;
     for (const sq of s.board) {
-        sq.effects = sq.effects.filter((e) => e.effect !== '⚡');
-        if (!sq.effects.some((e) => e.effect === '🔑')) sq.bind = 0;
+        sq.effects = sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑');
+        sq.bind = 0;
     }
     bumpStat(s, 'discharge');
     return true;

@@ -29,7 +29,9 @@ module.exports = {
         "randomCost": 3,
         "jammerCost": 4,
         // 帯電付与・帯電拡散は盤面の⚡の数だけ軽減、この下限まで (#43)
-        "minCost": 1
+        "minCost": 1,
+        // 全マスが⚡で埋まると、全⚡と🔑を取り除いて全マスのライフを0にする（過負荷）。false で無効
+        "discharge": true
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
     "proliferate": {
