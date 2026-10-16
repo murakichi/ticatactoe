@@ -397,6 +397,7 @@ export const Game = (props: GameProps) => {
 
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
+        let poisonVanished = 0;
         for (let s = 0; s < nextBoard.length; s++) {
             const square = nextBoard[s];
             const hadLife = square.bind > 0;
@@ -408,7 +409,18 @@ export const Game = (props: GameProps) => {
                 square.effects = square.effects.filter((x) => x.effect !== '🔑');
             }
             // 毒持ちのマスが 0 に落ちた瞬間に拡散の起点として記録
-            if (poison > 0 && hadLife && square.bind === 0 && s !== i) spreadOrigins.push(s);
+            if (poison > 0 && hadLife && square.bind === 0 && s !== i) {
+                spreadOrigins.push(s);
+                // 毒でライフが尽きたマスは消える（空きマスに戻る）
+                nextBoard[s] = { player: undefined, bind: 0, effects: [] };
+                poisonVanished++;
+            }
+        }
+        // 毒使い側は、毒で空いたマス1つにつき魔力+1
+        if (poisonVanished > 0) {
+            if (props.heartSelectedCharacter === 'poisoner') setHeartMagic((m) => m + poisonVanished);
+            if (props.circleSelectedCharacter === 'poisoner') setCircleMagic((m) => m + poisonVanished);
+            addLog(`毒でマスが${poisonVanished}個消えた${poisonerInPlay ? '（毒使いの魔力+' + poisonVanished + '）' : ''}`);
         }
 
         let newBind: number;

@@ -36,6 +36,25 @@ test('placeMove: capturing a bind-0 enemy flips ownership', () => {
     assert.strictEqual(s.board[6].player, '💙');
 });
 
+test('毒でライフが尽きたマスは消え、毒使い側の魔力が+1される', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true; s.life = 3;
+    s.board[10] = { player: '⭕', bind: 2, effects: [{ effect: '☠' }, { effect: '☠' }] };
+    const before = s.heartMagic;
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[10].player, undefined);
+    // 空きマス化の+1（ターン送りの通常回復は別枠なので、少なくとも+1増えている）
+    assert.ok(s.heartMagic >= before + 1);
+});
+
+test('毒でなく通常の減衰で0になったマスは消えない', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true; s.life = 3;
+    s.board[10] = { player: '⭕', bind: 1, effects: [] };
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[10].player, '⭕');
+});
+
 test('token skill places one piece for the current player', () => {
     const s = game('tactician', 'you');
     s.heartTurn = true;

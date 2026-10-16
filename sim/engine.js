@@ -408,13 +408,11 @@ function placeMove(s, i) {
         if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
         if (poison > 0 && hadLife && sq.bind === 0 && k !== i) spreadOrigins.push(k);
-        if (process.env.POISON_VANISH === '1' && poison > 0 && hadLife && sq.bind === 0 && k !== i) {
+        // 毒でライフが尽きたマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1
+        if (poison > 0 && hadLife && sq.bind === 0 && k !== i) {
             board[k] = { player: undefined, bind: 0, effects: [] };
-            // 実験: 毒でマスが空いたら、毒使い側の魔力+1
-            if (process.env.POISON_MAGIC === '1') {
-                if (s.heartChar === 'poisoner') s.heartMagic += 1;
-                if (s.circleChar === 'poisoner') s.circleMagic += 1;
-            }
+            if (s.heartChar === 'poisoner') s.heartMagic += 1;
+            if (s.circleChar === 'poisoner') s.circleMagic += 1;
         }
     }
     const hadPoisonAtTarget = board[i].effects.some((e) => e.effect === '☠');
