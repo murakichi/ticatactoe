@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -61,6 +61,9 @@ function shouldDecay(placements, n) {
 
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
+
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 23; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -149,6 +152,10 @@ const skillCosts = {
     onClickPandemic: 6,
     // 増殖のコストだけは config.js のノブから引く (バランス調整ループ用)
     onClickProliferate: PROLIFERATE.cost,
+    // ⚡帯電 (雷霆の巫)。idx 21=帯電トークン / 22=帯電付与。固有スキルの帯電拡散は pool に入らない
+    onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
+    onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
+    onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
 };
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -200,6 +207,68 @@ function spreadPoisonAround(board, idx, rng, s) {
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
     poisonStrike(s, board[t]);
+}
+
+// ---- 帯電（雷霆の巫） ------------------------------------------------------
+// ⚡は {effect:'⚡'} の個数がスタック。発火: 帯電マスの縦横に隣接するマスへ誰かが着手すると、
+// その帯電マスの縦横隣接のコマに1ダメージ。🔑ロック中(bind>0)のマスは貫通しない。発火した⚡は全部消える。
+function chargeStacks(sq) {
+    return sq.effects.filter((e) => e.effect === '⚡').length;
+}
+// 縦横4隣接。size = 盤の一辺 (s.size)
+function orthoNeighbors(i, size) {
+    const r = Math.floor(i / size), c = i % size;
+    const out = [];
+    if (r > 0) out.push(i - size);
+    if (r < size - 1) out.push(i + size);
+    if (c > 0) out.push(i - 1);
+    if (c < size - 1) out.push(i + 1);
+    return out;
+}
+function charOfPlayer(s, player) {
+    return s.chars[seatOf(player)];
+}
+// 雷霆の巫の⚡付き自陣マスは「ライフ0でも取られない」無敵。弱点として本人も触れない
+function isShielded(s, sq) {
+    return !!sq.player && charOfPlayer(s, sq.player) === 'electrician' && chargeStacks(sq) > 0;
+}
+// 🔑ロックまたは⚡の無敵＝ダメージ系スキルの対象外にするマス
+function isGuarded(s, sq) {
+    return sq.effects.some((e) => e.effect === '🔑') || isShielded(s, sq);
+}
+function bumpStat(s, key, n = 1) {
+    s.stats[key] = (s.stats[key] || 0) + n;
+}
+// 着手マス i の隣にある⚡を発火させる。mover = 着手した側のシンボル
+function fireCharges(s, i, mover) {
+    const board = s.board;
+    for (const k of orthoNeighbors(i, s.size)) {
+        if (chargeStacks(board[k]) === 0) continue;
+        bumpStat(s, 'fires');
+        bumpStat(s, charOfPlayer(s, mover) === 'electrician' ? 'firesByElectrician' : 'firesByOther');
+        for (const n of orthoNeighbors(k, s.size)) {
+            const sq = board[n];
+            if (!sq.player || sq.bind <= 0) continue;
+            if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
+            sq.bind -= 1;
+            // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / それ以外の駒に与えた被害
+            bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
+        }
+        board[k].effects = board[k].effects.filter((e) => e.effect !== '⚡');
+    }
+}
+// 固有スキル: start から、コマのあるマスだけを縦横に辿れるすべてのマスの集合
+function connectedPieces(board, start, size) {
+    if (!board[start].player) return [];
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length) {
+        const cur = queue.shift();
+        for (const n of orthoNeighbors(cur, size)) {
+            if (!seen.has(n) && board[n].player) { seen.add(n); queue.push(n); }
+        }
+    }
+    return [...seen];
 }
 
 // ---- Game state -----------------------------------------------------------
@@ -274,12 +343,15 @@ function newGame(opts = {}) {
         // skill pool + per-player locks (Game.tsx と同じく毎手番ロックを残して再シャッフル)
         skills: [],
         lockedSkills: Array.from({ length: n }, () => []),
+        useChargeOne: false,
+        useChargeSpread: false,
+        stats: {},
         winner: undefined,
         log: [],
     };
     defineLegacyAliases(state);
     state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng));
-    state.skills = reshuffleSkillsFor(state, 0, 21); // 先手(席0)の初期スキル
+    state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     return state;
 }
 
@@ -376,7 +448,7 @@ function advanceTurn(s) {
     s.usedTokenThisTurn = false;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
-    s.skills = reshuffleSkillsFor(s, next, 21);
+    s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
 }
 
 /**
@@ -387,7 +459,19 @@ function advanceTurn(s) {
 function placeMove(s, i) {
     const board = s.board;
 
+    // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)
+    if (isShielded(s, board[i])) return false;
+
     // pending targeted skills consume the click without advancing the turn
+    if (s.useChargeOne) {
+        board[i].effects.push({ effect: '⚡' });
+        s.useChargeOne = false;
+        return true;
+    }
+    if (s.useChargeSpread) {
+        exeChargeSpread(s, i);
+        return true;
+    }
     if (s.useLock > 0) {
         board[i].effects.push({ effect: '🔑' });
         if (board[i].bind < 6) board[i].bind = 6;
@@ -500,6 +584,9 @@ function placeMove(s, i) {
             }
         }
     }
+
+    // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
+    fireCharges(s, i, cur);
 
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
@@ -616,19 +703,19 @@ function onClickBothToken(s) {
     s.useTokenCount[s.turn]++;
 }
 function onClickSlash(s) {
-    for (const idx of geometryOf(s.size).antiDiagonal) if (!s.board[idx].effects.some((e) => e.effect === '🔑')) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
     spendMagic(s, calculateCost(s, skillCosts.onClickSlash));
     bumpMagicCount(s);
 }
 function onClickBackSlash(s) {
-    for (const idx of geometryOf(s.size).mainDiagonal) if (!s.board[idx].effects.some((e) => e.effect === '🔑')) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
     spendMagic(s, calculateCost(s, skillCosts.onClickBackSlash));
     bumpMagicCount(s);
 }
 function onClickOpium(s) {
     const cur = curPlayer(s);
     for (const sq of s.board) {
-        if (sq.player !== cur && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')) {
+        if (sq.player !== cur && sq.bind > 0 && !isGuarded(s, sq)) {
             const calc = sq.bind - 2;
             sq.bind = calc > 1 ? sq.bind - 2 : 0;
         }
@@ -789,7 +876,7 @@ function onClickMiasma(s) {
 function exeMiasma(s, i) {
     const cur = curPlayer(s);
     const targets = surroundRange(s, i).filter(
-        (j) => s.board[j].player && s.board[j].player !== cur && !s.board[j].effects.some((e) => e.effect === '🔑')
+        (j) => s.board[j].player && s.board[j].player !== cur && !isGuarded(s, s.board[j])
     );
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     s.useMiasma = false;
@@ -828,9 +915,38 @@ function onClickPandemic(s) {
     bumpMagicCount(s);
 }
 function exePandemic(s, i) {
-    const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !s.board[j].effects.some((e) => e.effect === '🔑'));
+    const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     s.usePandemic = false;
+}
+
+// ---- 雷霆の巫 スキル ----
+function onClickChargeToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
+    spendMagic(s, calculateCost(s, skillCosts.onClickChargeToken, true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'chargeToken');
+}
+function onClickChargeOne(s) {
+    s.useChargeOne = true;
+    spendMagic(s, calculateCost(s, skillCosts.onClickChargeOne));
+    bumpMagicCount(s);
+    bumpStat(s, 'chargeOne');
+}
+// 固有スキル: 選んだコマのあるマスから、コマのあるマスだけを縦横に辿ってすべてに⚡を付与（発火はしない）
+function onClickChargeSpread(s) {
+    s.useChargeSpread = true;
+    spendMagic(s, skillCosts.onClickChargeSpread);
+    bumpStat(s, 'chargeSpread');
+}
+function exeChargeSpread(s, i) {
+    const cells = connectedPieces(s.board, i, s.size);
+    for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
+    bumpStat(s, 'spreadCells', cells.length);
+    s.useChargeSpread = false;
 }
 
 const SKILLS = {
@@ -865,6 +981,9 @@ const SKILLS = {
     totalAssault: onClickTotalAssault,
     necromancy: onClickNecromancy,
     proliferate: onClickProliferate,
+    chargeToken: onClickChargeToken,
+    chargeOne: onClickChargeOne,
+    chargeSpread: onClickChargeSpread,
 };
 
 // ---- Rendering ------------------------------------------------------------
@@ -891,4 +1010,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, boardPoisonCount, surroundRange,
     PROLIFERATE, proliferateUpkeep,
+    POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

@@ -188,6 +188,8 @@ function wr(w, l) { return w + l ? `${((100 * w) / (w + l)).toFixed(1)}%` : 'n/a
 
 // ---------- metrics: single comparable JSON snapshot (for the improvement loop) ----------
 function computeMetrics(games, mode, baseSeed) {
+    // SIM_CHARS=a,b,c で対象キャラを絞れる (新キャラ追加前後の比較用)
+    const CHARACTERS = process.env.SIM_CHARS ? process.env.SIM_CHARS.split(',') : engine.CHARACTERS;
     const pairs = crossProduct(CHARACTERS, CHARACTERS);
     const charAgg = {};
     for (const c of CHARACTERS) charAgg[c] = { w: 0, l: 0, d: 0 };

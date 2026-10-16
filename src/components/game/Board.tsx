@@ -10,6 +10,8 @@ type BoardProps = {
     onPlay: (i: number) => void;
     destroyCells?: number[];
     previewCells?: number[];
+    /** 雷霆の巫の⚡付き自陣マス（誰も触れない無敵マス） */
+    shieldedCells?: number[];
     onCellHover?: (i: number) => void;
     onCellLeave?: () => void;
 };
@@ -36,6 +38,7 @@ export const Board: React.FC<BoardProps> = (props: BoardProps) => {
                     showMark={showMark}
                     onSquareClick={() => props.onPlay(i)}
                     highlight={highlightFor(i)}
+                    shielded={props.shieldedCells?.includes(i)}
                     onHover={props.onCellHover ? () => props.onCellHover!(i) : undefined}
                     onHoverEnd={props.onCellLeave}
                 />

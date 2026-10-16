@@ -9,6 +9,7 @@ type SquareProps = {
     showMark?: boolean;
     onSquareClick: () => void;
     highlight?: 'preview' | 'destroy';
+    shielded?: boolean;
     onHover?: () => void;
     onHoverEnd?: () => void;
 };
@@ -32,6 +33,9 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     const classes = [styles.square, playerClass(info)];
     if (props.highlight === 'destroy') classes.push(styles.destroy);
     else if (props.highlight === 'preview') classes.push(styles.preview);
+
+    if (props.shielded) classes.push(styles.shielded);
+    else if (info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
 
     // 効果を記号ごとに集計してバッジ表示 (🌱×3 など)
     const counts: Record<string, number> = {};

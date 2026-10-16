@@ -8,9 +8,10 @@ test('起動時はキャラクター選択画面が描画される', () => {
     render(<App />);
     expect(screen.getByText('戦術三目並べ')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /対戦スタート/ })).toBeInTheDocument();
-    // 両プレイヤー分のキャラカードが並ぶ (7キャラ × 2枠)
+    // 両プレイヤー分のキャラカードが並ぶ (8キャラ × 2枠)
     expect(screen.getAllByText('軍師')).toHaveLength(2);
     expect(screen.getAllByText('毒使い')).toHaveLength(2);
+    expect(screen.getAllByText('雷霆の巫')).toHaveLength(2);
 });
 
 test('キャラ説明のライフ平均は実装の定数から描画される', () => {
@@ -19,6 +20,7 @@ test('キャラ説明のライフ平均は実装の定数から描画される',
     const giant = screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.giant}`));
     expect(giant.length).toBe(2); // 💙 / ⭕ の2枚
     expect(screen.getAllByText(new RegExp(`陽=ライフ平均${LIFE_MEANS.yinYangMaster_yang}`)).length).toBe(2);
+    expect(screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.electrician}`)).length).toBe(2);
 });
 
 test('対戦スタートで盤面に切り替わる', () => {
