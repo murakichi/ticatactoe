@@ -1,13 +1,16 @@
 import { CharacterId } from '../../types/Character';
-import { Player } from '../../types/Player';
+import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
-import { WIN_LINES, STOMP_AREA, JUDGE_AREA } from './boardGeometry';
-import { chargeStacks, orthoNeighbors, connectedPieces, shieldedCells, withCharge } from './charge';
+import { geometryForCells } from './boardGeometry';
+import { chargeStacks, orthoNeighbors, connectedPieces, withCharge } from './charge';
 
-// 汎用スキルプールの大きさ (Game.tsx の SKILL_POOL_SIZE / sim の poolSize と同値)
-const SKILL_POOL_SIZE = 23;
+// 汎用スキルプールの大きさ (idx 0..22)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 23;
+
+// 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
+const CHARGE_ONE_MIN_SCORE = 2;
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -15,61 +18,76 @@ export type AIResult = {
     move: number | null;
     skills: string[];
     lockTargets?: number[];
-    stompTarget?: number;
+    stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
     /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
     chargeClicks?: { skill: string; target: number }[];
 };
 
-// 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
-const CHARGE_ONE_MIN_SCORE = 2;
-
 class AIPlayer {
     playerSymbol: Player;
     character: CharacterId;
-    opponent: Player;
-    opponentCharacter: CharacterId;
+    /** 自分以外の全プレイヤー(2人戦なら1人)。先頭を探索木の「相手役」に使う */
+    opponents: Player[];
     necroActive: boolean = false;
+    /** 席ごとのキャラ（添字 = 席番号）。無敵マスの判定に使う。省略時は自分のキャラだけ分かる */
+    characters: readonly CharacterId[];
     /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
     shield: Set<number> = new Set();
 
-    constructor(playerSymbol: Player, character: CharacterId, opponentCharacter: CharacterId = 'you') {
+    constructor(
+        playerSymbol: Player,
+        character: CharacterId,
+        opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
+        characters: readonly CharacterId[] = []
+    ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
-        this.opponent = playerSymbol === '💙' ? '⭕' : '💙';
-        this.opponentCharacter = opponentCharacter;
+        this.opponents = opponents;
+        this.characters = characters;
     }
 
-    private updateShield(board: SquareInfo[]): void {
-        this.shield = new Set(
-            shieldedCells(board, { [this.playerSymbol]: this.character, [this.opponent]: this.opponentCharacter } as Record<Player, CharacterId>)
-        );
+    private characterOf(player: Player): CharacterId | undefined {
+        return player === this.playerSymbol ? this.character : this.characters[seatOf(player)];
+    }
+
+    /** 無敵マス(雷霆の巫の⚡付き自陣)の集合を更新する (sim/ai.js updateShield) */
+    updateShield(board: SquareInfo[]): void {
+        this.shield = new Set();
+        board.forEach((sq, i) => {
+            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0) this.shield.add(i);
+        });
+    }
+
+    private sizeOf(board: SquareInfo[]): number {
+        return Math.round(Math.sqrt(board.length));
     }
 
     /** 着手マス i が発火させる⚡の損得。敵コマ(ライフ>0)を削れば加点、自コマを削れば減点。ライフ1は0になるので重く見る */
     fireGain(board: SquareInfo[], i: number): number {
+        const size = this.sizeOf(board);
         let gain = 0;
-        for (const k of orthoNeighbors(i)) {
+        for (const k of orthoNeighbors(i, size)) {
             if (chargeStacks(board[k]) === 0) continue;
-            for (const n of orthoNeighbors(k)) {
+            for (const n of orthoNeighbors(k, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
                 if (sq.effects.some((e) => e.effect === '🔑')) continue;
                 const w = 3 + (sq.bind === 1 ? 4 : 0);
-                gain += sq.player === this.opponent ? w : -w;
+                gain += this.isEnemy(sq.player) ? w : -w;
             }
         }
         return gain;
     }
 
-    /** 自コマ i が入っている列のうち、敵コマが無く自コマが最も多い列の自コマ数 (i を含む) */
+    /** 自コマ i が入っている列のうち、他の席のコマが無く自コマが最も多い列の自コマ数 (i を含む) */
     bestOwnLineCount(board: SquareInfo[], i: number): number {
         let best = 0;
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             if (!line.includes(i)) continue;
             let mine = 0, bad = false;
             for (const idx of line) {
                 if (board[idx].player === this.playerSymbol) mine++;
-                else if (board[idx].player === this.opponent) bad = true;
+                else if (board[idx].player) bad = true;
             }
             if (!bad && mine > best) best = mine;
         }
@@ -77,19 +95,20 @@ class AIPlayer {
     }
 
     /**
-     * 帯電付与の対象。攻め=縦横隣接の(敵コマ数−自コマ数)、守り=ライフ0〜1の自コマが敵のいない列で
+     * 帯電付与の対象。攻め=縦横隣接の(敵コマ数−自コマ数)、守り=ライフ0〜1の自コマが他の席のいない列で
      * 2つ以上(リーチ列なら3つ)の一部なら⚡の無敵で守る。大きいほうが MIN 以上なら撃つ。
      */
     bestChargeOneTarget(board: SquareInfo[]): number | null {
+        const size = this.sizeOf(board);
         let bestIdx: number | null = null, bestScore = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
             if (chargeStacks(board[i]) > 0) continue;
             let attack = 0;
-            for (const n of orthoNeighbors(i)) {
+            for (const n of orthoNeighbors(i, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
-                if (sq.player === this.opponent) attack++; else attack--;
+                if (this.isEnemy(sq.player)) attack++; else attack--;
             }
             let defend = 0;
             if (board[i].player === this.playerSymbol && board[i].bind <= 1) {
@@ -104,20 +123,22 @@ class AIPlayer {
 
     /** 固有スキル(帯電拡散)の起点。リーチ列を無敵で守れる、または自コマ3つ以上で敵2体以上を巻き込めるとき */
     bestChargeSpreadTarget(board: SquareInfo[]): number | null {
+        const size = this.sizeOf(board);
         let bestIdx: number | null = null, bestScore = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             if (!board[i].player || this.shield.has(i)) continue;
-            const cells = connectedPieces(board, i);
+            const cells = connectedPieces(board, i, size);
             const mine = cells.filter((k) => board[k].player === this.playerSymbol).length;
             let reach = false;
             for (const k of cells) if (board[k].player === this.playerSymbol && this.bestOwnLineCount(board, k) >= 3) reach = true;
             const adj = new Set<number>();
             for (const k of cells) {
-                for (const n of orthoNeighbors(k)) {
-                    if (board[n].player === this.opponent && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+                for (const n of orthoNeighbors(k, size)) {
+                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
                 }
             }
-            for (const k of cells) if (board[k].player === this.opponent && board[k].bind > 0) adj.add(k);
+            // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
+            for (const k of cells) if (this.isEnemy(board[k].player) && board[k].bind > 0) adj.add(k);
             const ok = reach || (mine >= 3 && adj.size >= 2);
             if (!ok) continue;
             const score = adj.size + mine + (reach ? 10 : 0);
@@ -126,26 +147,42 @@ class AIPlayer {
         return bestIdx;
     }
 
+    /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
+    isEnemy(player: Player | undefined): boolean {
+        return player !== undefined && player !== this.playerSymbol;
+    }
+
+    /** 探索の深さ。盤が大きいほど候補手が増えるので浅くする（4x4=3 / 5x5=2 / それ以上=1） */
+    searchDepth(board: SquareInfo[]): number {
+        const cells = board.length;
+        if (cells <= 16) return 3;
+        if (cells <= 25) return 2;
+        return 1;
+    }
+
     /** 盤面評価関数: 各勝利ラインのスコアを合算 */
     evaluateBoard(board: SquareInfo[]): number {
         let score = 0;
         const lineScores = [0, 1, 10, 50, 1000];
 
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
+            // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
+            const enemiesInLine = new Set<Player>();
             for (const idx of line) {
                 const sq = board[idx];
                 if (sq.player === this.playerSymbol) {
                     myCount++;
                     myBindSum += sq.bind;
-                } else if (sq.player === this.opponent) {
+                } else if (sq.player) {
                     oppCount++;
                     oppBindSum += sq.bind;
+                    enemiesInLine.add(sq.player);
                 }
             }
             if (myCount > 0 && oppCount === 0) {
                 score += lineScores[myCount];
-            } else if (oppCount > 0 && myCount === 0) {
+            } else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
                 score -= lineScores[oppCount];
                 // 相手2つ+空き2つ: トークンで即リーチ→即勝ちの脅威
                 if (oppCount === 2) {
@@ -166,7 +203,7 @@ class AIPlayer {
             const hasLock = sq.effects.some(e => e.effect === '🔑');
             if (sq.player === this.playerSymbol) {
                 score += buds * 3 + (hasLock ? 5 : 0);
-            } else if (sq.player === this.opponent) {
+            } else if (sq.player) {
                 score -= buds * 3 + (hasLock ? 5 : 0);
             }
         }
@@ -176,13 +213,12 @@ class AIPlayer {
 
     /** 指定プレイヤーのリーチ数（3つ揃い+空き1）をカウント */
     countReaches(board: SquareInfo[], player: Player): number {
-        const opp: Player = player === '💙' ? '⭕' : '💙';
         let reaches = 0;
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let my = 0, op = 0;
             for (const idx of line) {
                 if (board[idx].player === player) my++;
-                else if (board[idx].player === opp) op++;
+                else if (board[idx].player) op++;
             }
             if (my === 3 && op === 0) reaches++;
         }
@@ -191,14 +227,13 @@ class AIPlayer {
 
     /** 相手がリーチしているラインの残り1マス（脅威マス）を列挙 */
     findThreatSquares(board: SquareInfo[], player: Player): number[] {
-        const opp: Player = player === '💙' ? '⭕' : '💙';
         const threats: number[] = [];
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];
                 if (sq.player === player) pCount++;
-                else if (sq.player === opp) oCount++;
+                else if (sq.player) oCount++;
                 else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -242,7 +277,7 @@ class AIPlayer {
     /** 有効な手の一覧 (空きマス + 乗っ取り/攻撃可能な敵マス) */
     getValidMoves(board: SquareInfo[], life: number): number[] {
         const moves: number[] = [];
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (this.shield.has(i)) continue;
             // ロック済みかつbind>0はスキップ
@@ -251,7 +286,7 @@ class AIPlayer {
             if (!sq.player) {
                 // 空きマス (ロックされていない)
                 if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
-            } else if (sq.player === this.opponent) {
+            } else if (this.isEnemy(sq.player)) {
                 // bind=0の敵マスは無条件で乗っ取り可能
                 if (sq.bind <= 0) {
                     moves.push(i);
@@ -267,7 +302,7 @@ class AIPlayer {
     /** 指定プレイヤーが着手可能なマスを列挙 */
     getMovesFor(board: SquareInfo[], player: Player, life: number): number[] {
         const moves: number[] = [];
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (this.shield.has(i)) continue;
             if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
@@ -284,9 +319,11 @@ class AIPlayer {
     minimax(board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number): number {
         const winner = calculateWinner(board.map(sq => sq.player));
         if (winner === this.playerSymbol) return 1000 + depth;
-        if (winner === this.opponent) return -1000 - depth;
+        if (winner) return -1000 - depth;
 
-        const currentPlayer = isMax ? this.playerSymbol : this.opponent;
+        // 敵が複数いても探索木では先頭の敵を「相手役」として代表させる（深さは盤サイズで制限済み）
+        const opponent = this.opponents[0];
+        const currentPlayer = isMax ? this.playerSymbol : opponent;
         const moves = this.getMovesFor(board, currentPlayer, life);
         if (depth === 0 || moves.length === 0) return this.evaluateBoard(board);
 
@@ -306,7 +343,7 @@ class AIPlayer {
             let best = Infinity;
             for (const idx of moves) {
                 const score = this.minimax(
-                    this.simulatePlace(board, idx, this.opponent, life),
+                    this.simulatePlace(board, idx, opponent, life),
                     depth - 1, true, alpha, beta, life
                 );
                 best = Math.min(best, score);
@@ -332,11 +369,13 @@ class AIPlayer {
         }
 
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)
-        const oppMoves = this.getMovesFor(board, this.opponent, life);
-        for (const i of oppMoves) {
-            const sim = this.simulatePlace(board, i, this.opponent, life);
-            if (calculateWinner(sim.map(sq => sq.player)) === this.opponent) {
-                if (allMoves.includes(i)) return i;
+        for (const opp of this.opponents) {
+            const oppMoves = this.getMovesFor(board, opp, life);
+            for (const i of oppMoves) {
+                const sim = this.simulatePlace(board, i, opp, life);
+                if (calculateWinner(sim.map(sq => sq.player)) === opp) {
+                    if (allMoves.includes(i)) return i;
+                }
             }
         }
 
@@ -346,7 +385,7 @@ class AIPlayer {
 
         for (const i of allMoves) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life);
-            let score = this.minimax(simBoard, 3, false, -Infinity, Infinity, life);
+            let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
 
             // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
             const reaches = this.countReaches(simBoard, this.playerSymbol);
@@ -354,7 +393,7 @@ class AIPlayer {
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
 
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
-            if (board[i].player === this.opponent && board[i].bind <= 0) {
+            if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
                 score += 30;
             }
 
@@ -388,11 +427,12 @@ class AIPlayer {
         let myPieces = 0, oppPieces = 0, empties = 0;
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player === this.opponent) oppPieces++;
+            else if (sq.player) oppPieces++;
             else if (!sq.player) empties++;
         }
+        const geo = geometryForCells(board.length);
         const enemiesOn = (idxs: number[]) =>
-            idxs.filter((i) => board[i].player === this.opponent && !board[i].effects.some((e) => e.effect === '🔑')).length;
+            idxs.filter((i) => this.isEnemy(board[i].player) && !board[i].effects.some((e) => e.effect === '🔑')).length;
 
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
@@ -405,8 +445,8 @@ class AIPlayer {
         const valued = (idx: number): boolean => {
             switch (idx) {
                 case 3: case 4: case 9: case 11: return empties >= 3;          // トークン系
-                case 5: return enemiesOn([3, 6, 9, 12]) >= 2;                   // スラッシュ
-                case 6: return enemiesOn([0, 5, 10, 15]) >= 2;                  // バックスラッシュ
+                case 5: return enemiesOn(geo.antiDiagonal) >= 2;                   // スラッシュ
+                case 6: return enemiesOn(geo.mainDiagonal) >= 2;                  // バックスラッシュ
                 case 8: return oppPieces >= 3;                                  // オピウム
                 case 7: return opponentMagic >= 7;                              // チューチュートレイン
                 case 14: return myPieces >= 3;                                  // ワルプルギスの夜
@@ -451,15 +491,25 @@ class AIPlayer {
     ): string[] {
         const skills: string[] = [];
         let remaining = magic;
-        const oppReaches = this.countReaches(board, this.opponent);
+        const oppReaches = this.opponents.reduce((n, o) => n + this.countReaches(board, o), 0);
         let myPieces = 0, oppPieces = 0;
+        const piecesOf = new Map<Player, number>();
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player === this.opponent) oppPieces++;
+            else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
         }
+        // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
+        piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
+        const geo = geometryForCells(board.length);
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
+        // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える
+        // (sim/ai.js chooseSkills と同一。A/B: ネクロ +2〜6pt。巨人は誤差内、軍師は大幅悪化で対象外)
+        let reserve = 0;
+        if (this.character === 'necromancer' && necroRemain === 0) reserve = necroCost;
+        const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
+            if (reserve > 0 && RESERVE_SKIP.includes(skill) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
         };
@@ -472,7 +522,7 @@ class AIPlayer {
                 const corpses = 10 - necroCost; // baseNecromancyCost=10。軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
-                    if (sq.player === this.opponent && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
+                    if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
                 if (corpses >= 3 || absorbable >= 2) spend(necroCost, 'onClickNecromancy');
             }
@@ -510,16 +560,16 @@ class AIPlayer {
         if (skills.length === 0 && isLosing && oppReaches === 0) {
             if (availableSkills.includes(5)) {
                 let oppOn = 0, myOn = 0;
-                for (const idx of [3, 6, 9, 12]) {
-                    if (board[idx].player === this.opponent && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+                for (const idx of geo.antiDiagonal) {
+                    if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
                 if (oppOn > myOn) spend(this.calculateAICost(costs.onClickSlash), 'onClickSlash');
             }
             if (skills.length === 0 && availableSkills.includes(6)) {
                 let oppOn = 0, myOn = 0;
-                for (const idx of [0, 5, 10, 15]) {
-                    if (board[idx].player === this.opponent && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+                for (const idx of geo.mainDiagonal) {
+                    if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
                 if (oppOn > myOn) spend(this.calculateAICost(costs.onClickBackSlash), 'onClickBackSlash');
@@ -587,13 +637,45 @@ class AIPlayer {
         return skills;
     }
 
+    /**
+     * 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰(1+毒数)で bind が 0 になれば消える。
+     * 消えるまでの手数が少なく、敵のライン価値が高いコマを狙う。なければ null (sim/ai.js bestInjectionTarget と同一)
+     */
+    findInjectionTarget(board: SquareInfo[], minValue: number): { index: number; kills: boolean } | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: { index: number; kills: boolean } | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player) || this.shield.has(i)) continue;
+            const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
+            const turns = Math.ceil(sq.bind / (1 + p));
+            if (turns > 2) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player) oc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(oc, 4)];
+            }
+            if (turns !== 1) val /= 2;
+            if (val > bestVal) { bestVal = val; best = { index: i, kills: turns === 1 }; }
+        }
+        return bestVal >= minValue ? best : null;
+    }
+
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestEnemies = 0, bestEmptyCenter = false;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
             let enemies = 0;
-            for (const idx of STOMP_AREA[i]) if (board[idx].player === this.opponent) enemies++;
+            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player)) enemies++;
             const emptyCenter = !board[i].player;
             if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -605,7 +687,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        for (const idx of STOMP_AREA[i]) {
+        for (const idx of geometryForCells(board.length).stompRange(i)) {
             if (nb[idx].player === player) nb[idx].bind = nb[idx].bind > 5 ? nb[idx].bind - 5 : 0;
             else nb[idx] = { player: undefined, bind: 0, effects: [] };
         }
@@ -615,16 +697,17 @@ class AIPlayer {
 
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
     findJudgeTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestNet = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
             let enemy = 0, mine = 0;
-            for (const idx of JUDGE_AREA[i]) {
+            for (const idx of geo.judgeRange(i)) {
                 const sq = board[idx];
                 const locked = sq.effects.some(e => e.effect === '🔑');
                 const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
                 if (locked && protectedBud) continue;
-                if (sq.player === this.opponent) enemy++;
+                if (this.isEnemy(sq.player)) enemy++;
                 else if (sq.player === this.playerSymbol) mine++;
             }
             const net = enemy - mine;
@@ -652,7 +735,7 @@ class AIPlayer {
         this.updateShield(board);
 
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
-        const threatSquares = this.findThreatSquares(board, this.opponent);
+        const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
         if (threatSquares.length >= 2) {
             const lockOptions: { skill: string; count: number; cost: number }[] = [
                 { skill: 'onClickUseLock', count: 1, cost: this.calculateAICost(costs.onClickUseLock) },
@@ -700,15 +783,31 @@ class AIPlayer {
             }
         }
 
+        // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+        if (
+            this.character === 'poisoner' &&
+            availableSkills.includes(15) &&
+            magic >= this.calculateAICost(costs.onClickInjection, false, true) &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const inj = this.findInjectionTarget(board, 10);
+            if (inj !== null) {
+                // 消える場合は着手時の減衰で盤面から消えるので、その盤面で通常着手を選ぶ
+                const postBoard = board.map((sq, i) => (inj.kills && i === inj.index ? { ...sq, player: undefined, bind: 0, effects: [] } : sq));
+                const followup = this.getBestMove(postBoard, life);
+                return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
+            }
+        }
+
         // 雷霆の巫: 帯電拡散→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）
         const chargeClicks: { skill: string; target: number }[] = [];
-        if (this.character === 'electrician' && this.countReaches(board, this.opponent) === 0) {
+        if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             if (magic >= costs.onClickChargeSpread) {
                 const start = this.bestChargeSpreadTarget(board);
                 if (start !== null) {
                     chargeClicks.push({ skill: 'onClickChargeSpread', target: start });
-                    board = withCharge(board, connectedPieces(board, start));
+                    board = withCharge(board, connectedPieces(board, start, this.sizeOf(board)));
                     magic -= costs.onClickChargeSpread;
                     this.updateShield(board);
                 }
@@ -723,9 +822,10 @@ class AIPlayer {
                 }
             }
         }
+        const chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
-        if (this.countReaches(board, this.opponent) === 0) {
+        if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             if (this.character === 'giant' && magic >= costs.onClickStomp) {
                 const target = this.findStompTarget(board);
                 if (target !== null) {
@@ -760,7 +860,7 @@ class AIPlayer {
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
-            return { move: null, skills, chargeClicks: chargeClicks.length > 0 ? chargeClicks : undefined };
+            return { move: null, skills, chargeClicks: chargeResult };
         }
 
         // 蘇生はこのターンから有効化し、敵マスを攻撃対象に含める
@@ -769,7 +869,7 @@ class AIPlayer {
         }
 
         const move = this.getBestMove(board, life);
-        return { move, skills, chargeClicks: chargeClicks.length > 0 ? chargeClicks : undefined };
+        return { move, skills, chargeClicks: chargeResult };
     }
 }
 

@@ -1,9 +1,12 @@
 import React from 'react';
 import { SquareInfo } from '../../types/SquareInfo';
+import { seatOf } from '../../types/Player';
 import styles from './Square.module.css';
 
 type SquareProps = {
     info: SquareInfo;
+    /** コマの記号(💙など)を隅に表示する（色だけに頼らず見分けるため） */
+    showMark?: boolean;
     onSquareClick: () => void;
     highlight?: 'preview' | 'destroy';
     shielded?: boolean;
@@ -11,8 +14,18 @@ type SquareProps = {
     onHoverEnd?: () => void;
 };
 
-const playerClass = (info: SquareInfo): string =>
-    info.player === '💙' ? styles.heart : info.player === '⭕' ? styles.circle : styles.empty;
+const SEAT_CLASSES = [
+    styles.heart,
+    styles.circle,
+    styles.seat2,
+    styles.seat3,
+    styles.seat4,
+    styles.seat5,
+    styles.seat6,
+    styles.seat7,
+];
+
+const playerClass = (info: SquareInfo): string => (info.player ? SEAT_CLASSES[seatOf(info.player)] : styles.empty);
 
 export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     const { info } = props;
@@ -37,6 +50,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
             onMouseEnter={props.onHover}
             onMouseLeave={props.onHoverEnd}
         >
+            {props.showMark && info.player && <span className={styles.mark}>{info.player}</span>}
             {showLife && <span className={styles.life}>{info.bind}</span>}
             {Object.keys(counts).length > 0 && (
                 <span className={styles.effects}>

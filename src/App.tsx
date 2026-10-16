@@ -1,8 +1,10 @@
 import './App.css';
 import React, { useState } from 'react';
-import { Game } from './components/game/Game';
+import { Game, PlayerConfig } from './components/game/Game';
+import { boardSizeFor } from './components/game/boardGeometry';
 import { CharacterId } from './types/Character';
-import { LIFE_MEANS } from './util';
+import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
+import { LIFE_MEANS, range } from './util';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -36,45 +38,71 @@ const CHARACTERS: CharacterDef[] = [
     },
 ];
 
+const MIN_PLAYERS = 2;
+const DEFAULT_PLAYERS: PlayerConfig[] = PLAYER_SYMBOLS.map((_, seat) => ({ character: 'you', isAI: seat !== 0 }));
+
 export const App = () => {
-    const [heartSelectedCharacter, setHeartSelectedCharacter] = useState<CharacterId>('you');
-    const [circleSelectedCharacter, setCircleSelectedCharacter] = useState<CharacterId>('you');
-    const [heartIsAI, setHeartIsAI] = useState<boolean>(false);
-    const [circleIsAI, setCircleIsAI] = useState<boolean>(true);
+    // 8席ぶんの設定を保持し、人数を変えても入力済みの内容を失わない。実際に使うのは先頭 playerCount 席
+    const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
+    const [playerCount, setPlayerCount] = useState<number>(MIN_PLAYERS);
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
+
+    const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
+        setPlayers((prev) => prev.map((p, i) => (i === seat ? { ...p, ...patch } : p)));
+    const boardSize = boardSizeFor(playerCount);
+    // AI席のキャラを「あなた」以外からランダムに決め直す（人間の席は触らない。重複あり）
+    const randomizeAICharacters = () =>
+        setPlayers((prev) =>
+            prev.map((p, seat) => {
+                if (seat >= playerCount || !p.isAI) return p;
+                const pool = CHARACTERS.filter((c) => c.id !== 'you');
+                return { ...p, character: pool[Math.floor(Math.random() * pool.length)].id };
+            })
+        );
+    const hasAISeat = players.slice(0, playerCount).some((p) => p.isAI);
 
     return (
         <div className='App'>
             {isGameStarted ? (
                 <div className='App-game'>
-                    <Game
-                        heartSelectedCharacter={heartSelectedCharacter}
-                        circleSelectedCharacter={circleSelectedCharacter}
-                        heartIsAI={heartIsAI}
-                        circleIsAI={circleIsAI}
-                    />
+                    <Game players={players.slice(0, playerCount)} />
                 </div>
             ) : (
                 <div className={styles.prep}>
                     <div className={styles.title}>戦術三目並べ</div>
-                    <div className={styles.subtitle}>キャラクターと操作を選んで対戦開始</div>
+                    <div className={styles.subtitle}>人数・キャラクター・操作を選んで対戦開始</div>
+                    <div className={styles.countRow}>
+                        <span className={styles.countLabel}>人数</span>
+                        <div className={styles.seg} role='group' aria-label='人数'>
+                            {range(MIN_PLAYERS, MAX_PLAYERS - MIN_PLAYERS + 1).map((n) => (
+                                <button
+                                    key={n}
+                                    className={`${styles.segBtn} ${playerCount === n ? styles.segBtnActive : ''}`}
+                                    onClick={() => setPlayerCount(n)}
+                                >
+                                    {n}人
+                                </button>
+                            ))}
+                        </div>
+                        <span className={styles.boardSizeNote}>
+                            盤面 {boardSize}x{boardSize}・4マス並べで勝ち
+                        </span>
+                    </div>
+                    <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
+                        🎲 AI席のキャラをランダムに決める（あなた以外）
+                    </button>
                     <div className={styles.players}>
-                        <PlayerSetting
-                            player='💙'
-                            variant='heart'
-                            checkedCharacter={heartSelectedCharacter}
-                            onCheckCharacter={setHeartSelectedCharacter}
-                            isAI={heartIsAI}
-                            onToggleAI={setHeartIsAI}
-                        />
-                        <PlayerSetting
-                            player='⭕'
-                            variant='circle'
-                            checkedCharacter={circleSelectedCharacter}
-                            onCheckCharacter={setCircleSelectedCharacter}
-                            isAI={circleIsAI}
-                            onToggleAI={setCircleIsAI}
-                        />
+                        {range(0, playerCount).map((seat) => (
+                            <PlayerSetting
+                                key={seat}
+                                seat={seat}
+                                compact={playerCount > 2}
+                                checkedCharacter={players[seat].character}
+                                onCheckCharacter={(character) => updatePlayer(seat, { character })}
+                                isAI={players[seat].isAI}
+                                onToggleAI={(isAI) => updatePlayer(seat, { isAI })}
+                            />
+                        ))}
                     </div>
                     <button className={styles.start} onClick={() => setIsGameStarted(true)}>
                         ⚔️ 対戦スタート
@@ -86,8 +114,9 @@ export const App = () => {
 };
 
 type PlayerSettingProps = {
-    player: string;
-    variant: 'heart' | 'circle';
+    seat: number;
+    /** 3人以上のときは説明文を省いて、選択中のキャラの説明だけ下に出す */
+    compact: boolean;
     checkedCharacter: CharacterId;
     onCheckCharacter: (id: CharacterId) => void;
     isAI: boolean;
@@ -95,12 +124,15 @@ type PlayerSettingProps = {
 };
 
 const PlayerSetting = (props: PlayerSettingProps) => {
-    const cardClass = `${styles.playerCard} ${props.variant === 'heart' ? styles.playerCardHeart : styles.playerCardCircle}`;
+    const selected = CHARACTERS.find((c) => c.id === props.checkedCharacter);
     return (
-        <div className={cardClass}>
+        <div
+            className={`${styles.playerCard}${props.compact ? ` ${styles.playerCardCompact}` : ''}`}
+            style={{ borderTopColor: `var(--color-seat-${props.seat})` }}
+        >
             <div className={styles.playerHead}>
-                <span>{props.player}</span>
-                <span>プレイヤー</span>
+                <span>{PLAYER_SYMBOLS[props.seat]}</span>
+                <span>プレイヤー{props.seat + 1}</span>
             </div>
             <div className={styles.seg}>
                 <button
@@ -126,11 +158,12 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                         <span className={styles.charIcon}>{c.icon}</span>
                         <span>
                             <span className={styles.charName}>{c.name}</span>
-                            <span className={styles.charDesc}>{c.passive}</span>
+                            {!props.compact && <span className={styles.charDesc}>{c.passive}</span>}
                         </span>
                     </button>
                 ))}
             </div>
+            {props.compact && selected && <div className={styles.charNote}>{selected.passive}</div>}
         </div>
     );
 };

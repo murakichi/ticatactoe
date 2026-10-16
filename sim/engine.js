@@ -7,6 +7,11 @@
  * Goal: let an agent / human play the game in a terminal and run batch
  * simulations for balance analysis, without a browser.
  *
+ * 多人数対応 (issue #32): 2〜8人・盤面 4x4〜7x7。席ごとの状態は配列（s.chars / s.magic / ...）で持ち、
+ * 手番は s.turn（席番号）。2人戦の旧フィールド名（heartMagic, circleChar, heartTurn など）は
+ * newGame が getter/setter の別名として生やすので、既存のテスト・CLIはそのまま動く。
+ * 2人戦の結果は多人数対応の前後で（同じseedなら）完全に一致する。
+ *
  * FIDELITY NOTES (deviations from the React source are flagged in comments
  * with [FAITHFUL] = matches source exactly, or [FIX]/[NOTE] = intentional change):
  *  - Win condition, life RNG, placement/capture/decay mechanics, turn order
@@ -18,8 +23,12 @@
  */
 
 // ---- Players / characters -------------------------------------------------
-const HEART = '💙';
-const CIRCLE = '⭕';
+// 席(seat)ごとのシンボル。席番号 = 配列の添字 = 手番順。src/types/Player.ts の PLAYER_SYMBOLS と同じ
+const SYMBOLS = ['💙', '⭕', '🟩', '🔶', '⭐', '🟣', '🟫', '🩷'];
+const MAX_PLAYERS = SYMBOLS.length;
+const HEART = SYMBOLS[0];
+const CIRCLE = SYMBOLS[1];
+const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
 const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician'];
@@ -38,9 +47,23 @@ function makeRng(seed) {
 }
 
 const config = require('./config');
+const { boardSizeFor, geometryOf, geometryForCells } = require('./geometry');
+
+// ライフ減衰のタイミング (src/components/game/decay.ts と同じ規則)。
+// この人数以上では「手番が1周するごとに1回」(= 着手 N 回につき1回)。それ未満は着手のたび。issue #30
+// 環境変数 DECAY_PER_ROUND_MIN_PLAYERS で上書きできる（A/B検証用。99 なら全人数で着手ごと）
+const DECAY_PER_ROUND_MIN_PLAYERS = process.env.DECAY_PER_ROUND_MIN_PLAYERS != null
+    ? parseInt(process.env.DECAY_PER_ROUND_MIN_PLAYERS, 10)
+    : config.decayPerRoundMinPlayers != null ? config.decayPerRoundMinPlayers : 3;
+function shouldDecay(placements, n) {
+    return n < DECAY_PER_ROUND_MIN_PLAYERS || placements % n === 0;
+}
 
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
+
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 23; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -62,28 +85,11 @@ function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0) {
     return Math.floor(normRand(m + lifeBonus, config.lifeStd, rng));
 }
 
-// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 23; // SIM_POOL_SIZE: A/B検証用の上書き
-
-const WIN_LINES = [
-    [0, 1, 2, 3],
-    [4, 5, 6, 7],
-    [8, 9, 10, 11],
-    [12, 13, 14, 15],
-    [0, 4, 8, 12],
-    [1, 5, 9, 13],
-    [2, 6, 10, 14],
-    [3, 7, 11, 15],
-    [0, 5, 10, 15],
-    [3, 6, 9, 12],
-];
-
-// [FAITHFUL] util.ts calculateWinner — purely by player symbol
+// [FAITHFUL] util.ts calculateWinner — purely by player symbol。盤サイズは配列長から決まる
 function calculateWinner(symbols) {
-    for (const [a, b, c, d] of WIN_LINES) {
-        if (symbols[a] && symbols[a] === symbols[b] && symbols[a] === symbols[c] && symbols[a] === symbols[d]) {
-            return symbols[a];
-        }
+    for (const line of geometryForCells(symbols.length).winLines) {
+        const first = symbols[line[0]];
+        if (first && line.every((idx) => symbols[idx] === first)) return first;
     }
     return undefined;
 }
@@ -146,7 +152,7 @@ const skillCosts = {
     onClickPandemic: 6,
     // 増殖のコストだけは config.js のノブから引く (バランス調整ループ用)
     onClickProliferate: PROLIFERATE.cost,
-    // ⚡帯電 (雷霆の巫)。idx 21=帯電トークン / 22=帯電付与。固有スキルの帯電拡散は poolに入らない
+    // ⚡帯電 (雷霆の巫)。idx 21=帯電トークン / 22=帯電付与。固有スキルの帯電拡散は pool に入らない
     onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
@@ -161,8 +167,9 @@ const necromancySummonCap = 5;
 // 盤上で駒が消える/奪われるたびに墓地を貯める＝ネクロの蘇生コストを軽減 (敵味方問わず)
 function addCorpses(s, n) {
     if (n <= 0) return;
-    if (s.heartChar === 'necromancer') s.currentHeartNecroCost = Math.max(0, s.currentHeartNecroCost - n);
-    if (s.circleChar === 'necromancer') s.currentCircleNecroCost = Math.max(0, s.currentCircleNecroCost - n);
+    s.chars.forEach((c, seat) => {
+        if (c === 'necromancer') s.necroCost[seat] = Math.max(0, s.necroCost[seat] - n);
+    });
 }
 
 // ---- 毒（毒使い）ヘルパー --------------------------------------------------
@@ -180,22 +187,22 @@ function poisonCountFor(board, player) {
     return n;
 }
 function poisonerInPlay(s) {
-    return s.heartChar === 'poisoner' || s.circleChar === 'poisoner';
+    return s.chars.includes('poisoner');
 }
 // 毒使いの駒に毒が付いた瞬間、そのマスのライフが1.5倍（四捨五入）になる。Game.tsx の POISON_LIFE_MULT と同値
 const POISON_MULT = 1.5;
 function poisonStrike(s, sq) {
     if (!s || !sq.player) return;
-    const ch = sq.player === HEART ? s.heartChar : s.circleChar;
+    const ch = s.chars[seatOf(sq.player)];
     if (ch === 'poisoner') sq.bind = Math.round(sq.bind * POISON_MULT);
 }
-// 周囲1マス（クリックしたマスを除く8近傍）— STOMP_AREA を流用
-function surroundRange(i) {
-    return (STOMP_AREA[i] || []).filter((x) => x !== i);
+// 周囲1マス（クリックしたマスを除く8近傍）。盤サイズは s.size
+function surroundRange(s, i) {
+    return geometryOf(s.size).surroundRange(i);
 }
 // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与（毒拡散パッシブ）
 function spreadPoisonAround(board, idx, rng, s) {
-    const targets = surroundRange(idx).filter((j) => board[j].player);
+    const targets = surroundRange(s, idx).filter((j) => board[j].player);
     if (!targets.length) return;
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
@@ -208,17 +215,18 @@ function spreadPoisonAround(board, idx, rng, s) {
 function chargeStacks(sq) {
     return sq.effects.filter((e) => e.effect === '⚡').length;
 }
-function orthoNeighbors(i) {
-    const r = Math.floor(i / 4), c = i % 4;
+// 縦横4隣接。size = 盤の一辺 (s.size)
+function orthoNeighbors(i, size) {
+    const r = Math.floor(i / size), c = i % size;
     const out = [];
-    if (r > 0) out.push(i - 4);
-    if (r < 3) out.push(i + 4);
+    if (r > 0) out.push(i - size);
+    if (r < size - 1) out.push(i + size);
     if (c > 0) out.push(i - 1);
-    if (c < 3) out.push(i + 1);
+    if (c < size - 1) out.push(i + 1);
     return out;
 }
 function charOfPlayer(s, player) {
-    return player === HEART ? s.heartChar : s.circleChar;
+    return s.chars[seatOf(player)];
 }
 // 雷霆の巫の⚡付き自陣マスは「ライフ0でも取られない」無敵。弱点として本人も触れない
 function isShielded(s, sq) {
@@ -231,32 +239,32 @@ function isGuarded(s, sq) {
 function bumpStat(s, key, n = 1) {
     s.stats[key] = (s.stats[key] || 0) + n;
 }
-// 着手マス i の隣にある⚡を発火させる。mover = 着手した側
+// 着手マス i の隣にある⚡を発火させる。mover = 着手した側のシンボル
 function fireCharges(s, i, mover) {
     const board = s.board;
-    for (const k of orthoNeighbors(i)) {
+    for (const k of orthoNeighbors(i, s.size)) {
         if (chargeStacks(board[k]) === 0) continue;
         bumpStat(s, 'fires');
         bumpStat(s, charOfPlayer(s, mover) === 'electrician' ? 'firesByElectrician' : 'firesByOther');
-        for (const n of orthoNeighbors(k)) {
+        for (const n of orthoNeighbors(k, s.size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
             sq.bind -= 1;
-            // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / 相手の駒に与えた被害 (雷霆の巫不在の試合は other に計上)
+            // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / それ以外の駒に与えた被害
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
         }
         board[k].effects = board[k].effects.filter((e) => e.effect !== '⚡');
     }
 }
-// 固有スキル: sq から、コマのあるマスだけを縦横に辿れるすべてのマスの集合
-function connectedPieces(board, start) {
+// 固有スキル: start から、コマのあるマスだけを縦横に辿れるすべてのマスの集合
+function connectedPieces(board, start, size) {
     if (!board[start].player) return [];
     const seen = new Set([start]);
     const queue = [start];
     while (queue.length) {
         const cur = queue.shift();
-        for (const n of orthoNeighbors(cur)) {
+        for (const n of orthoNeighbors(cur, size)) {
             if (!seen.has(n) && board[n].player) { seen.add(n); queue.push(n); }
         }
     }
@@ -268,31 +276,54 @@ function newSquare() {
     return { player: undefined, bind: 0, effects: [] };
 }
 
+// 席ごとの配列フィールド名 → 2人戦の旧フィールド名（heart=席0 / circle=席1）
+const LEGACY_ALIASES = {
+    chars: ['heartChar', 'circleChar'],
+    magic: ['heartMagic', 'circleMagic'],
+    yy: ['heartYY', 'circleYY'],
+    useMagicCount: ['heartUseMagicCount', 'circleUseMagicCount'],
+    useTokenCount: ['heartUseTokenCount', 'circleUseTokenCount'],
+    useAssault: ['heartUseAssault', 'circleUseAssault'],
+    proliferate: ['heartProliferate', 'circleProliferate'],
+    proliferateCount: ['heartProliferateCount', 'circleProliferateCount'],
+    remainNecro: ['remainHeartNecro', 'remainCircleNecro'],
+    necroCost: ['currentHeartNecroCost', 'currentCircleNecroCost'],
+    lockedSkills: ['heartLockedSkills', 'circleLockedSkills'],
+};
+
+function defineLegacyAliases(state) {
+    for (const [field, [heartName, circleName]] of Object.entries(LEGACY_ALIASES)) {
+        Object.defineProperty(state, heartName, { get: () => state[field][0], set: (v) => { state[field][0] = v; }, enumerable: false, configurable: true });
+        Object.defineProperty(state, circleName, { get: () => state[field][1], set: (v) => { state[field][1] = v; }, enumerable: false, configurable: true });
+    }
+    // 手番: heartTurn = 席0の手番か。代入すると席0/席1に切り替える（2人戦のテスト用）
+    Object.defineProperty(state, 'heartTurn', { get: () => state.turn === 0, set: (v) => { state.turn = v ? 0 : 1; }, enumerable: false, configurable: true });
+}
+
 /**
  * Create a new game.
- * @param {{heartChar?:string, circleChar?:string, seed?:number, rng?:()=>number}} [opts]
+ * @param {{chars?:string[], heartChar?:string, circleChar?:string, seed?:number, rng?:()=>number}} [opts]
+ *   chars=席順のキャラ配列(2〜8人)。省略時は heartChar/circleChar の2人戦
  */
 function newGame(opts = {}) {
-    const heartChar = opts.heartChar || 'you';
-    const circleChar = opts.circleChar || 'you';
+    const chars = opts.chars ? opts.chars.slice() : [opts.heartChar || 'you', opts.circleChar || 'you'];
+    if (chars.length < 2 || chars.length > MAX_PLAYERS) throw new Error(`players must be 2..${MAX_PLAYERS}`);
+    const n = chars.length;
+    const size = boardSizeFor(n);
     const rng = opts.rng || makeRng(opts.seed == null ? 12345 : opts.seed);
-    const heartYY = 'ying';
-    const circleYY = 'ying';
+    const fill = (v) => Array.from({ length: n }, () => v);
     const state = {
-        board: Array.from({ length: 16 }, newSquare),
-        heartChar,
-        circleChar,
+        board: Array.from({ length: size * size }, newSquare),
+        size,
+        chars,
         rng,
         currentTurn: 1,
-        heartTurn: true,
-        heartMagic: 2,
-        circleMagic: 2,
-        heartYY,
-        circleYY,
-        heartUseMagicCount: 0,
-        circleUseMagicCount: 0,
-        heartUseTokenCount: 0,
-        circleUseTokenCount: 0,
+        turn: 0, // 手番の席番号
+        placements: 0, // 盤面に着手した回数（3人以上の減衰タイミング用）
+        magic: fill(2),
+        yy: fill('ying'),
+        useMagicCount: fill(0),
+        useTokenCount: fill(0),
         // pending two-step skill flags
         useLock: 0,
         useStomp: false,
@@ -301,37 +332,34 @@ function newGame(opts = {}) {
         useInjection: 0,
         usePandemic: false,
         useBuds: [false, 0],
-        heartUseAssault: 0,
-        circleUseAssault: 0,
-        // 増殖(ループ召喚): active=発動中 / count=これまでのループ回数(=次の維持コストの基準)
-        heartProliferate: false,
-        heartProliferateCount: 0,
-        circleProliferate: false,
-        circleProliferateCount: 0,
+        useAssault: fill(0),
+        // 増殖(ループ召喚): proliferate=発動中 / proliferateCount=これまでのループ回数(=次の維持コストの基準)
+        proliferate: fill(false),
+        proliferateCount: fill(0),
         usedTokenThisTurn: false,
         // necromancer 蘇生 state
-        remainHeartNecro: 0,
-        remainCircleNecro: 0,
-        currentHeartNecroCost: baseNecromancyCost,
-        currentCircleNecroCost: baseNecromancyCost,
+        remainNecro: fill(0),
+        necroCost: fill(baseNecromancyCost),
         // skill pool + per-player locks (Game.tsx と同じく毎手番ロックを残して再シャッフル)
         skills: [],
-        heartLockedSkills: [],
-        circleLockedSkills: [],
+        lockedSkills: Array.from({ length: n }, () => []),
         useChargeOne: false,
         useChargeSpread: false,
         stats: {},
         winner: undefined,
         log: [],
     };
-    state.life = Math.max(1, calculateLife(heartChar, heartYY, rng));
-    state.skills = reshuffleSkillsFor(state, true, POOL_SIZE); // 先手(heart)の初期スキル
+    defineLegacyAliases(state);
+    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng));
+    state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     return state;
 }
 
 // ロック済みスキルを残しつつ残り枠を [0,poolEnd) からランダムに埋める (Game.tsx reshuffledSkills と同じ)
-function reshuffleSkillsFor(s, isHeart, poolEnd) {
-    const keep = (isHeart ? s.heartLockedSkills : s.circleLockedSkills).slice(0, 3);
+// seat: 席番号（2人戦の旧呼び出し互換で true=席0 / false=席1 も受ける）
+function reshuffleSkillsFor(s, seat, poolEnd) {
+    if (typeof seat === 'boolean') seat = seat ? 0 : 1;
+    const keep = s.lockedSkills[seat].slice(0, 3);
     const pool = [];
     for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
     const fill = randomAnyPick(pool, Math.max(0, 3 - keep.length), s.rng);
@@ -339,18 +367,20 @@ function reshuffleSkillsFor(s, isHeart, poolEnd) {
 }
 
 const symbolsOf = (board) => board.map((x) => x.player);
-const curPlayer = (s) => (s.heartTurn ? HEART : CIRCLE);
-const curChar = (s) => (s.heartTurn ? s.heartChar : s.circleChar);
-const curYY = (s) => (s.heartTurn ? s.heartYY : s.circleYY);
-const curMagic = (s) => (s.heartTurn ? s.heartMagic : s.circleMagic);
+const seatCount = (s) => s.chars.length;
+const symbolOfSeat = (seat) => SYMBOLS[seat];
+const curPlayer = (s) => SYMBOLS[s.turn];
+const curChar = (s) => s.chars[s.turn];
+const curYY = (s) => s.yy[s.turn];
+const curMagic = (s) => s.magic[s.turn];
+/** 自分以外の席番号 */
+const otherSeats = (s, seat = s.turn) => s.chars.map((_, i) => i).filter((i) => i !== seat);
 
 function spendMagic(s, amount) {
-    if (s.heartTurn) s.heartMagic -= amount;
-    else s.circleMagic -= amount;
+    s.magic[s.turn] -= amount;
 }
 function bumpMagicCount(s) {
-    if (s.heartTurn) s.heartUseMagicCount++;
-    else s.circleUseMagicCount++;
+    s.useMagicCount[s.turn]++;
 }
 
 // [FAITHFUL] Game.tsx calculateCost
@@ -375,59 +405,50 @@ function budsCount(board, player) {
         .filter((e) => e.effect === '🌱').length;
 }
 
-// [FAITHFUL] Game.tsx judgeNextIsHeart (called with post-increment currentTurn & pre-change heartTurn)
-function judgeNextIsHeart(s) {
-    if (s.currentTurn === 1) return true;
-    if (s.circleChar === s.heartChar) return !s.heartTurn;
-    const nextPlayerCharacter = s.heartTurn ? s.circleChar : s.heartChar;
+// 次の手番の席 (Game.tsx judgeNextSeat。post-increment な currentTurn・直前に動いた席の s.turn で呼ぶ)
+// 基本は席順。次が巨人のときだけ giantSkipModulo ターンに1回その席を飛ばす。
+// 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
+function judgeNextSeat(s) {
+    if (s.currentTurn === 1) return 0;
+    const n = seatCount(s);
+    let next = (s.turn + 1) % n;
+    const mirror = n === 2 && s.chars[0] === s.chars[1];
     const mod = config.giantSkipModulo || 0;
-    if (nextPlayerCharacter !== 'giant' || !mod) return !s.heartTurn;
-    if (s.currentTurn % mod < mod - 1) return !s.heartTurn;
-    return s.heartTurn;
+    if (!mirror && mod && s.chars[next] === 'giant' && s.currentTurn % mod >= mod - 1) next = (next + 1) % n;
+    return next;
+}
+// 2人戦互換: 次が席0(heart)か
+function judgeNextIsHeart(s) {
+    return judgeNextSeat(s) === 0;
 }
 
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 function advanceTurn(s) {
-    // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る (s.heartTurn = 直前に動いた側)
-    if (s.heartTurn && s.heartChar === 'necromancer' && s.remainHeartNecro > 0) s.remainHeartNecro--;
-    if (!s.heartTurn && s.circleChar === 'necromancer' && s.remainCircleNecro > 0) s.remainCircleNecro--;
-    const nextIsHeart = judgeNextIsHeart(s);
+    // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る (s.turn = 直前に動いた席)
+    if (s.chars[s.turn] === 'necromancer' && s.remainNecro[s.turn] > 0) s.remainNecro[s.turn]--;
+    const next = judgeNextSeat(s);
+    const sym = SYMBOLS[next];
+    const ch = s.chars[next];
     const magicCharacter = ['magician'];
-    if (nextIsHeart) {
-        let nextMagic = s.heartMagic + 1 + budsCount(s.board, HEART);
-        if (magicCharacter.includes(s.heartChar)) nextMagic++;
-        if (s.heartChar === 'yinYangMaster' && s.heartYY === 'ying') nextMagic++;
-        // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
-        if (s.heartChar === 'magician') nextMagic += budsCount(s.board, HEART) * 2;
-        // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
-        if (s.heartProliferate) {
-            const upkeep = proliferateUpkeep(s.heartProliferateCount);
-            if (nextMagic >= upkeep) nextMagic -= upkeep;
-            else { s.heartProliferate = false; s.heartProliferateCount = 0; }
-        }
-        s.heartMagic = nextMagic;
-        s.life = calculateLife(s.heartChar, s.heartYY, s.rng, s.heartChar === 'poisoner' ? poisonCountFor(s.board, HEART) : 0);
-    } else {
-        // Game.tsx と同じく円プレイヤー自身の魔力・バッズから計算する
-        let nextMagic = s.circleMagic + 1 + budsCount(s.board, CIRCLE);
-        if (magicCharacter.includes(s.circleChar)) nextMagic++;
-        if (s.circleChar === 'yinYangMaster' && s.circleYY === 'ying') nextMagic++;
-        // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
-        if (s.circleChar === 'magician') nextMagic += budsCount(s.board, CIRCLE) * 2;
-        // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
-        if (s.circleProliferate) {
-            const upkeep = proliferateUpkeep(s.circleProliferateCount);
-            if (nextMagic >= upkeep) nextMagic -= upkeep;
-            else { s.circleProliferate = false; s.circleProliferateCount = 0; }
-        }
-        s.circleMagic = nextMagic;
-        s.life = calculateLife(s.circleChar, s.circleYY, s.rng, s.circleChar === 'poisoner' ? poisonCountFor(s.board, CIRCLE) : 0);
+    // Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
+    let nextMagic = s.magic[next] + 1 + budsCount(s.board, sym);
+    if (magicCharacter.includes(ch)) nextMagic++;
+    if (ch === 'yinYangMaster' && s.yy[next] === 'ying') nextMagic++;
+    // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
+    if (ch === 'magician') nextMagic += budsCount(s.board, sym) * 2;
+    // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
+    if (s.proliferate[next]) {
+        const upkeep = proliferateUpkeep(s.proliferateCount[next]);
+        if (nextMagic >= upkeep) nextMagic -= upkeep;
+        else { s.proliferate[next] = false; s.proliferateCount[next] = 0; }
     }
+    s.magic[next] = nextMagic;
+    s.life = calculateLife(ch, s.yy[next], s.rng, ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0);
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
-    s.heartTurn = nextIsHeart;
+    s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
-    s.skills = reshuffleSkillsFor(s, nextIsHeart, POOL_SIZE);
+    s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
 }
 
 /**
@@ -481,18 +502,17 @@ function placeMove(s, i) {
     }
 
     if (s.winner) return false;
-    const necroActive =
-        (s.heartTurn && s.heartChar === 'necromancer' && s.remainHeartNecro > 0) ||
-        (!s.heartTurn && s.circleChar === 'necromancer' && s.remainCircleNecro > 0);
-    const opp = s.heartTurn ? CIRCLE : HEART;
-    if (board[i].player === opp) {
+    const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
+    if (board[i].player && board[i].player !== curPlayer(s)) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
 
-    // decay step (+ 毒: スタック数だけ追加で bind を減らす)
+    // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
+    const decayNow = shouldDecay(s.placements, seatCount(s));
+    s.placements += 1;
     const spreadOrigins = [];
-    for (let k = 0; k < board.length; k++) {
+    for (let k = 0; decayNow && k < board.length; k++) {
         const sq = board[k];
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0) sq.bind--;
         const poison = sq.effects.filter((e) => e.effect === '☠').length;
@@ -503,8 +523,7 @@ function placeMove(s, i) {
         if (poison > 0 && sq.bind === 0 && sq.player && k !== i) {
             spreadOrigins.push(k);
             board[k] = { player: undefined, bind: 0, effects: [] };
-            if (s.heartChar === 'poisoner') s.heartMagic += 1;
-            if (s.circleChar === 'poisoner') s.circleMagic += 1;
+            s.chars.forEach((c, seat) => { if (c === 'poisoner') s.magic[seat] += 1; });
         }
     }
     const hadPoisonAtTarget = board[i].effects.some((e) => e.effect === '☠');
@@ -547,26 +566,21 @@ function placeMove(s, i) {
     board[i] = { player: newPlayer, bind: newBind, effects: newEffects };
 
     // total-assault residual: drop a random 0-bind token after the move
-    if (s.heartTurn && s.heartUseAssault > 0) {
+    if (s.useAssault[s.turn] > 0) {
         const empties = findEmptyIndexes(board);
-        if (empties.length) board[randomPick(empties, s.rng)] = { player: HEART, bind: 0, effects: [] };
-        s.heartUseAssault -= 1;
-    } else if (!s.heartTurn && s.circleUseAssault > 0) {
-        const empties = findEmptyIndexes(board);
-        if (empties.length) board[randomPick(empties, s.rng)] = { player: CIRCLE, bind: 0, effects: [] };
-        s.circleUseAssault -= 1;
+        if (empties.length) board[randomPick(empties, s.rng)] = { player: cur, bind: 0, effects: [] };
+        s.useAssault[s.turn] -= 1;
     }
 
     // 増殖発動中: 着手のたびにコマ→アイテムを交互に1つずつ追加し続ける
-    if (s.heartTurn ? s.heartProliferate : s.circleProliferate) {
-        const nextCount = (s.heartTurn ? s.heartProliferateCount : s.circleProliferateCount) + 1;
+    if (s.proliferate[s.turn]) {
+        const nextCount = s.proliferateCount[s.turn] + 1;
         if (applyProliferate(s, nextCount)) {
-            if (s.heartTurn) s.heartProliferateCount = nextCount;
-            else s.circleProliferateCount = nextCount;
+            s.proliferateCount[s.turn] = nextCount;
             // 上限に達したら自然収束
             if (nextCount >= PROLIFERATE.maxStacks) {
-                if (s.heartTurn) { s.heartProliferate = false; s.heartProliferateCount = 0; }
-                else { s.circleProliferate = false; s.circleProliferateCount = 0; }
+                s.proliferate[s.turn] = false;
+                s.proliferateCount[s.turn] = 0;
             }
         }
     }
@@ -576,11 +590,10 @@ function placeMove(s, i) {
 
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
-        const opp2 = cur === HEART ? CIRCLE : HEART;
         let absorbed = 0;
         for (let k = 0; k < board.length; k++) {
             const sq = board[k];
-            if (sq.player === opp2 && sq.bind === 0 && !sq.effects.some((e) => e.effect === '🔑')) {
+            if (sq.player && sq.player !== cur && sq.bind === 0 && !sq.effects.some((e) => e.effect === '🔑')) {
                 board[k] = { player: cur, bind: necromancyReviveLife, effects: [] };
                 absorbed++;
             }
@@ -608,8 +621,7 @@ function endTurn(s) {
 }
 
 function onClickCharge(s) {
-    if (s.heartTurn) s.heartMagic += skillCosts.onClickCharge;
-    else s.circleMagic += skillCosts.onClickCharge;
+    s.magic[s.turn] += skillCosts.onClickCharge;
     endTurn(s);
 }
 function onClickAddLife(s) {
@@ -624,8 +636,8 @@ function onClickBibine(s) {
 }
 function onClickDepressionCherry(s) {
     s.life -= 1;
-    s.heartMagic -= skillCosts.onClickDepressionCherry;
-    s.circleMagic -= 1;
+    s.magic[0] -= skillCosts.onClickDepressionCherry;
+    s.magic[1] -= 1;
 }
 function onClickBuds(s) {
     s.useBuds = [true, s.useBuds[1] + 1];
@@ -658,7 +670,7 @@ function onClickToken(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
 }
 function onClickDoubleToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -668,7 +680,7 @@ function onClickDoubleToken(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickDoubleToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
 }
 function onClickBudsToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -676,32 +688,27 @@ function onClickBudsToken(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickBudsToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
 }
 function onClickBothToken(s) {
+    // 参加者全員に1つずつ（席順に空きマスからランダムに）。空きが足りなければ先着の席だけ
     const empties = findEmptyIndexes(s.board);
-    const [eh, ec] = randomAnyPick(empties, 2, s.rng);
-    if (s.heartTurn) {
-        if (eh != null) s.board[eh] = { player: HEART, bind: calculateTokenBind(s), effects: [] };
-        if (ec != null) s.board[ec] = { player: CIRCLE, bind: 4, effects: [] };
-        s.heartMagic -= calculateCost(s, skillCosts.onClickBothToken, true);
-        s.heartUseMagicCount++;
-    } else {
-        if (ec != null) s.board[ec] = { player: CIRCLE, bind: calculateTokenBind(s), effects: [] };
-        if (eh != null) s.board[eh] = { player: HEART, bind: 4, effects: [] };
-        s.circleMagic -= calculateCost(s, skillCosts.onClickBothToken, true);
-        s.circleUseMagicCount++;
-    }
+    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
+    picks.forEach((idx, seat) => {
+        s.board[idx] = { player: SYMBOLS[seat], bind: seat === s.turn ? calculateTokenBind(s) : 4, effects: [] };
+    });
+    s.magic[s.turn] -= calculateCost(s, skillCosts.onClickBothToken, true);
+    s.useMagicCount[s.turn]++;
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
 }
 function onClickSlash(s) {
-    for (const idx of [3, 6, 9, 12]) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
     spendMagic(s, calculateCost(s, skillCosts.onClickSlash));
     bumpMagicCount(s);
 }
 function onClickBackSlash(s) {
-    for (const idx of [0, 5, 10, 15]) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
     spendMagic(s, calculateCost(s, skillCosts.onClickBackSlash));
     bumpMagicCount(s);
 }
@@ -718,15 +725,10 @@ function onClickOpium(s) {
     endTurn(s);
 }
 function onClickTsunami(s) {
-    if (s.heartTurn) {
-        s.circleMagic = 0;
-        s.heartMagic -= calculateCost(s, skillCosts.onClickTsunami);
-        s.heartUseMagicCount++;
-    } else {
-        s.heartMagic = 0;
-        s.circleMagic -= calculateCost(s, skillCosts.onClickTsunami);
-        s.circleUseMagicCount++;
-    }
+    // 相手全員のマジックを0に
+    for (const seat of otherSeats(s)) s.magic[seat] = 0;
+    s.magic[s.turn] -= calculateCost(s, skillCosts.onClickTsunami);
+    s.useMagicCount[s.turn]++;
     endTurn(s);
 }
 function onClickWalpurgisNight(s) {
@@ -740,32 +742,20 @@ function onClickWalpurgisNight(s) {
 // yinYang
 function onClickToggleYingYang(s) {
     // [FAITHFUL] note: source has a known bug toggling heart's mode when reading circle; we toggle the active player's own mode.
-    if (s.heartTurn) {
-        s.heartYY = s.heartYY === 'yang' ? 'ying' : 'yang';
-        s.heartMagic -= skillCosts.onClickToggleYingYang;
-    } else {
-        s.circleYY = s.circleYY === 'yang' ? 'ying' : 'yang';
-        s.circleMagic -= skillCosts.onClickToggleYingYang;
-    }
+    s.yy[s.turn] = s.yy[s.turn] === 'yang' ? 'ying' : 'yang';
+    s.magic[s.turn] -= skillCosts.onClickToggleYingYang;
 }
 function onClickYingYangSkill(s) {
     const mode = curYY(s);
+    const cur = curPlayer(s);
     let destroyed = 0;
-    if (s.heartTurn) {
-        if (mode === 'yang') {
-            for (const sq of s.board) if (sq.player === HEART) sq.bind += 2;
-        } else {
-            for (const sq of s.board) if (sq.player === CIRCLE) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
-        }
-        s.heartMagic -= skillCosts.onClickYingYangSkill;
+    if (mode === 'yang') {
+        for (const sq of s.board) if (sq.player === cur) sq.bind += 2;
     } else {
-        if (mode === 'yang') {
-            for (const sq of s.board) if (sq.player === CIRCLE) sq.bind += 2;
-        } else {
-            for (const sq of s.board) if (sq.player === HEART) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
-        }
-        s.circleMagic -= skillCosts.onClickYingYangSkill;
+        // 凶荒の舞: 自分以外の全員のコマ
+        for (const sq of s.board) if (sq.player && sq.player !== cur) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
     }
+    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
     addCorpses(s, destroyed);
 }
 
@@ -774,16 +764,10 @@ function onClickStomp(s) {
     s.useStomp = true;
     spendMagic(s, skillCosts.onClickStomp);
 }
-const STOMP_AREA = {
-    0: [0, 1, 4, 5], 1: [0, 1, 2, 4, 5, 6], 2: [1, 2, 3, 5, 6, 7], 3: [2, 3, 6, 7],
-    4: [0, 1, 4, 5, 8, 9], 5: [0, 1, 2, 4, 5, 6, 8, 9, 10], 6: [1, 2, 3, 5, 6, 7, 9, 10, 11], 7: [2, 3, 6, 7, 10, 11],
-    8: [4, 5, 8, 9, 12, 13], 9: [4, 5, 6, 8, 9, 10, 12, 13, 14], 10: [5, 6, 7, 9, 10, 11, 13, 14, 15], 11: [6, 7, 10, 11, 14, 15],
-    12: [8, 9, 12, 13], 13: [8, 9, 10, 12, 13, 14], 14: [9, 10, 11, 13, 14, 15], 15: [10, 11, 14, 15],
-};
 function exeStomp(s, i) {
     const cur = curPlayer(s);
     let destroyed = 0;
-    for (const idx of STOMP_AREA[i]) {
+    for (const idx of geometryOf(s.size).stompRange(i)) {
         if (s.board[idx].player === cur) s.board[idx].bind = s.board[idx].bind > 5 ? s.board[idx].bind - 5 : 0;
         else { if (s.board[idx].player) destroyed++; s.board[idx] = { player: undefined, bind: 0, effects: [] }; }
     }
@@ -794,42 +778,37 @@ function exeStomp(s, i) {
 
 // magician judge day
 function judgeDayCost(s) {
-    const used = s.heartTurn ? s.heartUseMagicCount : s.circleUseMagicCount;
+    const used = s.useMagicCount[s.turn];
     return used < skillCosts.onClickJudgeDay ? skillCosts.onClickJudgeDay - used : 0;
 }
 function onClickJudgeDay(s) {
     spendMagic(s, judgeDayCost(s));
-    if (s.heartTurn) s.heartUseMagicCount = 0; else s.circleUseMagicCount = 0;
+    s.useMagicCount[s.turn] = 0;
     s.useJudgeDay = true;
 }
-const JUDGE_AREA = {
-    0: [0, 1, 2, 3, 4, 5, 8, 10, 12, 15], 1: [0, 1, 2, 3, 4, 5, 6, 9, 11, 13], 2: [0, 1, 2, 3, 5, 6, 7, 8, 10, 14], 3: [0, 1, 2, 3, 6, 7, 9, 11, 12, 15],
-    4: [0, 1, 4, 5, 6, 7, 8, 9, 12, 14], 5: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15], 6: [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 14], 7: [2, 3, 4, 5, 6, 7, 10, 11, 13, 15],
-    8: [0, 2, 4, 5, 8, 9, 10, 11, 12, 13], 9: [1, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14], 10: [0, 2, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15], 11: [1, 3, 7, 8, 9, 10, 11, 14, 15],
-    12: [0, 3, 4, 6, 8, 9, 12, 13, 14, 15], 13: [1, 5, 7, 8, 9, 10, 12, 13, 14, 15], 14: [3, 4, 6, 9, 10, 11, 12, 13, 14, 15], 15: [0, 3, 5, 7, 10, 11, 12, 13, 14, 15],
-};
 function exeJudgeDay(s, i) {
     const cur = curPlayer(s);
     let destroyed = 0;
-    for (const idx of JUDGE_AREA[i]) {
+    for (const idx of geometryOf(s.size).judgeRange(i)) {
         const sq = s.board[idx];
         const locked = sq.effects.some((e) => e.effect === '🔑');
         const protectedBud = sq.player === cur && sq.effects.some((e) => e.effect === '🌱');
         if (!locked || !protectedBud) { if (s.board[idx].player) destroyed++; s.board[idx] = { player: undefined, bind: 0, effects: [] }; }
     }
     addCorpses(s, destroyed);
-    if (s.heartTurn) s.heartUseMagicCount = 0; else s.circleUseMagicCount = 0;
+    s.useMagicCount[s.turn] = 0;
     s.board[i] = { player: cur, bind: 2, effects: [{ effect: '🌱' }] };
     s.useJudgeDay = false;
     endTurn(s);
 }
 
 function totalAssaultCost(s) {
-    return skillCosts.onClickTotalAssault - (s.heartTurn ? s.heartUseTokenCount : s.circleUseTokenCount) * 2;
+    return skillCosts.onClickTotalAssault - s.useTokenCount[s.turn] * 2;
 }
 function onClickTotalAssault(s) {
-    if (s.heartTurn) { s.heartUseAssault = 3; s.heartMagic -= totalAssaultCost(s); s.heartUseTokenCount = 0; }
-    else { s.circleUseAssault = 3; s.circleMagic -= totalAssaultCost(s); s.circleUseTokenCount = 0; }
+    s.useAssault[s.turn] = 3;
+    s.magic[s.turn] -= totalAssaultCost(s);
+    s.useTokenCount[s.turn] = 0;
 }
 
 // ---- 増殖 (ループ召喚) ----
@@ -861,35 +840,28 @@ function applyProliferate(s, step) {
     return true;
 }
 function onClickProliferate(s) {
-    if (s.heartTurn) { s.heartProliferate = true; s.heartProliferateCount = 0; }
-    else { s.circleProliferate = true; s.circleProliferateCount = 0; }
+    s.proliferate[s.turn] = true;
+    s.proliferateCount[s.turn] = 0;
     spendMagic(s, calculateCost(s, skillCosts.onClickProliferate));
     bumpMagicCount(s);
 }
 
 // necromancer: activate 蘇生 (墓地から召喚 + 4ターンの自動吸収窓)
 function necromancyCost(s) {
-    return s.heartTurn ? s.currentHeartNecroCost : s.currentCircleNecroCost;
+    return s.necroCost[s.turn];
 }
 function onClickNecromancy(s) {
     const cur = curPlayer(s);
-    const curCost = s.heartTurn ? s.currentHeartNecroCost : s.currentCircleNecroCost;
+    const curCost = s.necroCost[s.turn];
     // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
     const empties = findEmptyIndexes(s.board);
     const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
     const targets = randomAnyPick(empties, summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
-    if (s.heartTurn) {
-        s.heartMagic -= s.currentHeartNecroCost;
-        s.heartUseMagicCount++;
-        s.remainHeartNecro = necromancyDuration;
-        s.currentHeartNecroCost = baseNecromancyCost;
-    } else {
-        s.circleMagic -= s.currentCircleNecroCost;
-        s.circleUseMagicCount++;
-        s.remainCircleNecro = necromancyDuration;
-        s.currentCircleNecroCost = baseNecromancyCost;
-    }
+    s.magic[s.turn] -= curCost;
+    s.useMagicCount[s.turn]++;
+    s.remainNecro[s.turn] = necromancyDuration;
+    s.necroCost[s.turn] = baseNecromancyCost;
 }
 
 // ---- 毒使い スキル ----
@@ -903,7 +875,7 @@ function onClickMiasma(s) {
 }
 function exeMiasma(s, i) {
     const cur = curPlayer(s);
-    const targets = surroundRange(i).filter(
+    const targets = surroundRange(s, i).filter(
         (j) => s.board[j].player && s.board[j].player !== cur && !isGuarded(s, s.board[j])
     );
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
@@ -920,7 +892,7 @@ function onClickPoisonToken(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
 }
 function onClickSerum(s) {
     const cur = curPlayer(s);
@@ -943,11 +915,10 @@ function onClickPandemic(s) {
     bumpMagicCount(s);
 }
 function exePandemic(s, i) {
-    const targets = STOMP_AREA[i].filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
+    const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     s.usePandemic = false;
 }
-
 
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
@@ -956,7 +927,7 @@ function onClickChargeToken(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickChargeToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
-    if (s.heartTurn) s.heartUseTokenCount++; else s.circleUseTokenCount++;
+    s.useTokenCount[s.turn]++;
     bumpStat(s, 'chargeToken');
 }
 function onClickChargeOne(s) {
@@ -972,7 +943,7 @@ function onClickChargeSpread(s) {
     bumpStat(s, 'chargeSpread');
 }
 function exeChargeSpread(s, i) {
-    const cells = connectedPieces(s.board, i);
+    const cells = connectedPieces(s.board, i, s.size);
     for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
     bumpStat(s, 'spreadCells', cells.length);
     s.useChargeSpread = false;
@@ -1022,20 +993,21 @@ function renderBoard(s) {
         const eff = sq.effects.map((e) => e.effect).join('');
         return `${sym}${String(sq.bind).padStart(2)}${eff ? eff : '  '}`;
     };
-    let out = '   col0    col1    col2    col3\n';
-    for (let r = 0; r < 4; r++) {
+    const n = s.size;
+    let out = '    ' + Array.from({ length: n }, (_, c) => `col${c}`.padEnd(8)).join('') + '\n';
+    for (let r = 0; r < n; r++) {
         const row = [];
-        for (let c = 0; c < 4; c++) row.push(cell(s.board[r * 4 + c]));
-        out += `r${r} ` + row.map((x, c) => `${String(r * 4 + c).padStart(2)}:${x}`).join(' ') + '\n';
+        for (let c = 0; c < n; c++) row.push(cell(s.board[r * n + c]));
+        out += `r${r} ` + row.map((x, c) => `${String(r * n + c).padStart(2)}:${x}`).join(' ') + '\n';
     }
     return out;
 }
 
 module.exports = {
-    HEART, CIRCLE, CHARACTERS, skillCosts, SKILLS,
+    HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
-    newGame, placeMove, advanceTurn, judgeNextIsHeart, renderBoard,
-    curPlayer, curChar, curMagic, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
+    newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, renderBoard,
+    curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, boardPoisonCount, surroundRange,
     PROLIFERATE, proliferateUpkeep,
     POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,

@@ -48,13 +48,30 @@ node sim/probe-proliferate.js 60      # n=60/側。約5分
 「ループが終息するか」を見たいときは勝率ではなくこちらを使う（強制発動させて
 ループ到達回数の分布を直接測る統制実験）。`cap到達% = 0` なら暴走していない。
 
+### 6. 多人数（2〜8人・盤面 4x4〜7x7）
+```bash
+node sim/cli.js sim     --players 4 --games 300                 # 席別・キャラ別の勝率（キャラはゲームごとにランダム）
+node sim/cli.js sim     --players 3 --chars you,giant,poisoner  # 席のキャラを固定
+node sim/cli.js metrics --players 6 --games 300 --seed 1        # 同じ内容をJSONで（--log で追記）
+node sim/cli.js auto    --chars you,giant,poisoner --seed 1     # 1試合を観戦
+```
+- 盤面は人数で決まる（2=4x4 / 3〜4=5x5 / 5〜6=6x6 / 7〜8=7x7）。勝利は全サイズで4連続
+- 席0が先手。**均等なら各席 1/人数**。席別勝率で先手有利、キャラ別勝率（出場1回あたり）でキャラ間の差を見る
+- ライフ減衰は3人以上で「手番1周ごとに1回」（issue #30。`config.js` の `decayPerRoundMinPlayers`）。
+  A/B は環境変数で: `DECAY_PER_ROUND_MIN_PLAYERS=99 node sim/cli.js sim --players 4`（全人数で着手ごと）
+- 速度の目安: faithful AI は 3人戦で約0.35秒/試合、8人戦で約5秒/試合（深さを 3/2/1 に落としている）
+- 2人戦の結果は多人数対応の前後で（同じseedなら）完全に一致する（capture/faithful とも確認済み）
+- `engine.js` の状態は席ごとの配列（`s.chars` / `s.magic` / …、手番は `s.turn`）。2人戦の旧名
+  （`s.heartMagic` / `s.circleChar` / `s.heartTurn` など）は getter/setter の別名で残してあり、既存のテストやスクリプトはそのまま動く
+- `play`（対人CLI）は2人専用のまま
+
 ### 6. 帯電（雷霆の巫）の機構指標
 ```bash
-node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・発火回数・帯電系スキルの使用回数/試合
+node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・発火回数・帯電系スキルの使用回数/試合（2人戦）
 ```
 勝率だけでは「⚡が効いているか」が分からないので、発火回数・両者の被ダメージ・⚡が盤上にある手番の割合を
 直接出す。A/B検証用に環境変数 `CHG_FIRE_W`（発火の重み）/ `CHG_ONE_MIN`（帯電付与の閾値）/
-`SIM_POOL_SIZE`（プールの大きさ）/ `SIM_CHARS`（metrics の対象キャラ）が使える。
+`SIM_POOL_SIZE`（プールの大きさ）/ `SIM_CHARS`（2人戦 metrics の対象キャラ）が使える。
 雷霆の巫のライフ平均は `config.js` の `lifeMeans.electrician`、帯電系のコストは `charge` ノブ。
 
 この一連を自動で回すスキルが **`/balance-loop`**（`.claude/skills/balance-loop/`）。
@@ -62,11 +79,13 @@ node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・
 `cost`/`tokenLife`/`upkeepStep`/`maxStacks`）。増殖のノブを変えたら
 `src/components/game/skillCosts.ts` と `Game.tsx` の定数も同じ値に合わせること。
 
-キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner, electrician`
+キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner, electrician`（electrician = 雷霆の巫）
 
 ## ファイル
 - `engine.js` — ゲームエンジン（盤面・ライフ・マジック・手番・全スキル）。移植の
   忠実性メモ（`[FAITHFUL]` / `[FIX]`）をコメントで明記。
+- `geometry.js` — 盤面ジオメトリ（勝利ライン・ストンプ/審判の範囲・対角）。`src/components/game/boardGeometry.ts` の複製で、
+  一致は jest（`boardGeometry.test.ts`）が 4〜7 の全サイズで検証する。
 - `ai.js` — AI。`faithful`=AIPlayer.ts と同一挙動 / `capture`=捕獲も考慮する強化版。
 - `cli.js` — `play` / `auto` / `sim` のフロントエンド。
 - `BALANCE.md` — 分析結果と所見。

@@ -36,12 +36,42 @@
     padding: var(--space-4);
 }
 
-.playerCardHeart {
-    border-top-color: var(--color-heart);
+/* 3人以上のときは1枚を小さくして横に並べる */
+.playerCardCompact {
+    width: 300px;
+    padding: var(--space-3);
 }
 
-.playerCardCircle {
-    border-top-color: var(--color-circle);
+.playerCardCompact .charGrid {
+    grid-template-columns: 1fr 1fr;
+}
+
+.charNote {
+    margin-top: var(--space-2);
+    font-size: 11px;
+    color: var(--color-text-dim);
+    line-height: 1.4;
+}
+
+.countRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.countRow .seg {
+    margin-bottom: 0;
+}
+
+.countLabel {
+    font-weight: 800;
+}
+
+.boardSizeNote {
+    font-size: 12px;
+    color: var(--color-text-dim);
 }
 
 .playerHead {
@@ -144,4 +174,27 @@
 
 .start:hover {
     transform: translateY(-2px) scale(1.04);
+}
+
+.randomBtn {
+    margin-top: calc(var(--space-2) * -1);
+    padding: 8px 18px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.randomBtn:hover:not(:disabled) {
+    background: var(--color-surface-3);
+    transform: translateY(-1px);
+}
+
+.randomBtn:disabled {
+    opacity: 0.45;
+    cursor: default;
 }

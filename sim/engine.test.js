@@ -192,6 +192,117 @@ test('calculateWinner detects 4-in-a-row', () => {
     assert.strictEqual(e.calculateWinner(Array(16).fill(undefined)), undefined);
 });
 
+// ---- 多人数 (issue #32 / #30) ----
+console.log('multi-player:');
+const gameN = (...chars) => e.newGame({ chars, rng: e.makeRng(42) });
+
+test('人数に応じた盤面サイズ: 2=4x4 / 3,4=5x5 / 5,6=6x6 / 7,8=7x7', () => {
+    for (const [n, size] of [[2, 4], [3, 5], [4, 5], [5, 6], [6, 6], [7, 7], [8, 7]]) {
+        const s = gameN(...Array(n).fill('you'));
+        assert.strictEqual(s.size, size);
+        assert.strictEqual(s.board.length, size * size);
+    }
+});
+
+test('手番は席順に回る（3人）', () => {
+    const s = gameN('you', 'you', 'you');
+    s.life = 5;
+    const seen = [];
+    for (let k = 0; k < 4; k++) { seen.push(s.turn); e.placeMove(s, k); }
+    assert.deepStrictEqual(seen, [0, 1, 2, 0]);
+});
+
+test('巨人の休み: 次の巨人の席だけが飛ばされる（3人）。2人の同キャラは休みなし', () => {
+    const s = gameN('you', 'giant', 'you');
+    s.turn = 0; s.currentTurn = 14; // 14 % 5 === 4
+    assert.strictEqual(e.judgeNextSeat(s), 2);
+    s.currentTurn = 13;
+    assert.strictEqual(e.judgeNextSeat(s), 1);
+    const mirror = gameN('giant', 'giant');
+    mirror.turn = 0; mirror.currentTurn = 14;
+    assert.strictEqual(e.judgeNextSeat(mirror), 1);
+});
+
+test('減衰(#30): 3人以上は着手3回につき1回だけ全コマ-1。2人は従来どおり着手ごと', () => {
+    const s = gameN('you', 'you', 'you');
+    s.life = 9; e.placeMove(s, 0); // 着手1回目: 減衰あり（空の盤）
+    const afterFirst = s.board[0].bind; // 配置直後は life そのまま
+    assert.strictEqual(afterFirst, 9);
+    s.life = 5; e.placeMove(s, 1); // 2回目: 減衰なし
+    s.life = 5; e.placeMove(s, 2); // 3回目: 減衰なし
+    assert.strictEqual(s.board[0].bind, 9);
+    s.life = 5; e.placeMove(s, 3); // 4回目: 減衰あり
+    assert.strictEqual(s.board[0].bind, 8);
+    const two = game();
+    two.life = 9; e.placeMove(two, 0);
+    two.life = 5; e.placeMove(two, 1);
+    assert.strictEqual(two.board[0].bind, 8); // 2人は2手目でもう減る
+});
+
+test('shouldDecay の規則', () => {
+    assert.strictEqual(e.shouldDecay(1, 2), true);
+    assert.strictEqual(e.shouldDecay(1, 3), false);
+    assert.strictEqual(e.shouldDecay(3, 3), true);
+    assert.strictEqual(e.shouldDecay(6, 8), false);
+    assert.strictEqual(e.shouldDecay(8, 8), true);
+});
+
+test('チューチュートレイン: 相手全員のマジックを0にする（次の手番の席だけ手番開始の+1が入る）', () => {
+    const s = gameN('you', 'you', 'you', 'you');
+    s.magic = [20, 5, 6, 7];
+    e.SKILLS.tsunami(s);
+    assert.strictEqual(s.turn, 1);
+    assert.deepStrictEqual(s.magic.slice(1), [1, 0, 0]);
+});
+
+test('両トークン: 参加者全員のコマが1つずつ置かれる', () => {
+    const s = gameN('you', 'you', 'you', 'you', 'you');
+    s.magic[0] = 20;
+    e.SKILLS.bothToken(s);
+    const placed = s.board.map((sq) => sq.player).filter(Boolean).sort();
+    assert.deepStrictEqual(placed, e.SYMBOLS.slice(0, 5).slice().sort());
+});
+
+test('凶荒の舞: 自分以外の全員のコマのライフを-2する', () => {
+    const s = gameN('yinYangMaster', 'you', 'you');
+    s.board[0] = { player: '⭕', bind: 5, effects: [] };
+    s.board[1] = { player: '🟩', bind: 5, effects: [] };
+    s.board[2] = { player: '💙', bind: 5, effects: [] };
+    s.magic[0] = 20;
+    e.SKILLS.yyDance(s);
+    assert.deepStrictEqual([s.board[0].bind, s.board[1].bind, s.board[2].bind], [3, 3, 5]);
+});
+
+test('スラッシュ/審判の日は盤サイズに合わせる（5x5: 対角は5マス、中央の審判は行+列+両対角）', () => {
+    const s = gameN('you', 'you', 'you');
+    for (let i = 0; i < 25; i++) s.board[i] = { player: '⭕', bind: 3, effects: [] };
+    s.magic[0] = 20;
+    e.SKILLS.slash(s);
+    assert.deepStrictEqual([4, 8, 12, 16, 20].map((i) => s.board[i].bind), [0, 0, 0, 0, 0]);
+    assert.strictEqual(s.board[0].bind, 3);
+});
+
+test('勝利は5x5でも4連続（盤の途中でもよい）', () => {
+    const syms = Array(25).fill(undefined);
+    [6, 7, 8, 9].forEach((i) => (syms[i] = '🟩'));
+    assert.strictEqual(e.calculateWinner(syms), '🟩');
+});
+
+test('多人数: AIだけで3〜8人の試合が最後まで進む', () => {
+    const ai = require('./ai');
+    for (const n of [3, 5, 8]) {
+        const s = e.newGame({ chars: Array(n).fill('you'), rng: e.makeRng(7) });
+        let guard = 0;
+        while (!s.winner && guard++ < 60) {
+            const r = ai.makeMove(s, 'capture');
+            if (r.turnEnded) continue;
+            if (r.move === null) break; // 盤が埋まった
+            e.placeMove(s, r.move);
+        }
+        assert.ok(guard > 3);
+    }
+});
+
 // ---- 帯電 ⚡ (雷霆の巫, #39) ----
 const zap = () => ({ player: undefined, bind: 0, effects: [{ effect: '⚡' }] });
 

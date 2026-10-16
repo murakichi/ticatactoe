@@ -9,40 +9,29 @@
  * 'random'    -> pure random (strength benchmark baseline).
  */
 
-const { HEART, CIRCLE, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
+const { SYMBOLS, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, surroundRange, POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, otherSeats, POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+const { geometryForCells } = require('./geometry');
 
-const WIN_LINES = [
-    [0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15],
-    [0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15],
-    [0, 5, 10, 15], [3, 6, 9, 12],
-];
+// 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
+// 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
+const isEnemy = (player, me) => player !== undefined && player !== me;
+const opponentsOf = (s) => otherSeats(s).map((seat) => SYMBOLS[seat]);
+const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 : 1);
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
+const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
-// 破壊範囲 (engine.js の STOMP_AREA / JUDGE_AREA と一致)
-const STOMP_AREA = {
-    0: [0, 1, 4, 5], 1: [0, 1, 2, 4, 5, 6], 2: [1, 2, 3, 5, 6, 7], 3: [2, 3, 6, 7],
-    4: [0, 1, 4, 5, 8, 9], 5: [0, 1, 2, 4, 5, 6, 8, 9, 10], 6: [1, 2, 3, 5, 6, 7, 9, 10, 11], 7: [2, 3, 6, 7, 10, 11],
-    8: [4, 5, 8, 9, 12, 13], 9: [4, 5, 6, 8, 9, 10, 12, 13, 14], 10: [5, 6, 7, 9, 10, 11, 13, 14, 15], 11: [6, 7, 10, 11, 14, 15],
-    12: [8, 9, 12, 13], 13: [8, 9, 10, 12, 13, 14], 14: [9, 10, 11, 13, 14, 15], 15: [10, 11, 14, 15],
-};
-const JUDGE_AREA = {
-    0: [0, 1, 2, 3, 4, 5, 8, 10, 12, 15], 1: [0, 1, 2, 3, 4, 5, 6, 9, 11, 13], 2: [0, 1, 2, 3, 5, 6, 7, 8, 10, 14], 3: [0, 1, 2, 3, 6, 7, 9, 11, 12, 15],
-    4: [0, 1, 4, 5, 6, 7, 8, 9, 12, 14], 5: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15], 6: [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 14], 7: [2, 3, 4, 5, 6, 7, 10, 11, 13, 15],
-    8: [0, 2, 4, 5, 8, 9, 10, 11, 12, 13], 9: [1, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14], 10: [0, 2, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15], 11: [1, 3, 7, 8, 9, 10, 11, 14, 15],
-    12: [0, 3, 4, 6, 8, 9, 12, 13, 14, 15], 13: [1, 5, 7, 8, 9, 10, 12, 13, 14, 15], 14: [3, 4, 6, 9, 10, 11, 12, 13, 14, 15], 15: [0, 3, 5, 7, 10, 11, 12, 13, 14, 15],
-};
-
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
-function bestStompTarget(board, me, opp) {
+function bestStompTarget(board, me) {
+    const geo = geometryForCells(board.length);
     let bestIdx = null, bestEnemies = 0, bestEmptyCenter = false;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         if (shield.has(i)) continue;
         let enemies = 0;
-        for (const idx of STOMP_AREA[i]) if (board[idx].player === opp) enemies++;
+        for (const idx of geo.stompRange(i)) if (isEnemy(board[idx].player, me)) enemies++;
         const emptyCenter = !board[i].player; // 中心が空なら巨人のコマを配置できる
         if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
             bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -52,17 +41,18 @@ function bestStompTarget(board, me, opp) {
 }
 
 // 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) が最大の中心を選ぶ (純増2以上で価値あり)
-function bestJudgeTarget(board, me, opp) {
+function bestJudgeTarget(board, me) {
+    const geo = geometryForCells(board.length);
     let bestIdx = null, bestNet = 0;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         if (shield.has(i)) continue;
         let enemy = 0, mine = 0;
-        for (const idx of JUDGE_AREA[i]) {
+        for (const idx of geo.judgeRange(i)) {
             const sq = board[idx];
             const locked = sq.effects.some(e => e.effect === '🔑');
             const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
             if (locked && protectedBud) continue; // 守られている駒は消えない
-            if (sq.player === opp) enemy++;
+            if (isEnemy(sq.player, me)) enemy++;
             else if (sq.player === me) mine++;
         }
         const net = enemy - mine;
@@ -71,33 +61,58 @@ function bestJudgeTarget(board, me, opp) {
     return bestNet >= 2 ? bestIdx : null;
 }
 
-// 敵駒 i が「どかさないと負ける列」(敵3つ揃い・自駒なし・残り1マスが空き) に含まれるか
-function inOppReachLine(board, i, me, opp) {
-    for (const line of WIN_LINES) {
+// 敵駒 i が「どかさないと負ける列」(その持ち主が3つ揃い・自駒なし・他の敵駒なし・残り1マスが空き) に含まれるか
+function inOppReachLine(board, i, me) {
+    const owner = board[i].player;
+    for (const line of geometryForCells(board.length).winLines) {
         if (!line.includes(i)) continue;
-        let op = 0, mine = 0, empty = 0;
+        let op = 0, other = 0, empty = 0;
         for (const idx of line) {
-            if (board[idx].player === opp) op++;
-            else if (board[idx].player === me) mine++;
+            if (board[idx].player === owner) op++;
+            else if (board[idx].player) other++; // 自駒や別の敵駒が混ざっていれば脅威ではない
             else empty++;
         }
-        if (op === 3 && mine === 0 && empty === 1) return true;
+        if (op === 3 && other === 0 && empty === 1) return true;
     }
     return false;
 }
 
+// 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰で bind が 0 になれば消える。
+// 消えるまでの手数が少なく、そのコマが通る敵ライン(自駒・他の敵駒なし)の価値(LINE_SCORES)が高いものを狙う。なければ null
+function bestInjectionTarget(board, me, minValue) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (!isEnemy(sq.player, me) || shield.has(i)) continue;
+        const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数
+        const turns = Math.ceil(sq.bind / (1 + p)); // 1手ごとに 1+毒数 減る
+        if (turns > 2) continue;
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let oc = 0, foreign = 0;
+            for (const idx of line) { if (board[idx].player === sq.player) oc++; else if (board[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(oc, 4)];
+        }
+        val = turns === 1 ? val : val / 2;
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestVal >= minValue ? bestIdx : null;
+}
+
 // 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ。敵2体以上で価値あり。
 // 敵1体でも、その駒がリーチ列を作っている(どかさないと負ける)なら撃つ。
-// (AIは他の毒付与スキル(インジェクション等)を使わないので「他に手段がない」は常に成立)
-function bestMiasmaTarget(board, me, opp) {
+function bestMiasmaTarget(board, me) {
+    const geo = geometryForCells(board.length);
     let bestIdx = null, bestScore = 0;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         if (board[i].player !== me || shield.has(i)) continue; // 自陣を選択
         let enemies = 0, critical = 0;
-        for (const j of surroundRange(i)) {
-            if (board[j].player === opp && !board[j].effects.some(e => e.effect === '🔑')) {
+        for (const j of geo.surroundRange(i)) {
+            if (isEnemy(board[j].player, me) && !board[j].effects.some(e => e.effect === '🔑')) {
                 enemies++;
-                if (inOppReachLine(board, j, me, opp)) critical++;
+                if (inOppReachLine(board, j, me)) critical++;
             }
         }
         const score = enemies + critical * 2;
@@ -109,40 +124,42 @@ function bestMiasmaTarget(board, me, opp) {
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
 // ---- 帯電（雷霆の巫）AI ----
-// 無敵(⚡付き雷霆の巫自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙から除外する
+// 無敵(⚡付き雷霆の巫の自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙・スキル対象から除外する
 let shield = new Set();
 function updateShield(s) {
     shield = new Set();
-    for (let i = 0; i < 16; i++) if (isShielded(s, s.board[i])) shield.add(i);
+    for (let i = 0; i < s.board.length; i++) if (isShielded(s, s.board[i])) shield.add(i);
 }
+const sizeOf = (board) => Math.round(Math.sqrt(board.length));
 
 // 着手マス i が発火させる⚡の損得。敵コマ(ライフ>0)を削れば加点、自コマを削れば減点。
 // ライフ1のコマは0になる(=奪取可能になる/守りが剥がれる)ので重く見る
-function fireGain(board, i, me, opp) {
+function fireGain(board, i, me) {
+    const size = sizeOf(board);
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
-    for (const k of orthoNeighbors(i)) {
+    for (const k of orthoNeighbors(i, size)) {
         if (chargeStacks(board[k]) === 0) continue;
-        for (const n of orthoNeighbors(k)) {
+        for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue;
             const w = 3 + (sq.bind === 1 ? 4 : 0);
-            gain += (sq.player === opp ? w : -w) * W;
+            gain += (isEnemy(sq.player, me) ? w : -w) * W;
         }
     }
     return gain;
 }
 
-// 自コマ i が入っている列のうち、敵コマが無く自コマが最も多い列の自コマ数 (i を含む)
-function bestOwnLineCount(board, i, me, opp) {
+// 自コマ i が入っている列のうち、他の席のコマが無く自コマが最も多い列の自コマ数 (i を含む)
+function bestOwnLineCount(board, i, me) {
     let best = 0;
-    for (const line of WIN_LINES) {
+    for (const line of geometryForCells(board.length).winLines) {
         if (!line.includes(i)) continue;
         let mine = 0, bad = false;
         for (const idx of line) {
             if (board[idx].player === me) mine++;
-            else if (board[idx].player === opp) bad = true;
+            else if (board[idx].player) bad = true;
         }
         if (!bad && mine > best) best = mine;
     }
@@ -151,24 +168,25 @@ function bestOwnLineCount(board, i, me, opp) {
 
 // 帯電付与の対象。2通りの価値の大きいほう:
 //  攻め: 縦横隣接の (敵コマ数 − 自コマ数)（ライフ>0のコマのみ）
-//  守り: ライフ0〜1(奪われやすい)の自コマが、敵のいない列で自コマ2つ以上(リーチ列なら3つ)の一部なら、
+//  守り: ライフ0〜1(奪われやすい)の自コマが、他の席のいない列で自コマ2つ以上(リーチ列なら3つ)の一部なら、
 //        ⚡の無敵で守る (雷霆の巫のパッシブ)
 // 値が MIN 以上なら撃つ。ロック中・無敵マス・すでに帯電したマスは除く
 const CHARGE_ONE_MIN_SCORE = Number(process.env.CHG_ONE_MIN) || 2; // CHG_ONE_MIN: A/B検証用の上書き
-function bestChargeOneTarget(board, me, opp) {
+function bestChargeOneTarget(board, me) {
+    const size = sizeOf(board);
     let bestIdx = null, bestScore = 0;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         if (shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
         if (chargeStacks(board[i]) > 0) continue;
         let attack = 0;
-        for (const n of orthoNeighbors(i)) {
+        for (const n of orthoNeighbors(i, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
-            if (sq.player === opp) attack++; else attack--;
+            if (isEnemy(sq.player, me)) attack++; else attack--;
         }
         let defend = 0;
         if (board[i].player === me && board[i].bind <= 1) {
-            const own = bestOwnLineCount(board, i, me, opp);
+            const own = bestOwnLineCount(board, i, me);
             if (own >= 3) defend = 4; else if (own === 2) defend = 2;
         }
         const score = Math.max(attack, defend);
@@ -178,21 +196,22 @@ function bestChargeOneTarget(board, me, opp) {
 }
 
 // 固有スキル(帯電拡散): 辿れる範囲(コマのあるマスだけ)が
-//  - 敵のいない列で自コマ3つ(リーチ列)を含む → 無敵で守る、または
+//  - 他の席のいない列で自コマ3つ(リーチ列)を含む → 無敵で守る、または
 //  - 自コマ3つ以上で、範囲内/縦横隣接に敵コマ(ライフ>0)が2体以上
 // のとき、その起点を選ぶ
-function bestChargeSpreadTarget(board, me, opp) {
+function bestChargeSpreadTarget(board, me) {
+    const size = sizeOf(board);
     let bestIdx = null, bestScore = 0;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         if (!board[i].player || shield.has(i)) continue;
-        const cells = connectedPieces(board, i);
+        const cells = connectedPieces(board, i, size);
         const mine = cells.filter((k) => board[k].player === me).length;
         let reach = false;
-        for (const k of cells) if (board[k].player === me && bestOwnLineCount(board, k, me, opp) >= 3) reach = true;
+        for (const k of cells) if (board[k].player === me && bestOwnLineCount(board, k, me) >= 3) reach = true;
         const adj = new Set();
-        for (const k of cells) for (const n of orthoNeighbors(k)) if (board[n].player === opp && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+        for (const k of cells) for (const n of orthoNeighbors(k, size)) if (isEnemy(board[n].player, me) && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
         // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
-        for (const k of cells) if (board[k].player === opp && board[k].bind > 0) adj.add(k);
+        for (const k of cells) if (isEnemy(board[k].player, me) && board[k].bind > 0) adj.add(k);
         const ok = reach || (mine >= 3 && adj.size >= 2);
         if (!ok) continue;
         const score = adj.size + mine + (reach ? 10 : 0);
@@ -209,18 +228,20 @@ function symbolsWith(board, i, symbol) {
     return syms;
 }
 
-function evaluateBoard(board, me, opp) {
+function evaluateBoard(board, me) {
     let score = 0;
-    for (const line of WIN_LINES) {
+    for (const line of geometryForCells(board.length).winLines) {
         let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
+        // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
+        const enemiesInLine = new Set();
         for (const idx of line) {
             const sq = board[idx];
             if (sq.player === me) { myCount++; myBindSum += sq.bind; }
-            else if (sq.player === opp) { oppCount++; oppBindSum += sq.bind; }
+            else if (sq.player) { oppCount++; oppBindSum += sq.bind; enemiesInLine.add(sq.player); }
         }
         if (myCount > 0 && oppCount === 0) {
             score += LINE_SCORES[myCount];
-        } else if (oppCount > 0 && myCount === 0) {
+        } else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
             score -= LINE_SCORES[oppCount];
             if (oppCount === 2) {
                 let emptyInLine = 0;
@@ -234,32 +255,32 @@ function evaluateBoard(board, me, opp) {
         const buds = sq.effects.filter(e => e.effect === '🌱').length;
         const hasLock = sq.effects.some(e => e.effect === '🔑');
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
-        else if (sq.player === opp) { score -= buds * 3 + (hasLock ? 5 : 0); }
+        else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
     }
     return score;
 }
 
-function countReaches(board, player, opp) {
+function countReaches(board, player) {
     let reaches = 0;
-    for (const line of WIN_LINES) {
+    for (const line of geometryForCells(board.length).winLines) {
         let my = 0, op = 0;
         for (const idx of line) {
             if (board[idx].player === player) my++;
-            else if (board[idx].player === opp) op++;
+            else if (board[idx].player) op++;
         }
         if (my === 3 && op === 0) reaches++;
     }
     return reaches;
 }
 
-function findThreatSquares(board, player, opp) {
+function findThreatSquares(board, player) {
     const threats = [];
-    for (const line of WIN_LINES) {
+    for (const line of geometryForCells(board.length).winLines) {
         let pCount = 0, oCount = 0, emptyIdx = -1;
         for (const idx of line) {
             const sq = board[idx];
             if (sq.player === player) pCount++;
-            else if (sq.player === opp) oCount++;
+            else if (sq.player) oCount++;
             else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
         }
         if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -289,15 +310,15 @@ function simulatePlace(board, index, player, life) {
     return nb;
 }
 
-function getValidMoves(board, me, opp, character, necroActive) {
+function getValidMoves(board, me, character) {
     const moves = [];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         const sq = board[i];
         if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
         if (!sq.player) {
             if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
-        } else if (sq.player === opp) {
+        } else if (isEnemy(sq.player, me)) {
             if (sq.bind <= 0) moves.push(i);
             else if (character === 'giant') moves.push(i);
         }
@@ -307,7 +328,7 @@ function getValidMoves(board, me, opp, character, necroActive) {
 
 function getMovesFor(board, player, life) {
     const moves = [];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < board.length; i++) {
         const sq = board[i];
         if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
@@ -323,10 +344,10 @@ function getMovesFor(board, player, life) {
 function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     const winner = calculateWinner(board.map(sq => sq.player));
     if (winner === me) return 1000 + depth;
-    if (winner === opp) return -1000 - depth;
+    if (winner) return -1000 - depth;
     const currentPlayer = isMax ? me : opp;
     const moves = getMovesFor(board, currentPlayer, life);
-    if (depth === 0 || moves.length === 0) return evaluateBoard(board, me, opp);
+    if (depth === 0 || moves.length === 0) return evaluateBoard(board, me);
 
     if (isMax) {
         let best = -Infinity;
@@ -353,15 +374,14 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
-    const opp = me === HEART ? CIRCLE : HEART;
+    const opps = opponentsOf(s);
+    const opp = opps[0];
     const character = curChar(s);
-    const oppChar = s.heartTurn ? s.circleChar : s.heartChar;
     const life = s.life;
     const board = s.board;
 
-    const necroActive = me === HEART ? s.remainHeartNecro > 0 : s.remainCircleNecro > 0;
     const empty = findEmptyIndexes(board);
-    const valid = getValidMoves(board, me, opp, character, necroActive);
+    const valid = getValidMoves(board, me, character);
     const seen = {};
     const allMoves = [];
     for (const m of empty) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
@@ -374,10 +394,12 @@ function getEnhancedBestMove(s) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
     // block opponent win (including captures)
-    const oppMoves = getMovesFor(board, opp, life);
-    for (const i of oppMoves) {
-        if (calculateWinner(simulatePlace(board, i, opp, life).map(sq => sq.player)) === opp) {
-            if (seen[i]) return i;
+    for (const o of opps) {
+        const oppMoves = getMovesFor(board, o, life);
+        for (const i of oppMoves) {
+            if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
+                if (seen[i]) return i;
+            }
         }
     }
 
@@ -386,15 +408,15 @@ function getEnhancedBestMove(s) {
     let bestMove = allMoves[0];
     for (const i of allMoves) {
         const sim = simulatePlace(board, i, me, life);
-        let score = minimax(sim, 3, false, -Infinity, Infinity, me, opp, life);
+        let score = minimax(sim, searchDepth(board), false, -Infinity, Infinity, me, opp, life);
         // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
-        const reaches = countReaches(sim, me, opp);
+        const reaches = countReaches(sim, me);
         if (reaches >= 2) score += 200;        // フォーク
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
-        if (board[i].player === opp && board[i].bind <= 0) score += 30;
+        if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
-        score += fireGain(board, i, me, opp);
+        score += fireGain(board, i, me);
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
@@ -404,26 +426,39 @@ function getEnhancedBestMove(s) {
 
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
-    const opp = me === HEART ? CIRCLE : HEART;
+    const opps = opponentsOf(s);
     const character = curChar(s);
-    const oppChar = s.heartTurn ? s.circleChar : s.heartChar;
     let remaining = curMagic(s);
-    const oppMagic = s.heartTurn ? s.circleMagic : s.heartMagic;
+    // 敵が複数いるときは最も魔力の多い相手を基準にする（2人戦なら従来どおり相手の魔力）
+    const oppMagic = Math.max(...otherSeats(s).map((seat) => s.magic[seat]));
     const board = s.board;
     const tokenUsed = s.usedTokenThisTurn;
+    const geo = geometryForCells(board.length);
 
-    const oppReaches = countReaches(board, opp, me);
+    const oppReaches = opps.reduce((n, o) => n + countReaches(board, o), 0);
     let myPieces = 0, oppPieces = 0;
+    const piecesOf = new Map();
     for (const sq of board) {
         if (sq.player === me) myPieces++;
-        else if (sq.player === opp) oppPieces++;
+        else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) || 0) + 1);
     }
+    // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
+    piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
     const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
     function cost(base, isToken) { return calculateCost(s, base, isToken || false); }
 
     const skills = [];
+    // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える。
+    // A/B(約1200試合×seed1-3): ネクロ +2.1/+5.2/+5.8pt。巨人(ストンプ)は +0.8/+1.1/+1.0pt と誤差内で対象外、
+    // 軍師は全軍突撃のコストをトークンで下げるため温存すると 0.468→0.198 と大幅悪化
+    let reserve = 0;
+    if (character === 'necromancer') {
+        if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
+    }
+    const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
+        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
     }
@@ -431,13 +466,13 @@ function chooseSkills(s, availableSkills) {
     // --- 固有スキル (相手リーチがなければ積極的に使う) ---
     if (oppReaches === 0) {
         if (character === 'necromancer') {
-            const active = me === HEART ? s.remainHeartNecro > 0 : s.remainCircleNecro > 0;
-            const ncost = me === HEART ? s.currentHeartNecroCost : s.currentCircleNecroCost;
+            const active = s.remainNecro[s.turn] > 0;
+            const ncost = s.necroCost[s.turn];
             if (!active && remaining >= ncost) {
                 const corpses = 10 - ncost; // 軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
-                    if (sq.player === opp && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
+                    if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
                 if (corpses >= 3 || absorbable >= 2) spend(ncost, 'necromancy');
             }
@@ -456,7 +491,7 @@ function chooseSkills(s, availableSkills) {
         }
 
         // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
-        const proliferateActive = me === HEART ? s.heartProliferate : s.circleProliferate;
+        const proliferateActive = s.proliferate[s.turn];
         if (!proliferateActive && availableSkills.includes(20)) {
             const pCost = cost(skillCosts.onClickProliferate);
             let emptyCount = 0;
@@ -471,16 +506,16 @@ function chooseSkills(s, availableSkills) {
     if (skills.length === 0 && isLosing && oppReaches === 0) {
         if (availableSkills.includes(5)) {
             let oppOn = 0, myOn = 0;
-            for (const idx of [3, 6, 9, 12]) {
-                if (board[idx].player === opp && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+            for (const idx of geo.antiDiagonal) {
+                if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
             if (oppOn > myOn) spend(cost(skillCosts.onClickSlash), 'slash');
         }
         if (skills.length === 0 && availableSkills.includes(6)) {
             let oppOn = 0, myOn = 0;
-            for (const idx of [0, 5, 10, 15]) {
-                if (board[idx].player === opp && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+            for (const idx of geo.mainDiagonal) {
+                if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
             if (oppOn > myOn) spend(cost(skillCosts.onClickBackSlash), 'backSlash');
@@ -545,26 +580,26 @@ function chooseSkills(s, availableSkills) {
 function chooseLocks(s, availableSkills) {
     if (process.env.NO_AI_LOCK === '1') return [];
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
-    if (s.heartTurn ? s.noLockHeart : s.noLockCircle) return [];
+    if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
     // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化
     if (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster') return [];
     const me = curPlayer(s);
-    const opp = me === HEART ? CIRCLE : HEART;
     const character = curChar(s);
     const board = s.board;
-    const oppMagic = s.heartTurn ? s.circleMagic : s.heartMagic;
+    const geo = geometryForCells(board.length);
+    const oppMagic = Math.max(...otherSeats(s).map((seat) => s.magic[seat]));
     const life = s.life;
     let myPieces = 0, oppPieces = 0, empties = 0;
-    for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player === opp) oppPieces++; else if (!sq.player) empties++; }
-    const enemiesOn = (idxs) => idxs.filter((i) => board[i].player === opp && !board[i].effects.some((e) => e.effect === '🔑')).length;
+    for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player) oppPieces++; else if (!sq.player) empties++; }
+    const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
-            case 5: return enemiesOn([3, 6, 9, 12]) >= 2;
-            case 6: return enemiesOn([0, 5, 10, 15]) >= 2;
+            case 5: return enemiesOn(geo.antiDiagonal) >= 2;
+            case 6: return enemiesOn(geo.mainDiagonal) >= 2;
             case 8: return oppPieces >= 3;
             case 7: return oppMagic >= 7;
             case 14: return myPieces >= 3;
@@ -586,9 +621,8 @@ function chooseLocks(s, availableSkills) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 function faithfulMakeMove(s) {
     const me = curPlayer(s);
-    const opp = me === HEART ? CIRCLE : HEART;
+    const opps = opponentsOf(s);
     const magic = curMagic(s);
-
     updateShield(s);
 
     // 永続スキルプール(ロックで固定される)を使用
@@ -596,11 +630,10 @@ function faithfulMakeMove(s) {
 
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
-    if (s.heartTurn) s.heartLockedSkills = locks;
-    else s.circleLockedSkills = locks;
+    s.lockedSkills[s.turn] = locks;
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
-    const threats = findThreatSquares(s.board, opp, me);
+    const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
     if (threats.length >= 2) {
         const lockOpts = [
             { key: 'lock', count: 1, cost: calculateCost(s, skillCosts.onClickUseLock) },
@@ -633,21 +666,34 @@ function faithfulMakeMove(s) {
 
     // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
-    if (curChar(s) === 'electrician' && countReaches(s.board, opp, me) === 0) {
+    if (curChar(s) === 'electrician' && opps.every((o) => countReaches(s.board, o) === 0)) {
         if (curMagic(s) >= skillCosts.onClickChargeSpread) {
-            const start = bestChargeSpreadTarget(s.board, me, opp);
+            const start = bestChargeSpreadTarget(s.board, me);
             if (start !== null) { SKILLS.chargeSpread(s); placeMove(s, start); updateShield(s); }
         }
         if (availableSkills.includes(22) && curMagic(s) >= calculateCost(s, skillCosts.onClickChargeOne)) {
-            const target = bestChargeOneTarget(s.board, me, opp);
+            const target = bestChargeOneTarget(s.board, me);
             if (target !== null) { SKILLS.chargeOne(s); placeMove(s, target); updateShield(s); }
+        }
+    }
+
+    // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+    if (curChar(s) === 'poisoner' && availableSkills.includes(15)
+        && magic >= calculateCost(s, skillCosts.onClickInjection, false, true)
+        && countReaches(s.board, me) === 0) {
+        const target = bestInjectionTarget(s.board, me, INJ_MIN);
+        if (target !== null) {
+            SKILLS.injection(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
         }
     }
 
     // 毒使い ミアズマ: 周囲に敵がいる自陣マスを選び、隣接敵に毒を撒く (手番は進まない→通常着手)
     const ch0 = curChar(s);
     if (ch0 === 'poisoner' && magic >= miasmaCost(s)) {
-        const target = bestMiasmaTarget(s.board, me, opp);
+        const target = bestMiasmaTarget(s.board, me);
         if (target !== null) {
             SKILLS.miasma(s);
             placeMove(s, target);
@@ -657,11 +703,11 @@ function faithfulMakeMove(s) {
     }
 
     // 巨人ストンプ / 魔法使い審判の日: 範囲破壊スキル (相手リーチが無いときに狙う)
-    const oppReaches = countReaches(s.board, opp, me);
+    const oppReaches = opps.reduce((n, o) => n + countReaches(s.board, o), 0);
     if (oppReaches === 0) {
         const ch = curChar(s);
         if (ch === 'giant' && magic >= calculateCost(s, skillCosts.onClickStomp)) {
-            const target = bestStompTarget(s.board, me, opp);
+            const target = bestStompTarget(s.board, me);
             if (target !== null) {
                 SKILLS.stomp(s);        // useStomp=true (手番は進まない)
                 placeMove(s, target);   // exeStomp: 範囲破壊+中心配置
@@ -670,7 +716,7 @@ function faithfulMakeMove(s) {
             }
         }
         if (ch === 'magician' && magic >= judgeDayCost(s)) {
-            const target = bestJudgeTarget(s.board, me, opp);
+            const target = bestJudgeTarget(s.board, me);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
@@ -702,7 +748,7 @@ function faithfulMakeMove(s) {
 /** Legacy getBestMove for capture/random modes (no skill usage) */
 function getBestMove(s, mode) {
     const me = curPlayer(s);
-    const opp = me === HEART ? CIRCLE : HEART;
+    const opps = opponentsOf(s);
     const empties = findEmptyIndexes(s.board);
 
     if (mode === 'random') return empties.length ? empties[Math.floor(s.rng() * empties.length)] : null;
@@ -710,13 +756,13 @@ function getBestMove(s, mode) {
     // win on empty
     for (const i of empties) if (calculateWinner(symbolsWith(s.board, i, me))) return i;
     // block on empty
-    for (const i of empties) if (calculateWinner(symbolsWith(s.board, i, opp))) return i;
+    for (const i of empties) for (const o of opps) if (calculateWinner(symbolsWith(s.board, i, o))) return i;
 
     if (mode === 'capture') {
         const life = s.life;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < s.board.length; i++) {
             const sq = s.board[i];
-            if (sq.player === opp && sq.bind > 0) {
+            if (isEnemy(sq.player, me) && sq.bind > 0) {
                 const calc = sq.bind - life + 1;
                 if (calc < 0 && calculateWinner(symbolsWith(s.board, i, me))) return i;
             }
