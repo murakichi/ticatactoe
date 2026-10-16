@@ -65,6 +65,8 @@ issues: [12, 13]     # このエントリで立てた/進めた issue 番号
 ```bash
 gh issue create --title "<短い症状>" --label "<balance|bug|ai|infra>" --body "<背景/再現/期待/検証方法>"
 ```
+`gh` が使えない環境（クラウドセッション等）では GitHub MCP の `issue_write`（method=create, labels 指定）で起票する。
+**日記の「積み残し」に書いた項目は、立てない基準に当たるもの以外すべて issue にも起票する**（日記だけに残さない）。
 本文には **再現手順か検証コマンド**（例: `node sim/cli.js metrics --games 800 --seed 1`）を必ず入れる。
 ラベルが未作成なら `gh label create` で作る。
 
