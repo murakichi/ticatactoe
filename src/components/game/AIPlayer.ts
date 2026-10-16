@@ -6,8 +6,8 @@ import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..22)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 23;
+// 汎用スキルプールの大きさ (idx 0..23)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 24;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;

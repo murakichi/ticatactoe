@@ -14,8 +14,8 @@ module.exports = {
     },
     "lifeStd": 3,
     "giantSkipModulo": 5,
-    // 汎用スキルプールの大きさ。21 -> 23 (帯電トークン/帯電付与, #39)
-    "poolSize": 23,
+    // 汎用スキルプールの大きさ。21 -> 23 (帯電トークン/帯電付与, #39) -> 24 (ヘイルメアリー)
+    "poolSize": 24,
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。
     // 99 にすると全人数で従来どおり着手ごと（A/B検証用）
     "decayPerRoundMinPlayers": 3,

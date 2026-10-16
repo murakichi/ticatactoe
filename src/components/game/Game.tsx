@@ -151,6 +151,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
+            case 'onClickHailMary': onClickHailMary(); break;
         }
     };
 
@@ -584,7 +585,7 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全23スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)を永久に引けなかった
+        // プールは全24スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)・ヘイルメアリー(23)を永久に引けなかった
         setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
@@ -928,12 +929,13 @@ export const Game = (props: GameProps) => {
     };
 
     const yingYangSkllCost = 5;
-    const onClickYingYangSkll = () => {
-        addLog(`「${currentYinYangMode === 'yang' ? '豊穣の舞（自分の全コマ+2）' : '凶荒の舞（相手の全コマ-2）'}」を使用`);
+    // 豊穣の舞/凶荒の舞の効果本体。コストは呼び出し側で払う（ヘイルメアリーからも使う）
+    const applyYingYangDance = (mode: YingYangMode) => {
+        addLog(`「${mode === 'yang' ? '豊穣の舞（自分の全コマ+2）' : '凶荒の舞（相手の全コマ-2）'}」を使用`);
         const board = currentBoard.slice();
         const affected: number[] = [];
         let destroyed = 0;
-        if (currentYinYangMode === 'yang') {
+        if (mode === 'yang') {
             for (const square of board) {
                 if (square.player === currentTurnPlayer) {
                     square.bind = square.bind + 2;
@@ -953,11 +955,14 @@ export const Game = (props: GameProps) => {
                 }
             });
         }
-        spendMagic(yingYangSkllCost, false);
         addCorpses(destroyed);
         flashCells(affected);
-        playEffect(currentYinYangMode === 'yang' ? 'harvest' : 'famine');
+        playEffect(mode === 'yang' ? 'harvest' : 'famine');
         setCurrentBoard(board);
+    };
+    const onClickYingYangSkll = () => {
+        applyYingYangDance(currentYinYangMode === 'yang' ? 'yang' : 'ying');
+        spendMagic(yingYangSkllCost, false);
     };
 
     const baseNecromancyCost = 10;
@@ -978,10 +983,18 @@ export const Game = (props: GameProps) => {
 
     const onClickNecromancy = () => {
         const curCost = necroCost[turnSeat];
+        summonCorpses(baseNecromancyCost - curCost);
+        setMagicAt(turnSeat, (m) => m - curCost);
+        setUseMagicCountAt(turnSeat, (c) => c + 1);
+        setRemainNecroAt(turnSeat, necromancyDuration);
+        setNecroCostAt(turnSeat, baseNecromancyCost);
+    };
+
+    // 墓地の死体数ぶん（上限・空きマス数でクランプ）ライフ2のコマを召喚する。コスト支払いは呼び出し側
+    const summonCorpses = (corpses: number) => {
         const board = currentBoard.slice();
         const empties = findEmptyIndexes(board);
-        // 墓地に貯まった死体数だけ召喚（上限・空きマス数でクランプ）
-        const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
+        const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
         const summonTargets = randomAnyPick(empties, summonCount);
         for (const idx of summonTargets) {
             board[idx] = { player: currentTurnPlayer, bind: necromancyReviveLife, effects: [] };
@@ -989,10 +1002,45 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         playEffect('necromancy');
         addLog(`「蘇生」を使用（墓地から${summonCount}体召喚 / ${necromancyDuration}ターン吸収）`);
-        setMagicAt(turnSeat, (m) => m - curCost);
-        setUseMagicCountAt(turnSeat, (c) => c + 1);
-        setRemainNecroAt(turnSeat, necromancyDuration);
-        setNecroCostAt(turnSeat, baseNecromancyCost);
+    };
+
+    // ヘイルメアリー: 陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動する
+    const hailMaryChoices: { name: string; run: () => void }[] = [
+        {
+            name: '全軍突撃',
+            run: () => {
+                playEffect('assault');
+                setUseAssaultAt(turnSeat, 3);
+                setUseTokenCountAt(turnSeat, 0);
+            },
+        },
+        { name: 'ストンプ', run: () => setUseStomp(true) },
+        { name: '審判の日', run: () => setUseJudgeDay(true) },
+        { name: '豊穣の舞', run: () => applyYingYangDance('yang') },
+        { name: '凶荒の舞', run: () => applyYingYangDance('ying') },
+        {
+            name: '蘇生',
+            run: () => {
+                // 墓地は蘇生コストの軽減量として持つ（ネクロマンサー全員分のうち最大）。自分がネクロなら吸収と墓地リセットも行う
+                summonCorpses(Math.max(...necroCost.map((c) => baseNecromancyCost - c)));
+                if (currentCharacter === 'necromancer') {
+                    setRemainNecroAt(turnSeat, necromancyDuration);
+                    setNecroCostAt(turnSeat, baseNecromancyCost);
+                }
+            },
+        },
+        { name: 'ミアズマ', run: () => setUseMiasma(true) },
+        { name: '帯電拡散', run: () => setUseChargeSpread(true) },
+    ];
+    // ヘイルメアリーで引いたスキル名。マス選択型は演出より先に画面へ出すため、一定時間表示する
+    const [hailMaryPick, setHailMaryPick] = useState<string | null>(null);
+    const onClickHailMary = () => {
+        const picked = randomPick(hailMaryChoices);
+        setHailMaryPick(picked.name);
+        setTimeout(() => setHailMaryPick(null), 2500);
+        addLog(`「ヘイルメアリー」を使用 → 「${picked.name}」が発動`);
+        spendMagic(skillCosts.onClickHailMary);
+        picked.run();
     };
 
     // --- 毒使い 固有スキル「ミアズマ」 ---
@@ -1345,6 +1393,28 @@ export const Game = (props: GameProps) => {
         if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread) setPreviewCells([]);
     };
 
+    // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
+    const pendingSkillName = useStomp
+        ? 'ストンプ'
+        : useJudgeDay
+        ? '審判の日'
+        : useMiasma
+        ? 'ミアズマ'
+        : useChargeSpread
+        ? '帯電拡散'
+        : usePandemic
+        ? 'パンデミック'
+        : useInjection > 0
+        ? 'インジェクション'
+        : useChargeOne
+        ? '帯電付与'
+        : null;
+    const skillAnnounce = pendingSkillName
+        ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
+        : hailMaryPick
+        ? `ヘイルメアリー → ${hailMaryPick}`
+        : null;
+
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
     const shuffleSkillDefs: {
         idx: number;
@@ -1384,6 +1454,7 @@ export const Game = (props: GameProps) => {
         },
         { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(skillCosts.onClickChargeToken, true)}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickChargeToken, true) },
         { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${calculateCost(skillCosts.onClickChargeOne)}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeOne) },
+        { idx: 23, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(skillCosts.onClickHailMary)}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(skillCosts.onClickHailMary) },
     ];
 
     return (
@@ -1392,6 +1463,7 @@ export const Game = (props: GameProps) => {
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
+                    {skillAnnounce && <div className={styles.announce}>{skillAnnounce}</div>}
                     <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
                         <Board
                             size={geo.size}

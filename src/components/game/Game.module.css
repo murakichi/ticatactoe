@@ -368,3 +368,12 @@
 .skillCost b {
     color: var(--color-accent);
 }
+
+.announce {
+    padding: var(--space-2) var(--space-4);
+    border-radius: 999px;
+    background: #fff44f;
+    color: #2a2500;
+    font-weight: 700;
+    text-align: center;
+}

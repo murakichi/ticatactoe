@@ -34,6 +34,8 @@ export const skillCosts = {
     onClickChargeToken: 3,
     onClickChargeOne: 2,
     onClickChargeSpread: 7,
+    // ヘイルメアリー: 固有スキル(陰陽転化を除く)をランダム発動。idx 23
+    onClickHailMary: 6,
 };
 
 export type SkillCosts = typeof skillCosts;

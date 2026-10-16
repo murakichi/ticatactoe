@@ -72,8 +72,8 @@ function lateMagicBonus(turn, n) {
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
-// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 23; // SIM_POOL_SIZE: A/B検証用の上書き
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23, ヘイルメアリーで 24
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 24; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -166,6 +166,7 @@ const skillCosts = {
     onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
+    onClickHailMary: 6, // idx 23
 };
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -757,7 +758,10 @@ function onClickToggleYingYang(s) {
     s.magic[s.turn] -= skillCosts.onClickToggleYingYang;
 }
 function onClickYingYangSkill(s) {
-    const mode = curYY(s);
+    applyYingYangDance(s, curYY(s));
+    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
+}
+function applyYingYangDance(s, mode) {
     const cur = curPlayer(s);
     let destroyed = 0;
     if (mode === 'yang') {
@@ -766,7 +770,6 @@ function onClickYingYangSkill(s) {
         // 凶荒の舞: 自分以外の全員のコマ
         for (const sq of s.board) if (sq.player && sq.player !== cur) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
     }
-    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
     addCorpses(s, destroyed);
 }
 
@@ -861,14 +864,17 @@ function onClickProliferate(s) {
 function necromancyCost(s) {
     return s.necroCost[s.turn];
 }
-function onClickNecromancy(s) {
+function summonCorpses(s, corpses) {
     const cur = curPlayer(s);
-    const curCost = s.necroCost[s.turn];
-    // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
     const empties = findEmptyIndexes(s.board);
-    const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
+    const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
     const targets = randomAnyPick(empties, summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
+}
+function onClickNecromancy(s) {
+    const curCost = s.necroCost[s.turn];
+    // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
+    summonCorpses(s, baseNecromancyCost - curCost);
     s.magic[s.turn] -= curCost;
     s.useMagicCount[s.turn]++;
     s.remainNecro[s.turn] = necromancyDuration;
@@ -960,6 +966,26 @@ function exeChargeSpread(s, i) {
     s.useChargeSpread = false;
 }
 
+// ヘイルメアリー (idx 23): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
+// 対象選択が要るもの(ストンプ/審判の日/ミアズマ/帯電拡散)は use* フラグを立てるだけ。対象クリックは呼び出し側(AI)の責任
+function onClickHailMary(s) {
+    spendMagic(s, skillCosts.onClickHailMary);
+    const choices = [
+        () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
+        () => { s.useStomp = true; },
+        () => { s.useJudgeDay = true; },
+        () => applyYingYangDance(s, 'yang'),
+        () => applyYingYangDance(s, 'ying'),
+        () => {
+            summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
+            if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
+        },
+        () => { s.useMiasma = true; },
+        () => { s.useChargeSpread = true; },
+    ];
+    choices[Math.floor(s.rng() * choices.length)]();
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -995,6 +1021,7 @@ const SKILLS = {
     chargeToken: onClickChargeToken,
     chargeOne: onClickChargeOne,
     chargeSpread: onClickChargeSpread,
+    hailMary: onClickHailMary,
 };
 
 // ---- Rendering ------------------------------------------------------------
