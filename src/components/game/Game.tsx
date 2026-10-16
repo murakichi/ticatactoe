@@ -97,6 +97,7 @@ export const Game = (props: GameProps) => {
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
+            case 'onClickSerum': onClickSerum(); break;
         }
     };
 
@@ -1559,6 +1560,13 @@ export const Game = (props: GameProps) => {
                         disabled={checkSkillDisable(skillCosts.onClickYingYangSkill)}
                         onHoverStart={currentYinYangMode === 'ying' ? () => showPreview(kyokoPreview()) : undefined}
                         onHoverEnd={currentYinYangMode === 'ying' ? clearPreview : undefined}
+                    />
+                    <SkillButton
+                        onClick={onClickSerum}
+                        buttonText={`血清-${calculateCost(skillCosts.onClickSerum, false, true)}`}
+                        paragraph='自陣のコマの毒をすべて除去します'
+                        hidden={(heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) === 'poisoner'}
+                        disabled={checkSkillDisable(skillCosts.onClickSerum, false, true)}
                     />
                     {shuffleSkillDefs.map((s) => (
                         <SkillButton

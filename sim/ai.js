@@ -384,6 +384,18 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
+    if ((character !== 'poisoner' || availableSkills.includes(17))) {
+        const serumCost = calculateCost(s, skillCosts.onClickSerum, false, true);
+        let doomed = 0;
+        for (const sq of board) {
+            if (sq.player !== me) continue;
+            const p = sq.effects.filter(e => e.effect === '☠').length;
+            if (p > 0 && p >= sq.bind) doomed++;
+        }
+        if (doomed >= 1) spend(serumCost, 'serum');
+    }
+
     // --- トークン系 ---
     if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, skillCosts.onClickPoisonToken, true, true);
