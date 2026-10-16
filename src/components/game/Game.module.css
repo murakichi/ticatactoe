@@ -253,6 +253,58 @@
     cursor: default;
 }
 
+/* ===== モバイル: 両プレイヤーのパネルを盤面の上に横並びで表示 ===== */
+@media (max-width: 720px) {
+    /* .main を display: contents にして、パネル/盤面/スキル/ログを .game の直接のグリッド項目として並べ替える */
+    .game {
+        padding: var(--space-3) var(--space-2);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
+    }
+
+    .main {
+        display: contents;
+    }
+
+    /* パネルは行1(💙=左 / ⭕=右)に自動配置。盤面→スキル→ログの順に固定する(ログが一番下) */
+    .boardWrap {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        align-items: center;
+    }
+
+    .skills {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        margin-top: var(--space-3);
+    }
+
+    .log {
+        grid-column: 1 / -1;
+        grid-row: 4;
+        width: 100%;
+        margin-top: var(--space-3);
+    }
+
+    .panel {
+        width: auto;
+        min-width: 0;
+        padding: var(--space-2);
+        gap: 4px;
+    }
+
+    .avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 22px;
+    }
+
+    .name {
+        font-size: 13px;
+    }
+}
+
 /* ===== スキル ===== */
 .skills {
     margin-top: var(--space-6);
