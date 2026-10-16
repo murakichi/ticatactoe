@@ -22,7 +22,10 @@ const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
-const EXP = { spread: null, lockVs: (process.env.EXP_LOCK_VS || 'necromancer').split(','), lockBind: parseInt(process.env.EXP_LOCK_BIND || '3', 10) };
+const EXP = { spread: null, lockVs: (process.env.EXP_LOCK_VS || 'necromancer,poisoner,yinYangMaster').split(','), lockBind: parseInt(process.env.EXP_LOCK_BIND || '3', 10) };
+const EXP_NECRO_LOCKED = parseInt(process.env.EXP_NECRO_LOCKED || '0', 10);
+const EXP_NECRO_CORPSES = parseInt(process.env.EXP_NECRO_CORPSES || '3', 10);
+const EXP_NECRO_ABS = parseInt(process.env.EXP_NECRO_ABS || '2', 10);
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -508,8 +511,9 @@ function chooseSkills(s, availableSkills) {
                 let absorbable = 0;
                 for (const sq of board) {
                     if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
+                    else if (EXP_NECRO_LOCKED && isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= EXP_NECRO_LOCKED && sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(ncost, 'necromancy');
+                if (corpses >= EXP_NECRO_CORPSES || absorbable >= EXP_NECRO_ABS) spend(ncost, 'necromancy');
             }
         }
 
@@ -704,8 +708,8 @@ function faithfulMakeMove(s) {
     // 「蘇生中/発動間近のときだけ」ロックする版は 0.422 でむしろ悪化 (後出しでは遅い)。
     // 対照: 敵が「あなた」なら変化なし(0.686→0.693)、敵が巨人なら悪化(0.493→0.403)で、効果は対ネクロ特有。
     // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
-    if (curChar(s) !== 'tactician' && curChar(s) !== 'necromancer'
-        && otherSeats(s).some((seat) => EXP.lockVs.includes(s.chars[seat]))
+    if (curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
+        && otherSeats(s).some((seat) => EXP.lockVs.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
         && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
         const target = bestAntiNecroLockTarget(s.board, me);
         if (target !== null) {
