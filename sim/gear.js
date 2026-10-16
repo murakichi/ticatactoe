@@ -10,7 +10,7 @@ const GEAR_PARAMS = {
     lockBind: 6,
     ironLockBind: 9,
     emptyLockLife: 1,
-    bindingLockChance: 0.3,
+    bindingLockChance: 0.5,
     quadCount: 4,
     afterglowDelta: -1,
     luckyPurseChance: 0.2,
