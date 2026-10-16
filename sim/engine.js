@@ -408,6 +408,12 @@ function placeMove(s, i) {
         if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
         if (poison > 0 && hadLife && sq.bind === 0 && k !== i) spreadOrigins.push(k);
+        // 毒でライフが尽きたマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1
+        if (poison > 0 && hadLife && sq.bind === 0 && k !== i) {
+            board[k] = { player: undefined, bind: 0, effects: [] };
+            if (s.heartChar === 'poisoner') s.heartMagic += 1;
+            if (s.circleChar === 'poisoner') s.circleMagic += 1;
+        }
     }
     const hadPoisonAtTarget = board[i].effects.some((e) => e.effect === '☠');
 
@@ -790,8 +796,9 @@ function onClickNecromancy(s) {
 }
 
 // ---- 毒使い スキル ----
+const MIASMA_MIN_COST = 1; // Game.tsx / skillCosts.ts と同値
 function miasmaCost(s) {
-    return Math.max(0, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
+    return Math.max(MIASMA_MIN_COST, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
 }
 function onClickMiasma(s) {
     s.useMiasma = true;

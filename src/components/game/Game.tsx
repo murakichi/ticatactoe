@@ -9,7 +9,7 @@ import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange, surroundRange } from './boardGeometry';
-import { skillCosts } from './skillCosts';
+import { skillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
 
@@ -397,6 +397,7 @@ export const Game = (props: GameProps) => {
 
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
+        let poisonVanished = 0;
         for (let s = 0; s < nextBoard.length; s++) {
             const square = nextBoard[s];
             const hadLife = square.bind > 0;
@@ -408,7 +409,18 @@ export const Game = (props: GameProps) => {
                 square.effects = square.effects.filter((x) => x.effect !== '🔑');
             }
             // 毒持ちのマスが 0 に落ちた瞬間に拡散の起点として記録
-            if (poison > 0 && hadLife && square.bind === 0 && s !== i) spreadOrigins.push(s);
+            if (poison > 0 && hadLife && square.bind === 0 && s !== i) {
+                spreadOrigins.push(s);
+                // 毒でライフが尽きたマスは消える（空きマスに戻る）
+                nextBoard[s] = { player: undefined, bind: 0, effects: [] };
+                poisonVanished++;
+            }
+        }
+        // 毒使い側は、毒で空いたマス1つにつき魔力+1
+        if (poisonVanished > 0) {
+            if (props.heartSelectedCharacter === 'poisoner') setHeartMagic((m) => m + poisonVanished);
+            if (props.circleSelectedCharacter === 'poisoner') setCircleMagic((m) => m + poisonVanished);
+            addLog(`毒でマスが${poisonVanished}個消えた${poisonerInPlay ? '（毒使いの魔力+' + poisonVanished + '）' : ''}`);
         }
 
         let newBind: number;
@@ -591,9 +603,9 @@ export const Game = (props: GameProps) => {
     const [useMiasma, setUseMiasma] = useState<boolean>(false);
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
-    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、0未満は0
+    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、下限は MIASMA_MIN_COST
     const miasmaCost = (player: Player = currentTurnPlayer): number =>
-        Math.max(0, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true, player));
+        Math.max(MIASMA_MIN_COST, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true, player));
 
     const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);
