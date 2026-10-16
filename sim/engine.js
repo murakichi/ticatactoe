@@ -59,9 +59,6 @@ function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0) {
     let m;
     if (characterId === 'yinYangMaster') m = yinYangMode === 'yang' ? L.yinYangMaster_yang : L.yinYangMaster_ying;
     else m = L[characterId] != null ? L[characterId] : L.default;
-    // 実験: 毒使いは自陣に毒があるとライフが倍（POISON_LIFE=add_double: (m+毒数)*2 / flat_double: m*2）
-    if (characterId === 'poisoner' && lifeBonus > 0 && process.env.POISON_LIFE === 'add_double') m = (m + lifeBonus) * 2, lifeBonus = 0;
-    else if (characterId === 'poisoner' && lifeBonus > 0 && process.env.POISON_LIFE === 'flat_double') m = m * 2, lifeBonus = 0;
     return Math.floor(normRand(m + lifeBonus, config.lifeStd, rng));
 }
 
@@ -178,10 +175,10 @@ function poisonCountFor(board, player) {
 function poisonerInPlay(s) {
     return s.heartChar === 'poisoner' || s.circleChar === 'poisoner';
 }
-// 実験(POISON_DOUBLE=1: 毒トークンも倍 / =2: トークンは倍にしない): 毒使いの駒に毒が付いた瞬間、そのマスのライフが倍になる
-const POISON_MULT = parseFloat(process.env.POISON_MULT || '2');
+// 毒使いの駒に毒が付いた瞬間、そのマスのライフが1.5倍（四捨五入）になる。Game.tsx の POISON_LIFE_MULT と同値
+const POISON_MULT = 1.5;
 function poisonStrike(s, sq) {
-    if (!['1', '2'].includes(process.env.POISON_DOUBLE) || !s || !sq.player) return;
+    if (!s || !sq.player) return;
     const ch = sq.player === HEART ? s.heartChar : s.circleChar;
     if (ch === 'poisoner') sq.bind = Math.round(sq.bind * POISON_MULT);
 }
@@ -833,7 +830,7 @@ function onClickInjection(s) {
 }
 function onClickPoisonToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (process.env.POISON_DOUBLE === '1' && curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
+    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
     spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
