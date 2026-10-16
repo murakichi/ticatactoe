@@ -20,6 +20,7 @@ const WIN_LINES = [
 ];
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
+const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 破壊範囲 (engine.js の STOMP_AREA / JUDGE_AREA と一致)
@@ -79,6 +80,29 @@ function bestMiasmaTarget(board, me, opp) {
         if (enemies > bestEnemies) { bestEnemies = enemies; bestIdx = i; }
     }
     return bestEnemies >= 1 ? bestIdx : null;
+}
+
+// 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰で bind が 0 になれば消える。
+// 消えるまでの手数が少なく、敵のライン価値(LINE_SCORES)が高いコマを狙う。なければ null
+function bestInjectionTarget(board, me, opp, minValue) {
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < 16; i++) {
+        const sq = board[i];
+        if (sq.player !== opp) continue;
+        const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数
+        const turns = Math.ceil(sq.bind / (1 + p)); // 1手ごとに 1+毒数 減る
+        if (turns > 2) continue;
+        let val = 0;
+        for (const line of WIN_LINES) {
+            if (!line.includes(i)) continue;
+            let oc = 0, mc = 0;
+            for (const idx of line) { if (board[idx].player === opp) oc++; else if (board[idx].player === me) mc++; }
+            if (mc === 0) val += LINE_SCORES[oc];
+        }
+        val = turns === 1 ? val : val / 2;
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestVal >= minValue ? bestIdx : null;
 }
 
 // ---- helpers ----
@@ -498,6 +522,19 @@ function faithfulMakeMove(s) {
             SKILLS.lock(s);
             placeMove(s, threats[0]);
             return { move: threats[1], turnEnded: false };
+        }
+    }
+
+    // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+    if (INJ_MIN > 0 && curChar(s) === 'poisoner' && availableSkills.includes(15)
+        && magic >= calculateCost(s, skillCosts.onClickInjection, false, true)
+        && countReaches(s.board, me, opp) === 0) {
+        const target = bestInjectionTarget(s.board, me, opp, INJ_MIN);
+        if (target !== null) {
+            SKILLS.injection(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
         }
     }
 
