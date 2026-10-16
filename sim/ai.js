@@ -351,8 +351,7 @@ function chooseSkills(s, availableSkills) {
     // 軍師は全軍突撃のコストをトークンで下げるため温存すると 0.468→0.198 と大幅悪化
     let reserve = 0;
     if (character === 'necromancer') {
-        const active = me === HEART ? s.remainHeartNecro > 0 : s.remainCircleNecro > 0;
-        if (!active) reserve = me === HEART ? s.currentHeartNecroCost : s.currentCircleNecroCost;
+        if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
