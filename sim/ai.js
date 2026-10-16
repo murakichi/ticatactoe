@@ -22,6 +22,8 @@ const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
+// 対策ロックの対象(敵がこのキャラなら、自コマを事前にロックして守る)
+const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -544,7 +546,9 @@ function chooseSkills(s, availableSkills) {
                 for (const sq of board) {
                     if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(ncost, 'necromancy');
+                // 死体が1つでもあれば即発動。相手がロックで守っても蘇生の窓(4手番)の間に切れるので待つ意味がない
+                // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
+                if (corpses >= 1 || absorbable >= 2) spend(ncost, 'necromancy');
             }
         }
 
@@ -743,13 +747,13 @@ function faithfulMakeMove(s) {
         }
     }
 
-    // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る。
-    // A/B(ネクロ以外6キャラ vs ネクロ、約1200試合×seed3-5): 0.448/0.455/0.456 → 0.631/0.613/0.625 (+16〜18pt)。
-    // 「蘇生中/発動間近のときだけ」ロックする版は 0.422 でむしろ悪化 (後出しでは遅い)。
-    // 対照: 敵が「あなた」なら変化なし(0.686→0.693)、敵が巨人なら悪化(0.493→0.403)で、効果は対ネクロ特有。
-    // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
-    if (curChar(s) !== 'tactician' && curChar(s) !== 'necromancer'
-        && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
+    // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、吸収・毒・凶荒の舞(全コマ-2)で失いそうな低bind(<=3)の自コマを
+    // 事前にロックして守る(ロックはライフを6以上にして貫通を防ぐ)。後出し(蘇生中だけ等)では遅く悪化する。
+    // A/B(自キャラ側の勝率): 対ネクロ 0.448/0.455/0.456 → 0.631/0.613/0.625 (seed3-5)、対陰陽師 +4.5〜+13pt (seed3-5)、
+    // 対毒使い +3.4/+4.4/+12.2/-0.8pt (seed3-6)。対照: 敵が「あなた」なら変化なし、敵が巨人なら悪化(0.493→0.403)で効果は敵の特性に由来
+    // 対象外: 軍師と毒使いはロックに+2/+1コストが乗り運用と競合して悪化。ネクロ同士は未検証。雷霆の巫は変化なし(+0.6pt)
+    if (curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
+        && otherSeats(s).some((seat) => ANTI_LOCK_VS.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
         && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
         const target = bestAntiNecroLockTarget(s.board, me);
         if (target !== null) {
