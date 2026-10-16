@@ -288,6 +288,19 @@ test('勝利は5x5でも4連続（盤の途中でもよい）', () => {
     assert.strictEqual(e.calculateWinner(syms), '🟩');
 });
 
+test('終盤の魔力ボーナス: 3人以上は50ターンごとに手番開始時の魔力が+1ずつ増える。2人戦は増えない', () => {
+    const adv = (n, turn) => {
+        const s = e.newGame({ chars: Array(n).fill('you'), rng: e.makeRng(1) });
+        s.turn = 0; s.magic = Array(n).fill(0); s.currentTurn = turn;
+        e.advanceTurn(s); // 次の席(1)の手番開始
+        return s.magic[1];
+    };
+    assert.strictEqual(adv(3, 49), 1);
+    assert.strictEqual(adv(3, 50), 2);
+    assert.strictEqual(adv(4, 100), 3);
+    assert.strictEqual(adv(2, 100), 1);
+});
+
 test('多人数: AIだけで3〜8人の試合が最後まで進む', () => {
     const ai = require('./ai');
     for (const n of [3, 5, 8]) {
