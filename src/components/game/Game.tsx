@@ -1449,71 +1449,78 @@ export const Game = (props: GameProps) => {
             <div className={styles.skills}>
                 <div className={styles.skillsTitle}>スキル</div>
                 <div className={styles.skillGrid}>
-                    <SkillButton onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickShuffle}
                         buttonText={`シャッフル-${ skillCosts.onClickShuffle}`}
                         paragraph='固定でないスキルをシャッフルします'
                         disabled={checkSkillDisable(skillCosts.onClickShuffle)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickUseLock}
                         buttonText={`ロック-${calculateCost(skillCosts.onClickUseLock)}`}
                         paragraph={`選択したマスを6ターン以上ロックします`}
                         disabled={checkSkillDisable(skillCosts.onClickUseLock)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickTotalAssault}
                         buttonText={`全軍突撃-${totalAssaultCost}`}
                         paragraph={
                             '3ターンの間、ターン終了時にランダムにトークンを設置します コストは使用したトークンの回数×2軽減されます(使用後はカウントがリセットされます)'
                         }
                         hidden={currentCharacter !== 'tactician'}
+                        exclusive
                         disabled={checkSkillDisable(totalAssaultCost - 2)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickStomp}
                         buttonText={`ストンプ-${skillCosts.onClickStomp}`}
                         paragraph={'クリックしたセルと周囲1マスを破壊します'}
                         hidden={currentCharacter !== 'giant'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickStomp)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickJudgeDay}
                         buttonText={`審判の日-${judgeDayCost}`}
                         paragraph='セルをクリックし、審判を下します コストは使用したスキルの回数軽減されます(使用後はカウントがリセットされます)'
                         hidden={currentCharacter !== 'magician'}
+                        exclusive
                         disabled={checkSkillDisable(judgeDayCost)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickToggleYingYang}
                         buttonText={`陰陽転化-${skillCosts.onClickToggleYingYang}`}
                         paragraph={`陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`}
                         hidden={currentCharacter !== 'yinYangMaster'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickToggleYingYang)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickNecromancy}
                         buttonText={`蘇生-${currentNecroCost}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`}
                         paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
                         hidden={currentCharacter !== 'necromancer'}
+                        exclusive
                         disabled={checkSkillDisable(currentNecroCost)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickMiasma}
                         buttonText={`ミアズマ-${miasmaCost()}`}
                         paragraph={'自陣を選択し、周囲1マスの敵コマすべてに毒を1付与します コストは盤面の毒の数だけ軽減されます'}
                         hidden={currentCharacter !== 'poisoner'}
+                        exclusive
                         disabled={magic[turnSeat] < miasmaCost()}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickChargeSpread}
                         buttonText={`帯電拡散-${skillCosts.onClickChargeSpread}`}
                         paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します'}
                         hidden={currentCharacter !== 'electrician'}
+                        exclusive
                         disabled={magic[turnSeat] < skillCosts.onClickChargeSpread}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickYingYangSkll}
                         buttonText={`${currentYinYangMode === 'yang' ? '豊穣の舞' : '凶荒の舞'}-${skillCosts.onClickYingYangSkill}`}
                         paragraph={`${
@@ -1522,11 +1529,12 @@ export const Game = (props: GameProps) => {
                                 : '相手のすべてのコマのライフを-2します 0になったコマは破壊します'
                         }`}
                         hidden={currentCharacter !== 'yinYangMaster'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickYingYangSkill)}
                         onHoverStart={currentYinYangMode === 'ying' ? () => showPreview(kyokoPreview()) : undefined}
                         onHoverEnd={currentYinYangMode === 'ying' ? clearPreview : undefined}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickSerum}
                         buttonText={`血清-${calculateCost(skillCosts.onClickSerum, false, true)}`}
                         paragraph='自陣のコマの毒をすべて除去します'
@@ -1534,7 +1542,7 @@ export const Game = (props: GameProps) => {
                         disabled={checkSkillDisable(skillCosts.onClickSerum, false, true)}
                     />
                     {shuffleSkillDefs.map((s) => (
-                        <SkillButton
+                        <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                             key={s.idx}
                             onClick={s.onClick}
                             buttonText={s.buttonText}
