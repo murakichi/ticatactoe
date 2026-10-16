@@ -34,6 +34,11 @@ export const skillCosts = {
     onClickChargeToken: 3,
     onClickChargeOne: 2,
     onClickChargeSpread: 7,
+    // 雷霆の巫 スキル2 (#40)。sim/config.js の charge.doubleTokenCost / areaCost / randomCost / jammerCost と同値
+    onClickDoubleChargeToken: 6,
+    onClickChargeArea: 5,
+    onClickChargeRandom: 3,
+    onClickJammer: 4,
 };
 
 export type SkillCosts = typeof skillCosts;
@@ -44,3 +49,6 @@ export const MIASMA_MIN_COST = 1;
 
 // 毒使いの駒に毒が付いた瞬間、そのマスのライフにかかる倍率（四捨五入）。sim/engine.js の POISON_MULT と同値
 export const POISON_LIFE_MULT = 1.5;
+
+// 帯電付与・帯電拡散は盤面の⚡の数だけ安くなる(#43)。その下限。sim/config.js の charge.minCost と同値
+export const CHARGE_MIN_COST = 1;

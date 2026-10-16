@@ -3,6 +3,7 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { CHARGE_MIN_COST } from './skillCosts';
 
 /** 席ごとのキャラ（添字 = 席番号。シンボルからは seatOf で引く）。sim/engine.js の s.chars と同じ */
 export type PlayerCharacters = readonly CharacterId[];
@@ -49,7 +50,7 @@ export type FireResult = {
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = []): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
@@ -59,6 +60,8 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number): FireR
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (hasLock(sq)) continue; // ロックは貫通しない
+            // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
+            if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
             board[n] = { ...sq, bind: sq.bind - 1 };
             damaged.push(n);
         }
@@ -89,4 +92,69 @@ export const withCharge = (board: SquareInfo[], cells: number[]): SquareInfo[] =
     const next = board.slice();
     for (const k of cells) next[k] = { ...next[k], effects: [...next[k].effects, { effect: '⚡' }] };
     return next;
+};
+
+/** 盤面全体の⚡の数（スタック込み）。sim/engine.js の boardChargeCount と同じ */
+export const boardChargeCount = (board: SquareInfo[]): number => board.reduce((n, sq) => n + chargeStacks(sq), 0);
+
+/**
+ * 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ基礎コストを軽減してからキャラ補正（calc）をかけ、
+ * 下限は CHARGE_MIN_COST (#43)。sim/engine.js の chargeOneCost / chargeSpreadCost と同じ
+ */
+export const reducedChargeCost = (baseCost: number, board: SquareInfo[], calc: (cost: number) => number): number =>
+    Math.max(CHARGE_MIN_COST, calc(baseCost - boardChargeCount(board)));
+
+/** ランダム帯電の候補マス: 空きマス含む全マスから、無敵マスと🔑ロック中のマスを除く */
+export const randomChargeCandidates = (board: SquareInfo[], chars: PlayerCharacters): number[] =>
+    board.map((sq, i) => (!isShielded(sq, chars) && !hasLock(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** ジャマーが選べるマスか: ⚡があり、無敵マスなら自分のものだけ（弱点を解く唯一の手段）。他人の無敵マスは不可 */
+export const canJam = (board: SquareInfo[], i: number, current: Player, chars: PlayerCharacters): boolean =>
+    chargeStacks(board[i]) > 0 && !(isShielded(board[i], chars) && board[i].player !== current);
+
+/** ジャマーのダメージ対象: i の縦横隣接の敵コマ（ライフ>0・🔑なし。current 以外のコマ） */
+export const jammerTargets = (board: SquareInfo[], i: number, size: number, current: Player): number[] =>
+    orthoNeighbors(i, size).filter((j) => {
+        const sq = board[j];
+        return !!sq.player && sq.player !== current && sq.bind > 0 && !hasLock(sq);
+    });
+
+export type JammerResult = {
+    /** ライフを減らされたマス */
+    damaged: number[];
+    /** ライフが0になったマス */
+    zeroed: number[];
+};
+
+/**
+ * ジャマー: i の⚡のスタック数ぶん、縦横隣接の敵コマのライフを減らし（最小0）、i の⚡を全部消す。
+ * 自分のコマ・🔑付きのコマは対象外。board を直接書き換える。sim/engine.js の exeJammer と同じ
+ */
+export const applyJammer = (board: SquareInfo[], i: number, size: number, current: Player): JammerResult => {
+    const stacks = chargeStacks(board[i]);
+    const damaged = jammerTargets(board, i, size, current);
+    const zeroed: number[] = [];
+    for (const j of damaged) {
+        const bind = Math.max(0, board[j].bind - stacks);
+        board[j] = { ...board[j], bind };
+        if (bind === 0) zeroed.push(j);
+    }
+    board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
+    return { damaged, zeroed };
+};
+
+/** 全マス（空きマス含む）に⚡が1つ以上あるか。sim/engine.js checkDischarge の判定と同じ */
+export const isFullyCharged = (board: SquareInfo[]): boolean => board.length > 0 && board.every((sq) => chargeStacks(sq) > 0);
+
+/**
+ * 過負荷: 全マスが⚡で埋まっていたら、全⚡と全🔑を取り除き、全マスのライフを0にした新しい盤面を返す。
+ * 埋まっていなければ同じ盤面をそのまま返す（元の盤面は変更しない）。sim/engine.js の checkDischarge が同仕様になる想定（ロックも解除）
+ */
+export const applyOverload = (board: SquareInfo[]): SquareInfo[] => {
+    if (!isFullyCharged(board)) return board;
+    return board.map((sq) => ({
+        ...sq,
+        effects: sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑'),
+        bind: 0,
+    }));
 };
