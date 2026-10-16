@@ -19,12 +19,20 @@ class AIPlayer {
     character: CharacterId;
     /** 自分以外の全プレイヤー(2人戦なら1人)。先頭を探索木の「相手役」に使う */
     opponents: Player[];
+    /** 敵のキャラクター(対ネクロ戦略などで参照)。不明なら空 */
+    opponentCharacters: CharacterId[];
     necroActive: boolean = false;
 
-    constructor(playerSymbol: Player, character: CharacterId, opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙']) {
+    constructor(
+        playerSymbol: Player,
+        character: CharacterId,
+        opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
+        opponentCharacters: CharacterId[] = []
+    ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
         this.opponents = opponents;
+        this.opponentCharacters = opponentCharacters;
     }
 
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
@@ -540,6 +548,33 @@ class AIPlayer {
         return bestVal >= minValue ? best : null;
     }
 
+    /**
+     * 対ネクロ: 吸収されそうな低bind(<=3)の未ロック自コマのうち、通っている自ラインの価値が最大のもの。
+     * なければ null (sim/ai.js bestAntiNecroLockTarget と同一)
+     */
+    findAntiNecroLockTarget(board: SquareInfo[]): number | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || sq.effects.some((e) => e.effect === '🔑')) continue;
+            let val = 1;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let mc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === this.playerSymbol) mc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(mc, 4)];
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        }
+        return best;
+    }
+
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
@@ -649,6 +684,20 @@ class AIPlayer {
                     skills: ['onClickUseLock'],
                     lockTargets: [threatSquares[0]],
                 };
+            }
+        }
+
+        // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る (sim/ai.js と同一)。
+        // A/B: ネクロ以外6キャラ vs ネクロ 0.45→0.62 (+16〜18pt)。軍師は+2コストで悪化、ネクロ同士は未検証のため対象外
+        if (
+            this.character !== 'tactician' &&
+            this.character !== 'necromancer' &&
+            this.opponentCharacters.includes('necromancer') &&
+            magic >= this.calculateAICost(costs.onClickUseLock)
+        ) {
+            const lockCell = this.findAntiNecroLockTarget(board);
+            if (lockCell !== null) {
+                return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [lockCell] };
             }
         }
 

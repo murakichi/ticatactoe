@@ -103,7 +103,9 @@ export const Game = (props: GameProps) => {
     const posName = geo.posName;
 
     const aiBySeat = props.players.map((p, seat) =>
-        p.isAI ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat)) : null
+        p.isAI
+            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), props.players.filter((_, i) => i !== seat).map((q) => q.character))
+            : null
     );
     const currentAI = aiBySeat[turnSeat];
     // 全員AIのときだけステップ実行UIを出す
