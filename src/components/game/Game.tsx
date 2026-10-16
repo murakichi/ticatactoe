@@ -400,7 +400,6 @@ export const Game = (props: GameProps) => {
         let poisonVanished = 0;
         for (let s = 0; s < nextBoard.length; s++) {
             const square = nextBoard[s];
-            const hadLife = square.bind > 0;
             if ((square.player || square.effects.filter((x) => x.effect === '🔑').length !== 0) && square.bind > 0) square.bind--;
             // 毒: スタック数だけ追加で bind を減らす（毎ターン bind-1 × 毒の数）
             const poison = square.effects.filter((x) => x.effect === '☠').length;
@@ -408,10 +407,10 @@ export const Game = (props: GameProps) => {
             if (square.bind === 0) {
                 square.effects = square.effects.filter((x) => x.effect !== '🔑');
             }
-            // 毒持ちのマスが 0 に落ちた瞬間に拡散の起点として記録
-            if (poison > 0 && hadLife && square.bind === 0 && s !== i) {
+            // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。
+            // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
+            if (poison > 0 && square.bind === 0 && square.player && s !== i) {
                 spreadOrigins.push(s);
-                // 毒でライフが尽きたマスは消える（空きマスに戻る）
                 nextBoard[s] = { player: undefined, bind: 0, effects: [] };
                 poisonVanished++;
             }
