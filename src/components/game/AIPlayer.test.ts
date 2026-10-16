@@ -151,3 +151,34 @@ describe('AIPlayer 多人数', () => {
         expect(move).not.toBeNull();
     });
 });
+
+describe('ヘイルメアリー (詰みでの使用)', () => {
+    const costs = { onClickHailMary: 6, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    // ⭕が3つの脅威マス(3, 12, 15)を同時に持つ: 単ロックでは塞げない
+    const lostBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2, 4, 8, 5, 10].forEach((i) => put(b, i, '⭕'));
+        return b;
+    };
+
+    it('ロックで防げない詰みなら、魔力が足りてスロットにあれば使う', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const r = ai.makeMove(lostBoard(), 10, costs, 0, 5, [23, 0, 1], false);
+        expect(r.hailMary).toBe(true);
+    });
+    it('魔力不足・スロットなし・自分に即勝ちがあるときは使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.makeMove(lostBoard(), 5, costs, 0, 5, [23, 0, 1], false).hailMary).toBeUndefined();
+        expect(ai.makeMove(lostBoard(), 10, costs, 0, 5, [0, 1, 2], false).hailMary).toBeUndefined();
+        const b = lostBoard();
+        [13, 14, 15].forEach((i) => put(b, i, '💙')); // 12 に置けば 💙 の勝ち
+        expect(ai.makeMove(b, 10, costs, 0, 5, [23, 0, 1], false).hailMary).toBeUndefined();
+    });
+    it('planHailMary: ストンプは敵の脅威を減らす中心を返し、審判の日は着手を返さない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const stomp = ai.planHailMary(lostBoard(), 'ストンプ', 5);
+        expect(stomp.target).not.toBeNull();
+        expect(ai.planHailMary(lostBoard(), '審判の日', 5).move).toBeNull();
+        expect(ai.planHailMary(lostBoard(), '蘇生', 5).target).toBeNull();
+    });
+});

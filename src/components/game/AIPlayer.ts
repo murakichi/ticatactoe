@@ -21,6 +21,8 @@ export type AIResult = {
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
     /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
     chargeClicks?: { skill: string; target: number }[];
+    /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
+    hailMary?: boolean;
 };
 
 class AIPlayer {
@@ -743,6 +745,61 @@ class AIPlayer {
         return bestNet >= 2 ? bestIdx : null;
     }
 
+    /** ヘイルメアリー用: 範囲破壊(ストンプ/審判の日)後に敵の脅威マスが最も減る中心。同点なら壊せる敵が多い方 */
+    findRescueCenter(board: SquareInfo[], kind: 'stomp' | 'judge'): number | null {
+        const geo = geometryForCells(board.length);
+        const me = this.playerSymbol;
+        let bestIdx: number | null = null, bestThreats = Infinity, bestKilled = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i)) continue;
+            const nb = board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
+            let killed = 0;
+            for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
+                const sq = nb[idx];
+                if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+                if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱')) continue;
+                if (this.isEnemy(sq.player)) killed++;
+                nb[idx] = { player: undefined, bind: 0, effects: [] };
+            }
+            if (!nb[i].player) nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
+            const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;
+            if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    /** ヘイルメアリーで当選したスキルに対する、AIの対象クリックと着手 (target=null ならクリック不要) */
+    planHailMary(board: SquareInfo[], skillName: string, life: number): { target: number | null; move: number | null } {
+        this.updateShield(board);
+        const me = this.playerSymbol;
+        const geo = geometryForCells(board.length);
+        switch (skillName) {
+            case 'ストンプ': {
+                const target = this.findRescueCenter(board, 'stomp');
+                if (target === null) return { target: null, move: this.getBestMove(board, life) };
+                return { target, move: this.getBestMove(this.simulateStomp(board, target, me, life), life) };
+            }
+            case '審判の日':
+                // 審判の日は対象クリックの着手で手番が終わる
+                return { target: this.findRescueCenter(board, 'judge'), move: null };
+            case 'ミアズマ': {
+                let best = board.findIndex((sq) => sq.player === me), bestN = -1;
+                board.forEach((sq, i) => {
+                    if (sq.player !== me) return;
+                    const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player)).length;
+                    if (n > bestN) { bestN = n; best = i; }
+                });
+                return { target: best >= 0 ? best : 0, move: this.getBestMove(board, life) };
+            }
+            case '帯電拡散': {
+                const start = this.bestChargeSpreadTarget(board) ?? board.findIndex((sq) => sq.player);
+                return { target: start >= 0 ? start : 0, move: this.getBestMove(board, life) };
+            }
+            default:
+                return { target: null, move: this.getBestMove(board, life) };
+        }
+    }
+
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(
         board: SquareInfo[],
@@ -796,6 +853,14 @@ class AIPlayer {
                     skills: [chosen.skill],
                     lockTargets,
                 };
+            }
+            // 詰み(ロックでは全脅威を塞げない)で自分に即勝ちもない: ヘイルメアリーに賭ける
+            if (
+                availableSkills.includes(23) &&
+                magic >= this.calculateAICost(costs.onClickHailMary) &&
+                this.findThreatSquares(board, this.playerSymbol).length === 0
+            ) {
+                return { move: null, skills: [], hailMary: true };
             }
             // 必要数を1つのロックでカバーできない場合: 単ロックで最低1つは塞ぐ
             // (かつてここに「シャッフルで防御札を引き直す」分岐があったが、発火条件が

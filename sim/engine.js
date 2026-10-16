@@ -969,7 +969,7 @@ function exeChargeSpread(s, i) {
 // ヘイルメアリー (idx 23): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
 // 対象選択が要るもの(ストンプ/審判の日/ミアズマ/帯電拡散)は use* フラグを立てるだけ。対象クリックは呼び出し側(AI)の責任
 function onClickHailMary(s) {
-    spendMagic(s, skillCosts.onClickHailMary);
+    spendMagic(s, calculateCost(s, skillCosts.onClickHailMary));
     const choices = [
         () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
         () => { s.useStomp = true; },

@@ -121,8 +121,15 @@ export const Game = (props: GameProps) => {
     // AI同士の対戦時のステップ実行制御 (autoPlay=false なら「次の手番」ボタンで1ターンずつ進める)
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
     const [stepRequest, setStepRequest] = useState<number>(0);
+    // ヘイルメアリーのルーレット演出 (intro=「ヘイルメアリー！」/ spin=抽選中 / reveal=当選)。非 null の間は入力とAIキューを止める
+    const [hailMarySpin, setHailMarySpin] = useState<{ label: string; phase: 'intro' | 'spin' | 'reveal' } | null>(null);
 
     const executeSkillForAI = (skill: string) => {
+        // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
+        if (skill.startsWith('onClickHailMary:')) {
+            exeHailMary(skill.slice('onClickHailMary:'.length));
+            return;
+        }
         switch (skill) {
             case 'onClickToken': onClickToken(); break;
             case 'onClickDoubleToken': onClickDoubleToken(); break;
@@ -151,12 +158,11 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
-            case 'onClickHailMary': onClickHailMary(); break;
         }
     };
 
     useEffect(() => {
-        if (pendingAIMove !== null && pendingAIMove.length > 0) {
+        if (pendingAIMove !== null && pendingAIMove.length > 0 && !hailMarySpin) {
             const timer = setTimeout(() => {
                 const [next, ...rest] = pendingAIMove;
                 if (typeof next === 'string') executeSkillForAI(next);
@@ -165,7 +171,7 @@ export const Game = (props: GameProps) => {
             }, 200);
             return () => clearTimeout(timer);
         }
-    }, [pendingAIMove]);
+    }, [pendingAIMove, hailMarySpin]);
 
     const runAIMove = () => {
         const ai = currentAI!;
@@ -182,6 +188,17 @@ export const Game = (props: GameProps) => {
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         setLockedSkillsAt(turnSeat, aiLocks);
+
+        // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選んでキューに積む
+        if (result.hailMary) {
+            const picked = randomPick(hailMaryChoices);
+            const plan = ai.planHailMary(currentBoard, picked.name, life);
+            const steps: (number | string)[] = [`onClickHailMary:${picked.name}`];
+            if (plan.target !== null) steps.push(plan.target);
+            if (plan.move !== null) steps.push(plan.move);
+            setPendingAIMove(steps);
+            return;
+        }
 
         // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
         // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
@@ -342,6 +359,7 @@ export const Game = (props: GameProps) => {
     }, [history]);
 
     const onCellClick = (i: number) => {
+        if (hailMarySpin) return;
         setPreviewCells([]);
         // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)。対象選択スキルも含めて受け付けない
         if (isShielded(currentBoard[i], characters)) return;
@@ -1034,14 +1052,32 @@ export const Game = (props: GameProps) => {
     ];
     // ヘイルメアリーで引いたスキル名。マス選択型は演出より先に画面へ出すため、一定時間表示する
     const [hailMaryPick, setHailMaryPick] = useState<string | null>(null);
-    const onClickHailMary = () => {
-        const picked = randomPick(hailMaryChoices);
-        setHailMaryPick(picked.name);
-        setTimeout(() => setHailMaryPick(null), 2500);
+    const HAIL_MARY_INTRO_MS = 800;
+    const HAIL_MARY_REVEAL_MS = 900;
+    // forcedName: AI が事前に対象を決めた当選スキル。省略時はここでランダムに選ぶ
+    const exeHailMary = (forcedName?: string) => {
+        const picked = hailMaryChoices.find((c) => c.name === forcedName) ?? randomPick(hailMaryChoices);
         addLog(`「ヘイルメアリー」を使用 → 「${picked.name}」が発動`);
-        spendMagic(skillCosts.onClickHailMary);
-        picked.run();
+        spendMagic(calculateCost(skillCosts.onClickHailMary));
+        setHailMarySpin({ label: 'ヘイルメアリー！', phase: 'intro' });
+        // 抽選中は表示を回し、終盤ほど間隔を空けて当選スキルで止める
+        let at = HAIL_MARY_INTRO_MS;
+        const ticks = 16;
+        const start = Math.floor(Math.random() * hailMaryChoices.length);
+        for (let k = 0; k < ticks; k++) {
+            const name = hailMaryChoices[(start + k) % hailMaryChoices.length].name;
+            setTimeout(() => setHailMarySpin({ label: name, phase: 'spin' }), at);
+            at += 60 + k * k * 1.2;
+        }
+        setTimeout(() => setHailMarySpin({ label: picked.name, phase: 'reveal' }), at);
+        setTimeout(() => {
+            setHailMarySpin(null);
+            setHailMaryPick(picked.name);
+            setTimeout(() => setHailMaryPick(null), 2500);
+            picked.run();
+        }, at + HAIL_MARY_REVEAL_MS);
     };
+    const onClickHailMary = () => exeHailMary();
 
     // --- 毒使い 固有スキル「ミアズマ」 ---
     const onClickMiasma = () => {
@@ -1476,6 +1512,11 @@ export const Game = (props: GameProps) => {
                             onCellLeave={onCellLeave}
                         />
                         <BoardEffects effect={boardEffect} size={geo.size} />
+                        {hailMarySpin && (
+                            <div className={styles.hmOverlay}>
+                                <div className={`${styles.hmBand} ${styles[`hm_${hailMarySpin.phase}`]}`}>{hailMarySpin.label}</div>
+                            </div>
+                        )}
                     </div>
                     <div className={styles.controls}>
                         <button className={styles.btn} onClick={onClickRestart}>
@@ -1522,7 +1563,7 @@ export const Game = (props: GameProps) => {
                     </div>
                 </div>
             </div>
-            <div className={styles.skills}>
+            <div className={`${styles.skills}${hailMarySpin ? ` ${styles.skillsBusy}` : ''}`}>
                 <div className={styles.skillsTitle}>スキル</div>
                 <div className={styles.skillGrid}>
                     <SkillButton onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
