@@ -1,0 +1,169 @@
+import { CharacterId } from '../../types/Character';
+import { SkillCosts, skillCosts } from './skillCosts';
+
+/**
+ * ギア: キャラ選択時に装備する追加パッシブ。長所と短所がセットのものが多い。
+ * ヘッドレス版は sim/gear.js に同じ定義を複製してある（gear.test.ts が一致を確認する）。
+ * 数値はすべて GEAR_PARAMS に集め、説明文もここから描画する（説明文と実装のズレ防止）。
+ */
+export type GearId =
+    | 'emptyLock'
+    | 'ironLock'
+    | 'bindingLock'
+    | 'quadMastery'
+    | 'afterglow'
+    | 'luckyPurse'
+    | 'sturdy'
+    | 'titanCost'
+    | 'reinforce'
+    | 'harvest'
+    | 'toxicBloom'
+    | 'priceWreck'
+    | 'chainDiscount'
+    | 'propagate'
+    | 'lightToken'
+    | 'gambler'
+    | 'vengeance';
+
+export const GEAR_PARAMS = {
+    /** 通常のロック期間(ライフ) */
+    lockBind: 6,
+    /** 堅牢の鍵のロック期間 */
+    ironLockBind: 9,
+    /** 空蔵: 期限切れで生まれる自陣のコマのライフ */
+    emptyLockLife: 1,
+    /** 道連れの鍵: トークン系スキルで置いたコマにロックが付く確率 */
+    bindingLockChance: 0.3,
+    /** 四連の極意: この回数スキルを使うと、次のスキルが無料 */
+    quadCount: 4,
+    /** 余韻: 次ターン1つ目のスキルのコスト変化 */
+    afterglowDelta: -1,
+    /** 幸運の財布: スキルのコストが0になる確率 */
+    luckyPurseChance: 0.2,
+    /** 頑健: ライフ平均 */
+    sturdyLife: 1,
+    /** 剛腕の代償: ライフ平均とスキルコスト */
+    titanLife: 3,
+    titanCost: 2,
+    /** 増援 / 軽量トークン: トークンスキルで置くコマのライフの変化 */
+    reinforceTokenLife: 1,
+    lightTokenLife: -1,
+    /** 軽量トークン: トークン系スキルのコスト変化 */
+    lightTokenCost: -1,
+    /** 収穫: 1回のスキル使用で得られる魔力の上限 */
+    harvestCap: 5,
+    /** 価格破壊: 基礎コストに足すランダム値の範囲 ±N（下限1） */
+    priceRange: 4,
+    /** 賭博師の骰子: ライフ値の標準偏差 */
+    gamblerStd: 5,
+    /** 復讐の刃: 自分のコマを奪われたときの魔力 / 自分が奪取したときの魔力 / 1手での獲得上限 */
+    vengeanceGain: 2,
+    vengeancePenalty: 1,
+    vengeanceCap: 4,
+} as const;
+
+export type GearDef = { id: GearId; name: string; icon: string; desc: string };
+
+const P = GEAR_PARAMS;
+
+export const GEARS: GearDef[] = [
+    { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスがライフ${P.emptyLockLife}の自陣のコマになる` },
+    { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockBind}ターンになる（通常${P.lockBind}）` },
+    { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークン系スキルで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
+    { id: 'quadMastery', name: '四連の極意', icon: '🎴', desc: `1ターンにスキルを${P.quadCount}回使うと、そのターンの次のスキルのコストが0になる` },
+    { id: 'afterglow', name: '余韻', icon: '🔔', desc: `スキルを使った次のターン、1つ目のスキルのコスト${P.afterglowDelta}（下限1）` },
+    { id: 'luckyPurse', name: '幸運の財布', icon: '👛', desc: `スキル使用時、${P.luckyPurseChance * 100}%の確率で消費コストが0になる` },
+    { id: 'sturdy', name: '頑健', icon: '🛡️', desc: `ライフ平均+${P.sturdyLife}` },
+    { id: 'titanCost', name: '剛腕の代償', icon: '🏋️', desc: `ライフ平均+${P.titanLife}。全スキルのコスト+${P.titanCost}` },
+    { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンスキルで置くコマのライフ+${P.reinforceTokenLife}` },
+    { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクト(🌱🔑☠⚡)を付与するスキルを使うと、付与した数だけ魔力+1（1回につき最大${P.harvestCap}）` },
+    { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '毒を付与するスキルを使うと、自陣のコマ1つにバッズも付く（付与先が自陣ならそのコマ。敵ならランダムな自陣のコマ）' },
+    { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがそれぞれランダムに-${P.priceRange}〜+${P.priceRange}される（下限1。試合中は固定）` },
+    { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: 'スキルを使うたび、そのターンの間は全スキルのコスト-1（重複する。下限1）' },
+    { id: 'propagate', name: '伝播', icon: '🌊', desc: 'エフェクト付きトークンを置くと、周囲8マスのランダムなコマに同じエフェクトが広がる' },
+    { id: 'lightToken', name: '軽量トークン', icon: '🪶', desc: `トークン系スキルのコスト${P.lightTokenCost}、ただし置くコマのライフ${P.lightTokenLife}` },
+    { id: 'gambler', name: '賭博師の骰子', icon: '🎲', desc: `ライフ値のばらつきが大きくなる（標準偏差を${P.gamblerStd}に。平均は変わらない）` },
+    { id: 'vengeance', name: '復讐の刃', icon: '🗡️', desc: `自分のコマを奪われると魔力+${P.vengeanceGain}（1手で最大+${P.vengeanceCap}）。自分が敵のコマを奪取すると魔力-${P.vengeancePenalty}` },
+];
+
+export const GEAR_IDS: GearId[] = GEARS.map((g) => g.id);
+export const gearDefOf = (id: GearId): GearDef => GEARS.find((g) => g.id === id)!;
+
+/** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
+export const gearSlotsFor = (character: CharacterId): number => (character === 'you' ? 3 : 2);
+
+type Gears = readonly GearId[] | undefined;
+export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.includes(id);
+
+/** ライフ平均への加算（頑健 / 剛腕の代償） */
+export const gearLifeBonus = (gears: Gears): number =>
+    (hasGear(gears, 'sturdy') ? P.sturdyLife : 0) + (hasGear(gears, 'titanCost') ? P.titanLife : 0);
+
+/** ライフ値の標準偏差。賭博師の骰子があれば広がる */
+export const gearLifeStd = (gears: Gears, base: number): number => (hasGear(gears, 'gambler') ? P.gamblerStd : base);
+
+/** ロックの期間（ライフ）。堅牢の鍵で延びる */
+export const gearLockBind = (gears: Gears): number => (hasGear(gears, 'ironLock') ? P.ironLockBind : P.lockBind);
+
+/** トークンスキルで置くコマのライフ補正（増援 / 軽量トークン）。最終ライフは1以上に丸める側で行う */
+export const gearTokenBindDelta = (gears: Gears): number =>
+    (hasGear(gears, 'reinforce') ? P.reinforceTokenLife : 0) + (hasGear(gears, 'lightToken') ? P.lightTokenLife : 0);
+
+/** 手番内のスキル使用状況。コスト補正の入力になる */
+export type CostContext = {
+    /** この手番にすでに使ったスキルの数 */
+    skillsThisTurn: number;
+    /** 余韻の割引が有効か（前の手番にスキルを使った）。その手番の1つ目のスキルまで */
+    echoReady: boolean;
+};
+
+/**
+ * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。
+ * 下げる方向の補正は下限1（もともと0のコストは0のまま）。四連の極意の無料だけは0にする。
+ */
+export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, isToken: boolean = false): number => {
+    if (!gears || gears.length === 0) return cost;
+    if (hasGear(gears, 'quadMastery') && ctx.skillsThisTurn === P.quadCount) return 0;
+    let delta = 0;
+    if (hasGear(gears, 'titanCost')) delta += P.titanCost;
+    if (hasGear(gears, 'afterglow') && ctx.echoReady && ctx.skillsThisTurn === 0) delta += P.afterglowDelta;
+    if (hasGear(gears, 'chainDiscount')) delta -= ctx.skillsThisTurn;
+    if (hasGear(gears, 'lightToken') && isToken) delta += P.lightTokenCost;
+    const next = cost + delta;
+    return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
+};
+
+/** 価格破壊の対象にするスキル。シャッフル(1固定)とチャージは対象外。蘇生は墓地と召喚数に連動するので対象外 */
+export const PRICEABLE_KEYS: (keyof SkillCosts)[] = (Object.keys(skillCosts) as (keyof SkillCosts)[]).filter(
+    (k) => !['onClickShuffle', 'onClickCharge', 'onClickDepressionCherry'].includes(k)
+);
+
+export type PriceOffsets = Partial<Record<keyof SkillCosts, number>>;
+
+/** 価格破壊: スキルごとの加算値を抽選する（rng は [0,1) を返す関数） */
+export const rollPriceOffsets = (rng: () => number): PriceOffsets => {
+    const out: PriceOffsets = {};
+    for (const k of PRICEABLE_KEYS) out[k] = Math.floor(rng() * (2 * P.priceRange + 1)) - P.priceRange;
+    return out;
+};
+
+/** 基礎コスト表に価格破壊の加算値を適用する（下限1）。offsets が無ければ元の表をそのまま返す */
+export const applyPriceOffsets = (base: SkillCosts, offsets: PriceOffsets | undefined): SkillCosts => {
+    if (!offsets) return base;
+    const out = { ...base };
+    for (const k of PRICEABLE_KEYS) out[k] = Math.max(1, base[k] + (offsets[k] ?? 0));
+    return out;
+};
+
+/** ランダム付与: 重複なく slots 個を選ぶ（rng は [0,1) を返す関数） */
+export const randomGears = (slots: number, rng: () => number = Math.random): GearId[] => {
+    const pool = [...GEAR_IDS];
+    const out: GearId[] = [];
+    for (let i = 0; i < slots && pool.length > 0; i++) {
+        out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+    }
+    return out;
+};
+
+/** トークン系スキルが付けるエフェクト（伝播・収穫の対象） */
+export type TokenEffect = '🌱' | '☠' | '⚡';

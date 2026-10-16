@@ -48,6 +48,8 @@ function makeRng(seed) {
 
 const config = require('./config');
 const { boardSizeFor, geometryOf, geometryForCells } = require('./geometry');
+const gear = require('./gear');
+const { GEAR_PARAMS: GP, hasGear } = gear;
 
 // ライフ減衰のタイミング (src/components/game/decay.ts と同じ規則)。
 // この人数以上では「手番が1周するごとに1回」(= 着手 N 回につき1回)。それ未満は着手のたび。issue #30
@@ -87,12 +89,12 @@ function normRand(m, s, rng) {
 
 // [FAITHFUL] util.ts calculateLife — means/std come from config.js (balance knobs)
 // lifeBonus: 毒使いの「自陣の毒の数だけライフ期待値+1」用
-function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0) {
+function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0, std = config.lifeStd) {
     const L = config.lifeMeans;
     let m;
     if (characterId === 'yinYangMaster') m = yinYangMode === 'yang' ? L.yinYangMaster_yang : L.yinYangMaster_ying;
     else m = L[characterId] != null ? L[characterId] : L.default;
-    return Math.floor(normRand(m + lifeBonus, config.lifeStd, rng));
+    return Math.floor(normRand(m + lifeBonus, std, rng));
 }
 
 // [FAITHFUL] util.ts calculateWinner — purely by player symbol。盤サイズは配列長から決まる
@@ -281,6 +283,71 @@ function connectedPieces(board, start, size) {
     return [...seen];
 }
 
+// ---- ギアのエフェクト系ヘルパー ----
+// ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
+function applyLock(s, idx) {
+    const sq = s.board[idx];
+    const g = s.gears[s.turn];
+    const owner = hasGear(g, 'emptyLock') && !sq.player ? s.turn + 1 : undefined;
+    sq.effects.push(owner ? { effect: '🔑', value: owner } : { effect: '🔑' });
+    const bind = gear.gearLockBind(g);
+    if (sq.bind < bind) sq.bind = bind;
+}
+// 毒花: 毒を付与するスキルを使ったとき、自陣のコマ1つにバッズも付く。target が自陣のコマならそこ、なければランダムな自陣のコマ
+function toxicBloom(s, target) {
+    if (!hasGear(s.gears[s.turn], 'toxicBloom')) return;
+    const me = curPlayer(s);
+    let idx = target;
+    if (idx == null || s.board[idx].player !== me) {
+        const mine = [];
+        s.board.forEach((sq, k) => { if (sq.player === me && !isGuarded(s, sq)) mine.push(k); });
+        if (!mine.length) return;
+        idx = randomPick(mine, s.rng);
+    }
+    s.board[idx].effects.push({ effect: '🌱' });
+    bumpStat(s, 'toxicBloom');
+}
+// トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
+// effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
+function afterTokenPlaced(s, idx, effect) {
+    const g = s.gears[s.turn];
+    let granted = effect ? 1 : 0;
+    if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
+        applyLock(s, idx);
+        granted += 1;
+        bumpStat(s, 'bindingLock');
+    }
+    if (effect && hasGear(g, 'propagate')) {
+        const me = curPlayer(s);
+        // 周囲8マスのコマのうち、ロックされておらず、エフェクトの種類に合うもの（バッズ=自陣 / 毒=敵 / ⚡=誰でも）
+        const cands = surroundRange(s, idx).filter((j) => {
+            const sq = s.board[j];
+            if (!sq.player || isGuarded(s, sq)) return false;
+            if (effect === '🌱') return sq.player === me;
+            if (effect === '☠') return sq.player !== me;
+            return true;
+        });
+        if (cands.length) {
+            const j = randomPick(cands, s.rng);
+            s.board[j].effects.push({ effect });
+            if (effect === '☠') poisonStrike(s, s.board[j]);
+            granted += 1;
+            bumpStat(s, 'propagate');
+        }
+    }
+    return granted;
+}
+// 復讐の刃: 魔力の増減を席ごとに記録するための上限つき加算
+function vengeanceGain(s, seat, gained) {
+    if (!hasGear(s.gears[seat], 'vengeance')) return;
+    const room = GP.vengeanceCap - (gained[seat] || 0);
+    const add = Math.min(GP.vengeanceGain, room);
+    if (add <= 0) return;
+    s.magic[seat] += add;
+    gained[seat] = (gained[seat] || 0) + add;
+    bumpStat(s, 'vengeanceMagic', add);
+}
+
 // ---- Game state -----------------------------------------------------------
 function newSquare() {
     return { player: undefined, bind: 0, effects: [] };
@@ -323,6 +390,8 @@ function newGame(opts = {}) {
     const size = opts.size != null ? Math.min(10, Math.max(4, Math.round(opts.size))) : boardSizeFor(n);
     const rng = opts.rng || makeRng(opts.seed == null ? 12345 : opts.seed);
     const fill = (v) => Array.from({ length: n }, () => v);
+    // ギア: 席ごとの装備 (opts.gears[seat] = GearId[])。省略時は全席なし
+    const gears = chars.map((_, i) => ((opts.gears && opts.gears[i]) || []).slice());
     const state = {
         board: Array.from({ length: size * size }, newSquare),
         size,
@@ -356,12 +425,19 @@ function newGame(opts = {}) {
         lockedSkills: Array.from({ length: n }, () => []),
         useChargeOne: false,
         useChargeSpread: false,
+        // ギア。gearSkills=この手番に使ったスキル数 / echoReady=余韻の割引が有効 / echoNext=次の手番に余韻が付く
+        gears,
+        gearSkills: fill(0),
+        echoReady: fill(false),
+        echoNext: fill(false),
+        // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
+        priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(skillCosts, rng)) : null)),
         stats: {},
         winner: undefined,
         log: [],
     };
     defineLegacyAliases(state);
-    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng));
+    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], config.lifeStd)));
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     return state;
 }
@@ -387,15 +463,47 @@ const curMagic = (s) => s.magic[s.turn];
 /** 自分以外の席番号 */
 const otherSeats = (s, seat = s.turn) => s.chars.map((_, i) => i).filter((i) => i !== seat);
 
+// ---- ギア ----
+/** 席ごとのスキルコスト表。価格破壊を装備していればその席の抽選結果、なければ基礎表 */
+function costsOf(s, seat = s.turn) {
+    return s.priceTables[seat] || skillCosts;
+}
+function gearCtx(s, seat) {
+    return { skillsThisTurn: s.gearSkills[seat], echoReady: s.echoReady[seat] };
+}
+/** キャラ補正済みのコストにギアの補正を掛ける */
+function gearCost(s, cost, isToken = false, seat = s.turn) {
+    return gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken);
+}
+/** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
+function noteSkillUsed(s) {
+    s.gearSkills[s.turn]++;
+    s.echoNext[s.turn] = true;
+    s.echoReady[s.turn] = false;
+}
+/** 収穫: エフェクトをn個付与したぶん魔力を得る（上限あり） */
+function harvestMagic(s, n) {
+    if (!hasGear(s.gears[s.turn], 'harvest') || n <= 0) return;
+    const gain = Math.min(n, GP.harvestCap);
+    s.magic[s.turn] += gain;
+    bumpStat(s, 'harvestMagic', gain);
+}
+
+// スキル使用で魔力を払う。幸運の財布なら確率で0円
 function spendMagic(s, amount) {
+    if (amount > 0 && hasGear(s.gears[s.turn], 'luckyPurse') && s.rng() < GP.luckyPurseChance) {
+        amount = 0;
+        bumpStat(s, 'luckyFree');
+    }
     s.magic[s.turn] -= amount;
+    noteSkillUsed(s);
 }
 function bumpMagicCount(s) {
     s.useMagicCount[s.turn]++;
 }
 
 // [FAITHFUL] Game.tsx calculateCost
-function calculateCost(s, cost, isToken = false, isPoison = false) {
+function characterCost(s, cost, isToken, isPoison) {
     const c = curChar(s);
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
@@ -403,10 +511,15 @@ function calculateCost(s, cost, isToken = false, isPoison = false) {
     if (c === 'yinYangMaster' && curYY(s) === 'yang') return cost + 1;
     return cost;
 }
+function calculateCost(s, cost, isToken = false, isPoison = false) {
+    return gearCost(s, characterCost(s, cost, isToken, isPoison), isToken);
+}
 
 // [FAITHFUL] Game.tsx calculateTokenBind
 function calculateTokenBind(s) {
-    return curChar(s) === 'tactician' ? 6 : 4;
+    const base = curChar(s) === 'tactician' ? 6 : 4;
+    const delta = gear.gearTokenBindDelta(s.gears[s.turn]);
+    return delta === 0 ? base : Math.max(1, base + delta);
 }
 
 function budsCount(board, player) {
@@ -454,9 +567,13 @@ function advanceTurn(s) {
         else { s.proliferate[next] = false; s.proliferateCount[next] = 0; }
     }
     s.magic[next] = nextMagic;
-    s.life = calculateLife(ch, s.yy[next], s.rng, ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0);
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
+    // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
+    s.gearSkills[next] = 0;
+    s.echoReady[next] = s.echoNext[next];
+    s.echoNext[next] = false;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
     s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
@@ -476,6 +593,7 @@ function placeMove(s, i) {
     // pending targeted skills consume the click without advancing the turn
     if (s.useChargeOne) {
         board[i].effects.push({ effect: '⚡' });
+        harvestMagic(s, 1);
         s.useChargeOne = false;
         return true;
     }
@@ -484,14 +602,16 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useLock > 0) {
-        board[i].effects.push({ effect: '🔑' });
-        if (board[i].bind < 6) board[i].bind = 6;
+        applyLock(s, i);
+        harvestMagic(s, 1);
         s.useLock -= 1;
         return true;
     }
     if (s.useInjection > 0) {
         board[i].effects.push({ effect: '☠' });
         poisonStrike(s, board[i]);
+        harvestMagic(s, 1);
+        toxicBloom(s, i);
         s.useInjection -= 1;
         return true;
     }
@@ -528,7 +648,14 @@ function placeMove(s, i) {
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0) sq.bind--;
         const poison = sq.effects.filter((e) => e.effect === '☠').length;
         if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
+        // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
+        const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
+        if (expiredLock && expiredLock.value != null && !sq.player) {
+            board[k] = { player: SYMBOLS[expiredLock.value - 1], bind: GP.emptyLockLife, effects: [] };
+            bumpStat(s, 'emptyLockSpawn');
+            continue;
+        }
         // 毒持ちでライフが0のマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1。
         // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
         if (poison > 0 && sq.bind === 0 && sq.player && k !== i) {
@@ -542,6 +669,7 @@ function placeMove(s, i) {
     const cur = curPlayer(s);
     const life = s.life;
     let newBind, newEffects, newPlayer;
+    let capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
     if (board[i].player === cur) {
         newPlayer = board[i].player;
         newBind = board[i].bind + life + 1;
@@ -551,6 +679,7 @@ function placeMove(s, i) {
         if (calc < 0) {
             newPlayer = cur;
             newBind = calc * -1;
+            capturedFrom = board[i].player;
         } else if (calc === 0) {
             newPlayer = undefined;
             newBind = 0;
@@ -575,6 +704,13 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: newBind, effects: newEffects };
+
+    // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
+    const vengeanceGained = {};
+    if (capturedFrom) {
+        vengeanceGain(s, seatOf(capturedFrom), vengeanceGained);
+        if (hasGear(s.gears[s.turn], 'vengeance')) s.magic[s.turn] = Math.max(0, s.magic[s.turn] - GP.vengeancePenalty);
+    }
 
     // total-assault residual: drop a random 0-bind token after the move
     if (s.useAssault[s.turn] > 0) {
@@ -605,6 +741,7 @@ function placeMove(s, i) {
         for (let k = 0; k < board.length; k++) {
             const sq = board[k];
             if (sq.player && sq.player !== cur && sq.bind === 0 && !sq.effects.some((e) => e.effect === '🔑')) {
+                vengeanceGain(s, seatOf(sq.player), vengeanceGained);
                 board[k] = { player: cur, bind: necromancyReviveLife, effects: [] };
                 absorbed++;
             }
@@ -632,53 +769,61 @@ function endTurn(s) {
 }
 
 function onClickCharge(s) {
-    s.magic[s.turn] += skillCosts.onClickCharge;
+    s.magic[s.turn] += costsOf(s).onClickCharge;
     endTurn(s);
 }
 function onClickAddLife(s) {
     s.life += 3;
-    spendMagic(s, calculateCost(s, skillCosts.onClickAddLife));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickAddLife));
     bumpMagicCount(s);
 }
 function onClickBibine(s) {
     s.life *= 2;
-    spendMagic(s, calculateCost(s, skillCosts.onClickBibine));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBibine));
     bumpMagicCount(s);
 }
 function onClickDepressionCherry(s) {
     s.life -= 1;
-    s.magic[0] -= skillCosts.onClickDepressionCherry;
+    s.magic[0] -= costsOf(s).onClickDepressionCherry;
     s.magic[1] -= 1;
 }
 function onClickBuds(s) {
     s.useBuds = [true, s.useBuds[1] + 1];
-    spendMagic(s, calculateCost(s, skillCosts.onClickBuds));
+    harvestMagic(s, 1);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBuds));
     bumpMagicCount(s);
 }
 function onClickDoubleBuds(s) {
     s.useBuds = [true, s.useBuds[1] + 2];
-    spendMagic(s, calculateCost(s, skillCosts.onClickDoubleBuds));
+    harvestMagic(s, 2);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleBuds));
     bumpMagicCount(s);
 }
 function onClickUseLock(s) {
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, skillCosts.onClickUseLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock));
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {
     s.useLock += 2;
-    spendMagic(s, calculateCost(s, skillCosts.onClickDoubleLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleLock));
     bumpMagicCount(s);
 }
 function onClickTripleLock(s) {
     s.useLock += 3;
-    spendMagic(s, calculateCost(s, skillCosts.onClickTripleLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickTripleLock));
     bumpMagicCount(s);
 }
 function onClickToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-    spendMagic(s, calculateCost(s, skillCosts.onClickToken, true));
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
+        granted = afterTokenPlaced(s, idx, undefined);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -686,17 +831,25 @@ function onClickToken(s) {
 function onClickDoubleToken(s) {
     const empties = findEmptyIndexes(s.board);
     const [a, b] = randomAnyPick(empties, 2, s.rng);
-    if (a != null) s.board[a] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-    if (b != null) s.board[b] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-    spendMagic(s, calculateCost(s, skillCosts.onClickDoubleToken, true));
+    let granted = 0;
+    if (a != null) { s.board[a] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, a, undefined); }
+    if (b != null) { s.board[b] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, b, undefined); }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickBudsToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
-    spendMagic(s, calculateCost(s, skillCosts.onClickBudsToken, true));
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
+        granted = afterTokenPlaced(s, idx, '🌱');
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBudsToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -705,22 +858,25 @@ function onClickBothToken(s) {
     // 参加者全員に1つずつ（席順に空きマスからランダムに）。空きが足りなければ先着の席だけ
     const empties = findEmptyIndexes(s.board);
     const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
+    let granted = 0;
     picks.forEach((idx, seat) => {
         s.board[idx] = { player: SYMBOLS[seat], bind: seat === s.turn ? calculateTokenBind(s) : 4, effects: [] };
+        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
     });
-    s.magic[s.turn] -= calculateCost(s, skillCosts.onClickBothToken, true);
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBothToken, true));
     s.useMagicCount[s.turn]++;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickSlash(s) {
     for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
-    spendMagic(s, calculateCost(s, skillCosts.onClickSlash));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSlash));
     bumpMagicCount(s);
 }
 function onClickBackSlash(s) {
     for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
-    spendMagic(s, calculateCost(s, skillCosts.onClickBackSlash));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBackSlash));
     bumpMagicCount(s);
 }
 function onClickOpium(s) {
@@ -731,22 +887,24 @@ function onClickOpium(s) {
             sq.bind = calc > 1 ? sq.bind - 2 : 0;
         }
     }
-    spendMagic(s, calculateCost(s, skillCosts.onClickOpium));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickOpium));
     bumpMagicCount(s);
     endTurn(s);
 }
 function onClickTsunami(s) {
     // 相手全員のマジックを0に
     for (const seat of otherSeats(s)) s.magic[seat] = 0;
-    s.magic[s.turn] -= calculateCost(s, skillCosts.onClickTsunami);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickTsunami));
     s.useMagicCount[s.turn]++;
     endTurn(s);
 }
 function onClickWalpurgisNight(s) {
+    let planted = 0;
     for (const sq of s.board) {
-        if (sq.player && !sq.effects.some((e) => e.effect === '🔑')) sq.effects.push({ effect: '🌱' });
+        if (sq.player && !sq.effects.some((e) => e.effect === '🔑')) { sq.effects.push({ effect: '🌱' }); planted++; }
     }
-    spendMagic(s, calculateCost(s, skillCosts.onClickWalpurgisNight));
+    harvestMagic(s, planted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickWalpurgisNight));
     bumpMagicCount(s);
 }
 
@@ -754,7 +912,7 @@ function onClickWalpurgisNight(s) {
 function onClickToggleYingYang(s) {
     // [FAITHFUL] note: source has a known bug toggling heart's mode when reading circle; we toggle the active player's own mode.
     s.yy[s.turn] = s.yy[s.turn] === 'yang' ? 'ying' : 'yang';
-    s.magic[s.turn] -= skillCosts.onClickToggleYingYang;
+    spendMagic(s, gearCost(s, costsOf(s).onClickToggleYingYang));
 }
 function onClickYingYangSkill(s) {
     const mode = curYY(s);
@@ -766,14 +924,14 @@ function onClickYingYangSkill(s) {
         // 凶荒の舞: 自分以外の全員のコマ
         for (const sq of s.board) if (sq.player && sq.player !== cur) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
     }
-    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
+    spendMagic(s, gearCost(s, costsOf(s).onClickYingYangSkill));
     addCorpses(s, destroyed);
 }
 
 // giant
 function onClickStomp(s) {
     s.useStomp = true;
-    spendMagic(s, skillCosts.onClickStomp);
+    spendMagic(s, gearCost(s, costsOf(s).onClickStomp));
 }
 function exeStomp(s, i) {
     const cur = curPlayer(s);
@@ -790,7 +948,8 @@ function exeStomp(s, i) {
 // magician judge day
 function judgeDayCost(s) {
     const used = s.useMagicCount[s.turn];
-    return used < skillCosts.onClickJudgeDay ? skillCosts.onClickJudgeDay - used : 0;
+    const base = used < costsOf(s).onClickJudgeDay ? costsOf(s).onClickJudgeDay - used : 0;
+    return gearCost(s, base);
 }
 function onClickJudgeDay(s) {
     spendMagic(s, judgeDayCost(s));
@@ -814,12 +973,13 @@ function exeJudgeDay(s, i) {
 }
 
 function totalAssaultCost(s) {
-    return skillCosts.onClickTotalAssault - s.useTokenCount[s.turn] * 2;
+    return gearCost(s, costsOf(s).onClickTotalAssault - s.useTokenCount[s.turn] * 2);
 }
 function onClickTotalAssault(s) {
     s.useAssault[s.turn] = 3;
-    s.magic[s.turn] -= totalAssaultCost(s);
+    const pay = totalAssaultCost(s);
     s.useTokenCount[s.turn] = 0;
+    spendMagic(s, pay);
 }
 
 // ---- 増殖 (ループ召喚) ----
@@ -853,13 +1013,17 @@ function applyProliferate(s, step) {
 function onClickProliferate(s) {
     s.proliferate[s.turn] = true;
     s.proliferateCount[s.turn] = 0;
-    spendMagic(s, calculateCost(s, skillCosts.onClickProliferate));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickProliferate));
     bumpMagicCount(s);
 }
 
 // necromancer: activate 蘇生 (墓地から召喚 + 4ターンの自動吸収窓)
 function necromancyCost(s) {
     return s.necroCost[s.turn];
+}
+// 実際に払う魔力（ギア補正込み）。召喚数は墓地(necroCost)で決まり、ギアでは変わらない
+function necromancyPay(s) {
+    return gearCost(s, s.necroCost[s.turn]);
 }
 function onClickNecromancy(s) {
     const cur = curPlayer(s);
@@ -869,7 +1033,7 @@ function onClickNecromancy(s) {
     const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
     const targets = randomAnyPick(empties, summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
-    s.magic[s.turn] -= curCost;
+    spendMagic(s, gearCost(s, curCost));
     s.useMagicCount[s.turn]++;
     s.remainNecro[s.turn] = necromancyDuration;
     s.necroCost[s.turn] = baseNecromancyCost;
@@ -878,7 +1042,7 @@ function onClickNecromancy(s) {
 // ---- 毒使い スキル ----
 const MIASMA_MIN_COST = 1; // Game.tsx / skillCosts.ts と同値
 function miasmaCost(s) {
-    return Math.max(MIASMA_MIN_COST, calculateCost(s, skillCosts.onClickMiasma - boardPoisonCount(s.board), false, true));
+    return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - boardPoisonCount(s.board), false, true));
 }
 function onClickMiasma(s) {
     s.useMiasma = true;
@@ -890,17 +1054,26 @@ function exeMiasma(s, i) {
         (j) => s.board[j].player && s.board[j].player !== cur && !isGuarded(s, s.board[j])
     );
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
+    harvestMagic(s, targets.length);
+    if (targets.length) toxicBloom(s, null);
     s.useMiasma = false;
 }
 function onClickInjection(s) {
     s.useInjection += 1;
-    spendMagic(s, calculateCost(s, skillCosts.onClickInjection, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickInjection, false, true));
     bumpMagicCount(s);
 }
 function onClickPoisonToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
-    spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
+        granted = afterTokenPlaced(s, idx, '☠');
+        toxicBloom(s, idx);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -908,34 +1081,46 @@ function onClickPoisonToken(s) {
 function onClickSerum(s) {
     const cur = curPlayer(s);
     for (const sq of s.board) if (sq.player === cur) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
-    spendMagic(s, calculateCost(s, skillCosts.onClickSerum, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSerum, false, true));
     bumpMagicCount(s);
 }
 function onClickIntensify(s) {
+    let added = 0;
     for (const sq of s.board) {
         const p = poisonStacks(sq);
         for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
         if (p > 0) poisonStrike(s, sq);
+        added += p;
     }
-    spendMagic(s, calculateCost(s, skillCosts.onClickIntensify, false, true));
+    harvestMagic(s, added);
+    if (added) toxicBloom(s, null);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true));
     bumpMagicCount(s);
 }
 function onClickPandemic(s) {
     s.usePandemic = true;
-    spendMagic(s, calculateCost(s, skillCosts.onClickPandemic, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPandemic, false, true));
     bumpMagicCount(s);
 }
 function exePandemic(s, i) {
     const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
+    harvestMagic(s, targets.length);
+    if (targets.length) toxicBloom(s, null);
     s.usePandemic = false;
 }
 
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
-    spendMagic(s, calculateCost(s, skillCosts.onClickChargeToken, true));
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
+        granted = afterTokenPlaced(s, idx, '⚡');
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeToken, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -943,19 +1128,20 @@ function onClickChargeToken(s) {
 }
 function onClickChargeOne(s) {
     s.useChargeOne = true;
-    spendMagic(s, calculateCost(s, skillCosts.onClickChargeOne));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeOne));
     bumpMagicCount(s);
     bumpStat(s, 'chargeOne');
 }
 // 固有スキル: 選んだコマのあるマスから、コマのあるマスだけを縦横に辿ってすべてに⚡を付与（発火はしない）
 function onClickChargeSpread(s) {
     s.useChargeSpread = true;
-    spendMagic(s, skillCosts.onClickChargeSpread);
+    spendMagic(s, gearCost(s, costsOf(s).onClickChargeSpread));
     bumpStat(s, 'chargeSpread');
 }
 function exeChargeSpread(s, i) {
     const cells = connectedPieces(s.board, i, s.size);
     for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
+    harvestMagic(s, cells.length);
     bumpStat(s, 'spreadCells', cells.length);
     s.useChargeSpread = false;
 }
@@ -1019,7 +1205,7 @@ module.exports = {
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
-    miasmaCost, boardPoisonCount, surroundRange,
+    miasmaCost, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
     POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

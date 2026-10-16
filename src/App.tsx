@@ -5,6 +5,7 @@ import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
+import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears } from './components/game/gear';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -39,7 +40,7 @@ const CHARACTERS: CharacterDef[] = [
 ];
 
 const MIN_PLAYERS = 2;
-const DEFAULT_PLAYERS: PlayerConfig[] = PLAYER_SYMBOLS.map((_, seat) => ({ character: 'you', isAI: seat !== 0 }));
+const DEFAULT_PLAYERS: PlayerConfig[] = PLAYER_SYMBOLS.map((_, seat) => ({ character: 'you', isAI: seat !== 0, gears: [] }));
 
 export const App = () => {
     // 8席ぶんの設定を保持し、人数を変えても入力済みの内容を失わない。実際に使うのは先頭 playerCount 席
@@ -50,7 +51,17 @@ export const App = () => {
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
-        setPlayers((prev) => prev.map((p, i) => (i === seat ? { ...p, ...patch } : p)));
+        setPlayers((prev) =>
+            prev.map((p, i) => {
+                if (i !== seat) return p;
+                const next = { ...p, ...patch };
+                // キャラを変えて枠数が減ったとき（「あなた」3枠 → 他2枠）は、はみ出したギアを外す
+                return { ...next, gears: (next.gears ?? []).slice(0, gearSlotsFor(next.character)) };
+            })
+        );
+    const randomizeGears = (seat: number) => updatePlayer(seat, { gears: randomGears(gearSlotsFor(players[seat].character)) });
+    const randomizeAllGears = () =>
+        setPlayers((prev) => prev.map((p, seat) => (seat < playerCount ? { ...p, gears: randomGears(gearSlotsFor(p.character)) } : p)));
     const boardSize = boardSizeChoice === 'auto' ? boardSizeFor(playerCount) : boardSizeChoice;
     // AI席のキャラを「あなた」以外からランダムに決め直す（人間の席は触らない。重複あり）
     const randomizeAICharacters = () =>
@@ -114,6 +125,9 @@ export const App = () => {
                     <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
                         🎲 AI席のキャラをランダムに決める（あなた以外）
                     </button>
+                    <button className={styles.randomBtn} onClick={randomizeAllGears}>
+                        🎲 全員のギアをランダムに決める
+                    </button>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting
@@ -124,6 +138,9 @@ export const App = () => {
                                 onCheckCharacter={(character) => updatePlayer(seat, { character })}
                                 isAI={players[seat].isAI}
                                 onToggleAI={(isAI) => updatePlayer(seat, { isAI })}
+                                gears={players[seat].gears ?? []}
+                                onChangeGears={(gears) => updatePlayer(seat, { gears })}
+                                onRandomGears={() => randomizeGears(seat)}
                             />
                         ))}
                     </div>
@@ -144,10 +161,16 @@ type PlayerSettingProps = {
     onCheckCharacter: (id: CharacterId) => void;
     isAI: boolean;
     onToggleAI: (isAI: boolean) => void;
+    gears: GearId[];
+    onChangeGears: (gears: GearId[]) => void;
+    onRandomGears: () => void;
 };
 
 const PlayerSetting = (props: PlayerSettingProps) => {
     const selected = CHARACTERS.find((c) => c.id === props.checkedCharacter);
+    const slots = gearSlotsFor(props.checkedCharacter);
+    const toggleGear = (id: GearId) =>
+        props.onChangeGears(props.gears.includes(id) ? props.gears.filter((g) => g !== id) : [...props.gears, id].slice(0, slots));
     return (
         <div
             className={`${styles.playerCard}${props.compact ? ` ${styles.playerCardCompact}` : ''}`}
@@ -187,6 +210,47 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                 ))}
             </div>
             {props.compact && selected && <div className={styles.charNote}>{selected.passive}</div>}
+            <div className={styles.gearBox}>
+                <div className={styles.gearHead}>
+                    <span>
+                        ギア {props.gears.length}/{slots}
+                    </span>
+                    <span>
+                        <button className={styles.gearMiniBtn} onClick={props.onRandomGears} aria-label={`プレイヤー${props.seat + 1}のギアをランダムに`}>
+                            🎲
+                        </button>{' '}
+                        <button className={styles.gearMiniBtn} onClick={() => props.onChangeGears([])} disabled={props.gears.length === 0}>
+                            外す
+                        </button>
+                    </span>
+                </div>
+                <div className={styles.gearGrid}>
+                    {GEARS.map((g) => {
+                        const active = props.gears.includes(g.id);
+                        return (
+                            <button
+                                key={g.id}
+                                className={`${styles.gearChip} ${active ? styles.gearChipActive : ''}`}
+                                onClick={() => toggleGear(g.id)}
+                                disabled={!active && props.gears.length >= slots}
+                                title={g.desc}
+                                aria-pressed={active}
+                            >
+                                {g.icon} {g.name}
+                            </button>
+                        );
+                    })}
+                </div>
+                {props.gears.length > 0 && (
+                    <div className={styles.gearNote}>
+                        {props.gears.map((id) => (
+                            <div key={id}>
+                                {gearDefOf(id).icon} {gearDefOf(id).name}: {gearDefOf(id).desc}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

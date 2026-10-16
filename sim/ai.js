@@ -9,7 +9,7 @@
  * 'random'    -> pure random (strength benchmark baseline).
  */
 
-const { SYMBOLS, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
+const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, otherSeats, POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
@@ -486,20 +486,21 @@ function chooseSkills(s, availableSkills) {
     if (oppReaches === 0) {
         if (character === 'necromancer') {
             const active = s.remainNecro[s.turn] > 0;
-            const ncost = s.necroCost[s.turn];
-            if (!active && remaining >= ncost) {
+            const ncost = s.necroCost[s.turn]; // 墓地で決まる基礎コスト（召喚数の計算に使う）
+            const npay = necromancyPay(s); // 実際に払う額（ギア補正込み）
+            if (!active && remaining >= npay) {
                 const corpses = 10 - ncost; // 軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
                     if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(ncost, 'necromancy');
+                if (corpses >= 3 || absorbable >= 2) spend(npay, 'necromancy');
             }
         }
 
         // 凶荒の舞(相手-2)
         if (character === 'yinYangMaster') {
-            const yyCost = cost(skillCosts.onClickYingYangSkill);
+            const yyCost = cost(costsOf(s).onClickYingYangSkill);
             if (remaining >= yyCost && (oppPieces > myPieces || myPieces >= 3)) spend(yyCost, 'yyDance');
         }
 
@@ -512,7 +513,7 @@ function chooseSkills(s, availableSkills) {
         // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
         const proliferateActive = s.proliferate[s.turn];
         if (!proliferateActive && availableSkills.includes(20)) {
-            const pCost = cost(skillCosts.onClickProliferate);
+            const pCost = cost(costsOf(s).onClickProliferate);
             let emptyCount = 0;
             for (const sq of board) if (!sq.player) emptyCount++;
             if (remaining >= pCost + 1 && emptyCount >= 5) spend(pCost, 'proliferate');
@@ -529,7 +530,7 @@ function chooseSkills(s, availableSkills) {
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
-            if (oppOn > myOn) spend(cost(skillCosts.onClickSlash), 'slash');
+            if (oppOn > myOn) spend(cost(costsOf(s).onClickSlash), 'slash');
         }
         if (skills.length === 0 && availableSkills.includes(6)) {
             let oppOn = 0, myOn = 0;
@@ -537,10 +538,10 @@ function chooseSkills(s, availableSkills) {
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
-            if (oppOn > myOn) spend(cost(skillCosts.onClickBackSlash), 'backSlash');
+            if (oppOn > myOn) spend(cost(costsOf(s).onClickBackSlash), 'backSlash');
         }
         if (skills.length === 0 && availableSkills.includes(7) && oppMagic >= 6) {
-            spend(cost(skillCosts.onClickTsunami), 'tsunami');
+            spend(cost(costsOf(s).onClickTsunami), 'tsunami');
         }
     }
 
@@ -548,23 +549,23 @@ function chooseSkills(s, availableSkills) {
 
     // --- 準備スキル ---
     if (s.life <= 2 && availableSkills.includes(0)) {
-        spend(cost(skillCosts.onClickAddLife), 'addLife');
+        spend(cost(costsOf(s).onClickAddLife), 'addLife');
     }
 
-    if (availableSkills.includes(2) && remaining >= cost(skillCosts.onClickBuds)) {
+    if (availableSkills.includes(2) && remaining >= cost(costsOf(s).onClickBuds)) {
         let emptyCount = 0, myBuds = 0;
         for (const sq of board) {
             if (!sq.player) emptyCount++;
             if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
         }
         if (emptyCount >= 6 && myBuds < 3) {
-            spend(cost(skillCosts.onClickBuds), 'buds');
+            spend(cost(costsOf(s).onClickBuds), 'buds');
         }
     }
 
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
     if (availableSkills.includes(17)) {
-        const serumCost = calculateCost(s, skillCosts.onClickSerum, false, true);
+        const serumCost = calculateCost(s, costsOf(s).onClickSerum, false, true);
         let doomed = 0;
         for (const sq of board) {
             if (sq.player !== me) continue;
@@ -576,18 +577,18 @@ function chooseSkills(s, availableSkills) {
 
     // --- トークン系 ---
     if (!tokenUsed) {
-        const poisonTokenCost = calculateCost(s, skillCosts.onClickPoisonToken, true, true);
-        const chargeTokenCost = calculateCost(s, skillCosts.onClickChargeToken, true);
+        const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true);
+        const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true);
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
             spend(poisonTokenCost, 'poisonToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
             spend(chargeTokenCost, 'chargeToken');
-        } else if (availableSkills.includes(11) && remaining >= cost(skillCosts.onClickDoubleToken, true)) {
-            spend(cost(skillCosts.onClickDoubleToken, true), 'doubleToken');
-        } else if (availableSkills.includes(9) && remaining >= cost(skillCosts.onClickBudsToken, true)) {
-            spend(cost(skillCosts.onClickBudsToken, true), 'budsToken');
-        } else if (availableSkills.includes(3) && remaining >= cost(skillCosts.onClickToken, true)) {
-            spend(cost(skillCosts.onClickToken, true), 'token');
+        } else if (availableSkills.includes(11) && remaining >= cost(costsOf(s).onClickDoubleToken, true)) {
+            spend(cost(costsOf(s).onClickDoubleToken, true), 'doubleToken');
+        } else if (availableSkills.includes(9) && remaining >= cost(costsOf(s).onClickBudsToken, true)) {
+            spend(cost(costsOf(s).onClickBudsToken, true), 'budsToken');
+        } else if (availableSkills.includes(3) && remaining >= cost(costsOf(s).onClickToken, true)) {
+            spend(cost(costsOf(s).onClickToken, true), 'token');
         }
     }
 
@@ -655,10 +656,10 @@ function faithfulMakeMove(s) {
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
     if (threats.length >= 2) {
         const lockOpts = [
-            { key: 'lock', count: 1, cost: calculateCost(s, skillCosts.onClickUseLock) },
+            { key: 'lock', count: 1, cost: calculateCost(s, costsOf(s).onClickUseLock) },
         ];
-        if (availableSkills.includes(12)) lockOpts.push({ key: 'doubleLock', count: 2, cost: calculateCost(s, skillCosts.onClickDoubleLock) });
-        if (availableSkills.includes(13)) lockOpts.push({ key: 'tripleLock', count: 3, cost: calculateCost(s, skillCosts.onClickTripleLock) });
+        if (availableSkills.includes(12)) lockOpts.push({ key: 'doubleLock', count: 2, cost: calculateCost(s, costsOf(s).onClickDoubleLock) });
+        if (availableSkills.includes(13)) lockOpts.push({ key: 'tripleLock', count: 3, cost: calculateCost(s, costsOf(s).onClickTripleLock) });
 
         const needed = threats.length - 1;
         const viable = lockOpts.filter(o => o.count >= needed && magic >= o.cost).sort((a, b) => a.cost - b.cost);
@@ -690,7 +691,7 @@ function faithfulMakeMove(s) {
     // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
     if (curChar(s) !== 'tactician' && curChar(s) !== 'necromancer'
         && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
-        && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
+        && magic >= calculateCost(s, costsOf(s).onClickUseLock)) {
         const target = bestAntiNecroLockTarget(s.board, me);
         if (target !== null) {
             SKILLS.lock(s);
@@ -703,11 +704,11 @@ function faithfulMakeMove(s) {
     // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
     if (curChar(s) === 'electrician' && opps.every((o) => countReaches(s.board, o) === 0)) {
-        if (curMagic(s) >= skillCosts.onClickChargeSpread) {
+        if (curMagic(s) >= gearCost(s, costsOf(s).onClickChargeSpread)) {
             const start = bestChargeSpreadTarget(s.board, me);
             if (start !== null) { SKILLS.chargeSpread(s); placeMove(s, start); updateShield(s); }
         }
-        if (availableSkills.includes(22) && curMagic(s) >= calculateCost(s, skillCosts.onClickChargeOne)) {
+        if (availableSkills.includes(22) && curMagic(s) >= calculateCost(s, costsOf(s).onClickChargeOne)) {
             const target = bestChargeOneTarget(s.board, me);
             if (target !== null) { SKILLS.chargeOne(s); placeMove(s, target); updateShield(s); }
         }
@@ -715,7 +716,7 @@ function faithfulMakeMove(s) {
 
     // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
     if (curChar(s) === 'poisoner' && availableSkills.includes(15)
-        && magic >= calculateCost(s, skillCosts.onClickInjection, false, true)
+        && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true)
         && countReaches(s.board, me) === 0) {
         const target = bestInjectionTarget(s.board, me, INJ_MIN);
         if (target !== null) {
@@ -742,7 +743,7 @@ function faithfulMakeMove(s) {
     const oppReaches = opps.reduce((n, o) => n + countReaches(s.board, o), 0);
     if (oppReaches === 0) {
         const ch = curChar(s);
-        if (ch === 'giant' && magic >= calculateCost(s, skillCosts.onClickStomp)) {
+        if (ch === 'giant' && magic >= calculateCost(s, costsOf(s).onClickStomp)) {
             const target = bestStompTarget(s.board, me);
             if (target !== null) {
                 SKILLS.stomp(s);        // useStomp=true (手番は進まない)
@@ -761,7 +762,7 @@ function faithfulMakeMove(s) {
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
         if (ch === 'magician') {
-            const lockCost = calculateCost(s, skillCosts.onClickUseLock);
+            const lockCost = calculateCost(s, costsOf(s).onClickUseLock);
             const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
             if (magic >= lockCost && budCell !== -1) {
                 SKILLS.lock(s);

@@ -34,16 +34,21 @@ class AIPlayer {
     /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
     shield: Set<number> = new Set();
 
+    /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
+    gearCostFn?: (cost: number, isToken: boolean) => number;
+
     constructor(
         playerSymbol: Player,
         character: CharacterId,
         opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
-        characters: readonly CharacterId[] = []
+        characters: readonly CharacterId[] = [],
+        gearCostFn?: (cost: number, isToken: boolean) => number
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
         this.opponents = opponents;
         this.characters = characters;
+        this.gearCostFn = gearCostFn;
     }
 
     private characterOf(player: Player): CharacterId | undefined {
@@ -470,9 +475,10 @@ class AIPlayer {
 
     /** AI用コスト計算 (軍師のトークン割引など) */
     calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false): number {
-        if (this.character === 'poisoner') return isPoison ? baseCost - 1 : baseCost + 1;
-        if (this.character === 'tactician') return isToken ? baseCost - 1 : baseCost + 2;
-        return baseCost;
+        let cost = baseCost;
+        if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
+        else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
+        return this.gearCostFn ? this.gearCostFn(cost, isToken) : cost;
     }
 
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
@@ -487,7 +493,9 @@ class AIPlayer {
         necroRemain: number = 0,
         necroCost: number = 0,
         assaultCost: number = 99,
-        proliferateActive: boolean = false
+        proliferateActive: boolean = false,
+        /** 蘇生で実際に払う魔力（ギア補正込み）。省略時は necroCost */
+        necroPay: number = necroCost
     ): string[] {
         const skills: string[] = [];
         let remaining = magic;
@@ -518,13 +526,13 @@ class AIPlayer {
 
         if (oppReaches === 0) {
             // ネクロマンサー蘇生: 墓地が貯まり召喚が見込める or 吸収対象が複数いるなら発動
-            if (this.character === 'necromancer' && necroRemain === 0 && remaining >= necroCost) {
+            if (this.character === 'necromancer' && necroRemain === 0 && remaining >= necroPay) {
                 const corpses = 10 - necroCost; // baseNecromancyCost=10。軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
                     if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(necroCost, 'onClickNecromancy');
+                if (corpses >= 3 || absorbable >= 2) spend(necroPay, 'onClickNecromancy');
             }
 
             // 陰陽師: 凶荒の舞(相手-2)
@@ -756,7 +764,8 @@ class AIPlayer {
         necroCost: number = 0,
         judgeCost: number = 99,
         assaultCost: number = 99,
-        proliferateActive: boolean = false
+        proliferateActive: boolean = false,
+        necroPay: number = necroCost
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
@@ -844,12 +853,13 @@ class AIPlayer {
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）
         const chargeClicks: { skill: string; target: number }[] = [];
         if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            if (magic >= costs.onClickChargeSpread) {
+            const spreadCost = this.calculateAICost(costs.onClickChargeSpread);
+            if (magic >= spreadCost) {
                 const start = this.bestChargeSpreadTarget(board);
                 if (start !== null) {
                     chargeClicks.push({ skill: 'onClickChargeSpread', target: start });
                     board = withCharge(board, connectedPieces(board, start, this.sizeOf(board)));
-                    magic -= costs.onClickChargeSpread;
+                    magic -= spreadCost;
                     this.updateShield(board);
                 }
             }
@@ -867,7 +877,7 @@ class AIPlayer {
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
         if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            if (this.character === 'giant' && magic >= costs.onClickStomp) {
+            if (this.character === 'giant' && magic >= this.calculateAICost(costs.onClickStomp)) {
                 const target = this.findStompTarget(board);
                 if (target !== null) {
                     // ストンプは手番を終えないので、破壊後の盤面で通常着手も返す
@@ -884,7 +894,7 @@ class AIPlayer {
                 }
             }
             // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-            if (this.character === 'magician' && magic >= costs.onClickUseLock) {
+            if (this.character === 'magician' && magic >= this.calculateAICost(costs.onClickUseLock)) {
                 const budCell = board.findIndex(
                     (sq) =>
                         sq.player === this.playerSymbol &&
@@ -897,7 +907,7 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive);
+        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, necroPay);
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
