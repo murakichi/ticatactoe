@@ -179,10 +179,11 @@ function poisonerInPlay(s) {
     return s.heartChar === 'poisoner' || s.circleChar === 'poisoner';
 }
 // 実験(POISON_DOUBLE=1: 毒トークンも倍 / =2: トークンは倍にしない): 毒使いの駒に毒が付いた瞬間、そのマスのライフが倍になる
+const POISON_MULT = parseFloat(process.env.POISON_MULT || '2');
 function poisonStrike(s, sq) {
     if (!['1', '2'].includes(process.env.POISON_DOUBLE) || !s || !sq.player) return;
     const ch = sq.player === HEART ? s.heartChar : s.circleChar;
-    if (ch === 'poisoner') sq.bind *= 2;
+    if (ch === 'poisoner') sq.bind = Math.round(sq.bind * POISON_MULT);
 }
 // 周囲1マス（クリックしたマスを除く8近傍）— STOMP_AREA を流用
 function surroundRange(i) {
@@ -832,7 +833,7 @@ function onClickInjection(s) {
 }
 function onClickPoisonToken(s) {
     const empties = findEmptyIndexes(s.board);
-    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s) * (process.env.POISON_DOUBLE === '1' && curChar(s) === 'poisoner' ? 2 : 1), effects: [{ effect: '☠' }] };
+    if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (process.env.POISON_DOUBLE === '1' && curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
     spendMagic(s, calculateCost(s, skillCosts.onClickPoisonToken, true, true));
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
