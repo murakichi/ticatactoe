@@ -59,6 +59,9 @@ function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0) {
     let m;
     if (characterId === 'yinYangMaster') m = yinYangMode === 'yang' ? L.yinYangMaster_yang : L.yinYangMaster_ying;
     else m = L[characterId] != null ? L[characterId] : L.default;
+    // 実験: 毒使いは自陣に毒があるとライフが倍（POISON_LIFE=add_double: (m+毒数)*2 / flat_double: m*2）
+    if (characterId === 'poisoner' && lifeBonus > 0 && process.env.POISON_LIFE === 'add_double') m = (m + lifeBonus) * 2, lifeBonus = 0;
+    else if (characterId === 'poisoner' && lifeBonus > 0 && process.env.POISON_LIFE === 'flat_double') m = m * 2, lifeBonus = 0;
     return Math.floor(normRand(m + lifeBonus, config.lifeStd, rng));
 }
 
