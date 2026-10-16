@@ -22,10 +22,8 @@ const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
-const EXP = { spread: null, lockVs: (process.env.EXP_LOCK_VS || 'necromancer,poisoner,yinYangMaster').split(','), lockBind: parseInt(process.env.EXP_LOCK_BIND || '3', 10) };
-const EXP_NECRO_LOCKED = parseInt(process.env.EXP_NECRO_LOCKED || '0', 10);
-const EXP_NECRO_CORPSES = parseInt(process.env.EXP_NECRO_CORPSES || '3', 10);
-const EXP_NECRO_ABS = parseInt(process.env.EXP_NECRO_ABS || '2', 10);
+// 対策ロックの対象(敵がこのキャラなら、自コマを事前にロックして守る)
+const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -133,7 +131,7 @@ function bestAntiNecroLockTarget(board, me) {
     let bestIdx = null, bestVal = 0;
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
-        if (sq.player !== me || sq.bind > EXP.lockBind || sq.effects.some(e => e.effect === '🔑')) continue;
+        if (sq.player !== me || sq.bind > 3 || sq.effects.some(e => e.effect === '🔑')) continue;
         let val = 1;
         for (const line of geo.winLines) {
             if (!line.includes(i)) continue;
@@ -280,16 +278,6 @@ function evaluateBoard(board, me) {
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
         else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
     }
-    if (EXP.spread) {
-        const geo = geometryForCells(board.length);
-        let worst = 0;
-        for (let c = 0; c < board.length; c++) {
-            let n = 0;
-            for (const idx of EXP.spread.kind === 'judge' ? geo.judgeRange(c) : geo.stompRange(c)) if (board[idx].player === me) n++;
-            if (n > worst) worst = n;
-        }
-        score -= EXP.spread.w * Math.max(0, worst - EXP.spread.free);
-    }
     return score;
 }
 
@@ -407,11 +395,6 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
-    EXP.spread = null;
-    if (process.env.EXP_SPREAD_W) {
-        const vs = process.env.EXP_SPREAD_VS || 'magician';
-        if (otherSeats(s).some((seat) => s.chars[seat] === vs)) EXP.spread = { kind: vs === 'magician' ? 'judge' : 'stomp', w: parseFloat(process.env.EXP_SPREAD_W), free: parseInt(process.env.EXP_SPREAD_FREE || '2', 10) };
-    }
     const opps = opponentsOf(s);
     const opp = opps[0];
     const character = curChar(s);
@@ -511,9 +494,10 @@ function chooseSkills(s, availableSkills) {
                 let absorbable = 0;
                 for (const sq of board) {
                     if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
-                    else if (EXP_NECRO_LOCKED && isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= EXP_NECRO_LOCKED && sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= EXP_NECRO_CORPSES || absorbable >= EXP_NECRO_ABS) spend(ncost, 'necromancy');
+                // 死体が1つでもあれば即発動。相手がロックで守っても蘇生の窓(4手番)の間に切れるので待つ意味がない
+                // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
+                if (corpses >= 1 || absorbable >= 2) spend(ncost, 'necromancy');
             }
         }
 
@@ -703,13 +687,13 @@ function faithfulMakeMove(s) {
         }
     }
 
-    // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る。
-    // A/B(ネクロ以外6キャラ vs ネクロ、約1200試合×seed3-5): 0.448/0.455/0.456 → 0.631/0.613/0.625 (+16〜18pt)。
-    // 「蘇生中/発動間近のときだけ」ロックする版は 0.422 でむしろ悪化 (後出しでは遅い)。
-    // 対照: 敵が「あなた」なら変化なし(0.686→0.693)、敵が巨人なら悪化(0.493→0.403)で、効果は対ネクロ特有。
-    // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
+    // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、吸収・毒・凶荒の舞(全コマ-2)で失いそうな低bind(<=3)の自コマを
+    // 事前にロックして守る(ロックはライフを6以上にして貫通を防ぐ)。後出し(蘇生中だけ等)では遅く悪化する。
+    // A/B(自キャラ側の勝率): 対ネクロ 0.448/0.455/0.456 → 0.631/0.613/0.625 (seed3-5)、対陰陽師 +4.5〜+13pt (seed3-5)、
+    // 対毒使い +3.4/+4.4/+12.2/-0.8pt (seed3-6)。対照: 敵が「あなた」なら変化なし、敵が巨人なら悪化(0.493→0.403)で効果は敵の特性に由来
+    // 対象外: 軍師と毒使いはロックに+2/+1コストが乗り運用と競合して悪化。ネクロ同士は未検証。雷霆の巫は変化なし(+0.6pt)
     if (curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
-        && otherSeats(s).some((seat) => EXP.lockVs.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
+        && otherSeats(s).some((seat) => ANTI_LOCK_VS.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
         && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
         const target = bestAntiNecroLockTarget(s.board, me);
         if (target !== null) {

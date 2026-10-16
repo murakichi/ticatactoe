@@ -524,7 +524,8 @@ class AIPlayer {
                 for (const sq of board) {
                     if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(necroCost, 'onClickNecromancy');
+                // 死体が1つでもあれば即発動 (sim/ai.js と同一。A/B: 他キャラの勝率 -3〜-4.6pt)
+                if (corpses >= 1 || absorbable >= 2) spend(necroCost, 'onClickNecromancy');
             }
 
             // 陰陽師: 凶荒の舞(相手-2)
@@ -810,12 +811,17 @@ class AIPlayer {
             }
         }
 
-        // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る (sim/ai.js と同一)。
-        // A/B: ネクロ以外6キャラ vs ネクロ 0.45→0.62 (+16〜18pt)。軍師は+2コストで悪化、ネクロ同士は未検証のため対象外
+        // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、失いそうな低bindの自コマを事前にロックして守る (sim/ai.js と同一)。
+        // A/B: 対ネクロ 0.45→0.62、対陰陽師 +4.5〜+13pt、対毒使い 平均+4.8pt。軍師・毒使いはロックの追加コストで悪化、ネクロ同士は未検証のため対象外
         if (
             this.character !== 'tactician' &&
-            this.character !== 'necromancer' &&
-            this.characters.some((c, seat) => c === 'necromancer' && seat !== seatOf(this.playerSymbol)) &&
+            this.character !== 'poisoner' &&
+            this.characters.some(
+                (c, seat) =>
+                    seat !== seatOf(this.playerSymbol) &&
+                    ['necromancer', 'poisoner', 'yinYangMaster'].includes(c) &&
+                    !(c === 'necromancer' && this.character === 'necromancer')
+            ) &&
             magic >= this.calculateAICost(costs.onClickUseLock)
         ) {
             const lockCell = this.findAntiNecroLockTarget(board);
