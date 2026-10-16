@@ -445,5 +445,152 @@ test('帯電: 同じ盤で複数の帯電マスが同時に発火する(着手�
     assert.strictEqual(s.board[2].bind, 4 - 1 - 1);
 });
 
+// ---- 帯電系スキル2 (#40) と帯電コスト軽減 (#43) ----
+test('帯電ダブルトークン: ⚡付きのコマを2つ設置し、ダメージは出さない', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    e.SKILLS.doubleChargeToken(s);
+    const charged = s.board.filter((sq) => sq.player === '💙' && e.chargeStacks(sq) === 1);
+    assert.strictEqual(charged.length, 2);
+    assert.strictEqual(s.usedTokenThisTurn, true);
+});
+
+test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出ない', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.chargeArea(s);
+    assert.strictEqual(s.heartTurn, true);
+    e.placeMove(s, 5);
+    const cells = [0, 1, 2, 4, 5, 6, 8, 9, 10];
+    assert.ok(cells.every((i) => e.chargeStacks(s.board[i]) === 1));
+    assert.strictEqual(e.chargeStacks(s.board[3]), 0);
+    assert.strictEqual(s.board[6].bind, 4);
+});
+
+test('ランダム帯電: 1〜4マスに⚡。ロック中・無敵マスは対象外', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+        const s = e.newGame({ heartChar: 'electrician', circleChar: 'you', rng: e.makeRng(seed) });
+        s.heartTurn = true; s.heartMagic = 20;
+        s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] }; // 無敵
+        s.board[1] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+        e.SKILLS.chargeRandom(s);
+        const added = s.board.reduce((n, sq, i) => n + e.chargeStacks(sq) - (i === 0 ? 1 : 0), 0);
+        assert.ok(added >= 1 && added <= 4, `seed ${seed}: ${added}`);
+        assert.strictEqual(e.chargeStacks(s.board[0]), 1);
+        assert.strictEqual(e.chargeStacks(s.board[1]), 0);
+    }
+});
+
+test('ジャマー: 隣接する敵コマに⚡のスタック数だけダメージ、⚡は消える。ロックと自コマは無傷', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '⚡' }, { effect: '⚡' }] }; // スタック2
+    s.board[4] = { player: '⭕', bind: 3, effects: [] };
+    s.board[6] = { player: '⭕', bind: 1, effects: [] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] };
+    s.board[9] = { player: '💙', bind: 4, effects: [] };
+    e.SKILLS.jammer(s);
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[4].bind, 1);
+    assert.strictEqual(s.board[6].bind, 0);
+    assert.strictEqual(s.board[1].bind, 4);
+    assert.strictEqual(s.board[9].bind, 4);
+    assert.strictEqual(e.chargeStacks(s.board[5]), 0);
+    assert.strictEqual(s.heartTurn, true); // 手番は進まない
+});
+
+test('ジャマー: ⚡の無いマスは選べない。自分の無敵マスは選べて、これが弱点を解く手段になる', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[3] = { player: '💙', bind: 2, effects: [{ effect: '⚡' }] };
+    e.SKILLS.jammer(s);
+    assert.strictEqual(e.placeMove(s, 7), false); // ⚡なし
+    assert.strictEqual(s.useJammer, true);
+    assert.strictEqual(e.placeMove(s, 3), true);  // 自分の無敵マス
+    assert.strictEqual(e.chargeStacks(s.board[3]), 0);
+    assert.strictEqual(e.placeMove(s, 3), true);  // 無敵が解けたので触れる(強化)
+});
+
+test('ジャマー: 他人の無敵マスは選べない', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[3] = { player: '⭕', bind: 2, effects: [{ effect: '⚡' }] };
+    e.SKILLS.jammer(s);
+    assert.strictEqual(e.placeMove(s, 3), false);
+    assert.strictEqual(e.chargeStacks(s.board[3]), 1);
+});
+
+test('帯電付与・帯電拡散のコストは盤面の⚡の数だけ軽減され、下限は1 (#43)', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true;
+    assert.strictEqual(e.chargeSpreadCost(s), 7);
+    assert.strictEqual(e.chargeOneCost(s), 2);
+    s.board[0].effects.push({ effect: '⚡' }, { effect: '⚡' }); // スタック2
+    s.board[1].effects.push({ effect: '⚡' });                   // 合計3
+    assert.strictEqual(e.chargeSpreadCost(s), 4);
+    assert.strictEqual(e.chargeOneCost(s), 1);                   // 2-3 -> 下限1
+    for (let i = 2; i < 12; i++) s.board[i].effects.push({ effect: '⚡' });
+    assert.strictEqual(e.chargeSpreadCost(s), 1);                // 下限1
+});
+
+test('打てるマスが無い（無敵の⚡だらけ）AIはチャージでパスし、手番が止まらない', () => {
+    const ai = require('./ai');
+    const s = game('electrician', 'electrician');
+    s.heartTurn = true; s.heartMagic = 3; s.life = 5;
+    for (let i = 0; i < 16; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 2, effects: [{ effect: '⚡' }] };
+    s.skills = [0, 1, 2];
+    const before = s.currentTurn;
+    const r = ai.makeMove(s, 'faithful');
+    assert.strictEqual(r.turnEnded, true);
+    assert.ok(s.currentTurn > before);
+    assert.strictEqual(s.heartTurn, false);
+});
+
+test('過負荷（全マス⚡）: 全⚡と🔑を取り除き、全マスのライフを0にする', () => {
+    // 既定で有効（CHG_DISCHARGE=0 で無効）。環境変数は読み込み時に決まるため、別プロセスで検証する
+    const { execFileSync } = require('child_process');
+    const code = `
+        const e = require('./sim/engine');
+        const s = e.newGame({ heartChar: 'electrician', circleChar: 'you', rng: e.makeRng(7) });
+        s.heartTurn = true; s.heartMagic = 20;
+        for (let i = 0; i < 15; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        s.board[3].effects.push({ effect: '🔑' }); s.board[3].bind = 6;
+        s.board[15] = { player: '⭕', bind: 4, effects: [] };
+        e.SKILLS.chargeOne(s); e.placeMove(s, 15);
+        console.log(JSON.stringify({
+            stacks: s.board.reduce((n, sq) => n + e.chargeStacks(sq), 0),
+            binds: s.board.map((sq) => sq.bind),
+            locks: s.board.reduce((n, sq) => n + sq.effects.filter((x) => x.effect === '🔑').length, 0),
+            discharge: s.stats.discharge,
+        }));`;
+    const out = JSON.parse(execFileSync('node', ['-e', code], { cwd: require('path').join(__dirname, '..'), env: { ...process.env } }).toString());
+    assert.strictEqual(out.stacks, 0);
+    assert.strictEqual(out.discharge, 1);
+    assert.ok(out.binds.every((b) => b === 0));                // ロックのマスも含めて全部0
+    assert.strictEqual(out.locks, 0);                          // ロックも解除
+});
+
+test('雷霆の巫は自陣由来（自分のコマが載った⚡マス）の発火ダメージを受けない。敵の⚡や他人の駒には通常どおり効く', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 5;
+    // 5番=雷霆の巫(💙)の⚡コマ。隣の4番に着手して発火。隣接の6番=自コマ(💙)は無傷、9番=敵(⭕)は1ダメージ
+    s.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+    s.board[6] = { player: '💙', bind: 4, effects: [] };
+    s.board[9] = { player: '⭕', bind: 4, effects: [] };
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[6].bind, 4 - 1);  // 減衰のみ（発火ダメージなし）
+    assert.strictEqual(s.board[9].bind, 4 - 1 - 1);
+});
+
+test('敵（雷霆の巫以外）の⚡コマの発火は、雷霆の巫のコマにも効く', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] }; // 敵の⚡コマ
+    s.board[6] = { player: '💙', bind: 4, effects: [] };
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[6].bind, 4 - 1 - 1);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
