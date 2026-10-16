@@ -204,6 +204,16 @@ test('人数に応じた盤面サイズ: 2=4x4 / 3,4=5x5 / 5,6=6x6 / 7,8=7x7', (
     }
 });
 
+test('盤面サイズは人数と無関係に指定できる（4〜10、範囲外は丸める）', () => {
+    for (const [n, size, expected] of [[2, 6, 6], [8, 4, 4], [3, 10, 10], [2, 2, 4], [2, 30, 10]]) {
+        const s = e.newGame({ chars: Array(n).fill('you'), size, rng: e.makeRng(1) });
+        assert.strictEqual(s.size, expected);
+        assert.strictEqual(s.board.length, expected * expected);
+    }
+    const auto = e.newGame({ chars: ['you', 'you', 'you'], rng: e.makeRng(1) });
+    assert.strictEqual(auto.size, 5);
+});
+
 test('手番は席順に回る（3人）', () => {
     const s = gameN('you', 'you', 'you');
     s.life = 5;

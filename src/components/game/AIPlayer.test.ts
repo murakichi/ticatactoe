@@ -140,4 +140,14 @@ describe('AIPlayer 多人数', () => {
         expect(result.move).not.toBeNull();
         expect(b[result.move as number].player === undefined || b[result.move as number].bind <= 0).toBe(true);
     });
+
+    it('10x10 でも2人戦のAIが実用的な時間で手を返す', () => {
+        const b = emptyN(10);
+        for (let k = 0; k < 12; k++) putN(b, k * 7, k % 2 ? '⭕' : '💙', 3);
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const t0 = Date.now();
+        const move = ai.getBestMove(b, 5);
+        expect(Date.now() - t0).toBeLessThan(5000);
+        expect(move).not.toBeNull();
+    });
 });

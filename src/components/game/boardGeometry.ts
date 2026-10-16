@@ -4,7 +4,15 @@
 
 export const WIN_LENGTH = 4;
 
-/** 人数ごとの盤面サイズ。2人=4x4(従来)、3〜4人=5x5、5〜6人=6x6、7〜8人=7x7 */
+/** 選べる盤面サイズ(一辺のマス数)の範囲。勝利が4連続なので4未満は勝負にならない */
+export const MIN_BOARD_SIZE = 4;
+export const MAX_BOARD_SIZE = 10;
+
+/** 盤面サイズを選べる範囲に収める（整数でなければ四捨五入） */
+export const clampBoardSize = (size: number): number =>
+    Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, Math.round(size)));
+
+/** 人数ごとの既定(おまかせ)の盤面サイズ。2人=4x4(従来)、3〜4人=5x5、5〜6人=6x6、7〜8人=7x7 */
 export const boardSizeFor = (playerCount: number): number => {
     if (playerCount <= 2) return 4;
     if (playerCount <= 4) return 5;
@@ -111,4 +119,5 @@ export const geometryOf = (size: number): BoardGeometry => {
 export const geometryForCells = (cells: number): BoardGeometry => geometryOf(Math.round(Math.sqrt(cells)));
 
 /** 盤が大きいほどマスを小さくして、7x7でも画面に収める（px） */
-export const cellPixelsFor = (size: number): number => (size <= 4 ? 64 : size === 5 ? 60 : size === 6 ? 56 : 52);
+export const cellPixelsFor = (size: number): number =>
+    size <= 4 ? 64 : size === 5 ? 60 : size === 6 ? 56 : size === 7 ? 52 : size === 8 ? 48 : size === 9 ? 44 : 40;

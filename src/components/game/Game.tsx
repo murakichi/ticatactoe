@@ -8,7 +8,7 @@ import AIPlayer, { TURN_ENDING_SKILLS, SKILL_POOL_SIZE } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
-import { boardSizeFor, geometryOf } from './boardGeometry';
+import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge } from './charge';
@@ -27,6 +27,8 @@ export type PlayerConfig = {
 type GameProps = {
     /** 席順(= 手番順)。先頭が先手。2〜8人 */
     players: PlayerConfig[];
+    /** 盤面の一辺のマス数(4〜10)。省略時は人数に応じた既定 */
+    boardSize?: number;
 };
 
 const CHARACTER_NAMES: Record<CharacterId, string> = {
@@ -66,7 +68,7 @@ const GIANT_SKIP_MODULO = 5;
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
-    const geo = geometryOf(boardSizeFor(seatCount));
+    const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : boardSizeFor(seatCount));
     const symbols: Player[] = PLAYER_SYMBOLS.slice(0, seatCount);
     const characters: CharacterId[] = props.players.map((p) => p.character);
     const makeBoard = (): SquareInfo[] => Array.from({ length: geo.cells }, () => ({ player: undefined, bind: 0, effects: [] }));
