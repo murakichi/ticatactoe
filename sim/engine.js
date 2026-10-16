@@ -164,6 +164,9 @@ const skillCosts = {
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
 const FIRE_DAMAGE = Number(process.env.CHG_FIRE_DMG) || (config.charge && config.charge.fireDamage) || 1;
+// 全マスが⚡で埋まったら、全⚡を取り除いて全マスのライフを0にする（ユーザー案。既定は無効、A/B検証用）。
+// 環境変数 CHG_DISCHARGE=1 または config.charge.discharge。🔑ロック中のマスのライフは変えない（ロックは貫通しない）
+const DISCHARGE = process.env.CHG_DISCHARGE != null ? process.env.CHG_DISCHARGE === '1' : !!(config.charge && config.charge.discharge);
 const CHARGE_MIN_COST = (config.charge && config.charge.minCost) || 1;
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -256,6 +259,17 @@ function chargeOneCost(s) {
 }
 function chargeSpreadCost(s) {
     return Math.max(CHARGE_MIN_COST, calculateCost(s, skillCosts.onClickChargeSpread - boardChargeCount(s.board)));
+}
+// ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡を取り除き、(ロック以外の)全マスのライフを0にする
+function checkDischarge(s) {
+    if (!DISCHARGE) return false;
+    if (!s.board.every((sq) => chargeStacks(sq) > 0)) return false;
+    for (const sq of s.board) {
+        sq.effects = sq.effects.filter((e) => e.effect !== '⚡');
+        if (!sq.effects.some((e) => e.effect === '🔑')) sq.bind = 0;
+    }
+    bumpStat(s, 'discharge');
+    return true;
 }
 function bumpStat(s, key, n = 1) {
     s.stats[key] = (s.stats[key] || 0) + n;
@@ -497,6 +511,7 @@ function placeMove(s, i) {
     if (s.useChargeOne) {
         board[i].effects.push({ effect: '⚡' });
         s.useChargeOne = false;
+        checkDischarge(s);
         return true;
     }
     if (s.useChargeSpread) {
@@ -964,6 +979,7 @@ function onClickChargeToken(s) {
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
     bumpStat(s, 'chargeToken');
+    checkDischarge(s);
 }
 function onClickChargeOne(s) {
     s.useChargeOne = true;
@@ -982,6 +998,7 @@ function exeChargeSpread(s, i) {
     for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
     bumpStat(s, 'spreadCells', cells.length);
     s.useChargeSpread = false;
+    checkDischarge(s);
 }
 
 // ---- 雷霆の巫 スキル2 (#40) ----
@@ -996,6 +1013,7 @@ function onClickDoubleChargeToken(s) {
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
     bumpStat(s, 'doubleChargeToken');
+    checkDischarge(s);
 }
 // 範囲帯電: 選んだマスを中心に3x3へ⚡を付与（発火はしない）
 function onClickChargeArea(s) {
@@ -1009,6 +1027,7 @@ function exeChargeArea(s, i) {
     for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
     bumpStat(s, 'areaCells', cells.length);
     s.useChargeArea = false;
+    checkDischarge(s);
 }
 // ランダム帯電: ランダムな1〜4マスに⚡（空きマス可。無敵マス・ロック中のマスは除く）
 function onClickChargeRandom(s) {
@@ -1021,6 +1040,7 @@ function onClickChargeRandom(s) {
     spendMagic(s, calculateCost(s, skillCosts.onClickChargeRandom));
     bumpMagicCount(s);
     bumpStat(s, 'chargeRandom');
+    checkDischarge(s);
 }
 // ジャマー: 選んだマスの⚡を発散。縦横に隣接する**敵**コマ(ライフ>0・ロックなし)に⚡のスタック数だけダメージ、⚡は消える
 function onClickJammer(s) {

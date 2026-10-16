@@ -523,5 +523,28 @@ test('打てるマスが無い（無敵の⚡だらけ）AIはチャージでパ
     assert.strictEqual(s.heartTurn, false);
 });
 
+test('全マス⚡で放電（CHG_DISCHARGE）: 全⚡を取り除き、ロック以外の全マスのライフを0にする', () => {
+    // DISCHARGE は読み込み時に決まるため、別プロセスで検証する
+    const { execFileSync } = require('child_process');
+    const code = `
+        const e = require('./sim/engine');
+        const s = e.newGame({ heartChar: 'electrician', circleChar: 'you', rng: e.makeRng(7) });
+        s.heartTurn = true; s.heartMagic = 20;
+        for (let i = 0; i < 15; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        s.board[3].effects.push({ effect: '🔑' }); s.board[3].bind = 6;
+        s.board[15] = { player: '⭕', bind: 4, effects: [] };
+        e.SKILLS.chargeOne(s); e.placeMove(s, 15);
+        console.log(JSON.stringify({
+            stacks: s.board.reduce((n, sq) => n + e.chargeStacks(sq), 0),
+            binds: s.board.map((sq) => sq.bind),
+            discharge: s.stats.discharge,
+        }));`;
+    const out = JSON.parse(execFileSync('node', ['-e', code], { cwd: require('path').join(__dirname, '..'), env: { ...process.env, CHG_DISCHARGE: '1' } }).toString());
+    assert.strictEqual(out.stacks, 0);
+    assert.strictEqual(out.discharge, 1);
+    assert.strictEqual(out.binds[3], 6);                       // ロック中は変えない
+    assert.ok(out.binds.every((b, i) => i === 3 || b === 0));  // それ以外は全部0
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
