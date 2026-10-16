@@ -37,3 +37,6 @@ export type SkillCosts = typeof skillCosts;
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）
 export const MIASMA_MIN_COST = 1;
+
+// 毒使いの駒に毒が付いた瞬間、そのマスのライフにかかる倍率（四捨五入）。sim/engine.js の POISON_MULT と同値
+export const POISON_LIFE_MULT = 1.5;

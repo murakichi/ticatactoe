@@ -47,6 +47,51 @@ test('毒でライフが尽きたマスは消え、毒使い側の魔力が+1さ
     assert.ok(s.heartMagic >= before + 1);
 });
 
+test('ライフ0のコマに後から毒を撒いても、次の手番で消える', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true; s.life = 3;
+    s.board[10] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
+    const before = s.heartMagic;
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[10].player, undefined);
+    assert.ok(s.heartMagic >= before + 1);
+});
+
+test('毒使いの駒に毒が付くとライフが1.5倍になる（ミアズマ・インジェクション）', () => {
+    // 毒使い(💙)の駒に、敵(⭕=毒使い)のミアズマが当たる: 毒使い同士の対戦で ⭕ がミアズマを撃つ
+    const s = game('poisoner', 'poisoner');
+    s.heartTurn = false; s.life = 3;
+    s.board[5] = { player: '⭕', bind: 4, effects: [] };   // ミアズマの起点（自陣）
+    s.board[6] = { player: '💙', bind: 4, effects: [] };   // 毒使いの敵駒
+    s.heartMagic = 0; s.circleMagic = 10;
+    e.SKILLS.miasma(s);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '☠').length, 1);
+    assert.strictEqual(s.board[6].bind, 6); // 4 × 1.5
+});
+
+test('毒使いでない駒に毒が付いてもライフは変わらない', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true; s.life = 3;
+    s.board[5] = { player: '💙', bind: 4, effects: [] };
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.miasma(s);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '☠').length, 1);
+    assert.strictEqual(s.board[6].bind, 4);
+});
+
+test('毒トークンは毒使いが置くとライフが1.5倍になる', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true;
+    const before = s.board.filter((x) => x.player).length;
+    e.SKILLS.poisonToken(s);
+    const placed = s.board.find((x) => x.player === '💙');
+    assert.ok(placed && placed.effects.some((x) => x.effect === '☠'));
+    assert.strictEqual(before, 0);
+    assert.strictEqual(placed.bind, 6); // 基本4 × 1.5
+});
+
 test('毒でなく通常の減衰で0になったマスは消えない', () => {
     const s = game('poisoner', 'you');
     s.heartTurn = true; s.life = 3;

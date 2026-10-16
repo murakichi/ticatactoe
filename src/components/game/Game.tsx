@@ -9,7 +9,7 @@ import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { stompRange, judgeRange, surroundRange } from './boardGeometry';
-import { skillCosts, MIASMA_MIN_COST } from './skillCosts';
+import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
 
@@ -354,7 +354,7 @@ export const Game = (props: GameProps) => {
         }
 
         if (useInjection > 0) {
-            nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '☠' }] };
+            nextBoard[i] = poisonStrike({ ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '☠' }] });
             addLog(`${posName(i)}に毒を注入`);
             setUseInjection(useInjection - 1);
             playEffect('poison', i);
@@ -401,7 +401,6 @@ export const Game = (props: GameProps) => {
         let poisonVanished = 0;
         for (let s = 0; s < nextBoard.length; s++) {
             const square = nextBoard[s];
-            const hadLife = square.bind > 0;
             if ((square.player || square.effects.filter((x) => x.effect === '🔑').length !== 0) && square.bind > 0) square.bind--;
             // 毒: スタック数だけ追加で bind を減らす（毎ターン bind-1 × 毒の数）
             const poison = square.effects.filter((x) => x.effect === '☠').length;
@@ -409,10 +408,10 @@ export const Game = (props: GameProps) => {
             if (square.bind === 0) {
                 square.effects = square.effects.filter((x) => x.effect !== '🔑');
             }
-            // 毒持ちのマスが 0 に落ちた瞬間に拡散の起点として記録
-            if (poison > 0 && hadLife && square.bind === 0 && s !== i) {
+            // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。
+            // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
+            if (poison > 0 && square.bind === 0 && square.player && s !== i) {
                 spreadOrigins.push(s);
-                // 毒でライフが尽きたマスは消える（空きマスに戻る）
                 nextBoard[s] = { player: undefined, bind: 0, effects: [] };
                 poisonVanished++;
             }
@@ -594,12 +593,18 @@ export const Game = (props: GameProps) => {
             .filter((e) => e.effect === '☠').length;
     // 盤面全体の毒スタック数
     const boardPoisonCount = (board: SquareInfo[]): number => board.flatMap((x) => x.effects).filter((e) => e.effect === '☠').length;
+    // 毒使いの駒に毒が付いた瞬間、そのマスのライフが POISON_LIFE_MULT 倍になる（毒を付与した直後のマスに適用する）
+    const poisonStrike = (sq: SquareInfo): SquareInfo => {
+        if (!sq.player) return sq;
+        const owner = sq.player === '💙' ? props.heartSelectedCharacter : props.circleSelectedCharacter;
+        return owner === 'poisoner' ? { ...sq, bind: Math.round(sq.bind * POISON_LIFE_MULT) } : sq;
+    };
     // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与する（毒拡散パッシブ）
     const spreadPoisonAround = (board: SquareInfo[], idx: number) => {
         const targets = surroundRange(idx).filter((j) => board[j].player);
         if (targets.length === 0) return;
         const t = randomPick(targets);
-        board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+        board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
     };
     const [useMiasma, setUseMiasma] = useState<boolean>(false);
     const [useInjection, setUseInjection] = useState<number>(0);
@@ -826,6 +831,7 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return null;
         const index = randomPick(targets);
         board[index] = { ...board[index], effects: [...board[index].effects, item] };
+        if (isPoisoner) board[index] = poisonStrike(board[index]);
         return `${posName(index)}に${item.effect}を追加`;
     };
 
@@ -1057,7 +1063,7 @@ export const Game = (props: GameProps) => {
         const targets = surroundRange(i).filter(
             (j) => board[j].player && board[j].player !== currentTurnPlayer && !board[j].effects.some((e) => e.effect === '🔑')
         );
-        for (const t of targets) board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+        for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         addLog(`${posName(i)}を中心にミアズマ（敵${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison', i);
@@ -1076,7 +1082,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const emptyIndexes = findEmptyIndexes(board);
         const index = randomPick(emptyIndexes);
-        board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] };
+        board[index] = poisonStrike({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] });
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
         setCurrentBoard(board);
         spendMagic(calculateCost(skillCosts.onClickPoisonToken, true, true));
@@ -1102,7 +1108,7 @@ export const Game = (props: GameProps) => {
         board.forEach((sq, idx) => {
             const poison = sq.effects.filter((e) => e.effect === '☠').length;
             if (poison > 0) {
-                board[idx] = { ...sq, effects: [...sq.effects, ...Array<Effect>(poison).fill({ effect: '☠' })] };
+                board[idx] = poisonStrike({ ...sq, effects: [...sq.effects, ...Array<Effect>(poison).fill({ effect: '☠' })] });
                 affected.push(idx);
             }
         });
@@ -1121,7 +1127,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         // 選択マスと周囲1マス(3x3)のコマに毒を1付与（敵味方問わず）
         const targets = stompRange(i).filter((j) => board[j].player && !board[j].effects.some((e) => e.effect === '🔑'));
-        for (const t of targets) board[t] = { ...board[t], effects: [...board[t].effects, { effect: '☠' }] };
+        for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison', i);
