@@ -69,17 +69,42 @@ function bestJudgeTarget(board, me, opp) {
     return bestNet >= 2 ? bestIdx : null;
 }
 
-// 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ (敵1体以上で価値あり)。なければ null
+// 敵駒 i が「どかさないと負ける列」(敵3つ揃い・自駒なし・残り1マスが空き) に含まれるか
+function inOppReachLine(board, i, me, opp) {
+    for (const line of WIN_LINES) {
+        if (!line.includes(i)) continue;
+        let op = 0, mine = 0, empty = 0;
+        for (const idx of line) {
+            if (board[idx].player === opp) op++;
+            else if (board[idx].player === me) mine++;
+            else empty++;
+        }
+        if (op === 3 && mine === 0 && empty === 1) return true;
+    }
+    return false;
+}
+
+// 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ。敵2体以上で価値あり。
+// 敵1体でも、その駒がリーチ列を作っている(どかさないと負ける)なら撃つ。
+// (AIは他の毒付与スキル(インジェクション等)を使わないので「他に手段がない」は常に成立)
 function bestMiasmaTarget(board, me, opp) {
-    let bestIdx = null, bestEnemies = 0;
+    let bestIdx = null, bestScore = 0;
     for (let i = 0; i < 16; i++) {
         if (board[i].player !== me) continue; // 自陣を選択
-        let enemies = 0;
-        for (const j of surroundRange(i)) if (board[j].player === opp && !board[j].effects.some(e => e.effect === '🔑')) enemies++;
-        if (enemies > bestEnemies) { bestEnemies = enemies; bestIdx = i; }
+        let enemies = 0, critical = 0;
+        for (const j of surroundRange(i)) {
+            if (board[j].player === opp && !board[j].effects.some(e => e.effect === '🔑')) {
+                enemies++;
+                if (inOppReachLine(board, j, me, opp)) critical++;
+            }
+        }
+        const score = enemies + critical * 2;
+        if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
-    return bestEnemies >= 1 ? bestIdx : null;
+    return bestScore >= MIASMA_MIN_SCORE ? bestIdx : null;
 }
+
+const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
 // ---- helpers ----
 
@@ -501,6 +526,18 @@ function faithfulMakeMove(s) {
         }
     }
 
+    // 毒使い ミアズマ: 周囲に敵がいる自陣マスを選び、隣接敵に毒を撒く (手番は進まない→通常着手)
+    const ch0 = curChar(s);
+    if (ch0 === 'poisoner' && magic >= miasmaCost(s)) {
+        const target = bestMiasmaTarget(s.board, me, opp);
+        if (target !== null) {
+            SKILLS.miasma(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
+        }
+    }
+
     // 巨人ストンプ / 魔法使い審判の日: 範囲破壊スキル (相手リーチが無いときに狙う)
     const oppReaches = countReaches(s.board, opp, me);
     if (oppReaches === 0) {
@@ -520,16 +557,6 @@ function faithfulMakeMove(s) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
                 return { move: null, turnEnded: true };
-            }
-        }
-        // 毒使い ミアズマ: 周囲に敵がいる自陣マスを選び、隣接敵に毒を撒く (手番は進まない→通常着手)
-        if (ch === 'poisoner' && magic >= miasmaCost(s)) {
-            const target = bestMiasmaTarget(s.board, me, opp);
-            if (target !== null) {
-                SKILLS.miasma(s);
-                placeMove(s, target);
-                const move = getEnhancedBestMove(s);
-                return { move, turnEnded: false };
             }
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
