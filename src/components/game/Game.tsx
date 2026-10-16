@@ -295,7 +295,7 @@ export const Game = (props: GameProps) => {
         // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
         // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
         const magicCharacter: CharacterId[] = ['magician'];
-        // 3人以上は50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
+        // 50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
         let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + budsCount(nextSymbol);
         if (magicCharacter.includes(nextCharacter)) {
             nextMagic++;
