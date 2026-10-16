@@ -67,8 +67,8 @@ describe('adjustCostByGear', () => {
         expect(adjustCostByGear(4, undefined, ctx())).toBe(4);
     });
 
-    it('剛腕の代償: +2', () => {
-        expect(adjustCostByGear(4, ['titanCost'], ctx())).toBe(6);
+    it('剛腕の代償: +3', () => {
+        expect(adjustCostByGear(4, ['titanCost'], ctx())).toBe(7);
     });
 
     it('四連の極意: 4回使った直後（ちょうど4回目の次）だけ0', () => {
@@ -97,8 +97,8 @@ describe('adjustCostByGear', () => {
     });
 
     it('プラスとマイナスの補正が重なっても下限1を割らない', () => {
-        // +2 -3 = -1 → 下げる方向なので、元の4を超えず1以上
-        expect(adjustCostByGear(4, ['titanCost', 'chainDiscount'], ctx(3))).toBe(3);
+        // +3 -4 = -1 → 下げる方向なので、元の4を超えず1以上
+        expect(adjustCostByGear(4, ['titanCost', 'chainDiscount'], ctx(4))).toBe(3);
         expect(adjustCostByGear(2, ['chainDiscount', 'afterglow'], ctx(0, true))).toBe(1);
     });
 });

@@ -44,7 +44,7 @@ export const GEAR_PARAMS = {
     sturdyLife: 1,
     /** 剛腕の代償: ライフ平均とスキルコスト */
     titanLife: 3,
-    titanCost: 2,
+    titanCost: 3,
     /** 増援 / 軽量トークン: トークンスキルで置くコマのライフの変化 */
     reinforceTokenLife: 1,
     lightTokenLife: -1,

@@ -150,6 +150,6 @@ describe('ギアの選択', () => {
         const { container } = render(<App />);
         fireEvent.click(chip(cards(container)[0], '剛腕の代償'));
         fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
-        expect(screen.getByRole('button', { name: 'ロック-4' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'ロック-5' })).toBeInTheDocument();
     });
 });

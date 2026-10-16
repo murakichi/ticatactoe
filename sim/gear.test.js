@@ -41,10 +41,10 @@ test('頑健: 実際に引くライフの平均が+1される', () => {
     assert.ok(mean(['sturdy']) - mean([]) > 0.8);
 });
 
-test('剛腕の代償: 全スキルのコスト+2', () => {
+test('剛腕の代償: 全スキルのコスト+3', () => {
     const s = game([['titanCost'], []]);
-    assert.strictEqual(e.calculateCost(s, 4), 6);
-    assert.strictEqual(e.calculateCost(s, 4, true), 6);
+    assert.strictEqual(e.calculateCost(s, 4), 7);
+    assert.strictEqual(e.calculateCost(s, 4, true), 7);
 });
 
 test('堅牢の鍵: ロックのライフが9になる（通常は6）', () => {

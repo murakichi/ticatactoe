@@ -34,9 +34,9 @@ describe('ギア（ブラウザ版）', () => {
         expect(lifeAt(b.container, 0)).toBe('13');
     });
 
-    it('剛腕の代償: ライフ+3 かつ全スキルのコスト+2（ロック 2 → 4）', () => {
+    it('剛腕の代償: ライフ+3 かつ全スキルのコスト+3（ロック 2 → 5）', () => {
         const { container } = render(<Game players={players(['titanCost'])} />);
-        expect(screen.getByRole('button', { name: 'ロック-4' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'ロック-5' })).toBeInTheDocument();
         fireEvent.click(cells(container)[0]);
         expect(lifeAt(container, 0)).toBe('12');
     });

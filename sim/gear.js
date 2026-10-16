@@ -16,7 +16,7 @@ const GEAR_PARAMS = {
     luckyPurseChance: 0.2,
     sturdyLife: 1,
     titanLife: 3,
-    titanCost: 2,
+    titanCost: 3,
     reinforceTokenLife: 1,
     lightTokenLife: -1,
     lightTokenCost: -1,
