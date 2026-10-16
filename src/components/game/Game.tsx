@@ -10,13 +10,13 @@ import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer } from './charge';
+import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
 
 // 盤面を揺らすスキル演出
-const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash'];
+const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload'];
 
 export type PlayerConfig = {
     character: CharacterId;
@@ -100,6 +100,14 @@ export const Game = (props: GameProps) => {
         if (indexes.length === 0) return;
         setHighlightedCells(indexes);
         setTimeout(() => setHighlightedCells([]), 1200);
+    };
+    // ⚡を増やす操作の直後に、次の盤面を通す。全マス⚡なら過負荷（全⚡・全🔑除去、全マスのライフ0）。ターンは続く
+    const withOverload = (board: SquareInfo[]): SquareInfo[] => {
+        if (!isFullyCharged(board)) return board;
+        addLog('⚡過負荷！全マスの⚡が爆発して、ロックも解除され、全マスのライフが0になった');
+        flashCells(board.map((_, i) => i));
+        playEffect('overload');
+        return applyOverload(board);
     };
     const [gameLog, setGameLog] = useState<string[]>([]);
     const addLog = (message: string) => {
@@ -359,7 +367,7 @@ export const Game = (props: GameProps) => {
             addLog(`${posName(i)}に⚡を付与`);
             playEffect('zap', i);
             setUseChargeOne(false);
-            setCurrentBoard(nextBoard);
+            setCurrentBoard(withOverload(nextBoard));
             return;
         }
 
@@ -369,7 +377,7 @@ export const Game = (props: GameProps) => {
             flashCells(cells);
             playEffect('zap', i);
             setUseChargeArea(false);
-            setCurrentBoard(withCharge(currentBoard, cells));
+            setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
         }
 
@@ -380,7 +388,7 @@ export const Game = (props: GameProps) => {
             flashCells(cells);
             playEffect('zap');
             setUseChargeSpread(false);
-            setCurrentBoard(withCharge(currentBoard, cells));
+            setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
         }
 
@@ -1115,7 +1123,7 @@ export const Game = (props: GameProps) => {
             board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
             addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
             playEffect('zap', index);
-            setCurrentBoard(board);
+            setCurrentBoard(withOverload(board));
         }
         spendMagic(calculateCost(skillCosts.onClickChargeToken, true));
         setUseToken(true);
@@ -1141,7 +1149,7 @@ export const Game = (props: GameProps) => {
         }
         addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (picks.length > 0) playEffect('zap', picks[0]);
-        setCurrentBoard(board);
+        setCurrentBoard(withOverload(board));
         spendMagic(calculateCost(skillCosts.onClickDoubleChargeToken, true));
         setUseToken(true);
     };
@@ -1161,7 +1169,7 @@ export const Game = (props: GameProps) => {
             flashCells(picks);
             playEffect('zap', picks[0]);
         }
-        setCurrentBoard(withCharge(currentBoard, picks));
+        setCurrentBoard(withOverload(withCharge(currentBoard, picks)));
         spendMagic(calculateCost(skillCosts.onClickChargeRandom));
     };
     // ジャマー: ⚡のあるマスを選び、縦横隣接の敵コマのライフを⚡の数だけ減らして⚡を取り除く

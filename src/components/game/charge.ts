@@ -140,3 +140,19 @@ export const applyJammer = (board: SquareInfo[], i: number, size: number, curren
     board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
     return { damaged, zeroed };
 };
+
+/** 全マス（空きマス含む）に⚡が1つ以上あるか。sim/engine.js checkDischarge の判定と同じ */
+export const isFullyCharged = (board: SquareInfo[]): boolean => board.length > 0 && board.every((sq) => chargeStacks(sq) > 0);
+
+/**
+ * 過負荷: 全マスが⚡で埋まっていたら、全⚡と全🔑を取り除き、全マスのライフを0にした新しい盤面を返す。
+ * 埋まっていなければ同じ盤面をそのまま返す（元の盤面は変更しない）。sim/engine.js の checkDischarge が同仕様になる想定（ロックも解除）
+ */
+export const applyOverload = (board: SquareInfo[]): SquareInfo[] => {
+    if (!isFullyCharged(board)) return board;
+    return board.map((sq) => ({
+        ...sq,
+        effects: sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑'),
+        bind: 0,
+    }));
+};

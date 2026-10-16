@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -308,5 +308,46 @@ describe('帯電 AI スキル2', () => {
     it('chooseLocks: 雷霆の巫は帯電ダブルトークン(23)もロックする', () => {
         const ai = new AIPlayer('⭕', 'electrician', ['💙'], ['you', 'electrician']);
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [23])).toEqual([23]);
+    });
+});
+
+describe('過負荷 ⚡ (overload)', () => {
+    const full = (n = 25): SquareInfo[] =>
+        Array.from({ length: n }, () => ({ bind: 3, player: undefined, effects: [{ effect: '⚡' as const }] }));
+
+    test('空きマス含む全マス⚡なら全⚡・全🔑が消え、全マスのライフが0（ロックも解除）', () => {
+        const board = full();
+        board[0] = { bind: 5, player: '💙' as Player, effects: [{ effect: '⚡' }, { effect: '⚡' }, { effect: '🔑' }] };
+        board[1] = { bind: 4, player: '⭕' as Player, effects: [{ effect: '⚡' }] };
+        expect(isFullyCharged(board)).toBe(true);
+        const next = applyOverload(board);
+        expect(next).toHaveLength(25);
+        for (const sq of next) {
+            expect(sq.effects.some((e) => e.effect === '⚡')).toBe(false);
+            expect(sq.effects.some((e) => e.effect === '🔑')).toBe(false);
+            expect(sq.bind).toBe(0);
+        }
+        expect(next[0].player).toBe('💙');
+        expect(next[1].player).toBe('⭕');
+    });
+
+    test('元の盤面は変更しない', () => {
+        const board = full();
+        applyOverload(board);
+        expect(board[0].effects).toHaveLength(1);
+        expect(board[0].bind).toBe(3);
+    });
+
+    test('1マスでも⚡がなければ何もしない', () => {
+        const board = full();
+        board[7] = { bind: 3, player: undefined, effects: [] };
+        expect(isFullyCharged(board)).toBe(false);
+        expect(applyOverload(board)).toBe(board);
+    });
+
+    test('他の効果(☠)は残る', () => {
+        const board = full();
+        board[2] = { bind: 2, player: '💙' as Player, effects: [{ effect: '⚡' }, { effect: '☠' }] };
+        expect(applyOverload(board)[2].effects).toEqual([{ effect: '☠' }]);
     });
 });
