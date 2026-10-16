@@ -49,7 +49,9 @@ npm test     # Jest in watch mode
 何が残ったか」を残す。git log と diff で分かることは書かない。
 
 積み残しのうち、**未検証のバランスリスク / スコープ外のバグ / 試行数を増やせば結論が
-変わる保留**は `gh issue create` で issue にし、日記に番号を残す。
+変わる保留**は `gh issue create` で issue にし、日記に番号を残す
+（`gh` が使えないクラウドセッションでは GitHub MCP の `issue_write`（method=create）で起票する）。
+**日記の「積み残し」に書いたものは、例外なく issue にも起票する**（日記だけに残さない）。
 
 積んだ issue と積み残しは `/diary-improve-loop`（`/loop` から回す）が
 1イテレーション1件ずつ拾って潰す。
