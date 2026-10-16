@@ -11,7 +11,7 @@ export type AIResult = {
     move: number | null;
     skills: string[];
     lockTargets?: number[];
-    stompTarget?: number;
+    stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
 };
 
 class AIPlayer {
@@ -481,6 +481,36 @@ class AIPlayer {
         return skills;
     }
 
+    /**
+     * 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰(1+毒数)で bind が 0 になれば消える。
+     * 消えるまでの手数が少なく、敵のライン価値が高いコマを狙う。なければ null (sim/ai.js bestInjectionTarget と同一)
+     */
+    findInjectionTarget(board: SquareInfo[], minValue: number): { index: number; kills: boolean } | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        let best: { index: number; kills: boolean } | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < 16; i++) {
+            const sq = board[i];
+            if (sq.player !== this.opponent) continue;
+            const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
+            const turns = Math.ceil(sq.bind / (1 + p));
+            if (turns > 2) continue;
+            let val = 0;
+            for (const line of WIN_LINES) {
+                if (!line.includes(i)) continue;
+                let oc = 0, mc = 0;
+                for (const idx of line) {
+                    if (board[idx].player === this.opponent) oc++;
+                    else if (board[idx].player === this.playerSymbol) mc++;
+                }
+                if (mc === 0) val += lineScores[oc];
+            }
+            if (turns !== 1) val /= 2;
+            if (val > bestVal) { bestVal = val; best = { index: i, kills: turns === 1 }; }
+        }
+        return bestVal >= minValue ? best : null;
+    }
+
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
         let bestIdx: number | null = null, bestEnemies = 0, bestEmptyCenter = false;
@@ -588,6 +618,22 @@ class AIPlayer {
                     skills: ['onClickUseLock'],
                     lockTargets: [threatSquares[0]],
                 };
+            }
+        }
+
+        // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
+        if (
+            this.character === 'poisoner' &&
+            availableSkills.includes(15) &&
+            magic >= this.calculateAICost(costs.onClickInjection, false, true) &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const inj = this.findInjectionTarget(board, 10);
+            if (inj !== null) {
+                // 消える場合は着手時の減衰で盤面から消えるので、その盤面で通常着手を選ぶ
+                const postBoard = board.map((sq, i) => (inj.kills && i === inj.index ? { ...sq, player: undefined, bind: 0, effects: [] } : sq));
+                const followup = this.getBestMove(postBoard, life);
+                return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
             }
         }
 
