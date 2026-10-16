@@ -1,11 +1,11 @@
 /* =========================================================
-   デザイントークン (ダークゲーム風テーマ)
+   デザイントークン (フラット・ダークテーマ)
    Phase 0: 色・余白・角丸・影・タイポグラフィを一元管理
    ========================================================= */
 :root {
     /* --- 背景 / サーフェス --- */
     --color-bg: #0c1018;
-    --color-bg-grad: radial-gradient(1200px 800px at 50% -10%, #182338 0%, #0c1018 60%);
+    --color-bg-grad: #0c1018;
     --color-surface: #161d2c;
     --color-surface-2: #1f2840;
     --color-surface-3: #28324e;
@@ -20,11 +20,11 @@
     /* --- プレイヤーカラー (鮮やかなネオン系) --- */
     --color-heart: #29b6ff;
     --color-heart-soft: rgba(41, 182, 255, 0.2);
-    --color-heart-grad: linear-gradient(150deg, #58e0ff 0%, #2f8bff 52%, #4b46ff 100%);
+    --color-heart-grad: #2f8bff;
     --color-heart-glow: rgba(56, 160, 255, 0.65);
     --color-circle: #ff4d79;
     --color-circle-soft: rgba(255, 77, 121, 0.2);
-    --color-circle-grad: linear-gradient(150deg, #ff7eb3 0%, #ff3b6b 52%, #ff1f5a 100%);
+    --color-circle-grad: #ff3b6b;
     --color-circle-glow: rgba(255, 60, 110, 0.6);
 
     /* --- アクセント / 状態 --- */
@@ -56,9 +56,10 @@
     --radius-pill: 999px;
 
     /* --- 影 / グロー --- */
-    --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.35);
-    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
-    --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    /* フラットデザイン: ぼかし影は使わない */
+    --shadow-1: none;
+    --shadow-2: none;
+    --shadow-inset: none;
 
     /* --- タイポグラフィ --- */
     --font-base: 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

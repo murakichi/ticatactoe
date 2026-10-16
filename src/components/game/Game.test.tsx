@@ -48,3 +48,17 @@ test('相手が陽でも自分が陰ならコストは増えない', () => {
     expect(screen.getByText(/現在のモード:陰/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ロック-2' })).toBeInTheDocument();
 });
+
+test('プレイヤーパネルにキャラ固有スキルの現在コストが両者分表示される', () => {
+    const { container } = render(
+        <Game heartSelectedCharacter='giant' circleSelectedCharacter='magician' heartIsAI={false} circleIsAI={false} />
+    );
+    const panels = () => Array.from(container.querySelectorAll('[class*="panel"]'));
+    const [heartPanel, circlePanel] = panels().filter((el) => /panel(?!Current)/.test(el.className) || el.className.includes('panelCurrent'));
+    expect(heartPanel).toHaveTextContent('ストンプ⚡ 6');
+    expect(circlePanel).toHaveTextContent('審判の日⚡ 11');
+
+    // 💙が着手(使用回数は変わらない)しても非手番側の表示は維持される
+    fireEvent.click(cells(container)[0]);
+    expect(circlePanel).toHaveTextContent('審判の日⚡ 11');
+});

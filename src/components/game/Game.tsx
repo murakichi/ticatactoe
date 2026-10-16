@@ -604,7 +604,8 @@ export const Game = (props: GameProps) => {
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
     // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、下限は MIASMA_MIN_COST
-    const miasmaCost = (): number => Math.max(MIASMA_MIN_COST, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true));
+    const miasmaCost = (player: Player = currentTurnPlayer): number =>
+        Math.max(MIASMA_MIN_COST, calculateCost(skillCosts.onClickMiasma - boardPoisonCount(currentBoard), false, true, player));
 
     const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);
@@ -1155,8 +1156,10 @@ export const Game = (props: GameProps) => {
         return magic < calculatedCost || (isToken && useToken);
     };
 
-    const calculateCost = (cost: number, isToken: boolean = false, isPoison: boolean = false) => {
-        const characterId = heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter;
+    // player 省略時は手番プレイヤー。パネルで非手番側のコストを出すために指定できる
+    const calculateCost = (cost: number, isToken: boolean = false, isPoison: boolean = false, player: Player = currentTurnPlayer) => {
+        const isHeart = player === '💙';
+        const characterId = isHeart ? props.heartSelectedCharacter : props.circleSelectedCharacter;
         // 毒使い: 毒系スキルは-1、それ以外は+1
         if (characterId === 'poisoner') {
             return isPoison ? cost - 1 : cost + 1;
@@ -1171,7 +1174,7 @@ export const Game = (props: GameProps) => {
 
         // 陰陽師: 陽は「手番プレイヤー自身のモード」で判定する。以前は両分岐とも heartTurn 条件付きで、
         // ⭕側は陽のライフを得ながらコスト増を免れ、💙側は⭕のモードで+1される誤りがあった (issue #12)
-        if (characterId === 'yinYangMaster' && (heartTurn ? heartYinYangMode : circleYinYangMode) === 'yang') {
+        if (characterId === 'yinYangMaster' && (isHeart ? heartYinYangMode : circleYinYangMode) === 'yang') {
             return cost + 1;
         }
 
@@ -1203,6 +1206,32 @@ export const Game = (props: GameProps) => {
         return labels;
     };
 
+    // キャラ固有スキルの現在コスト(スキルボタンの表示と同じ値)。固有スキルのないキャラは空
+    const exclusiveSkillCosts = (player: Player): { name: string; cost: number }[] => {
+        const isHeart = player === '💙';
+        switch (isHeart ? props.heartSelectedCharacter : props.circleSelectedCharacter) {
+            case 'tactician':
+                return [{ name: '全軍突撃', cost: skillCosts.onClickTotalAssault - (isHeart ? heartUseTokenCount : circleUseTokenCount) * 2 }];
+            case 'giant':
+                return [{ name: 'ストンプ', cost: skillCosts.onClickStomp }];
+            case 'magician':
+                return [{ name: '審判の日', cost: Math.max(0, baseJudgeDayCost - (isHeart ? heartUseMagicCount : circleUseMagicCount)) }];
+            case 'yinYangMaster': {
+                const yang = (isHeart ? heartYinYangMode : circleYinYangMode) === 'yang';
+                return [
+                    { name: '陰陽転化', cost: skillCosts.onClickToggleYingYang },
+                    { name: yang ? '豊穣の舞' : '凶荒の舞', cost: skillCosts.onClickYingYangSkill },
+                ];
+            }
+            case 'necromancer':
+                return [{ name: '蘇生', cost: isHeart ? currentHeartNecroCost : currentCircleNecroCost }];
+            case 'poisoner':
+                return [{ name: 'ミアズマ', cost: miasmaCost(player) }];
+            default:
+                return [];
+        }
+    };
+
     // 盤面の両サイドに表示するプレイヤー情報パネル
     const playerPanel = (player: Player) => {
         const isHeart = player === '💙';
@@ -1212,6 +1241,7 @@ export const Game = (props: GameProps) => {
         const wins = isHeart ? heartWins : circleWins;
         const isCurrent = currentTurnPlayer === player && !winner;
         const effects = continuousEffects(player);
+        const exclusiveCosts = exclusiveSkillCosts(player);
         return (
             <div className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}>
                 <div className={`${styles.avatar} ${isHeart ? styles.avatarHeart : styles.avatarCircle}`}>{player}</div>
@@ -1224,6 +1254,16 @@ export const Game = (props: GameProps) => {
                     <span className={styles.chip}>🏆 {wins}</span>
                     <span className={`${styles.chip} ${styles.chipMagic}`}>⚡ {magic}</span>
                 </div>
+                {exclusiveCosts.length > 0 && (
+                    <div className={styles.skillCosts}>
+                        {exclusiveCosts.map((s) => (
+                            <div key={s.name} className={styles.skillCost}>
+                                <span>{s.name}</span>
+                                <b>⚡ {s.cost}</b>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 {effects.length > 0 && (
                     <div className={styles.effects}>
                         {effects.map((label) => (
