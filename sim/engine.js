@@ -402,14 +402,14 @@ function placeMove(s, i) {
     const spreadOrigins = [];
     for (let k = 0; k < board.length; k++) {
         const sq = board[k];
-        const hadLife = sq.bind > 0;
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0) sq.bind--;
         const poison = sq.effects.filter((e) => e.effect === '☠').length;
         if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
-        if (poison > 0 && hadLife && sq.bind === 0 && k !== i) spreadOrigins.push(k);
-        // 毒でライフが尽きたマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1
-        if (poison > 0 && hadLife && sq.bind === 0 && k !== i) {
+        // 毒持ちでライフが0のマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1。
+        // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
+        if (poison > 0 && sq.bind === 0 && sq.player && k !== i) {
+            spreadOrigins.push(k);
             board[k] = { player: undefined, bind: 0, effects: [] };
             if (s.heartChar === 'poisoner') s.heartMagic += 1;
             if (s.circleChar === 'poisoner') s.circleMagic += 1;

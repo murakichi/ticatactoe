@@ -47,6 +47,16 @@ test('毒でライフが尽きたマスは消え、毒使い側の魔力が+1さ
     assert.ok(s.heartMagic >= before + 1);
 });
 
+test('ライフ0のコマに後から毒を撒いても、次の手番で消える', () => {
+    const s = game('poisoner', 'you');
+    s.heartTurn = true; s.life = 3;
+    s.board[10] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
+    const before = s.heartMagic;
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[10].player, undefined);
+    assert.ok(s.heartMagic >= before + 1);
+});
+
 test('毒でなく通常の減衰で0になったマスは消えない', () => {
     const s = game('poisoner', 'you');
     s.heartTurn = true; s.life = 3;
