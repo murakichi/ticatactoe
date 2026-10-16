@@ -97,6 +97,7 @@ export const Game = (props: GameProps) => {
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
+            case 'onClickSerum': onClickSerum(); break;
         }
     };
 
