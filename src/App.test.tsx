@@ -72,3 +72,25 @@ test('AI席が1つも無ければランダムボタンは押せない', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '人間' })[1]);
     expect(screen.getByRole('button', { name: /AI席のキャラをランダム/ })).toBeDisabled();
 });
+
+test('マス数は人数と無関係に選べる（おまかせ/4x4〜10x10）', () => {
+    const { container } = render(<App />);
+    // 既定はおまかせ: 2人=4x4
+    expect(screen.getByText(/盤面 4x4/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '8x8' }));
+    expect(screen.getByText(/盤面 8x8/)).toBeInTheDocument();
+    // 人数を変えても選んだサイズのまま
+    fireEvent.click(screen.getByRole('button', { name: '3人' }));
+    expect(screen.getByText(/盤面 8x8/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
+    expect(container.querySelectorAll('button.square')).toHaveLength(64);
+});
+
+test('おまかせに戻すと人数に応じた盤面になる', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '10x10' }));
+    expect(screen.getByText(/盤面 10x10/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'おまかせ' }));
+    fireEvent.click(screen.getByRole('button', { name: '5人' }));
+    expect(screen.getByText(/盤面 6x6/)).toBeInTheDocument();
+});

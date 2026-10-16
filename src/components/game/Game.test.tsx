@@ -193,3 +193,33 @@ describe('終盤の魔力ボーナス', () => {
         expect(chips[1]).toBe(100);
     });
 });
+
+describe('マス数の選択', () => {
+    it.each([
+        [2, 6, 36],
+        [2, 10, 100],
+        [8, 4, 16],
+        [3, 7, 49],
+    ])('%i人で盤面を %i x %i にできる（%i マス）', (n, size, cellCount) => {
+        const { container } = render(<Game players={cfg(...Array(n).fill('you'))} boardSize={size} />);
+        expect(cells(container)).toHaveLength(cellCount);
+    });
+
+    it('範囲外は4〜10に丸められ、省略時は人数に応じた既定', () => {
+        const small = render(<Game players={cfg('you', 'you')} boardSize={2} />);
+        expect(cells(small.container)).toHaveLength(16);
+        small.unmount();
+        const big = render(<Game players={cfg('you', 'you')} boardSize={30} />);
+        expect(cells(big.container)).toHaveLength(100);
+        big.unmount();
+        const auto = render(<Game players={cfg('you', 'you', 'you')} />);
+        expect(cells(auto.container)).toHaveLength(25);
+    });
+
+    it('選んだ盤面でも4連続で勝てる（2人・8x8の途中の列）', () => {
+        const { container } = render(<Game players={cfg('you', 'you')} boardSize={8} />);
+        // 💙が 18,19,20,21（3行目の3〜6列）、⭕は離れたマス
+        [18, 40, 19, 41, 20, 42, 21].forEach((i) => fireEvent.click(cells(container)[i]));
+        expect(container.querySelector('.winner')?.textContent).toContain('💙');
+    });
+});

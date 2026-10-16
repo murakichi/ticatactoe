@@ -55,7 +55,7 @@ node sim/cli.js sim     --players 3 --chars you,giant,poisoner  # 席のキャ�
 node sim/cli.js metrics --players 6 --games 300 --seed 1        # 同じ内容をJSONで（--log で追記）
 node sim/cli.js auto    --chars you,giant,poisoner --seed 1     # 1試合を観戦
 ```
-- 盤面は人数で決まる（2=4x4 / 3〜4=5x5 / 5〜6=6x6 / 7〜8=7x7）。勝利は全サイズで4連続
+- 盤面は既定では人数で決まる（2=4x4 / 3〜4=5x5 / 5〜6=6x6 / 7〜8=7x7）。`--size N`（4〜10）で人数と無関係に指定できる（sim/metrics/auto）。勝利は全サイズで4連続
 - 席0が先手。**均等なら各席 1/人数**。席別勝率で先手有利、キャラ別勝率（出場1回あたり）でキャラ間の差を見る
 - ライフ減衰は3人以上で「手番1周ごとに1回」（issue #30。`config.js` の `decayPerRoundMinPlayers`）。
   A/B は環境変数で: `DECAY_PER_ROUND_MIN_PLAYERS=99 node sim/cli.js sim --players 4`（全人数で着手ごと）
