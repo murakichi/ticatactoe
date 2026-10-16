@@ -26,6 +26,31 @@
     --color-circle-soft: rgba(255, 77, 121, 0.2);
     --color-circle-grad: #ff3b6b;
     --color-circle-glow: rgba(255, 60, 110, 0.6);
+    /* 席ごとの色 (0=💙 1=⭕ は上の heart/circle と同値。2以降は3人目〜8人目) */
+    --color-seat-0: var(--color-heart);
+    --color-seat-0-soft: var(--color-heart-soft);
+    --color-seat-0-grad: var(--color-heart-grad);
+    --color-seat-1: var(--color-circle);
+    --color-seat-1-soft: var(--color-circle-soft);
+    --color-seat-1-grad: var(--color-circle-grad);
+    --color-seat-2: #2ecc71; /* 🟩 */
+    --color-seat-2-soft: rgba(46, 204, 113, 0.2);
+    --color-seat-2-grad: #22a85a;
+    --color-seat-3: #ff8c1a; /* 🔶 */
+    --color-seat-3-soft: rgba(255, 140, 26, 0.2);
+    --color-seat-3-grad: #e57a0c;
+    --color-seat-4: #f2c200; /* ⭐ */
+    --color-seat-4-soft: rgba(242, 194, 0, 0.2);
+    --color-seat-4-grad: #e6b800;
+    --color-seat-5: #a066ff; /* 🟣 */
+    --color-seat-5-soft: rgba(160, 102, 255, 0.2);
+    --color-seat-5-grad: #8a4de6;
+    --color-seat-6: #b07a45; /* 🟫 */
+    --color-seat-6-soft: rgba(176, 122, 69, 0.2);
+    --color-seat-6-grad: #9a6b3f;
+    --color-seat-7: #ff9bd4; /* 🩷 */
+    --color-seat-7-soft: rgba(255, 155, 212, 0.2);
+    --color-seat-7-grad: #ff7ec8;
 
     /* --- アクセント / 状態 --- */
     --color-accent: #ffc24a;

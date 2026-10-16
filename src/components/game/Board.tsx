@@ -1,9 +1,11 @@
 import React from 'react';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Square } from './Square';
+import { cellPixelsFor } from './boardGeometry';
 import styles from './Board.module.css';
 
 type BoardProps = {
+    size: number;
     squares: SquareInfo[];
     onPlay: (i: number) => void;
     destroyCells?: number[];
@@ -19,12 +21,19 @@ export const Board: React.FC<BoardProps> = (props: BoardProps) => {
         return undefined;
     };
 
+    // 3人以上のときは色に加えてコマの記号も表示して見分けやすくする
+    const showMark = props.squares.some((sq) => sq.player !== undefined) && props.size > 4;
+
     return (
-        <div className={styles.board}>
+        <div
+            className={styles.board}
+            style={{ gridTemplateColumns: `repeat(${props.size}, 1fr)`, ['--sq' as string]: `min(${cellPixelsFor(props.size)}px, calc((100vw - 56px - ${(props.size - 1) * 8}px) / ${props.size}))` }}
+        >
             {props.squares.map((info, i) => (
                 <Square
                     key={i}
                     info={info}
+                    showMark={showMark}
                     onSquareClick={() => props.onPlay(i)}
                     highlight={highlightFor(i)}
                     onHover={props.onCellHover ? () => props.onCellHover!(i) : undefined}

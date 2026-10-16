@@ -88,6 +88,20 @@
     box-shadow: inset 0 0 0 2px var(--color-circle);
 }
 
+.avatarSeat2 { background: var(--color-seat-2-soft); box-shadow: inset 0 0 0 2px var(--color-seat-2); }
+.avatarSeat3 { background: var(--color-seat-3-soft); box-shadow: inset 0 0 0 2px var(--color-seat-3); }
+.avatarSeat4 { background: var(--color-seat-4-soft); box-shadow: inset 0 0 0 2px var(--color-seat-4); }
+.avatarSeat5 { background: var(--color-seat-5-soft); box-shadow: inset 0 0 0 2px var(--color-seat-5); }
+.avatarSeat6 { background: var(--color-seat-6-soft); box-shadow: inset 0 0 0 2px var(--color-seat-6); }
+.avatarSeat7 { background: var(--color-seat-7-soft); box-shadow: inset 0 0 0 2px var(--color-seat-7); }
+
+/* 3人以上のときのプレイヤーパネル一覧(盤面の左に2列で並べる) */
+.seatList {
+    display: grid;
+    grid-template-columns: repeat(2, 150px);
+    gap: var(--space-3);
+}
+
 .name {
     font-weight: 700;
     font-size: 15px;
@@ -265,6 +279,14 @@
 
     .main {
         display: contents;
+    }
+
+    /* 3人以上のパネル一覧は行1に2列で並べる */
+    .seatList {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
     }
 
     /* パネルは行1(💙=左 / ⭕=右)に自動配置。盤面→スキル→ログの順に固定する(ログが一番下) */

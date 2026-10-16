@@ -1,4 +1,5 @@
 import React from 'react';
+import { cellPixelsFor } from './boardGeometry';
 import styles from './BoardEffects.module.css';
 
 export type SkillEffectType =
@@ -26,22 +27,31 @@ export type SkillEffect = {
 
 type Props = {
     effect: SkillEffect | null;
+    /** 盤面の一辺のマス数 */
+    size: number;
 };
 
-// 盤面のセル中心座標 (padding 12 + cell 64 + gap 8 → step 72, 中心 44)
-const cellCenter = (index: number) => {
-    const col = index % 4;
-    const row = Math.floor(index / 4);
-    return { left: 44 + col * 72, top: 44 + row * 72 };
+// 盤面のセル中心座標 (padding 12 + cell + gap 8。4x4 なら cell 64 → step 72, 中心 44)
+const cellCenter = (index: number, size: number) => {
+    const cell = cellPixelsFor(size);
+    const col = index % size;
+    const row = Math.floor(index / size);
+    return { left: 12 + cell / 2 + col * (cell + 8), top: 12 + cell / 2 + row * (cell + 8) };
 };
 
-// 全軍突撃: 盤面各所に着弾する衝撃 (軍師の総攻撃)
-const ASSAULT_IMPACTS = [3, 6, 9, 1, 12, 14, 7];
+// 全軍突撃: 盤面各所に着弾する衝撃 (軍師の総攻撃)。4x4 での位置を相対座標のまま他サイズへ写す
+const ASSAULT_IMPACTS_4X4 = [3, 6, 9, 1, 12, 14, 7];
+const assaultImpacts = (size: number): number[] =>
+    ASSAULT_IMPACTS_4X4.map((idx) => {
+        const row = Math.round(Math.floor(idx / 4) * ((size - 1) / 3));
+        const col = Math.round((idx % 4) * ((size - 1) / 3));
+        return row * size + col;
+    });
 
 // 上昇/落下パーティクルの横位置(%)
 const PARTICLE_X = [10, 26, 42, 58, 74, 90];
 
-export const BoardEffects: React.FC<Props> = ({ effect }) => {
+export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
     if (!effect) return null;
 
     const riseParticles = (emoji: string) =>
@@ -73,7 +83,7 @@ export const BoardEffects: React.FC<Props> = ({ effect }) => {
             case 'backslash':
                 return <div className={`${styles.slashLine} ${styles.backslash}`} />;
             case 'stomp': {
-                const pos = cellCenter(effect.index ?? 5);
+                const pos = cellCenter(effect.index ?? size + 1, size);
                 return <div className={styles.shockwave} style={{ left: pos.left, top: pos.top }} />;
             }
             case 'judge':
@@ -91,8 +101,8 @@ export const BoardEffects: React.FC<Props> = ({ effect }) => {
                 // 軍師「全軍突撃」: 各所に着弾する衝撃 + 旗
                 return (
                     <>
-                        {ASSAULT_IMPACTS.map((idx, i) => {
-                            const pos = cellCenter(idx);
+                        {assaultImpacts(size).map((idx, i) => {
+                            const pos = cellCenter(idx, size);
                             return (
                                 <div
                                     key={i}

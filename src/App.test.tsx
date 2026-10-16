@@ -29,3 +29,21 @@ test('対戦スタートで盤面に切り替わる', () => {
     // 常設スキル (チャージ/シャッフル) が出ている
     expect(screen.getByText(/チャージ/)).toBeInTheDocument();
 });
+
+test('人数を選ぶと席の数と盤面サイズの表示が変わり、その人数で開始できる', () => {
+    const { container } = render(<App />);
+    // 既定は2人(4x4)
+    expect(screen.getByText(/盤面 4x4/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^プレイヤー\d$/)).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: '3人' }));
+    expect(screen.getByText(/盤面 5x5/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^プレイヤー\d$/)).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole('button', { name: '8人' }));
+    expect(screen.getByText(/盤面 7x7/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^プレイヤー\d$/)).toHaveLength(8);
+
+    fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
+    expect(container.querySelectorAll('button.square')).toHaveLength(49);
+});
