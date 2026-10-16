@@ -146,7 +146,7 @@ const skillCosts = {
     onClickPandemic: 6,
     // 増殖のコストだけは config.js のノブから引く (バランス調整ループ用)
     onClickProliferate: PROLIFERATE.cost,
-    // ⚡帯電 (電気使い)。idx 21=帯電トークン / 22=帯電付与。固有スキルの帯電拡散は poolに入らない
+    // ⚡帯電 (雷霆の巫)。idx 21=帯電トークン / 22=帯電付与。固有スキルの帯電拡散は poolに入らない
     onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
@@ -202,7 +202,7 @@ function spreadPoisonAround(board, idx, rng, s) {
     poisonStrike(s, board[t]);
 }
 
-// ---- 帯電（電気使い） ------------------------------------------------------
+// ---- 帯電（雷霆の巫） ------------------------------------------------------
 // ⚡は {effect:'⚡'} の個数がスタック。発火: 帯電マスの縦横に隣接するマスへ誰かが着手すると、
 // その帯電マスの縦横隣接のコマに1ダメージ。🔑ロック中(bind>0)のマスは貫通しない。発火した⚡は全部消える。
 function chargeStacks(sq) {
@@ -220,7 +220,7 @@ function orthoNeighbors(i) {
 function charOfPlayer(s, player) {
     return player === HEART ? s.heartChar : s.circleChar;
 }
-// 電気使いの⚡付き自陣マスは「ライフ0でも取られない」無敵。弱点として本人も触れない
+// 雷霆の巫の⚡付き自陣マスは「ライフ0でも取られない」無敵。弱点として本人も触れない
 function isShielded(s, sq) {
     return !!sq.player && charOfPlayer(s, sq.player) === 'electrician' && chargeStacks(sq) > 0;
 }
@@ -243,7 +243,7 @@ function fireCharges(s, i, mover) {
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
             sq.bind -= 1;
-            // 電気使い視点: 電気使いの駒が受けた被害 / 相手の駒に与えた被害 (電気使い不在の試合は other に計上)
+            // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / 相手の駒に与えた被害 (雷霆の巫不在の試合は other に計上)
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
         }
         board[k].effects = board[k].effects.filter((e) => e.effect !== '⚡');
@@ -438,7 +438,7 @@ function advanceTurn(s) {
 function placeMove(s, i) {
     const board = s.board;
 
-    // 電気使いの⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)
+    // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)
     if (isShielded(s, board[i])) return false;
 
     // pending targeted skills consume the click without advancing the turn
@@ -949,7 +949,7 @@ function exePandemic(s, i) {
 }
 
 
-// ---- 電気使い スキル ----
+// ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
     if (empties.length) s.board[randomPick(empties, s.rng)] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };

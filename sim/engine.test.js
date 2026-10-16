@@ -192,7 +192,7 @@ test('calculateWinner detects 4-in-a-row', () => {
     assert.strictEqual(e.calculateWinner(Array(16).fill(undefined)), undefined);
 });
 
-// ---- 帯電 ⚡ (電気使い, #39) ----
+// ---- 帯電 ⚡ (雷霆の巫, #39) ----
 const zap = () => ({ player: undefined, bind: 0, effects: [{ effect: '⚡' }] });
 
 test('⚡発火: 帯電マスの隣に置くと、帯電マスの縦横隣接のコマが1ダメージ受け、⚡は消える', () => {
@@ -248,7 +248,7 @@ test('⚡付与スキルは付与した時点ではダメージを出さない',
     assert.strictEqual(s.heartTurn, true);                           // 手番は進まない
 });
 
-test('電気使いパッシブ: ⚡付き自陣マスはライフ0でも奪えない', () => {
+test('雷霆の巫パッシブ: ⚡付き自陣マスはライフ0でも奪えない', () => {
     const s = game('you', 'electrician');
     s.heartTurn = true; s.life = 9;
     s.board[3] = { player: '⭕', bind: 0, effects: [{ effect: '⚡' }] };
@@ -256,7 +256,7 @@ test('電気使いパッシブ: ⚡付き自陣マスはライフ0でも奪え�
     assert.strictEqual(s.board[3].player, '⭕');
 });
 
-test('電気使いパッシブ: 電気使い以外の⚡付きコマは通常どおり奪える', () => {
+test('雷霆の巫パッシブ: 雷霆の巫以外の⚡付きコマは通常どおり奪える', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.life = 9;
     s.board[3] = { player: '⭕', bind: 0, effects: [{ effect: '⚡' }] };
@@ -264,7 +264,7 @@ test('電気使いパッシブ: 電気使い以外の⚡付きコマは通常ど
     assert.strictEqual(s.board[3].player, '💙');
 });
 
-test('電気使いの弱点: ⚡付き自陣マスは自分でも触れない(強化もできない)', () => {
+test('雷霆の巫の弱点: ⚡付き自陣マスは自分でも触れない(強化もできない)', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.life = 5;
     s.board[3] = { player: '💙', bind: 2, effects: [{ effect: '⚡' }] };
@@ -272,7 +272,7 @@ test('電気使いの弱点: ⚡付き自陣マスは自分でも触れない(�
     assert.strictEqual(s.board[3].bind, 2);
 });
 
-test('電気使いの⚡付きマスはスラッシュ等のダメージ系スキルの対象外', () => {
+test('雷霆の巫の⚡付きマスはスラッシュ等のダメージ系スキルの対象外', () => {
     const s = game('you', 'electrician');
     s.heartTurn = true; s.heartMagic = 20;
     s.board[3] = { player: '⭕', bind: 4, effects: [{ effect: '⚡' }] };

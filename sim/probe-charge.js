@@ -2,12 +2,12 @@
 // @ts-check
 'use strict';
 /*
- * 帯電(電気使い, #39)の機構レベルの計測。勝率ではなく「効いているか」を直接見る。
+ * 帯電(雷霆の巫, #39)の機構レベルの計測。勝率ではなく「効いているか」を直接見る。
  *   node sim/probe-charge.js [games-per-side=100] [seed=1]
  *
- * 出力 (電気使い vs 各キャラ、先手/後手を合算):
+ * 出力 (雷霆の巫 vs 各キャラ、先手/後手を合算):
  *  - 勝率 / 平均ターン / 引き分け(=着手候補が尽きて止まった)率
- *  - 1試合あたりの発火回数(byElec=電気使いの着手で発火) / 相手の駒が受けたダメージ(dmgOpp) / 電気使いの駒が受けたダメージ(dmgElec)
+ *  - 1試合あたりの発火回数(byElec=雷霆の巫の着手で発火) / 相手の駒が受けたダメージ(dmgOpp) / 雷霆の巫の駒が受けたダメージ(dmgElec)
  *  - 帯電系スキルの使用回数/試合 (帯電トークン・帯電付与・帯電拡散)
  *  - 手番ごとの平均 ⚡マス数 と 無敵(固まった自駒)数、⚡が1個以上盤上にあった手番の割合
  */
@@ -68,5 +68,5 @@ for (const opp of others) {
         `   ${(cells / sampled).toFixed(2).padStart(5)}  ${(frozen / sampled).toFixed(2).padStart(5)}   ${(any / sampled * 100).toFixed(0).padStart(4)}%`
     );
 }
-console.log(`\n電気使い 対7キャラ勝率(ミラー除く): ${(vsOthers.w / (vsOthers.w + vsOthers.l)).toFixed(3)}  (n=${vsOthers.w + vsOthers.l})`);
-console.log(`電気使い 総合勝率(ミラー含む): ${(total.w / (total.w + total.l)).toFixed(3)}`);
+console.log(`\n雷霆の巫 対7キャラ勝率(ミラー除く): ${(vsOthers.w / (vsOthers.w + vsOthers.l)).toFixed(3)}  (n=${vsOthers.w + vsOthers.l})`);
+console.log(`雷霆の巫 総合勝率(ミラー含む): ${(total.w / (total.w + total.l)).toFixed(3)}`);

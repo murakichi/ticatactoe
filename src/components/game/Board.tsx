@@ -8,7 +8,7 @@ type BoardProps = {
     onPlay: (i: number) => void;
     destroyCells?: number[];
     previewCells?: number[];
-    /** 電気使いの⚡付き自陣マス（誰も触れない無敵マス） */
+    /** 雷霆の巫の⚡付き自陣マス（誰も触れない無敵マス） */
     shieldedCells?: number[];
     onCellHover?: (i: number) => void;
     onCellLeave?: () => void;

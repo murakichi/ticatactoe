@@ -124,7 +124,7 @@
     box-shadow: 0 0 0 2px #facc15 inset, 0 0 10px rgba(250, 204, 21, 0.55);
 }
 
-/* 電気使いの無敵マス（⚡付き自陣）。誰も触れない */
+/* 雷霆の巫の無敵マス（⚡付き自陣）。誰も触れない */
 .shielded {
     box-shadow: 0 0 0 3px #fde047 inset, 0 0 14px rgba(250, 204, 21, 0.9);
     cursor: not-allowed;

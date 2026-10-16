@@ -31,7 +31,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     yinYangMaster: '陰陽師',
     necromancer: 'ネクロマンサー',
     poisoner: '毒使い',
-    electrician: '電気使い',
+    electrician: '雷霆の巫',
 };
 // 汎用スキルプールの大きさ (idx 0..22)。sim/config.js の poolSize と揃えること
 const SKILL_POOL_SIZE = 23;
@@ -138,7 +138,7 @@ export const Game = (props: GameProps) => {
         if (heartTurn) setHeartLockedSkills(aiLocks);
         else setCircleLockedSkills(aiLocks);
 
-        // 電気使い: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
+        // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
         // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
         if (result.chargeClicks && result.chargeClicks.length > 0) {
             const steps: (number | string)[] = [];
@@ -366,7 +366,7 @@ export const Game = (props: GameProps) => {
         const necroActive =
             (heartTurn && props.heartSelectedCharacter === 'necromancer' && remainHeartNecro > 0) ||
             (!heartTurn && props.circleSelectedCharacter === 'necromancer' && remainCircleNecro > 0);
-        // 電気使いの⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)。対象選択スキルも含めて受け付けない
+        // 雷霆の巫の⚡付き自陣マスは、本人も相手も触れない (無敵＋弱点)。対象選択スキルも含めて受け付けない
         if (isShielded(currentBoard[i], chars)) return;
         const nextBoard = currentBoard.slice();
         if (useChargeOne) {
@@ -1190,7 +1190,7 @@ export const Game = (props: GameProps) => {
         setUsePandemic(false);
     };
 
-    // --- 帯電（電気使い） ---
+    // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
     // 帯電トークン: 空きマスにランダムに⚡付きのコマを置く（トークン扱い。発火はしない）

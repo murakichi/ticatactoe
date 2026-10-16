@@ -38,7 +38,7 @@ describe('帯電 ⚡ helpers', () => {
         expect(fireCharges(b, 15).fired).toEqual([]);
     });
 
-    it('isShielded: 電気使いの⚡付き自陣だけ。isGuarded は🔑も含む', () => {
+    it('isShielded: 雷霆の巫の⚡付き自陣だけ。isGuarded は🔑も含む', () => {
         const b = emptyBoard();
         put(b, 0, '⭕', 0, true);
         put(b, 1, '💙', 0, true);
@@ -72,7 +72,7 @@ describe('帯電 AI', () => {
         expect(ai.getValidMoves(b, 5)).not.toContain(3);
     });
 
-    it('電気使いは敵が密集していて魔力があれば帯電拡散を起点クリック付きで選ぶ', () => {
+    it('雷霆の巫は敵が密集していて魔力があれば帯電拡散を起点クリック付きで選ぶ', () => {
         const ai = new AIPlayer('⭕', 'electrician', 'you');
         const b = emptyBoard();
         [0, 1, 2].forEach((i) => put(b, i, '⭕', 3));

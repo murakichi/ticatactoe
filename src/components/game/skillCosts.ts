@@ -30,7 +30,7 @@ export const skillCosts = {
     onClickIntensify: 8,
     onClickPandemic: 6,
     onClickProliferate: 6,
-    // ⚡帯電（電気使い）。帯電トークン/帯電付与は汎用プール(idx 21/22)、帯電拡散は電気使いの固有スキル
+    // ⚡帯電（雷霆の巫）。帯電トークン/帯電付与は汎用プール(idx 21/22)、帯電拡散は雷霆の巫の固有スキル
     onClickChargeToken: 3,
     onClickChargeOne: 2,
     onClickChargeSpread: 7,

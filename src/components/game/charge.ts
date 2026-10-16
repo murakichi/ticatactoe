@@ -1,4 +1,4 @@
-// ⚡帯電（電気使い）の純粋ロジック。Game.tsx / AIPlayer.ts で共有する。
+// ⚡帯電（雷霆の巫）の純粋ロジック。Game.tsx / AIPlayer.ts で共有する。
 // sim/engine.js の chargeStacks / orthoNeighbors / isShielded / isGuarded / fireCharges / connectedPieces と同じ仕様。
 import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';
@@ -24,7 +24,7 @@ export const orthoNeighbors = (i: number): number[] => {
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
 
-/** 電気使いの⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
+/** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 export const isShielded = (sq: SquareInfo, chars: PlayerCharacters): boolean =>
     !!sq.player && chars[sq.player] === 'electrician' && chargeStacks(sq) > 0;
 

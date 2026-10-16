@@ -16,7 +16,7 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number;
-    /** 電気使い: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
+    /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
     chargeClicks?: { skill: string; target: number }[];
 };
 
@@ -29,7 +29,7 @@ class AIPlayer {
     opponent: Player;
     opponentCharacter: CharacterId;
     necroActive: boolean = false;
-    /** 無敵(⚡付き電気使い自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
+    /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
     shield: Set<number> = new Set();
 
     constructor(playerSymbol: Player, character: CharacterId, opponentCharacter: CharacterId = 'you') {
@@ -700,7 +700,7 @@ class AIPlayer {
             }
         }
 
-        // 電気使い: 帯電拡散→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
+        // 雷霆の巫: 帯電拡散→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）
         const chargeClicks: { skill: string; target: number }[] = [];
         if (this.character === 'electrician' && this.countReaches(board, this.opponent) === 0) {

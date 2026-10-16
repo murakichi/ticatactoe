@@ -16,7 +16,7 @@ module.exports = {
     "giantSkipModulo": 5,
     // 汎用スキルプールの大きさ。21 -> 23 (帯電トークン/帯電付与, #39)
     "poolSize": 23,
-    // 帯電（電気使い, #39）のコスト。Game.tsx / skillCosts.ts の値と一致させること
+    // 帯電（雷霆の巫, #39）のコスト。Game.tsx / skillCosts.ts の値と一致させること
     "charge": {
         "tokenCost": 3,
         "oneCost": 2,

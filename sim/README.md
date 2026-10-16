@@ -48,14 +48,14 @@ node sim/probe-proliferate.js 60      # n=60/側。約5分
 「ループが終息するか」を見たいときは勝率ではなくこちらを使う（強制発動させて
 ループ到達回数の分布を直接測る統制実験）。`cap到達% = 0` なら暴走していない。
 
-### 6. 帯電（電気使い）の機構指標
+### 6. 帯電（雷霆の巫）の機構指標
 ```bash
-node sim/probe-charge.js 120 5        # 電気使い vs 各キャラの勝率・発火回数・帯電系スキルの使用回数/試合
+node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・発火回数・帯電系スキルの使用回数/試合
 ```
 勝率だけでは「⚡が効いているか」が分からないので、発火回数・両者の被ダメージ・⚡が盤上にある手番の割合を
 直接出す。A/B検証用に環境変数 `CHG_FIRE_W`（発火の重み）/ `CHG_ONE_MIN`（帯電付与の閾値）/
 `SIM_POOL_SIZE`（プールの大きさ）/ `SIM_CHARS`（metrics の対象キャラ）が使える。
-電気使いのライフ平均は `config.js` の `lifeMeans.electrician`、帯電系のコストは `charge` ノブ。
+雷霆の巫のライフ平均は `config.js` の `lifeMeans.electrician`、帯電系のコストは `charge` ノブ。
 
 この一連を自動で回すスキルが **`/balance-loop`**（`.claude/skills/balance-loop/`）。
 バランス調整ノブは **`sim/config.js`**（ライフ平均・std・巨人の手番スキップ・増殖の

@@ -151,7 +151,7 @@ export const BoardEffects: React.FC<Props> = ({ effect }) => {
                     </>
                 );
             case 'zap': {
-                // 電気使い「帯電」: 対象マスに電光が走る。マス指定なしなら盤面全体に短い閃光
+                // 雷霆の巫「帯電」: 対象マスに電光が走る。マス指定なしなら盤面全体に短い閃光
                 if (effect.index === undefined) {
                     return (
                         <>

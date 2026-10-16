@@ -108,8 +108,8 @@ function bestMiasmaTarget(board, me, opp) {
 
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
-// ---- 帯電（電気使い）AI ----
-// 無敵(⚡付き電気使い自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙から除外する
+// ---- 帯電（雷霆の巫）AI ----
+// 無敵(⚡付き雷霆の巫自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙から除外する
 let shield = new Set();
 function updateShield(s) {
     shield = new Set();
@@ -152,7 +152,7 @@ function bestOwnLineCount(board, i, me, opp) {
 // 帯電付与の対象。2通りの価値の大きいほう:
 //  攻め: 縦横隣接の (敵コマ数 − 自コマ数)（ライフ>0のコマのみ）
 //  守り: ライフ0〜1(奪われやすい)の自コマが、敵のいない列で自コマ2つ以上(リーチ列なら3つ)の一部なら、
-//        ⚡の無敵で守る (電気使いのパッシブ)
+//        ⚡の無敵で守る (雷霆の巫のパッシブ)
 // 値が MIN 以上なら撃つ。ロック中・無敵マス・すでに帯電したマスは除く
 const CHARGE_ONE_MIN_SCORE = Number(process.env.CHG_ONE_MIN) || 2; // CHG_ONE_MIN: A/B検証用の上書き
 function bestChargeOneTarget(board, me, opp) {
@@ -631,7 +631,7 @@ function faithfulMakeMove(s) {
         }
     }
 
-    // 電気使い: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
+    // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
     if (curChar(s) === 'electrician' && countReaches(s.board, opp, me) === 0) {
         if (curMagic(s) >= skillCosts.onClickChargeSpread) {
