@@ -175,3 +175,26 @@
 .start:hover {
     transform: translateY(-2px) scale(1.04);
 }
+
+.randomBtn {
+    margin-top: calc(var(--space-2) * -1);
+    padding: 8px 18px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.randomBtn:hover:not(:disabled) {
+    background: var(--color-surface-3);
+    transform: translateY(-1px);
+}
+
+.randomBtn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}

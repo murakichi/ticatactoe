@@ -35,27 +35,26 @@ const build = (size: number): BoardGeometry => {
     const at = (r: number, c: number) => r * size + c;
     const inside = (r: number, c: number) => r >= 0 && r < size && c >= 0 && c < size;
 
+    // 並び順は旧4x4テーブルと同じ（行→列→左上右下の斜め→右上左下の斜め。同じ向きの中は左上から）。
+    // AIはラインを順に走査して最初に見つけた脅威を優先するため、順序を変えると2人戦の手が変わる
     const winLines: number[][] = [];
-    const dirs: [number, number][] = [
-        [0, 1],
-        [1, 0],
-        [1, 1],
-        [1, -1],
-    ];
-    for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-            for (const [dr, dc] of dirs) {
-                const line: number[] = [];
-                for (let k = 0; k < WIN_LENGTH; k++) {
-                    const rr = r + dr * k;
-                    const cc = c + dc * k;
-                    if (!inside(rr, cc)) break;
-                    line.push(at(rr, cc));
-                }
-                if (line.length === WIN_LENGTH) winLines.push(line);
-            }
+    const lineAt = (r: number, c: number, dr: number, dc: number): number[] | null => {
+        const line: number[] = [];
+        for (let k = 0; k < WIN_LENGTH; k++) {
+            const rr = r + dr * k;
+            const cc = c + dc * k;
+            if (!inside(rr, cc)) return null;
+            line.push(at(rr, cc));
         }
-    }
+        return line;
+    };
+    const push = (line: number[] | null) => {
+        if (line) winLines.push(line);
+    };
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) push(lineAt(r, c, 0, 1)); // 行
+    for (let c = 0; c < size; c++) for (let r = 0; r < size; r++) push(lineAt(r, c, 1, 0)); // 列
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) push(lineAt(r, c, 1, 1)); // 左上→右下
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) push(lineAt(r, c, 1, -1)); // 右上→左下
 
     const cells = size * size;
     const stomp: number[][] = [];

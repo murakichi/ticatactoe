@@ -43,7 +43,8 @@ describe('boardSizeFor', () => {
 describe('geometryOf(4) は従来の4x4テーブルと一致する', () => {
     const g = geometryOf(4);
     it('勝利ライン', () => {
-        expect(g.winLines.map(sorted).sort()).toEqual(WIN_LINES.map(sorted).sort());
+        // 順序も同じ: AIが脅威を走査する順序に効くので、2人戦の手が変わらないよう旧テーブルと一致させる
+        expect(g.winLines).toEqual(WIN_LINES);
     });
     it('ストンプ範囲', () => {
         for (let i = 0; i < 16; i++) expect(sorted(g.stompRange(i))).toEqual(sorted(STOMP_AREA[i]));
@@ -99,5 +100,26 @@ describe('可変サイズの範囲スキル', () => {
     it('対角線の長さは盤の一辺', () => {
         expect(geometryOf(6).antiDiagonal).toHaveLength(6);
         expect(geometryOf(6).mainDiagonal).toHaveLength(6);
+    });
+});
+
+describe('sim/geometry.js（ヘッドレス版の複製）と一致する', () => {
+    // sim は依存ゼロの素のNodeで import できないため生成式を複製している。ずれたらここで落ちる
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const simGeo = require('../../../sim/geometry');
+    it.each([4, 5, 6, 7])('%ix%i', (size) => {
+        const a = geometryOf(size);
+        const b = simGeo.geometryOf(size);
+        expect(b.winLines).toEqual(a.winLines);
+        expect(b.antiDiagonal).toEqual(a.antiDiagonal);
+        expect(b.mainDiagonal).toEqual(a.mainDiagonal);
+        for (let i = 0; i < size * size; i++) {
+            expect(sorted(b.stompRange(i))).toEqual(sorted(a.stompRange(i)));
+            expect(sorted(b.judgeRange(i))).toEqual(sorted(a.judgeRange(i)));
+            expect(sorted(b.surroundRange(i))).toEqual(sorted(a.surroundRange(i)));
+        }
+    });
+    it.each([2, 3, 4, 5, 6, 7, 8])('boardSizeFor(%i)', (n) => {
+        expect(simGeo.boardSizeFor(n)).toBe(boardSizeFor(n));
     });
 });

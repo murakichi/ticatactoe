@@ -44,6 +44,16 @@ export const App = () => {
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) => prev.map((p, i) => (i === seat ? { ...p, ...patch } : p)));
     const boardSize = boardSizeFor(playerCount);
+    // AI席のキャラを「あなた」以外からランダムに決め直す（人間の席は触らない。重複あり）
+    const randomizeAICharacters = () =>
+        setPlayers((prev) =>
+            prev.map((p, seat) => {
+                if (seat >= playerCount || !p.isAI) return p;
+                const pool = CHARACTERS.filter((c) => c.id !== 'you');
+                return { ...p, character: pool[Math.floor(Math.random() * pool.length)].id };
+            })
+        );
+    const hasAISeat = players.slice(0, playerCount).some((p) => p.isAI);
 
     return (
         <div className='App'>
@@ -72,6 +82,9 @@ export const App = () => {
                             盤面 {boardSize}x{boardSize}・4マス並べで勝ち
                         </span>
                     </div>
+                    <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
+                        🎲 AI席のキャラをランダムに決める（あなた以外）
+                    </button>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting

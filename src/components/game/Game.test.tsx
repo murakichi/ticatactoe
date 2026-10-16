@@ -129,3 +129,29 @@ describe('多人数', () => {
         expect(turnPlayer(container)).toBe('🟩');
     });
 });
+
+describe('ライフ減衰のタイミング (issue #30)', () => {
+    // Math.random を 0.25 に固定すると正規乱数のライフが毎回 9 になる（sin 側の枝）
+    beforeEach(() => jest.spyOn(Math, 'random').mockReturnValue(0.25));
+    afterEach(() => jest.restoreAllMocks());
+    const lifeAt = (container: HTMLElement, i: number) => cells(container)[i].querySelector('.life')?.textContent;
+
+    it('3人戦: 手番が1周するまで(3着手)は減らず、4着手目で全コマが-1される', () => {
+        const { container } = render(<Game players={cfg('you', 'you', 'you')} />);
+        fireEvent.click(cells(container)[0]);
+        expect(lifeAt(container, 0)).toBe('9');
+        fireEvent.click(cells(container)[1]);
+        fireEvent.click(cells(container)[2]);
+        expect(lifeAt(container, 0)).toBe('9'); // 1周するまで減衰しない
+        fireEvent.click(cells(container)[3]);
+        expect(lifeAt(container, 0)).toBe('8'); // 2周目の最初の着手で-1
+    });
+
+    it('2人戦は従来どおり着手のたびに-1される', () => {
+        const { container } = render(<Game players={cfg('you', 'you')} />);
+        fireEvent.click(cells(container)[0]);
+        expect(lifeAt(container, 0)).toBe('9');
+        fireEvent.click(cells(container)[1]);
+        expect(lifeAt(container, 0)).toBe('8');
+    });
+});

@@ -9,6 +9,7 @@ import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, geometryOf } from './boardGeometry';
+import { shouldDecay } from './decay';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
@@ -67,6 +68,8 @@ export const Game = (props: GameProps) => {
     const [history, setHistory] = useState<SquareInfo[][]>([initialBoard]);
     const [currentBoard, setCurrentBoard] = useState<SquareInfo[]>(initialBoard);
     const [currentTurn, setCurrentTurn] = useState<number>(1);
+    // 盤面に着手した回数。3人以上のときの減衰タイミング(手番が1周するごと)の判定に使う
+    const [placements, setPlacements] = useState<number>(0);
     // 手番の席番号(0始まり)
     const [turnSeat, setTurnSeat] = useState<number>(0);
     const currentTurnPlayer = symbols[turnSeat];
@@ -371,7 +374,10 @@ export const Game = (props: GameProps) => {
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
         let poisonVanished = 0;
-        for (let s = 0; s < nextBoard.length; s++) {
+        // 3人以上は手番が1周するごとに1回だけ減衰させる (issue #30)
+        const decayNow = shouldDecay(placements, seatCount);
+        setPlacements(placements + 1);
+        for (let s = 0; decayNow && s < nextBoard.length; s++) {
             const square = nextBoard[s];
             if ((square.player || square.effects.filter((x) => x.effect === '🔑').length !== 0) && square.bind > 0) square.bind--;
             // 毒: スタック数だけ追加で bind を減らす（毎ターン bind-1 × 毒の数）
@@ -1192,6 +1198,7 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         setHistory([board]);
         setCurrentTurn(1);
+        setPlacements(0);
         setMagicAll(Array(seatCount).fill(2));
         setUseMagicCountAll(zeros());
         setUseTokenCountAll(zeros());
