@@ -325,7 +325,8 @@ class AIPlayer {
     }
 
     /** AI用コスト計算 (軍師のトークン割引など) */
-    calculateAICost(baseCost: number, isToken: boolean = false): number {
+    calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false): number {
+        if (this.character === 'poisoner') return isPoison ? baseCost - 1 : baseCost + 1;
         if (this.character === 'tactician') return isToken ? baseCost - 1 : baseCost + 2;
         return baseCost;
     }
@@ -445,6 +446,15 @@ class AIPlayer {
             if (remaining >= budsCost && emptyCount >= 6 && myBuds < 3) {
                 spend(budsCost, 'onClickBuds');
             }
+        }
+
+        // 血清: 自陣の毒で次の減衰までに消えそうなコマ(毒数>=bind)があれば除去
+        // (毒使いはランダム枠に出ているときのみ。それ以外は常設ボタン)
+        if (this.character !== 'poisoner' || availableSkills.includes(17)) {
+            const doomed = board.filter(sq => sq.player === this.playerSymbol
+                && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
+                && sq.effects.some(e => e.effect === '☠')).length;
+            if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true), 'onClickSerum');
         }
 
         // --- トークン系 ---
