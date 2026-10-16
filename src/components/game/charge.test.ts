@@ -351,3 +351,22 @@ describe('過負荷 ⚡ (overload)', () => {
         expect(applyOverload(board)[2].effects).toEqual([{ effect: '☠' }]);
     });
 });
+
+describe('雷霆の巫は自陣由来の発火ダメージを受けない', () => {
+    it('⚡が載った自コマの発火では、隣の自コマは無傷で敵コマは1ダメージ。敵の⚡コマの発火は雷霆の巫のコマにも効く', () => {
+        const chars = ['electrician', 'you'] as const; // 💙=雷霆の巫, ⭕=あなた
+        const b = emptyBoard();
+        put(b, 5, '💙', 3, true);   // 雷霆の巫の⚡コマ
+        put(b, 6, '💙', 4);         // 隣の自コマ
+        put(b, 9, '⭕', 4);         // 隣の敵コマ
+        fireCharges(b, 4, 4, chars);
+        expect(b[6].bind).toBe(4);
+        expect(b[9].bind).toBe(3);
+
+        const b2 = emptyBoard();
+        put(b2, 5, '⭕', 3, true);  // 敵の⚡コマ
+        put(b2, 6, '💙', 4);
+        fireCharges(b2, 4, 4, chars);
+        expect(b2[6].bind).toBe(3);
+    });
+});

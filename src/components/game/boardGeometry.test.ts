@@ -1,4 +1,4 @@
-import { boardSizeFor, geometryOf, WIN_LENGTH } from './boardGeometry';
+import { boardSizeFor, clampBoardSize, geometryOf, MAX_BOARD_SIZE, MIN_BOARD_SIZE, WIN_LENGTH } from './boardGeometry';
 import { calculateWinner } from '../../util';
 import { Player } from '../../types/Player';
 
@@ -60,12 +60,12 @@ describe('geometryOf(4) は従来の4x4テーブルと一致する', () => {
 
 describe('大きい盤でも勝利条件は4マス連続', () => {
     it('勝利ラインはすべて長さ4', () => {
-        for (const size of [4, 5, 6, 7]) {
+        for (const size of [4, 5, 6, 7, 8, 9, 10]) {
             expect(geometryOf(size).winLines.every((l) => l.length === WIN_LENGTH)).toBe(true);
         }
     });
     it('ライン数: 行/列は size*(size-3) ずつ、斜めは (size-3)^2 ずつ', () => {
-        for (const size of [4, 5, 6, 7]) {
+        for (const size of [4, 5, 6, 7, 8, 9, 10]) {
             const expected = 2 * size * (size - 3) + 2 * (size - 3) * (size - 3);
             expect(geometryOf(size).winLines.length).toBe(expected);
         }
@@ -107,7 +107,7 @@ describe('sim/geometry.js（ヘッドレス版の複製）と一致する', () =
     // sim は依存ゼロの素のNodeで import できないため生成式を複製している。ずれたらここで落ちる
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const simGeo = require('../../../sim/geometry');
-    it.each([4, 5, 6, 7])('%ix%i', (size) => {
+    it.each([4, 5, 6, 7, 8, 9, 10])('%ix%i', (size) => {
         const a = geometryOf(size);
         const b = simGeo.geometryOf(size);
         expect(b.winLines).toEqual(a.winLines);
@@ -121,5 +121,24 @@ describe('sim/geometry.js（ヘッドレス版の複製）と一致する', () =
     });
     it.each([2, 3, 4, 5, 6, 7, 8])('boardSizeFor(%i)', (n) => {
         expect(simGeo.boardSizeFor(n)).toBe(boardSizeFor(n));
+    });
+});
+
+describe('盤面サイズの選択 (4〜10)', () => {
+    it('範囲は4〜10で、範囲外は丸める', () => {
+        expect(MIN_BOARD_SIZE).toBe(4);
+        expect(MAX_BOARD_SIZE).toBe(10);
+        expect(clampBoardSize(2)).toBe(4);
+        expect(clampBoardSize(0)).toBe(4);
+        expect(clampBoardSize(11)).toBe(10);
+        expect(clampBoardSize(6.4)).toBe(6);
+        expect(clampBoardSize(7)).toBe(7);
+    });
+    it('10x10 でも対角・範囲が盤内に収まる', () => {
+        const g = geometryOf(10);
+        expect(g.antiDiagonal).toHaveLength(10);
+        expect(g.stompRange(0)).toHaveLength(4);
+        expect(g.stompRange(55)).toHaveLength(9);
+        expect(g.judgeRange(55).every((i) => i >= 0 && i < 100)).toBe(true);
     });
 });

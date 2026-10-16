@@ -123,6 +123,25 @@ function bestMiasmaTarget(board, me) {
 
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
+// 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
+function bestAntiNecroLockTarget(board, me) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (sq.player !== me || sq.bind > 3 || sq.effects.some(e => e.effect === '🔑')) continue;
+        let val = 1;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let mc = 0, foreign = 0;
+            for (const idx of line) { if (board[idx].player === me) mc++; else if (board[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(mc, 4)];
+        }
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestIdx;
+}
+
 // ---- 帯電（雷霆の巫）AI ----
 // 無敵(⚡付き雷霆の巫の自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙・スキル対象から除外する
 let shield = new Set();
@@ -134,7 +153,13 @@ const sizeOf = (board) => Math.round(Math.sqrt(board.length));
 
 // 着手マス i が発火させる⚡の損得。敵コマ(ライフ>0)を削れば加点、自コマを削れば減点。
 // ライフ1のコマは0になる(=奪取可能になる/守りが剥がれる)ので重く見る
-function fireGain(board, i, me) {
+// 雷霆の巫の席のシンボル集合（自陣由来の発火ダメージが効かない側）
+function electricianSymbols(s) {
+    const set = new Set();
+    s.chars.forEach((c, seat) => { if (c === 'electrician') set.add(SYMBOLS[seat]); });
+    return set;
+}
+function fireGain(board, i, me, electricians) {
     const size = sizeOf(board);
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
@@ -144,6 +169,7 @@ function fireGain(board, i, me) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (sq.player === board[k].player && electricians.has(sq.player)) continue; // 自陣由来の発火は雷霆の巫に効かない
             // 発火ダメージで 0 になる(=奪取可能になる/守りが剥がれる)コマは重く見る
             const w = 3 * Math.min(FIRE_DAMAGE, sq.bind) + (sq.bind <= FIRE_DAMAGE ? 4 : 0);
             gain += (isEnemy(sq.player, me) ? w : -w) * W;
@@ -460,7 +486,7 @@ function getEnhancedBestMove(s) {
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
-        score += fireGain(board, i, me);
+        score += fireGain(board, i, me, electricianSymbols(s));
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
@@ -588,7 +614,7 @@ function chooseSkills(s, availableSkills) {
     }
 
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
-    if ((character !== 'poisoner' || availableSkills.includes(17))) {
+    if (availableSkills.includes(17)) {
         const serumCost = calculateCost(s, skillCosts.onClickSerum, false, true);
         let doomed = 0;
         for (const sq of board) {
@@ -714,6 +740,23 @@ function faithfulMakeMove(s) {
             SKILLS.lock(s);
             placeMove(s, threats[0]);
             return { move: threats[1], turnEnded: false };
+        }
+    }
+
+    // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る。
+    // A/B(ネクロ以外6キャラ vs ネクロ、約1200試合×seed3-5): 0.448/0.455/0.456 → 0.631/0.613/0.625 (+16〜18pt)。
+    // 「蘇生中/発動間近のときだけ」ロックする版は 0.422 でむしろ悪化 (後出しでは遅い)。
+    // 対照: 敵が「あなた」なら変化なし(0.686→0.693)、敵が巨人なら悪化(0.493→0.403)で、効果は対ネクロ特有。
+    // 軍師はロックに+2コストが乗り、トークン運用と競合して悪化 (0.60→0.50, 0.55→0.47) するため対象外。ネクロ同士は未検証のため対象外
+    if (curChar(s) !== 'tactician' && curChar(s) !== 'necromancer'
+        && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
+        && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
+        const target = bestAntiNecroLockTarget(s.board, me);
+        if (target !== null) {
+            SKILLS.lock(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
         }
     }
 

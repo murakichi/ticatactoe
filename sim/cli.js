@@ -12,6 +12,7 @@
  *   node sim/cli.js sim     --players 4 [--games 300] [--chars you,giant,..] [--mode faithful] [--seed N]
  *   node sim/cli.js metrics --players 4 [--games 300] [--mode faithful] [--seed N]   (JSON)
  *   node sim/cli.js auto    --chars you,giant,poisoner [--seed N]
+ *   --size N で盤面の一辺(4〜10)を人数と無関係に指定（sim/metrics/auto。省略時は人数に応じた既定）
  *
  * In `play`, type a cell index (0-15) to place, `skill <name> [idx]` to use a
  * skill, `help`, or `quit`.
@@ -37,9 +38,9 @@ function parseArgs(argv) {
 
 // ---------- batch simulation (balance analysis) ----------
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
-function runGame(chars, rng, modes) {
+function runGame(chars, rng, modes, size) {
     const modeOf = (seat) => (Array.isArray(modes) ? modes[seat] : modes);
-    const s = engine.newGame({ chars, rng });
+    const s = engine.newGame({ chars, rng, size });
     // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
     const limit = Math.max(400, 200 * chars.length);
     let guard = 0;
@@ -70,7 +71,7 @@ function pickChars(n, fixed, rng) {
     return Array.from({ length: n }, () => CHARACTERS[Math.floor(rng() * CHARACTERS.length)]);
 }
 
-function computeMultiMetrics(players, games, mode, baseSeed, fixedChars) {
+function computeMultiMetrics(players, games, mode, baseSeed, fixedChars, size) {
     const seatWins = Array(players).fill(0);
     const charAgg = {};
     for (const c of CHARACTERS) charAgg[c] = { w: 0, appearances: 0 };
@@ -79,7 +80,7 @@ function computeMultiMetrics(players, games, mode, baseSeed, fixedChars) {
     for (let g = 0; g < games; g++) {
         const chars = pickChars(players, fixedChars, pickRng);
         const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
-        const r = runGame(chars, rng, mode);
+        const r = runGame(chars, rng, mode, size);
         chars.forEach((c) => { charAgg[c].appearances++; });
         if (r.winnerSeat >= 0) { seatWins[r.winnerSeat]++; charAgg[chars[r.winnerSeat]].w++; }
         else draws++;
@@ -89,7 +90,7 @@ function computeMultiMetrics(players, games, mode, baseSeed, fixedChars) {
     const charWinRate = {};
     for (const c of CHARACTERS) charWinRate[c] = charAgg[c].appearances ? charAgg[c].w / charAgg[c].appearances : null;
     return {
-        players, boardSize: engine.boardSizeFor(players), mode, games, seed: baseSeed,
+        players, boardSize: size != null ? size : engine.boardSizeFor(players), boardSizeFixed: size != null, mode, games, seed: baseSeed,
         chars: fixedChars || 'random',
         decayPerRoundMinPlayers: engine.DECAY_PER_ROUND_MIN_PLAYERS,
         seatWinRate: seatWins.map((w) => (decided ? w / decided : null)), // 席0=先手。均等なら 1/players
@@ -104,7 +105,7 @@ function multiSim(args) {
     const players = parseInt(args.players, 10);
     if (!(players >= 2 && players <= MAX_PLAYERS)) throw new Error(`--players must be 2..${MAX_PLAYERS}`);
     const games = parseInt(args.games || '300', 10);
-    const m = computeMultiMetrics(players, games, args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null);
+    const m = computeMultiMetrics(players, games, args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
     const se = (p) => Math.sqrt((p * (1 - p)) / Math.max(1, games * (1 - m.drawRate)));
     console.log(`# ${players}人戦 (${m.boardSize}x${m.boardSize})  games=${games}  AI=${m.mode}  seed=${m.seed}  chars=${Array.isArray(m.chars) ? m.chars.join(',') : 'random'}`);
     console.log(`減衰: ${players >= m.decayPerRoundMinPlayers ? '手番1周ごとに1回' : '着手のたび'}   均等なら各席 ${(100 / players).toFixed(1)}%\n`);
@@ -119,7 +120,7 @@ function multiSim(args) {
 
 function multiMetrics(args) {
     const players = parseInt(args.players, 10);
-    const m = computeMultiMetrics(players, parseInt(args.games || '300', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null);
+    const m = computeMultiMetrics(players, parseInt(args.games || '300', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
     if (args.tag) m.tag = args.tag;
     console.log(JSON.stringify(m, null, 2));
     if (args.log) {
@@ -129,7 +130,7 @@ function multiMetrics(args) {
 }
 
 function sim(args) {
-    if (args.players && parseInt(args.players, 10) !== 2) return multiSim(args);
+    if (args.players && (parseInt(args.players, 10) !== 2 || args.size)) return multiSim(args);
     const games = parseInt(args.games || '500', 10);
     const mode = args.mode || 'faithful';
     const baseSeed = parseInt(args.seed || '1', 10);
@@ -222,7 +223,7 @@ function computeMetrics(games, mode, baseSeed) {
     };
 }
 function metrics(args) {
-    if (args.players && parseInt(args.players, 10) !== 2) return multiMetrics(args);
+    if (args.players && (parseInt(args.players, 10) !== 2 || args.size)) return multiMetrics(args);
     const m = computeMetrics(parseInt(args.games || '800', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10));
     if (args.tag) m.tag = args.tag;
     console.log(JSON.stringify(m, null, 2));
@@ -272,7 +273,7 @@ function auto(args) {
     const chars = args.chars ? args.chars.split(',') : [args.hchar || 'you', args.cchar || 'you'];
     const mode = args.mode || 'faithful';
     const rng = engine.makeRng(parseInt(args.seed || '1', 10));
-    const s = engine.newGame({ chars, rng });
+    const s = engine.newGame({ chars, rng, size: args.size ? parseInt(args.size, 10) : undefined });
     console.log(chars.map((c, seat) => `AI(${c}) ${SYMBOLS[seat]}`).join('  vs  ') + `   mode=${mode}  board=${s.size}x${s.size}\n`);
     let guard = 0;
     const limit = Math.max(400, 200 * chars.length);
@@ -376,6 +377,7 @@ else {
   node sim/cli.js sim     --players N [--games 300] [--chars a,b,..]   # 多人数(2〜8人)の席別・キャラ別勝率
   node sim/cli.js metrics --players N [--games 300] [--seed N]         # 多人数のJSON
   node sim/cli.js auto    --chars a,b,c [--seed N]                     # 多人数の1試合を観戦
+  (多人数系は --size N で盤面の一辺(4〜10)を指定できる)
 
 characters: ${CHARACTERS.join(', ')}
 modes: faithful (=AIPlayer.ts同一), capture (捕獲考慮), random (ランダム基準)`);

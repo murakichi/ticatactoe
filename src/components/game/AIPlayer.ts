@@ -78,6 +78,7 @@ class AIPlayer {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
                 if (sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (sq.player === board[k].player && this.characterOf(sq.player) === 'electrician') continue; // 自陣由来の発火は雷霆の巫に効かない
                 const w = 3 + (sq.bind === 1 ? 4 : 0);
                 gain += this.isEnemy(sq.player) ? w : -w;
             }
@@ -670,8 +671,8 @@ class AIPlayer {
         }
 
         // 血清: 自陣の毒で次の減衰までに消えそうなコマ(毒数>=bind)があれば除去
-        // (毒使いはランダム枠に出ているときのみ。それ以外は常設ボタン)
-        if (this.character !== 'poisoner' || availableSkills.includes(17)) {
+        // (ランダム枠に出ているときのみ)
+        if (availableSkills.includes(17)) {
             const doomed = board.filter(sq => sq.player === this.playerSymbol
                 && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
                 && sq.effects.some(e => e.effect === '☠')).length;
@@ -741,6 +742,33 @@ class AIPlayer {
             if (val > bestVal) { bestVal = val; best = { index: i, kills: turns === 1 }; }
         }
         return bestVal >= minValue ? best : null;
+    }
+
+    /**
+     * 対ネクロ: 吸収されそうな低bind(<=3)の未ロック自コマのうち、通っている自ラインの価値が最大のもの。
+     * なければ null (sim/ai.js bestAntiNecroLockTarget と同一)
+     */
+    findAntiNecroLockTarget(board: SquareInfo[]): number | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || sq.effects.some((e) => e.effect === '🔑')) continue;
+            let val = 1;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let mc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === this.playerSymbol) mc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(mc, 4)];
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        }
+        return best;
     }
 
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
@@ -855,6 +883,20 @@ class AIPlayer {
                     skills: ['onClickUseLock'],
                     lockTargets: [threatSquares[0]],
                 };
+            }
+        }
+
+        // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る (sim/ai.js と同一)。
+        // A/B: ネクロ以外6キャラ vs ネクロ 0.45→0.62 (+16〜18pt)。軍師は+2コストで悪化、ネクロ同士は未検証のため対象外
+        if (
+            this.character !== 'tactician' &&
+            this.character !== 'necromancer' &&
+            this.characters.some((c, seat) => c === 'necromancer' && seat !== seatOf(this.playerSymbol)) &&
+            magic >= this.calculateAICost(costs.onClickUseLock)
+        ) {
+            const lockCell = this.findAntiNecroLockTarget(board);
+            if (lockCell !== null) {
+                return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [lockCell] };
             }
         }
 

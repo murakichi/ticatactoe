@@ -50,7 +50,7 @@ export type FireResult = {
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = []): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
@@ -60,6 +60,8 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number): FireR
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (hasLock(sq)) continue; // ロックは貫通しない
+            // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
+            if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
             board[n] = { ...sq, bind: sq.bind - 1 };
             damaged.push(n);
         }

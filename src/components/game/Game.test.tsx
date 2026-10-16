@@ -165,3 +165,61 @@ test('雷霆の巫: 固有スキル(帯電拡散)がパネルとスキルボタ�
     expect(container.textContent).toContain('帯電拡散⚡ 7');
     expect(screen.getByRole('button', { name: '帯電拡散-7' })).toBeInTheDocument();
 });
+
+describe('終盤の魔力ボーナス', () => {
+    const chargeTimes = (n: number) => {
+        for (let k = 0; k < n; k++) fireEvent.click(screen.getByRole('button', { name: /チャージ/ }));
+    };
+
+    it('3人戦: 50ターン目から手番開始時の魔力が+1される（表示と実際の魔力）', () => {
+        const { container } = render(<Game players={cfg('you', 'you', 'you')} />);
+        chargeTimes(48);
+        expect(screen.queryByText(/魔力ボーナス/)).not.toBeInTheDocument();
+        chargeTimes(1); // ターン50の開始
+        expect(screen.getByText(/魔力ボーナス/)).toHaveTextContent('+1');
+        // 50ターン目の手番は席1。初期2 + チャージ3×16回 + 手番開始+1×17回(ターン2,5,…,47,50) + ボーナス+1 = 68
+        const chips = Array.from(container.querySelectorAll('[class*="chipMagic"]')).map((el) => Number((el.textContent ?? '').replace(/\D/g, '')));
+        expect(chips[1]).toBe(68);
+    });
+
+    it('2人戦でも50ターン目から増える', () => {
+        const { container } = render(<Game players={cfg('you', 'you')} />);
+        chargeTimes(48);
+        expect(screen.queryByText(/魔力ボーナス/)).not.toBeInTheDocument();
+        chargeTimes(1); // ターン50の開始（席1の手番）
+        expect(screen.getByText(/魔力ボーナス/)).toHaveTextContent('+1');
+        // 席1: 初期2 + チャージ3×24回 + 手番開始+1×25回(ターン2,4,…,50) + ボーナス+1 = 100
+        const chips = Array.from(container.querySelectorAll('[class*="chipMagic"]')).map((el) => Number((el.textContent ?? '').replace(/\D/g, '')));
+        expect(chips[1]).toBe(100);
+    });
+});
+
+describe('マス数の選択', () => {
+    it.each([
+        [2, 6, 36],
+        [2, 10, 100],
+        [8, 4, 16],
+        [3, 7, 49],
+    ])('%i人で盤面を %i x %i にできる（%i マス）', (n, size, cellCount) => {
+        const { container } = render(<Game players={cfg(...Array(n).fill('you'))} boardSize={size} />);
+        expect(cells(container)).toHaveLength(cellCount);
+    });
+
+    it('範囲外は4〜10に丸められ、省略時は人数に応じた既定', () => {
+        const small = render(<Game players={cfg('you', 'you')} boardSize={2} />);
+        expect(cells(small.container)).toHaveLength(16);
+        small.unmount();
+        const big = render(<Game players={cfg('you', 'you')} boardSize={30} />);
+        expect(cells(big.container)).toHaveLength(100);
+        big.unmount();
+        const auto = render(<Game players={cfg('you', 'you', 'you')} />);
+        expect(cells(auto.container)).toHaveLength(25);
+    });
+
+    it('選んだ盤面でも4連続で勝てる（2人・8x8の途中の列）', () => {
+        const { container } = render(<Game players={cfg('you', 'you')} boardSize={8} />);
+        // 💙が 18,19,20,21（3行目の3〜6列）、⭕は離れたマス
+        [18, 40, 19, 41, 20, 42, 21].forEach((i) => fireEvent.click(cells(container)[i]));
+        expect(container.querySelector('.winner')?.textContent).toContain('💙');
+    });
+});

@@ -8,8 +8,9 @@ import AIPlayer, { TURN_ENDING_SKILLS, SKILL_POOL_SIZE } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
-import { boardSizeFor, geometryOf } from './boardGeometry';
+import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
+import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
@@ -26,6 +27,8 @@ export type PlayerConfig = {
 type GameProps = {
     /** 席順(= 手番順)。先頭が先手。2〜8人 */
     players: PlayerConfig[];
+    /** 盤面の一辺のマス数(4〜10)。省略時は人数に応じた既定 */
+    boardSize?: number;
 };
 
 const CHARACTER_NAMES: Record<CharacterId, string> = {
@@ -65,7 +68,7 @@ const GIANT_SKIP_MODULO = 5;
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
-    const geo = geometryOf(boardSizeFor(seatCount));
+    const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : boardSizeFor(seatCount));
     const symbols: Player[] = PLAYER_SYMBOLS.slice(0, seatCount);
     const characters: CharacterId[] = props.players.map((p) => p.character);
     const makeBoard = (): SquareInfo[] => Array.from({ length: geo.cells }, () => ({ player: undefined, bind: 0, effects: [] }));
@@ -306,7 +309,8 @@ export const Game = (props: GameProps) => {
         // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
         // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
         const magicCharacter: CharacterId[] = ['magician'];
-        let nextMagic: number = magic[nextSeat] + 1 + budsCount(nextSymbol);
+        // 50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
+        let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + budsCount(nextSymbol);
         if (magicCharacter.includes(nextCharacter)) {
             nextMagic++;
         }
@@ -559,7 +563,7 @@ export const Game = (props: GameProps) => {
         }
 
         // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ（蘇生の吸収より前）
-        const fire = fireCharges(nextBoard, i, geo.size);
+        const fire = fireCharges(nextBoard, i, geo.size, characters);
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
@@ -1478,7 +1482,7 @@ export const Game = (props: GameProps) => {
             <div className={styles.main}>
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
-                    <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} />
+                    <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
                     <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
                         <Board
                             size={geo.size}
@@ -1616,13 +1620,6 @@ export const Game = (props: GameProps) => {
                         disabled={checkSkillDisable(skillCosts.onClickYingYangSkill)}
                         onHoverStart={currentYinYangMode === 'ying' ? () => showPreview(kyokoPreview()) : undefined}
                         onHoverEnd={currentYinYangMode === 'ying' ? clearPreview : undefined}
-                    />
-                    <SkillButton
-                        onClick={onClickSerum}
-                        buttonText={`血清-${calculateCost(skillCosts.onClickSerum, false, true)}`}
-                        paragraph='自陣のコマの毒をすべて除去します'
-                        hidden={currentCharacter === 'poisoner'}
-                        disabled={checkSkillDisable(skillCosts.onClickSerum, false, true)}
                     />
                     {shuffleSkillDefs.map((s) => (
                         <SkillButton

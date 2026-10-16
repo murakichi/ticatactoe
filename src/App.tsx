@@ -1,7 +1,7 @@
 import './App.css';
 import React, { useState } from 'react';
 import { Game, PlayerConfig } from './components/game/Game';
-import { boardSizeFor } from './components/game/boardGeometry';
+import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
@@ -34,7 +34,7 @@ const CHARACTERS: CharacterDef[] = [
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。ライフ平均${L.electrician}。固有:帯電拡散`,
+        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージは受けない。ライフ平均${L.electrician}。固有:帯電拡散`,
     },
 ];
 
@@ -45,11 +45,13 @@ export const App = () => {
     // 8席ぶんの設定を保持し、人数を変えても入力済みの内容を失わない。実際に使うのは先頭 playerCount 席
     const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
     const [playerCount, setPlayerCount] = useState<number>(MIN_PLAYERS);
+    // 盤面サイズ: 'auto'=人数に応じた既定(おまかせ) / 数値=人数に関わらずその一辺のマス数
+    const [boardSizeChoice, setBoardSizeChoice] = useState<'auto' | number>('auto');
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) => prev.map((p, i) => (i === seat ? { ...p, ...patch } : p)));
-    const boardSize = boardSizeFor(playerCount);
+    const boardSize = boardSizeChoice === 'auto' ? boardSizeFor(playerCount) : boardSizeChoice;
     // AI席のキャラを「あなた」以外からランダムに決め直す（人間の席は触らない。重複あり）
     const randomizeAICharacters = () =>
         setPlayers((prev) =>
@@ -65,7 +67,7 @@ export const App = () => {
         <div className='App'>
             {isGameStarted ? (
                 <div className='App-game'>
-                    <Game players={players.slice(0, playerCount)} />
+                    <Game players={players.slice(0, playerCount)} boardSize={boardSize} />
                 </div>
             ) : (
                 <div className={styles.prep}>
@@ -87,6 +89,27 @@ export const App = () => {
                         <span className={styles.boardSizeNote}>
                             盤面 {boardSize}x{boardSize}・4マス並べで勝ち
                         </span>
+                    </div>
+                    <div className={styles.countRow}>
+                        <span className={styles.countLabel}>マス数</span>
+                        <div className={styles.seg} role='group' aria-label='マス数'>
+                            <button
+                                className={`${styles.segBtn} ${boardSizeChoice === 'auto' ? styles.segBtnActive : ''}`}
+                                onClick={() => setBoardSizeChoice('auto')}
+                                title='人数に応じて自動で決めます（2人=4x4 / 3〜4人=5x5 / 5〜6人=6x6 / 7〜8人=7x7）'
+                            >
+                                おまかせ
+                            </button>
+                            {range(MIN_BOARD_SIZE, MAX_BOARD_SIZE - MIN_BOARD_SIZE + 1).map((n) => (
+                                <button
+                                    key={n}
+                                    className={`${styles.segBtn} ${boardSizeChoice === n ? styles.segBtnActive : ''}`}
+                                    onClick={() => setBoardSizeChoice(n)}
+                                >
+                                    {n}x{n}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
                         🎲 AI席のキャラをランダムに決める（あなた以外）

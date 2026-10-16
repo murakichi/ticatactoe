@@ -204,6 +204,16 @@ test('人数に応じた盤面サイズ: 2=4x4 / 3,4=5x5 / 5,6=6x6 / 7,8=7x7', (
     }
 });
 
+test('盤面サイズは人数と無関係に指定できる（4〜10、範囲外は丸める）', () => {
+    for (const [n, size, expected] of [[2, 6, 6], [8, 4, 4], [3, 10, 10], [2, 2, 4], [2, 30, 10]]) {
+        const s = e.newGame({ chars: Array(n).fill('you'), size, rng: e.makeRng(1) });
+        assert.strictEqual(s.size, expected);
+        assert.strictEqual(s.board.length, expected * expected);
+    }
+    const auto = e.newGame({ chars: ['you', 'you', 'you'], rng: e.makeRng(1) });
+    assert.strictEqual(auto.size, 5);
+});
+
 test('手番は席順に回る（3人）', () => {
     const s = gameN('you', 'you', 'you');
     s.life = 5;
@@ -286,6 +296,20 @@ test('勝利は5x5でも4連続（盤の途中でもよい）', () => {
     const syms = Array(25).fill(undefined);
     [6, 7, 8, 9].forEach((i) => (syms[i] = '🟩'));
     assert.strictEqual(e.calculateWinner(syms), '🟩');
+});
+
+test('終盤の魔力ボーナス: 50ターンごとに手番開始時の魔力が+1ずつ増える（2人戦も同じ）', () => {
+    const adv = (n, turn) => {
+        const s = e.newGame({ chars: Array(n).fill('you'), rng: e.makeRng(1) });
+        s.turn = 0; s.magic = Array(n).fill(0); s.currentTurn = turn;
+        e.advanceTurn(s); // 次の席(1)の手番開始
+        return s.magic[1];
+    };
+    assert.strictEqual(adv(3, 49), 1);
+    assert.strictEqual(adv(3, 50), 2);
+    assert.strictEqual(adv(4, 100), 3);
+    assert.strictEqual(adv(2, 49), 1);
+    assert.strictEqual(adv(2, 100), 3);
 });
 
 test('多人数: AIだけで3〜8人の試合が最後まで進む', () => {
@@ -545,6 +569,27 @@ test('過負荷（全マス⚡）: 全⚡と🔑を取り除き、全マスの�
     assert.strictEqual(out.discharge, 1);
     assert.ok(out.binds.every((b) => b === 0));                // ロックのマスも含めて全部0
     assert.strictEqual(out.locks, 0);                          // ロックも解除
+});
+
+test('雷霆の巫は自陣由来（自分のコマが載った⚡マス）の発火ダメージを受けない。敵の⚡や他人の駒には通常どおり効く', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 5;
+    // 5番=雷霆の巫(💙)の⚡コマ。隣の4番に着手して発火。隣接の6番=自コマ(💙)は無傷、9番=敵(⭕)は1ダメージ
+    s.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+    s.board[6] = { player: '💙', bind: 4, effects: [] };
+    s.board[9] = { player: '⭕', bind: 4, effects: [] };
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[6].bind, 4 - 1);  // 減衰のみ（発火ダメージなし）
+    assert.strictEqual(s.board[9].bind, 4 - 1 - 1);
+});
+
+test('敵（雷霆の巫以外）の⚡コマの発火は、雷霆の巫のコマにも効く', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] }; // 敵の⚡コマ
+    s.board[6] = { player: '💙', bind: 4, effects: [] };
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[6].bind, 4 - 1 - 1);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
