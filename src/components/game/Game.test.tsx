@@ -155,3 +155,13 @@ describe('ライフ減衰のタイミング (issue #30)', () => {
         expect(lifeAt(container, 0)).toBe('8');
     });
 });
+
+test('雷霆の巫: 固有スキル(帯電拡散)がパネルとスキルボタンに出る (5x5・3人戦でも)', () => {
+    const { container } = render(<Game players={cfg('you', 'tactician', 'electrician')} />);
+    // 席2(雷霆の巫)の手番まで進める
+    fireEvent.click(cells(container)[0]);
+    fireEvent.click(cells(container)[1]);
+    expect(cells(container)).toHaveLength(25);
+    expect(container.textContent).toContain('帯電拡散⚡ 7');
+    expect(screen.getByRole('button', { name: '帯電拡散-7' })).toBeInTheDocument();
+});

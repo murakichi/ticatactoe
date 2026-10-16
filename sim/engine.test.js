@@ -303,5 +303,123 @@ test('多人数: AIだけで3〜8人の試合が最後まで進む', () => {
     }
 });
 
+// ---- 帯電 ⚡ (雷霆の巫, #39) ----
+const zap = () => ({ player: undefined, bind: 0, effects: [{ effect: '⚡' }] });
+
+test('⚡発火: 帯電マスの隣に置くと、帯電マスの縦横隣接のコマが1ダメージ受け、⚡は消える', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = zap();                                              // 帯電マス (r1,c1)
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };              // 帯電マスの右隣
+    s.board[9] = { player: '⭕', bind: 4, effects: [] };              // 帯電マスの下隣
+    s.board[10] = { player: '⭕', bind: 4, effects: [] };             // 斜めは対象外
+    e.placeMove(s, 4);                                               // 帯電マスの左隣に着手
+    // 着手後の減衰(-1)に加え、発火でさらに-1
+    assert.strictEqual(s.board[6].bind, 4 - 1 - 1);
+    assert.strictEqual(s.board[9].bind, 4 - 1 - 1);
+    assert.strictEqual(s.board[10].bind, 4 - 1);
+    assert.strictEqual(e.chargeStacks(s.board[5]), 0);
+});
+
+test('⚡発火: 着手したコマ自身も帯電マスの隣なら1ダメージを受ける', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = zap();
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[4].bind, 5 - 1);
+});
+
+test('⚡発火: 🔑ロック中のマスはダメージを貫通しない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = zap();
+    s.board[6] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] };
+    e.placeMove(s, 4);
+    assert.strictEqual(s.board[6].bind, 4 - 1); // 減衰のみ。発火分は入らない
+    assert.strictEqual(e.chargeStacks(s.board[5]), 0);
+});
+
+test('⚡発火: 連鎖しない(ダメージで別の⚡は発火しない)', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[5] = zap();
+    s.board[6] = { player: '⭕', bind: 4, effects: [{ effect: '⚡' }] }; // 帯電したコマ
+    e.placeMove(s, 4);
+    assert.strictEqual(e.chargeStacks(s.board[6]), 1); // 発火したのは5番だけ。6番の⚡は残る
+});
+
+test('⚡付与スキルは付与した時点ではダメージを出さない', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20; s.life = 5;
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.chargeOne(s);
+    e.placeMove(s, 5);                                                // 帯電付与(クリック)
+    assert.strictEqual(e.chargeStacks(s.board[5]), 1);
+    assert.strictEqual(s.board[6].bind, 4);
+    assert.strictEqual(s.heartTurn, true);                           // 手番は進まない
+});
+
+test('雷霆の巫パッシブ: ⚡付き自陣マスはライフ0でも奪えない', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.life = 9;
+    s.board[3] = { player: '⭕', bind: 0, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(e.placeMove(s, 3), false);
+    assert.strictEqual(s.board[3].player, '⭕');
+});
+
+test('雷霆の巫パッシブ: 雷霆の巫以外の⚡付きコマは通常どおり奪える', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 9;
+    s.board[3] = { player: '⭕', bind: 0, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(e.placeMove(s, 3), true);
+    assert.strictEqual(s.board[3].player, '💙');
+});
+
+test('雷霆の巫の弱点: ⚡付き自陣マスは自分でも触れない(強化もできない)', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[3] = { player: '💙', bind: 2, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(e.placeMove(s, 3), false);
+    assert.strictEqual(s.board[3].bind, 2);
+});
+
+test('雷霆の巫の⚡付きマスはスラッシュ等のダメージ系スキルの対象外', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[3] = { player: '⭕', bind: 4, effects: [{ effect: '⚡' }] };
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.slash(s);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[6].bind, 0);
+});
+
+test('固有スキル(帯電拡散): コマのあるマスだけを縦横に辿ってすべてに⚡、空きマスは経由しない', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '⭕', bind: 3, effects: [] };   // 敵のコマも辿る
+    s.board[5] = { player: '💙', bind: 3, effects: [] };
+    s.board[10] = { player: '💙', bind: 3, effects: [] };  // 5と斜め→辿れない
+    e.SKILLS.chargeSpread(s);
+    e.placeMove(s, 0);
+    assert.deepStrictEqual([0, 1, 5].map((i) => e.chargeStacks(s.board[i])), [1, 1, 1]);
+    assert.strictEqual(e.chargeStacks(s.board[10]), 0);
+    // 付与の時点ではダメージなし
+    assert.strictEqual(s.board[5].bind, 3);
+});
+
+test('帯電: 同じ盤で複数の帯電マスが同時に発火する(着手マスが2つの帯電マスの隣)', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 5;
+    s.board[4] = zap();
+    s.board[6] = zap();
+    s.board[5] = { player: '⭕', bind: 0, effects: [] }; // 奪取先: 4と6の間 (ライフ0の敵)
+    s.board[0] = { player: '⭕', bind: 4, effects: [] }; // 4の上
+    s.board[2] = { player: '⭕', bind: 4, effects: [] }; // 6の上
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[0].bind, 4 - 1 - 1);
+    assert.strictEqual(s.board[2].bind, 4 - 1 - 1);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

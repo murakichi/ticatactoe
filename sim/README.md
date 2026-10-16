@@ -65,12 +65,21 @@ node sim/cli.js auto    --chars you,giant,poisoner --seed 1     # 1試合を観�
   （`s.heartMagic` / `s.circleChar` / `s.heartTurn` など）は getter/setter の別名で残してあり、既存のテストやスクリプトはそのまま動く
 - `play`（対人CLI）は2人専用のまま
 
+### 6. 帯電（雷霆の巫）の機構指標
+```bash
+node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・発火回数・帯電系スキルの使用回数/試合（2人戦）
+```
+勝率だけでは「⚡が効いているか」が分からないので、発火回数・両者の被ダメージ・⚡が盤上にある手番の割合を
+直接出す。A/B検証用に環境変数 `CHG_FIRE_W`（発火の重み）/ `CHG_ONE_MIN`（帯電付与の閾値）/
+`SIM_POOL_SIZE`（プールの大きさ）/ `SIM_CHARS`（2人戦 metrics の対象キャラ）が使える。
+雷霆の巫のライフ平均は `config.js` の `lifeMeans.electrician`、帯電系のコストは `charge` ノブ。
+
 この一連を自動で回すスキルが **`/balance-loop`**（`.claude/skills/balance-loop/`）。
 バランス調整ノブは **`sim/config.js`**（ライフ平均・std・巨人の手番スキップ・増殖の
 `cost`/`tokenLife`/`upkeepStep`/`maxStacks`）。増殖のノブを変えたら
 `src/components/game/skillCosts.ts` と `Game.tsx` の定数も同じ値に合わせること。
 
-キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner`
+キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner, electrician`（electrician = 雷霆の巫）
 
 ## ファイル
 - `engine.js` — ゲームエンジン（盤面・ライフ・マジック・手番・全スキル）。移植の
