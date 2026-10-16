@@ -215,11 +215,9 @@ export const Game = (props: GameProps) => {
         setter((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].slice(0, 3)));
     };
     // ロック済みスキルを残しつつ、残り枠を [0,poolEnd) からランダムに埋める
-    // 血清(17)は毒使い以外では常設ボタンで出すので、ランダム枠からは外す
-    const SERUM_IDX = 17;
-    const reshuffledSkills = (poolEnd: number, locks: number[], isPoisoner: boolean): number[] => {
-        const keep = locks.slice(0, 3).filter((i) => isPoisoner || i !== SERUM_IDX);
-        const pool = range(0, poolEnd).filter((i) => !keep.includes(i) && (isPoisoner || i !== SERUM_IDX));
+    const reshuffledSkills = (poolEnd: number, locks: number[]): number[] => {
+        const keep = locks.slice(0, 3);
+        const pool = range(0, poolEnd).filter((i) => !keep.includes(i));
         return [...keep, ...randomAnyPick(pool, Math.max(0, 3 - keep.length))];
     };
 
@@ -333,7 +331,7 @@ export const Game = (props: GameProps) => {
     useEffect(() => {
         // 次に手番が来るプレイヤーのロックを固定して再シャッフル
         const next = judgeNextIsHeart();
-        setSkills(reshuffledSkills(21, next ? heartLockedSkills : circleLockedSkills, (next ? props.heartSelectedCharacter : props.circleSelectedCharacter) === 'poisoner'));
+        setSkills(reshuffledSkills(21, next ? heartLockedSkills : circleLockedSkills));
     }, [history]);
 
     const onCellClick = (i: number) => {
@@ -573,7 +571,7 @@ export const Game = (props: GameProps) => {
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
         // プールは全21スキル。8 だと毒スキル(15-19)と増殖(20)を永久に引けなかった
-        setSkills(reshuffledSkills(21, currentLockedSkills, (heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) === 'poisoner'));
+        setSkills(reshuffledSkills(21, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
 
@@ -1570,7 +1568,7 @@ export const Game = (props: GameProps) => {
                             buttonText={s.buttonText}
                             paragraph={s.paragraph}
                             disabled={s.disabled}
-                            hidden={!skills.includes(s.idx) || (s.idx === SERUM_IDX && (heartTurn ? props.heartSelectedCharacter : props.circleSelectedCharacter) !== 'poisoner')}
+                            hidden={!skills.includes(s.idx)}
                             locked={currentLockedSkills.includes(s.idx)}
                             onToggleLock={() => toggleLock(s.idx)}
                             onHoverStart={s.onHoverStart}
