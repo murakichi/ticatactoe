@@ -252,9 +252,11 @@ function newGame(opts = {}) {
 
 // ロック済みスキルを残しつつ残り枠を [0,poolEnd) からランダムに埋める (Game.tsx reshuffledSkills と同じ)
 function reshuffleSkillsFor(s, isHeart, poolEnd) {
-    const keep = (isHeart ? s.heartLockedSkills : s.circleLockedSkills).slice(0, 3);
+    // 血清(17)は毒使い以外では常設ボタンなのでランダム枠から外す (Game.tsx と同じ)
+    const noSerum = (isHeart ? s.heartChar : s.circleChar) !== 'poisoner';
+    const keep = (isHeart ? s.heartLockedSkills : s.circleLockedSkills).slice(0, 3).filter((i) => !(noSerum && i === 17));
     const pool = [];
-    for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
+    for (let i = 0; i < poolEnd; i++) if (!keep.includes(i) && !(noSerum && i === 17)) pool.push(i);
     const fill = randomAnyPick(pool, Math.max(0, 3 - keep.length), s.rng);
     return [...keep, ...fill];
 }
