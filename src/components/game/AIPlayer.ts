@@ -3,7 +3,7 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
-import { WIN_LINES, STOMP_AREA, JUDGE_AREA } from './boardGeometry';
+import { geometryForCells } from './boardGeometry';
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -17,15 +17,27 @@ export type AIResult = {
 class AIPlayer {
     playerSymbol: Player;
     character: CharacterId;
-    opponent: Player;
-    opponentCharacter: CharacterId;
+    /** 自分以外の全プレイヤー(2人戦なら1人)。先頭を探索木の「相手役」に使う */
+    opponents: Player[];
     necroActive: boolean = false;
 
-    constructor(playerSymbol: Player, character: CharacterId, opponentCharacter: CharacterId = 'you') {
+    constructor(playerSymbol: Player, character: CharacterId, opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙']) {
         this.playerSymbol = playerSymbol;
         this.character = character;
-        this.opponent = playerSymbol === '💙' ? '⭕' : '💙';
-        this.opponentCharacter = opponentCharacter;
+        this.opponents = opponents;
+    }
+
+    /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
+    isEnemy(player: Player | undefined): boolean {
+        return player !== undefined && player !== this.playerSymbol;
+    }
+
+    /** 探索の深さ。盤が大きいほど候補手が増えるので浅くする（4x4=3 / 5x5=2 / それ以上=1） */
+    searchDepth(board: SquareInfo[]): number {
+        const cells = board.length;
+        if (cells <= 16) return 3;
+        if (cells <= 25) return 2;
+        return 1;
     }
 
     /** 盤面評価関数: 各勝利ラインのスコアを合算 */
@@ -33,21 +45,24 @@ class AIPlayer {
         let score = 0;
         const lineScores = [0, 1, 10, 50, 1000];
 
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
+            // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
+            const enemiesInLine = new Set<Player>();
             for (const idx of line) {
                 const sq = board[idx];
                 if (sq.player === this.playerSymbol) {
                     myCount++;
                     myBindSum += sq.bind;
-                } else if (sq.player === this.opponent) {
+                } else if (sq.player) {
                     oppCount++;
                     oppBindSum += sq.bind;
+                    enemiesInLine.add(sq.player);
                 }
             }
             if (myCount > 0 && oppCount === 0) {
                 score += lineScores[myCount];
-            } else if (oppCount > 0 && myCount === 0) {
+            } else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
                 score -= lineScores[oppCount];
                 // 相手2つ+空き2つ: トークンで即リーチ→即勝ちの脅威
                 if (oppCount === 2) {
@@ -68,7 +83,7 @@ class AIPlayer {
             const hasLock = sq.effects.some(e => e.effect === '🔑');
             if (sq.player === this.playerSymbol) {
                 score += buds * 3 + (hasLock ? 5 : 0);
-            } else if (sq.player === this.opponent) {
+            } else if (sq.player) {
                 score -= buds * 3 + (hasLock ? 5 : 0);
             }
         }
@@ -78,13 +93,12 @@ class AIPlayer {
 
     /** 指定プレイヤーのリーチ数（3つ揃い+空き1）をカウント */
     countReaches(board: SquareInfo[], player: Player): number {
-        const opp: Player = player === '💙' ? '⭕' : '💙';
         let reaches = 0;
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let my = 0, op = 0;
             for (const idx of line) {
                 if (board[idx].player === player) my++;
-                else if (board[idx].player === opp) op++;
+                else if (board[idx].player) op++;
             }
             if (my === 3 && op === 0) reaches++;
         }
@@ -93,14 +107,13 @@ class AIPlayer {
 
     /** 相手がリーチしているラインの残り1マス（脅威マス）を列挙 */
     findThreatSquares(board: SquareInfo[], player: Player): number[] {
-        const opp: Player = player === '💙' ? '⭕' : '💙';
         const threats: number[] = [];
-        for (const line of WIN_LINES) {
+        for (const line of geometryForCells(board.length).winLines) {
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];
                 if (sq.player === player) pCount++;
-                else if (sq.player === opp) oCount++;
+                else if (sq.player) oCount++;
                 else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -144,7 +157,7 @@ class AIPlayer {
     /** 有効な手の一覧 (空きマス + 乗っ取り/攻撃可能な敵マス) */
     getValidMoves(board: SquareInfo[], life: number): number[] {
         const moves: number[] = [];
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ロック済みかつbind>0はスキップ
             if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
@@ -152,7 +165,7 @@ class AIPlayer {
             if (!sq.player) {
                 // 空きマス (ロックされていない)
                 if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
-            } else if (sq.player === this.opponent) {
+            } else if (this.isEnemy(sq.player)) {
                 // bind=0の敵マスは無条件で乗っ取り可能
                 if (sq.bind <= 0) {
                     moves.push(i);
@@ -168,7 +181,7 @@ class AIPlayer {
     /** 指定プレイヤーが着手可能なマスを列挙 */
     getMovesFor(board: SquareInfo[], player: Player, life: number): number[] {
         const moves: number[] = [];
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
             if (!sq.player) {
@@ -184,9 +197,11 @@ class AIPlayer {
     minimax(board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number): number {
         const winner = calculateWinner(board.map(sq => sq.player));
         if (winner === this.playerSymbol) return 1000 + depth;
-        if (winner === this.opponent) return -1000 - depth;
+        if (winner) return -1000 - depth;
 
-        const currentPlayer = isMax ? this.playerSymbol : this.opponent;
+        // 敵が複数いても探索木では先頭の敵を「相手役」として代表させる（深さは盤サイズで制限済み）
+        const opponent = this.opponents[0];
+        const currentPlayer = isMax ? this.playerSymbol : opponent;
         const moves = this.getMovesFor(board, currentPlayer, life);
         if (depth === 0 || moves.length === 0) return this.evaluateBoard(board);
 
@@ -206,7 +221,7 @@ class AIPlayer {
             let best = Infinity;
             for (const idx of moves) {
                 const score = this.minimax(
-                    this.simulatePlace(board, idx, this.opponent, life),
+                    this.simulatePlace(board, idx, opponent, life),
                     depth - 1, true, alpha, beta, life
                 );
                 best = Math.min(best, score);
@@ -232,11 +247,13 @@ class AIPlayer {
         }
 
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)
-        const oppMoves = this.getMovesFor(board, this.opponent, life);
-        for (const i of oppMoves) {
-            const sim = this.simulatePlace(board, i, this.opponent, life);
-            if (calculateWinner(sim.map(sq => sq.player)) === this.opponent) {
-                if (allMoves.includes(i)) return i;
+        for (const opp of this.opponents) {
+            const oppMoves = this.getMovesFor(board, opp, life);
+            for (const i of oppMoves) {
+                const sim = this.simulatePlace(board, i, opp, life);
+                if (calculateWinner(sim.map(sq => sq.player)) === opp) {
+                    if (allMoves.includes(i)) return i;
+                }
             }
         }
 
@@ -246,7 +263,7 @@ class AIPlayer {
 
         for (const i of allMoves) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life);
-            let score = this.minimax(simBoard, 3, false, -Infinity, Infinity, life);
+            let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
 
             // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
             const reaches = this.countReaches(simBoard, this.playerSymbol);
@@ -254,7 +271,7 @@ class AIPlayer {
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
 
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
-            if (board[i].player === this.opponent && board[i].bind <= 0) {
+            if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
                 score += 30;
             }
 
@@ -285,11 +302,12 @@ class AIPlayer {
         let myPieces = 0, oppPieces = 0, empties = 0;
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player === this.opponent) oppPieces++;
+            else if (sq.player) oppPieces++;
             else if (!sq.player) empties++;
         }
+        const geo = geometryForCells(board.length);
         const enemiesOn = (idxs: number[]) =>
-            idxs.filter((i) => board[i].player === this.opponent && !board[i].effects.some((e) => e.effect === '🔑')).length;
+            idxs.filter((i) => this.isEnemy(board[i].player) && !board[i].effects.some((e) => e.effect === '🔑')).length;
 
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
@@ -302,8 +320,8 @@ class AIPlayer {
         const valued = (idx: number): boolean => {
             switch (idx) {
                 case 3: case 4: case 9: case 11: return empties >= 3;          // トークン系
-                case 5: return enemiesOn([3, 6, 9, 12]) >= 2;                   // スラッシュ
-                case 6: return enemiesOn([0, 5, 10, 15]) >= 2;                  // バックスラッシュ
+                case 5: return enemiesOn(geo.antiDiagonal) >= 2;                   // スラッシュ
+                case 6: return enemiesOn(geo.mainDiagonal) >= 2;                  // バックスラッシュ
                 case 8: return oppPieces >= 3;                                  // オピウム
                 case 7: return opponentMagic >= 7;                              // チューチュートレイン
                 case 14: return myPieces >= 3;                                  // ワルプルギスの夜
@@ -347,12 +365,16 @@ class AIPlayer {
     ): string[] {
         const skills: string[] = [];
         let remaining = magic;
-        const oppReaches = this.countReaches(board, this.opponent);
+        const oppReaches = this.opponents.reduce((n, o) => n + this.countReaches(board, o), 0);
         let myPieces = 0, oppPieces = 0;
+        const piecesOf = new Map<Player, number>();
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player === this.opponent) oppPieces++;
+            else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
         }
+        // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
+        piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
+        const geo = geometryForCells(board.length);
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
         // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える
@@ -374,7 +396,7 @@ class AIPlayer {
                 const corpses = 10 - necroCost; // baseNecromancyCost=10。軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
-                    if (sq.player === this.opponent && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
+                    if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
                 if (corpses >= 3 || absorbable >= 2) spend(necroCost, 'onClickNecromancy');
             }
@@ -412,16 +434,16 @@ class AIPlayer {
         if (skills.length === 0 && isLosing && oppReaches === 0) {
             if (availableSkills.includes(5)) {
                 let oppOn = 0, myOn = 0;
-                for (const idx of [3, 6, 9, 12]) {
-                    if (board[idx].player === this.opponent && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+                for (const idx of geo.antiDiagonal) {
+                    if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
                 if (oppOn > myOn) spend(this.calculateAICost(costs.onClickSlash), 'onClickSlash');
             }
             if (skills.length === 0 && availableSkills.includes(6)) {
                 let oppOn = 0, myOn = 0;
-                for (const idx of [0, 5, 10, 15]) {
-                    if (board[idx].player === this.opponent && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
+                for (const idx of geo.mainDiagonal) {
+                    if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
                 if (oppOn > myOn) spend(this.calculateAICost(costs.onClickBackSlash), 'onClickBackSlash');
@@ -493,23 +515,24 @@ class AIPlayer {
      */
     findInjectionTarget(board: SquareInfo[], minValue: number): { index: number; kills: boolean } | null {
         const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
         let best: { index: number; kills: boolean } | null = null;
         let bestVal = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             const sq = board[i];
-            if (sq.player !== this.opponent) continue;
+            if (!this.isEnemy(sq.player)) continue;
             const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
             const turns = Math.ceil(sq.bind / (1 + p));
             if (turns > 2) continue;
             let val = 0;
-            for (const line of WIN_LINES) {
+            for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
-                let oc = 0, mc = 0;
+                let oc = 0, foreign = 0;
                 for (const idx of line) {
-                    if (board[idx].player === this.opponent) oc++;
-                    else if (board[idx].player === this.playerSymbol) mc++;
+                    if (board[idx].player === sq.player) oc++;
+                    else if (board[idx].player) foreign++;
                 }
-                if (mc === 0) val += lineScores[oc];
+                if (foreign === 0) val += lineScores[Math.min(oc, 4)];
             }
             if (turns !== 1) val /= 2;
             if (val > bestVal) { bestVal = val; best = { index: i, kills: turns === 1 }; }
@@ -519,10 +542,11 @@ class AIPlayer {
 
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestEnemies = 0, bestEmptyCenter = false;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             let enemies = 0;
-            for (const idx of STOMP_AREA[i]) if (board[idx].player === this.opponent) enemies++;
+            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player)) enemies++;
             const emptyCenter = !board[i].player;
             if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -534,7 +558,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        for (const idx of STOMP_AREA[i]) {
+        for (const idx of geometryForCells(board.length).stompRange(i)) {
             if (nb[idx].player === player) nb[idx].bind = nb[idx].bind > 5 ? nb[idx].bind - 5 : 0;
             else nb[idx] = { player: undefined, bind: 0, effects: [] };
         }
@@ -544,15 +568,16 @@ class AIPlayer {
 
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
     findJudgeTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestNet = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < board.length; i++) {
             let enemy = 0, mine = 0;
-            for (const idx of JUDGE_AREA[i]) {
+            for (const idx of geo.judgeRange(i)) {
                 const sq = board[idx];
                 const locked = sq.effects.some(e => e.effect === '🔑');
                 const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
                 if (locked && protectedBud) continue;
-                if (sq.player === this.opponent) enemy++;
+                if (this.isEnemy(sq.player)) enemy++;
                 else if (sq.player === this.playerSymbol) mine++;
             }
             const net = enemy - mine;
@@ -579,7 +604,7 @@ class AIPlayer {
         this.necroActive = necroRemain > 0;
 
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
-        const threatSquares = this.findThreatSquares(board, this.opponent);
+        const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
         if (threatSquares.length >= 2) {
             const lockOptions: { skill: string; count: number; cost: number }[] = [
                 { skill: 'onClickUseLock', count: 1, cost: this.calculateAICost(costs.onClickUseLock) },
@@ -644,7 +669,7 @@ class AIPlayer {
         }
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
-        if (this.countReaches(board, this.opponent) === 0) {
+        if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             if (this.character === 'giant' && magic >= costs.onClickStomp) {
                 const target = this.findStompTarget(board);
                 if (target !== null) {

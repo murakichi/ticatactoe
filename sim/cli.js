@@ -8,6 +8,11 @@
  *   node sim/cli.js sim   [--games 500] [--mode faithful|capture] [--seed N] [--pair you,giant]
  *   node sim/cli.js auto  [--hchar you] [--cchar you] [--seed N] [--mode faithful]   (watch one AIvsAI game)
  *
+ * 多人数 (2〜8人。盤面は人数で 4x4〜7x7。issue #32):
+ *   node sim/cli.js sim     --players 4 [--games 300] [--chars you,giant,..] [--mode faithful] [--seed N]
+ *   node sim/cli.js metrics --players 4 [--games 300] [--mode faithful] [--seed N]   (JSON)
+ *   node sim/cli.js auto    --chars you,giant,poisoner [--seed N]
+ *
  * In `play`, type a cell index (0-15) to place, `skill <name> [idx]` to use a
  * skill, `help`, or `quit`.
  */
@@ -15,7 +20,7 @@
 const readline = require('readline');
 const engine = require('./engine');
 const ai = require('./ai');
-const { HEART, CIRCLE, CHARACTERS, SKILLS } = engine;
+const { HEART, CIRCLE, CHARACTERS, SKILLS, SYMBOLS, MAX_PLAYERS } = engine;
 
 function parseArgs(argv) {
     const out = { _: [] };
@@ -31,24 +36,100 @@ function parseArgs(argv) {
 }
 
 // ---------- batch simulation (balance analysis) ----------
-// hmode/cmode let the two sides use different AIs (for AI-strength benchmarking).
-function runOneGame(hchar, cchar, rng, hmode, cmode) {
-    if (cmode === undefined) cmode = hmode;
-    const s = engine.newGame({ heartChar: hchar, circleChar: cchar, rng });
+// 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
+function runGame(chars, rng, modes) {
+    const modeOf = (seat) => (Array.isArray(modes) ? modes[seat] : modes);
+    const s = engine.newGame({ chars, rng });
+    // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
+    const limit = Math.max(400, 200 * chars.length);
     let guard = 0;
-    while (!s.winner && guard++ < 400) {
-        const mode = s.heartTurn ? hmode : cmode;
-        const result = ai.makeMove(s, mode);
+    while (!s.winner && guard++ < limit) {
+        const result = ai.makeMove(s, modeOf(s.turn));
         if (result.turnEnded) continue;
         if (result.move === null) break;
         const before = s.currentTurn;
         engine.placeMove(s, result.move);
         if (s.currentTurn === before) break;
     }
-    return { winner: s.winner, turns: s.currentTurn };
+    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn };
+}
+
+// 2人戦用。hmode/cmode let the two sides use different AIs (for AI-strength benchmarking).
+function runOneGame(hchar, cchar, rng, hmode, cmode) {
+    if (cmode === undefined) cmode = hmode;
+    return runGame([hchar, cchar], rng, [hmode, cmode]);
+}
+
+// ---------- 多人数バッチ (issue #32) ----------
+// 各ゲームの席ごとのキャラは、--chars で固定するか、未指定ならゲームごとに一様ランダムに引く
+function pickChars(n, fixed, rng) {
+    if (fixed) {
+        if (fixed.length !== n) throw new Error(`--chars needs ${n} characters (got ${fixed.length})`);
+        return fixed;
+    }
+    return Array.from({ length: n }, () => CHARACTERS[Math.floor(rng() * CHARACTERS.length)]);
+}
+
+function computeMultiMetrics(players, games, mode, baseSeed, fixedChars) {
+    const seatWins = Array(players).fill(0);
+    const charAgg = {};
+    for (const c of CHARACTERS) charAgg[c] = { w: 0, appearances: 0 };
+    let draws = 0, turns = 0;
+    const pickRng = engine.makeRng(baseSeed * 2654435 + players);
+    for (let g = 0; g < games; g++) {
+        const chars = pickChars(players, fixedChars, pickRng);
+        const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
+        const r = runGame(chars, rng, mode);
+        chars.forEach((c) => { charAgg[c].appearances++; });
+        if (r.winnerSeat >= 0) { seatWins[r.winnerSeat]++; charAgg[chars[r.winnerSeat]].w++; }
+        else draws++;
+        turns += r.turns;
+    }
+    const decided = games - draws;
+    const charWinRate = {};
+    for (const c of CHARACTERS) charWinRate[c] = charAgg[c].appearances ? charAgg[c].w / charAgg[c].appearances : null;
+    return {
+        players, boardSize: engine.boardSizeFor(players), mode, games, seed: baseSeed,
+        chars: fixedChars || 'random',
+        decayPerRoundMinPlayers: engine.DECAY_PER_ROUND_MIN_PLAYERS,
+        seatWinRate: seatWins.map((w) => (decided ? w / decided : null)), // 席0=先手。均等なら 1/players
+        drawRate: draws / games,
+        avgTurns: turns / games,
+        // キャラ別: 出場1回あたりの勝率（均等なら 1/players）
+        charWinRate,
+    };
+}
+
+function multiSim(args) {
+    const players = parseInt(args.players, 10);
+    if (!(players >= 2 && players <= MAX_PLAYERS)) throw new Error(`--players must be 2..${MAX_PLAYERS}`);
+    const games = parseInt(args.games || '300', 10);
+    const m = computeMultiMetrics(players, games, args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null);
+    const se = (p) => Math.sqrt((p * (1 - p)) / Math.max(1, games * (1 - m.drawRate)));
+    console.log(`# ${players}人戦 (${m.boardSize}x${m.boardSize})  games=${games}  AI=${m.mode}  seed=${m.seed}  chars=${Array.isArray(m.chars) ? m.chars.join(',') : 'random'}`);
+    console.log(`減衰: ${players >= m.decayPerRoundMinPlayers ? '手番1周ごとに1回' : '着手のたび'}   均等なら各席 ${(100 / players).toFixed(1)}%\n`);
+    console.log('## 席別の勝率 (席0=先手, 引き分け除く)');
+    m.seatWinRate.forEach((p, seat) => console.log(`  ${SYMBOLS[seat]} 席${seat}: ${p == null ? 'n/a' : (p * 100).toFixed(1) + '%'}  (±${p == null ? 'n/a' : (se(p) * 100).toFixed(1)}pt)`));
+    console.log(`\ndraw/打ち切り ${(m.drawRate * 100).toFixed(1)}%   avgTurns ${m.avgTurns.toFixed(1)}\n`);
+    if (!m.chars || !Array.isArray(m.chars)) {
+        console.log('## キャラ別の勝率 (出場1回あたり。均等なら ' + (100 / players).toFixed(1) + '%)');
+        for (const c of CHARACTERS) console.log(`  ${pad(c, 14)} ${m.charWinRate[c] == null ? 'n/a' : (m.charWinRate[c] * 100).toFixed(1) + '%'}`);
+    }
+}
+
+function multiMetrics(args) {
+    const players = parseInt(args.players, 10);
+    const m = computeMultiMetrics(players, parseInt(args.games || '300', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null);
+    if (args.tag) m.tag = args.tag;
+    console.log(JSON.stringify(m, null, 2));
+    if (args.log) {
+        require('fs').appendFileSync(args.log, JSON.stringify(m) + '\n');
+        console.error(`(appended to ${args.log})`);
+    }
 }
 
 function sim(args) {
+    if (args.players && parseInt(args.players, 10) !== 2) return multiSim(args);
     const games = parseInt(args.games || '500', 10);
     const mode = args.mode || 'faithful';
     const baseSeed = parseInt(args.seed || '1', 10);
@@ -139,6 +220,7 @@ function computeMetrics(games, mode, baseSeed) {
     };
 }
 function metrics(args) {
+    if (args.players && parseInt(args.players, 10) !== 2) return multiMetrics(args);
     const m = computeMetrics(parseInt(args.games || '800', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10));
     if (args.tag) m.tag = args.tag;
     console.log(JSON.stringify(m, null, 2));
@@ -185,14 +267,14 @@ function bench(args) {
 
 // ---------- watch one AI vs AI game ----------
 function auto(args) {
-    const hchar = args.hchar || 'you';
-    const cchar = args.cchar || 'you';
+    const chars = args.chars ? args.chars.split(',') : [args.hchar || 'you', args.cchar || 'you'];
     const mode = args.mode || 'faithful';
     const rng = engine.makeRng(parseInt(args.seed || '1', 10));
-    const s = engine.newGame({ heartChar: hchar, circleChar: cchar, rng });
-    console.log(`AI(${hchar}) 💙  vs  AI(${cchar}) ⭕   mode=${mode}\n`);
+    const s = engine.newGame({ chars, rng });
+    console.log(chars.map((c, seat) => `AI(${c}) ${SYMBOLS[seat]}`).join('  vs  ') + `   mode=${mode}  board=${s.size}x${s.size}\n`);
     let guard = 0;
-    while (!s.winner && guard++ < 400) {
+    const limit = Math.max(400, 200 * chars.length);
+    while (!s.winner && guard++ < limit) {
         const who = engine.curPlayer(s);
         const result = ai.makeMove(s, mode);
         if (result.turnEnded) {
@@ -289,6 +371,9 @@ else {
   node sim/cli.js auto    [--hchar C] [--cchar C] [--mode faithful] [--seed N]
   node sim/cli.js metrics [--games 800] [--mode faithful] [--seed N]   # balance snapshot as JSON
   node sim/cli.js bench   [--games 1500] [--char you] [--seed N]       # AI strength vs random / head-to-head
+  node sim/cli.js sim     --players N [--games 300] [--chars a,b,..]   # 多人数(2〜8人)の席別・キャラ別勝率
+  node sim/cli.js metrics --players N [--games 300] [--seed N]         # 多人数のJSON
+  node sim/cli.js auto    --chars a,b,c [--seed N]                     # 多人数の1試合を観戦
 
 characters: ${CHARACTERS.join(', ')}
 modes: faithful (=AIPlayer.ts同一), capture (捕獲考慮), random (ランダム基準)`);
