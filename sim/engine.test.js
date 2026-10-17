@@ -124,9 +124,6 @@ test('毒使いでない駒に毒が付いてもライフは変わらない', ()
     assert.strictEqual(s.board[6].bind, 4);
 });
 
-const P = { effect: '☠' };
-const stacks = (sq) => sq.effects.filter((x) => x.effect === '☠').length;
-
 test('毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与し、空きマスには付かない', () => {
     const s = game('you', 'you');
     s.board[0] = { player: '💙', bind: 5, effects: [] };

@@ -862,8 +862,9 @@ function faithfulMakeMove(s) {
         const move = getEnhancedBestMove(s);
         return { move, turnEnded: false };
     }
-    // 実験(SELF_INJ=1): ミアズマの種として、敵に囲まれた自コマに自分でインジェクションする（自陣に毒マスが無いときだけ）
-    if (process.env.SELF_INJ === '1' && ch0 === 'poisoner' && availableSkills.includes(15)
+    // ミアズマの種: 自陣に毒マスが無いとき、敵に囲まれた自コマに自分でインジェクションする（毒使いは毒が付くとライフ1.5倍）。
+    // 実測では発動が稀で勝率にはほぼ効かない（手札にインジェクションが来る手番しか撃てない）
+    if (ch0 === 'poisoner' && availableSkills.includes(15)
         && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true) && countReaches(s.board, me) === 0
         && !s.board.some((sq) => sq.player === me && sq.effects.some((e) => e.effect === '☠'))) {
         const geo = geometryForCells(s.board.length);

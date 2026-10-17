@@ -542,11 +542,6 @@ export const Game = (props: GameProps) => {
             return;
         }
 
-        if (useMiasma) {
-            exeMiasma(i);
-            return;
-        }
-
         if (usePandemic) {
             exePandemic(i);
             return;
@@ -851,12 +846,23 @@ export const Game = (props: GameProps) => {
         const t = randomPick(targets);
         board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
     };
-    const [useMiasma, setUseMiasma] = useState<boolean>(false);
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
-    // ミアズマの実コスト: 基礎 - 盤面の毒数、毒使い割引(-1)、下限は MIASMA_MIN_COST
+    // ミアズマの実コスト: 基礎 - 自陣の毒の数、毒使い割引(-1)、下限は MIASMA_MIN_COST
     const miasmaCost = (player: Player = currentTurnPlayer): number =>
-        Math.max(MIASMA_MIN_COST, calculateCost(costTableFor(seatOf(player)).onClickMiasma - boardPoisonCount(currentBoard), false, true, player));
+        Math.max(MIASMA_MIN_COST, calculateCost(costTableFor(seatOf(player)).onClickMiasma - poisonCount(player), false, true, player));
+    // ミアズマが毒を付与するマス → 付与する毒の数。自陣の毒が乗っているマスごとに、周囲1マスの敵マス(ロック/無敵は除く)へ1つずつ（重複あり）
+    const miasmaPlan = (board: SquareInfo[], player: Player): Map<number, number> => {
+        const plan = new Map<number, number>();
+        board.forEach((sq, i) => {
+            if (sq.player !== player || !sq.effects.some((e) => e.effect === '☠')) return;
+            for (const j of geo.surroundRange(i)) {
+                const target = board[j];
+                if (target.player && target.player !== player && !isGuarded(target, characters)) plan.set(j, (plan.get(j) ?? 0) + 1);
+            }
+        });
+        return plan;
+    };
 
     const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);
@@ -1270,7 +1276,7 @@ export const Game = (props: GameProps) => {
                 }
             },
         },
-        { name: 'ミアズマ', run: () => setUseMiasma(true) },
+        { name: 'ミアズマ', run: () => exeMiasma() },
         { name: '帯電拡散', run: () => setUseChargeSpread(true) },
     ];
     // ヘイルメアリーで引いたスキル名。マス選択型は演出より先に画面へ出すため、一定時間表示する
@@ -1303,25 +1309,29 @@ export const Game = (props: GameProps) => {
     const onClickHailMary = () => exeHailMary();
 
     // --- 毒使い 固有スキル「ミアズマ」 ---
-    const onClickMiasma = () => {
-        addLog('「ミアズマ」を使用（自陣を選択）');
-        setUseMiasma(true);
-        spendMagic(miasmaCost(), false);
-    };
-    const exeMiasma = (i: number) => {
+    // 対象選択なし。自陣の毒が乗っているマスの周囲1マスの敵マスに毒を付与（重複あり）し、自陣の毒はすべて消える
+    const exeMiasma = () => {
         const board = currentBoard.slice();
-        // 周囲1マスの敵セル(ロック以外)すべてに毒を1付与
-        const targets = geo.surroundRange(i).filter(
-            (j) => board[j].player && board[j].player !== currentTurnPlayer && !isGuarded(board[j], characters)
-        );
-        for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
+        const plan = miasmaPlan(board, currentTurnPlayer);
+        const targets = Array.from(plan.keys());
+        plan.forEach((n, j) => {
+            board[j] = poisonStrike({ ...board[j], effects: [...board[j].effects, ...Array<Effect>(n).fill({ effect: '☠' })] });
+        });
+        board.forEach((sq, k) => {
+            if (sq.player === currentTurnPlayer && sq.effects.some((e) => e.effect === '☠')) {
+                board[k] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '☠') };
+            }
+        });
         harvestMagic(targets.length);
         if (targets.length > 0) toxicBloom(board, null);
-        addLog(`${posName(i)}を中心にミアズマ（敵${targets.length}マスに毒）`);
+        addLog(`ミアズマ（敵${targets.length}マスに毒、自陣の毒はすべて消えた）`);
         flashCells(targets);
-        playEffect('poison', i);
+        playEffect('poison');
         setCurrentBoard(board);
-        setUseMiasma(false);
+    };
+    const onClickMiasma = () => {
+        spendMagic(miasmaCost(), false);
+        exeMiasma();
     };
 
     // --- 通常枠 毒スキル ---
@@ -1706,7 +1716,6 @@ export const Game = (props: GameProps) => {
         setUseJudgeDay(false);
         setUseBuds([false, 0]);
         setUseLock(0);
-        setUseMiasma(false);
         setUseInjection(0);
         setUsePandemic(false);
         setUseChargeOne(false);
@@ -1752,7 +1761,6 @@ export const Game = (props: GameProps) => {
         if (useStomp) setPreviewCells(geo.stompRange(i));
         else if (useJudgeDay) setPreviewCells(geo.judgeRange(i));
         else if (usePandemic) setPreviewCells(geo.stompRange(i));
-        else if (useMiasma) setPreviewCells(geo.surroundRange(i));
         else if (useInjection > 0) setPreviewCells([i]);
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
@@ -1760,7 +1768,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -1768,8 +1776,6 @@ export const Game = (props: GameProps) => {
         ? 'ストンプ'
         : useJudgeDay
         ? '審判の日'
-        : useMiasma
-        ? 'ミアズマ'
         : useChargeSpread
         ? '帯電拡散'
         : usePandemic
@@ -1972,10 +1978,10 @@ export const Game = (props: GameProps) => {
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickMiasma}
                         buttonText={`ミアズマ-${miasmaCost()}`}
-                        paragraph={'自陣を選択し、周囲1マスの敵コマすべてに毒を1付与します コストは盤面の毒の数だけ軽減されます'}
+                        paragraph={'自陣の毒が乗っているマスの周囲1マスの敵コマに毒を付与します（毒マスが重なると積み上がります） 自陣の毒はすべて消えます コストは自陣の毒の数だけ軽減されます'}
                         hidden={currentCharacter !== 'poisoner'}
                         exclusive
-                        disabled={magic[turnSeat] < miasmaCost()}
+                        disabled={magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickChargeSpread}

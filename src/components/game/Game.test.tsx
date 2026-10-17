@@ -246,3 +246,28 @@ describe('マス数の選択', () => {
         expect(container.querySelector('.winner')?.textContent).toContain('💙');
     });
 });
+
+test('ミアズマ: 魔力が足りていても、自陣に毒が乗ったマスが無いと撃てない', () => {
+    const { container } = render(
+        <Game
+            players={[
+                { character: 'poisoner', isAI: false },
+                { character: 'you', isAI: false },
+            ]}
+        />
+    );
+    // 毒使い(💙)の初期状態: 自陣に毒が無い → 基礎6 − 毒使い割引1 = 5
+    expect(screen.getByRole('button', { name: 'ミアズマ-5' })).toBeInTheDocument();
+    // 魔力を貯める（各手番 +1）。空きマスに交互に置くだけなので毒は一切乗らない
+    const squares = Array.from(container.querySelectorAll('button.square'));
+    const heart = [0, 2, 9, 11, 13]; // どの列にも4つ揃わない置き方
+    const circle = [15, 12, 6, 4, 7];
+    for (let round = 0; round < 5; round++) {
+        fireEvent.click(squares[heart[round]]);   // 💙
+        fireEvent.click(squares[circle[round]]);  // ⭕
+    }
+    // 前提の確認: 魔力はコスト(5)以上ある。ここが成立していないと「魔力不足で押せない」だけで通ってしまう
+    const miasma = screen.getByRole('button', { name: 'ミアズマ-5' }) as HTMLButtonElement;
+    expect(miasma.textContent).not.toContain('あと⚡');
+    expect(miasma.disabled).toBe(true);
+});
