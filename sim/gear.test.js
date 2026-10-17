@@ -146,12 +146,12 @@ test('幸運の財布: 乱数が当たりなら消費コスト0', () => {
     assert.strictEqual(s.magic[0], 10 - e.calculateCost(s, 3));
 });
 
-test('価格破壊: 装備した席だけ試合開始時にコスト表が決まり、下限1で試合中は固定', () => {
+test('価格破壊: 装備した席だけ試合開始時にコスト表が決まり、下限2で試合中は固定', () => {
     const s = game([['priceWreck'], []]);
     assert.ok(s.priceTables[0]);
     assert.strictEqual(s.priceTables[1], null);
     for (const k of Object.keys(s.priceTables[0])) {
-        assert.ok(s.priceTables[0][k] >= 1, k);
+        assert.ok(s.priceTables[0][k] >= Math.min(2, e.skillCosts[k]), k);
         if (k === 'onClickShuffle') assert.strictEqual(s.priceTables[0][k], e.skillCosts[k]);
     }
     const diffs = Object.keys(e.skillCosts).filter((k) => s.priceTables[0][k] !== e.skillCosts[k]);

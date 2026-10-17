@@ -54,6 +54,8 @@ export const GEAR_PARAMS = {
     harvestCap: 5,
     /** 価格破壊: 基礎コストに足すランダム値の範囲 ±N（下限1） */
     priceRange: 4,
+    /** 価格破壊: ずらしたあとの基礎コストの下限（元のコストがこれ未満ならそのまま） */
+    priceFloor: 2,
     /** 賭博師の骰子: ライフ値の標準偏差 */
     gamblerStd: 5,
     /** 復讐の刃: 自分のコマを奪われたときの魔力 / 自分が奪取したときの魔力 / 1手での獲得上限 */
@@ -78,7 +80,7 @@ export const GEARS: GearDef[] = [
     { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンスキルで置くコマのライフ+${P.reinforceTokenLife}` },
     { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクト(🌱🔑☠⚡)を付与するスキルを使うと、付与した数だけ魔力+1（1回につき最大${P.harvestCap}）` },
     { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '毒を付与するスキルを使うと、自陣のコマ1つにバッズも付く（付与先が自陣ならそのコマ。敵ならランダムな自陣のコマ）' },
-    { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがそれぞれランダムに-${P.priceRange}〜+${P.priceRange}される（下限1。試合中は固定）` },
+    { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがそれぞれランダムに-${P.priceRange}〜+${P.priceRange}される（下限${P.priceFloor}。試合中は固定）` },
     { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: 'スキルを使うたび、そのターンの間は全スキルのコスト-1（重複する。下限1）' },
     { id: 'propagate', name: '伝播', icon: '🌊', desc: 'エフェクト付きトークンを置くと、周囲8マスのランダムなコマに同じエフェクトが広がる' },
     { id: 'lightToken', name: '軽量トークン', icon: '🪶', desc: `トークン系スキルのコスト${P.lightTokenCost}、ただし置くコマのライフ${P.lightTokenLife}` },
@@ -147,11 +149,17 @@ export const rollPriceOffsets = (rng: () => number): PriceOffsets => {
     return out;
 };
 
-/** 基礎コスト表に価格破壊の加算値を適用する（下限1）。offsets が無ければ元の表をそのまま返す */
+/** 基礎コストに加算値を足す。下げる方向は下限 priceFloor まで（元のコストが下限未満ならそのまま） */
+export const priceShift = (base: number, offset: number): number => {
+    const next = base + offset;
+    return offset > 0 ? next : Math.min(base, Math.max(GEAR_PARAMS.priceFloor, next));
+};
+
+/** 基礎コスト表に価格破壊の加算値を適用する。offsets が無ければ元の表をそのまま返す */
 export const applyPriceOffsets = (base: SkillCosts, offsets: PriceOffsets | undefined): SkillCosts => {
     if (!offsets) return base;
     const out = { ...base };
-    for (const k of PRICEABLE_KEYS) out[k] = Math.max(1, base[k] + (offsets[k] ?? 0));
+    for (const k of PRICEABLE_KEYS) out[k] = priceShift(base[k], offsets[k] ?? 0);
     return out;
 };
 

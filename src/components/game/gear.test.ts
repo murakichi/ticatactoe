@@ -1,4 +1,5 @@
 import {
+    priceShift,
     GEARS,
     GEAR_IDS,
     GEAR_PARAMS,
@@ -110,7 +111,7 @@ describe('価格破壊', () => {
         expect(PRICEABLE_KEYS).toContain('onClickToken');
     });
 
-    it('加算値は ±4 の範囲、適用後は全スキル下限1・対象外は不変', () => {
+    it('加算値は ±4 の範囲、適用後は下限2（元が2未満ならそのまま）・対象外は不変', () => {
         let seed = 7;
         const rng = () => {
             seed = (seed * 16807) % 2147483647;
@@ -122,8 +123,18 @@ describe('価格破壊', () => {
             expect(offsets[k]).toBeLessThanOrEqual(GEAR_PARAMS.priceRange);
         }
         const table = applyPriceOffsets(skillCosts, offsets);
-        for (const k of PRICEABLE_KEYS) expect(table[k]).toBeGreaterThanOrEqual(1);
+        for (const k of PRICEABLE_KEYS) expect(table[k]).toBeGreaterThanOrEqual(Math.min(GEAR_PARAMS.priceFloor, skillCosts[k]));
         expect(table.onClickShuffle).toBe(skillCosts.onClickShuffle);
+    });
+
+    it('priceShift: 上げる方向はそのまま、下げる方向は下限2まで（元が2未満ならそのまま）', () => {
+        expect(priceShift(4, 3)).toBe(7);
+        expect(priceShift(4, -1)).toBe(3);
+        expect(priceShift(4, -4)).toBe(2);
+        expect(priceShift(2, -3)).toBe(2);
+        expect(priceShift(1, -3)).toBe(1);
+        expect(priceShift(1, 0)).toBe(1);
+        expect(priceShift(1, 2)).toBe(3);
     });
 
     it('加算値が無ければ元の表をそのまま返す', () => {
@@ -183,6 +194,7 @@ describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
             };
         };
         const a = applyPriceOffsets(skillCosts, rollPriceOffsets(mk()));
+        for (const [base, off] of [[4, -4], [2, -3], [1, -3], [1, 2], [6, 4]]) expect(simGear.priceShift(base, off)).toBe(priceShift(base, off));
         const b = simGear.applyPriceOffsets(simEngine.skillCosts, simGear.rollPriceOffsets(simEngine.skillCosts, mk()));
         for (const k of PRICEABLE_KEYS) expect(b[k]).toBe(a[k]);
     });

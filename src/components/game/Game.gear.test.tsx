@@ -98,10 +98,12 @@ describe('ギア（ブラウザ版）', () => {
         expect(magicChips(container)[0]).toBe(0);
     });
 
-    it('価格破壊: 全スキルの基礎コストがずれる（乱数0.25 → 全て-2、下限1）', () => {
-        // 加算値は floor(0.25*9)-4 = -2。ロックは 2-2=0 → 下限1
+    it('価格破壊: 全スキルの基礎コストがずれる（乱数0.25 → 全て-2、下限2）', () => {
+        // 加算値は floor(0.25*9)-4 = -2。ロックは 2-2=0 → 下限2
         render(<Game players={players(['priceWreck'])} />);
-        expect(screen.getByRole('button', { name: 'ロック-1' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'ロック-2' })).toBeInTheDocument();
+        // シャッフル(基礎1)は価格破壊の対象外
+        expect(screen.getByRole('button', { name: 'シャッフル-1' })).toBeInTheDocument();
     });
 
     it('価格破壊: 乱数が最大なら全て+4（ロック 2 → 6）。リスタートで引き直し', () => {
@@ -110,7 +112,7 @@ describe('ギア（ブラウザ版）', () => {
         expect(screen.getByRole('button', { name: 'ロック-6' })).toBeInTheDocument();
         jest.spyOn(Math, 'random').mockReturnValue(0.25);
         fireEvent.click(screen.getByRole('button', { name: 'リスタート' }));
-        expect(screen.getByRole('button', { name: 'ロック-1' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'ロック-2' })).toBeInTheDocument();
     });
 
     it('余韻: スキルを使った次の自分の手番、1つ目のスキルだけコスト-1', () => {

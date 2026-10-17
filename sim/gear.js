@@ -22,6 +22,7 @@ const GEAR_PARAMS = {
     lightTokenCost: -1,
     harvestCap: 5,
     priceRange: 4,
+    priceFloor: 2,
     gamblerStd: 5,
     vengeanceGain: 2,
     vengeancePenalty: 1,
@@ -70,13 +71,19 @@ function rollPriceOffsets(skillCosts, rng) {
     return out;
 }
 
-/** 基礎コスト表に加算値を適用する（下限1）。offsets が無ければ元の表をそのまま返す */
+/** 基礎コストに加算値を足す。下げる方向は下限 priceFloor まで（元のコストが下限未満ならそのまま） */
+function priceShift(base, offset) {
+    const next = base + offset;
+    return offset > 0 ? next : Math.min(base, Math.max(P.priceFloor, next));
+}
+
+/** 基礎コスト表に加算値を適用する。offsets が無ければ元の表をそのまま返す */
 function applyPriceOffsets(base, offsets) {
     if (!offsets) return base;
     const out = Object.assign({}, base);
     for (const k of Object.keys(base)) {
         if (NOT_PRICEABLE.includes(k)) continue;
-        out[k] = Math.max(1, base[k] + (offsets[k] || 0));
+        out[k] = priceShift(base[k], offsets[k] || 0);
     }
     return out;
 }
@@ -91,5 +98,5 @@ function randomGears(slots, rng = Math.random) {
 
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, randomGears,
+    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears,
 };
