@@ -15,6 +15,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
+import { isMuted, playSfx, setMuted } from '../../sound';
 
 // 盤面を揺らすスキル演出
 const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload'];
@@ -94,8 +95,18 @@ export const Game = (props: GameProps) => {
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
     const playEffect = (type: SkillEffectType, index?: number) => {
+        playSfx(type);
         setBoardEffect((prev) => ({ type, index, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardEffect(null), 1400);
+    };
+    // 効果音のオン/オフ(設定は localStorage に保存される)
+    const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
+    const onClickToggleSound = () => {
+        const next = !soundOn;
+        setMuted(!next);
+        setSoundOn(next);
+        // オンにした瞬間に確認音を鳴らす(ブラウザの音声再開も兼ねる)
+        if (next) playSfx('charge');
     };
     const flashCells = (indexes: number[]) => {
         // スキル実行時はホバープレビューを消して破壊演出に切り替える
@@ -481,6 +492,7 @@ export const Game = (props: GameProps) => {
         }
 
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
+        playSfx('place');
 
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
@@ -632,6 +644,7 @@ export const Game = (props: GameProps) => {
 
     const charge = 3;
     const onClickCharge = () => {
+        playSfx('charge');
         addLog(`「チャージ」を使用（ターン終了・マジック+${charge}）`);
         setMagicAt(turnSeat, (m) => m + charge);
         setCurrentTurn(currentTurn + 1);
@@ -1348,7 +1361,10 @@ export const Game = (props: GameProps) => {
 
     // 勝者が確定したら勝利数を1回だけ加算する
     useEffect(() => {
-        if (winner) setWinsAt(seatOf(winner), (w) => w + 1);
+        if (winner) {
+            setWinsAt(seatOf(winner), (w) => w + 1);
+            playSfx('win');
+        }
     }, [winner]);
 
     // 継続中スキルの残りターン数を返す
@@ -1637,6 +1653,14 @@ export const Game = (props: GameProps) => {
                         <button className={styles.btn} onClick={onClickRestart}>
                             リスタート
                         </button>
+                        <button
+                            className={styles.btn}
+                            onClick={onClickToggleSound}
+                            aria-pressed={soundOn}
+                            title={soundOn ? '効果音をオフにする' : '効果音をオンにする'}
+                        >
+                            {soundOn ? '🔊 音あり' : '🔇 音なし'}
+                        </button>
                         {isAllAI && (
                             <>
                                 <label className={styles.check}>
@@ -1681,71 +1705,78 @@ export const Game = (props: GameProps) => {
             <div className={`${styles.skills}${hailMarySpin || silenced[turnSeat] ? ` ${styles.skillsBusy}` : ''}`}>
                 <div className={styles.skillsTitle}>スキル{silenced[turnSeat] && <span className={styles.silenceNote}> サイレンス中: この手番はスキルを使えません</span>}</div>
                 <div className={styles.skillGrid}>
-                    <SkillButton onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickShuffle}
                         buttonText={`シャッフル-${ skillCosts.onClickShuffle}`}
                         paragraph='固定でないスキルをシャッフルします'
                         disabled={checkSkillDisable(skillCosts.onClickShuffle)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickUseLock}
                         buttonText={`ロック-${calculateCost(skillCosts.onClickUseLock)}`}
                         paragraph={`選択したマスを6ターン以上ロックします`}
                         disabled={checkSkillDisable(skillCosts.onClickUseLock)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickTotalAssault}
                         buttonText={`全軍突撃-${totalAssaultCost}`}
                         paragraph={
                             '3ターンの間、ターン終了時にランダムにトークンを設置します コストは使用したトークンの回数×2軽減されます(使用後はカウントがリセットされます)'
                         }
                         hidden={currentCharacter !== 'tactician'}
+                        exclusive
                         disabled={checkSkillDisable(totalAssaultCost - 2)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickStomp}
                         buttonText={`ストンプ-${skillCosts.onClickStomp}`}
                         paragraph={'クリックしたセルと周囲1マスを破壊します'}
                         hidden={currentCharacter !== 'giant'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickStomp)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickJudgeDay}
                         buttonText={`審判の日-${judgeDayCost}`}
                         paragraph='セルをクリックし、審判を下します コストは使用したスキルの回数軽減されます(使用後はカウントがリセットされます)'
                         hidden={currentCharacter !== 'magician'}
+                        exclusive
                         disabled={checkSkillDisable(judgeDayCost)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickToggleYingYang}
                         buttonText={`陰陽転化-${skillCosts.onClickToggleYingYang}`}
                         paragraph={`陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`}
                         hidden={currentCharacter !== 'yinYangMaster'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickToggleYingYang)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickNecromancy}
                         buttonText={`蘇生-${currentNecroCost}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`}
                         paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
                         hidden={currentCharacter !== 'necromancer'}
+                        exclusive
                         disabled={checkSkillDisable(currentNecroCost)}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickMiasma}
                         buttonText={`ミアズマ-${miasmaCost()}`}
                         paragraph={'自陣を選択し、周囲1マスの敵コマすべてに毒を1付与します コストは盤面の毒の数だけ軽減されます'}
                         hidden={currentCharacter !== 'poisoner'}
+                        exclusive
                         disabled={magic[turnSeat] < miasmaCost()}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickChargeSpread}
                         buttonText={`帯電拡散-${chargeSpreadCost()}`}
                         paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します コストは盤面の⚡の数だけ軽減されます'}
                         hidden={currentCharacter !== 'electrician'}
+                        exclusive
                         disabled={magic[turnSeat] < chargeSpreadCost()}
                     />
-                    <SkillButton
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickYingYangSkll}
                         buttonText={`${currentYinYangMode === 'yang' ? '豊穣の舞' : '凶荒の舞'}-${skillCosts.onClickYingYangSkill}`}
                         paragraph={`${
@@ -1754,12 +1785,13 @@ export const Game = (props: GameProps) => {
                                 : '相手のすべてのコマのライフを-2します 0になったコマは破壊します'
                         }`}
                         hidden={currentCharacter !== 'yinYangMaster'}
+                        exclusive
                         disabled={checkSkillDisable(skillCosts.onClickYingYangSkill)}
                         onHoverStart={currentYinYangMode === 'ying' ? () => showPreview(kyokoPreview()) : undefined}
                         onHoverEnd={currentYinYangMode === 'ying' ? clearPreview : undefined}
                     />
                     {shuffleSkillDefs.map((s) => (
-                        <SkillButton
+                        <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                             key={s.idx}
                             onClick={s.onClick}
                             buttonText={s.buttonText}
