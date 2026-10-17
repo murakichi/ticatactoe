@@ -536,6 +536,19 @@ class AIPlayer {
         return locks.slice(0, 2);
     }
 
+    /**
+     * 手札(ランダム3枠)にトークン系が無く、トークンを撃てる魔力が残るなら、シャッフル(魔力1)で引き直す。
+     * 軍師(トークンが戦力の源)と「あなた」(手札運が全て)だけ。sim/ai.js と同一。
+     * A/B: 軍師 +2.1〜+3.9pt、あなた +0.7〜+1.1pt。他キャラは悪化するため対象外
+     */
+    shouldShuffle(skills: number[], magic: number, costs: Record<keyof SkillCosts, number>, tokenUsed: boolean): boolean {
+        if (this.character !== 'you' && this.character !== 'tactician') return false;
+        if (tokenUsed) return false;
+        const tokenSkills = [3, 9, 11, 16, 21]; // トークン/バッズトークン/ダブルトークン/ポイズントークン/帯電トークン
+        if (skills.some((k) => tokenSkills.includes(k))) return false;
+        return magic >= costs.onClickShuffle + costs.onClickToken;
+    }
+
     /** AI用コスト計算 (軍師のトークン割引など) */
     calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false): number {
         if (this.character === 'poisoner') return isPoison ? baseCost - 1 : baseCost + 1;

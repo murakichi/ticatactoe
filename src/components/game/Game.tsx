@@ -191,10 +191,19 @@ export const Game = (props: GameProps) => {
 
     const runAIMove = () => {
         const ai = currentAI!;
-        const currentMagic = magic[turnSeat];
+        let currentMagic = magic[turnSeat];
         // 敵が複数いるときは最も魔力の多い相手を基準にする（2人戦なら従来どおり相手の魔力）
         const oppMagic = Math.max(...otherSeats(turnSeat).map((i) => magic[i]));
-        const currentSkills = skills;
+        let currentSkills = skills;
+
+        // 手札にトークンが無ければシャッフルで引き直してから判断する (sim/ai.js と同じ順序。軍師と「あなた」だけ)
+        if (ai.shouldShuffle(currentSkills, currentMagic, skillCosts, useToken)) {
+            currentSkills = reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills);
+            setSkills(currentSkills);
+            addLog('「シャッフル」を使用');
+            spendMagic(skillCosts.onClickShuffle);
+            currentMagic -= skillCosts.onClickShuffle;
+        }
 
         const aiNecroRemain = remainNecro[turnSeat];
         const aiNecroCost = necroCost[turnSeat];

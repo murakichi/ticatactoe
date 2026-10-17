@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, otherSeats, reshuffleSkillsFor, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
@@ -24,6 +24,8 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
 // 対策ロックの対象(敵がこのキャラなら、自コマを事前にロックして守る)
 const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
+const SHUFFLE_CHARS = ['you', 'tactician'];
+const TOKEN_SKILLS = [3, 9, 11, 16, 21]; // トークン系スキルの番号(トークン/バッズトークン/ダブルトークン/ポイズントークン/帯電トークン)
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -707,6 +709,17 @@ function faithfulMakeMove(s) {
     const opps = opponentsOf(s);
     const magic = curMagic(s);
     updateShield(s);
+
+    // シャッフル(魔力1)で手札を引き直す: トークンが手札に無く、トークンを撃てる魔力が残るときに1回だけ。
+    // トークンが戦力の源の軍師と、固有スキルが無く手札運が全ての「あなた」だけ。
+    // A/B(自キャラ側の勝率、各約840試合×seed3-5): 軍師 +3.9/+2.7/+2.1pt、あなた +1.1/+0.7/+0.9pt。
+    // 他キャラは巨人-1.5 魔法使い-1.4 陰陽師-4.1 ネクロ-4.8 毒使い-0.3 雷霆の巫-0.7pt で悪化するため対象外
+    if (SHUFFLE_CHARS.includes(curChar(s))) {
+        if (!s.usedTokenThisTurn && !s.skills.some((k) => TOKEN_SKILLS.includes(k)) && curMagic(s) >= 1 + skillCosts.onClickToken) {
+            s.magic[s.turn] -= skillCosts.onClickShuffle;
+            s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
+        }
+    }
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
