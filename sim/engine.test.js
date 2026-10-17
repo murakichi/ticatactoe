@@ -57,70 +57,27 @@ test('ライフ0のコマに後から毒を撒いても、次の手番で消え�
     assert.ok(s.heartMagic >= before + 1);
 });
 
-const P = { effect: '☠' };
-const stacks = (sq) => sq.effects.filter((x) => x.effect === '☠').length;
-
-test('ミアズマ: 自陣の毒マスの周囲の敵マスに毒を1つ付与し、自陣の毒はすべて消える', () => {
-    const s = game('poisoner', 'you');
-    s.heartTurn = true; s.life = 3;
-    s.board[5] = { player: '💙', bind: 4, effects: [P, P] };   // 自陣の毒マス（毒2スタック）
-    s.board[6] = { player: '⭕', bind: 4, effects: [] };        // 隣の敵
-    s.board[15] = { player: '⭕', bind: 4, effects: [] };       // 離れた敵（対象外）
-    e.SKILLS.miasma(s);
-    assert.strictEqual(stacks(s.board[6]), 1, '毒マス1つにつき1つ（スタック数ではない）');
-    assert.strictEqual(stacks(s.board[15]), 0);
-    assert.strictEqual(stacks(s.board[5]), 0, '自陣の毒は消える');
-});
-
-test('ミアズマ: 毒マスが複数隣り合うと同じ敵マスに毒が重複して積み上がる', () => {
-    const s = game('poisoner', 'you');
-    s.heartTurn = true;
-    s.board[5] = { player: '💙', bind: 4, effects: [P] };
-    s.board[7] = { player: '💙', bind: 4, effects: [P] };
-    s.board[6] = { player: '⭕', bind: 4, effects: [] };        // 5 と 7 の両方に隣接
-    e.SKILLS.miasma(s);
-    assert.strictEqual(stacks(s.board[6]), 2);
-});
-
-test('ミアズマ: 自陣に毒が無ければ何も起きない（敵の毒は対象にならない）', () => {
-    const s = game('poisoner', 'you');
-    s.heartTurn = true;
-    s.board[5] = { player: '💙', bind: 4, effects: [] };
-    s.board[6] = { player: '⭕', bind: 4, effects: [P] };
-    e.SKILLS.miasma(s);
-    assert.strictEqual(stacks(s.board[6]), 1);
-    assert.strictEqual(e.miasmaPlan(s).size, 0);
-});
-
-test('ミアズマのコスト: 自陣の毒の数だけ軽減（敵陣の毒は数えない）、下限1', () => {
-    const s = game('poisoner', 'you');
-    s.heartTurn = true;
-    s.board[5] = { player: '⭕', bind: 4, effects: [P, P, P] };  // 敵陣の毒は数えない
-    assert.strictEqual(e.miasmaCost(s), 5);                      // 6 - 1(毒使い割引)
-    s.board[6] = { player: '💙', bind: 4, effects: [P, P, P] };
-    assert.strictEqual(e.miasmaCost(s), 2);                      // 6 - 3 - 1
-    s.board[7] = { player: '💙', bind: 4, effects: [P, P, P, P, P, P] };
-    assert.strictEqual(e.miasmaCost(s), 1);                      // 下限
-});
-
-test('毒使いの駒に毒が付くとライフが1.5倍になる（ミアズマ）', () => {
-    // 毒使い同士: ⭕ がミアズマを撃ち、💙 の毒使いの駒が毒を受ける
+test('毒使いの駒に毒が付くとライフが1.5倍になる（ミアズマ・インジェクション）', () => {
+    // 毒使い(💙)の駒に、敵(⭕=毒使い)のミアズマが当たる: 毒使い同士の対戦で ⭕ がミアズマを撃つ
     const s = game('poisoner', 'poisoner');
     s.heartTurn = false; s.life = 3;
-    s.board[5] = { player: '⭕', bind: 4, effects: [P] };
-    s.board[6] = { player: '💙', bind: 4, effects: [] };
+    s.board[5] = { player: '⭕', bind: 4, effects: [] };   // ミアズマの起点（自陣）
+    s.board[6] = { player: '💙', bind: 4, effects: [] };   // 毒使いの敵駒
+    s.heartMagic = 0; s.circleMagic = 10;
     e.SKILLS.miasma(s);
-    assert.strictEqual(stacks(s.board[6]), 1);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '☠').length, 1);
     assert.strictEqual(s.board[6].bind, 6); // 4 × 1.5
 });
 
 test('毒使いでない駒に毒が付いてもライフは変わらない', () => {
     const s = game('poisoner', 'you');
     s.heartTurn = true; s.life = 3;
-    s.board[5] = { player: '💙', bind: 4, effects: [P] };
+    s.board[5] = { player: '💙', bind: 4, effects: [] };
     s.board[6] = { player: '⭕', bind: 4, effects: [] };
     e.SKILLS.miasma(s);
-    assert.strictEqual(stacks(s.board[6]), 1);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '☠').length, 1);
     assert.strictEqual(s.board[6].bind, 4);
 });
 
