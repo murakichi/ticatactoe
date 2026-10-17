@@ -161,6 +161,24 @@
     justify-content: center;
 }
 
+/* ギア（装備中のものを名前つきで並べる。説明は title で出す） */
+.gears {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+}
+
+.gear {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(140, 170, 255, 0.14);
+    border: 1px solid rgba(140, 170, 255, 0.55);
+    color: var(--color-text, inherit);
+    cursor: help;
+}
+
 .effectBadge {
     font-size: 11px;
     padding: 2px 8px;

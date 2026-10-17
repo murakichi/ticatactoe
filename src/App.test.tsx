@@ -1,6 +1,6 @@
 // tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { App } from './App';
 import { LIFE_MEANS } from './util';
 
@@ -93,4 +93,63 @@ test('おまかせに戻すと人数に応じた盤面になる', () => {
     fireEvent.click(screen.getByRole('button', { name: 'おまかせ' }));
     fireEvent.click(screen.getByRole('button', { name: '5人' }));
     expect(screen.getByText(/盤面 6x6/)).toBeInTheDocument();
+});
+
+describe('ギアの選択', () => {
+    const cards = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>('[class*="playerCard"]'));
+    const chip = (card: HTMLElement, name: string) => within(card).getByRole('button', { name: new RegExp(name) });
+
+    it('最初から全ギアを選べる（装備枠は2。枠が埋まると他は選べない）', () => {
+        const { container } = render(<App />);
+        const card = cards(container)[0];
+        fireEvent.click(within(card).getByText('巨人'));
+        expect(card).toHaveTextContent('ギア 0/2');
+        fireEvent.click(chip(card, '頑健'));
+        fireEvent.click(chip(card, '堅牢の鍵'));
+        expect(card).toHaveTextContent('ギア 2/2');
+        expect(chip(card, '頑健')).toHaveAttribute('aria-pressed', 'true');
+        expect(chip(card, '余韻')).toBeDisabled();
+        // 外すと空く
+        fireEvent.click(chip(card, '頑健'));
+        expect(card).toHaveTextContent('ギア 1/2');
+        expect(chip(card, '余韻')).not.toBeDisabled();
+        // 説明文が出る
+        expect(card).toHaveTextContent('ロックの期間が9ターン');
+    });
+
+    it('「あなた」だけ3枠。他のキャラに変えると、はみ出したギアは外れる', () => {
+        const { container } = render(<App />);
+        const card = cards(container)[0];
+        expect(card).toHaveTextContent('ギア 0/3');
+        ['頑健', '堅牢の鍵', '余韻'].forEach((n) => fireEvent.click(chip(card, n)));
+        expect(card).toHaveTextContent('ギア 3/3');
+        fireEvent.click(within(card).getByText('巨人'));
+        expect(card).toHaveTextContent('ギア 2/2');
+    });
+
+    it('席ごとのランダム付与: 枠数ぶん重複なしで付く', () => {
+        const { container } = render(<App />);
+        const card = cards(container)[1];
+        fireEvent.click(within(card).getByRole('button', { name: /プレイヤー2のギアをランダムに/ }));
+        const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+        expect(pressed).toHaveLength(3); // 「あなた」は3枠
+    });
+
+    it('全員ランダム: 人数分の席に付き、対戦画面のパネルに出る', () => {
+        const { container } = render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: /全員のギアをランダム/ }));
+        cards(container).forEach((card) => {
+            const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+            expect(pressed).toHaveLength(3);
+        });
+        fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
+        expect(container.querySelectorAll('[class*="gear"]').length).toBeGreaterThanOrEqual(6);
+    });
+
+    it('選んだギアが対戦に引き継がれる', () => {
+        const { container } = render(<App />);
+        fireEvent.click(chip(cards(container)[0], '剛腕の代償'));
+        fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
+        expect(screen.getByRole('button', { name: 'ロック-5' })).toBeInTheDocument();
+    });
 });

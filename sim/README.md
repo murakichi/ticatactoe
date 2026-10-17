@@ -83,6 +83,16 @@ node sim/probe-charge.js 120 5        # 雷霆の巫 vs 各キャラの勝率・
 
 キャラ: `you, tactician, magician, giant, yinYangMaster, necromancer, poisoner, electrician`（electrician = 雷霆の巫）
 
+### 7. ギア（キャラ選択時に装備する追加パッシブ）の強さ
+```bash
+node sim/probe-gear.js 500 1 baseline,sturdy,ironLock   # 2人戦・faithful AI・キャラ毎試合ランダム。1ギア=1行のJSON
+node sim/gear.test.js                                   # ギアの単体テスト
+```
+片方の席だけにギアを1つ持たせ、先手/後手を半々にして、装備側の勝率（引き分け除く）を出す。`baseline` は
+同じ条件で何も付けない対照群（0.5付近が出るはず）。1ギアあたり500試合で標準誤差は約±2pt。4コアなら
+ギアを分けて並列に走らせる。ギアの定義は `gear.js`（`src/components/game/gear.ts` の複製。
+`gear.test.ts` が一致を確認する）。`newGame({ chars, gears })` の `gears[seat]` にギアIDの配列を渡す。
+
 ## ファイル
 - `engine.js` — ゲームエンジン（盤面・ライフ・マジック・手番・全スキル）。移植の
   忠実性メモ（`[FAITHFUL]` / `[FIX]`）をコメントで明記。

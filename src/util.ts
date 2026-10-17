@@ -28,8 +28,9 @@ const lifeMeanOf = (characterId: CharacterId, yingYangMode?: YingYangMode): numb
     return (LIFE_MEANS as Record<string, number>)[characterId] ?? LIFE_MEANS.default;
 };
 
-const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0): number => {
-    return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, LIFE_STD));
+/** std はギア(賭博師の骰子)でばらつきを変えるときに渡す。省略時は LIFE_STD */
+const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0, std: number = LIFE_STD): number => {
+    return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std));
 };
 
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
