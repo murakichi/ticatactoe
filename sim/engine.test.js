@@ -108,16 +108,16 @@ test('毒霧: 🔑ロック中のコマは対象外。毒使いの駒はライ�
     assert.strictEqual(stacks(s.board[2]), 0);
 });
 
-test('毒霧: 毒使いは毒系の割引(-1)を受けて7、他キャラは8', () => {
+test('毒霧: 毒使いは毒系の割引(-1)を受けて6、他キャラは7', () => {
     const a = game('poisoner', 'you');
     a.heartTurn = true;
     a.heartMagic = 20;
     e.SKILLS.poisonMist(a);
-    assert.strictEqual(20 - a.heartMagic, 7);
+    assert.strictEqual(20 - a.heartMagic, 6);
     const b = game('you', 'you');
     b.heartTurn = true; b.heartMagic = 20;
     e.SKILLS.poisonMist(b);
-    assert.strictEqual(20 - b.heartMagic, 8);
+    assert.strictEqual(20 - b.heartMagic, 7);
 });
 
 test('毒トークンは毒使いが置くとライフが1.5倍になる', () => {
