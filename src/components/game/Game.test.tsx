@@ -166,6 +166,29 @@ test('雷霆の巫: 固有スキル(帯電拡散)がパネルとスキルボタ�
     expect(screen.getByRole('button', { name: '帯電拡散-7' })).toBeInTheDocument();
 });
 
+test('スキルカードにコストバッジ・種類タグ・使えない理由が出る', () => {
+    render(
+        <Game
+            players={[
+                { character: 'giant', isAI: false },
+                { character: 'you', isAI: false },
+            ]}
+        />
+    );
+    // 初期マジック2: ストンプ(コスト6)は使えず、不足分が出る。固有タグも付く
+    const stomp = screen.getByRole('button', { name: 'ストンプ-6' });
+    expect(stomp).toBeDisabled();
+    expect(stomp).toHaveTextContent('あと⚡4');
+    expect(stomp).toHaveTextContent('固有');
+    // ロック(コスト2)は使える。コストバッジが出て、不足表示はない
+    const lock = screen.getByRole('button', { name: 'ロック-2' });
+    expect(lock).toBeEnabled();
+    expect(lock).toHaveTextContent('⚡2');
+    expect(lock).not.toHaveTextContent('あと');
+    // チャージは獲得なので + 表示
+    expect(screen.getByRole('button', { name: 'チャージ+3' })).toHaveTextContent('+3');
+});
+
 describe('終盤の魔力ボーナス', () => {
     const chargeTimes = (n: number) => {
         for (let k = 0; k < n; k++) fireEvent.click(screen.getByRole('button', { name: /チャージ/ }));
