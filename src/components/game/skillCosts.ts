@@ -44,7 +44,7 @@ export const skillCosts = {
     // サイレンス: 相手全員の次の手番のスキルを封じる。idx 28
     onClickSilence: 5,
     // 毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与。idx 29。毒系なので毒使いは-1
-    onClickPoisonMist: 8,
+    onClickPoisonMist: 7,
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -174,7 +174,7 @@ const skillCosts = {
     onClickJammer: (config.charge && config.charge.jammerCost) || 4,
     onClickHailMary: 6, // idx 27
     onClickSilence: 5, // idx 28
-    onClickPoisonMist: 8, // idx 29
+    onClickPoisonMist: 7, // idx 29
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
