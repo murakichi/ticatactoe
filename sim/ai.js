@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, skillCosts, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, otherSeats, POOL_SIZE, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
@@ -22,6 +22,8 @@ const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
+// 対策ロックの対象(敵がこのキャラなら、自コマを事前にロックして守る)
+const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
@@ -123,6 +125,25 @@ function bestMiasmaTarget(board, me) {
 
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
+// 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
+function bestAntiNecroLockTarget(board, me) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (sq.player !== me || sq.bind > 3 || sq.effects.some(e => e.effect === '🔑')) continue;
+        let val = 1;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let mc = 0, foreign = 0;
+            for (const idx of line) { if (board[idx].player === me) mc++; else if (board[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(mc, 4)];
+        }
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestIdx;
+}
+
 // ---- 帯電（雷霆の巫）AI ----
 // 無敵(⚡付き雷霆の巫の自陣マス)は誰も触れない。手番開始時に集合を作り、候補列挙・スキル対象から除外する
 let shield = new Set();
@@ -134,7 +155,13 @@ const sizeOf = (board) => Math.round(Math.sqrt(board.length));
 
 // 着手マス i が発火させる⚡の損得。敵コマ(ライフ>0)を削れば加点、自コマを削れば減点。
 // ライフ1のコマは0になる(=奪取可能になる/守りが剥がれる)ので重く見る
-function fireGain(board, i, me) {
+// 雷霆の巫の席のシンボル集合（自陣由来の発火ダメージが効かない側）
+function electricianSymbols(s) {
+    const set = new Set();
+    s.chars.forEach((c, seat) => { if (c === 'electrician') set.add(SYMBOLS[seat]); });
+    return set;
+}
+function fireGain(board, i, me, electricians) {
     const size = sizeOf(board);
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
@@ -144,7 +171,9 @@ function fireGain(board, i, me) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue;
-            const w = 3 + (sq.bind === 1 ? 4 : 0);
+            if (sq.player === board[k].player && electricians.has(sq.player)) continue; // 自陣由来の発火は雷霆の巫に効かない
+            // 発火ダメージで 0 になる(=奪取可能になる/守りが剥がれる)コマは重く見る
+            const w = 3 * Math.min(FIRE_DAMAGE, sq.bind) + (sq.bind <= FIRE_DAMAGE ? 4 : 0);
             gain += (isEnemy(sq.player, me) ? w : -w) * W;
         }
     }
@@ -216,6 +245,49 @@ function bestChargeSpreadTarget(board, me) {
         if (!ok) continue;
         const score = adj.size + mine + (reach ? 10 : 0);
         if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestIdx;
+}
+
+// 範囲帯電(3x3): 範囲内の (敵コマ数 − 自コマ数)（ライフ>0のコマのみ）が 2 以上の中心を選ぶ（3 だと 0.01回/試合で撃たれず、2 に緩めた）
+const CHARGE_AREA_MIN_SCORE = Number(process.env.CHG_AREA_MIN) || 2; // A/B検証用の上書き
+function bestChargeAreaTarget(board, me) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestScore = 0;
+    for (let i = 0; i < board.length; i++) {
+        if (shield.has(i)) continue;
+        let score = 0;
+        for (const k of geo.stompRange(i)) {
+            const sq = board[k];
+            if (!sq.player || sq.bind <= 0) continue;
+            if (isEnemy(sq.player, me)) score++; else score--;
+        }
+        if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestScore >= CHARGE_AREA_MIN_SCORE ? bestIdx : null;
+}
+
+// ジャマー: ⚡マスを選び、縦横隣接の敵コマ(ライフ>0・ロックなし)に⚡のスタック数のダメージ。
+// ライフ0にできる敵が2体以上、敵のリーチ列の要(どかさないと負ける駒)をライフ0にできる、または与ダメージ合計が2以上なら撃つ。
+// ライフ0になった敵は同じ手番で奪取できる。他人の無敵マスは選べない
+const JAM_MIN_DMG = process.env.JAM_MIN_DMG != null ? Number(process.env.JAM_MIN_DMG) : 2; // 与ダメージ合計がこの値以上でも撃つ（0=無効。A/B検証用に上書き可）
+function bestJammerTarget(board, me) {
+    const size = sizeOf(board);
+    let bestIdx = null, bestScore = 0;
+    for (let k = 0; k < board.length; k++) {
+        const n = chargeStacks(board[k]);
+        if (n === 0 || (shield.has(k) && board[k].player !== me)) continue;
+        let zeroed = 0, critical = 0, dmg = 0;
+        for (const j of orthoNeighbors(k, size)) {
+            const sq = board[j];
+            if (!isEnemy(sq.player, me) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑')) continue;
+            dmg += Math.min(n, sq.bind);
+            if (sq.bind <= n) { zeroed++; if (inOppReachLine(board, j, me)) critical++; }
+        }
+        if (zeroed >= 2 || critical >= 1 || (JAM_MIN_DMG > 0 && dmg >= JAM_MIN_DMG)) {
+            const score = zeroed + critical * 2 + dmg * 0.1;
+            if (score > bestScore) { bestScore = score; bestIdx = k; }
+        }
     }
     return bestIdx;
 }
@@ -416,7 +488,7 @@ function getEnhancedBestMove(s) {
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
-        score += fireGain(board, i, me);
+        score += fireGain(board, i, me, electricianSymbols(s));
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
@@ -474,7 +546,9 @@ function chooseSkills(s, availableSkills) {
                 for (const sq of board) {
                     if (isEnemy(sq.player, me) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(ncost, 'necromancy');
+                // 死体が1つでもあれば即発動。相手がロックで守っても蘇生の窓(4手番)の間に切れるので待つ意味がない
+                // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
+                if (corpses >= 1 || absorbable >= 2) spend(ncost, 'necromancy');
             }
         }
 
@@ -544,7 +618,7 @@ function chooseSkills(s, availableSkills) {
     }
 
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
-    if ((character !== 'poisoner' || availableSkills.includes(17))) {
+    if (availableSkills.includes(17)) {
         const serumCost = calculateCost(s, skillCosts.onClickSerum, false, true);
         let doomed = 0;
         for (const sq of board) {
@@ -561,6 +635,8 @@ function chooseSkills(s, availableSkills) {
         const chargeTokenCost = calculateCost(s, skillCosts.onClickChargeToken, true);
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
             spend(poisonTokenCost, 'poisonToken');
+        } else if (character === 'electrician' && availableSkills.includes(23) && remaining >= calculateCost(s, skillCosts.onClickDoubleChargeToken, true)) {
+            spend(calculateCost(s, skillCosts.onClickDoubleChargeToken, true), 'doubleChargeToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
             spend(chargeTokenCost, 'chargeToken');
         } else if (availableSkills.includes(11) && remaining >= cost(skillCosts.onClickDoubleToken, true)) {
@@ -570,6 +646,13 @@ function chooseSkills(s, availableSkills) {
         } else if (availableSkills.includes(3) && remaining >= cost(skillCosts.onClickToken, true)) {
             spend(cost(skillCosts.onClickToken, true), 'token');
         }
+    }
+
+    // 雷霆の巫: 他に撃つものが無く、魔力に余裕があるときだけランダム帯電（コスト+1 以上残る。+3 だと発動が稀すぎた）
+    const RAND_MARGIN = Number(process.env.CHG_RAND_MARGIN) || 1; // A/B検証用の上書き
+    if (character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
+        const rc = calculateCost(s, skillCosts.onClickChargeRandom);
+        if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
     }
 
     return skills;
@@ -606,7 +689,7 @@ function chooseLocks(s, availableSkills) {
             case 0: case 1: return life <= 2;
             case 2: case 10: return empties >= 8;
             case 20: return empties >= 6;   // 増殖(空きが多いほどループが伸びる)
-            case 21: return character === 'electrician' && empties >= 3; // 帯電トークン
+            case 21: case 23: return character === 'electrician' && empties >= 3; // 帯電トークン/帯電ダブルトークン
             default: return false;
         }
     };
@@ -664,17 +747,43 @@ function faithfulMakeMove(s) {
         }
     }
 
+    // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、吸収・毒・凶荒の舞(全コマ-2)で失いそうな低bind(<=3)の自コマを
+    // 事前にロックして守る(ロックはライフを6以上にして貫通を防ぐ)。後出し(蘇生中だけ等)では遅く悪化する。
+    // A/B(自キャラ側の勝率): 対ネクロ 0.448/0.455/0.456 → 0.631/0.613/0.625 (seed3-5)、対陰陽師 +4.5〜+13pt (seed3-5)、
+    // 対毒使い +3.4/+4.4/+12.2/-0.8pt (seed3-6)。対照: 敵が「あなた」なら変化なし、敵が巨人なら悪化(0.493→0.403)で効果は敵の特性に由来
+    // 対象外: 軍師と毒使いはロックに+2/+1コストが乗り運用と競合して悪化。ネクロ同士は未検証。雷霆の巫は変化なし(+0.6pt)
+    if (curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
+        && otherSeats(s).some((seat) => ANTI_LOCK_VS.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
+        && magic >= calculateCost(s, skillCosts.onClickUseLock)) {
+        const target = bestAntiNecroLockTarget(s.board, me);
+        if (target !== null) {
+            SKILLS.lock(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
+        }
+    }
+
     // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
     if (curChar(s) === 'electrician' && opps.every((o) => countReaches(s.board, o) === 0)) {
-        if (curMagic(s) >= skillCosts.onClickChargeSpread) {
+        if (curMagic(s) >= chargeSpreadCost(s)) {
             const start = bestChargeSpreadTarget(s.board, me);
             if (start !== null) { SKILLS.chargeSpread(s); placeMove(s, start); updateShield(s); }
         }
-        if (availableSkills.includes(22) && curMagic(s) >= calculateCost(s, skillCosts.onClickChargeOne)) {
+        if (availableSkills.includes(24) && curMagic(s) >= calculateCost(s, skillCosts.onClickChargeArea)) {
+            const center = bestChargeAreaTarget(s.board, me);
+            if (center !== null) { SKILLS.chargeArea(s); placeMove(s, center); updateShield(s); }
+        }
+        if (availableSkills.includes(22) && curMagic(s) >= chargeOneCost(s)) {
             const target = bestChargeOneTarget(s.board, me);
             if (target !== null) { SKILLS.chargeOne(s); placeMove(s, target); updateShield(s); }
         }
+    }
+    // ジャマー: 相手にリーチがあっても撃てる（要の駒をライフ0にして、同じ手番で奪って崩す）
+    if (curChar(s) === 'electrician' && availableSkills.includes(26) && curMagic(s) >= calculateCost(s, skillCosts.onClickJammer)) {
+        const target = bestJammerTarget(s.board, me);
+        if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
 
     // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
@@ -742,6 +851,11 @@ function faithfulMakeMove(s) {
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
     const move = getEnhancedBestMove(s);
+    // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
+    if (move === null) {
+        SKILLS.charge(s);
+        return { move: null, turnEnded: true };
+    }
     return { move, turnEnded: false };
 }
 

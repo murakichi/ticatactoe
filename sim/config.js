@@ -14,16 +14,28 @@ module.exports = {
     },
     "lifeStd": 3,
     "giantSkipModulo": 5,
-    // 汎用スキルプールの大きさ。21 -> 23 (帯電トークン/帯電付与, #39)
-    "poolSize": 23,
+    // 汎用スキルプールの大きさ。21 -> 23 (#39) -> 27 (#40)
+    "poolSize": 27,
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。
     // 99 にすると全人数で従来どおり着手ごと（A/B検証用）
     "decayPerRoundMinPlayers": 3,
+    // 長引く多人数戦の打ち切り: この人数以上で、interval ターンごとに手番開始時の魔力が全員+1ずつ増える。
+    // src/components/game/lateMagic.ts の LATE_MAGIC_MIN_PLAYERS / LATE_MAGIC_INTERVAL と同じ値に
+    "lateGameMagicMinPlayers": 2,
+    "lateGameMagicInterval": 50,
     // 帯電（雷霆の巫, #39）のコスト。Game.tsx / skillCosts.ts の値と一致させること
     "charge": {
         "tokenCost": 3,
         "oneCost": 2,
-        "spreadCost": 7
+        "spreadCost": 7,
+        "doubleTokenCost": 6,
+        "areaCost": 5,
+        "randomCost": 3,
+        "jammerCost": 4,
+        // 帯電付与・帯電拡散は盤面の⚡の数だけ軽減、この下限まで (#43)
+        "minCost": 1,
+        // 全マスが⚡で埋まると、全⚡と🔑を取り除いて全マスのライフを0にする（過負荷）。false で無効
+        "discharge": true
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
     "proliferate": {
