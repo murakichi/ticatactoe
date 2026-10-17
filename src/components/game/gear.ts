@@ -33,7 +33,7 @@ export const GEAR_PARAMS = {
     /** 空蔵: 期限切れで生まれる自陣のコマのライフ */
     emptyLockLife: 1,
     /** 道連れの鍵: トークン系スキルで置いたコマにロックが付く確率 */
-    bindingLockChance: 0.5,
+    bindingLockChance: 0.7,
     /** 四連の極意: この回数スキルを使うと、次のスキルが無料 */
     quadCount: 4,
     /** 余韻: 次ターン1つ目のスキルのコスト変化 */
