@@ -34,7 +34,7 @@ const makeCtx = () => {
 const ALL: Sfx[] = [
     'slash', 'backslash', 'stomp', 'judge', 'opium', 'tsunami', 'assault', 'necromancy', 'yinyang',
     'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'proliferate', 'zap', 'overload', 'silence',
-    'place', 'charge', 'win',
+    'place', 'charge', 'win', 'lock',
 ];
 
 test.each(ALL)('%s は音源を予約し、2秒以内に鳴り終わる', (sfx) => {

@@ -3,7 +3,7 @@
 // OfflineAudioContext(テスト・波形確認)でも同じコードが動く。
 import type { SkillEffectType } from './components/game/BoardEffects';
 
-export type Sfx = SkillEffectType | 'place' | 'charge' | 'win';
+export type Sfx = SkillEffectType | 'place' | 'charge' | 'win' | 'lock';
 
 type ToneOpts = {
     type?: OscillatorType;
@@ -232,6 +232,16 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             tone(ctx, d, { f0: 660, f1: 55, t: T(0.05), dur: 0.45, gain: 0.4 });
             noise(ctx, d, { t: T(0), dur: 0.3, gain: 0.3, filter: 'lowpass', f0: 2500, f1: 120 });
             return 0.6;
+        }
+        case 'lock': {
+            // 錠が掛かる「ガチャン」: 打撃の瞬間のノイズ + 非整数倍の金属倍音(チーン) + 重い低音のロック音
+            noise(ctx, d, { t: T(0), dur: 0.04, gain: 0.7, filter: 'highpass', f0: 3000 });
+            for (const [f, g] of [[1180, 0.28], [1770, 0.2], [2650, 0.14]] as const) {
+                tone(ctx, d, { type: 'square', f0: f, t: T(0), dur: 0.3, gain: g, lowpass: 6000 });
+            }
+            tone(ctx, d, { f0: 180, f1: 70, t: T(0.05), dur: 0.2, gain: 0.7 });
+            noise(ctx, d, { t: T(0.05), dur: 0.08, gain: 0.4, filter: 'lowpass', f0: 900, f1: 200 });
+            return 0.4;
         }
         case 'place': {
             // 駒を置く「ポン」

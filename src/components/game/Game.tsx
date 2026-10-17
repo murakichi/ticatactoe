@@ -445,6 +445,7 @@ export const Game = (props: GameProps) => {
                 nextBoard[i].bind = 6;
             }
             addLog(`${posName(i)}をロック`);
+            playSfx('lock');
             setUseLock(useLock - 1);
             setCurrentBoard(nextBoard);
             return;
