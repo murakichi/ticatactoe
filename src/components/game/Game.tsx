@@ -15,6 +15,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT } from './skillCosts';
 import { Status } from './Status';
 import styles from './Game.module.css';
+import { isMuted, playSfx, setMuted } from '../../sound';
 
 // 盤面を揺らすスキル演出
 const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload'];
@@ -94,8 +95,18 @@ export const Game = (props: GameProps) => {
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
     const playEffect = (type: SkillEffectType, index?: number) => {
+        playSfx(type);
         setBoardEffect((prev) => ({ type, index, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardEffect(null), 1400);
+    };
+    // 効果音のオン/オフ(設定は localStorage に保存される)
+    const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
+    const onClickToggleSound = () => {
+        const next = !soundOn;
+        setMuted(!next);
+        setSoundOn(next);
+        // オンにした瞬間に確認音を鳴らす(ブラウザの音声再開も兼ねる)
+        if (next) playSfx('charge');
     };
     const flashCells = (indexes: number[]) => {
         // スキル実行時はホバープレビューを消して破壊演出に切り替える
@@ -449,6 +460,7 @@ export const Game = (props: GameProps) => {
         }
 
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
+        playSfx('place');
 
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
@@ -600,6 +612,7 @@ export const Game = (props: GameProps) => {
 
     const charge = 3;
     const onClickCharge = () => {
+        playSfx('charge');
         addLog(`「チャージ」を使用（ターン終了・マジック+${charge}）`);
         setMagicAt(turnSeat, (m) => m + charge);
         setCurrentTurn(currentTurn + 1);
@@ -1243,7 +1256,10 @@ export const Game = (props: GameProps) => {
 
     // 勝者が確定したら勝利数を1回だけ加算する
     useEffect(() => {
-        if (winner) setWinsAt(seatOf(winner), (w) => w + 1);
+        if (winner) {
+            setWinsAt(seatOf(winner), (w) => w + 1);
+            playSfx('win');
+        }
     }, [winner]);
 
     // 継続中スキルの残りターン数を返す
@@ -1499,6 +1515,14 @@ export const Game = (props: GameProps) => {
                     <div className={styles.controls}>
                         <button className={styles.btn} onClick={onClickRestart}>
                             リスタート
+                        </button>
+                        <button
+                            className={styles.btn}
+                            onClick={onClickToggleSound}
+                            aria-pressed={soundOn}
+                            title={soundOn ? '効果音をオフにする' : '効果音をオンにする'}
+                        >
+                            {soundOn ? '🔊 音あり' : '🔇 音なし'}
                         </button>
                         {isAllAI && (
                             <>
