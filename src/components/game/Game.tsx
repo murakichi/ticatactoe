@@ -227,6 +227,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
             case 'onClickJammer': onClickJammer(); break;
+            case 'onClickPoisonMist': onClickPoisonMist(); break;
         }
     };
 
@@ -1395,6 +1396,20 @@ export const Game = (props: GameProps) => {
         setUsePandemic(false);
     };
 
+    // 毒霧: 盤上の全コマ（敵味方問わず。🔑ロック・無敵は除く）に毒を1付与する。対象選択なし
+    const onClickPoisonMist = () => {
+        const board = currentBoard.slice();
+        const targets = board.map((_, k) => k).filter((k) => board[k].player && !isGuarded(board[k], characters));
+        for (const k of targets) board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, { effect: '☠' }] });
+        harvestMagic(targets.length);
+        if (targets.length > 0) toxicBloom(board, null);
+        addLog(`「毒霧」を使用（${targets.length}マスに毒）`);
+        flashCells(targets);
+        playEffect('poison');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickPoisonMist, false, true));
+    };
+
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
@@ -1815,6 +1830,7 @@ export const Game = (props: GameProps) => {
         { idx: 26, onClick: onClickJammer, buttonText: `ジャマー-${calculateCost(seatCosts.onClickJammer)}`, paragraph: `⚡のあるマスを選択し、縦横に隣接する相手のコマのライフを⚡の数だけ減らして、そのマスの⚡を取り除きます\n自分のコマと🔑ロック中のコマは影響を受けません\n自分の無敵マスも選べます（弱点を解除できます）`, disabled: checkSkillDisable(seatCosts.onClickJammer) || boardChargeCount(currentBoard) === 0 },
         { idx: 27, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(seatCosts.onClickHailMary)}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(seatCosts.onClickHailMary) },
         { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(seatCosts.onClickSilence)}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(seatCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
+        { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true)}`, paragraph: `盤上の全コマ（敵味方問わず）に毒を1付与します 🔑ロック中・無敵のコマは対象外です`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
     ];
 
     return (

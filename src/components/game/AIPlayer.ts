@@ -6,8 +6,8 @@ import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..28)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 29;
+// 汎用スキルプールの大きさ (idx 0..29)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 30;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -637,6 +637,18 @@ class AIPlayer {
         }
 
         // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
+        // 毒霧: 毒使いが、敵コマが自コマより2つ以上多いとき撃つ（sim/ai.js と同じ条件）
+        if (this.character === 'poisoner' && availableSkills.includes(29)) {
+            let mine = 0;
+            let theirs = 0;
+            for (const sq of board) {
+                if (!sq.player || sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (sq.player === this.playerSymbol) mine++;
+                else theirs++;
+            }
+            if (theirs >= 4 && theirs >= mine + 2) spend(this.calculateAICost(costs.onClickPoisonMist, false, true), 'onClickPoisonMist');
+        }
+
         if (
             oppReaches === 0 &&
             availableSkills.includes(28) &&

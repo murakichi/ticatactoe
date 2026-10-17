@@ -12,3 +12,7 @@ test('未登録のスキル名でも既定のメタを返す', () => {
     expect(metaOf('存在しないスキル').category).toBe('basic');
     expect(metaOf('スラッシュ').category).toBe('attack');
 });
+
+test('毒霧は毒カテゴリ', () => {
+    expect(metaOf('毒霧').category).toBe('poison');
+});

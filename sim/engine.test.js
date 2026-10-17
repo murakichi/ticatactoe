@@ -81,6 +81,45 @@ test('毒使いでない駒に毒が付いてもライフは変わらない', ()
     assert.strictEqual(s.board[6].bind, 4);
 });
 
+const P = { effect: '☠' };
+const stacks = (sq) => sq.effects.filter((x) => x.effect === '☠').length;
+
+test('毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与し、空きマスには付かない', () => {
+    const s = game('you', 'you');
+    s.board[0] = { player: '💙', bind: 5, effects: [] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [P] };   // 既に毒1 → 2になる
+    s.board[10] = { player: '⭕', bind: 5, effects: [] };
+    e.SKILLS.poisonMist(s);
+    assert.strictEqual(stacks(s.board[0]), 1);
+    assert.strictEqual(stacks(s.board[5]), 2);
+    assert.strictEqual(stacks(s.board[10]), 1);
+    assert.strictEqual(stacks(s.board[1]), 0, '空きマスには付かない');
+});
+
+test('毒霧: 🔑ロック中のコマは対象外。毒使いの駒はライフ1.5倍、他は変わらない', () => {
+    const s = game('poisoner', 'you');
+    s.board[0] = { player: '💙', bind: 4, effects: [] };                   // 毒使い → 6
+    s.board[1] = { player: '⭕', bind: 4, effects: [] };                   // 他 → 4のまま
+    s.board[2] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] };   // ロック → 対象外
+    e.SKILLS.poisonMist(s);
+    assert.strictEqual(s.board[0].bind, 6);
+    assert.strictEqual(s.board[1].bind, 4);
+    assert.strictEqual(stacks(s.board[1]), 1);
+    assert.strictEqual(stacks(s.board[2]), 0);
+});
+
+test('毒霧: 毒使いは毒系の割引(-1)を受けて7、他キャラは8', () => {
+    const a = game('poisoner', 'you');
+    a.heartTurn = true;
+    a.heartMagic = 20;
+    e.SKILLS.poisonMist(a);
+    assert.strictEqual(20 - a.heartMagic, 7);
+    const b = game('you', 'you');
+    b.heartTurn = true; b.heartMagic = 20;
+    e.SKILLS.poisonMist(b);
+    assert.strictEqual(20 - b.heartMagic, 8);
+});
+
 test('毒トークンは毒使いが置くとライフが1.5倍になる', () => {
     const s = game('poisoner', 'you');
     s.heartTurn = true;
