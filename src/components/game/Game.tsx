@@ -158,6 +158,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
+            case 'onClickSilence': onClickSilence(); break;
         }
     };
 
@@ -183,7 +184,15 @@ export const Game = (props: GameProps) => {
         const aiNecroRemain = remainNecro[turnSeat];
         const aiNecroCost = necroCost[turnSeat];
         const aiProliferate = proliferate[turnSeat];
-        const result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate);
+
+        // サイレンス中はスキルを使えない: 通常の着手だけ行う
+        if (silenced[turnSeat]) {
+            ai.updateShield(currentBoard);
+            const move = ai.getBestMove(currentBoard, life);
+            if (move !== null) onCellClick(move);
+            return;
+        }
+        const result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic);
 
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
@@ -295,6 +304,8 @@ export const Game = (props: GameProps) => {
     const proliferateTokenLife = 2;
     const proliferateUpkeepStep = 1;
     const proliferateMaxStacks = 8;
+    // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
+    const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const [proliferate, setProliferateAt, setProliferateAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const [proliferateCount, setProliferateCountAt, setProliferateCountAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const proliferateUpkeep = (count: number): number => count * proliferateUpkeepStep;
@@ -344,6 +355,8 @@ export const Game = (props: GameProps) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextLife = calculateLife(nextCharacter, yinYangMode[nextSeat], nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0);
+        // サイレンスは「封じられた側の手番が終わるたび」に解除
+        setSilencedAt(turnSeat, false);
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
         if (currentCharacter === 'necromancer' && remainNecro[turnSeat] > 0) {
             setRemainNecroAt(turnSeat, remainNecro[turnSeat] - 1);
@@ -603,7 +616,7 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全24スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)・ヘイルメアリー(23)を永久に引けなかった
+        // プールは全25スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-22)・ヘイルメアリー(23)・サイレンス(24)を永久に引けなかった
         setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
@@ -854,6 +867,14 @@ export const Game = (props: GameProps) => {
         board[index] = { ...board[index], effects: [...board[index].effects, item] };
         if (isPoisoner) board[index] = poisonStrike(board[index]);
         return `${posName(index)}に${item.effect}を追加`;
+    };
+
+    // サイレンス: 自分以外の全員が、次の手番にスキルを使えなくなる
+    const onClickSilence = () => {
+        addLog('「サイレンス」を使用（相手は次の手番スキルを使えない）');
+        playEffect('silence');
+        otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+        spendMagic(calculateCost(skillCosts.onClickSilence));
     };
 
     const onClickProliferate = () => {
@@ -1252,6 +1273,7 @@ export const Game = (props: GameProps) => {
         const labels: string[] = [];
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
+        if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
         const necro = remainNecro[seat];
         if (necro > 0) labels.push(`蘇生 残り${necro}ターン`);
         if (proliferate[seat]) {
@@ -1379,6 +1401,7 @@ export const Game = (props: GameProps) => {
         setUseToken(false);
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
+        setSilencedAll(Array(seatCount).fill(false));
         setProliferateCountAll(zeros());
         setUseStomp(false);
         setUseJudgeDay(false);
@@ -1491,6 +1514,7 @@ export const Game = (props: GameProps) => {
         { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(skillCosts.onClickChargeToken, true)}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(skillCosts.onClickChargeToken, true) },
         { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${calculateCost(skillCosts.onClickChargeOne)}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeOne) },
         { idx: 23, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(skillCosts.onClickHailMary)}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(skillCosts.onClickHailMary) },
+        { idx: 24, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(skillCosts.onClickSilence)}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(skillCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
     ];
 
     return (
@@ -1563,8 +1587,8 @@ export const Game = (props: GameProps) => {
                     </div>
                 </div>
             </div>
-            <div className={`${styles.skills}${hailMarySpin ? ` ${styles.skillsBusy}` : ''}`}>
-                <div className={styles.skillsTitle}>スキル</div>
+            <div className={`${styles.skills}${hailMarySpin || silenced[turnSeat] ? ` ${styles.skillsBusy}` : ''}`}>
+                <div className={styles.skillsTitle}>スキル{silenced[turnSeat] && <span className={styles.silenceNote}> サイレンス中: この手番はスキルを使えません</span>}</div>
                 <div className={styles.skillGrid}>
                     <SkillButton onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
                     <SkillButton

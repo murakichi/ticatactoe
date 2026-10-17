@@ -438,3 +438,9 @@
         transform: skewY(-4deg) scale(1);
     }
 }
+
+.silenceNote {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: #ff4d79;
+}

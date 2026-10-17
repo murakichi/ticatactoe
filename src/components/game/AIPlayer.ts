@@ -6,8 +6,8 @@ import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..23)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 24;
+// 汎用スキルプールの大きさ (idx 0..24)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 25;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -23,6 +23,11 @@ export type AIResult = {
     chargeClicks?: { skill: string; target: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
+};
+
+// 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
+const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7,
 };
 
 class AIPlayer {
@@ -489,7 +494,8 @@ class AIPlayer {
         necroRemain: number = 0,
         necroCost: number = 0,
         assaultCost: number = 99,
-        proliferateActive: boolean = false
+        proliferateActive: boolean = false,
+        seatMagic: number[] = []
     ): string[] {
         const skills: string[] = [];
         let remaining = magic;
@@ -551,6 +557,19 @@ class AIPlayer {
                     spend(proliferateCost, 'onClickProliferate');
                 }
             }
+        }
+
+        // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
+        if (
+            oppReaches === 0 &&
+            availableSkills.includes(24) &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            this.opponents.some((o) => {
+                const seat = seatOf(o);
+                return (seatMagic[seat] ?? 0) + 1 >= (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity);
+            })
+        ) {
+            spend(this.calculateAICost(costs.onClickSilence), 'onClickSilence');
         }
 
         // --- ターン終了系は単独で返す ---
@@ -813,7 +832,8 @@ class AIPlayer {
         necroCost: number = 0,
         judgeCost: number = 99,
         assaultCost: number = 99,
-        proliferateActive: boolean = false
+        proliferateActive: boolean = false,
+        seatMagic: number[] = []
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
@@ -962,7 +982,7 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive);
+        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic);
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {

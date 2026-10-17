@@ -73,7 +73,7 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23, ヘイルメアリーで 24
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 24; // SIM_POOL_SIZE: A/B検証用の上書き
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 25; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -167,6 +167,7 @@ const skillCosts = {
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
     onClickHailMary: 6, // idx 23
+    onClickSilence: 5, // idx 24
 };
 
 // [FAITHFUL] Game.tsx necromancer constants
@@ -348,6 +349,7 @@ function newGame(opts = {}) {
         // 増殖(ループ召喚): proliferate=発動中 / proliferateCount=これまでのループ回数(=次の維持コストの基準)
         proliferate: fill(false),
         proliferateCount: fill(0),
+        silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
         usedTokenThisTurn: false,
         // necromancer 蘇生 state
         remainNecro: fill(0),
@@ -436,6 +438,8 @@ function judgeNextIsHeart(s) {
 
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 function advanceTurn(s) {
+    // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
+    s.silenced[s.turn] = false;
     // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る (s.turn = 直前に動いた席)
     if (s.chars[s.turn] === 'necromancer' && s.remainNecro[s.turn] > 0) s.remainNecro[s.turn]--;
     const next = judgeNextSeat(s);
@@ -986,6 +990,12 @@ function onClickHailMary(s) {
     choices[Math.floor(s.rng() * choices.length)]();
 }
 
+// サイレンス (idx 24): 自分以外の全席を次の手番スキル禁止にする [FAITHFUL] Game.tsx onClickSilence
+function onClickSilence(s) {
+    otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
+    spendMagic(s, calculateCost(s, skillCosts.onClickSilence));
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -1022,6 +1032,7 @@ const SKILLS = {
     chargeOne: onClickChargeOne,
     chargeSpread: onClickChargeSpread,
     hailMary: onClickHailMary,
+    silence: onClickSilence,
 };
 
 // ---- Rendering ------------------------------------------------------------

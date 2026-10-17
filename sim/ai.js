@@ -443,6 +443,9 @@ function getEnhancedBestMove(s) {
 
 // ---- strategic skill selection (mirrors AIPlayer.ts chooseSkills) ----
 
+// 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。AIPlayer.ts と同値
+const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7 };
+
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -517,6 +520,12 @@ function chooseSkills(s, availableSkills) {
             for (const sq of board) if (!sq.player) emptyCount++;
             if (remaining >= pCost + 1 && emptyCount >= 5) spend(pCost, 'proliferate');
         }
+    }
+
+    // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
+    if (oppReaches === 0 && availableSkills.includes(24) && countReaches(board, me) === 0
+        && otherSeats(s).some((seat) => s.magic[seat] + 1 >= (EXCLUSIVE_MIN_MAGIC[s.chars[seat]] || Infinity))) {
+        spend(cost(skillCosts.onClickSilence), 'silence');
     }
 
     // Opiumはリーチ防御に使わない (bindを下げるだけで空きマスは塞げない)
@@ -666,6 +675,9 @@ function faithfulMakeMove(s) {
     const opps = opponentsOf(s);
     const magic = curMagic(s);
     updateShield(s);
+
+    // サイレンス中はスキルを使えない: 通常の着手だけ行う
+    if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();

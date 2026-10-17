@@ -182,3 +182,26 @@ describe('ヘイルメアリー (詰みでの使用)', () => {
         expect(ai.planHailMary(lostBoard(), '蘇生', 5).target).toBeNull();
     });
 });
+
+describe('サイレンス (先回りの封印)', () => {
+    const costs = { onClickSilence: 5 } as any;
+    const quiet = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙');
+        put(b, 15, '⭕');
+        return b;
+    };
+    it('相手が次の手番に固有スキルを撃てそうなら使う', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        const r = ai.makeMove(quiet(), 8, costs, 5, 5, [24, 0, 1], false, 0, 0, 99, 99, false, [8, 5]);
+        expect(r.skills).toContain('onClickSilence');
+    });
+    it('相手の魔力が足りない・固有スキルがない・スロットにない・魔力不足なら使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(ai.makeMove(quiet(), 8, costs, 3, 5, [24, 0, 1], false, 0, 0, 99, 99, false, [8, 3]).skills).not.toContain('onClickSilence');
+        expect(ai.makeMove(quiet(), 8, costs, 9, 5, [0, 1, 2], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
+        expect(ai.makeMove(quiet(), 4, costs, 9, 5, [24, 0, 1], false, 0, 0, 99, 99, false, [4, 9]).skills).not.toContain('onClickSilence');
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'fighter']);
+        expect(plain.makeMove(quiet(), 8, costs, 9, 5, [24, 0, 1], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
+    });
+});
