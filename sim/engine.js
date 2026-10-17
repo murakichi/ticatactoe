@@ -74,8 +74,8 @@ function lateMagicBonus(turn, n) {
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
-// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 29; // SIM_POOL_SIZE: A/B検証用の上書き
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 30; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -174,6 +174,7 @@ const skillCosts = {
     onClickJammer: (config.charge && config.charge.jammerCost) || 4,
     onClickHailMary: 6, // idx 27
     onClickSilence: 5, // idx 28
+    onClickPoisonMist: 8, // idx 29
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -1172,6 +1173,21 @@ function exePandemic(s, i) {
     s.usePandemic = false;
 }
 
+// 毒霧 (idx 29): 盤上の全コマ（敵味方問わず。🔑ロック・無敵は除く）に毒を1付与する。対象選択なし [FAITHFUL] Game.tsx onClickPoisonMist
+function onClickPoisonMist(s) {
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true));
+    bumpMagicCount(s);
+    let n = 0;
+    for (const sq of s.board) {
+        if (!sq.player || isGuarded(s, sq)) continue;
+        sq.effects.push({ effect: '☠' });
+        poisonStrike(s, sq);
+        n++;
+    }
+    harvestMagic(s, n);
+    if (n) toxicBloom(s, null);
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -1308,6 +1324,7 @@ const SKILLS = {
     serum: onClickSerum,
     intensify: onClickIntensify,
     pandemic: onClickPandemic,
+    poisonMist: onClickPoisonMist,
     addLife: onClickAddLife,
     bibine: onClickBibine,
     depressionCherry: onClickDepressionCherry,

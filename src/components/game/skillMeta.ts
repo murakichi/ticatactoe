@@ -51,6 +51,7 @@ const SKILL_META: Record<string, Meta> = {
     血清: { icon: '🧪', category: 'poison' },
     猛毒化: { icon: '☠', category: 'poison' },
     パンデミック: { icon: '🦠', category: 'poison' },
+    毒霧: { icon: '🌫️', category: 'poison' },
     ミアズマ: { icon: '☠', category: 'poison' },
 };
 

@@ -123,6 +123,8 @@ function bestMiasmaTarget(board, me) {
     return bestScore >= MIASMA_MIN_SCORE ? bestIdx : null;
 }
 
+const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
+const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
 const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
@@ -576,6 +578,16 @@ function chooseSkills(s, availableSkills) {
             for (const sq of board) if (!sq.player) emptyCount++;
             if (remaining >= pCost + 1 && emptyCount >= 5) spend(pCost, 'proliferate');
         }
+    }
+
+    // 毒霧: 毒使いが、敵コマが自コマより2つ以上多いとき撃つ（全コマに毒を撒くと敵が多く削れ、自コマはライフ1.5倍で耐える）
+    if (character === 'poisoner' && availableSkills.includes(29)) {
+        let mine = 0, theirs = 0;
+        for (const sq of board) {
+            if (!sq.player || sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (sq.player === me) mine++; else theirs++;
+        }
+        if (theirs >= MIST_MIN_ENEMIES && theirs >= mine + MIST_MIN_LEAD) spend(calculateCost(s, costsOf(s).onClickPoisonMist, false, true), 'poisonMist');
     }
 
     // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
