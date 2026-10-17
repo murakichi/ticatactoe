@@ -151,3 +151,57 @@ describe('AIPlayer 多人数', () => {
         expect(move).not.toBeNull();
     });
 });
+
+describe('ヘイルメアリー (詰みでの使用)', () => {
+    const costs = { onClickHailMary: 6, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    // ⭕が3つの脅威マス(3, 12, 15)を同時に持つ: 単ロックでは塞げない
+    const lostBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2, 4, 8, 5, 10].forEach((i) => put(b, i, '⭕'));
+        return b;
+    };
+
+    it('ロックで防げない詰みなら、魔力が足りてスロットにあれば使う', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const r = ai.makeMove(lostBoard(), 10, costs, 0, 5, [27, 0, 1], false);
+        expect(r.hailMary).toBe(true);
+    });
+    it('魔力不足・スロットなし・自分に即勝ちがあるときは使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.makeMove(lostBoard(), 5, costs, 0, 5, [27, 0, 1], false).hailMary).toBeUndefined();
+        expect(ai.makeMove(lostBoard(), 10, costs, 0, 5, [0, 1, 2], false).hailMary).toBeUndefined();
+        const b = lostBoard();
+        [13, 14, 15].forEach((i) => put(b, i, '💙')); // 12 に置けば 💙 の勝ち
+        expect(ai.makeMove(b, 10, costs, 0, 5, [27, 0, 1], false).hailMary).toBeUndefined();
+    });
+    it('planHailMary: ストンプは敵の脅威を減らす中心を返し、審判の日は着手を返さない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const stomp = ai.planHailMary(lostBoard(), 'ストンプ', 5);
+        expect(stomp.target).not.toBeNull();
+        expect(ai.planHailMary(lostBoard(), '審判の日', 5).move).toBeNull();
+        expect(ai.planHailMary(lostBoard(), '蘇生', 5).target).toBeNull();
+    });
+});
+
+describe('サイレンス (先回りの封印)', () => {
+    const costs = { onClickSilence: 5 } as any;
+    const quiet = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙');
+        put(b, 15, '⭕');
+        return b;
+    };
+    it('相手が次の手番に固有スキルを撃てそうなら使う', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        const r = ai.makeMove(quiet(), 8, costs, 5, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [8, 5]);
+        expect(r.skills).toContain('onClickSilence');
+    });
+    it('相手の魔力が足りない・固有スキルがない・スロットにない・魔力不足なら使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(ai.makeMove(quiet(), 8, costs, 3, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [8, 3]).skills).not.toContain('onClickSilence');
+        expect(ai.makeMove(quiet(), 8, costs, 9, 5, [0, 1, 2], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
+        expect(ai.makeMove(quiet(), 4, costs, 9, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [4, 9]).skills).not.toContain('onClickSilence');
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'fighter']);
+        expect(plain.makeMove(quiet(), 8, costs, 9, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
+    });
+});

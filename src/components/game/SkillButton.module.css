@@ -1,40 +1,177 @@
 .wrap {
-    width: 138px;
+    width: 180px;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 4px;
 }
 
 .row {
     display: flex;
     align-items: stretch;
     gap: 4px;
+    height: 100%;
 }
 
-.btn {
+/* ===== スキルカード: 左の色帯で種類を示す ===== */
+.card {
+    --cat: var(--color-border-strong);
     flex: 1;
-    padding: 8px 6px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 8px 10px 8px 12px;
     border-radius: var(--radius);
-    border: 1px solid var(--color-border-strong);
+    border: 1px solid var(--color-border);
+    border-left: 5px solid var(--cat);
     background: var(--color-surface-2);
     color: var(--color-text);
-    font-weight: 700;
-    font-size: 12px;
-    line-height: 1.25;
+    text-align: left;
     cursor: pointer;
     transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
         transform var(--dur-fast) var(--ease);
 }
 
-.btn:hover:not(:disabled) {
-    background: var(--color-surface-3);
-    border-color: var(--color-accent);
-    transform: translateY(-1px);
+.attack {
+    --cat: var(--color-circle);
 }
 
-.btn:disabled {
-    opacity: 0.4;
+.support {
+    --cat: var(--color-buds);
+}
+
+.token {
+    --cat: var(--color-heart);
+}
+
+.poison {
+    --cat: var(--color-skull);
+}
+
+.control {
+    --cat: var(--color-accent);
+}
+
+.basic {
+    --cat: var(--color-text-muted);
+}
+
+.card:hover:not(:disabled) {
+    background: var(--color-surface-3);
+    transform: translateY(-2px);
+}
+
+.card:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+/* キャラ固有スキルは枠全体を種類色で縁取る */
+.exclusive {
+    border-color: var(--cat);
+    background: var(--color-surface-3);
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.name {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+    word-break: keep-all;
+}
+
+/* 長いスキル名は少し小さくして折り返しを減らす */
+.nameLong {
+    font-size: 11px;
+    letter-spacing: -0.5px;
+}
+
+/* コストは大きなバッジで一目で読めるように */
+.cost {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.gain {
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tagCategory,
+.tagExclusive {
+    padding: 0 6px;
+    border-radius: var(--radius-pill);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+}
+
+.tagCategory {
+    background: var(--color-surface);
+    color: var(--cat);
+}
+
+.tagExclusive {
+    background: var(--cat);
+    color: #10131c;
+}
+
+.desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--color-text-dim);
+}
+
+/* 使えない理由は薄くせず目立たせる */
+.reason {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--color-danger);
+}
+
+.card:disabled {
     cursor: default;
+}
+
+/* コストは使えなくても読めるよう薄くしすぎない */
+.card:disabled .cost {
+    opacity: 0.75;
+}
+
+.card:disabled .icon,
+.card:disabled .name,
+.card:disabled .tags,
+.card:disabled .desc {
+    opacity: 0.5;
 }
 
 .lock {
@@ -51,11 +188,4 @@
 .lockOn {
     background: rgba(255, 194, 74, 0.2);
     border-color: var(--color-accent);
-}
-
-.desc {
-    margin: 0;
-    font-size: 10px;
-    color: var(--color-text-muted);
-    line-height: 1.3;
 }

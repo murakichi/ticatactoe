@@ -4,13 +4,19 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { chargeStacks, orthoNeighbors, connectedPieces, withCharge } from './charge';
+import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..22)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 23;
+// 汎用スキルプールの大きさ (idx 0..28)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 29;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
+// 範囲帯電の採用しきい値 (sim/ai.js の CHARGE_AREA_MIN_SCORE)
+const CHARGE_AREA_MIN_SCORE = 2;
+// ジャマーを与ダメージ合計だけで撃つ下限 (sim/ai.js の JAM_MIN_DMG)
+const JAMMER_MIN_DMG = 2;
+// ランダム帯電を撃つときに残しておく魔力の余裕 (sim/ai.js の CHG_RAND_MARGIN)
+const CHARGE_RANDOM_MARGIN = 1;
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -21,6 +27,13 @@ export type AIResult = {
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
     /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
     chargeClicks?: { skill: string; target: number }[];
+    /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
+    hailMary?: boolean;
+};
+
+// 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
+const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7,
 };
 
 class AIPlayer {
@@ -77,6 +90,7 @@ class AIPlayer {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
                 if (sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (sq.player === board[k].player && this.characterOf(sq.player) === 'electrician') continue; // 自陣由来の発火は雷霆の巫に効かない
                 const w = 3 + (sq.bind === 1 ? 4 : 0);
                 gain += this.isEnemy(sq.player) ? w : -w;
             }
@@ -148,6 +162,67 @@ class AIPlayer {
             if (!ok) continue;
             const score = adj.size + mine + (reach ? 10 : 0);
             if (score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    /**
+     * 範囲帯電(3x3)の中心。範囲内の(敵コマ数−自コマ数)（ライフ>0のコマのみ）が最大で、CHARGE_AREA_MIN_SCORE 以上なら撃つ
+     * (sim/ai.js bestChargeAreaTarget と同一)
+     */
+    bestChargeAreaTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let bestIdx: number | null = null, bestScore = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i)) continue;
+            let score = 0;
+            for (const k of geo.stompRange(i)) {
+                const sq = board[k];
+                if (!sq.player || sq.bind <= 0) continue;
+                if (this.isEnemy(sq.player)) score++; else score--;
+            }
+            if (score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+        return bestScore >= CHARGE_AREA_MIN_SCORE ? bestIdx : null;
+    }
+
+    /** 敵駒 i が「どかさないと負ける列」(持ち主が3つ揃い・他のコマなし・残り1マスが空き) に含まれるか (sim/ai.js inOppReachLine) */
+    private inOppReachLine(board: SquareInfo[], i: number): boolean {
+        const owner = board[i].player;
+        for (const line of geometryForCells(board.length).winLines) {
+            if (!line.includes(i)) continue;
+            let op = 0, other = 0, empty = 0;
+            for (const idx of line) {
+                if (board[idx].player === owner) op++;
+                else if (board[idx].player) other++;
+                else empty++;
+            }
+            if (op === 3 && other === 0 && empty === 1) return true;
+        }
+        return false;
+    }
+
+    /**
+     * ジャマーの対象(⚡マス)。縦横隣接の敵コマ(ライフ>0・ロックなし)を⚡のスタック数でライフ0にできる数が2以上、
+     * 敵のリーチ列の要をライフ0にできる、または与ダメージ合計が JAMMER_MIN_DMG 以上なら撃つ。他人の無敵マスは選べない (sim/ai.js bestJammerTarget と同一)
+     */
+    bestJammerTarget(board: SquareInfo[]): number | null {
+        const size = this.sizeOf(board);
+        let bestIdx: number | null = null, bestScore = 0;
+        for (let k = 0; k < board.length; k++) {
+            const n = chargeStacks(board[k]);
+            if (n === 0 || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
+            let zeroed = 0, critical = 0, dmg = 0;
+            for (const j of orthoNeighbors(k, size)) {
+                const sq = board[j];
+                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑')) continue;
+                dmg += Math.min(n, sq.bind);
+                if (sq.bind <= n) { zeroed++; if (this.inOppReachLine(board, j)) critical++; }
+            }
+            if (zeroed >= 2 || critical >= 1 || dmg >= JAMMER_MIN_DMG) {
+                const score = zeroed + critical * 2 + dmg * 0.1;
+                if (score > bestScore) { bestScore = score; bestIdx = k; }
+            }
         }
         return bestIdx;
     }
@@ -458,7 +533,7 @@ class AIPlayer {
                 case 0: case 1: return life <= 2;                               // ライフ3/バイバイン
                 case 2: case 10: return empties >= 8;                           // バッズ系(序盤)
                 case 20: return empties >= 6;                                   // 増殖(空きが多いほどループが伸びる)
-                case 21: return this.character === 'electrician' && empties >= 3; // 帯電トークン
+                case 21: case 23: return this.character === 'electrician' && empties >= 3; // 帯電トークン/帯電ダブルトークン
                 default: return false;
             }
         };
@@ -494,6 +569,7 @@ class AIPlayer {
         necroCost: number = 0,
         assaultCost: number = 99,
         proliferateActive: boolean = false,
+        seatMagic: number[] = [],
         /** 蘇生で実際に払う魔力（ギア補正込み）。省略時は necroCost */
         necroPay: number = necroCost
     ): string[] {
@@ -532,7 +608,8 @@ class AIPlayer {
                 for (const sq of board) {
                     if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
                 }
-                if (corpses >= 3 || absorbable >= 2) spend(necroPay, 'onClickNecromancy');
+                // 死体が1つでもあれば即発動 (sim/ai.js と同一。A/B: 他キャラの勝率 -3〜-4.6pt)
+                if (corpses >= 1 || absorbable >= 2) spend(necroPay, 'onClickNecromancy');
             }
 
             // 陰陽師: 凶荒の舞(相手-2)
@@ -557,6 +634,19 @@ class AIPlayer {
                     spend(proliferateCost, 'onClickProliferate');
                 }
             }
+        }
+
+        // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
+        if (
+            oppReaches === 0 &&
+            availableSkills.includes(28) &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            this.opponents.some((o) => {
+                const seat = seatOf(o);
+                return (seatMagic[seat] ?? 0) + 1 >= (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity);
+            })
+        ) {
+            spend(this.calculateAICost(costs.onClickSilence), 'onClickSilence');
         }
 
         // --- ターン終了系は単独で返す ---
@@ -621,7 +711,9 @@ class AIPlayer {
 
         // --- トークン系 ---
         if (!tokenUsed) {
-            if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true)) {
+            if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true)) {
+                spend(this.calculateAICost(costs.onClickDoubleChargeToken, true), 'onClickDoubleChargeToken');
+            } else if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true)) {
                 spend(this.calculateAICost(costs.onClickChargeToken, true), 'onClickChargeToken');
             } else if (this.character === 'tactician') {
                 if (availableSkills.includes(11) && remaining >= this.calculateAICost(costs.onClickDoubleToken, true)) {
@@ -640,6 +732,12 @@ class AIPlayer {
                     spend(this.calculateAICost(costs.onClickToken, true), 'onClickToken');
                 }
             }
+        }
+
+        // 雷霆の巫: 他に撃つものが無く、魔力に余裕があるときだけランダム帯電（コスト+1 以上残る）
+        if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
+            const rc = this.calculateAICost(costs.onClickChargeRandom);
+            if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
         }
 
         return skills;
@@ -751,6 +849,61 @@ class AIPlayer {
         return bestNet >= 2 ? bestIdx : null;
     }
 
+    /** ヘイルメアリー用: 範囲破壊(ストンプ/審判の日)後に敵の脅威マスが最も減る中心。同点なら壊せる敵が多い方 */
+    findRescueCenter(board: SquareInfo[], kind: 'stomp' | 'judge'): number | null {
+        const geo = geometryForCells(board.length);
+        const me = this.playerSymbol;
+        let bestIdx: number | null = null, bestThreats = Infinity, bestKilled = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i)) continue;
+            const nb = board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
+            let killed = 0;
+            for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
+                const sq = nb[idx];
+                if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+                if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱')) continue;
+                if (this.isEnemy(sq.player)) killed++;
+                nb[idx] = { player: undefined, bind: 0, effects: [] };
+            }
+            if (!nb[i].player) nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
+            const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;
+            if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
+    /** ヘイルメアリーで当選したスキルに対する、AIの対象クリックと着手 (target=null ならクリック不要) */
+    planHailMary(board: SquareInfo[], skillName: string, life: number): { target: number | null; move: number | null } {
+        this.updateShield(board);
+        const me = this.playerSymbol;
+        const geo = geometryForCells(board.length);
+        switch (skillName) {
+            case 'ストンプ': {
+                const target = this.findRescueCenter(board, 'stomp');
+                if (target === null) return { target: null, move: this.getBestMove(board, life) };
+                return { target, move: this.getBestMove(this.simulateStomp(board, target, me, life), life) };
+            }
+            case '審判の日':
+                // 審判の日は対象クリックの着手で手番が終わる
+                return { target: this.findRescueCenter(board, 'judge'), move: null };
+            case 'ミアズマ': {
+                let best = board.findIndex((sq) => sq.player === me), bestN = -1;
+                board.forEach((sq, i) => {
+                    if (sq.player !== me) return;
+                    const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player)).length;
+                    if (n > bestN) { bestN = n; best = i; }
+                });
+                return { target: best >= 0 ? best : 0, move: this.getBestMove(board, life) };
+            }
+            case '帯電拡散': {
+                const start = this.bestChargeSpreadTarget(board) ?? board.findIndex((sq) => sq.player);
+                return { target: start >= 0 ? start : 0, move: this.getBestMove(board, life) };
+            }
+            default:
+                return { target: null, move: this.getBestMove(board, life) };
+        }
+    }
+
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(
         board: SquareInfo[],
@@ -765,6 +918,7 @@ class AIPlayer {
         judgeCost: number = 99,
         assaultCost: number = 99,
         proliferateActive: boolean = false,
+        seatMagic: number[] = [],
         necroPay: number = necroCost
     ): AIResult {
         this.necroActive = necroRemain > 0;
@@ -806,6 +960,14 @@ class AIPlayer {
                     lockTargets,
                 };
             }
+            // 詰み(ロックでは全脅威を塞げない)で自分に即勝ちもない: ヘイルメアリーに賭ける
+            if (
+                availableSkills.includes(27) &&
+                magic >= this.calculateAICost(costs.onClickHailMary) &&
+                this.findThreatSquares(board, this.playerSymbol).length === 0
+            ) {
+                return { move: null, skills: [], hailMary: true };
+            }
             // 必要数を1つのロックでカバーできない場合: 単ロックで最低1つは塞ぐ
             // (かつてここに「シャッフルで防御札を引き直す」分岐があったが、発火条件が
             //  同時脅威3つ以上で実測 3,631手番中1回(0.03%)。閾値を2つに緩めても直接対決
@@ -819,12 +981,17 @@ class AIPlayer {
             }
         }
 
-        // 対ネクロ: 敵にネクロがいるときは、吸収されそうな低bindの自コマを常にロックして守る (sim/ai.js と同一)。
-        // A/B: ネクロ以外6キャラ vs ネクロ 0.45→0.62 (+16〜18pt)。軍師は+2コストで悪化、ネクロ同士は未検証のため対象外
+        // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、失いそうな低bindの自コマを事前にロックして守る (sim/ai.js と同一)。
+        // A/B: 対ネクロ 0.45→0.62、対陰陽師 +4.5〜+13pt、対毒使い 平均+4.8pt。軍師・毒使いはロックの追加コストで悪化、ネクロ同士は未検証のため対象外
         if (
             this.character !== 'tactician' &&
-            this.character !== 'necromancer' &&
-            this.characters.some((c, seat) => c === 'necromancer' && seat !== seatOf(this.playerSymbol)) &&
+            this.character !== 'poisoner' &&
+            this.characters.some(
+                (c, seat) =>
+                    seat !== seatOf(this.playerSymbol) &&
+                    ['necromancer', 'poisoner', 'yinYangMaster'].includes(c) &&
+                    !(c === 'necromancer' && this.character === 'necromancer')
+            ) &&
             magic >= this.calculateAICost(costs.onClickUseLock)
         ) {
             const lockCell = this.findAntiNecroLockTarget(board);
@@ -849,11 +1016,13 @@ class AIPlayer {
             }
         }
 
-        // 雷霆の巫: 帯電拡散→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
-        // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）
+        // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
+        // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
+        // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
         const chargeClicks: { skill: string; target: number }[] = [];
+        const chargeCost = (base: number) => reducedChargeCost(base, board, (c) => this.calculateAICost(c));
         if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            const spreadCost = this.calculateAICost(costs.onClickChargeSpread);
+            const spreadCost = chargeCost(costs.onClickChargeSpread);
             if (magic >= spreadCost) {
                 const start = this.bestChargeSpreadTarget(board);
                 if (start !== null) {
@@ -863,14 +1032,34 @@ class AIPlayer {
                     this.updateShield(board);
                 }
             }
-            if (availableSkills.includes(22) && magic >= this.calculateAICost(costs.onClickChargeOne)) {
+            if (availableSkills.includes(24) && magic >= this.calculateAICost(costs.onClickChargeArea)) {
+                const center = this.bestChargeAreaTarget(board);
+                if (center !== null) {
+                    chargeClicks.push({ skill: 'onClickChargeArea', target: center });
+                    board = withCharge(board, geometryForCells(board.length).stompRange(center));
+                    magic -= this.calculateAICost(costs.onClickChargeArea);
+                    this.updateShield(board);
+                }
+            }
+            const oneCost = chargeCost(costs.onClickChargeOne);
+            if (availableSkills.includes(22) && magic >= oneCost) {
                 const target = this.bestChargeOneTarget(board);
                 if (target !== null) {
                     chargeClicks.push({ skill: 'onClickChargeOne', target });
                     board = withCharge(board, [target]);
-                    magic -= this.calculateAICost(costs.onClickChargeOne);
+                    magic -= oneCost;
                     this.updateShield(board);
                 }
+            }
+        }
+        if (this.character === 'electrician' && availableSkills.includes(26) && magic >= this.calculateAICost(costs.onClickJammer)) {
+            const target = this.bestJammerTarget(board);
+            if (target !== null) {
+                chargeClicks.push({ skill: 'onClickJammer', target });
+                board = board.slice();
+                applyJammer(board, target, this.sizeOf(board), this.playerSymbol);
+                magic -= this.calculateAICost(costs.onClickJammer);
+                this.updateShield(board);
             }
         }
         const chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
@@ -907,7 +1096,7 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, necroPay);
+        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
@@ -920,6 +1109,10 @@ class AIPlayer {
         }
 
         const move = this.getBestMove(board, life);
+        // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
+        if (move === null) {
+            return { move: null, skills: [...skills, 'onClickCharge'], chargeClicks: chargeResult };
+        }
         return { move, skills, chargeClicks: chargeResult };
     }
 }
