@@ -448,7 +448,6 @@ function newGame(opts = {}) {
         useLock: 0,
         useStomp: false,
         useJudgeDay: false,
-        useMiasma: false,
         useInjection: 0,
         usePandemic: false,
         useBuds: [false, 0],
@@ -671,10 +670,6 @@ function placeMove(s, i) {
         harvestMagic(s, 1);
         toxicBloom(s, i);
         s.useInjection -= 1;
-        return true;
-    }
-    if (s.useMiasma) {
-        exeMiasma(s, i);
         return true;
     }
     if (s.usePandemic) {
@@ -1104,22 +1099,38 @@ function onClickNecromancy(s) {
 
 // ---- 毒使い スキル ----
 const MIASMA_MIN_COST = 1; // Game.tsx / skillCosts.ts と同値
+// ミアズマの実コスト: 基礎 - 自陣の毒の数、毒使い割引(-1)、下限は MIASMA_MIN_COST
 function miasmaCost(s) {
-    return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - boardPoisonCount(s.board), false, true));
+    return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - poisonCountFor(s.board, curPlayer(s)), false, true));
+}
+// 自陣の毒が乗っているマスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与する毒の数。
+// 毒マスごとに1つずつ付与する（重複あり: 毒マスが隣り合うほど同じ敵マスに積み上がる）
+function miasmaPlan(s, me = curPlayer(s)) {
+    const plan = new Map();
+    s.board.forEach((sq, i) => {
+        if (sq.player !== me || poisonStacks(sq) === 0) return;
+        for (const j of surroundRange(s, i)) {
+            const t = s.board[j];
+            if (t.player && t.player !== me && !isGuarded(s, t)) plan.set(j, (plan.get(j) || 0) + 1);
+        }
+    });
+    return plan;
+}
+// 効果: 上の plan どおりに敵マスへ毒を付与し、自陣の毒はすべて消える。対象選択は無い
+function exeMiasma(s) {
+    const me = curPlayer(s);
+    const plan = miasmaPlan(s, me);
+    for (const [j, n] of plan) {
+        for (let k = 0; k < n; k++) s.board[j].effects.push({ effect: '☠' });
+        poisonStrike(s, s.board[j]);
+    }
+    for (const sq of s.board) if (sq.player === me) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
+    harvestMagic(s, plan.size);
+    if (plan.size) toxicBloom(s, null);
 }
 function onClickMiasma(s) {
-    s.useMiasma = true;
     spendMagic(s, miasmaCost(s));
-}
-function exeMiasma(s, i) {
-    const cur = curPlayer(s);
-    const targets = surroundRange(s, i).filter(
-        (j) => s.board[j].player && s.board[j].player !== cur && !isGuarded(s, s.board[j])
-    );
-    for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
-    harvestMagic(s, targets.length);
-    if (targets.length) toxicBloom(s, null);
-    s.useMiasma = false;
+    exeMiasma(s);
 }
 function onClickInjection(s) {
     s.useInjection += 1;
@@ -1291,7 +1302,7 @@ function exeJammer(s, i) {
 }
 
 // ヘイルメアリー (idx 27): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
-// 対象選択が要るもの(ストンプ/審判の日/ミアズマ/帯電拡散)は use* フラグを立てるだけ。対象クリックは呼び出し側(AI)の責任
+// 対象選択が要るもの(ストンプ/審判の日/帯電拡散)は use* フラグを立てるだけ。ミアズマは対象選択が無いのでその場で発動。対象クリックは呼び出し側(AI)の責任
 function onClickHailMary(s) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickHailMary));
     const choices = [
@@ -1304,7 +1315,7 @@ function onClickHailMary(s) {
             summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
             if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
         },
-        () => { s.useMiasma = true; },
+        () => exeMiasma(s),
         () => { s.useChargeSpread = true; },
     ];
     choices[Math.floor(s.rng() * choices.length)]();
@@ -1382,7 +1393,7 @@ module.exports = {
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
-    miasmaCost, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
+    miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
     POOL_SIZE, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
@@ -103,29 +103,18 @@ function bestInjectionTarget(board, me, minValue) {
     return bestVal >= minValue ? bestIdx : null;
 }
 
-// 毒使いミアズマ: 周囲に敵が最も多い自陣マスを選ぶ。敵2体以上で価値あり。
-// 敵1体でも、その駒がリーチ列を作っている(どかさないと負ける)なら撃つ。
-function bestMiasmaTarget(board, me) {
-    const geo = geometryForCells(board.length);
-    let bestIdx = null, bestScore = 0;
-    for (let i = 0; i < board.length; i++) {
-        if (board[i].player !== me || shield.has(i)) continue; // 自陣を選択
-        let enemies = 0, critical = 0;
-        for (const j of geo.surroundRange(i)) {
-            if (isEnemy(board[j].player, me) && !board[j].effects.some(e => e.effect === '🔑')) {
-                enemies++;
-                if (inOppReachLine(board, j, me)) critical++;
-            }
-        }
-        const score = enemies + critical * 2;
-        if (score > bestScore) { bestScore = score; bestIdx = i; }
-    }
-    return bestScore >= MIASMA_MIN_SCORE ? bestIdx : null;
+// 毒使いミアズマ: 自陣の毒マスの周囲の敵マスに毒を撒き、自陣の毒は消える（対象選択なし）。
+// 敵2マス以上、または敵1マス+リーチ列(=3)なら撃つ価値あり。
+function miasmaScore(s, me) {
+    const plan = miasmaPlan(s, me);
+    let critical = 0;
+    for (const j of plan.keys()) if (inOppReachLine(s.board, j, me)) critical++;
+    return plan.size + critical * 2;
 }
 
 const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
 const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
-const MIASMA_MIN_SCORE = 2; // 敵2体、または敵1体+リーチ列(=3)
+const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
 function bestAntiNecroLockTarget(board, me) {
@@ -790,13 +779,12 @@ function faithfulMakeMove(s) {
             let target = null;
             if (s.useStomp) target = bestRescueCenter(s.board, me, opps, 'stomp');
             else if (s.useJudgeDay) target = bestRescueCenter(s.board, me, opps, 'judge');
-            else if (s.useMiasma) target = bestMiasmaTarget(s.board, me) ?? s.board.findIndex((sq) => sq.player === me);
             else if (s.useChargeSpread) target = bestChargeSpreadTarget(s.board, me) ?? s.board.findIndex((sq) => sq.player);
-            const pending = s.useStomp || s.useJudgeDay || s.useMiasma || s.useChargeSpread;
+            const pending = s.useStomp || s.useJudgeDay || s.useChargeSpread;
             if (pending) {
                 const wasJudge = s.useJudgeDay;
                 if (target === null || target < 0 || !placeMove(s, target)) {
-                    s.useStomp = s.useJudgeDay = s.useMiasma = s.useChargeSpread = false; // 撃つ先がない: 不発
+                    s.useStomp = s.useJudgeDay = s.useChargeSpread = false; // 撃つ先がない: 不発
                 } else if (wasJudge) { // 審判の日は着手で手番終了
                     return { move: null, turnEnded: true };
                 }
@@ -867,13 +855,27 @@ function faithfulMakeMove(s) {
         }
     }
 
-    // 毒使い ミアズマ: 周囲に敵がいる自陣マスを選び、隣接敵に毒を撒く (手番は進まない→通常着手)
+    // 毒使い ミアズマ: 自陣の毒マスの周囲の敵に毒を撒く (手番は進まない→通常着手)
     const ch0 = curChar(s);
-    if (ch0 === 'poisoner' && magic >= miasmaCost(s)) {
-        const target = bestMiasmaTarget(s.board, me);
-        if (target !== null) {
-            SKILLS.miasma(s);
-            placeMove(s, target);
+    if (ch0 === 'poisoner' && magic >= miasmaCost(s) && miasmaScore(s, me) >= MIASMA_MIN_SCORE) {
+        SKILLS.miasma(s);
+        const move = getEnhancedBestMove(s);
+        return { move, turnEnded: false };
+    }
+    // 実験(SELF_INJ=1): ミアズマの種として、敵に囲まれた自コマに自分でインジェクションする（自陣に毒マスが無いときだけ）
+    if (process.env.SELF_INJ === '1' && ch0 === 'poisoner' && availableSkills.includes(15)
+        && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true) && countReaches(s.board, me) === 0
+        && !s.board.some((sq) => sq.player === me && sq.effects.some((e) => e.effect === '☠'))) {
+        const geo = geometryForCells(s.board.length);
+        let best = null, bestN = 1;
+        s.board.forEach((sq, i) => {
+            if (sq.player !== me || shield.has(i)) return;
+            const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
+            if (n > bestN) { bestN = n; best = i; }
+        });
+        if (best !== null) {
+            SKILLS.injection(s);
+            placeMove(s, best);
             const move = getEnhancedBestMove(s);
             return { move, turnEnded: false };
         }
