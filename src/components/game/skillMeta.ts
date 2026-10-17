@@ -42,6 +42,8 @@ const SKILL_META: Record<string, Meta> = {
     全軍突撃: { icon: '🚩', category: 'attack' },
     凶荒の舞: { icon: '🥀', category: 'attack' },
     蘇生: { icon: '💀', category: 'support' },
+    ヘイルメアリー: { icon: '🎲', category: 'support' },
+    サイレンス: { icon: '🤫', category: 'control' },
     陰陽転化: { icon: '☯️', category: 'control' },
     帯電付与: { icon: '⚡', category: 'support' },
     帯電拡散: { icon: '⚡', category: 'attack' },

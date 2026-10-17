@@ -226,6 +226,13 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             boom(ctx, d, T(0.2), 0.95);
             return 0.9;
         }
+        case 'silence': {
+            // サイレンス: 高い音が吸い込まれるように沈み、静けさが残る
+            tone(ctx, d, { type: 'triangle', f0: 1320, f1: 110, t: T(0), dur: 0.5, gain: 0.5, lowpass: 3000 });
+            tone(ctx, d, { f0: 660, f1: 55, t: T(0.05), dur: 0.45, gain: 0.4 });
+            noise(ctx, d, { t: T(0), dur: 0.3, gain: 0.3, filter: 'lowpass', f0: 2500, f1: 120 });
+            return 0.6;
+        }
         case 'place': {
             // 駒を置く「ポン」
             tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0), dur: 0.09, gain: 0.8 });

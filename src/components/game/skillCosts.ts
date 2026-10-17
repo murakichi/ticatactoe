@@ -39,6 +39,10 @@ export const skillCosts = {
     onClickChargeArea: 5,
     onClickChargeRandom: 3,
     onClickJammer: 4,
+    // ヘイルメアリー: 固有スキル(陰陽転化を除く)をランダム発動。idx 27
+    onClickHailMary: 6,
+    // サイレンス: 相手全員の次の手番のスキルを封じる。idx 28
+    onClickSilence: 5,
 };
 
 export type SkillCosts = typeof skillCosts;

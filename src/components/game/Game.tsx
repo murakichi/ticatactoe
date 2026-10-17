@@ -140,8 +140,15 @@ export const Game = (props: GameProps) => {
     // AI同士の対戦時のステップ実行制御 (autoPlay=false なら「次の手番」ボタンで1ターンずつ進める)
     const [autoPlay, setAutoPlay] = useState<boolean>(false);
     const [stepRequest, setStepRequest] = useState<number>(0);
+    // ヘイルメアリーのルーレット演出 (intro=「ヘイルメアリー！」/ spin=抽選中 / reveal=当選)。非 null の間は入力とAIキューを止める
+    const [hailMarySpin, setHailMarySpin] = useState<{ label: string; phase: 'intro' | 'spin' | 'reveal' } | null>(null);
 
     const executeSkillForAI = (skill: string) => {
+        // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
+        if (skill.startsWith('onClickHailMary:')) {
+            exeHailMary(skill.slice('onClickHailMary:'.length));
+            return;
+        }
         switch (skill) {
             case 'onClickToken': onClickToken(); break;
             case 'onClickDoubleToken': onClickDoubleToken(); break;
@@ -170,6 +177,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
+            case 'onClickSilence': onClickSilence(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -178,7 +186,7 @@ export const Game = (props: GameProps) => {
     };
 
     useEffect(() => {
-        if (pendingAIMove !== null && pendingAIMove.length > 0) {
+        if (pendingAIMove !== null && pendingAIMove.length > 0 && !hailMarySpin) {
             const timer = setTimeout(() => {
                 const [next, ...rest] = pendingAIMove;
                 if (typeof next === 'string') executeSkillForAI(next);
@@ -187,7 +195,7 @@ export const Game = (props: GameProps) => {
             }, 200);
             return () => clearTimeout(timer);
         }
-    }, [pendingAIMove]);
+    }, [pendingAIMove, hailMarySpin]);
 
     const runAIMove = () => {
         const ai = currentAI!;
@@ -199,11 +207,30 @@ export const Game = (props: GameProps) => {
         const aiNecroRemain = remainNecro[turnSeat];
         const aiNecroCost = necroCost[turnSeat];
         const aiProliferate = proliferate[turnSeat];
-        const result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate);
+
+        // サイレンス中はスキルを使えない: 通常の着手だけ行う
+        if (silenced[turnSeat]) {
+            ai.updateShield(currentBoard);
+            const move = ai.getBestMove(currentBoard, life);
+            if (move !== null) onCellClick(move);
+            return;
+        }
+        const result = ai.makeMove(currentBoard, currentMagic, skillCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic);
 
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         setLockedSkillsAt(turnSeat, aiLocks);
+
+        // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選んでキューに積む
+        if (result.hailMary) {
+            const picked = randomPick(hailMaryChoices);
+            const plan = ai.planHailMary(currentBoard, picked.name, life);
+            const steps: (number | string)[] = [`onClickHailMary:${picked.name}`];
+            if (plan.target !== null) steps.push(plan.target);
+            if (plan.move !== null) steps.push(plan.move);
+            setPendingAIMove(steps);
+            return;
+        }
 
         // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
         // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
@@ -300,6 +327,8 @@ export const Game = (props: GameProps) => {
     const proliferateTokenLife = 2;
     const proliferateUpkeepStep = 1;
     const proliferateMaxStacks = 8;
+    // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
+    const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const [proliferate, setProliferateAt, setProliferateAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const [proliferateCount, setProliferateCountAt, setProliferateCountAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const proliferateUpkeep = (count: number): number => count * proliferateUpkeepStep;
@@ -349,6 +378,8 @@ export const Game = (props: GameProps) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextLife = calculateLife(nextCharacter, yinYangMode[nextSeat], nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0);
+        // サイレンスは「封じられた側の手番が終わるたび」に解除
+        setSilencedAt(turnSeat, false);
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
         if (currentCharacter === 'necromancer' && remainNecro[turnSeat] > 0) {
             setRemainNecroAt(turnSeat, remainNecro[turnSeat] - 1);
@@ -364,6 +395,7 @@ export const Game = (props: GameProps) => {
     }, [history]);
 
     const onCellClick = (i: number) => {
+        if (hailMarySpin) return;
         setPreviewCells([]);
         // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。
         // ⚡のないマス・他人の無敵マスは無視（選び直せる）。無敵の早期リターンより前に判定する
@@ -626,7 +658,7 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全27スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)を永久に引けなかった
+        // プールは全29スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)・ヘイルメアリー(27)・サイレンス(28)を永久に引けなかった
         setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(skillCosts.onClickShuffle);
     };
@@ -879,6 +911,14 @@ export const Game = (props: GameProps) => {
         return `${posName(index)}に${item.effect}を追加`;
     };
 
+    // サイレンス: 自分以外の全員が、次の手番にスキルを使えなくなる
+    const onClickSilence = () => {
+        addLog('「サイレンス」を使用（相手は次の手番スキルを使えない）');
+        playEffect('silence');
+        otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+        spendMagic(calculateCost(skillCosts.onClickSilence));
+    };
+
     const onClickProliferate = () => {
         addLog(`「増殖」を使用（以後の着手ごとにコマ⇄アイテムを追加。維持コストが毎回+${proliferateUpkeepStep}）`);
         playEffect('proliferate');
@@ -970,12 +1010,13 @@ export const Game = (props: GameProps) => {
     };
 
     const yingYangSkllCost = 5;
-    const onClickYingYangSkll = () => {
-        addLog(`「${currentYinYangMode === 'yang' ? '豊穣の舞（自分の全コマ+2）' : '凶荒の舞（相手の全コマ-2）'}」を使用`);
+    // 豊穣の舞/凶荒の舞の効果本体。コストは呼び出し側で払う（ヘイルメアリーからも使う）
+    const applyYingYangDance = (mode: YingYangMode) => {
+        addLog(`「${mode === 'yang' ? '豊穣の舞（自分の全コマ+2）' : '凶荒の舞（相手の全コマ-2）'}」を使用`);
         const board = currentBoard.slice();
         const affected: number[] = [];
         let destroyed = 0;
-        if (currentYinYangMode === 'yang') {
+        if (mode === 'yang') {
             for (const square of board) {
                 if (square.player === currentTurnPlayer) {
                     square.bind = square.bind + 2;
@@ -995,11 +1036,14 @@ export const Game = (props: GameProps) => {
                 }
             });
         }
-        spendMagic(yingYangSkllCost, false);
         addCorpses(destroyed);
         flashCells(affected);
-        playEffect(currentYinYangMode === 'yang' ? 'harvest' : 'famine');
+        playEffect(mode === 'yang' ? 'harvest' : 'famine');
         setCurrentBoard(board);
+    };
+    const onClickYingYangSkll = () => {
+        applyYingYangDance(currentYinYangMode === 'yang' ? 'yang' : 'ying');
+        spendMagic(yingYangSkllCost, false);
     };
 
     const baseNecromancyCost = 10;
@@ -1020,10 +1064,18 @@ export const Game = (props: GameProps) => {
 
     const onClickNecromancy = () => {
         const curCost = necroCost[turnSeat];
+        summonCorpses(baseNecromancyCost - curCost);
+        setMagicAt(turnSeat, (m) => m - curCost);
+        setUseMagicCountAt(turnSeat, (c) => c + 1);
+        setRemainNecroAt(turnSeat, necromancyDuration);
+        setNecroCostAt(turnSeat, baseNecromancyCost);
+    };
+
+    // 墓地の死体数ぶん（上限・空きマス数でクランプ）ライフ2のコマを召喚する。コスト支払いは呼び出し側
+    const summonCorpses = (corpses: number) => {
         const board = currentBoard.slice();
         const empties = findEmptyIndexes(board);
-        // 墓地に貯まった死体数だけ召喚（上限・空きマス数でクランプ）
-        const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
+        const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
         const summonTargets = randomAnyPick(empties, summonCount);
         for (const idx of summonTargets) {
             board[idx] = { player: currentTurnPlayer, bind: necromancyReviveLife, effects: [] };
@@ -1031,11 +1083,64 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         playEffect('necromancy');
         addLog(`「蘇生」を使用（墓地から${summonCount}体召喚 / ${necromancyDuration}ターン吸収）`);
-        setMagicAt(turnSeat, (m) => m - curCost);
-        setUseMagicCountAt(turnSeat, (c) => c + 1);
-        setRemainNecroAt(turnSeat, necromancyDuration);
-        setNecroCostAt(turnSeat, baseNecromancyCost);
     };
+
+    // ヘイルメアリー: 陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動する
+    const hailMaryChoices: { name: string; run: () => void }[] = [
+        {
+            name: '全軍突撃',
+            run: () => {
+                playEffect('assault');
+                setUseAssaultAt(turnSeat, 3);
+                setUseTokenCountAt(turnSeat, 0);
+            },
+        },
+        { name: 'ストンプ', run: () => setUseStomp(true) },
+        { name: '審判の日', run: () => setUseJudgeDay(true) },
+        { name: '豊穣の舞', run: () => applyYingYangDance('yang') },
+        { name: '凶荒の舞', run: () => applyYingYangDance('ying') },
+        {
+            name: '蘇生',
+            run: () => {
+                // 墓地は蘇生コストの軽減量として持つ（ネクロマンサー全員分のうち最大）。自分がネクロなら吸収と墓地リセットも行う
+                summonCorpses(Math.max(...necroCost.map((c) => baseNecromancyCost - c)));
+                if (currentCharacter === 'necromancer') {
+                    setRemainNecroAt(turnSeat, necromancyDuration);
+                    setNecroCostAt(turnSeat, baseNecromancyCost);
+                }
+            },
+        },
+        { name: 'ミアズマ', run: () => setUseMiasma(true) },
+        { name: '帯電拡散', run: () => setUseChargeSpread(true) },
+    ];
+    // ヘイルメアリーで引いたスキル名。マス選択型は演出より先に画面へ出すため、一定時間表示する
+    const [hailMaryPick, setHailMaryPick] = useState<string | null>(null);
+    const HAIL_MARY_INTRO_MS = 800;
+    const HAIL_MARY_REVEAL_MS = 900;
+    // forcedName: AI が事前に対象を決めた当選スキル。省略時はここでランダムに選ぶ
+    const exeHailMary = (forcedName?: string) => {
+        const picked = hailMaryChoices.find((c) => c.name === forcedName) ?? randomPick(hailMaryChoices);
+        addLog(`「ヘイルメアリー」を使用 → 「${picked.name}」が発動`);
+        spendMagic(calculateCost(skillCosts.onClickHailMary));
+        setHailMarySpin({ label: 'ヘイルメアリー！', phase: 'intro' });
+        // 抽選中は表示を回し、終盤ほど間隔を空けて当選スキルで止める
+        let at = HAIL_MARY_INTRO_MS;
+        const ticks = 16;
+        const start = Math.floor(Math.random() * hailMaryChoices.length);
+        for (let k = 0; k < ticks; k++) {
+            const name = hailMaryChoices[(start + k) % hailMaryChoices.length].name;
+            setTimeout(() => setHailMarySpin({ label: name, phase: 'spin' }), at);
+            at += 60 + k * k * 1.2;
+        }
+        setTimeout(() => setHailMarySpin({ label: picked.name, phase: 'reveal' }), at);
+        setTimeout(() => {
+            setHailMarySpin(null);
+            setHailMaryPick(picked.name);
+            setTimeout(() => setHailMaryPick(null), 2500);
+            picked.run();
+        }, at + HAIL_MARY_REVEAL_MS);
+    };
+    const onClickHailMary = () => exeHailMary();
 
     // --- 毒使い 固有スキル「ミアズマ」 ---
     const onClickMiasma = () => {
@@ -1267,6 +1372,7 @@ export const Game = (props: GameProps) => {
         const labels: string[] = [];
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
+        if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
         const necro = remainNecro[seat];
         if (necro > 0) labels.push(`蘇生 残り${necro}ターン`);
         if (proliferate[seat]) {
@@ -1394,6 +1500,7 @@ export const Game = (props: GameProps) => {
         setUseToken(false);
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
+        setSilencedAll(Array(seatCount).fill(false));
         setProliferateCountAll(zeros());
         setUseStomp(false);
         setUseJudgeDay(false);
@@ -1448,6 +1555,28 @@ export const Game = (props: GameProps) => {
         if (useStomp || useJudgeDay || usePandemic || useMiasma || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer) setPreviewCells([]);
     };
 
+    // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
+    const pendingSkillName = useStomp
+        ? 'ストンプ'
+        : useJudgeDay
+        ? '審判の日'
+        : useMiasma
+        ? 'ミアズマ'
+        : useChargeSpread
+        ? '帯電拡散'
+        : usePandemic
+        ? 'パンデミック'
+        : useInjection > 0
+        ? 'インジェクション'
+        : useChargeOne
+        ? '帯電付与'
+        : null;
+    const skillAnnounce = pendingSkillName
+        ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
+        : hailMaryPick
+        ? `ヘイルメアリー → ${hailMaryPick}`
+        : null;
+
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
     const shuffleSkillDefs: {
         idx: number;
@@ -1491,6 +1620,8 @@ export const Game = (props: GameProps) => {
         { idx: 24, onClick: onClickChargeArea, buttonText: `範囲帯電-${calculateCost(skillCosts.onClickChargeArea)}`, paragraph: `マスを選択し、そのマスと周囲1マス(3x3)に⚡を1つずつ付与します（空きマスも可）\n付与しただけではダメージは出ません`, disabled: checkSkillDisable(skillCosts.onClickChargeArea) },
         { idx: 25, onClick: onClickChargeRandom, buttonText: `ランダム帯電-${calculateCost(skillCosts.onClickChargeRandom)}`, paragraph: `ランダムな1〜4マスに⚡を1つずつ付与します（空きマスも可）\n無敵のマスと🔑ロック中のマスは対象外です`, disabled: checkSkillDisable(skillCosts.onClickChargeRandom) },
         { idx: 26, onClick: onClickJammer, buttonText: `ジャマー-${calculateCost(skillCosts.onClickJammer)}`, paragraph: `⚡のあるマスを選択し、縦横に隣接する相手のコマのライフを⚡の数だけ減らして、そのマスの⚡を取り除きます\n自分のコマと🔑ロック中のコマは影響を受けません\n自分の無敵マスも選べます（弱点を解除できます）`, disabled: checkSkillDisable(skillCosts.onClickJammer) || boardChargeCount(currentBoard) === 0 },
+        { idx: 27, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(skillCosts.onClickHailMary)}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(skillCosts.onClickHailMary) },
+        { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(skillCosts.onClickSilence)}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(skillCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
     ];
 
     return (
@@ -1499,6 +1630,7 @@ export const Game = (props: GameProps) => {
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
+                    {skillAnnounce && <div className={styles.announce}>{skillAnnounce}</div>}
                     <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
                         <Board
                             size={geo.size}
@@ -1511,6 +1643,11 @@ export const Game = (props: GameProps) => {
                             onCellLeave={onCellLeave}
                         />
                         <BoardEffects effect={boardEffect} size={geo.size} />
+                        {hailMarySpin && (
+                            <div className={styles.hmOverlay}>
+                                <div className={`${styles.hmBand} ${styles[`hm_${hailMarySpin.phase}`]}`}>{hailMarySpin.label}</div>
+                            </div>
+                        )}
                     </div>
                     <div className={styles.controls}>
                         <button className={styles.btn} onClick={onClickRestart}>
@@ -1565,8 +1702,8 @@ export const Game = (props: GameProps) => {
                     </div>
                 </div>
             </div>
-            <div className={styles.skills}>
-                <div className={styles.skillsTitle}>スキル</div>
+            <div className={`${styles.skills}${hailMarySpin || silenced[turnSeat] ? ` ${styles.skillsBusy}` : ''}`}>
+                <div className={styles.skillsTitle}>スキル{silenced[turnSeat] && <span className={styles.silenceNote}> サイレンス中: この手番はスキルを使えません</span>}</div>
                 <div className={styles.skillGrid}>
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}

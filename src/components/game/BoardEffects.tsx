@@ -19,7 +19,8 @@ export type SkillEffectType =
     | 'poison'
     | 'proliferate'
     | 'zap'
-    | 'overload';
+    | 'overload'
+    | 'silence';
 
 export type SkillEffect = {
     type: SkillEffectType;
@@ -78,6 +79,7 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     famine: { label: '凶荒の舞', bg: '#ff4d79', fg: '#fff' },
     auraGreen: { label: 'ワルプルギスの夜', bg: '#5fd06a', fg: '#082a0c' },
     poison: { label: '毒', bg: '#c98bff', fg: '#1d0b33' },
+    silence: { label: 'サイレンス', bg: '#1d2236', fg: '#c7d0ff' },
     proliferate: { label: '増殖', bg: '#5fd06a', fg: '#082a0c' },
     overload: { label: '⚡過負荷！', bg: '#fff44f', fg: '#2a2500' },
 };

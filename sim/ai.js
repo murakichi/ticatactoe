@@ -496,6 +496,9 @@ function getEnhancedBestMove(s) {
 
 // ---- strategic skill selection (mirrors AIPlayer.ts chooseSkills) ----
 
+// 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。AIPlayer.ts と同値
+const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7 };
+
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -572,6 +575,12 @@ function chooseSkills(s, availableSkills) {
             for (const sq of board) if (!sq.player) emptyCount++;
             if (remaining >= pCost + 1 && emptyCount >= 5) spend(pCost, 'proliferate');
         }
+    }
+
+    // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
+    if (oppReaches === 0 && availableSkills.includes(28) && countReaches(board, me) === 0
+        && otherSeats(s).some((seat) => s.magic[seat] + 1 >= (EXCLUSIVE_MIN_MAGIC[s.chars[seat]] || Infinity))) {
+        spend(cost(skillCosts.onClickSilence), 'silence');
     }
 
     // Opiumはリーチ防御に使わない (bindを下げるだけで空きマスは塞げない)
@@ -701,12 +710,38 @@ function chooseLocks(s, availableSkills) {
 
 // ---- main entry points ----
 
+// ヘイルメアリー用: 範囲破壊(ストンプ/審判の日)を撃った後に敵の勝ち筋(脅威マス)が最も減る中心を選ぶ。
+// 同点なら壊せる敵駒が多い方。判断の詰み具合に関係なく必ず1つ返す(盤が全マス使えないときだけ null)
+function bestRescueCenter(board, me, opps, kind) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestThreats = Infinity, bestKilled = -1;
+    for (let i = 0; i < board.length; i++) {
+        if (shield.has(i)) continue;
+        const nb = board.map((sq) => ({ player: sq.player, bind: sq.bind, effects: sq.effects.slice() }));
+        let killed = 0;
+        for (const idx of (kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i))) {
+            const sq = nb[idx];
+            if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+            if (kind === 'judge' && sq.effects.some(e => e.effect === '🔑') && sq.player === me && sq.effects.some(e => e.effect === '🌱')) continue;
+            if (isEnemy(sq.player, me)) killed++;
+            nb[idx] = { player: undefined, bind: 0, effects: [] };
+        }
+        if (!nb[i].player) nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
+        const threats = new Set(opps.flatMap((o) => findThreatSquares(nb, o))).size;
+        if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
+    }
+    return bestIdx;
+}
+
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 function faithfulMakeMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const magic = curMagic(s);
     updateShield(s);
+
+    // サイレンス中はスキルを使えない: 通常の着手だけ行う
+    if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
@@ -735,6 +770,26 @@ function faithfulMakeMove(s) {
             let moveTarget = threats.find(t => !lockTargets.includes(t));
             if (moveTarget === undefined) moveTarget = getEnhancedBestMove(s);
             return { move: moveTarget, turnEnded: false };
+        }
+        // 詰み(ロックでは全脅威を塞げない)で自分に即勝ちもない: ヘイルメアリーに賭ける
+        if (availableSkills.includes(27) && magic >= calculateCost(s, skillCosts.onClickHailMary) && findThreatSquares(s.board, me).length === 0) {
+            SKILLS.hailMary(s);
+            let target = null;
+            if (s.useStomp) target = bestRescueCenter(s.board, me, opps, 'stomp');
+            else if (s.useJudgeDay) target = bestRescueCenter(s.board, me, opps, 'judge');
+            else if (s.useMiasma) target = bestMiasmaTarget(s.board, me) ?? s.board.findIndex((sq) => sq.player === me);
+            else if (s.useChargeSpread) target = bestChargeSpreadTarget(s.board, me) ?? s.board.findIndex((sq) => sq.player);
+            const pending = s.useStomp || s.useJudgeDay || s.useMiasma || s.useChargeSpread;
+            if (pending) {
+                const wasJudge = s.useJudgeDay;
+                if (target === null || target < 0 || !placeMove(s, target)) {
+                    s.useStomp = s.useJudgeDay = s.useMiasma = s.useChargeSpread = false; // 撃つ先がない: 不発
+                } else if (wasJudge) { // 審判の日は着手で手番終了
+                    return { move: null, turnEnded: true };
+                }
+            }
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
         }
         // ロックだけでは足りない: 単ロックで最低1つは塞ぐ
         // (かつてここに「シャッフルで防御札を引き直す」分岐があったが、発火条件が

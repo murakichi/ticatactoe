@@ -72,8 +72,8 @@ function lateMagicBonus(turn, n) {
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
-// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 27; // SIM_POOL_SIZE: A/B検証用の上書き
+// 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 29; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -170,6 +170,8 @@ const skillCosts = {
     onClickChargeArea: (config.charge && config.charge.areaCost) || 5,
     onClickChargeRandom: (config.charge && config.charge.randomCost) || 3,
     onClickJammer: (config.charge && config.charge.jammerCost) || 4,
+    onClickHailMary: 6, // idx 27
+    onClickSilence: 5, // idx 28
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -384,6 +386,7 @@ function newGame(opts = {}) {
         // 増殖(ループ召喚): proliferate=発動中 / proliferateCount=これまでのループ回数(=次の維持コストの基準)
         proliferate: fill(false),
         proliferateCount: fill(0),
+        silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
         usedTokenThisTurn: false,
         // necromancer 蘇生 state
         remainNecro: fill(0),
@@ -474,6 +477,8 @@ function judgeNextIsHeart(s) {
 
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 function advanceTurn(s) {
+    // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
+    s.silenced[s.turn] = false;
     // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る (s.turn = 直前に動いた席)
     if (s.chars[s.turn] === 'necromancer' && s.remainNecro[s.turn] > 0) s.remainNecro[s.turn]--;
     const next = judgeNextSeat(s);
@@ -809,7 +814,10 @@ function onClickToggleYingYang(s) {
     s.magic[s.turn] -= skillCosts.onClickToggleYingYang;
 }
 function onClickYingYangSkill(s) {
-    const mode = curYY(s);
+    applyYingYangDance(s, curYY(s));
+    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
+}
+function applyYingYangDance(s, mode) {
     const cur = curPlayer(s);
     let destroyed = 0;
     if (mode === 'yang') {
@@ -818,7 +826,6 @@ function onClickYingYangSkill(s) {
         // 凶荒の舞: 自分以外の全員のコマ
         for (const sq of s.board) if (sq.player && sq.player !== cur) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
     }
-    s.magic[s.turn] -= skillCosts.onClickYingYangSkill;
     addCorpses(s, destroyed);
 }
 
@@ -913,14 +920,17 @@ function onClickProliferate(s) {
 function necromancyCost(s) {
     return s.necroCost[s.turn];
 }
-function onClickNecromancy(s) {
+function summonCorpses(s, corpses) {
     const cur = curPlayer(s);
-    const curCost = s.necroCost[s.turn];
-    // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
     const empties = findEmptyIndexes(s.board);
-    const summonCount = Math.min(baseNecromancyCost - curCost, necromancySummonCap, empties.length);
+    const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
     const targets = randomAnyPick(empties, summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
+}
+function onClickNecromancy(s) {
+    const curCost = s.necroCost[s.turn];
+    // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
+    summonCorpses(s, baseNecromancyCost - curCost);
     s.magic[s.turn] -= curCost;
     s.useMagicCount[s.turn]++;
     s.remainNecro[s.turn] = necromancyDuration;
@@ -1078,6 +1088,32 @@ function exeJammer(s, i) {
     s.useJammer = false;
 }
 
+// ヘイルメアリー (idx 27): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
+// 対象選択が要るもの(ストンプ/審判の日/ミアズマ/帯電拡散)は use* フラグを立てるだけ。対象クリックは呼び出し側(AI)の責任
+function onClickHailMary(s) {
+    spendMagic(s, calculateCost(s, skillCosts.onClickHailMary));
+    const choices = [
+        () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
+        () => { s.useStomp = true; },
+        () => { s.useJudgeDay = true; },
+        () => applyYingYangDance(s, 'yang'),
+        () => applyYingYangDance(s, 'ying'),
+        () => {
+            summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
+            if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
+        },
+        () => { s.useMiasma = true; },
+        () => { s.useChargeSpread = true; },
+    ];
+    choices[Math.floor(s.rng() * choices.length)]();
+}
+
+// サイレンス (idx 28): 自分以外の全席を次の手番スキル禁止にする [FAITHFUL] Game.tsx onClickSilence
+function onClickSilence(s) {
+    otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
+    spendMagic(s, calculateCost(s, skillCosts.onClickSilence));
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -1113,6 +1149,8 @@ const SKILLS = {
     chargeToken: onClickChargeToken,
     chargeOne: onClickChargeOne,
     chargeSpread: onClickChargeSpread,
+    hailMary: onClickHailMary,
+    silence: onClickSilence,
     doubleChargeToken: onClickDoubleChargeToken,
     chargeArea: onClickChargeArea,
     chargeRandom: onClickChargeRandom,
