@@ -529,3 +529,55 @@
         opacity: 0;
     }
 }
+
+/* 過負荷: 全マスの⚡が爆発する白黄の閃光と、盤面中央から広がる輪 */
+.overloadFlash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(250, 204, 21, 0.75));
+    opacity: 0;
+    animation: overloadFlashOut 800ms var(--ease);
+}
+
+@keyframes overloadFlashOut {
+    0% {
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.overloadRing {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 80px;
+    height: 80px;
+    margin: -40px 0 0 -40px;
+    border-radius: 50%;
+    border: 6px solid #facc15;
+    opacity: 0;
+    animation: overloadRingOut 800ms var(--ease);
+}
+
+@keyframes overloadRingOut {
+    0% {
+        opacity: 1;
+        transform: scale(0.3);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(7);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .overloadFlash,
+    .overloadRing {
+        animation-duration: 1ms;
+    }
+}

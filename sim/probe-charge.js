@@ -8,7 +8,7 @@
  * 出力 (雷霆の巫 vs 各キャラ、先手/後手を合算):
  *  - 勝率 / 平均ターン / 引き分け(=着手候補が尽きて止まった)率
  *  - 1試合あたりの発火回数(byElec=雷霆の巫の着手で発火) / 相手の駒が受けたダメージ(dmgOpp) / 雷霆の巫の駒が受けたダメージ(dmgElec)
- *  - 帯電系スキルの使用回数/試合 (帯電トークン・帯電付与・帯電拡散)
+ *  - 帯電系スキルの使用回数/試合 (token=帯電トークン, dbl=帯電ダブルトークン, one=帯電付与, spread=帯電拡散, area=範囲帯電, rand=ランダム帯電, jam=ジャマー, jamZ=ジャマーでライフ0になった敵)
  *  - 手番ごとの平均 ⚡マス数 と 無敵(固まった自駒)数、⚡が1個以上盤上にあった手番の割合
  */
 const engine = require('./engine');
@@ -39,12 +39,12 @@ function play(hchar, cchar, seed) {
 }
 
 console.log(`# probe-charge  games/side=${games}  seed=${baseSeed}  poolSize=${engine.POOL_SIZE}\n`);
-console.log('opp            winE   turns  stall  fires  byElec dmgOpp dmgElec token  one   spread  ⚡cells  frozen  ⚡有り手番%');
+console.log('opp            winE   turns  stall  fires  byElec dmgOpp dmgElec | token dbl   one   spread area  rand  jam  jamZ  dsch | ⚡cells frozen ⚡有り手番%');
 const total = { w: 0, l: 0 };
 let vsOthers = { w: 0, l: 0 };
 for (const opp of others) {
     let w = 0, l = 0, d = 0, turns = 0, stall = 0, n = 0;
-    const st = { fires: 0, firesByElectrician: 0, dmgToOther: 0, dmgToElectrician: 0, chargeToken: 0, chargeOne: 0, chargeSpread: 0 };
+    const st = { fires: 0, firesByElectrician: 0, dmgToOther: 0, dmgToElectrician: 0, chargeToken: 0, doubleChargeToken: 0, chargeOne: 0, chargeSpread: 0, chargeArea: 0, chargeRandom: 0, jammer: 0, jammerDmg: 0, jammerZeroed: 0, discharge: 0 };
     let cells = 0, frozen = 0, any = 0, sampled = 0;
     for (const electricFirst of [true, false]) {
         for (let g = 0; g < games; g++) {
@@ -64,7 +64,8 @@ for (const opp of others) {
     const f = (x, k = 2) => (x / n).toFixed(k).padStart(5);
     console.log(
         `${opp.padEnd(14)} ${(w / (w + l || 1)).toFixed(3)}  ${f(turns, 1)}  ${(stall / n * 100).toFixed(1).padStart(4)}%` +
-        `  ${f(st.fires)} ${f(st.firesByElectrician)} ${f(st.dmgToOther)} ${f(st.dmgToElectrician)} ${f(st.chargeToken)} ${f(st.chargeOne)}  ${f(st.chargeSpread)}` +
+        `  ${f(st.fires)} ${f(st.firesByElectrician)} ${f(st.dmgToOther)} ${f(st.dmgToElectrician)} |` +
+        ` ${f(st.chargeToken)} ${f(st.doubleChargeToken)} ${f(st.chargeOne)} ${f(st.chargeSpread)} ${f(st.chargeArea)} ${f(st.chargeRandom)} ${f(st.jammer)} ${f(st.jammerZeroed)} ${f(st.discharge, 3)} |` +
         `   ${(cells / sampled).toFixed(2).padStart(5)}  ${(frozen / sampled).toFixed(2).padStart(5)}   ${(any / sampled * 100).toFixed(0).padStart(4)}%`
     );
 }
