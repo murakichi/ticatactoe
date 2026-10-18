@@ -114,6 +114,7 @@ function miasmaScore(s, me) {
 
 const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
 const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
+const SEED_MIN_ENEMIES = Number(process.env.SEED_MIN_ENEMIES) || 2; // ミアズマの種: 自コマ周囲の敵マス数の下限
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
@@ -868,7 +869,7 @@ function faithfulMakeMove(s) {
         && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true) && countReaches(s.board, me) === 0
         && !s.board.some((sq) => sq.player === me && sq.effects.some((e) => e.effect === '☠'))) {
         const geo = geometryForCells(s.board.length);
-        let best = null, bestN = 1;
+        let best = null, bestN = SEED_MIN_ENEMIES - 1;
         s.board.forEach((sq, i) => {
             if (sq.player !== me || shield.has(i)) return;
             const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
