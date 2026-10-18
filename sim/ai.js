@@ -115,7 +115,7 @@ function miasmaScore(s, me) {
 const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
 const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
 const SEED_MIN_ENEMIES = Number(process.env.SEED_MIN_ENEMIES) || 2; // ミアズマの種: 自コマ周囲の敵マス数の下限
-const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
+const MIASMA_MIN_SCORE = Number(process.env.MIASMA_MIN_SCORE) || 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
 function bestAntiNecroLockTarget(board, me) {
@@ -630,7 +630,7 @@ function chooseSkills(s, availableSkills) {
     }
 
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
-    if (availableSkills.includes(17)) {
+    if (availableSkills.includes(17) && !(process.env.NO_SERUM_POI && character === 'poisoner')) {
         const serumCost = calculateCost(s, costsOf(s).onClickSerum, false, true);
         let doomed = 0;
         for (const sq of board) {
