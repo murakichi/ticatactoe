@@ -671,5 +671,24 @@ test('敵（雷霆の巫以外）の⚡コマの発火は、雷霆の巫のコ�
     assert.strictEqual(s.board[6].bind, 4 - 1 - 1);
 });
 
+test('AI: ⚡で無敵の自コマを対策ロックの対象にしない（4人戦で手番が進まなくなる不具合）', () => {
+    const ai = require('./ai');
+    const gear = require('./gear');
+    const chars = ['electrician', 'tactician', 'magician', 'poisoner'];
+    // 修正前は seed 1000+8 / 1000+2 / 1000+11 で、雷霆の巫の手番がロックの選択待ちのまま止まった
+    for (const g of [8, 2, 11]) {
+        const s = e.newGame({ chars, gears: chars.map(gear.recommendedGears), rng: e.makeRng(1000 + g), size: 7 });
+        let guard = 0;
+        while (!s.winner && guard++ < 1200) {
+            const r = ai.makeMove(s, 'faithful');
+            if (r.turnEnded) continue;
+            assert.notStrictEqual(r.move, null, `seed ${g}: 着手が無い (turn ${s.currentTurn})`);
+            const before = s.currentTurn;
+            e.placeMove(s, r.move);
+            assert.notStrictEqual(s.currentTurn, before, `seed ${g}: 手番が進まない (turn ${before})`);
+        }
+    }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
