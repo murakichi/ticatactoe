@@ -13,6 +13,7 @@ const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromanc
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
+const thermal = require('./thermal');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -131,6 +132,20 @@ function bestAntiNecroLockTarget(board, me) {
             if (foreign === 0) val += LINE_SCORES[Math.min(mc, 4)];
         }
         if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestIdx;
+}
+
+// 炎使いフレアバースト: 中心+縦横隣の敵コマ(ライフ>0・🔑なし)に🔥。巻き込む敵が2個以上で最も価値の高い中心（ライフ4以上は+1）
+function bestFlareTarget(board, me) {
+    const size = Math.round(Math.sqrt(board.length));
+    let bestIdx = null, bestScore = 0;
+    for (let i = 0; i < board.length; i++) {
+        if (shield.has(i)) continue;
+        const targets = thermal.flareTargets(board, i, size, me);
+        if (targets.length < 2) continue;
+        const score = targets.reduce((n, k) => n + 1 + (board[k].bind >= 4 ? 1 : 0), 0);
+        if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
     return bestIdx;
 }
@@ -488,7 +503,7 @@ function getEnhancedBestMove(s) {
 // ---- strategic skill selection (mirrors AIPlayer.ts chooseSkills) ----
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。AIPlayer.ts と同値
-const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7 };
+const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 6 };
 
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
@@ -842,6 +857,12 @@ function faithfulMakeMove(s) {
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
 
+    // 氷結師 氷河期: 自陣のライフ3以上の未氷結コマが2個以上あれば全部凍らせる（クリック不要・手番は進まない）
+    if (curChar(s) === 'cryomancer' && curMagic(s) >= calculateCost(s, costsOf(s).onClickGlacier)
+        && thermal.glacierTargets(s.board, me).filter((k) => s.board[k].bind >= 3).length >= 2) {
+        SKILLS.glacier(s);
+    }
+
     // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
     if (curChar(s) === 'poisoner' && availableSkills.includes(15)
         && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true)
@@ -901,6 +922,16 @@ function faithfulMakeMove(s) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
                 return { move: null, turnEnded: true };
+            }
+        }
+        // 炎使い フレアバースト: 敵2個以上を巻き込む中心に撃ち、同じ手番で通常着手へ続ける
+        if (ch === 'pyromancer' && magic >= calculateCost(s, costsOf(s).onClickFlareBurst)) {
+            const target = bestFlareTarget(s.board, me);
+            if (target !== null) {
+                SKILLS.flareBurst(s);
+                placeMove(s, target);
+                const move = getEnhancedBestMove(s);
+                return { move, turnEnded: false };
             }
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る

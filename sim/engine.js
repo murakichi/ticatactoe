@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -49,6 +49,7 @@ function makeRng(seed) {
 const config = require('./config');
 const { boardSizeFor, geometryOf, geometryForCells } = require('./geometry');
 const gear = require('./gear');
+const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
 
 // ライフ減衰のタイミング (src/components/game/decay.ts と同じ規則)。
@@ -75,7 +76,7 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 30; // SIM_POOL_SIZE: A/B検証用の上書き
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 32; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -175,6 +176,11 @@ const skillCosts = {
     onClickHailMary: 6, // idx 27
     onClickSilence: 5, // idx 28
     onClickPoisonMist: 7, // idx 29
+    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷結師・フレアバーストは炎使いの固有スキル
+    onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
+    onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
+    onClickGlacier: (config.thermal && config.thermal.glacierCost) || 7,
+    onClickFlareBurst: (config.thermal && config.thermal.flareCost) || 6,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -302,7 +308,7 @@ function fireCharges(s, i, mover) {
             if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && charOfPlayer(s, sq.player) === 'electrician') continue;
-            sq.bind = Math.max(0, sq.bind - FIRE_DAMAGE);
+            board[n] = thermal.applyDamage(sq, FIRE_DAMAGE, 'electric').sq; // 電気は氷結を貫通する。ダメージが通れば🔥は消える
             // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / それ以外の駒に与えた被害
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
         }
@@ -474,6 +480,9 @@ function newGame(opts = {}) {
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(skillCosts, rng)) : null)),
         useChargeArea: false,
         useJammer: false,
+        useFreeze: false,
+        useIgnite: false,
+        useFlare: false,
         stats: {},
         winner: undefined,
         log: [],
@@ -658,6 +667,25 @@ function placeMove(s, i) {
         exeChargeArea(s, i);
         return true;
     }
+    if (s.useFreeze) {
+        if (!thermal.canFreeze(board[i])) return false; // 空きマス・氷結済み・ロック中は選び直せる
+        thermal.freeze(board, [i]);
+        s.useFreeze = false;
+        return true;
+    }
+    if (s.useIgnite) {
+        if (!board[i].player) return false;
+        thermal.ignite(board, [i], s.size);
+        s.useIgnite = false;
+        return true;
+    }
+    if (s.useFlare) {
+        const targets = thermal.flareTargets(board, i, s.size, curPlayer(s));
+        if (!targets.length) return false;
+        thermal.ignite(board, targets, s.size);
+        s.useFlare = false;
+        return true;
+    }
     if (s.useLock > 0) {
         applyLock(s, i);
         harvestMagic(s, 1);
@@ -691,6 +719,8 @@ function placeMove(s, i) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
+    // ❄氷結中の自陣コマには重ねて強化できない（氷結師は除く）
+    if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i], curChar(s))) return false;
 
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
     const decayNow = shouldDecay(s.placements, seatCount(s));
@@ -698,9 +728,18 @@ function placeMove(s, i) {
     const spreadOrigins = [];
     for (let k = 0; decayNow && k < board.length; k++) {
         const sq = board[k];
-        if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0) sq.bind--;
+        // ❄氷結中のマスはターン進行でライフが減らない（自然減衰・🔥の継続ダメージとも）
+        if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !thermal.isFrozen(sq)) sq.bind--;
+        // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
+        const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
+        if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
         const poison = sq.effects.filter((e) => e.effect === '☠').length;
-        if (poison > 0 && sq.bind > 0) sq.bind = Math.max(0, sq.bind - poison);
+        if (poison > 0 && sq.bind > 0) {
+            // 毒は氷結を貫通し、ダメージが通れば🔥は消える
+            const hit = thermal.applyDamage(sq, poison, 'poison').sq;
+            sq.bind = hit.bind;
+            sq.effects = hit.effects;
+        }
         // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
         const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
@@ -922,22 +961,29 @@ function onClickBothToken(s) {
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
+// 「ライフを0にする」スキルを1マスに当てる。氷結中なら氷結だけ解除、そうでなければ0にして🔥も消す
+function zeroBySkill(s, idx) {
+    const guard = thermal.absorbDestroy(s.board[idx]);
+    s.board[idx] = guard.blocked ? guard.sq : thermal.zeroOut(s.board[idx]);
+}
 function onClickSlash(s) {
-    for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) zeroBySkill(s, idx);
     spendMagic(s, calculateCost(s, costsOf(s).onClickSlash));
     bumpMagicCount(s);
 }
 function onClickBackSlash(s) {
-    for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) s.board[idx].bind = 0;
+    for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) zeroBySkill(s, idx);
     spendMagic(s, calculateCost(s, costsOf(s).onClickBackSlash));
     bumpMagicCount(s);
 }
 function onClickOpium(s) {
     const cur = curPlayer(s);
-    for (const sq of s.board) {
+    for (let k = 0; k < s.board.length; k++) {
+        const sq = s.board[k];
         if (sq.player !== cur && sq.bind > 0 && !isGuarded(s, sq)) {
-            const calc = sq.bind - 2;
-            sq.bind = calc > 1 ? sq.bind - 2 : 0;
+            // スキルダメージ: 氷結なら解除だけ、🔥なら1.5倍。-2して1以下になったマスはライフ0
+            const hit = thermal.applyDamage(sq, 2, 'skill');
+            s.board[k] = hit.blocked || hit.sq.bind > 1 ? hit.sq : { ...hit.sq, bind: 0 };
         }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickOpium));
@@ -978,7 +1024,14 @@ function applyYingYangDance(s, mode) {
         for (const sq of s.board) if (sq.player === cur) sq.bind += 2;
     } else {
         // 凶荒の舞: 自分以外の全員のコマ
-        for (const sq of s.board) if (sq.player && sq.player !== cur) { sq.bind -= 2; if (sq.bind < 1) { sq.player = undefined; sq.effects = []; sq.bind = 0; destroyed++; } }
+        for (let k = 0; k < s.board.length; k++) {
+            const sq = s.board[k];
+            if (!sq.player || sq.player === cur) continue;
+            const hit = thermal.applyDamage(sq, 2, 'skill'); // 氷結なら解除だけ、🔥なら1.5倍
+            if (hit.blocked) { s.board[k] = hit.sq; continue; }
+            if (hit.sq.bind < 1) { s.board[k] = { player: undefined, bind: 0, effects: [] }; destroyed++; }
+            else s.board[k] = hit.sq;
+        }
     }
     addCorpses(s, destroyed);
 }
@@ -992,8 +1045,13 @@ function exeStomp(s, i) {
     const cur = curPlayer(s);
     let destroyed = 0;
     for (const idx of geometryOf(s.size).stompRange(i)) {
-        if (s.board[idx].player === cur) s.board[idx].bind = s.board[idx].bind > 5 ? s.board[idx].bind - 5 : 0;
-        else { if (s.board[idx].player) destroyed++; s.board[idx] = { player: undefined, bind: 0, effects: [] }; }
+        if (s.board[idx].player === cur) s.board[idx] = thermal.applyDamage(s.board[idx], 5, 'skill').sq; // 自陣は-5（氷結なら解除だけ・🔥は1.5倍）
+        else {
+            const guard = thermal.absorbDestroy(s.board[idx]);
+            if (guard.blocked) { s.board[idx] = guard.sq; continue; } // 氷結が身代わりになる
+            if (s.board[idx].player) destroyed++;
+            s.board[idx] = { player: undefined, bind: 0, effects: [] };
+        }
     }
     addCorpses(s, destroyed);
     if (s.board[i].player === undefined) s.board[i] = { player: cur, bind: s.life, effects: [] };
@@ -1014,15 +1072,22 @@ function onClickJudgeDay(s) {
 function exeJudgeDay(s, i) {
     const cur = curPlayer(s);
     let destroyed = 0;
+    let centerSurvived = false;
     for (const idx of geometryOf(s.size).judgeRange(i)) {
         const sq = s.board[idx];
         const locked = sq.effects.some((e) => e.effect === '🔑');
         const protectedBud = sq.player === cur && sq.effects.some((e) => e.effect === '🌱');
-        if (!locked || !protectedBud) { if (s.board[idx].player) destroyed++; s.board[idx] = { player: undefined, bind: 0, effects: [] }; }
+        if (!locked || !protectedBud) {
+            const guard = thermal.absorbDestroy(sq);
+            if (guard.blocked) { s.board[idx] = guard.sq; if (idx === i) centerSurvived = true; continue; } // 氷結が身代わりになる
+            if (s.board[idx].player) destroyed++;
+            s.board[idx] = { player: undefined, bind: 0, effects: [] };
+        }
     }
     addCorpses(s, destroyed);
     s.useMagicCount[s.turn] = 0;
-    s.board[i] = { player: cur, bind: 2, effects: [{ effect: '🌱' }] };
+    // 中心は自分のコマになる。ただし氷結が身代わりになって残った敵コマは奪えない
+    if (!centerSurvived) s.board[i] = { player: cur, bind: 2, effects: [{ effect: '🌱' }] };
     s.useJudgeDay = false;
     endTurn(s);
 }
@@ -1293,9 +1358,9 @@ function exeJammer(s, i) {
         if (!sq.player || sq.player === cur || sq.bind <= 0) continue;
         if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
         const before = sq.bind;
-        sq.bind = Math.max(0, sq.bind - stacks);
-        bumpStat(s, 'jammerDmg', before - sq.bind);
-        if (sq.bind === 0) bumpStat(s, 'jammerZeroed');
+        s.board[j] = thermal.applyDamage(sq, stacks, 'electric').sq; // ジャマーの電気も氷結を貫通する
+        bumpStat(s, 'jammerDmg', before - s.board[j].bind);
+        if (s.board[j].bind === 0) bumpStat(s, 'jammerZeroed');
     }
     s.board[i].effects = s.board[i].effects.filter((e) => e.effect !== '⚡');
     s.useJammer = false;
@@ -1325,6 +1390,34 @@ function onClickHailMary(s) {
 function onClickSilence(s) {
     otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
     spendMagic(s, calculateCost(s, costsOf(s).onClickSilence));
+}
+
+// ---- 氷結・火炎 (src/components/game/thermal.ts) ----
+// 氷結 (idx 30): 選んだコマに❄。火炎付与 (idx 31): 選んだコマに🔥（そのマスと縦横隣の氷結は解ける）
+function onClickFreeze(s) {
+    s.useFreeze = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFreeze));
+    bumpMagicCount(s);
+    bumpStat(s, 'freeze');
+}
+function onClickIgnite(s) {
+    s.useIgnite = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIgnite));
+    bumpMagicCount(s);
+    bumpStat(s, 'ignite');
+}
+// 氷結師の固有スキル 氷河期: 自陣のライフが残るコマすべてに❄（クリック不要・ターン継続）
+function onClickGlacier(s) {
+    const done = thermal.freeze(s.board, thermal.glacierTargets(s.board, curPlayer(s)));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickGlacier));
+    bumpStat(s, 'glacier');
+    bumpStat(s, 'glacierCells', done.length);
+}
+// 炎使いの固有スキル フレアバースト: 選んだマスと縦横隣の敵コマに🔥
+function onClickFlareBurst(s) {
+    s.useFlare = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFlareBurst));
+    bumpStat(s, 'flareBurst');
 }
 
 const SKILLS = {
@@ -1369,6 +1462,10 @@ const SKILLS = {
     chargeArea: onClickChargeArea,
     chargeRandom: onClickChargeRandom,
     jammer: onClickJammer,
+    freeze: onClickFreeze,
+    ignite: onClickIgnite,
+    glacier: onClickGlacier,
+    flareBurst: onClickFlareBurst,
 };
 
 // ---- Rendering ------------------------------------------------------------

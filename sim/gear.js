@@ -106,6 +106,8 @@ const RECOMMENDED_GEARS = {
     necromancer: ['vengeance', 'sturdy'],
     poisoner: ['titanCost', 'sturdy'],
     electrician: ['sturdy', 'harvest'],
+    cryomancer: ['sturdy', 'harvest'],
+    pyromancer: ['sturdy', 'harvest'],
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 
