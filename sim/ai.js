@@ -118,7 +118,43 @@ const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマ
 const BLOOM_AI = process.env.BLOOM_AI !== '0'; // 毒使い×毒花の専用行動（A/B用に無効化できる）
 const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
+const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
+const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
+const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 40; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
+const EL_DENY = process.env.EL_DENY != null ? Number(process.env.EL_DENY) : 0.5; // 敵の列を止める価値の重み
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
+
+// 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数
+function myEmptyLocks(s) {
+    return s.board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === s.turn + 1)).length;
+}
+// 空蔵: 空きマスのうち、自分のコマが置けた場合の列の伸びと、敵に置かれたら困る列の伸び(EL_DENY倍)の合計が最大のマス
+function bestEmptyLockTarget(board, me, opps) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = EL_MIN_VALUE - 1e-9;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (sq.player || sq.effects.some((e) => e.effect === '🔑') || shield.has(i)) continue;
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let mine = 0, foreign = 0;
+            const oc = new Map();
+            for (const idx of line) {
+                const p = board[idx].player;
+                if (p === me) mine++;
+                else if (p) { foreign++; oc.set(p, (oc.get(p) || 0) + 1); }
+            }
+            if (foreign === 0) val += LINE_SCORES[Math.min(mine + 1, 4)] - LINE_SCORES[Math.min(mine, 4)];
+            else if (mine === 0 && oc.size === 1) {
+                const c = [...oc.values()][0];
+                val += EL_DENY * (LINE_SCORES[Math.min(c + 1, 4)] - LINE_SCORES[Math.min(c, 4)]);
+            }
+        }
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestIdx;
+}
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
 function bestAntiNecroLockTarget(board, me) {
@@ -883,6 +919,20 @@ function faithfulMakeMove(s) {
             placeMove(s, best);
             const move = getEnhancedBestMove(s);
             return { move, turnEnded: false };
+        }
+    }
+
+    // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
+    // ロック中は敵も置けないので、敵の列を止める効果もある。ロックは6ターンで切れ、そのとき自分のコマになる。
+    // EL_AI=0 で無効化(A/B用)
+    if (EL_AI && hasGear(s.gears[s.turn], 'emptyLock') && countReaches(s.board, me) === 0
+        && magic >= calculateCost(s, costsOf(s).onClickUseLock)
+        && myEmptyLocks(s) < EL_MAX) {
+        const target = bestEmptyLockTarget(s.board, me, opps);
+        if (target !== null) {
+            SKILLS.lock(s);
+            placeMove(s, target);
+            return { move: getEnhancedBestMove(s), turnEnded: false };
         }
     }
 
