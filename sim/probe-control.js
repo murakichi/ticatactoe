@@ -11,6 +11,8 @@
  *   gear+ai と ai の差 = ギア自体の価値 / ai と none の差 = 戦略だけの価値（ギアに関係なく強い）
  *   node sim/probe-control.js <gear> <games> <seed> <gear+ai|gear|ai|none>
  */
+// 戦略の無効化は ai.js を読み込む前に環境変数で行う（ai.js は読み込み時に EL_AI を読む）
+if (['gear', 'none'].includes(process.argv[5] || 'none')) process.env.EL_AI = '0';
 const engine = require('./engine');
 const ai = require('./ai');
 
@@ -20,7 +22,6 @@ const seed = parseInt(process.argv[4] || '1', 10);
 const mode = process.argv[5] || 'none';
 const hasGear = mode === 'gear+ai' || mode === 'gear';
 const useAi = mode === 'gear+ai' || mode === 'ai';
-if (mode === 'gear' || mode === 'none') process.env.EL_AI = '0'; // 戦略を使わない（ここで無効化するのは空蔵の戦略。他のギアは今後対応）
 let w = 0, l = 0, d = 0, turns = 0;
 const pickRng = engine.makeRng(seed * 7919 + 13);
 for (let g = 0; g < games; g++) {
