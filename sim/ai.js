@@ -837,18 +837,18 @@ function faithfulMakeMove(s) {
     s.lockedSkills[s.turn] = locks;
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
-    let threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
-    // 氷結で相手リーチの4つ目を塞ぐ（着手を使わずに防げるので、その手番を攻めに使える）。氷室の番人はロックが氷結に置き換わっている
-    if (F.frzBlock && threats.length >= 1 && (F.frzBlock >= 2 || threats.length === 1) && !s.silenced[s.turn]) {
-        const cryo = curChar(s) === 'cryomancer';
-        const fcost = calculateCost(s, cryo ? costsOf(s).onClickCryoFreeze : costsOf(s).onClickFreeze);
-        if ((cryo || availableSkills.includes(30)) && curMagic(s) >= fcost) {
-            if (cryo) SKILLS.lock(s); else SKILLS.freeze(s);
-            if (placeMove(s, threats[0])) {
-                threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
-                if (threats.length === 0) return { move: getEnhancedBestMove(s), turnEnded: false };
-            } else { s.useFreeze = false; s.useLock = 0; }
+    const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
+    // （A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上。非氷室は手札に氷結が来ないと撃てず差なしなので対象外）
+    if (F.frzBlock && curChar(s) === 'cryomancer' && threats.length === 1 && !s.silenced[s.turn]
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickCryoFreeze)) {
+        SKILLS.lock(s); // 氷室の番人ではロック=氷結（対象1マス）
+        if (placeMove(s, threats[0])) {
+            const move = getEnhancedBestMove(s);
+            if (move === null) { SKILLS.charge(s); return { move: null, turnEnded: true }; }
+            return { move, turnEnded: false };
         }
+        s.useFreeze = false; s.useLock = 0;
     }
     if (threats.length >= 2) {
         const lockOpts = [
