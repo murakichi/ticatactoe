@@ -22,16 +22,40 @@ export type SkillEffectType =
     | 'overload'
     | 'silence'
     | 'freeze'
-    | 'flame';
+    | 'flame'
+    | 'glacier'
+    | 'glacierBurst'
+    | 'inferno'
+    | 'cleanse'
+    | 'harvestEve'
+    | 'solstice'
+    | 'sprout'
+    | 'windborne'
+    | 'iceBreak'
+    | 'thaw'
+    | 'burn';
+
+/** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
+export type BurstType = 'iceBreak' | 'thaw' | 'burn';
+
+export type BurstEffect = {
+    type: BurstType;
+    cells: number[];
+    nonce: number;
+};
 
 export type SkillEffect = {
     type: SkillEffectType;
     index?: number;
+    /** 演出を出すマスが複数あるとき（ひこばえ・業火など） */
+    indexes?: number[];
     nonce: number;
 };
 
 type Props = {
     effect: SkillEffect | null;
+    /** マスに重ねる小演出（氷結が砕ける・解凍・燃焼） */
+    burst?: BurstEffect | null;
     /** 盤面の一辺のマス数 */
     size: number;
 };
@@ -86,10 +110,48 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     overload: { label: '⚡過負荷！', bg: '#fff44f', fg: '#2a2500' },
     freeze: { label: '氷結', bg: '#bfe9ff', fg: '#06324d' },
     flame: { label: '火炎', bg: '#ff7a2f', fg: '#2a0d00' },
+    glacier: { label: '絶対零度', bg: '#7dd3fc', fg: '#06243a' },
+    glacierBurst: { label: '氷結崩壊！', bg: '#e0f7ff', fg: '#06324d' },
+    inferno: { label: '業火', bg: '#ff5a1f', fg: '#fff' },
+    cleanse: { label: '浄化', bg: '#fff6c9', fg: '#4a3b00' },
+    harvestEve: { label: '刈り入れ前夜', bg: '#f6c445', fg: '#3a2a00' },
+    solstice: { label: '冬至の種子', bg: '#1d2a5a', fg: '#cfe0ff' },
+    sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
+    windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
 };
 
-export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
-    if (!effect) return null;
+/** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
+const RING_DELAYS = [0, 130, 260];
+
+const BURST_EMOJI: Record<BurstType, string> = { iceBreak: '💠', thaw: '💧', burn: '🔥' };
+
+export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
+    if (!effect && !burst) return null;
+
+    // マスの中心に出る小さな絵文字（indexes の各マス）
+    const cellPops = (indexes: number[] | undefined, emoji: string, cls: string = '') =>
+        (indexes ?? []).slice(0, 49).map((idx, i) => {
+            const pos = cellCenter(idx, size);
+            return (
+                <span key={`${idx}-${i}`} className={`${styles.cellPop} ${cls}`} style={{ left: pos.left, top: pos.top, animationDelay: `${(i % 8) * 45}ms` }}>
+                    {emoji}
+                </span>
+            );
+        });
+
+    const sweepParticles = (emoji: string) =>
+        [8, 22, 38, 54, 70, 84].map((y, i) => (
+            <span key={i} className={`${styles.particle} ${styles.sweep}`} style={{ top: `${y}%`, animationDelay: `${i * 70}ms` }}>
+                {emoji}
+            </span>
+        ));
+
+    const burstOverlay = burst ? (
+        <div className={styles.overlay} key={`burst-${burst.nonce}`}>
+            {cellPops(burst.cells, BURST_EMOJI[burst.type], styles[`burst_${burst.type}`])}
+        </div>
+    ) : null;
+    if (!effect) return burstOverlay;
 
     const riseParticles = (emoji: string) =>
         PARTICLE_X.map((x, i) => (
@@ -254,6 +316,91 @@ export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
                         {riseParticles('🔥')}
                     </>
                 );
+            case 'glacier':
+                // 絶対零度: 盤面全体が凍りつく。青いオーラ、降りしきる雪、中央に冷気の紋章
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraIce}`} />
+                        <div className={styles.haze} style={{ background: 'rgba(186, 230, 253, 0.55)' }} />
+                        {fallParticles('❄')}
+                        {fallParticles('🧊')}
+                        <div className={styles.sigil}>🥶</div>
+                    </>
+                );
+            case 'glacierBurst': {
+                // 氷結崩壊: 凍った敵が砕け散る。白い閃光と中央からの衝撃波、ダメージを受けたマスに破片
+                const pos = cellCenter(effect.index ?? Math.floor((size * size) / 2), size);
+                return (
+                    <>
+                        <div className={styles.flash} style={{ background: 'rgba(224, 247, 255, 0.9)' }} />
+                        {RING_DELAYS.map((d) => (
+                            <div key={d} className={styles.shockwave} style={{ left: pos.left, top: pos.top, animationDelay: `${d}ms`, borderColor: '#7dd3fc' }} />
+                        ))}
+                        {cellPops(effect.indexes, '💥')}
+                        {cellPops(effect.indexes, '❄', styles.burst_iceBreak)}
+                        {fallParticles('✨')}
+                    </>
+                );
+            }
+            case 'inferno':
+                // 業火: 画面が炎に包まれる。赤橙のオーラと立ち昇る炎、敵コマの上に火柱
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraFire}`} />
+                        {riseParticles('🔥')}
+                        {riseParticles('🔥')}
+                        {cellPops(effect.indexes, '🔥', styles.burst_burn)}
+                        <div className={styles.sigil}>🌋</div>
+                    </>
+                );
+            case 'cleanse':
+                // 浄化: 白金の光が盤面を洗い、きらめきが舞い上がる
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGold}`} />
+                        <div className={styles.flashQuick} />
+                        {riseParticles('✨')}
+                        {riseParticles('🕊️')}
+                        <div className={styles.sigil}>✨</div>
+                    </>
+                );
+            case 'harvestEve':
+                // 刈り入れ前夜: 夜の金色の畑。麦と硬貨が舞い上がる
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraNight}`} />
+                        {riseParticles('🌾')}
+                        {riseParticles('🪙')}
+                        <div className={styles.sigil}>🌙</div>
+                    </>
+                );
+            case 'solstice':
+                // 冬至の種子: 冬の夜に種が守られる。濃紺のオーラ、雪、中央の種
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraNight}`} />
+                        {fallParticles('❄')}
+                        {fallParticles('✨')}
+                        <div className={styles.sigil}>🌰</div>
+                    </>
+                );
+            case 'sprout':
+                // ひこばえ: 受け取ったマスから新芽が吹き出す
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {cellPops(effect.indexes, '🌱')}
+                        {riseParticles('🌿')}
+                    </>
+                );
+            case 'windborne':
+                // 風の落とし子: 木の葉が風に乗って横切り、種が落ちたマスに芽が出る
+                return (
+                    <>
+                        {sweepParticles('🍃')}
+                        {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
             case 'proliferate':
                 // 増殖: 緑のオーラから増え続ける芽が湧き上がり、中央に無限記号
                 return (
@@ -310,6 +457,8 @@ export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
     // nonce を key にして毎回アニメーションを再生
     const banner = BANNERS[effect.type];
     return (
+        <>
+        {burstOverlay}
         <div className={styles.overlay} key={effect.nonce}>
             {render()}
             {banner && (
@@ -321,5 +470,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
                 </div>
             )}
         </div>
+        </>
     );
 };

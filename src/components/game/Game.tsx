@@ -6,13 +6,13 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
 import AIPlayer, { TURN_ENDING_SKILLS, SKILL_POOL_SIZE } from './AIPlayer';
 import { Board } from './Board';
-import { BoardEffects, SkillEffect, SkillEffectType } from './BoardEffects';
+import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -34,7 +34,7 @@ import styles from './Game.module.css';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
 // 盤面を揺らすスキル演出
-const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload'];
+const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno'];
 
 export type PlayerConfig = {
     character: CharacterId;
@@ -140,10 +140,18 @@ export const Game = (props: GameProps) => {
     const [previewCells, setPreviewCells] = useState<number[]>([]);
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
-    const playEffect = (type: SkillEffectType, index?: number) => {
+    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[]) => {
         playSfx(type);
-        setBoardEffect((prev) => ({ type, index, nonce: (prev?.nonce ?? 0) + 1 }));
+        setBoardEffect((prev) => ({ type, index, indexes, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardEffect(null), 1400);
+    };
+    // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
+    const [boardBurst, setBoardBurst] = useState<BurstEffect | null>(null);
+    const playBurst = (type: BurstType, cells: number[]) => {
+        if (cells.length === 0) return;
+        playSfx(type);
+        setBoardBurst((prev) => ({ type, cells, nonce: (prev?.nonce ?? 0) + 1 }));
+        setTimeout(() => setBoardBurst(null), 1200);
     };
     // 効果音のオン/オフ(設定は localStorage に保存される)
     const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
@@ -461,7 +469,7 @@ export const Game = (props: GameProps) => {
                 ]);
                 if (r.damaged.length > 0) {
                     flashCells(r.damaged);
-                    playEffect('freeze');
+                    playEffect('glacierBurst', undefined, r.damaged);
                 }
                 addCorpses(r.destroyed.length);
             }
@@ -651,8 +659,10 @@ export const Game = (props: GameProps) => {
         let poisonVanished = 0;
         // 3人以上は手番が1周するごとに1回だけ減衰させる (issue #30)
         const decayNow = shouldDecay(placements, seatCount);
+        const burnCells: number[] = [];
         setPlacements(placements + 1);
         for (let s = 0; decayNow && s < nextBoard.length; s++) {
+            if (burnDamageOf(nextBoard[s], characters) > 0) burnCells.push(s);
             // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
             // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
             const square = decayTick(nextBoard[s], characters);
@@ -676,6 +686,8 @@ export const Game = (props: GameProps) => {
                 poisonVanished++;
             }
         }
+        // 🔥の継続ダメージを受けたマスに炎の小演出
+        playBurst('burn', burnCells);
         // 毒使い側は、毒で空いたマス1つにつき魔力+1
         if (poisonVanished > 0) {
             characters.forEach((c, seat) => {
@@ -986,10 +998,11 @@ export const Game = (props: GameProps) => {
     const onClickUnlock = () => {};
 
     // 「ライフを0にする」スキルを1マスに当てる。氷結中ならライフはそのまま氷結だけ解除（false）、そうでなければ0にして🔥も消す（true）
-    const zeroBySkill = (board: SquareInfo[], idx: number): boolean => {
+    const zeroBySkill = (board: SquareInfo[], idx: number, broken: number[]): boolean => {
         const guard = absorbDestroy(board[idx]);
         if (guard.blocked) {
             board[idx] = guard.sq;
+            broken.push(idx);
             return false;
         }
         board[idx] = zeroOut(board[idx]);
@@ -1013,6 +1026,7 @@ export const Game = (props: GameProps) => {
         if (iceBroken.length > 0) addLog(`氷結が身代わりになった（${iceBroken.map(posName).join('・')}）`);
         flashCells(affected);
         playEffect('opium');
+        playBurst('iceBreak', iceBroken);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickOpium));
         setCurrentTurn(currentTurn + 1);
@@ -1022,13 +1036,15 @@ export const Game = (props: GameProps) => {
         addLog(`「スラッシュ」を使用（右上→左下の${geo.size}マスのライフを0に）`);
         const board = currentBoard.slice();
         const affected: number[] = [];
+        const broken: number[] = [];
         for (const idx of geo.antiDiagonal) {
             if (!isGuarded(board[idx], characters)) {
-                if (zeroBySkill(board, idx)) affected.push(idx);
+                if (zeroBySkill(board, idx, broken)) affected.push(idx);
             }
         }
         flashCells(affected);
         playEffect('slash');
+        playBurst('iceBreak', broken);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickSlash));
     };
@@ -1037,13 +1053,15 @@ export const Game = (props: GameProps) => {
         addLog(`「バックスラッシュ」を使用（左上→右下の${geo.size}マスのライフを0に）`);
         const board = currentBoard.slice();
         const affected: number[] = [];
+        const broken: number[] = [];
         for (const idx of geo.mainDiagonal) {
             if (!isGuarded(board[idx], characters)) {
-                if (zeroBySkill(board, idx)) affected.push(idx);
+                if (zeroBySkill(board, idx, broken)) affected.push(idx);
             }
         }
         flashCells(affected);
         playEffect('backslash');
+        playBurst('iceBreak', broken);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBackSlash));
     };
@@ -1198,6 +1216,7 @@ export const Game = (props: GameProps) => {
     const exeStomp = (i: number, currentBoard: SquareInfo[]) => {
         const stompIndexes = geo.stompRange(i);
         let destroyed = 0;
+        const broken: number[] = [];
         for (const stompIndex of stompIndexes) {
             if (currentBoard[stompIndex].player === currentTurnPlayer) {
                 // 自陣のコマは-5（氷結なら解除だけ・🔥なら1.5倍）
@@ -1206,6 +1225,7 @@ export const Game = (props: GameProps) => {
                 const guard = absorbDestroy(currentBoard[stompIndex]);
                 if (guard.blocked) {
                     currentBoard[stompIndex] = guard.sq; // 氷結が身代わりになる
+                    broken.push(stompIndex);
                     continue;
                 }
                 if (currentBoard[stompIndex].player) destroyed++;
@@ -1219,6 +1239,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}を中心にストンプを実行`);
         flashCells(stompIndexes);
         playEffect('stomp', i);
+        playBurst('iceBreak', broken);
         setCurrentBoard(currentBoard);
         setUseStomp(false);
     };
@@ -1241,6 +1262,7 @@ export const Game = (props: GameProps) => {
 
         let destroyed = 0;
         let centerSurvived = false;
+        const broken: number[] = [];
         for (const judgeIndex of judgeIndexes) {
             if (
                 !board[judgeIndex].effects.map((x) => x.effect).includes('🔑') ||
@@ -1249,6 +1271,7 @@ export const Game = (props: GameProps) => {
                 const guard = absorbDestroy(board[judgeIndex]);
                 if (guard.blocked) {
                     board[judgeIndex] = guard.sq; // 氷結が身代わりになる
+                    broken.push(judgeIndex);
                     if (judgeIndex === i) centerSurvived = true;
                     continue;
                 }
@@ -1265,6 +1288,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}を中心に審判の日を実行`);
         flashCells(judgeIndexes);
         playEffect('judge');
+        playBurst('iceBreak', broken);
         setCurrentBoard(board);
         setUseJudgeDay(false);
         setCurrentTurn(currentTurn + 1);
@@ -1283,6 +1307,7 @@ export const Game = (props: GameProps) => {
         addLog(`「${mode === 'yang' ? '豊穣の舞（自分の全コマ+2）' : '凶荒の舞（相手の全コマ-2）'}」を使用`);
         const board = currentBoard.slice();
         const affected: number[] = [];
+        const broken: number[] = [];
         let destroyed = 0;
         if (mode === 'yang') {
             for (const square of board) {
@@ -1297,6 +1322,7 @@ export const Game = (props: GameProps) => {
                     const hit = applyDamage(square, 2, 'skill');
                     if (hit.blocked) {
                         board[idx] = hit.sq;
+                        broken.push(idx);
                         return;
                     }
                     affected.push(idx);
@@ -1312,6 +1338,7 @@ export const Game = (props: GameProps) => {
         addCorpses(destroyed);
         flashCells(affected);
         playEffect(mode === 'yang' ? 'harvest' : 'famine');
+        playBurst('iceBreak', broken);
         setCurrentBoard(board);
     };
     const onClickYingYangSkll = () => {
@@ -1638,7 +1665,7 @@ export const Game = (props: GameProps) => {
         const done = freezeAll(board, keepBuds);
         addLog(`「絶対零度」を使用（${done.length}マスが氷結。次の手番開始時に発動）`);
         flashCells(done);
-        playEffect('freeze');
+        playEffect('glacier');
         setCurrentBoard(board);
         setGlacierPendingAt(turnSeat, true);
         spendMagic(cost, false);
@@ -1652,7 +1679,7 @@ export const Game = (props: GameProps) => {
         const n = harvestBuds(board, currentTurnPlayer);
         if (n === 0) return;
         addLog(`「刈り入れ前夜」を使用（🌱${n}個を刈り取り、魔力+${n}）`);
-        playEffect('harvest');
+        playEffect('harvestEve');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickHarvestEve));
         setMagicAt(turnSeat, (m) => m + n);
@@ -1661,7 +1688,7 @@ export const Game = (props: GameProps) => {
     const onClickSolstice = () => {
         if (budGuard[turnSeat]) return;
         addLog('「冬至の種子」を使用（次の自分の手番まで🌱は氷結・火炎で消えない）');
-        playEffect('auraGreen');
+        playEffect('solstice');
         setBudGuardAt(turnSeat, true);
         spendMagic(calculateCost(seatCosts.onClickSolstice));
     };
@@ -1684,7 +1711,7 @@ export const Game = (props: GameProps) => {
         const done = graft(board, i, currentTurnPlayer, geo.size, picked);
         addLog(`${posName(i)}からひこばえ（${done.length}コマに🌱）`);
         flashCells(done);
-        playEffect('auraGreen');
+        playEffect('sprout', undefined, done);
         setUseSucker(false);
         setCurrentBoard(board);
     };
@@ -1697,7 +1724,7 @@ export const Game = (props: GameProps) => {
         sow(board, picks);
         addLog(`「風の落とし子」を使用（${picks.map(posName).join('・')}に🌱）`);
         flashCells(Array.from(new Set(picks)));
-        playEffect('auraGreen');
+        playEffect('windborne', undefined, Array.from(new Set(picks)));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickWindborne));
     };
@@ -1710,7 +1737,7 @@ export const Game = (props: GameProps) => {
         const done = cleanse(board, currentTurnPlayer);
         addLog(`「浄化」を使用（${done.length}コマの状態異常を回復）`);
         flashCells(done);
-        playEffect('auraGreen');
+        playEffect('cleanse');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickCleanse));
     };
@@ -1730,7 +1757,8 @@ export const Game = (props: GameProps) => {
         const { thawed } = ignite(board, targets, geo.size, INFERNO_STACKS, keepBuds);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(targets);
-        playEffect('flame');
+        playEffect('inferno', undefined, targets);
+        playBurst('thaw', thawed);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickInferno), false);
     };
@@ -1749,6 +1777,7 @@ export const Game = (props: GameProps) => {
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(cells);
         playEffect('flame', cells[0]);
+        playBurst('thaw', thawed);
         setCurrentBoard(board);
     };
     const exeIgnite = (i: number) => {
@@ -1996,6 +2025,7 @@ export const Game = (props: GameProps) => {
         setRestartCount((c) => c + 1);
         setPreviewCells([]);
         setBoardEffect(null);
+        setBoardBurst(null);
         setLockedSkillsAll(Array.from({ length: seatCount }, () => []));
         // ギア: 手番内のスキル使用状況をリセットし、価格破壊のコスト表を引き直す
         gearTurn.current = {
@@ -2137,7 +2167,7 @@ export const Game = (props: GameProps) => {
                             onCellHover={onCellHover}
                             onCellLeave={onCellLeave}
                         />
-                        <BoardEffects effect={boardEffect} size={geo.size} />
+                        <BoardEffects effect={boardEffect} burst={boardBurst} size={geo.size} />
                         {hailMarySpin && (
                             <div className={styles.hmOverlay}>
                                 <div className={`${styles.hmBand} ${styles[`hm_${hailMarySpin.phase}`]}`}>{hailMarySpin.label}</div>

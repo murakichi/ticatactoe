@@ -581,3 +581,172 @@
         animation-duration: 1ms;
     }
 }
+
+/* --- 追加の演出（氷結・火炎・バッズ系スキル） --- */
+.auraIce {
+    background: rgba(125, 211, 252, 0.45);
+    box-shadow: 0 0 0 5px #bfe9ff inset, 0 0 40px rgba(125, 211, 252, 0.8) inset;
+}
+
+.auraFire {
+    background: radial-gradient(circle, rgba(255, 190, 60, 0.55), rgba(255, 70, 20, 0.5));
+    box-shadow: 0 0 0 5px #ff7a2f inset;
+}
+
+.auraGold {
+    background: radial-gradient(circle, rgba(255, 252, 220, 0.8), rgba(250, 204, 21, 0.4));
+    box-shadow: 0 0 0 4px #fde047 inset;
+}
+
+.auraNight {
+    background: rgba(24, 36, 90, 0.55);
+    box-shadow: 0 0 0 4px #7aa2ff inset;
+}
+
+/* 盤面中央の大きな紋章 */
+.sigil {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 96px;
+    animation: sigilBig 1000ms var(--ease);
+    opacity: 0;
+    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.8));
+}
+
+@keyframes sigilBig {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.2) rotate(-25deg);
+    }
+    35% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.25) rotate(6deg);
+    }
+    70% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.6) rotate(0deg);
+    }
+}
+
+/* マスの中心にポンと出る絵文字 */
+.cellPop {
+    position: absolute;
+    margin: -18px 0 0 -18px;
+    font-size: 34px;
+    opacity: 0;
+    animation: cellPopIn 800ms var(--ease) forwards;
+}
+
+@keyframes cellPopIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    30% {
+        opacity: 1;
+        transform: scale(1.35);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-14px) scale(1);
+    }
+}
+
+/* 氷結が砕ける: 回りながら弾けて散る */
+.burst_iceBreak {
+    animation: iceShatter 650ms var(--ease) forwards;
+}
+
+@keyframes iceShatter {
+    0% {
+        opacity: 0;
+        transform: scale(0.4) rotate(0deg);
+    }
+    25% {
+        opacity: 1;
+        transform: scale(1.5) rotate(40deg);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2.2) rotate(160deg);
+    }
+}
+
+/* 解凍: 水滴が落ちる */
+.burst_thaw {
+    animation: dripDown 700ms var(--ease) forwards;
+}
+
+@keyframes dripDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.6);
+    }
+    35% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(20px) scale(1);
+    }
+}
+
+/* 燃焼: 炎がゆらめいて立ち昇る */
+.burst_burn {
+    animation: flicker 750ms var(--ease) forwards;
+}
+
+@keyframes flicker {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.5);
+    }
+    25% {
+        opacity: 1;
+        transform: translateY(0) scale(1.25) rotate(-8deg);
+    }
+    50% {
+        opacity: 1;
+        transform: translateY(-4px) scale(1) rotate(8deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-22px) scale(1.1) rotate(0deg);
+    }
+}
+
+/* 風に乗って横切る葉 */
+.sweep {
+    left: -10%;
+    animation: sweepAcross 900ms var(--ease) forwards;
+}
+
+@keyframes sweepAcross {
+    0% {
+        opacity: 0;
+        left: -10%;
+        transform: rotate(0deg);
+    }
+    20% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        left: 105%;
+        transform: rotate(540deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sigil,
+    .cellPop,
+    .sweep {
+        animation-duration: 1ms;
+    }
+}
