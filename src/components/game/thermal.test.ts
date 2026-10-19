@@ -335,7 +335,7 @@ describe('sim/thermal.js との一致', () => {
         }
     });
 
-    it('ignite / freeze / glacierTargets / flareTargets が一致', () => {
+    it('ignite / freeze / freezeAll / detonate / flareTargets が一致', () => {
         const mk = () => {
             const b = emptyBoard();
             b[5] = sq('💙', 4, '❄');

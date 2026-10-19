@@ -1017,11 +1017,11 @@ test('絶対零度: 使用時に🔑のない全マス（空きマス含む）�
     assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '❄').length, 1);
 });
 
-test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄スタック×3ダメージ→❄全除去。0以下は破壊。空きマス・自陣の❄は触らない', () => {
+test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄スタック×3ダメージ→❄全除去。0以下は破壊。空きマスの❄は全除去、自陣の❄は残す', () => {
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 30; s.life = 3;
-    s.board[4] = { player: '⭕', bind: 9, effects: [FRZ, FRZ, { effect: '🔥' }] };  // 6ダメージ → 3、🔥消える
-    s.board[5] = { player: '⭕', bind: 5, effects: [FRZ, FRZ] };                       // 6ダメージ → 破壊
+    s.board[4] = { player: '⭕', bind: 12, effects: [FRZ, FRZ, { effect: '🔥' }] }; // 使用で❄3 → 9ダメージ → 3、🔥消える
+    s.board[5] = { player: '⭕', bind: 5, effects: [FRZ, FRZ] };                       // ❄3 → 9ダメージ → 破壊
     s.board[6] = { player: '⭕', bind: 8, effects: [] };                               // ❄なし → 全マス+1で❄1 → 3ダメージ
     s.board[7] = { player: '💙', bind: 5, effects: [FRZ] };                            // 自陣
     s.board[8] = { player: undefined, bind: 0, effects: [FRZ] };                       // 空き
@@ -1034,14 +1034,15 @@ test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄ス
     assert.strictEqual(s.heartTurn, true);
     assert.strictEqual(s.glacierPending[0], false);
     // チャージは減衰しない
-    assert.strictEqual(s.board[4].bind, 9 - 6);
+    assert.strictEqual(s.board[4].bind, 12 - 9);
     assert.ok(s.board[4].effects.length === 0);
     assert.strictEqual(s.board[5].player, undefined);
     assert.strictEqual(s.board[5].effects.length, 0);
     assert.strictEqual(s.board[6].bind, 8 - 3);
     assert.strictEqual(s.board[6].effects.length, 0);
     assert.ok(s.board[7].effects.some((x) => x.effect === '❄')); // 自陣は触らない
-    assert.ok(s.board[8].effects.some((x) => x.effect === '❄')); // 空きマスは触らない
+    assert.strictEqual(s.board[8].effects.length, 0); // 空きマスの❄はダメージなしで全除去
+    assert.strictEqual(s.board[0].effects.length, 0);
 });
 
 test('フレアバースト: 中心と縦横隣の敵コマ（ライフ>0・🔑なし）に🔥。自コマ・ライフ0・ロック中・斜めは対象外', () => {

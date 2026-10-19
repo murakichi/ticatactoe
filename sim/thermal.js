@@ -90,13 +90,14 @@ const freezeAll = (board) => freeze(board, board.map((_, i) => i));
 /**
  * 絶対零度の発動（使用者の次の手番開始時）: 使用者 me 以外のコマで❄が付いたマスに、❄スタック数×3の
  * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
- * 空きマスの❄・自陣コマの❄は触らない。board を直接書き換える
+ * 空きマスの❄は（試合が止まらないよう）ダメージなしで全除去する。自陣コマの❄だけ残す。board を直接書き換える
  */
 function detonate(board, me) {
     const damaged = [], destroyed = [];
     for (let k = 0; k < board.length; k++) {
         const sq = board[k];
-        if (!sq.player || sq.player === me || !isFrozen(sq)) continue;
+        if (!sq.player) { if (isFrozen(sq)) board[k] = thaw(sq); continue; } // 空きマスの❄はダメージなしで全除去（damaged/destroyed には含めない）
+        if (sq.player === me || !isFrozen(sq)) continue;
         const hit = applyDamage(sq, frozenStacks(sq) * 3, 'poison').sq;
         damaged.push(k);
         if (hit.bind <= 0) { board[k] = { player: undefined, bind: 0, effects: [] }; destroyed.push(k); }
@@ -111,10 +112,9 @@ const flareTargets = (board, center, size, me) =>
     });
 
 const lockable = (sq) => !isFrozen(sq);
-const canThawByClick = (sq, me) => !!sq.player && sq.player !== me && sq.bind > 0 && isFrozen(sq);
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, flareTargets,
-    lockable, canThawByClick,
+    lockable,
 };

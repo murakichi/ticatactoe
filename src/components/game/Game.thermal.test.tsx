@@ -48,6 +48,7 @@ describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
         const bindBefore = lifeAt(container, 15);
         fireEvent.click(zero);
         expect(badgesAt(container, 0)).toContain('❄'); // 空きマスにも
+        expect(screen.getByRole('button', { name: /絶対零度-/ })).toBeDisabled(); // 同じ手番に2回は撃てない
         expect(badgesAt(container, 15)).toContain('❄');
         // 全マスが凍っているので誰も着手できない。💙も⭕もチャージでパスし、💙の手番開始時に発動する
         fireEvent.click(cells(container)[3]);
