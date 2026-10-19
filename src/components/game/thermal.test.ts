@@ -294,6 +294,15 @@ describe('🔥火炎', () => {
         expect(r.thawed.sort((a, c) => a - c)).toEqual([6, 9]);
     });
 
+    it('🔥が付くとバッズは消える。氷結が肩代わりして🔥が付かなかったときは消えない', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱', '🌱');
+        b[10] = sq('💙', 3, '🌱', '❄');
+        ignite(b, [0, 10], 4);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🔥']);
+        expect(b[10].effects.map((e) => e.effect)).toEqual(['🌱']); // ❄は消えたが🔥は付かず、🌱は残る
+    });
+
     it('氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が1スタック減る（隣は解けない）', () => {
         const b = emptyBoard();
         b[5] = sq('⭕', 4, '❄', '❄');
@@ -373,7 +382,7 @@ describe('sim/thermal.js との一致', () => {
             b[5] = sq('💙', 4, '❄');
             b[6] = sq('⭕', 4, '❄');
             b[9] = sq('⭕', 3, '🔥');
-            b[10] = sq('💙', 2);
+            b[10] = sq('💙', 2, '🌱');
             b[1] = sq('⭕', 5, '🔑');
             b[4] = sq('⭕', 0);
             return b;

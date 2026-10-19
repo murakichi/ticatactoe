@@ -77,7 +77,8 @@ function ignite(board, cells, size, n = 1) {
                 thawed.add(k);
                 continue;
             }
-            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
+            // 🔥が付くとそのマスの🌱バッズは燃えて消える
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '🔥' }] };
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }

@@ -11,6 +11,7 @@
 //   - 🔥を付けられそうになると、🔥の代わりに❄が1スタック減る
 //   - 隣（縦横）のマスに🔥が付く（発火する）と、全スタックが即座に解除される
 // 🔥火炎（スタックする）
+//   - 🔥が付いた時点でそのマスの🌱バッズは消える
 //   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師がいれば敵のマスは1回の継続ダメージにつき追加で+1
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
@@ -121,7 +122,8 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number, n: nu
                 thawed.add(k);
                 continue;
             }
-            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
+            // 🔥が付くとそのマスの🌱バッズは燃えて消える
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '🔥' }] };
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
