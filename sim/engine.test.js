@@ -1326,5 +1326,43 @@ test('氷室の番人・煉獄の鍛冶師のAI同士の試合が最後まで進
     }
 });
 
+// ---- AI の氷結・火炎対応 (ai-improve Phase 1) ----
+const aiMod = require('./ai');
+const emptyAiBoard = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+
+test('AI countReaches: 残り1マスが氷結中/ロック中の空きマスならリーチと数えない', () => {
+    const b = emptyAiBoard();
+    for (const i of [0, 1, 2]) b[i] = { player: '💙', bind: 5, effects: [] };
+    assert.strictEqual(aiMod.countReaches(b, '💙'), 1);
+    b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+    assert.strictEqual(aiMod.countReaches(b, '💙'), 0);
+    b[3] = { player: undefined, bind: 3, effects: [{ effect: '🔑' }] };
+    assert.strictEqual(aiMod.countReaches(b, '💙'), 0);
+    assert.deepStrictEqual(aiMod.findThreatSquares(b, '💙'), []);
+});
+
+test('AI evaluateBoard: 氷結中の空きマスを含むラインは評価しない', () => {
+    const b = emptyAiBoard();
+    for (const i of [0, 1, 2]) b[i] = { player: '💙', bind: 5, effects: [] };
+    const open = aiMod.evaluateBoard(b, '💙');
+    b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+    assert.ok(aiMod.evaluateBoard(b, '💙') < open);
+});
+
+test('AI ストンプ/審判の日/救済の中心: 氷結中の敵は壊れないものとして数えない', () => {
+    const b = emptyAiBoard();
+    for (const i of [5, 6]) b[i] = { player: '⭕', bind: 5, effects: [FRZ] };
+    assert.strictEqual(aiMod.bestStompTarget(b, '💙'), null);
+    assert.strictEqual(aiMod.bestJudgeTarget(b, '💙'), null);
+    b[9] = { player: '⭕', bind: 5, effects: [] };
+    b[10] = { player: '⭕', bind: 5, effects: [] };
+    assert.notStrictEqual(aiMod.bestStompTarget(b, '💙'), null);
+    // 救済: 氷結中の3つ並びは壊れず、脅威(3つ目の隣)は残る
+    const r = emptyAiBoard();
+    for (const i of [0, 1, 2]) r[i] = { player: '⭕', bind: 5, effects: [FRZ] };
+    const c = aiMod.bestRescueCenter(r, '💙', ['⭕'], 'judge');
+    assert.notStrictEqual(c, null);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

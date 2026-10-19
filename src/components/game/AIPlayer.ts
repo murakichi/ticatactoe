@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..36)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -127,11 +127,11 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
-            if (chargeStacks(board[i]) > 0) continue;
+            if (chargeStacks(board[i]) > 0 || isFrozen(board[i])) continue; // 氷結中のマスの⚡は休眠
             let attack = 0;
             for (const n of orthoNeighbors(i, size)) {
                 const sq = board[n];
-                if (!sq.player || sq.bind <= 0) continue;
+                if (!sq.player || sq.bind <= 0 || isFrozen(sq)) continue; // 氷結中のコマは隣接⚡のダメージを受けない
                 if (this.isEnemy(sq.player)) attack++; else attack--;
             }
             let defend = 0;
@@ -158,11 +158,11 @@ class AIPlayer {
             const adj = new Set<number>();
             for (const k of cells) {
                 for (const n of orthoNeighbors(k, size)) {
-                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !isFrozen(board[n]) && !cells.includes(n)) adj.add(n);
                 }
             }
             // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
-            for (const k of cells) if (this.isEnemy(board[k].player) && board[k].bind > 0) adj.add(k);
+            for (const k of cells) if (this.isEnemy(board[k].player) && board[k].bind > 0 && !isFrozen(board[k])) adj.add(k);
             const ok = reach || (mine >= 3 && adj.size >= 2);
             if (!ok) continue;
             const score = adj.size + mine + (reach ? 10 : 0);
@@ -183,7 +183,7 @@ class AIPlayer {
             let score = 0;
             for (const k of geo.stompRange(i)) {
                 const sq = board[k];
-                if (!sq.player || sq.bind <= 0) continue;
+                if (!sq.player || sq.bind <= 0 || isFrozen(sq)) continue;
                 if (this.isEnemy(sq.player)) score++; else score--;
             }
             if (score > bestScore) { bestScore = score; bestIdx = i; }
@@ -261,6 +261,8 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
 
         for (const line of geometryForCells(board.length).winLines) {
+            // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない
+            if (line.some((idx) => emptyBlocked(board[idx]))) continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
             const enemiesInLine = new Set<Player>();
@@ -310,12 +312,15 @@ class AIPlayer {
     countReaches(board: SquareInfo[], player: Player): number {
         let reaches = 0;
         for (const line of geometryForCells(board.length).winLines) {
-            let my = 0, op = 0;
+            let my = 0, op = 0, blocked = false;
             for (const idx of line) {
-                if (board[idx].player === player) my++;
-                else if (board[idx].player) op++;
+                const sq = board[idx];
+                if (sq.player === player) my++;
+                else if (sq.player) op++;
+                // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
+                else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)) blocked = true;
             }
-            if (my === 3 && op === 0) reaches++;
+            if (my === 3 && op === 0 && !blocked) reaches++;
         }
         return reaches;
     }
@@ -520,14 +525,15 @@ class AIPlayer {
             return [];
         }
         let myPieces = 0, oppPieces = 0, empties = 0;
+        // オピウム等のダメージが通る敵コマだけを数える（氷結中は❄が肩代わりする）
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player) oppPieces++;
-            else if (!sq.player) empties++;
+            else if (sq.player) { if (!isFrozen(sq)) oppPieces++; }
+            else if (!isFrozen(sq)) empties++;
         }
         const geo = geometryForCells(board.length);
         const enemiesOn = (idxs: number[]) =>
-            idxs.filter((i) => this.isEnemy(board[i].player) && !board[i].effects.some((e) => e.effect === '🔑')).length;
+            idxs.filter((i) => this.isEnemy(board[i].player) && !isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
 
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
@@ -591,14 +597,19 @@ class AIPlayer {
         const skills: string[] = [];
         let remaining = magic;
         const oppReaches = this.opponents.reduce((n, o) => n + this.countReaches(board, o), 0);
-        let myPieces = 0, oppPieces = 0;
+        let myPieces = 0, oppPieces = 0, oppHit = 0;
         const piecesOf = new Map<Player, number>();
+        const hitOf = new Map<Player, number>();
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
+            else if (sq.player) {
+                piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
+                if (!isFrozen(sq)) hitOf.set(sq.player, (hitOf.get(sq.player) ?? 0) + 1); // スキルダメージが通る敵コマ
+            }
         }
         // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
         piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
+        hitOf.forEach((n) => { oppHit = Math.max(oppHit, n); });
         const geo = geometryForCells(board.length);
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
@@ -630,7 +641,7 @@ class AIPlayer {
             // 陰陽師: 凶荒の舞(相手-2)
             if (this.character === 'yinYangMaster') {
                 const yyCost = this.calculateAICost(costs.onClickYingYangSkill);
-                if (remaining >= yyCost && (oppPieces > myPieces || myPieces >= 3)) {
+                if (remaining >= yyCost && (oppHit > myPieces || myPieces >= 3)) {
                     spend(yyCost, 'onClickYingYangSkill');
                 }
             }
@@ -686,6 +697,7 @@ class AIPlayer {
             if (availableSkills.includes(5)) {
                 let oppOn = 0, myOn = 0;
                 for (const idx of geo.antiDiagonal) {
+                    if (isFrozen(board[idx])) continue; // 氷結中は❄1つが身代わり（敵も自陣も無傷）
                     if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
@@ -694,6 +706,7 @@ class AIPlayer {
             if (skills.length === 0 && availableSkills.includes(6)) {
                 let oppOn = 0, myOn = 0;
                 for (const idx of geo.mainDiagonal) {
+                    if (isFrozen(board[idx])) continue;
                     if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
@@ -783,7 +796,7 @@ class AIPlayer {
             const sq = board[i];
             if (!this.isEnemy(sq.player) || this.shield.has(i)) continue;
             const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
-            const turns = Math.ceil(sq.bind / (1 + p));
+            const turns = Math.ceil(sq.bind / (isFrozen(sq) ? p : 1 + p)); // 氷結中は自然減衰が無く毒数だけ
             if (turns > 2) continue;
             let val = 0;
             for (const line of geo.winLines) {
@@ -835,7 +848,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
             let enemies = 0;
-            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player)) enemies++;
+            // 氷結中の敵コマはスキルダメージを❄1つ肩代わりするだけで壊れないので数えない
+            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player) && !isFrozen(board[idx])) enemies++;
             const emptyCenter = !board[i].player;
             if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -848,10 +862,12 @@ class AIPlayer {
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
         for (const idx of geometryForCells(board.length).stompRange(i)) {
-            if (nb[idx].player === player) nb[idx].bind = nb[idx].bind > 5 ? nb[idx].bind - 5 : 0;
-            else nb[idx] = { player: undefined, bind: 0, effects: [] };
+            if (nb[idx].player === player) { nb[idx] = applyDamage(nb[idx], 5, 'skill').sq; continue; }
+            const guard = absorbDestroy(nb[idx]);
+            if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
+            nb[idx] = { player: undefined, bind: 0, effects: [] };
         }
-        if (nb[i].player === undefined) nb[i] = { player, bind: life, effects: [] };
+        if (nb[i].player === undefined && !emptyBlocked(nb[i])) nb[i] = { player, bind: life, effects: [] };
         return nb;
     }
 
@@ -867,6 +883,7 @@ class AIPlayer {
                 const locked = sq.effects.some(e => e.effect === '🔑');
                 const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
                 if (locked && protectedBud) continue;
+                if (isFrozen(sq)) continue; // 氷結中は❄1つが身代わりになり、敵も自陣も壊れない
                 if (this.isEnemy(sq.player)) enemy++;
                 else if (sq.player === this.playerSymbol) mine++;
             }
@@ -887,8 +904,10 @@ class AIPlayer {
             let killed = 0;
             for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
                 const sq = nb[idx];
-                if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+                if (kind === 'stomp' && sq.player === me) { nb[idx] = applyDamage(sq, 5, 'skill').sq; continue; }
                 if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱')) continue;
+                const guard = absorbDestroy(sq);
+                if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
                 if (this.isEnemy(sq.player)) killed++;
                 nb[idx] = { player: undefined, bind: 0, effects: [] };
             }

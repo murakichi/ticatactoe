@@ -205,3 +205,82 @@ describe('サイレンス (先回りの封印)', () => {
         expect(plain.makeMove(quiet(), 8, costs, 9, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
     });
 });
+
+describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
+    const FRZ = { effect: '❄' as const };
+    const ai = new AIPlayer('💙', 'giant', ['⭕']);
+    const frozen = (b: SquareInfo[], i: number, player: Player, bind = 5): void => {
+        b[i] = { player, bind, effects: [FRZ] };
+    };
+
+    it('countReaches: 残り1マスが氷結中の空きマスならリーチと数えない（解けば数える）', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        expect(ai.countReaches(b, '💙')).toBe(1);
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        expect(ai.countReaches(b, '💙')).toBe(0);
+    });
+
+    it('countReaches: ロック中（ライフ>0）の空きマスもリーチと数えない（findThreatSquares と同じ判定）', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        b[3] = { player: undefined, bind: 3, effects: [{ effect: '🔑' }] };
+        expect(ai.countReaches(b, '⭕')).toBe(0);
+        expect(ai.findThreatSquares(b, '⭕')).toEqual([]);
+    });
+
+    it('evaluateBoard: 氷結中の空きマスを含むラインは評価しない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        const open = ai.evaluateBoard(b);
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        expect(ai.evaluateBoard(b)).toBeLessThan(open);
+    });
+
+    it('findStompTarget: 氷結中の敵は数えない（スキルダメージは❄1つが肩代わりする）', () => {
+        const b = emptyBoard();
+        frozen(b, 5, '⭕');
+        frozen(b, 6, '⭕');
+        expect(ai.findStompTarget(b)).toBeNull();
+        put(b, 9, '⭕');
+        expect(ai.findStompTarget(b)).toBeNull(); // 効く敵は1体だけ
+        put(b, 10, '⭕');
+        expect(ai.findStompTarget(b)).not.toBeNull();
+    });
+
+    it('simulateStomp: 氷結中の敵は壊れず❄が1つ減るだけ。自陣の氷結コマも守られる', () => {
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 5, effects: [FRZ, FRZ] };
+        frozen(b, 6, '💙', 8);
+        const nb = ai.simulateStomp(b, 5, '💙', 4);
+        expect(nb[5].player).toBe('⭕');
+        expect(nb[5].effects.filter((e) => e.effect === '❄')).toHaveLength(1);
+        expect(nb[6].bind).toBe(8);
+        expect(nb[6].effects).toHaveLength(0);
+    });
+
+    it('findJudgeTarget: 氷結中の敵は数えず、氷結中の自コマは壊れない扱い', () => {
+        const b = emptyBoard();
+        frozen(b, 5, '⭕');
+        frozen(b, 6, '⭕');
+        frozen(b, 9, '⭕');
+        const mage = new AIPlayer('💙', 'magician', ['⭕']);
+        expect(mage.findJudgeTarget(b)).toBeNull();
+        put(b, 4, '⭕');
+        put(b, 7, '⭕');
+        expect(mage.findJudgeTarget(b)).not.toBeNull();
+    });
+
+    it('findRescueCenter: 氷結中の敵コマは壊せたものとして数えない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => frozen(b, i, '⭕'));
+        // 氷結中の3つ並びは壊れないので、どの中心でも脅威(3)は消えない
+        const c = ai.findRescueCenter(b, 'judge');
+        expect(c).not.toBeNull();
+        const threatsAfter = (center: number) => {
+            const nb = b.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            return ai.findThreatSquares(nb, '⭕').length;
+        };
+        expect(threatsAfter(c as number)).toBe(1);
+    });
+});
