@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..36)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -1137,7 +1137,7 @@ class AIPlayer {
                 if (best !== -1) {
                     chargeClicks.push({ skill: 'onClickSucker', target: best });
                     board = board.slice();
-                    graft(board, best, this.playerSymbol, size);
+                    graft(board, best, this.playerSymbol, size, budReceivers(board, best, this.playerSymbol, size).slice(0, GRAFT_MAX));
                     magic -= this.calculateAICost(costs.onClickSucker);
                 }
             }

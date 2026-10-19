@@ -17,6 +17,7 @@ import {
     harvestBuds,
     budReceivers,
     graft,
+    GRAFT_MAX,
     sowCandidates,
     sow,
     cleanse,
@@ -512,6 +513,18 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(budStacks(b[10])).toBe(0);
     });
 
+    it('ひこばえ: picked を渡すと受け手のうちそのマスだけに付く（GRAFT_MAX=2）', () => {
+        const b = emptyBoard();
+        b[5] = sq('💙', 3, '🌱');
+        [1, 4, 6, 9].forEach((k) => (b[k] = sq('💙', 3)));
+        expect(GRAFT_MAX).toBe(2);
+        expect(graft(b, 5, '💙', 4, [4, 9]).sort((a, c) => a - c)).toEqual([4, 9]);
+        expect(budStacks(b[4])).toBe(1);
+        expect(budStacks(b[9])).toBe(1);
+        expect(budStacks(b[1])).toBe(0);
+        expect(graft(b, 5, '💙', 4, [0, 15])).toEqual([]); // 受け手でないマスは無視
+    });
+
     it('風の落とし子: 候補は自陣の🌱を持てるコマ。同じコマへの重複付与も可', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
@@ -549,6 +562,11 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         const c = mk();
         expect(sim.graft(a, 5, '💙', 4)).toEqual(graft(c, 5, '💙', 4));
         expect(a).toEqual(c);
+        expect(sim.GRAFT_MAX).toBe(GRAFT_MAX);
+        const a2 = mk();
+        const c2 = mk();
+        expect(sim.graft(a2, 5, '💙', 4, [1])).toEqual(graft(c2, 5, '💙', 4, [1]));
+        expect(a2).toEqual(c2);
         expect(sim.harvestBuds(a, '💙')).toBe(harvestBuds(c, '💙'));
         expect(a).toEqual(c);
         const d = mk();

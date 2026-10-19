@@ -130,9 +130,12 @@ function harvestBuds(board, player) {
 /** cell の縦横隣のうち player のコマで canBud なマス */
 const budReceivers = (board, cell, player, size) =>
     orthoNeighbors(cell, size).filter((k) => board[k].player === player && canBud(board[k]));
-/** cell の縦横隣の receivers 全部に🌱を1つ足す。受け取ったマスを返す。board を直接書き換える */
-function graft(board, cell, player, size) {
-    const got = budReceivers(board, cell, player, size);
+/** ひこばえで🌱を受け取れる最大数。receivers がこれを超えるときは picked（呼び出し側がランダムに選ぶ）だけに足す */
+const GRAFT_MAX = 2;
+/** cell の縦横隣の receivers 全部（picked があればその共通部分だけ）に🌱を1つ足す。受け取ったマスを返す。board を直接書き換える */
+function graft(board, cell, player, size, picked) {
+    const all = budReceivers(board, cell, player, size);
+    const got = picked ? all.filter((k) => picked.includes(k)) : all;
     for (const k of got) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
     return got;
 }
@@ -179,6 +182,6 @@ const lockable = (sq) => !isFrozen(sq);
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, budStacks, harvestBuds, budReceivers, graft, sowCandidates, sow,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,
 };

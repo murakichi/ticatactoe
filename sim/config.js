@@ -48,7 +48,7 @@ module.exports = {
         "cleanseCost": 5,
         "harvestEveCost": 2,
         "solsticeCost": 4,
-        "suckerCost": 3,
+        "suckerCost": 4,
         "windborneCost": 3,
         "infernoCost": 9
     },

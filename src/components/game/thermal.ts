@@ -287,9 +287,16 @@ export const harvestBuds = (board: SquareInfo[], player: SquareInfo['player']): 
 export const budReceivers = (board: SquareInfo[], cell: number, player: SquareInfo['player'], size: number): number[] =>
     orthoNeighbors(cell, size).filter((k) => board[k].player === player && canBud(board[k]));
 
-/** ひこばえ: cell の縦横隣の自陣コマ全てに🌱を1つずつ足す。受け取ったマスを返す。board を直接書き換える */
-export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['player'], size: number): number[] => {
-    const receivers = budReceivers(board, cell, player, size);
+/** ひこばえで🌱を受け取れる隣の最大数。受け手がこれより多いときはランダムに選ぶ */
+export const GRAFT_MAX = 2;
+
+/**
+ * ひこばえ: cell の縦横隣の自陣コマに🌱を1つずつ足す。受け取ったマスを返す。board を直接書き換える。
+ * picked を渡すと、受け手（budReceivers）のうち picked に含まれるマスだけに足す（呼び出し側が GRAFT_MAX 個を無作為に選ぶ）。
+ * 省略時は受け手すべて
+ */
+export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['player'], size: number, picked?: number[]): number[] => {
+    const receivers = budReceivers(board, cell, player, size).filter((k) => !picked || picked.includes(k));
     for (const k of receivers) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
     return receivers;
 };

@@ -57,7 +57,7 @@ export const skillCosts = {
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
-    onClickSucker: 3,
+    onClickSucker: 4,
     onClickWindborne: 3,
 };
 

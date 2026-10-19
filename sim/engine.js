@@ -186,7 +186,7 @@ const skillCosts = {
     // 🌱バッズ系の汎用スキル idx 33〜36
     onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
-    onClickSucker: (config.thermal && config.thermal.suckerCost) || 3,
+    onClickSucker: (config.thermal && config.thermal.suckerCost) || 4,
     onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
@@ -1510,7 +1510,10 @@ function bestSuckerTarget(s) {
 }
 function exeSucker(s, i) {
     if (!suckerTargets(s).includes(i)) return false;
-    const got = thermal.graft(s.board, i, curPlayer(s), s.size);
+    // 受け手は最大2つ: 3つ以上あるときはその中からランダムに2つ（重複なし）
+    const recv = thermal.budReceivers(s.board, i, curPlayer(s), s.size);
+    const picked = recv.length > thermal.GRAFT_MAX ? randomAnyPick(recv, thermal.GRAFT_MAX, s.rng) : undefined;
+    const got = thermal.graft(s.board, i, curPlayer(s), s.size, picked);
     bumpStat(s, 'suckerCells', got.length);
     return true;
 }

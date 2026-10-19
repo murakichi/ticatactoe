@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -1678,7 +1678,10 @@ export const Game = (props: GameProps) => {
     const exeSucker = (i: number) => {
         if (!suckerSources().includes(i)) return; // 🌱を持たない・隣に受け手がいないマスは選び直せる
         const board = currentBoard.slice();
-        const done = graft(board, i, currentTurnPlayer, geo.size);
+        const receivers = budReceivers(board, i, currentTurnPlayer, geo.size);
+        // 受け手が3つ以上なら、ランダムに2つだけに付く
+        const picked = receivers.length > GRAFT_MAX ? randomAnyPick([...receivers], GRAFT_MAX) : receivers;
+        const done = graft(board, i, currentTurnPlayer, geo.size, picked);
         addLog(`${posName(i)}からひこばえ（${done.length}コマに🌱）`);
         flashCells(done);
         playEffect('auraGreen');
@@ -2112,7 +2115,7 @@ export const Game = (props: GameProps) => {
         { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse)}`, paragraph: `自陣のコマの状態異常（☠毒・🔥火炎・❄氷結・⚡帯電）をすべて回復します\n🌱バッズと🔑ロックはそのままです`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
         { idx: 33, onClick: onClickHarvestEve, buttonText: `刈り入れ前夜-${calculateCost(seatCosts.onClickHarvestEve)}`, paragraph: `自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます\n氷結や火炎で失う前に現金化できます`, disabled: checkSkillDisable(seatCosts.onClickHarvestEve) || ownBudTotal() === 0 },
         { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice)}`, paragraph: `次の自分の手番が来るまで、自陣のコマの🌱が氷結・火炎で消えなくなります`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
-        { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker)}`, paragraph: `🌱を持つ自陣のコマを選ぶと、縦横に隣り合う自陣のコマすべてに🌱が1つずつ付きます\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
+        { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker)}`, paragraph: `🌱を持つ自陣のコマを選ぶと、縦横に隣り合う自陣のコマに🌱が1つずつ付きます（隣が3つ以上ならランダムに2つ）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
         { idx: 36, onClick: onClickWindborne, buttonText: `風の落とし子-${calculateCost(seatCosts.onClickWindborne)}`, paragraph: `自陣のコマにランダムで🌱を3つ配ります（同じコマに重なることもあります）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickWindborne) || sowCandidates(currentBoard, currentTurnPlayer).length === 0 },
     ];
 

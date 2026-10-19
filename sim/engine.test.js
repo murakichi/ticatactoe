@@ -963,7 +963,7 @@ test('冬至の種子: エンジンの氷結(絶対零度)・業火でもガー�
     assert.strictEqual(budsOn(t.board[1]), 1);
 });
 
-test('ひこばえ: 🌱を持つ自陣コマを選ぶと、縦横隣の自陣コマ(canBud)全てに🌱を1つずつ足す。選べるコマが無ければ不可', () => {
+test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コマ(canBud)に🌱を1つずつ（受け手が3つ以上なら重複なくランダムに2つ）。選べるコマが無ければ不可。コスト4', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '💙', bind: 3, effects: [BUD] };   // 選ぶコマ
@@ -974,12 +974,12 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと、縦横隣の自陣�
     s.board[10] = { player: '💙', bind: 3, effects: [] };      // 斜め → 不可
     const before = s.heartMagic;
     e.SKILLS.sucker(s);
-    assert.strictEqual(s.heartMagic, before - 3);
+    assert.strictEqual(s.heartMagic, before - 4);
     assert.strictEqual(s.useSucker, true);
     assert.strictEqual(e.placeMove(s, 4), false);  // 🌱を持たないコマは選び直し
     assert.strictEqual(e.placeMove(s, 1), false);  // 敵
     assert.strictEqual(e.placeMove(s, 5), true);
-    assert.strictEqual(budsOn(s.board[4]), 1);
+    assert.strictEqual(budsOn(s.board[4]), 1);     // 受け手1つ → 全部
     assert.strictEqual(budsOn(s.board[5]), 1);
     for (const k of [6, 9, 1, 10]) assert.strictEqual(budsOn(s.board[k]), 0);
     assert.strictEqual(s.heartTurn, true);
@@ -989,6 +989,35 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと、縦横隣の自陣�
     e.SKILLS.sucker(t);
     assert.strictEqual(t.useSucker, false);
     assert.strictEqual(t.heartMagic, 20);
+    // 受け手が4つ: 付くのは2つだけ（重複なし）。シードを変えても常に2つ、選ばれる顔ぶれは変わり得る
+    const seen = new Set();
+    for (let seed = 1; seed <= 20; seed++) {
+        const u = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        u.heartTurn = true; u.heartMagic = 20;
+        u.board[5] = { player: '💙', bind: 3, effects: [BUD] };
+        for (const k of [1, 4, 6, 9]) u.board[k] = { player: '💙', bind: 3, effects: [] };
+        e.SKILLS.sucker(u);
+        e.placeMove(u, 5);
+        const got = [1, 4, 6, 9].filter((k) => budsOn(u.board[k]) === 1);
+        assert.strictEqual(got.length, 2);
+        assert.strictEqual([1, 4, 6, 9].reduce((n, k) => n + budsOn(u.board[k]), 0), 2);
+        seen.add(got.join(','));
+    }
+    assert.ok(seen.size > 1);
+    // 受け手がちょうど2つなら両方
+    const w = game();
+    w.heartTurn = true; w.heartMagic = 20;
+    w.board[5] = { player: '💙', bind: 3, effects: [BUD] };
+    for (const k of [4, 6]) w.board[k] = { player: '💙', bind: 3, effects: [] };
+    e.SKILLS.sucker(w);
+    e.placeMove(w, 5);
+    assert.strictEqual(budsOn(w.board[4]) + budsOn(w.board[6]), 2);
+    // graft の picked は receivers との共通部分に限る
+    const th = require('./thermal');
+    const b = w.board.map((x) => ({ ...x, effects: [] }));
+    b[5] = { player: '💙', bind: 3, effects: [BUD] };
+    assert.deepStrictEqual(th.graft(b, 5, '💙', w.size, [4, 10]), [4]);
+    assert.strictEqual(th.GRAFT_MAX, 2);
 });
 
 test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
@@ -1019,7 +1048,7 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(t.heartMagic, 20 - 6);
     assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
     assert.strictEqual(e.skillCosts.onClickSolstice, 4);
-    assert.strictEqual(e.skillCosts.onClickSucker, 3);
+    assert.strictEqual(e.skillCosts.onClickSucker, 4);
     assert.strictEqual(e.skillCosts.onClickWindborne, 3);
 });
 
