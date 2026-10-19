@@ -16,9 +16,9 @@ describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
     it('固有スキルのボタンとパネルのコストが出る', () => {
         render(<Game players={cfg('cryomancer', 'pyromancer')} />);
         expect(screen.getByRole('button', { name: /絶対零度-10/ })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /フレアバースト/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /業火/ })).toBeNull();
         expect(screen.getAllByText(/絶対零度/).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/フレアバースト/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/業火/).length).toBeGreaterThan(0);
     });
 
     it('氷室の番人は常在のロックの代わりに氷結(コスト2)を持ち、空きマスを凍らせると誰も置けなくなる', () => {

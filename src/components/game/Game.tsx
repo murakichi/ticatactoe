@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, flareTargets, overwriteBlocked } from './thermal';
+import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -233,7 +233,7 @@ export const Game = (props: GameProps) => {
             case 'onClickPoisonMist': onClickPoisonMist(); break;
             case 'onClickGlacier': onClickGlacier(); break;
             case 'onClickCleanse': onClickCleanse(); break;
-            case 'onClickFlareBurst': onClickFlareBurst(); break;
+            case 'onClickInferno': onClickInferno(); break;
         }
     };
 
@@ -567,11 +567,6 @@ export const Game = (props: GameProps) => {
 
         if (useIgnite) {
             exeIgnite(i);
-            return;
-        }
-
-        if (useFlare) {
-            exeFlare(i);
             return;
         }
 
@@ -1606,7 +1601,6 @@ export const Game = (props: GameProps) => {
     // --- 氷結・火炎（thermal.ts。氷室の番人・煉獄の鍛冶師） ---
     const [useFreeze, setUseFreeze] = useState<boolean>(false);
     const [useIgnite, setUseIgnite] = useState<boolean>(false);
-    const [useFlare, setUseFlare] = useState<boolean>(false);
     // 氷結: 選んだコマに❄を付与する（敵味方どちらでも。付与しただけではダメージは出ない）
     const onClickFreeze = () => {
         addLog('「氷結」を使用（コマを選択）');
@@ -1653,11 +1647,19 @@ export const Game = (props: GameProps) => {
         setUseFreeze(true);
         spendMagic(calculateCost(seatCosts.onClickCryoFreeze));
     };
-    // 固有スキル フレアバースト（煉獄の鍛冶師）: 選んだマスと縦横隣の敵コマ（ライフ>0・🔑なし）に🔥を付与する
-    const onClickFlareBurst = () => {
-        addLog('「フレアバースト」を使用（中心のマスを選択）');
-        setUseFlare(true);
-        spendMagic(calculateCost(seatCosts.onClickFlareBurst), false);
+    // 固有スキル 業火（煉獄の鍛冶師）: 敵のコマ全て（🔑ロック中・⚡無敵を除く）に🔥を2スタックずつ付ける。クリック不要・手番は続く。
+    // 氷結中のマスは🔥の代わりに❄が減る
+    const onClickInferno = () => {
+        const targets = infernoTargets(currentBoard, currentTurnPlayer, characters);
+        if (targets.length === 0) return;
+        const board = currentBoard.slice();
+        addLog(`「業火」を使用（${targets.length}コマに🔥+${INFERNO_STACKS}）`);
+        const { thawed } = ignite(board, targets, geo.size, INFERNO_STACKS);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        flashCells(targets);
+        playEffect('flame');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickInferno), false);
     };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック中は選び直せる
@@ -1671,7 +1673,7 @@ export const Game = (props: GameProps) => {
     // 🔥を付けたあとの共通処理: 解けた氷結をログに出す
     const igniteCells = (board: SquareInfo[], cells: number[]) => {
         const { thawed } = ignite(board, cells, geo.size);
-        if (thawed.length > 0) addLog(`発火で氷結が解けた（${thawed.map(posName).join('・')}）`);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(cells);
         playEffect('flame', cells[0]);
         setCurrentBoard(board);
@@ -1682,14 +1684,6 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}に🔥を付与`);
         setUseIgnite(false);
         igniteCells(board, [i]);
-    };
-    const exeFlare = (i: number) => {
-        const targets = flareTargets(currentBoard, i, geo.size, currentTurnPlayer);
-        if (targets.length === 0) return; // 燃やせる敵コマが無いマスは選び直せる
-        const board = currentBoard.slice();
-        addLog(`${posName(i)}を中心にフレアバースト（${targets.length}コマに🔥）`);
-        setUseFlare(false);
-        igniteCells(board, targets);
     };
 
     // 次の手番の席。基本は席順どおりで、次が巨人のときだけ5ターンに1回その席を飛ばす
@@ -1795,7 +1789,7 @@ export const Game = (props: GameProps) => {
             case 'cryomancer':
                 return [{ name: '絶対零度', cost: glacierCost(symbols[seat]) }];
             case 'pyromancer':
-                return [{ name: 'フレアバースト', cost: g(sc.onClickFlareBurst) }];
+                return [{ name: '業火', cost: g(sc.onClickInferno) }];
             default:
                 return [];
         }
@@ -1915,7 +1909,6 @@ export const Game = (props: GameProps) => {
         setUseJammer(false);
         setUseFreeze(false);
         setUseIgnite(false);
-        setUseFlare(false);
         setGlacierPendingAll(Array(seatCount).fill(false));
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
@@ -1962,11 +1955,10 @@ export const Game = (props: GameProps) => {
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
         else if (useIgnite) setPreviewCells(currentBoard[i].player ? [i] : []);
-        else if (useFlare) setPreviewCells(flareTargets(currentBoard, i, geo.size, currentTurnPlayer));
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useFlare) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -1986,8 +1978,6 @@ export const Game = (props: GameProps) => {
         ? '氷結'
         : useIgnite
         ? '火炎付与'
-        : useFlare
-        ? 'フレアバースト'
         : null;
     const skillAnnounce = pendingSkillName
         ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
@@ -2215,12 +2205,12 @@ export const Game = (props: GameProps) => {
                         disabled={magic[turnSeat] < glacierCost() || glacierPending[turnSeat]}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
-                        onClick={onClickFlareBurst}
-                        buttonText={`フレアバースト-${calculateCost(seatCosts.onClickFlareBurst)}`}
-                        paragraph={'マスを選択し、そのマスと縦横隣の敵コマ(ライフが残るもの)に🔥火炎を付与します 付与したマスと縦横隣の氷結は即座に解けます'}
+                        onClick={onClickInferno}
+                        buttonText={`業火-${calculateCost(seatCosts.onClickInferno)}`}
+                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が減ります。🔥が付いたマスの縦横隣の氷結は即座に解けます'}
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickFlareBurst)}
+                        disabled={checkSkillDisable(seatCosts.onClickInferno) || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickYingYangSkll}

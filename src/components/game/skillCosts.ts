@@ -45,7 +45,7 @@ export const skillCosts = {
     onClickSilence: 5,
     // 毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与。idx 29。毒系なので毒使いは-1
     onClickPoisonMist: 7,
-    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、絶対零度は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
+    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、絶対零度は氷室の番人・業火は煉獄の鍛冶師の固有スキル
     onClickFreeze: 3,
     onClickIgnite: 3,
     onClickGlacier: 10,
@@ -53,7 +53,7 @@ export const skillCosts = {
     onClickCryoFreeze: 2,
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
     onClickCleanse: 5,
-    onClickFlareBurst: 6,
+    onClickInferno: 9,
 };
 
 export type SkillCosts = typeof skillCosts;

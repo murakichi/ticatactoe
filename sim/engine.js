@@ -182,7 +182,7 @@ const skillCosts = {
     onClickGlacier: (config.thermal && config.thermal.glacierCost) || 10,
     onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
     onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
-    onClickFlareBurst: (config.thermal && config.thermal.flareCost) || 6,
+    onClickInferno: (config.thermal && config.thermal.infernoCost) || 9,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -487,7 +487,6 @@ function newGame(opts = {}) {
         useFreeze: false,
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
         useIgnite: false,
-        useFlare: false,
         stats: {},
         winner: undefined,
         log: [],
@@ -696,13 +695,6 @@ function placeMove(s, i) {
         if (!board[i].player) return false;
         thermal.ignite(board, [i], s.size);
         s.useIgnite = false;
-        return true;
-    }
-    if (s.useFlare) {
-        const targets = thermal.flareTargets(board, i, s.size, curPlayer(s));
-        if (!targets.length) return false;
-        thermal.ignite(board, targets, s.size);
-        s.useFlare = false;
         return true;
     }
     if (s.useLock > 0) {
@@ -1466,10 +1458,16 @@ function onClickCleanse(s) {
     bumpStat(s, 'cleanse');
     bumpStat(s, 'cleanseCells', done.length);
 }
-function onClickFlareBurst(s) {
-    s.useFlare = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFlareBurst));
-    bumpStat(s, 'flareBurst');
+function infernoTargets(s) {
+    return thermal.infernoTargets(s.board, curPlayer(s)).filter((k) => !isShielded(s, s.board[k]));
+}
+function onClickInferno(s) {
+    const targets = infernoTargets(s);
+    if (!targets.length) return; // 対象なしは不発
+    thermal.ignite(s.board, targets, s.size, 2);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
+    bumpStat(s, 'inferno');
+    bumpStat(s, 'infernoCells', targets.length);
 }
 
 const SKILLS = {
@@ -1518,7 +1516,7 @@ const SKILLS = {
     ignite: onClickIgnite,
     glacier: onClickGlacier,
     cleanse: onClickCleanse,
-    flareBurst: onClickFlareBurst,
+    inferno: onClickInferno,
 };
 
 // ---- Rendering ------------------------------------------------------------
@@ -1545,5 +1543,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, infernoTargets, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

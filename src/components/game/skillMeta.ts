@@ -57,7 +57,7 @@ const SKILL_META: Record<string, Meta> = {
     火炎付与: { icon: '🔥', category: 'support' },
     浄化: { icon: '✨', category: 'support' },
     絶対零度: { icon: '🥶', category: 'attack' },
-    フレアバースト: { icon: '💥', category: 'attack' },
+    業火: { icon: '💥', category: 'attack' },
 };
 
 export const metaOf = (name: string): Meta => SKILL_META[name] ?? { icon: '✨', category: 'basic' };

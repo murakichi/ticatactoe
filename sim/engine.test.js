@@ -809,10 +809,11 @@ test('氷結はスタックする: スキルダメージ・破壊は❄を1つ�
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     t.board[5] = { player: '⭕', bind: 4, effects: [FRZ, FRZ, FRZ] };
+    t.board[6] = { player: '⭕', bind: 4, effects: [] };
     e.SKILLS.ignite(t);
     assert.strictEqual(e.placeMove(t, 0), false); // コマのないマスは選べない
     assert.strictEqual(t.useIgnite, true);
-    e.placeMove(t, 5);
+    e.placeMove(t, 6); // 非氷結の隣に🔥が付く → 隣の氷結は全スタック解除
     assert.ok(!t.board[5].effects.some((x) => x.effect === '❄'));
     const u = game();
     u.board[5] = { player: '⭕', bind: 4, effects: [FRZ, FRZ] };
@@ -930,25 +931,51 @@ test('火炎: スキルダメージは1.5倍（切り上げ）で、通れば�
     assert.strictEqual(s.board[6].bind, 4);
 });
 
-test('火炎: 煉獄の鍛冶師の自陣コマは継続ダメージを受けない', () => {
+test('火炎: 煉獄の鍛冶師が敵席に居ると、持ち主以外の火炎ダメージが1回につき+1（本人の席は+0）', () => {
     const s = game('pyromancer', 'you');
     s.heartTurn = true; s.life = 3;
-    s.board[5] = { player: '💙', bind: 9, effects: [FLM] };
-    s.board[6] = { player: '⭕', bind: 9, effects: [FLM] };
+    s.board[5] = { player: '💙', bind: 9, effects: [FLM] };            // 煉獄の鍛冶師自身のコマ: 通常の2のみ
+    s.board[6] = { player: '⭕', bind: 9, effects: [FLM] };            // 敵のコマ: 2+1
+    s.board[7] = { player: '⭕', bind: 9, effects: [FLM, FLM] };       // スタック2: 4+1（1回につき+1）
     e.placeMove(s, 0);
-    assert.strictEqual(s.board[5].bind, 8); // 自然減衰のみ
-    assert.strictEqual(s.board[6].bind, 6);
+    assert.strictEqual(s.board[5].bind, 9 - 1 - 2);
+    assert.strictEqual(s.board[6].bind, 9 - 1 - 3);
+    assert.strictEqual(s.board[7].bind, 9 - 1 - 5);
+    const t = game('pyromancer', 'pyromancer');
+    t.heartTurn = true; t.life = 3;
+    t.board[5] = { player: '⭕', bind: 9, effects: [FLM] };
+    t.board[6] = { player: '💙', bind: 9, effects: [FLM] };
+    e.placeMove(t, 0);
+    assert.strictEqual(t.board[5].bind, 9 - 1 - 3); // 複数いても+1
+    assert.strictEqual(t.board[6].bind, 9 - 1 - 3);
+    const th = require('./thermal');
+    const frozen = { player: '⭕', bind: 5, effects: [FLM, FRZ] };
+    assert.strictEqual(th.burnDamageOf(frozen, ['pyromancer', 'you'], e.SYMBOLS), 0);
+    assert.strictEqual(th.burnDamageOf({ player: '⭕', bind: 0, effects: [FLM] }, ['pyromancer', 'you'], e.SYMBOLS), 0);
+    assert.strictEqual(th.burnDamageOf({ player: '⭕', bind: 5, effects: [FLM] }, ['you', 'you'], e.SYMBOLS), 2);
 });
 
-test('発火: 🔥が付くと自マスと縦横隣の氷結が即座に解ける（斜めは解けない）', () => {
+test('火炎付与: 氷結中のマスは❄が1つ減るだけで🔥は付かず、隣の氷結も解けない', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
-    s.board[5] = { player: '⭕', bind: 4, effects: [FRZ] };   // 付与先の自マス
-    s.board[6] = { player: '⭕', bind: 4, effects: [FRZ] };   // 隣
-    s.board[10] = { player: '⭕', bind: 4, effects: [FRZ] };  // 斜め
+    s.board[5] = { player: '⭕', bind: 4, effects: [FRZ, FRZ] };
+    s.board[6] = { player: '⭕', bind: 4, effects: [FRZ] };
     e.SKILLS.ignite(s);
     assert.strictEqual(e.placeMove(s, 5), true);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '❄'));
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[6].effects.some((x) => x.effect === '❄'));
+    assert.strictEqual(s.heartTurn, true);
+});
+
+test('発火: 🔥が実際に付くと縦横隣の氷結が全スタック解除される（斜めは解けない）', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 4, effects: [] };            // 付与先（非氷結）
+    s.board[6] = { player: '⭕', bind: 4, effects: [FRZ, FRZ] };   // 隣: 全解除
+    s.board[10] = { player: '⭕', bind: 4, effects: [FRZ] };        // 斜め
+    e.SKILLS.ignite(s);
+    assert.strictEqual(e.placeMove(s, 5), true);
     assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(!s.board[6].effects.some((x) => x.effect === '❄'));
     assert.ok(s.board[10].effects.some((x) => x.effect === '❄'));
@@ -1077,32 +1104,47 @@ test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄ス
     assert.strictEqual(s.board[0].effects.length, 0);
 });
 
-test('フレアバースト: 中心と縦横隣の敵コマ（ライフ>0・🔑なし）に🔥。自コマ・ライフ0・ロック中・斜めは対象外', () => {
+test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・自コマ・空きマスは対象外。クリック不要・手番は続きコスト9', () => {
     const s = game('pyromancer', 'you');
     s.heartTurn = true; s.heartMagic = 20;
-    s.board[5] = { player: '⭕', bind: 3, effects: [] };                  // 中心
-    s.board[6] = { player: '⭕', bind: 3, effects: [] };                  // 隣
-    s.board[4] = { player: '💙', bind: 3, effects: [] };                  // 自コマ
-    s.board[1] = { player: '⭕', bind: 0, effects: [] };                  // ライフ0
-    s.board[9] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // ロック
-    s.board[10] = { player: '⭕', bind: 3, effects: [] };                 // 斜め
-    s.board[2] = { player: '⭕', bind: 3, effects: [FRZ] };
+    s.board[5] = { player: '⭕', bind: 3, effects: [] };
+    s.board[6] = { player: '⭕', bind: 0, effects: [] };
+    s.board[4] = { player: '💙', bind: 3, effects: [] };
+    s.board[9] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[8] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ] };  // 氷結が先に2つ減る → 🔥は付かない
+    s.board[11] = { player: '⭕', bind: 3, effects: [FRZ] };           // 氷結1つ減って、余り1スタックが🔥
     const before = s.heartMagic;
-    e.SKILLS.flareBurst(s);
-    assert.strictEqual(s.heartMagic, before - 6);
-    assert.strictEqual(e.placeMove(s, 0), false); // 燃やせる敵がいない中心は選び直せる
-    assert.strictEqual(e.placeMove(s, 5), true);
-    const has = (i) => s.board[i].effects.some((x) => x.effect === '🔥');
-    assert.ok(has(5) && has(6));
-    assert.ok(!has(4) && !has(1) && !has(9) && !has(10));
+    e.SKILLS.inferno(s);
+    assert.strictEqual(s.heartMagic, before - 9);
     assert.strictEqual(s.heartTurn, true);
+    const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
+    const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
+    assert.strictEqual(fl(5), 2); assert.strictEqual(fl(6), 2);
+    assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
+    assert.strictEqual(fr(8), 1); assert.strictEqual(fl(8), 0);
+    assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
+    // 対象が無ければ不発（魔力を払わない）
+    const t = game('pyromancer', 'you');
+    t.heartTurn = true; t.heartMagic = 20;
+    e.SKILLS.inferno(t);
+    assert.strictEqual(t.heartMagic, 20);
+});
+
+test('業火: 雷霆の巫の⚡無敵コマは対象外', () => {
+    const s = game('pyromancer', 'electrician');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+    s.board[6] = { player: '⭕', bind: 3, effects: [] };
+    e.SKILLS.inferno(s);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 0);
+    assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '🔥').length, 2);
 });
 
 test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人6・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
     assert.strictEqual(e.POOL_SIZE, 33);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
-    assert.strictEqual(e.skillCosts.onClickFlareBurst, 6);
+    assert.strictEqual(e.skillCosts.onClickInferno, 9);
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
     assert.strictEqual(e.skillCosts.onClickIgnite, 3);
     const mean = (c, bonus = 0) => Array.from({ length: 400 }, (_, k) => e.calculateLife(c, undefined, e.makeRng(k + 1), bonus)).reduce((a, b) => a + b, 0) / 400;

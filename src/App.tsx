@@ -47,7 +47,7 @@ const CHARACTERS: CharacterDef[] = [
         id: 'pyromancer',
         name: '煉獄の鍛冶師',
         icon: '🔥',
-        passive: `自陣の🔥は継続ダメージを与えない（🔥は毎ターン1つにつき2ダメージ・スキル被ダメ1.5倍）。ライフ平均${L.pyromancer}。固有:フレアバースト`,
+        passive: `敵が🔥の継続ダメージを受けるとき追加で1ダメージ（🔥は毎ターン1つにつき2ダメージ・スキル被ダメ1.5倍）。ライフ平均${L.pyromancer}。固有:業火（仮）`,
     },
 ];
 

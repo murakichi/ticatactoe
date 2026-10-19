@@ -39,14 +39,14 @@ module.exports = {
         // 全マスが⚡で埋まると、全⚡と🔑を取り除いて全マスのライフを0にする（過負荷）。false で無効
         "discharge": true
     },
-    // ❄氷結・🔥火炎のコスト。src/components/game/skillCosts.ts の onClickFreeze / Ignite / Glacier / FlareBurst と一致させること
+    // ❄氷結・🔥火炎のコスト。src/components/game/skillCosts.ts の onClickFreeze / Ignite / Glacier / Inferno と一致させること
     "thermal": {
         "freezeCost": 3,
         "igniteCost": 3,
         "glacierCost": 10,
         "cryoFreezeCost": 2,
         "cleanseCost": 5,
-        "flareCost": 6
+        "infernoCost": 9
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
     "proliferate": {

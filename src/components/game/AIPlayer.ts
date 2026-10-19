@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, flareTargets, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
+import { ailmentStacks, cleanse, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..32)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -26,7 +26,7 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
-    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の絶対零度(target なし)・煉獄の鍛冶師のフレアバースト */
+    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の絶対零度(target なし)・煉獄の鍛冶師の業火 */
     chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
@@ -34,7 +34,7 @@ export type AIResult = {
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
-    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 6,
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9,
 };
 
 class AIPlayer {
@@ -235,19 +235,9 @@ class AIPlayer {
         return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
     }
 
-    /** フレアバーストの中心: 巻き込める敵コマが最多（2個以上）のマス。同数なら敵ライフの合計が大きい方 */
-    findFlareTarget(board: SquareInfo[]): number | null {
-        const size = this.sizeOf(board);
-        let best: number | null = null, bestN = 1, bestLife = -1;
-        for (let i = 0; i < board.length; i++) {
-            if (this.shield.has(i)) continue;
-            const targets = flareTargets(board, i, size, this.playerSymbol);
-            const life = targets.reduce((n, k) => n + board[k].bind, 0);
-            if (targets.length > bestN || (targets.length === bestN && targets.length >= 2 && life > bestLife)) {
-                best = i; bestN = targets.length; bestLife = life;
-            }
-        }
-        return best;
+    /** 業火を撃つ価値があるか: ライフが残る敵コマが3個以上（sim/ai.js と同方針） */
+    shouldInferno(board: SquareInfo[]): boolean {
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
     }
 
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
@@ -1097,7 +1087,7 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
-        // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師のフレアバースト（中心をクリックしてから着手）
+        // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
         if (this.character === 'cryomancer') {
             const cost = reducedGlacierCost(costs.onClickGlacier, board, (c) => this.calculateAICost(c));
             if (!this.glacierPending && magic >= cost && this.shouldGlacier(board)) {
@@ -1122,13 +1112,13 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
-        if (this.character === 'pyromancer' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            const cost = this.calculateAICost(costs.onClickFlareBurst);
-            const center = magic >= cost ? this.findFlareTarget(board) : null;
-            if (center !== null) {
-                chargeClicks.push({ skill: 'onClickFlareBurst', target: center });
+        if (this.character === 'pyromancer') {
+            const cost = this.calculateAICost(costs.onClickInferno);
+            const targets = infernoTargets(board, this.playerSymbol, this.characters);
+            if (magic >= cost && targets.length > 0 && this.shouldInferno(board)) {
+                chargeClicks.push({ skill: 'onClickInferno' });
                 board = board.slice();
-                ignite(board, flareTargets(board, center, this.sizeOf(board), this.playerSymbol), this.sizeOf(board));
+                ignite(board, targets, this.sizeOf(board), INFERNO_STACKS);
                 magic -= cost;
             }
         }

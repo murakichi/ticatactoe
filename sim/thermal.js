@@ -43,8 +43,10 @@ const overwriteBlocked = (sq) => isFrozen(sq);
 function burnDamageOf(sq, chars, symbols) {
     const stacks = flameStacks(sq);
     if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
-    if (sq.player && chars[symbols.indexOf(sq.player)] === 'pyromancer') return 0;
-    return stacks * FLAME_BURN_DAMAGE;
+    // 煉獄の鍛冶師のパッシブ: 持ち主以外の席に煉獄の鍛冶師が居れば、敵の火炎ダメージが1回につき+1
+    const owner = sq.player ? symbols.indexOf(sq.player) : -1;
+    const bonus = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? 1 : 0;
+    return stacks * FLAME_BURN_DAMAGE + bonus;
 }
 
 /** kind: 'skill' | 'electric' | 'poison' */
@@ -61,12 +63,24 @@ function applyDamage(sq, amount, kind) {
 const absorbDestroy = (sq) => (isFrozen(sq) ? { sq: thawOne(sq), blocked: true } : { sq, blocked: false });
 const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
 
-function ignite(board, cells, size) {
+/**
+ * cells の各マスに n スタック分、1スタックずつ火炎を付ける。氷結中のマスは「❄を1つ減らすだけで🔥は付けない」。
+ * 🔥が実際に付いたときだけ、縦横隣の氷結を全スタック解除する（氷結が減っただけなら隣は解除しない）。
+ * 戻り値 thawed = 氷結が減った/解除されたマスの添字（重複なし）。cells を先頭から順に処理する。board を直接書き換える
+ */
+function ignite(board, cells, size, n = 1) {
     const thawed = new Set();
     for (const k of cells) {
-        board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
-        for (const n of [k, ...orthoNeighbors(k, size)]) {
-            if (isFrozen(board[n])) { board[n] = thaw(board[n]); thawed.add(n); }
+        for (let t = 0; t < n; t++) {
+            if (isFrozen(board[k])) {
+                board[k] = thawOne(board[k]);
+                thawed.add(k);
+                continue;
+            }
+            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
+            for (const nb of orthoNeighbors(k, size)) {
+                if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
+            }
         }
     }
     return { thawed: Array.from(thawed) };
@@ -118,16 +132,15 @@ function detonate(board, me) {
     }
     return { damaged, destroyed };
 }
-const flareTargets = (board, center, size, me) =>
-    [center, ...orthoNeighbors(center, size)].filter((k) => {
-        const sq = board[k];
-        return !!sq.player && sq.player !== me && sq.bind > 0 && !hasLock(sq);
-    });
+/** 業火（煉獄の鍛冶師）: 使用者 me 以外のコマで🔑のないマス（ライフ0も含む）。雷霆の巫の⚡無敵コマは engine 側で除く */
+const infernoTargets = (board, me) =>
+    board.map((sq, i) => (sq.player && sq.player !== me && !hasLock(sq) ? i : -1)).filter((i) => i !== -1);
 
+/** 🔑ロックを掛けられるマスか: 氷結中でない */
 const lockable = (sq) => !isFrozen(sq);
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, flareTargets,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets,
     lockable,
 };

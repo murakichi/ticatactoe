@@ -8,9 +8,10 @@
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
 //   - スキルでダメージを受けるとき、ダメージを受ける代わりに氷結が1スタック減る
 //   - 自陣のコマへの上書き（強化）ができなくなる
-//   - 隣（縦横）のマスや自マスに🔥が付く（発火する）と、全スタックが即座に解除される
+//   - 🔥を付けられそうになると、🔥の代わりに❄が1スタック減る
+//   - 隣（縦横）のマスに🔥が付く（発火する）と、全スタックが即座に解除される
 // 🔥火炎（スタックする）
-//   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師の自陣コマは受けない
+//   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師がいれば敵のマスは1回の継続ダメージにつき追加で+1
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
 import { CharacterId } from '../../types/Character';
@@ -21,6 +22,8 @@ import { orthoNeighbors } from './boardGeometry';
 
 /** 火炎1スタックあたりの継続ダメージ */
 export const FLAME_BURN_DAMAGE = 2;
+/** 煉獄の鍛冶師のパッシブ: 敵（持ち主以外）が火炎ダメージを受けるとき追加で与えるダメージ */
+export const PYROMANCER_EXTRA_BURN = 1;
 /** 火炎状態のマスがスキルでダメージを受けるときの倍率（切り上げ） */
 export const FLAME_SKILL_MULT = 1.5;
 
@@ -57,14 +60,17 @@ export const frozenLifeBonus = (board: SquareInfo[], player: SquareInfo['player'
 /** 🔑ロックを掛けられるマスか: 氷結中でない */
 export const lockable = (sq: SquareInfo): boolean => !isFrozen(sq);
 
-/** ターン進行の火炎ダメージ（スタック×2）。煉獄の鍛冶師の自陣・氷結・🔑ロックは受けない */
+/**
+ * ターン進行の火炎ダメージ（スタック×2。持ち主以外の席に煉獄の鍛冶師がいれば、1マスの1回の継続ダメージにつき追加で+1）。
+ * 氷結中・🔑ロック中・ライフ0のマスは受けない
+ */
 export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): number => {
     const stacks = flameStacks(sq);
     if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
-    if (sq.player && chars[seatOf(sq.player)] === 'pyromancer') return 0;
-    return stacks * FLAME_BURN_DAMAGE;
+    const owner = sq.player ? seatOf(sq.player) : -1;
+    const extra = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? PYROMANCER_EXTRA_BURN : 0;
+    return stacks * FLAME_BURN_DAMAGE + extra;
 };
-
 
 export type DamageKind = 'skill' | 'electric' | 'poison';
 
@@ -101,15 +107,26 @@ export const absorbDestroy = (sq: SquareInfo): { sq: SquareInfo; blocked: boolea
 /** ライフを丸ごと0にする（倍率なし）。ライフが残っていたなら🔥は消える。氷結の判定は absorbDestroy で先に行う */
 export const zeroOut = (sq: SquareInfo): SquareInfo => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
 
-/** 指定マスに🔥を1つずつ付ける。付いたマスと縦横隣の氷結は即座に解除される（board を直接書き換える） */
-export const ignite = (board: SquareInfo[], cells: number[], size: number): { thawed: number[] } => {
+/**
+ * 指定マスに🔥を n スタックずつ付ける（board を直接書き換える）。1スタックごとに、
+ * 氷結中のマスなら🔥は付かず代わりに❄が1つ減る。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
+ * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
+ */
+export const ignite = (board: SquareInfo[], cells: number[], size: number, n: number = 1): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
-        board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
-        for (const n of [k, ...orthoNeighbors(k, size)]) {
-            if (isFrozen(board[n])) {
-                board[n] = thaw(board[n]);
-                thawed.add(n);
+        for (let c = 0; c < n; c++) {
+            if (isFrozen(board[k])) {
+                board[k] = thawOne(board[k]);
+                thawed.add(k);
+                continue;
+            }
+            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] };
+            for (const m of orthoNeighbors(k, size)) {
+                if (isFrozen(board[m])) {
+                    board[m] = thaw(board[m]);
+                    thawed.add(m);
+                }
             }
         }
     }
@@ -204,12 +221,20 @@ export const detonate = (board: SquareInfo[], me: SquareInfo['player']): Detonat
     return { damaged, destroyed };
 };
 
-/** フレアバースト（煉獄の鍛冶師）: 中心と縦横隣のうち、🔥を付けられる敵コマ（ライフ>0・🔑なし） */
-export const flareTargets = (board: SquareInfo[], center: number, size: number, me: SquareInfo['player']): number[] =>
-    [center, ...orthoNeighbors(center, size)].filter((k) => {
-        const sq = board[k];
-        return !!sq.player && sq.player !== me && sq.bind > 0 && !hasLock(sq);
-    });
+/** 業火の基礎コスト。sim/config.js の thermal.infernoCost と同値 */
+export const INFERNO_COST = 9;
+/** 業火が敵コマ1つに足す🔥のスタック数 */
+export const INFERNO_STACKS = 2;
+
+/** 業火（煉獄の鍛冶師）の対象: 使用者以外のコマのうち、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
+export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
+    board
+        .map((sq, i) => {
+            if (!sq.player || sq.player === me || hasLock(sq)) return -1;
+            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            return i;
+        })
+        .filter((i) => i !== -1);
 
 /**
  * ターン進行1回ぶんのライフ減衰（自然減衰・🔥の継続ダメージ・毒）を1マスに適用した新しいマスを返す。

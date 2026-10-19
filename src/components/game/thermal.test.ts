@@ -10,7 +10,7 @@ import {
     ignite,
     canFreeze,
     freeze,
-    flareTargets,
+    infernoTargets,
     decayTick,
     cleanse,
     ailmentStacks,
@@ -237,10 +237,14 @@ describe('🔥火炎', () => {
         expect(burnDamageOf(sq('💙', 5, '🔥'), chars)).toBe(2);
     });
 
-    it('煉獄の鍛冶師の自陣の🔥は継続ダメージを与えない（相手の🔥コマは受ける）', () => {
+    it('煉獄の鍛冶師がいると、敵の🔥マスは継続ダメージが追加で+1（持ち主が鍛冶師なら+なし・1回につき+1）', () => {
         const cs: CharacterId[] = ['pyromancer', 'you'];
-        expect(burnDamageOf(sq('💙', 5, '🔥'), cs)).toBe(0);
-        expect(burnDamageOf(sq('⭕', 5, '🔥'), cs)).toBe(2);
+        expect(burnDamageOf(sq('⭕', 5, '🔥'), cs)).toBe(3); // 2 + 1
+        expect(burnDamageOf(sq('⭕', 5, '🔥', '🔥'), cs)).toBe(5); // 4 + 1
+        expect(burnDamageOf(sq('💙', 5, '🔥'), cs)).toBe(2); // 鍛冶師自身のマスには付かない
+        expect(burnDamageOf(sq('⭕', 5, '🔥', '❄'), cs)).toBe(0); // 氷結中は受けない
+        expect(burnDamageOf(sq('⭕', 5), cs)).toBe(0);
+        expect(decayTick(sq('⭕', 10, '🔥'), cs).bind).toBe(10 - 1 - 3);
     });
 
     it('スキルダメージは1.5倍（切り上げ）', () => {
@@ -274,21 +278,45 @@ describe('🔥火炎', () => {
         expect(flameStacks(b[6])).toBe(0);
     });
 
-    it('発火すると、そのマスと縦横隣の氷結が即座に解ける（斜めは解けない）', () => {
+    it('🔥が付くと、縦横隣の氷結が全スタック即座に解ける（斜めは解けない）', () => {
         const b = emptyBoard();
-        b[5] = sq('⭕', 4, '❄');
-        b[6] = sq('⭕', 4, '❄'); // 発火マス 5 の右隣
+        b[5] = sq('⭕', 4);
+        b[6] = sq('⭕', 4, '❄', '❄'); // 発火マス 5 の右隣
         b[9] = sq('⭕', 4, '❄'); // 下隣
         b[10] = sq('⭕', 4, '❄'); // 斜め
         b[0] = sq('⭕', 4, '❄'); // 斜め
         const r = ignite(b, [5], 4);
         expect(flameStacks(b[5])).toBe(1);
-        expect(isFrozen(b[5])).toBe(false);
         expect(isFrozen(b[6])).toBe(false);
         expect(isFrozen(b[9])).toBe(false);
         expect(isFrozen(b[10])).toBe(true);
         expect(isFrozen(b[0])).toBe(true);
-        expect(r.thawed.sort((a, c) => a - c)).toEqual([5, 6, 9]);
+        expect(r.thawed.sort((a, c) => a - c)).toEqual([6, 9]);
+    });
+
+    it('氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が1スタック減る（隣は解けない）', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 4, '❄', '❄');
+        b[6] = sq('⭕', 4, '❄');
+        const r = ignite(b, [5], 4);
+        expect(frozenStacks(b[5])).toBe(1);
+        expect(flameStacks(b[5])).toBe(0);
+        expect(isFrozen(b[6])).toBe(true); // 🔥は付いていないので発火しない
+        expect(r.thawed).toEqual([5]);
+    });
+
+    it('2スタック付与: 氷結が先に減り、余りが🔥になる。氷結が尽きて🔥が付くと隣も解ける', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 4, '❄'); // 1スタックだけ
+        b[6] = sq('⭕', 4, '❄', '❄');
+        ignite(b, [5], 4, 2);
+        expect(isFrozen(b[5])).toBe(false);
+        expect(flameStacks(b[5])).toBe(1); // 1つ目は氷結を減らし、2つ目が🔥になる
+        expect(isFrozen(b[6])).toBe(false); // 🔥が付いたので隣の氷結は全部解ける
+        const c = emptyBoard();
+        c[5] = sq('⭕', 4);
+        ignite(c, [5], 4, 2);
+        expect(flameStacks(c[5])).toBe(2);
     });
 
     it('thaw は氷結が無ければ同じ参照を返す', () => {
@@ -296,15 +324,16 @@ describe('🔥火炎', () => {
         expect(thaw(s)).toBe(s);
     });
 
-    it('フレアバーストの対象は中心と縦横隣の敵コマ（ライフ>0・ロックなし）', () => {
+    it('業火の対象は使用者以外のコマ全て（ライフ0も含む。🔑中と雷霆の巫の⚡無敵は除く）', () => {
         const b = emptyBoard();
-        b[5] = sq('⭕', 3);
-        b[4] = sq('⭕', 3);
-        b[6] = sq('💙', 3); // 自分
-        b[9] = sq('⭕', 0); // ライフ0
-        b[1] = sq('⭕', 3, '🔑'); // ロック
-        b[10] = sq('⭕', 3); // 斜め
-        expect(flareTargets(b, 5, 4, '💙').sort((a, c) => a - c)).toEqual([4, 5]);
+        b[0] = sq('⭕', 3);
+        b[1] = sq('⭕', 0);
+        b[2] = sq('⭕', 3, '🔑');
+        b[3] = sq('💙', 3); // 自分
+        b[4] = sq('🟩', 3, '⚡'); // 雷霆の巫の無敵
+        b[5] = sq('⭕', 3, '⚡'); // 雷霆の巫ではない⭕の⚡は対象
+        const cs: CharacterId[] = ['pyromancer', 'you', 'electrician'];
+        expect(infernoTargets(b, '💙', cs)).toEqual([0, 1, 5]);
     });
 });
 
@@ -331,14 +360,14 @@ describe('sim/thermal.js との一致', () => {
         }
     });
 
-    it('burnDamageOf が一致（煉獄の鍛冶師の自陣含む）', () => {
+    it('burnDamageOf が一致（煉獄の鍛冶師の+1含む）', () => {
         const cs: CharacterId[] = ['pyromancer', 'you'];
         for (const s of [...squares, ...squares.map((x) => ({ ...x, player: '⭕' as Player }))]) {
             expect(sim.burnDamageOf(s, cs, ['💙', '⭕'])).toBe(burnDamageOf(s, cs));
         }
     });
 
-    it('ignite / freeze / freezeAll / detonate / flareTargets が一致', () => {
+    it('ignite / freeze / freezeAll / detonate / infernoTargets が一致', () => {
         const mk = () => {
             const b = emptyBoard();
             b[5] = sq('💙', 4, '❄');
@@ -352,6 +381,10 @@ describe('sim/thermal.js との一致', () => {
         const a = mk();
         const b = mk();
         expect(sim.ignite(a, [5, 10], 4)).toEqual(ignite(b, [5, 10], 4));
+        const a2 = mk();
+        const b2 = mk();
+        expect(sim.ignite(a2, [5, 6, 10, 9], 4, 2)).toEqual(ignite(b2, [5, 6, 10, 9], 4, 2));
+        expect(a2).toEqual(b2);
         expect(a).toEqual(b);
         const c = mk();
         const d = mk();
@@ -363,7 +396,7 @@ describe('sim/thermal.js との一致', () => {
         expect(e).toEqual(f);
         expect(sim.detonate(e, '💙')).toEqual(detonate(f, '💙'));
         expect(e).toEqual(f);
-        for (let i = 0; i < 16; i++) expect(sim.flareTargets(mk(), i, 4, '💙')).toEqual(flareTargets(mk(), i, 4, '💙'));
+        expect(sim.infernoTargets(mk(), '💙')).toEqual(infernoTargets(mk(), '💙', ['you', 'you']));
     });
 });
 
