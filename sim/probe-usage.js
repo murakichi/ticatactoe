@@ -35,7 +35,7 @@ for (let g = 0; g < games; g++) {
     const first = g % 2 === 0;
     const chars = first ? [c1, c2] : [c2, c1];
     const test = first ? 0 : 1;
-    const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100003 + g) });
+    const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100003 + g), size: args.size ? parseInt(args.size, 10) : undefined });
     s.aiFlags = chars.map((_, seat) => (seat === test ? flags : {}));
     const mine = {};
     let t = 0;

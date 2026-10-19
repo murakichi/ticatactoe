@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..36)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -972,6 +972,17 @@ class AIPlayer {
 
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
         const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
+
+        // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
+        // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
+        if (this.character === 'cryomancer' && threatSquares.length === 1 && magic >= this.calculateAICost(costs.onClickCryoFreeze)) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            freeze(post, [threatSquares[0]]);
+            this.updateShield(post);
+            const followup = this.getBestMove(post, life);
+            if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [threatSquares[0]] };
+            this.updateShield(board); // 打てるマスが無くなるなら氷結せず通常の流れへ
+        }
         if (threatSquares.length >= 2) {
             const lockOptions: { skill: string; count: number; cost: number }[] = [
                 { skill: 'onClickUseLock', count: 1, cost: this.calculateAICost(costs.onClickUseLock) },

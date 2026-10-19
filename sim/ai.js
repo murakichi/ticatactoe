@@ -26,9 +26,9 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ---- A/B 検証用のノブ ----
 // 採用済みの設定は AI_DEFAULTS に書く。検証中は s.aiFlags[seat] = { 名前: 値 } で席ごとに上書きできる
 // （probe-ai.js が同一シードで改修前後を paired 比較する）。採用が決まったら AI_DEFAULTS へ移し、不採用なら分岐ごと消す。
-const AI_DEFAULTS = {};
+// ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
+const AI_DEFAULTS = { frzBlock: 1 }; // frzBlock: 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
 let F = AI_DEFAULTS;
-let pyroInPlay = false; // 手番開始時に更新（煉獄の鍛冶師が居れば敵の火炎ダメージ+1）
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
     F = o ? Object.assign({}, AI_DEFAULTS, o) : AI_DEFAULTS;
@@ -298,29 +298,6 @@ function bestJammerTarget(board, me) {
     return bestIdx;
 }
 
-// 火炎付与の対象: 氷結・ロック・無敵でない敵コマで、ライフが minBind 以上（keyOnly なら相手リーチ列の要のみ）
-// mode: 0=いつでも / 1=自陣が優勢でないとき(自コマ<=敵最大) / 2=自陣が優勢のとき(自コマ>敵最大)
-function aheadOk(s, me, mode) {
-    if (!mode) return true;
-    const cnt = new Map();
-    let mine = 0;
-    for (const sq of s.board) { if (sq.player === me) mine++; else if (sq.player) cnt.set(sq.player, (cnt.get(sq.player) || 0) + 1); }
-    const opp = Math.max(0, ...cnt.values());
-    return mode === 1 ? mine <= opp : mine > opp;
-}
-function bestIgniteTarget(board, me, minBind, keyOnly) {
-    let best = null, bestScore = 0;
-    for (let i = 0; i < board.length; i++) {
-        const sq = board[i];
-        if (!isEnemy(sq.player, me) || shield.has(i) || sq.bind < 1 || thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑' || e.effect === '🔥')) continue;
-        const key = inOppReachLine(board, i, me);
-        if (keyOnly ? !key : sq.bind < minBind && !key) continue;
-        const score = sq.bind + (key ? 10 : 0);
-        if (score > bestScore) { bestScore = score; best = i; }
-    }
-    return best;
-}
-
 // ---- helpers ----
 
 function symbolsWith(board, i, symbol) {
@@ -359,12 +336,6 @@ function evaluateBoard(board, me) {
         const hasLock = sq.effects.some(e => e.effect === '🔑');
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
         else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
-        // 状態効果: 自陣の❄は減衰せずスキルにも強い(加点)・敵の❄は減点。自陣の🔥は毎ターンの継続ダメージ+被ダメ1.5倍(減点)・敵の🔥は加点
-        if ((F.eFrz || F.eFlm) && sq.player && sq.bind > 0) {
-            const sgn = sq.player === me ? 1 : -1;
-            if (F.eFrz) score += sgn * F.eFrz * Math.min(2, thermal.frozenStacks(sq));
-            if (F.eFlm) score -= sgn * F.eFlm * Math.min(3, thermal.flameStacks(sq)) * (pyroInPlay ? 1.5 : 1);
-        }
     }
     return score;
 }
@@ -818,7 +789,6 @@ function bestRescueCenter(board, me, opps, kind) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 function faithfulMakeMove(s) {
     loadFlags(s);
-    pyroInPlay = s.chars.some((c, seat) => c === 'pyromancer' && seat !== s.turn);
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const magic = curMagic(s);
@@ -938,16 +908,10 @@ function faithfulMakeMove(s) {
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
 
-    // 火炎付与: 敵の高ライフコマ（または相手リーチ列の要）を燃やす。🔥は毎ターン2ダメージ+スキル被ダメ1.5倍で、通常着手で奪うきっかけにもなる
-    if (F.ignite && availableSkills.includes(31) && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite)) {
-        const target = bestIgniteTarget(s.board, me, F.igBind || 6, F.ignite >= 2);
-        if (target !== null) { SKILLS.ignite(s); placeMove(s, target); }
-    }
-
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= calculateCost(s, costsOf(s).onClickInferno)
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.infN || 3)
-        && infernoTargets(s).length > 0 && aheadOk(s, me, F.infMode)) {
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3
+        && infernoTargets(s).length > 0) {
         SKILLS.inferno(s);
     }
 
@@ -962,7 +926,7 @@ function faithfulMakeMove(s) {
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
     if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glN || 3) && aheadOk(s, me, F.glMode)) {
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3) {
         SKILLS.glacier(s);
     }
 

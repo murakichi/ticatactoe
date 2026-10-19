@@ -284,3 +284,31 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         expect(threatsAfter(c as number)).toBe(1);
     });
 });
+
+describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2 B)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const threatBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 6));
+        [4, 5].forEach((i) => put(b, i, '💙', 6));
+        return b;
+    };
+
+    it('魔力が足りるとロック(=氷結)で脅威マス3を塞ぎ、着手は別のマスにする', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        const r = ai.makeMove(threatBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([3]);
+        expect(r.move).not.toBeNull();
+        expect(r.move).not.toBe(3);
+    });
+
+    it('魔力が足りない・氷室の番人でないときは従来どおり（脅威マスに自分で置く）', () => {
+        const cryo = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        expect(cryo.makeMove(threatBoard(), 1, costs, 0, 4, [0, 1, 2], false).move).toBe(3);
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const r = plain.makeMove(threatBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).not.toContain('onClickUseLock');
+        expect(r.move).toBe(3);
+    });
+});

@@ -1364,5 +1364,20 @@ test('AI ストンプ/審判の日/救済の中心: 氷結中の敵は壊れな�
     assert.notStrictEqual(c, null);
 });
 
+test('AI 氷室の番人: 相手の単独リーチは氷結で塞ぎ（着手を使わない）、その手番は攻めに使う', () => {
+    const s = game('cryomancer', 'you');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 4;
+    for (const i of [0, 1, 2]) s.board[i] = { player: '⭕', bind: 6, effects: [] }; // 3 の目が脅威
+    for (const i of [4, 5]) s.board[i] = { player: '💙', bind: 6, effects: [] };
+    const before = s.heartMagic;
+    const r = aiMod.makeMove(s, 'faithful');
+    assert.ok(s.board[3].effects.some((x) => x.effect === '❄'), '脅威マスが凍っている');
+    assert.strictEqual(s.board[3].player, undefined);
+    assert.strictEqual(s.heartMagic, before - 2);
+    assert.notStrictEqual(r.move, 3); // 凍った空きマスには着手しない
+    assert.strictEqual(r.turnEnded, false);
+    assert.strictEqual(aiMod.countReaches(s.board, '⭕'), 0);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
