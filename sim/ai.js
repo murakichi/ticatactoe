@@ -120,8 +120,8 @@ const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // �
 const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
-const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 40; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
-const EL_DENY = process.env.EL_DENY != null ? Number(process.env.EL_DENY) : 0.5; // 敵の列を止める価値の重み
+const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
+const EL_DENY = process.env.EL_DENY != null ? Number(process.env.EL_DENY) : 2; // 敵の列を止める価値の重み
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数
@@ -925,7 +925,7 @@ function faithfulMakeMove(s) {
     // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
     // ロック中は敵も置けないので、敵の列を止める効果もある。ロックは6ターンで切れ、そのとき自分のコマになる。
     // EL_AI=0 で無効化(A/B用)
-    if (EL_AI && hasGear(s.gears[s.turn], 'emptyLock') && countReaches(s.board, me) === 0
+    if (EL_AI && (hasGear(s.gears[s.turn], 'emptyLock') || s.forceAi[s.turn].includes('emptyLock')) && countReaches(s.board, me) === 0
         && magic >= calculateCost(s, costsOf(s).onClickUseLock)
         && myEmptyLocks(s) < EL_MAX) {
         const target = bestEmptyLockTarget(s.board, me, opps);

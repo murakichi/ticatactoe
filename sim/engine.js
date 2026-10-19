@@ -464,6 +464,8 @@ function newGame(opts = {}) {
         useChargeSpread: false,
         // ギア。gearSkills=この手番に使ったスキル数 / echoReady=余韻の割引が有効 / echoNext=次の手番に余韻が付く
         gears,
+        // 検証用: ギアを持たない席にも、そのギア向けのAI戦略だけを使わせる（opts.forceAi[seat] = ギアIDの配列）。通常は空
+        forceAi: chars.map((_, i) => ((opts.forceAi && opts.forceAi[i]) || []).slice()),
         gearSkills: fill(0),
         echoReady: fill(false),
         echoNext: fill(false),
