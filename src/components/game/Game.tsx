@@ -61,8 +61,8 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     necromancer: 'ネクロマンサー',
     poisoner: '毒使い',
     electrician: '雷霆の巫',
-    cryomancer: '氷結師',
-    pyromancer: '炎使い',
+    cryomancer: '氷室の番人',
+    pyromancer: '煉獄の鍛冶師',
 };
 
 const AVATAR_CLASSES = [
