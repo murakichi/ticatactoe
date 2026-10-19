@@ -13,6 +13,11 @@ import {
     glacierTargets,
     flareTargets,
     decayTick,
+    frozenStacks,
+    thawOne,
+    lockable,
+    canThawByClick,
+    frozenLifeBonus,
     FLAME_BURN_DAMAGE,
 } from './thermal';
 import { fireCharges, applyJammer, chargeStacks, canJam } from './charge';
@@ -83,19 +88,70 @@ describe('❄氷結', () => {
         expect(absorbDestroy(sq('⭕', 4)).blocked).toBe(false);
     });
 
-    it('氷結は重ならず、コマの無いマス・ロック中には付かない', () => {
+    it('氷結は重ねられるが、コマの無いマス・ロック中には付かない', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '🔑');
-        expect(freeze(b, [0, 0, 1, 2])).toEqual([0]);
-        expect(b[0].effects.filter((e) => e.effect === '❄')).toHaveLength(1);
-        expect(canFreeze(b[0])).toBe(false);
+        expect(freeze(b, [0, 0, 1, 2])).toEqual([0, 0]); // 氷結済みでも重ねられる。ロック中・空きマスは付かない
+        expect(frozenStacks(b[0])).toBe(2);
+        expect(canFreeze(b[0])).toBe(true);
     });
 
-    it('自陣への上書き（強化）は氷室の番人以外できない', () => {
-        expect(overwriteBlocked(sq('💙', 3, '❄'), 'you')).toBe(true);
-        expect(overwriteBlocked(sq('💙', 3, '❄'), 'cryomancer')).toBe(false);
-        expect(overwriteBlocked(sq('💙', 3), 'you')).toBe(false);
+    it('自陣への上書き（強化）は氷結中は誰もできない', () => {
+        expect(overwriteBlocked(sq('💙', 3, '❄'))).toBe(true);
+        expect(overwriteBlocked(sq('💙', 3))).toBe(false);
+    });
+
+    it('氷結はスタックし、スキルダメージは1スタックずつ肩代わりする', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        freeze(b, [0]);
+        freeze(b, [0]);
+        expect(frozenStacks(b[0])).toBe(2);
+        const hit1 = applyDamage(b[0], 5, 'skill');
+        expect(hit1.blocked).toBe(true);
+        expect(frozenStacks(hit1.sq)).toBe(1);
+        expect(hit1.sq.bind).toBe(3);
+        const hit2 = absorbDestroy(hit1.sq);
+        expect(hit2.blocked).toBe(true);
+        expect(isFrozen(hit2.sq)).toBe(false);
+        expect(applyDamage(hit2.sq, 2, 'skill').sq.bind).toBe(1); // 氷結が無くなればダメージが通る
+    });
+
+    it('発火すると氷結は全スタックが解除される', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 4, '❄', '❄', '❄');
+        ignite(b, [6], 4);
+        expect(isFrozen(b[5])).toBe(false);
+    });
+
+    it('氷結が付くとバッズは消える。氷結中はロックできない', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱', '🌱');
+        freeze(b, [0]);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(lockable(b[0])).toBe(false);
+        expect(lockable(sq('💙', 3, '🌱'))).toBe(true);
+        // ロック中のコマには氷結が付かない
+        const l = emptyBoard();
+        l[0] = sq('💙', 3, '🔑');
+        expect(freeze(l, [0])).toEqual([]);
+    });
+
+    it('氷室の番人の解除クリック: ライフが残る敵の氷結マスだけ', () => {
+        expect(canThawByClick(sq('⭕', 3, '❄'), '💙')).toBe(true);
+        expect(canThawByClick(sq('⭕', 0, '❄'), '💙')).toBe(false);
+        expect(canThawByClick(sq('💙', 3, '❄'), '💙')).toBe(false);
+        expect(canThawByClick(sq('⭕', 3), '💙')).toBe(false);
+    });
+
+    it('氷室の番人のライフ加算は自陣の氷結スタック総数×0.5', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '❄', '❄');
+        b[1] = sq('💙', 3, '❄');
+        b[2] = sq('⭕', 3, '❄', '❄', '❄');
+        expect(frozenLifeBonus(b, '💙')).toBe(1.5);
+        expect(frozenLifeBonus(b, '⭕')).toBe(1.5);
     });
 
     it('氷河期の対象は自陣のライフが残る未氷結のコマ', () => {
@@ -202,7 +258,7 @@ describe('sim/thermal.js との一致', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const sim = require('../../../sim/thermal.js');
     const kinds = ['skill', 'electric', 'poison'] as const;
-    const combos: Effect['effect'][][] = [[], ['❄'], ['🔥'], ['🔥', '🔥'], ['❄', '🔥'], ['🔑'], ['☠', '🔥'], ['⚡', '❄']];
+    const combos: Effect['effect'][][] = [[], ['❄'], ['❄', '❄'], ['🌱', '❄'], ['🔥'], ['🔥', '🔥'], ['❄', '🔥'], ['🔑'], ['☠', '🔥'], ['⚡', '❄']];
     const squares = [0, 1, 3, 8].flatMap((bind) => combos.map((e) => sq('💙', bind, ...e)));
 
     it('applyDamage / absorbDestroy / zeroOut が一致', () => {
@@ -211,7 +267,11 @@ describe('sim/thermal.js との一致', () => {
             expect(sim.absorbDestroy(s)).toEqual(absorbDestroy(s));
             expect(sim.zeroOut(s)).toEqual(zeroOut(s));
             expect(sim.canFreeze(s)).toBe(canFreeze(s));
-            for (const mover of ['you', 'cryomancer']) expect(sim.overwriteBlocked(s, mover)).toBe(overwriteBlocked(s, mover as CharacterId));
+            expect(sim.overwriteBlocked(s)).toBe(overwriteBlocked(s));
+            expect(sim.frozenStacks(s)).toBe(frozenStacks(s));
+            expect(sim.thawOne(s)).toEqual(thawOne(s));
+            expect(sim.lockable(s)).toBe(lockable(s));
+            expect(sim.canThawByClick(s, '⭕')).toBe(canThawByClick(s, '⭕'));
         }
     });
 

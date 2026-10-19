@@ -1,12 +1,13 @@
 // ❄氷結 / 🔥火炎の純粋ロジック。Game.tsx / AIPlayer.ts で共有する。
 // sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
 //
-// ❄氷結（スタックしない）
+// ❄氷結（スタックする。❄が1つでもあれば氷結中）
+//   - 氷結が付いた時点でそのマスの🌱バッズは消える。氷結中のマスには🔑ロックを掛けられない
 //   - ターン進行（自然減衰・火炎の継続ダメージ）でライフが減らない。毒のダメージは受ける
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
-//   - スキルでダメージを受けるとき、ダメージの代わりに氷結が解除される
-//   - 自陣のコマへの上書き（強化）ができなくなる（氷室の番人は除く）
-//   - 隣（縦横）のマスや自マスに🔥が付く（発火する）と即座に解除される
+//   - スキルでダメージを受けるとき、ダメージを受ける代わりに氷結が1スタック減る
+//   - 自陣のコマへの上書き（強化）ができなくなる
+//   - 隣（縦横）のマスや自マスに🔥が付く（発火する）と、全スタックが即座に解除される
 // 🔥火炎（スタックする）
 //   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師の自陣コマは受けない
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
@@ -21,6 +22,7 @@ export const FLAME_BURN_DAMAGE = 2;
 /** 火炎状態のマスがスキルでダメージを受けるときの倍率（切り上げ） */
 export const FLAME_SKILL_MULT = 1.5;
 
+export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
 export const flameStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🔥').length;
 
@@ -31,12 +33,28 @@ const without = (sq: SquareInfo, ...kinds: string[]): SquareInfo => ({
     effects: sq.effects.filter((e) => !kinds.includes(e.effect)),
 });
 
-/** 氷結を解除した（マスのコピーを返す。氷結が無ければ同じ参照） */
+/** 氷結を全スタック解除した（マスのコピーを返す。氷結が無ければ同じ参照） */
 export const thaw = (sq: SquareInfo): SquareInfo => (isFrozen(sq) ? without(sq, '❄') : sq);
 
-/** 氷結中の自陣コマへの上書き（強化）が禁じられているか。氷室の番人は氷結していても強化できる */
-export const overwriteBlocked = (sq: SquareInfo, mover: CharacterId | undefined): boolean =>
-    isFrozen(sq) && mover !== 'cryomancer';
+/** 氷結を1スタックだけ減らした（氷結が無ければ同じ参照） */
+export const thawOne = (sq: SquareInfo): SquareInfo => {
+    const at = sq.effects.findIndex((e) => e.effect === '❄');
+    return at === -1 ? sq : { ...sq, effects: sq.effects.filter((_, i) => i !== at) };
+};
+
+/** 氷結中の自陣コマへの上書き（強化）が禁じられているか */
+export const overwriteBlocked = (sq: SquareInfo): boolean => isFrozen(sq);
+
+/** 氷室の番人が手番で押すと氷結を解除できるマスか: 氷結中でライフが0でない敵コマ */
+export const canThawByClick = (sq: SquareInfo, me: SquareInfo['player']): boolean =>
+    !!sq.player && sq.player !== me && sq.bind > 0 && isFrozen(sq);
+
+/** 氷室の番人のライフ平均への加算: 自陣コマの氷結スタック総数 × 0.5 */
+export const frozenLifeBonus = (board: SquareInfo[], player: SquareInfo['player']): number =>
+    board.reduce((n, sq) => (sq.player === player ? n + frozenStacks(sq) : n), 0) * 0.5;
+
+/** 🔑ロックを掛けられるマスか: 氷結中でない */
+export const lockable = (sq: SquareInfo): boolean => !isFrozen(sq);
 
 /** ターン進行の火炎ダメージ（スタック×2）。煉獄の鍛冶師の自陣・氷結・🔑ロックは受けない */
 export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): number => {
@@ -62,7 +80,7 @@ export type DamageResult = {
  * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。1以上ダメージが通ると🔥は全部消える。
  */
 export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): DamageResult => {
-    if (kind === 'skill' && isFrozen(sq)) return { sq: thaw(sq), dealt: 0, blocked: true };
+    if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）
     if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
     const real = kind === 'skill' && flameStacks(sq) > 0 ? Math.ceil(amount * FLAME_SKILL_MULT) : amount;
@@ -77,7 +95,7 @@ export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): D
  * そうでなければ元のマスのまま返す（呼び出し側が破壊・ライフ0化を行う）
  */
 export const absorbDestroy = (sq: SquareInfo): { sq: SquareInfo; blocked: boolean } =>
-    isFrozen(sq) ? { sq: thaw(sq), blocked: true } : { sq, blocked: false };
+    isFrozen(sq) ? { sq: thawOne(sq), blocked: true } : { sq, blocked: false };
 
 /** ライフを丸ごと0にする（倍率なし）。ライフが残っていたなら🔥は消える。氷結の判定は absorbDestroy で先に行う */
 export const zeroOut = (sq: SquareInfo): SquareInfo => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
@@ -97,15 +115,15 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number): { th
     return { thawed: Array.from(thawed) };
 };
 
-/** 氷結を付けられるマスか: コマがあり、まだ氷結しておらず、🔑ロック中でない */
-export const canFreeze = (sq: SquareInfo): boolean => !!sq.player && !isFrozen(sq) && !hasLock(sq);
+/** 氷結を付けられるマスか: コマがあり、🔑ロック中でない（氷結済みでも重ねられる） */
+export const canFreeze = (sq: SquareInfo): boolean => !!sq.player && !hasLock(sq);
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
 export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
     const done: number[] = [];
     for (const k of cells) {
         if (!canFreeze(board[k])) continue;
-        board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] };
+        board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '❄' }] }; // 氷結が付くとバッズは消える
         done.push(k);
     }
     return done;
@@ -113,7 +131,7 @@ export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
 
 /** 氷河期（氷室の番人）: 自陣のライフが残っているコマで、まだ氷結していないマス */
 export const glacierTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
-    board.map((sq, i) => (sq.player === player && sq.bind > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+    board.map((sq, i) => (sq.player === player && sq.bind > 0 && !isFrozen(sq) && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
 /** フレアバースト（煉獄の鍛冶師）: 中心と縦横隣のうち、🔥を付けられる敵コマ（ライフ>0・🔑なし） */
 export const flareTargets = (board: SquareInfo[], center: number, size: number, me: SquareInfo['player']): number[] =>

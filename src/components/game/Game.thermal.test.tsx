@@ -21,7 +21,7 @@ describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
         expect(screen.getAllByText(/フレアバースト/).length).toBeGreaterThan(0);
     });
 
-    it('氷河期: 自陣のコマが凍り、ライフが減らず、氷室の番人だけは重ねて強化できる', () => {
+    it('氷河期: 自陣のコマが凍り、ライフが減らず、重ねて強化もできなくなる', () => {
         const { container } = render(<Game players={cfg('cryomancer', 'you')} />);
         // 魔力を7まで貯める: 💙チャージ(+3) → ⭕着手 → 💙(魔力6)着手 → ⭕着手 → 💙(魔力7)
         fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
@@ -43,8 +43,9 @@ describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
         fireEvent.click(cells(container)[11]); // ⭕着手
         expect(lifeAt(container, 0)).toBe(before);
 
-        // 氷室の番人は氷結中の自陣コマにも重ねて強化できる
+        // 氷結中の自陣コマには重ねて強化できない（クリックしても何も起きず、手番も進まない）
         fireEvent.click(cells(container)[0]);
-        expect(lifeAt(container, 0)).toBeGreaterThan(before);
+        expect(lifeAt(container, 0)).toBe(before);
+        expect(screen.getAllByText('⭕').length).toBeGreaterThan(0);
     });
 });

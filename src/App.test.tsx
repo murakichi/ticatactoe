@@ -20,7 +20,7 @@ test('キャラ説明のライフ平均は実装の定数から描画される',
     const giant = screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.giant}`));
     expect(giant.length).toBe(2); // 💙 / ⭕ の2枚
     expect(screen.getAllByText(new RegExp(`陽=ライフ平均${LIFE_MEANS.yinYangMaster_yang}`)).length).toBe(2);
-    expect(screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.electrician}`)).length).toBe(2);
+    expect(screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.electrician}。固有:帯電拡散`)).length).toBe(2);
 });
 
 test('対戦スタートで盤面に切り替わる', () => {

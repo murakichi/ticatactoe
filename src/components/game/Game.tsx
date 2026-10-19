@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, canFreeze, glacierTargets, flareTargets, overwriteBlocked } from './thermal';
+import { isFrozen, thaw, canThawByClick, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, canFreeze, glacierTargets, flareTargets, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -268,6 +268,12 @@ export const Game = (props: GameProps) => {
         }
         const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
 
+        // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
+        if (result.lockTargets?.some((t) => !lockable(currentBoard[t]))) {
+            result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
+            result.lockTargets = undefined;
+        }
+
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         setLockedSkillsAt(turnSeat, aiLocks);
@@ -463,7 +469,9 @@ export const Game = (props: GameProps) => {
         const nextLife = calculateLife(
             nextCharacter,
             yinYangMode[nextSeat],
-            (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) + gearLifeBonus(nextGears),
+            (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
+                (nextCharacter === 'cryomancer' ? frozenLifeBonus(currentBoard, nextSymbol) : 0) +
+                gearLifeBonus(nextGears),
             gearLifeStd(nextGears, LIFE_STD)
         );
         // サイレンスは「封じられた側の手番が終わるたび」に解除
@@ -545,6 +553,7 @@ export const Game = (props: GameProps) => {
         }
 
         if (useLock > 0) {
+            if (!lockable(nextBoard[i])) return; // 氷結中のマスにはロックできない。選び直せる
             applyLock(nextBoard, i);
             harvestMagic(1);
             addLog(`${posName(i)}をロック`);
@@ -583,6 +592,15 @@ export const Game = (props: GameProps) => {
         if (calculateWinner(currentBoard.map((x) => x.player))) {
             return;
         } else if (currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer) {
+            // 氷室の番人: ライフが残る敵の氷結マスを押すと、氷結を全部解除する（着手の代わりに手番を終える）
+            if (currentCharacter === 'cryomancer' && canThawByClick(currentBoard[i], currentTurnPlayer)) {
+                nextBoard[i] = thaw(nextBoard[i]);
+                addLog(`${posName(i)}の氷結を解除`);
+                playEffect('flame', i);
+                setCurrentBoard(nextBoard);
+                setCurrentTurn(currentTurn + 1);
+                return;
+            }
             if (currentBoard[i].bind > 0 && currentCharacter !== 'giant') {
                 return;
             }
@@ -592,8 +610,8 @@ export const Game = (props: GameProps) => {
             return;
         }
 
-        // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
-        if (currentBoard[i].player === currentTurnPlayer && overwriteBlocked(currentBoard[i], currentCharacter)) {
+        // ❄氷結中の自陣コマには重ねて強化できない
+        if (currentBoard[i].player === currentTurnPlayer && overwriteBlocked(currentBoard[i])) {
             return;
         }
 
@@ -822,6 +840,7 @@ export const Game = (props: GameProps) => {
     // ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
     const applyLock = (board: SquareInfo[], idx: number) => {
         const sq = board[idx];
+        if (!lockable(sq)) return;
         const owner = hasGear(turnGears, 'emptyLock') && !sq.player ? turnSeat + 1 : undefined;
         const lockBind = gearLockBind(turnGears);
         const lock: Effect = owner ? { effect: '🔑', value: owner } : { effect: '🔑' };

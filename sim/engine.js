@@ -334,6 +334,7 @@ function connectedPieces(board, start, size) {
 // ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
 function applyLock(s, idx) {
     const sq = s.board[idx];
+    if (thermal.isFrozen(sq)) return; // 氷結中のマスにはロックが掛からない
     const g = s.gears[s.turn];
     const owner = hasGear(g, 'emptyLock') && !sq.player ? s.turn + 1 : undefined;
     sq.effects.push(owner ? { effect: '🔑', value: owner } : { effect: '🔑' });
@@ -574,6 +575,13 @@ function calculateTokenBind(s) {
     return delta === 0 ? base : Math.max(1, base + delta);
 }
 
+// 自陣コマの❄の総数（氷室の番人のライフ期待値 +0.5/個）
+function frozenStacksFor(board, player) {
+    let n = 0;
+    for (const sq of board) if (sq.player === player) n += thermal.frozenStacks(sq);
+    return n;
+}
+
 function budsCount(board, player) {
     return board
         .filter((x) => x.player === player)
@@ -621,7 +629,7 @@ function advanceTurn(s) {
         else { s.proliferate[next] = false; s.proliferateCount[next] = 0; }
     }
     s.magic[next] = nextMagic;
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + (ch === 'cryomancer' ? 0.5 * frozenStacksFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
@@ -688,6 +696,7 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useLock > 0) {
+        if (thermal.isFrozen(board[i])) return false; // 氷結中は選べない
         applyLock(s, i);
         harvestMagic(s, 1);
         s.useLock -= 1;
@@ -715,13 +724,20 @@ function placeMove(s, i) {
     }
 
     if (s.winner) return false;
+    // 氷室の番人: ライフが残る敵の氷結マスを着手でクリックすると❄を全部解除する（奪わない・置かない）。着手の代わりに手番を終える（減衰なし）
+    if (curChar(s) === 'cryomancer' && board[i].player && board[i].player !== curPlayer(s) && board[i].bind > 0 && thermal.isFrozen(board[i])) {
+        board[i] = thermal.thaw(board[i]);
+        bumpStat(s, 'wardenThaw');
+        endTurn(s);
+        return true;
+    }
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
-    if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i], curChar(s))) return false;
+    if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i])) return false;
 
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
     const decayNow = shouldDecay(s.placements, seatCount(s));
