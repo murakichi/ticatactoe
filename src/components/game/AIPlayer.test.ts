@@ -263,3 +263,18 @@ describe('毒使いのミアズマと毒花 (sim/ai.js と同じ動き)', () => 
         expect(ai.makeMove(weak, 10, costs, 2, 5, [15], false).stompTarget).not.toBe(5);
     });
 });
+
+describe('毒使いはトークン系スキルを手札でロックして残す (sim/ai.js と同じ)', () => {
+    it('ポイズントークン(16)・トークン(3)を優先してロックする。両トークン(4)は対象外', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const locks = ai.chooseLocks(emptyBoard(), 2, 5, [4, 16, 3, 7]);
+        expect(locks).toEqual(expect.arrayContaining([16, 3]));
+        expect(locks).not.toContain(4);
+        expect(locks.length).toBeLessThanOrEqual(2);
+    });
+
+    it('他のキャラ(あなた)はこのロックを優先しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.chooseLocks(emptyBoard(), 2, 5, [16])).not.toContain(16);
+    });
+});

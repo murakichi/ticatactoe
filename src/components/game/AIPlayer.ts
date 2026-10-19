@@ -575,9 +575,12 @@ class AIPlayer {
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
         const budsIdx = [2, 10];
+        // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
+        const poisonerTokenIdx = [3, 9, 11, 16];
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            (this.character === 'magician' && budsIdx.includes(idx));
+            (this.character === 'magician' && budsIdx.includes(idx)) ||
+            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {

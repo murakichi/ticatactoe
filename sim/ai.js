@@ -121,7 +121,7 @@ const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // �
 // ギア向けの戦略を使うか: そのギアを装備している席、または検証用に forceAi で指定された席。GEAR_AI=0 で全て無効化(A/B用)
 const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
 const TK_AI = process.env.TK_AI !== '0'; // トークン系スキルを残すロック（A/B用に無効化できる）
-const TK_CHARS = (process.env.TK_CHARS || 'poisoner,magician').split(','); // 対象のキャラ
+const TK_CHARS = (process.env.TK_CHARS || 'poisoner').split(','); // 対象のキャラ
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
 const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
@@ -720,8 +720,9 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
-    // トークン系スキルを手札でロックして、毎手番トークンを撃てるようにする(毒使い・魔法使い)。ギアとは無関係の通常のAI改善。
-    // A/B(ギアなし、500試合×seed2): 毒使い 0.346→0.425、魔法使い 0.600→0.662。巨人は +0.5pt、陰陽師は -2.7pt で対象外。TK_AI=0 で無効化(A/B用)
+    // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
+    // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
+    // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
     const tokenLockAi = TK_AI && TK_CHARS.includes(character0);
     // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化（魔法使いはトークンを残すため例外）
     if (!tokenLockAi && (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster')) return [];
