@@ -113,7 +113,13 @@ export const zeroOut = (sq: SquareInfo): SquareInfo => (sq.bind > 0 ? without({ 
  * 氷結中のマスなら🔥は付かず代わりに❄が1つ減る。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
  * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
  */
-export const ignite = (board: SquareInfo[], cells: number[], size: number, n: number = 1): { thawed: number[] } => {
+export const ignite = (
+    board: SquareInfo[],
+    cells: number[],
+    size: number,
+    n: number = 1,
+    keepBuds?: (sq: SquareInfo) => boolean
+): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
         for (let c = 0; c < n; c++) {
@@ -122,8 +128,8 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number, n: nu
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くとそのマスの🌱バッズは燃えて消える
-            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '🔥' }] };
+            // 🔥が付くとそのマスの🌱バッズは燃えて消える（冬至の種子のガード中は消えない）
+            board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -139,11 +145,11 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number, n: nu
 export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq);
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
+export const freeze = (board: SquareInfo[], cells: number[], keepBuds?: (sq: SquareInfo) => boolean): number[] => {
     const done: number[] = [];
     for (const k of cells) {
         if (!canFreeze(board[k])) continue;
-        board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '❄' }] }; // 氷結が付くとバッズは消える
+        board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '❄' }] }; // 氷結が付くとバッズは消える（ガード中は除く）
         done.push(k);
     }
     return done;
@@ -182,10 +188,11 @@ export const reducedGlacierCost = (baseCost: number, board: SquareInfo[], calc: 
     Math.max(1, calc(baseCost - frozenCellCount(board)));
 
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-export const freezeAll = (board: SquareInfo[]): number[] =>
+export const freezeAll = (board: SquareInfo[], keepBuds?: (sq: SquareInfo) => boolean): number[] =>
     freeze(
         board,
-        board.map((_, i) => i)
+        board.map((_, i) => i),
+        keepBuds
     );
 
 export type DetonateResult = {
@@ -251,4 +258,47 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     const poison = next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
     return next;
+};
+
+// ---- バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）の純粋ロジック ----
+// sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
+// 冬至の種子の「🌱ガード」は、freeze / freezeAll / ignite の keepBuds 述語として渡す。
+
+/** マスの🌱の数 */
+export const budStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🌱').length;
+
+/** 新しく🌱を持てるコマか: コマがあり、氷結中でなく、🔥が付いていない（付けても氷結・火炎ですぐ消えるため） */
+export const canBud = (sq: SquareInfo): boolean => !!sq.player && !isFrozen(sq) && flameStacks(sq) === 0;
+
+/** 刈り入れ前夜: player のコマの🌱を全部除去して、除去した数を返す。board を直接書き換える */
+export const harvestBuds = (board: SquareInfo[], player: SquareInfo['player']): number => {
+    let n = 0;
+    board.forEach((sq, i) => {
+        if (sq.player !== player) return;
+        const k = budStacks(sq);
+        if (k === 0) return;
+        n += k;
+        board[i] = without(sq, '🌱');
+    });
+    return n;
+};
+
+/** ひこばえの受け手: cell の縦横隣にある player のコマのうち、🌱を持てるもの */
+export const budReceivers = (board: SquareInfo[], cell: number, player: SquareInfo['player'], size: number): number[] =>
+    orthoNeighbors(cell, size).filter((k) => board[k].player === player && canBud(board[k]));
+
+/** ひこばえ: cell の縦横隣の自陣コマ全てに🌱を1つずつ足す。受け取ったマスを返す。board を直接書き換える */
+export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['player'], size: number): number[] => {
+    const receivers = budReceivers(board, cell, player, size);
+    for (const k of receivers) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+    return receivers;
+};
+
+/** 風の落とし子の候補: player のコマで🌱を持てるマス（昇順） */
+export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 風の落とし子: picks の各マス（重複可）に🌱を1つずつ足す。board を直接書き換える */
+export const sow = (board: SquareInfo[], picks: number[]): void => {
+    for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 };

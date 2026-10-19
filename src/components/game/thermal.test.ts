@@ -12,6 +12,13 @@ import {
     freeze,
     infernoTargets,
     decayTick,
+    budStacks,
+    canBud,
+    harvestBuds,
+    budReceivers,
+    graft,
+    sowCandidates,
+    sow,
     cleanse,
     ailmentStacks,
     AILMENTS,
@@ -450,5 +457,123 @@ describe('浄化（汎用スキル）', () => {
         expect(sim.cleanse(a, '💙')).toEqual(cleanse(c, '💙'));
         expect(a).toEqual(c);
         expect(sim.AILMENTS).toEqual(AILMENTS);
+    });
+});
+
+describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）', () => {
+    it('刈り入れ前夜: 自陣の🌱を全部除去して数を返す。他人のコマは触らない', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱', '🌱', '☠');
+        b[1] = sq('💙', 3, '🌱');
+        b[2] = sq('⭕', 3, '🌱');
+        expect(harvestBuds(b, '💙')).toBe(3);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['☠']);
+        expect(budStacks(b[1])).toBe(0);
+        expect(budStacks(b[2])).toBe(1);
+        expect(harvestBuds(b, '💙')).toBe(0);
+    });
+
+    it('冬至の種子: keepBuds が真なら、氷結・火炎が付いても🌱は消えない（偽・省略なら消える）', () => {
+        const guarded = (x: SquareInfo) => x.player === '💙';
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱');
+        b[5] = sq('⭕', 3, '🌱');
+        b[10] = sq('💙', 3, '🌱');
+        b[15] = sq('💙', 3, '🌱');
+        freeze(b, [0, 5], guarded);
+        expect(budStacks(b[0])).toBe(1); // 💙はガード
+        expect(budStacks(b[5])).toBe(0); // ⭕はガードなし
+        ignite(b, [10], 4, 1, guarded);
+        expect(budStacks(b[10])).toBe(1);
+        expect(flameStacks(b[10])).toBe(1);
+        freezeAll(b, guarded);
+        expect(budStacks(b[15])).toBe(1);
+        const c = emptyBoard();
+        c[10] = sq('💙', 3, '🌱');
+        ignite(c, [10], 4);
+        expect(budStacks(c[10])).toBe(0); // 省略時は従来どおり
+    });
+
+    it('ひこばえ: 縦横隣の自陣コマ全てに🌱を1つ。氷結・火炎中のコマ・敵・空きマス・斜めには付かない', () => {
+        const b = emptyBoard();
+        b[5] = sq('💙', 3, '🌱');
+        b[1] = sq('💙', 3);
+        b[4] = sq('💙', 3, '🌱');
+        b[6] = sq('💙', 3, '❄');
+        b[9] = sq('💙', 3, '🔥');
+        b[0] = sq('💙', 3); // 斜め
+        b[10] = sq('⭕', 3);
+        expect(canBud(b[6])).toBe(false);
+        expect(budReceivers(b, 5, '💙', 4).sort((a, c) => a - c)).toEqual([1, 4]);
+        expect(graft(b, 5, '💙', 4).sort((a, c) => a - c)).toEqual([1, 4]);
+        expect(budStacks(b[1])).toBe(1);
+        expect(budStacks(b[4])).toBe(2);
+        expect(budStacks(b[0])).toBe(0);
+        expect(budStacks(b[10])).toBe(0);
+    });
+
+    it('風の落とし子: 候補は自陣の🌱を持てるコマ。同じコマへの重複付与も可', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('💙', 3, '❄');
+        b[2] = sq('💙', 3, '🔥');
+        b[3] = sq('⭕', 3);
+        b[4] = sq('💙', 3, '🌱');
+        expect(sowCandidates(b, '💙')).toEqual([0, 4]);
+        sow(b, [0, 0, 4]);
+        expect(budStacks(b[0])).toBe(2);
+        expect(budStacks(b[4])).toBe(2);
+    });
+
+    it('sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = () => {
+            const b = emptyBoard();
+            b[5] = sq('💙', 3, '🌱', '🌱');
+            b[1] = sq('💙', 3);
+            b[4] = sq('💙', 3, '🌱');
+            b[6] = sq('💙', 3, '❄', '🌱');
+            b[9] = sq('💙', 3, '🔥', '🌱');
+            b[10] = sq('⭕', 3, '🌱');
+            return b;
+        };
+        const guarded = (x: SquareInfo) => x.player === '💙';
+        for (const s of mk()) {
+            expect(sim.canBud(s)).toBe(canBud(s));
+            expect(sim.budStacks(s)).toBe(budStacks(s));
+        }
+        expect(sim.sowCandidates(mk(), '💙')).toEqual(sowCandidates(mk(), '💙'));
+        expect(sim.budReceivers(mk(), 5, '💙', 4)).toEqual(budReceivers(mk(), 5, '💙', 4));
+        const a = mk();
+        const c = mk();
+        expect(sim.graft(a, 5, '💙', 4)).toEqual(graft(c, 5, '💙', 4));
+        expect(a).toEqual(c);
+        expect(sim.harvestBuds(a, '💙')).toBe(harvestBuds(c, '💙'));
+        expect(a).toEqual(c);
+        const d = mk();
+        const e = mk();
+        sim.sow(d, [0, 0, 5]);
+        sow(e, [0, 0, 5]);
+        expect(d).toEqual(e);
+        for (const [fs, ft] of [[sim.freeze, freeze], [sim.ignite, ignite]] as const) {
+            expect(fs).toBeDefined();
+            expect(ft).toBeDefined();
+        }
+        const f = mk();
+        const g = mk();
+        sim.freeze(f, [5, 10], guarded);
+        freeze(g, [5, 10], guarded);
+        expect(f).toEqual(g);
+        const h = mk();
+        const i = mk();
+        sim.ignite(h, [5, 10], 4, 1, guarded);
+        ignite(i, [5, 10], 4, 1, guarded);
+        expect(h).toEqual(i);
+        const j = mk();
+        const k = mk();
+        sim.freezeAll(j, guarded);
+        freezeAll(k, guarded);
+        expect(j).toEqual(k);
     });
 });

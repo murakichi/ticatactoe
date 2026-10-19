@@ -183,6 +183,11 @@ const skillCosts = {
     onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
     onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
     onClickInferno: (config.thermal && config.thermal.infernoCost) || 9,
+    // 🌱バッズ系の汎用スキル idx 33〜36
+    onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
+    onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
+    onClickSucker: (config.thermal && config.thermal.suckerCost) || 3,
+    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -485,6 +490,8 @@ function newGame(opts = {}) {
         useChargeArea: false,
         useJammer: false,
         useFreeze: false,
+        useSucker: false,
+        budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
         useIgnite: false,
         stats: {},
@@ -632,6 +639,8 @@ function advanceTurn(s) {
     }
     s.magic[next] = nextMagic;
     // 絶対零度: 使用者の手番開始時に敵の❄マスを爆破（ダメージ→❄全除去、0以下なら破壊=墓地+）
+    // 冬至の種子の🌱ガードは、その席の次の自分の手番開始時に解除
+    s.budGuard[next] = false;
     if (s.glacierPending[next]) {
         s.glacierPending[next] = false;
         const det = thermal.detonate(s.board, sym);
@@ -685,15 +694,20 @@ function placeMove(s, i) {
         exeChargeArea(s, i);
         return true;
     }
+    if (s.useSucker) {
+        if (!exeSucker(s, i)) return false; // 選べないコマは選び直せる
+        s.useSucker = false;
+        return true;
+    }
     if (s.useFreeze) {
         if (!thermal.canFreeze(board[i])) return false; // 空きマス・氷結済み・ロック中は選び直せる
-        thermal.freeze(board, [i]);
+        thermal.freeze(board, [i], keepBudsFn(s));
         s.useFreeze = false;
         return true;
     }
     if (s.useIgnite) {
         if (!board[i].player) return false;
-        thermal.ignite(board, [i], s.size);
+        thermal.ignite(board, [i], s.size, 1, keepBudsFn(s));
         s.useIgnite = false;
         return true;
     }
@@ -1439,7 +1453,7 @@ function glacierCost(s) {
 function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
     const cost = glacierCost(s);
-    const done = thermal.freezeAll(s.board);
+    const done = thermal.freezeAll(s.board, keepBudsFn(s));
     s.glacierPending[s.turn] = true;
     spendMagic(s, cost);
     bumpStat(s, 'glacier');
@@ -1450,6 +1464,74 @@ function onClickGlacier(s) {
 function hasAilment(board, player) {
     return board.some((sq) => sq.player === player && sq.effects.some((e) => thermal.AILMENTS.includes(e.effect)));
 }
+// ---- 🌱バッズ系の汎用スキル (idx 33〜36) ----
+// 冬至の種子の🌱ガード: 氷結・火炎を受けてもその席のコマの🌱が消えない
+function keepBudsFn(s) {
+    return (sq) => !!sq.player && !!s.budGuard[seatOf(sq.player)];
+}
+// 刈り入れ前夜 (idx 33): 自陣の🌱を全部取り除き、取り除いた数だけ魔力を得る。自陣に🌱が無ければ不発
+function ownBuds(s) {
+    return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + thermal.budStacks(sq) : n), 0);
+}
+function onClickHarvestEve(s) {
+    if (ownBuds(s) < 1) return;
+    const n = thermal.harvestBuds(s.board, curPlayer(s));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickHarvestEve));
+    s.magic[s.turn] += n;
+    bumpMagicCount(s);
+    bumpStat(s, 'harvestEve');
+    bumpStat(s, 'harvestEveBuds', n);
+}
+// 冬至の種子 (idx 34): 自分に🌱ガードを付ける。ガード中の再使用は不可
+function onClickSolstice(s) {
+    if (s.budGuard[s.turn]) return;
+    s.budGuard[s.turn] = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSolstice));
+    bumpMagicCount(s);
+    bumpStat(s, 'solstice');
+}
+// ひこばえ (idx 35): 🌱を持つ自陣コマ1つを選ぶと、その縦横隣の自陣コマ(canBud)全てに🌱を1つずつ足す
+function suckerTargets(s) {
+    const me = curPlayer(s);
+    const out = [];
+    s.board.forEach((sq, i) => {
+        if (sq.player === me && thermal.budStacks(sq) > 0 && thermal.budReceivers(s.board, i, me, s.size).length > 0) out.push(i);
+    });
+    return out;
+}
+/** 受け取れる隣が最も多い対象（なければ null）。AI 用 */
+function bestSuckerTarget(s) {
+    let best = null, bestN = 0;
+    for (const i of suckerTargets(s)) {
+        const n = thermal.budReceivers(s.board, i, curPlayer(s), s.size).length;
+        if (n > bestN) { bestN = n; best = i; }
+    }
+    return best;
+}
+function exeSucker(s, i) {
+    if (!suckerTargets(s).includes(i)) return false;
+    const got = thermal.graft(s.board, i, curPlayer(s), s.size);
+    bumpStat(s, 'suckerCells', got.length);
+    return true;
+}
+function onClickSucker(s) {
+    if (suckerTargets(s).length === 0) return; // 選べるコマが無ければ不発
+    s.useSucker = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSucker));
+    bumpMagicCount(s);
+    bumpStat(s, 'sucker');
+}
+// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複を許してランダムに3回選び、🌱を1つずつ足す
+function onClickWindborne(s) {
+    const cands = thermal.sowCandidates(s.board, curPlayer(s));
+    if (!cands.length) return;
+    const picks = [0, 1, 2].map(() => randomPick(cands, s.rng));
+    thermal.sow(s.board, picks);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne));
+    bumpMagicCount(s);
+    bumpStat(s, 'windborne');
+}
+
 function onClickCleanse(s) {
     if (!hasAilment(s.board, curPlayer(s))) return;
     const done = thermal.cleanse(s.board, curPlayer(s));
@@ -1464,7 +1546,7 @@ function infernoTargets(s) {
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
-    thermal.ignite(s.board, targets, s.size, 2);
+    thermal.ignite(s.board, targets, s.size, 2, keepBudsFn(s));
     spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
     bumpStat(s, 'inferno');
     bumpStat(s, 'infernoCells', targets.length);
@@ -1516,6 +1598,10 @@ const SKILLS = {
     ignite: onClickIgnite,
     glacier: onClickGlacier,
     cleanse: onClickCleanse,
+    harvestEve: onClickHarvestEve,
+    solstice: onClickSolstice,
+    sucker: onClickSucker,
+    windborne: onClickWindborne,
     inferno: onClickInferno,
 };
 
@@ -1543,5 +1629,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, infernoTargets, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

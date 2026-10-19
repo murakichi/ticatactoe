@@ -4,11 +4,11 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..32)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 33;
+// 汎用スキルプールの大きさ (idx 0..36)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 37;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -49,6 +49,8 @@ class AIPlayer {
     shield: Set<number> = new Set();
     /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */
     glacierPending: boolean = false;
+    /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
+    budGuard: boolean = false;
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean) => number;
@@ -1110,6 +1112,44 @@ class AIPlayer {
                 cleanse(board, this.playerSymbol);
                 magic -= cost;
                 this.updateShield(board);
+            }
+        }
+        // バッズ系の汎用スキル。氷結・火炎で🌱が消えるキャラ（氷室の番人・煉獄の鍛冶師）が他席にいるときに守りに使う
+        {
+            const size = this.sizeOf(board);
+            const threatened = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || c === 'pyromancer'));
+            const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + budStacks(sq) : n), 0);
+            if (availableSkills.includes(34) && threatened && !this.budGuard && ownBuds() >= 3 && magic >= this.calculateAICost(costs.onClickSolstice)) {
+                chargeClicks.push({ skill: 'onClickSolstice' });
+                magic -= this.calculateAICost(costs.onClickSolstice);
+            } else if (availableSkills.includes(33) && threatened && this.character !== 'magician' && ownBuds() >= 4 && magic >= this.calculateAICost(costs.onClickHarvestEve)) {
+                chargeClicks.push({ skill: 'onClickHarvestEve' });
+                board = board.slice();
+                magic += harvestBuds(board, this.playerSymbol) - this.calculateAICost(costs.onClickHarvestEve);
+            }
+            if (availableSkills.includes(35) && magic >= this.calculateAICost(costs.onClickSucker)) {
+                let best = -1, bestN = 1;
+                board.forEach((sq, i) => {
+                    if (sq.player !== this.playerSymbol || budStacks(sq) === 0 || this.shield.has(i)) return;
+                    const n = budReceivers(board, i, this.playerSymbol, size).length;
+                    if (n > bestN) { best = i; bestN = n; }
+                });
+                if (best !== -1) {
+                    chargeClicks.push({ skill: 'onClickSucker', target: best });
+                    board = board.slice();
+                    graft(board, best, this.playerSymbol, size);
+                    magic -= this.calculateAICost(costs.onClickSucker);
+                }
+            }
+            if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne)) {
+                const cands = sowCandidates(board, this.playerSymbol);
+                if (cands.length >= 3 && ownBuds() < 3) {
+                    chargeClicks.push({ skill: 'onClickWindborne' });
+                    // 実際の配置はランダム。AIの内部盤面は代表として先頭3マスに足して見積もる
+                    board = board.slice();
+                    sow(board, cands.slice(0, 3));
+                    magic -= this.calculateAICost(costs.onClickWindborne);
+                }
             }
         }
         if (this.character === 'pyromancer') {

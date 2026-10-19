@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 
@@ -582,6 +582,16 @@ function chooseSkills(s, availableSkills) {
         if (theirs >= MIST_MIN_ENEMIES && theirs >= mine + MIST_MIN_LEAD) spend(calculateCost(s, costsOf(s).onClickPoisonMist, false, true), 'poisonMist');
     }
 
+    // 🌱バッズ系: 氷室の番人・煉獄の鍛冶師が他席にいるとき、🌱を守る/換金する
+    const thermalFoe = otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer' || s.chars[seat] === 'pyromancer');
+    const myBuds = ownBuds(s);
+    // 刈り入れ前夜: 魔法使い以外が🌱を4個以上抱えていて、燃やされ/凍らされる相手がいるなら魔力に換える
+    if (character !== 'magician' && availableSkills.includes(33) && myBuds >= 4 && thermalFoe) spend(calculateCost(s, costsOf(s).onClickHarvestEve), 'harvestEve');
+    // 冬至の種子: 🌱が3個以上あり、まだガード中でなければ
+    if (availableSkills.includes(34) && myBuds >= 3 && thermalFoe && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice), 'solstice');
+    // 風の落とし子: 自陣のコマ(🌱を持てる)が3個以上あり🌱が3個未満なら撒く
+    if (availableSkills.includes(36) && myBuds < 3 && thermal.sowCandidates(board, me).length >= 3) spend(calculateCost(s, costsOf(s).onClickWindborne), 'windborne');
+
     // 浄化: 自陣のライフが残るコマの状態異常が合計3スタック以上で撃つ（雷霆の巫の自陣⚡無敵コマの⚡は数えない。雷霆の巫AIは⚡を剥がすので撃たない）
     if (character !== 'electrician' && availableSkills.includes(32) && hasAilment(board, me)) {
         let stacks = 0;
@@ -860,6 +870,15 @@ function faithfulMakeMove(s) {
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3
         && infernoTargets(s).length > 0) {
         SKILLS.inferno(s);
+    }
+
+    // ひこばえ: 🌱を持つ自陣コマの隣に受け取れる自陣コマが2つ以上あれば撃つ（対象クリックが要る2段階スキル。手番は進まない）
+    if (availableSkills.includes(35) && curMagic(s) >= calculateCost(s, costsOf(s).onClickSucker)) {
+        const target = bestSuckerTarget(s);
+        if (target !== null && thermal.budReceivers(s.board, target, me, sizeOf(s.board)).length >= 2) {
+            SKILLS.sucker(s);
+            placeMove(s, target);
+        }
     }
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）

@@ -894,6 +894,135 @@ test('浄化のコスト: 毒使い+1・軍師+2の通常補正', () => {
     assert.strictEqual(t.heartMagic, 20 - 7);
 });
 
+// ---- 🌱バッズ系の汎用スキル (idx33〜36) ----
+const BUD = { effect: '🌱' };
+const budsOn = (sq) => sq.effects.filter((x) => x.effect === '🌱').length;
+
+test('刈り入れ前夜: 自陣の🌱を全除去し、除去した数だけ魔力+（コスト2）。🌱が無ければ不可。手番は続く', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 10;
+    s.board[1] = { player: '💙', bind: 3, effects: [BUD, BUD] };
+    s.board[2] = { player: '💙', bind: 3, effects: [BUD, { effect: '🔑' }] };
+    s.board[3] = { player: '⭕', bind: 3, effects: [BUD] };
+    e.SKILLS.harvestEve(s);
+    assert.strictEqual(s.heartMagic, 10 - 2 + 3);
+    assert.strictEqual(budsOn(s.board[1]) + budsOn(s.board[2]), 0);
+    assert.ok(s.board[2].effects.some((x) => x.effect === '🔑'));
+    assert.strictEqual(budsOn(s.board[3]), 1); // 敵の🌱は不変
+    assert.strictEqual(s.heartTurn, true);
+    const m = s.heartMagic;
+    e.SKILLS.harvestEve(s); // もう🌱が無い → 不発
+    assert.strictEqual(s.heartMagic, m);
+});
+
+test('冬至の種子: 🌱ガード中は氷結・火炎を受けても🌱が消えない。自分の次の手番開始時に解除。ガード中の再使用は不可', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20; s.life = 3;
+    s.board[1] = { player: '💙', bind: 5, effects: [BUD] };
+    s.board[2] = { player: '⭕', bind: 5, effects: [BUD] };
+    const before = s.heartMagic;
+    e.SKILLS.solstice(s);
+    assert.strictEqual(s.heartMagic, before - 4);
+    assert.strictEqual(s.budGuard[0], true);
+    const m = s.heartMagic;
+    e.SKILLS.solstice(s);
+    assert.strictEqual(s.heartMagic, m); // 再使用不可
+    // 自陣: 🌱ガード中は凍らされても🌱が残る。敵のコマは従来どおり消える
+    const th = require('./thermal');
+    const keep = (sq) => !!sq.player && s.budGuard[e.seatOf(sq.player)];
+    th.freeze(s.board, [1, 2], keep);
+    assert.strictEqual(budsOn(s.board[1]), 1);
+    assert.strictEqual(budsOn(s.board[2]), 0);
+    th.ignite(s.board, [1], s.size, 1, keep); // 氷結中は❄が減るだけ
+    const b = [...s.board]; b[1] = { player: '💙', bind: 5, effects: [BUD] };
+    th.ignite(b, [1], s.size, 1, keep);
+    assert.strictEqual(budsOn(b[1]), 1);
+    th.ignite(b, [1], s.size, 1); // ガード無しなら燃えて消える
+    assert.strictEqual(budsOn(b[1]), 0);
+    // 解除タイミング: 自分の次の手番開始時（相手の手番ではまだ有効）
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.heartTurn, false);
+    assert.strictEqual(s.budGuard[0], true);
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(s.budGuard[0], false);
+});
+
+test('冬至の種子: エンジンの氷結(絶対零度)・業火でもガード中の席の🌱は守られる', () => {
+    const s = game('cryomancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[1] = { player: '💙', bind: 5, effects: [BUD] };
+    s.budGuard[0] = true;
+    e.SKILLS.glacier(s);
+    assert.strictEqual(budsOn(s.board[1]), 1);
+    const t = game('pyromancer', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    t.board[1] = { player: '⭕', bind: 5, effects: [BUD] };
+    t.budGuard[1] = true;
+    e.SKILLS.inferno(t);
+    assert.strictEqual(budsOn(t.board[1]), 1);
+});
+
+test('ひこばえ: 🌱を持つ自陣コマを選ぶと、縦横隣の自陣コマ(canBud)全てに🌱を1つずつ足す。選べるコマが無ければ不可', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '💙', bind: 3, effects: [BUD] };   // 選ぶコマ
+    s.board[4] = { player: '💙', bind: 3, effects: [] };       // 受け取る
+    s.board[6] = { player: '💙', bind: 3, effects: [FRZ] };    // 氷結 → 不可
+    s.board[9] = { player: '💙', bind: 3, effects: [FLM] };    // 火炎 → 不可
+    s.board[1] = { player: '⭕', bind: 3, effects: [] };        // 敵 → 不可
+    s.board[10] = { player: '💙', bind: 3, effects: [] };      // 斜め → 不可
+    const before = s.heartMagic;
+    e.SKILLS.sucker(s);
+    assert.strictEqual(s.heartMagic, before - 3);
+    assert.strictEqual(s.useSucker, true);
+    assert.strictEqual(e.placeMove(s, 4), false);  // 🌱を持たないコマは選び直し
+    assert.strictEqual(e.placeMove(s, 1), false);  // 敵
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(budsOn(s.board[4]), 1);
+    assert.strictEqual(budsOn(s.board[5]), 1);
+    for (const k of [6, 9, 1, 10]) assert.strictEqual(budsOn(s.board[k]), 0);
+    assert.strictEqual(s.heartTurn, true);
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    t.board[5] = { player: '💙', bind: 3, effects: [BUD] }; // 隣に受け取れるコマ無し
+    e.SKILLS.sucker(t);
+    assert.strictEqual(t.useSucker, false);
+    assert.strictEqual(t.heartMagic, 20);
+});
+
+test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[1] = { player: '💙', bind: 3, effects: [] };
+    s.board[2] = { player: '💙', bind: 3, effects: [FRZ] };
+    s.board[3] = { player: '⭕', bind: 3, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.windborne(s);
+    assert.strictEqual(s.heartMagic, before - 3);
+    assert.strictEqual(budsOn(s.board[1]), 3); // 候補が1つだけなので3回とも同じコマ
+    assert.strictEqual(budsOn(s.board[2]) + budsOn(s.board[3]), 0);
+    assert.strictEqual(s.heartTurn, true);
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    e.SKILLS.windborne(t);
+    assert.strictEqual(t.heartMagic, 20);
+});
+
+test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () => {
+    const p = game('poisoner', 'you'); p.heartTurn = true; p.heartMagic = 20;
+    p.board[1] = { player: '💙', bind: 3, effects: [BUD] };
+    e.SKILLS.harvestEve(p);
+    assert.strictEqual(p.heartMagic, 20 - 3 + 1);
+    const t = game('tactician', 'you'); t.heartTurn = true; t.heartMagic = 20;
+    e.SKILLS.solstice(t);
+    assert.strictEqual(t.heartMagic, 20 - 6);
+    assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
+    assert.strictEqual(e.skillCosts.onClickSolstice, 4);
+    assert.strictEqual(e.skillCosts.onClickSucker, 3);
+    assert.strictEqual(e.skillCosts.onClickWindborne, 3);
+});
+
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
@@ -1142,7 +1271,7 @@ test('業火: 雷霆の巫の⚡無敵コマは対象外', () => {
 
 test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人6・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
-    assert.strictEqual(e.POOL_SIZE, 33);
+    assert.strictEqual(e.POOL_SIZE, 37);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
     assert.strictEqual(e.skillCosts.onClickInferno, 9);
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);

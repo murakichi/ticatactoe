@@ -68,7 +68,7 @@ const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { .
  * 🔥が実際に付いたときだけ、縦横隣の氷結を全スタック解除する（氷結が減っただけなら隣は解除しない）。
  * 戻り値 thawed = 氷結が減った/解除されたマスの添字（重複なし）。cells を先頭から順に処理する。board を直接書き換える
  */
-function ignite(board, cells, size, n = 1) {
+function ignite(board, cells, size, n = 1, keepBuds) {
     const thawed = new Set();
     for (const k of cells) {
         for (let t = 0; t < n; t++) {
@@ -78,7 +78,9 @@ function ignite(board, cells, size, n = 1) {
                 continue;
             }
             // 🔥が付くとそのマスの🌱バッズは燃えて消える
-            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '🔥' }] };
+            // keepBuds(そのマス)が真（冬至の種子の🌱ガード）なら🌱は燃えない
+            const keep = !!keepBuds && keepBuds(board[k]);
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => keep || e.effect !== '🌱'), { effect: '🔥' }] };
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
@@ -90,23 +92,58 @@ function ignite(board, cells, size, n = 1) {
 const emptyBlocked = (sq) => !sq.player && isFrozen(sq);
 /** 氷結を付けられるマスか: 🔑ロック中でない（空きマスにも置け、氷結済みでも重ねられる） */
 const canFreeze = (sq) => !hasLock(sq);
-function freeze(board, cells) {
+function freeze(board, cells, keepBuds) {
     const done = [];
     for (const k of cells) {
         if (!canFreeze(board[k])) continue;
         // 付くたびにそのマスの🌱を全部除去し、❄を1つ足す（スタック）
-        board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '❄' }] };
+        const keep = !!keepBuds && keepBuds(board[k]); // 冬至の種子の🌱ガード中は🌱が消えない
+        board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => keep || e.effect !== '🌱'), { effect: '❄' }] };
         done.push(k);
     }
     return done;
 }
 /** 絶対零度の使用時効果: 🔑のない全マス（空きマス含む）に❄を1つ。付いたマスを返す。board を直接書き換える */
-const freezeAll = (board) => freeze(board, board.map((_, i) => i));
+const freezeAll = (board, keepBuds) => freeze(board, board.map((_, i) => i), keepBuds);
 /**
  * 絶対零度の発動（使用者の次の手番開始時）: 使用者 me 以外のコマで❄が付いたマスに、❄スタック数×3の
  * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
  * 空きマスの❄は（試合が止まらないよう）ダメージなしで全除去する。自陣コマの❄だけ残す。board を直接書き換える
  */
+// ---- 🌱バッズ操作（刈り入れ前夜 / ひこばえ / 風の落とし子） ----
+/** 新しく🌱を持てるコマ: コマがあり、氷結も火炎もしていない */
+const canBud = (sq) => !!sq.player && !isFrozen(sq) && flameStacks(sq) === 0;
+const budStacks = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+/** player のコマの🌱を全除去し、除去した🌱の総数を返す。board を直接書き換える */
+function harvestBuds(board, player) {
+    let n = 0;
+    for (let k = 0; k < board.length; k++) {
+        const sq = board[k];
+        if (sq.player !== player) continue;
+        const c = budStacks(sq);
+        if (c === 0) continue;
+        n += c;
+        board[k] = without(sq, '🌱');
+    }
+    return n;
+}
+/** cell の縦横隣のうち player のコマで canBud なマス */
+const budReceivers = (board, cell, player, size) =>
+    orthoNeighbors(cell, size).filter((k) => board[k].player === player && canBud(board[k]));
+/** cell の縦横隣の receivers 全部に🌱を1つ足す。受け取ったマスを返す。board を直接書き換える */
+function graft(board, cell, player, size) {
+    const got = budReceivers(board, cell, player, size);
+    for (const k of got) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+    return got;
+}
+/** player のコマで canBud なマス（昇順） */
+const sowCandidates = (board, player) =>
+    board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
+/** picks の各添字（重複可）に🌱を1つずつ足す。board を直接書き換える */
+function sow(board, picks) {
+    for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+}
+
 /** 浄化で除去する状態異常 */
 const AILMENTS = ['☠', '🔥', '❄', '⚡'];
 /** 浄化: player のコマの状態異常（☠🔥❄⚡）を全スタック除去する。🌱・🔑・空きマス・他人のコマは触らない。除去したマスの添字を返す。board を直接書き換える */
@@ -142,6 +179,6 @@ const lockable = (sq) => !isFrozen(sq);
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, budStacks, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,
 };
