@@ -120,38 +120,12 @@ const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // �
 const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
 // ギア向けの戦略を使うか: そのギアを装備している席、または検証用に forceAi で指定された席。GEAR_AI=0 で全て無効化(A/B用)
 const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
-// 収穫: エフェクトを付けるスキルは使うたびに魔力が戻る。バッズ・ロックを積極的に使う。各要素は HV_*=0 で無効化(A/B用)
-const HV_BUDS = process.env.HV_BUDS !== '0';   // バッズを緩い条件で撃つ
-const HV_DBUDS = process.env.HV_DBUDS !== '0'; // ダブルバッズも撃つ
-const HV_LOCK = process.env.HV_LOCK !== '0';   // 自陣の要のコマをロックする（1つにつき魔力+1が戻る）
-const HV_EMPTY = Number(process.env.HV_EMPTY) || 3;            // バッズを撃つ空きマス数の下限
-const HV_MAX_BUDS = Number(process.env.HV_MAX_BUDS) || 5;      // 自陣のバッズ数の上限
-const HV_MAX_LOCK = Number(process.env.HV_MAX_LOCK) || 3;      // 自陣のロック済みコマ数の上限
-const HV_LOCK_VALUE = Number(process.env.HV_LOCK_VALUE) || 10; // ロックするコマの価値(通る自ラインの価値)の下限
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
 const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
 const EL_DENY = process.env.EL_DENY != null ? Number(process.env.EL_DENY) : 2; // 敵の列を止める価値の重み
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
-// 収穫: ロックする自コマ。ロックされておらず、通っている自ライン(他のコマが混ざらない列)の価値が高いもの
-function bestOwnLockTarget(board, me) {
-    const geo = geometryForCells(board.length);
-    let bestIdx = null, bestVal = HV_LOCK_VALUE - 1e-9;
-    for (let i = 0; i < board.length; i++) {
-        const sq = board[i];
-        if (sq.player !== me || sq.bind < 1 || sq.effects.some((e) => e.effect === '🔑') || shield.has(i)) continue;
-        let val = 0;
-        for (const line of geo.winLines) {
-            if (!line.includes(i)) continue;
-            let mine = 0, foreign = 0;
-            for (const idx of line) { if (board[idx].player === me) mine++; else if (board[idx].player) foreign++; }
-            if (foreign === 0) val += LINE_SCORES[Math.min(mine, 4)];
-        }
-        if (val > bestVal) { bestVal = val; bestIdx = i; }
-    }
-    return bestIdx;
-}
 // 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数
 function myEmptyLocks(s) {
     return s.board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === s.turn + 1)).length;
@@ -696,19 +670,6 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
-    // 収穫: バッズ(1つにつき魔力+1/ターンが続く)を撃つと魔力が戻るので、緩い条件で撃つ
-    if (gearAi(s, 'harvest') && HV_BUDS && !skills.includes('buds')) {
-        let emptyCount = 0, myBuds = 0;
-        for (const sq of board) {
-            if (!sq.player) emptyCount++;
-            if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
-        }
-        if (emptyCount >= HV_EMPTY && myBuds < HV_MAX_BUDS) {
-            if (HV_DBUDS && availableSkills.includes(10) && myBuds <= HV_MAX_BUDS - 2 && remaining >= cost(costsOf(s).onClickDoubleBuds)) spend(cost(costsOf(s).onClickDoubleBuds), 'doubleBuds');
-            else if (availableSkills.includes(2) && remaining >= cost(costsOf(s).onClickBuds)) spend(cost(costsOf(s).onClickBuds), 'buds');
-        }
-    }
-
     // --- 血清: 自陣の毒で次の減衰までに消えそうなコマがあれば除去 ---
     if (availableSkills.includes(17)) {
         const serumCost = calculateCost(s, costsOf(s).onClickSerum, false, true);
@@ -960,18 +921,6 @@ function faithfulMakeMove(s) {
             placeMove(s, best);
             const move = getEnhancedBestMove(s);
             return { move, turnEnded: false };
-        }
-    }
-
-    // 収穫: ロックは1つかけるごとに魔力が1戻る（実質コスト1）。自陣の要のコマを守りながら魔力を回す。HV_LOCK=0 で無効化(A/B用)
-    if (HV_LOCK && gearAi(s, 'harvest') && countReaches(s.board, me) === 0
-        && magic >= calculateCost(s, costsOf(s).onClickUseLock)
-        && s.board.filter((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🔑')).length < HV_MAX_LOCK) {
-        const target = bestOwnLockTarget(s.board, me);
-        if (target !== null) {
-            SKILLS.lock(s);
-            placeMove(s, target);
-            return { move: getEnhancedBestMove(s), turnEnded: false };
         }
     }
 
