@@ -173,5 +173,24 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
     return out;
 };
 
+/**
+ * AI が席のキャラに合わせて選ぶギア（枠数ぶん）。キャラ×ギアの総当たり（各200試合、seed 1）の上位を選び、
+ * 別 seed（400試合）で無装備より勝率が上がることを確認した組み合わせ（2026-10-19、docs/diary/2026-10-19.md）。
+ * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
+ */
+export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
+    you: ['luckyPurse', 'titanCost', 'sturdy'],
+    tactician: ['sturdy', 'priceWreck'],
+    magician: ['sturdy', 'ironLock'],
+    giant: ['titanCost', 'sturdy'],
+    yinYangMaster: ['sturdy', 'ironLock'],
+    necromancer: ['vengeance', 'sturdy'],
+    poisoner: ['titanCost', 'sturdy'],
+    electrician: ['sturdy', 'harvest'],
+};
+
+export const recommendedGears = (character: CharacterId): GearId[] =>
+    (RECOMMENDED_GEARS[character] ?? ['sturdy']).slice(0, gearSlotsFor(character));
+
 /** トークン系スキルが付けるエフェクト（伝播・収穫の対象） */
 export type TokenEffect = '🌱' | '☠' | '⚡';

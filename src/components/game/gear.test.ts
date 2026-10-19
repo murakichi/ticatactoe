@@ -11,6 +11,8 @@ import {
     gearSlotsFor,
     gearTokenBindDelta,
     randomGears,
+    recommendedGears,
+    RECOMMENDED_GEARS,
     rollPriceOffsets,
     PRICEABLE_KEYS,
 } from './gear';
@@ -197,5 +199,23 @@ describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
         for (const [base, off] of [[4, -4], [2, -3], [1, -3], [1, 2], [6, 4]]) expect(simGear.priceShift(base, off)).toBe(priceShift(base, off));
         const b = simGear.applyPriceOffsets(simEngine.skillCosts, simGear.rollPriceOffsets(simEngine.skillCosts, mk()));
         for (const k of PRICEABLE_KEYS) expect(b[k]).toBe(a[k]);
+    });
+});
+
+describe('AIが選ぶギア', () => {
+    it('枠数以内・重複なし・存在するギアだけ', () => {
+        for (const c of ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'fighter', 'healer'] as const) {
+            const gears = recommendedGears(c);
+            expect(gears.length).toBeGreaterThan(0);
+            expect(gears.length).toBeLessThanOrEqual(gearSlotsFor(c));
+            expect(new Set(gears).size).toBe(gears.length);
+            for (const g of gears) expect(GEAR_IDS).toContain(g);
+        }
+    });
+
+    it('sim/gear.js の複製と一致する', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simGear = require('../../../sim/gear');
+        expect(simGear.RECOMMENDED_GEARS).toEqual(RECOMMENDED_GEARS);
     });
 });

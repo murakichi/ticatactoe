@@ -96,7 +96,20 @@ function randomGears(slots, rng = Math.random) {
     return out;
 }
 
+/** AI が席のキャラに合わせて選ぶギア。src/components/game/gear.ts の RECOMMENDED_GEARS の複製 */
+const RECOMMENDED_GEARS = {
+    you: ['luckyPurse', 'titanCost', 'sturdy'],
+    tactician: ['sturdy', 'priceWreck'],
+    magician: ['sturdy', 'ironLock'],
+    giant: ['titanCost', 'sturdy'],
+    yinYangMaster: ['sturdy', 'ironLock'],
+    necromancer: ['vengeance', 'sturdy'],
+    poisoner: ['titanCost', 'sturdy'],
+    electrician: ['sturdy', 'harvest'],
+};
+const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
+
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears,
+    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears,
 };

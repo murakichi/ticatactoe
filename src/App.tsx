@@ -5,7 +5,7 @@ import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
-import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears } from './components/game/gear';
+import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, recommendedGears } from './components/game/gear';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -72,13 +72,17 @@ export const App = () => {
                 return { ...p, character: pool[Math.floor(Math.random() * pool.length)].id };
             })
         );
+    // ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）
+    const gamePlayers = players
+        .slice(0, playerCount)
+        .map((p) => (p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: recommendedGears(p.character) } : p));
     const hasAISeat = players.slice(0, playerCount).some((p) => p.isAI);
 
     return (
         <div className='App'>
             {isGameStarted ? (
                 <div className='App-game'>
-                    <Game players={players.slice(0, playerCount)} boardSize={boardSize} />
+                    <Game players={gamePlayers} boardSize={boardSize} />
                 </div>
             ) : (
                 <div className={styles.prep}>
