@@ -12,6 +12,9 @@ import {
     freeze,
     flareTargets,
     decayTick,
+    cleanse,
+    ailmentStacks,
+    AILMENTS,
     frozenStacks,
     thawOne,
     lockable,
@@ -361,5 +364,49 @@ describe('sim/thermal.js との一致', () => {
         expect(sim.detonate(e, '💙')).toEqual(detonate(f, '💙'));
         expect(e).toEqual(f);
         for (let i = 0; i < 16; i++) expect(sim.flareTargets(mk(), i, 4, '💙')).toEqual(flareTargets(mk(), i, 4, '💙'));
+    });
+});
+
+describe('浄化（汎用スキル）', () => {
+    it('自陣のコマの毒・火炎・氷結・帯電を全スタック除去し、バッズとロックは残す', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 4, '☠', '☠', '🔥', '❄', '❄', '⚡', '🌱');
+        b[1] = sq('💙', 4, '🔑', '☠');
+        b[2] = sq('💙', 4, '🌱');
+        const done = cleanse(b, '💙');
+        expect(done).toEqual([0, 1]);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱']);
+        expect(b[1].effects.map((e) => e.effect)).toEqual(['🔑']);
+        expect(b[2].effects.map((e) => e.effect)).toEqual(['🌱']);
+    });
+
+    it('敵のコマ・空きマスは対象外', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 4, '☠', '🔥');
+        b[1] = sq(undefined, 0, '❄', '⚡');
+        expect(cleanse(b, '💙')).toEqual([]);
+        expect(ailmentStacks(b[0])).toBe(2);
+        expect(ailmentStacks(b[1])).toBe(2);
+    });
+
+    it('状態異常の定義は毒・火炎・氷結・帯電（バッズとロックは含まない）', () => {
+        expect(AILMENTS).toEqual(['☠', '🔥', '❄', '⚡']);
+    });
+
+    it('sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = () => {
+            const b = emptyBoard();
+            b[0] = sq('💙', 4, '☠', '🔥', '❄', '⚡', '🌱');
+            b[1] = sq('⭕', 4, '☠');
+            b[2] = sq('💙', 4, '🔑', '☠');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        expect(sim.cleanse(a, '💙')).toEqual(cleanse(c, '💙'));
+        expect(a).toEqual(c);
+        expect(sim.AILMENTS).toEqual(AILMENTS);
     });
 });

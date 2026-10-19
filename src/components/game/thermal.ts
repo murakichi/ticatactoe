@@ -14,6 +14,7 @@
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
 import { CharacterId } from '../../types/Character';
+import { Effect } from '../../types/Effect';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { orthoNeighbors } from './boardGeometry';
@@ -126,6 +127,23 @@ export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
         board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🌱'), { effect: '❄' }] }; // 氷結が付くとバッズは消える
         done.push(k);
     }
+    return done;
+};
+
+/** 「状態異常」とみなすエフェクト（浄化の対象）。🌱バッズと🔑ロックは含めない */
+export const AILMENTS: Effect['effect'][] = ['☠', '🔥', '❄', '⚡'];
+
+/** マスに付いている状態異常のスタック総数 */
+export const ailmentStacks = (sq: SquareInfo): number => sq.effects.filter((e) => AILMENTS.includes(e.effect)).length;
+
+/** 浄化（汎用スキル）: player のコマの状態異常（毒・火炎・氷結・帯電）を全スタック除去する。除去したマスを返す。board を直接書き換える */
+export const cleanse = (board: SquareInfo[], player: SquareInfo['player']): number[] => {
+    const done: number[] = [];
+    board.forEach((sq, i) => {
+        if (sq.player !== player || ailmentStacks(sq) === 0) return;
+        board[i] = without(sq, ...AILMENTS);
+        done.push(i);
+    });
     return done;
 };
 

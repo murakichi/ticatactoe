@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, hasAilment, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 
@@ -594,6 +594,16 @@ function chooseSkills(s, availableSkills) {
             if (sq.player === me) mine++; else theirs++;
         }
         if (theirs >= MIST_MIN_ENEMIES && theirs >= mine + MIST_MIN_LEAD) spend(calculateCost(s, costsOf(s).onClickPoisonMist, false, true), 'poisonMist');
+    }
+
+    // 浄化: 自陣のライフが残るコマの状態異常が合計3スタック以上で撃つ（雷霆の巫の自陣⚡無敵コマの⚡は数えない。雷霆の巫AIは⚡を剥がすので撃たない）
+    if (character !== 'electrician' && availableSkills.includes(32) && hasAilment(board, me)) {
+        let stacks = 0;
+        board.forEach((sq) => {
+            if (sq.player !== me || sq.bind <= 0) return;
+            for (const e of sq.effects) if (thermal.AILMENTS.includes(e.effect)) stacks++;
+        });
+        if (stacks >= 3) spend(calculateCost(s, costsOf(s).onClickCleanse), 'cleanse');
     }
 
     // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)

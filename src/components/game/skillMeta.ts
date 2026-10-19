@@ -55,6 +55,7 @@ const SKILL_META: Record<string, Meta> = {
     ミアズマ: { icon: '☠', category: 'poison' },
     氷結: { icon: '❄', category: 'control' },
     火炎付与: { icon: '🔥', category: 'support' },
+    浄化: { icon: '✨', category: 'support' },
     絶対零度: { icon: '🥶', category: 'attack' },
     フレアバースト: { icon: '💥', category: 'attack' },
 };

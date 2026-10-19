@@ -51,6 +51,8 @@ export const skillCosts = {
     onClickGlacier: 10,
     // 氷室の番人は常在のロックの代わりにこの「氷結」(マスを1つ選んで❄)を持つ
     onClickCryoFreeze: 2,
+    // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
+    onClickCleanse: 5,
     onClickFlareBurst: 6,
 };
 

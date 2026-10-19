@@ -92,6 +92,19 @@ const freezeAll = (board) => freeze(board, board.map((_, i) => i));
  * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
  * 空きマスの❄は（試合が止まらないよう）ダメージなしで全除去する。自陣コマの❄だけ残す。board を直接書き換える
  */
+/** 浄化で除去する状態異常 */
+const AILMENTS = ['☠', '🔥', '❄', '⚡'];
+/** 浄化: player のコマの状態異常（☠🔥❄⚡）を全スタック除去する。🌱・🔑・空きマス・他人のコマは触らない。除去したマスの添字を返す。board を直接書き換える */
+function cleanse(board, player) {
+    const done = [];
+    for (let k = 0; k < board.length; k++) {
+        const sq = board[k];
+        if (sq.player !== player || !sq.effects.some((e) => AILMENTS.includes(e.effect))) continue;
+        board[k] = { ...sq, effects: sq.effects.filter((e) => !AILMENTS.includes(e.effect)) };
+        done.push(k);
+    }
+    return done;
+}
 function detonate(board, me) {
     const damaged = [], destroyed = [];
     for (let k = 0; k < board.length; k++) {
@@ -115,6 +128,6 @@ const lockable = (sq) => !isFrozen(sq);
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, flareTargets,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, flareTargets,
     lockable,
 };

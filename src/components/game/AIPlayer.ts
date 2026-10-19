@@ -4,11 +4,11 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { flareTargets, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
+import { ailmentStacks, cleanse, flareTargets, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..31)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 32;
+// 汎用スキルプールの大きさ (idx 0..32)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 33;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1105,6 +1105,21 @@ class AIPlayer {
                 board = board.slice();
                 freezeAll(board);
                 magic -= cost;
+            }
+        }
+        // 浄化（汎用スキル）: 自陣のコマ（ライフ>0）の状態異常が合計3スタック以上で撃つ。雷霆の巫の⚡無敵は数えない
+        if (availableSkills.includes(32)) {
+            const cost = this.calculateAICost(costs.onClickCleanse);
+            const stacks = board.reduce(
+                (n, sq, i) => (sq.player === this.playerSymbol && sq.bind > 0 ? n + ailmentStacks(sq) - (this.shield.has(i) ? chargeStacks(sq) : 0) : n),
+                0
+            );
+            if (magic >= cost && stacks >= 3) {
+                chargeClicks.push({ skill: 'onClickCleanse' });
+                board = board.slice();
+                cleanse(board, this.playerSymbol);
+                magic -= cost;
+                this.updateShield(board);
             }
         }
         if (this.character === 'pyromancer' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {

@@ -76,7 +76,7 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 32; // SIM_POOL_SIZE: A/B検証用の上書き
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 33; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -179,6 +179,7 @@ const skillCosts = {
     // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
     onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
+    onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
     onClickGlacier: (config.thermal && config.thermal.glacierCost) || 10,
     onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
     onClickFlareBurst: (config.thermal && config.thermal.flareCost) || 6,
@@ -1453,6 +1454,18 @@ function onClickGlacier(s) {
     bumpStat(s, 'glacierCells', done.length);
 }
 // 煉獄の鍛冶師の固有スキル フレアバースト: 選んだマスと縦横隣の敵コマに🔥
+// 浄化 (idx 32): 自陣のコマの状態異常（☠🔥❄⚡）を全スタック除去する。クリック不要・手番は続く。自陣に状態異常が無ければ不発
+function hasAilment(board, player) {
+    return board.some((sq) => sq.player === player && sq.effects.some((e) => thermal.AILMENTS.includes(e.effect)));
+}
+function onClickCleanse(s) {
+    if (!hasAilment(s.board, curPlayer(s))) return;
+    const done = thermal.cleanse(s.board, curPlayer(s));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickCleanse));
+    bumpMagicCount(s);
+    bumpStat(s, 'cleanse');
+    bumpStat(s, 'cleanseCells', done.length);
+}
 function onClickFlareBurst(s) {
     s.useFlare = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickFlareBurst));
@@ -1504,6 +1517,7 @@ const SKILLS = {
     freeze: onClickFreeze,
     ignite: onClickIgnite,
     glacier: onClickGlacier,
+    cleanse: onClickCleanse,
     flareBurst: onClickFlareBurst,
 };
 
@@ -1531,5 +1545,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

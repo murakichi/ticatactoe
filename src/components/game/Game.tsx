@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, emptyBlocked, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, flareTargets, overwriteBlocked } from './thermal';
+import { isFrozen, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, flareTargets, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -232,6 +232,7 @@ export const Game = (props: GameProps) => {
             case 'onClickJammer': onClickJammer(); break;
             case 'onClickPoisonMist': onClickPoisonMist(); break;
             case 'onClickGlacier': onClickGlacier(); break;
+            case 'onClickCleanse': onClickCleanse(); break;
             case 'onClickFlareBurst': onClickFlareBurst(); break;
         }
     };
@@ -825,7 +826,7 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全29スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)・ヘイルメアリー(27)・サイレンス(28)を永久に引けなかった
+        // プールは全33スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)・ヘイルメアリー(27)・サイレンス(28)を永久に引けなかった
         setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
         spendMagic(seatCosts.onClickShuffle, true, false);
     };
@@ -1634,6 +1635,18 @@ export const Game = (props: GameProps) => {
         setGlacierPendingAt(turnSeat, true);
         spendMagic(cost, false);
     };
+    // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。クリック不要・手番は続く
+    const ownAilmentCells = (): number[] =>
+        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && ailmentStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const onClickCleanse = () => {
+        const board = currentBoard.slice();
+        const done = cleanse(board, currentTurnPlayer);
+        addLog(`「浄化」を使用（${done.length}コマの状態異常を回復）`);
+        flashCells(done);
+        playEffect('auraGreen');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickCleanse));
+    };
     // 氷室の番人は常在のロックの代わりにこの「氷結」を持つ: マスを1つ選んで❄を付ける（空きマス可）
     const onClickCryoFreeze = () => {
         addLog('「氷結」を使用（マスを選択）');
@@ -2030,6 +2043,7 @@ export const Game = (props: GameProps) => {
         { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true)}`, paragraph: `盤上の全コマ（敵味方問わず）に毒を1付与します 🔑ロック中・無敵のコマは対象外です`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
         { idx: 30, onClick: onClickFreeze, buttonText: `氷結-${calculateCost(seatCosts.onClickFreeze)}`, paragraph: `コマを選択し、❄氷結を付与します（敵味方どちらでも）\n氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず（そのマスの⚡は休眠）、スキルのダメージは氷結が解除される代わりに無効になります（毒は通ります）\n自陣の氷結コマには重ねて強化できません`, disabled: checkSkillDisable(seatCosts.onClickFreeze) || !currentBoard.some(canFreeze) },
         { idx: 31, onClick: onClickIgnite, buttonText: `火炎付与-${calculateCost(seatCosts.onClickIgnite)}`, paragraph: `コマを選択し、🔥火炎を1つ付与します（重複可）\n毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) || !currentBoard.some((sq) => sq.player) },
+        { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse)}`, paragraph: `自陣のコマの状態異常（☠毒・🔥火炎・❄氷結・⚡帯電）をすべて回復します\n🌱バッズと🔑ロックはそのままです`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
     ];
 
     return (

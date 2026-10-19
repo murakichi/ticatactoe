@@ -861,6 +861,38 @@ test('氷室の番人でも、ライフが残る敵の氷結マスをクリッ�
     assert.strictEqual(t.board[5].player, '💙');
 });
 
+test('浄化: 自陣のコマの☠🔥❄⚡を全スタック除去。🌱・🔑は残し、敵と空きマスは不変。手番は続きコスト5', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[1] = { player: '💙', bind: 4, effects: [{ effect: '☠' }, { effect: '☠' }, FLM, FRZ, FRZ, { effect: '⚡' }, { effect: '🌱' }, { effect: '🔑' }] };
+    s.board[2] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }] };
+    s.board[3] = { player: '⭕', bind: 3, effects: [{ effect: '☠' }, FLM, FRZ, { effect: '⚡' }] };
+    s.board[4] = { player: undefined, bind: 0, effects: [FRZ, { effect: '⚡' }] };
+    const before = s.heartMagic;
+    e.SKILLS.cleanse(s);
+    assert.deepStrictEqual(s.board[1].effects.map((x) => x.effect).sort(), ['🌱', '🔑'].sort());
+    assert.deepStrictEqual(s.board[2].effects.map((x) => x.effect), ['🌱']);
+    assert.strictEqual(s.board[3].effects.length, 4);
+    assert.strictEqual(s.board[4].effects.length, 2);
+    assert.strictEqual(s.heartMagic, before - 5);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(e.hasAilment(s.board, '💙'), false);
+    const m = s.heartMagic;
+    e.SKILLS.cleanse(s); // 状態異常が無ければ不発（魔力を払わない）
+    assert.strictEqual(s.heartMagic, m);
+});
+
+test('浄化のコスト: 毒使い+1・軍師+2の通常補正', () => {
+    const p = game('poisoner', 'you'); p.heartTurn = true; p.heartMagic = 20;
+    p.board[1] = { player: '💙', bind: 4, effects: [FRZ] };
+    e.SKILLS.cleanse(p);
+    assert.strictEqual(p.heartMagic, 20 - 6);
+    const t = game('tactician', 'you'); t.heartTurn = true; t.heartMagic = 20;
+    t.board[1] = { player: '💙', bind: 4, effects: [FRZ] };
+    e.SKILLS.cleanse(t);
+    assert.strictEqual(t.heartMagic, 20 - 7);
+});
+
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
@@ -1068,7 +1100,7 @@ test('フレアバースト: 中心と縦横隣の敵コマ（ライフ>0・🔑
 
 test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人6・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
-    assert.strictEqual(e.POOL_SIZE, 32);
+    assert.strictEqual(e.POOL_SIZE, 33);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
     assert.strictEqual(e.skillCosts.onClickFlareBurst, 6);
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
