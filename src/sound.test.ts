@@ -33,7 +33,7 @@ const makeCtx = () => {
 
 const ALL: Sfx[] = [
     'slash', 'backslash', 'stomp', 'judge', 'opium', 'tsunami', 'assault', 'necromancy', 'yinyang',
-    'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'proliferate', 'zap', 'overload', 'silence',
+    'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'proliferate', 'zap', 'overload', 'silence', 'freeze', 'flame',
     'place', 'charge', 'win', 'lock',
 ];
 

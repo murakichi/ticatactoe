@@ -12,6 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { isFrozen, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, canFreeze, glacierTargets, flareTargets, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -60,6 +61,8 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     necromancer: 'ネクロマンサー',
     poisoner: '毒使い',
     electrician: '雷霆の巫',
+    cryomancer: '氷結師',
+    pyromancer: '炎使い',
 };
 
 const AVATAR_CLASSES = [
@@ -228,6 +231,8 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeRandom': onClickChargeRandom(); break;
             case 'onClickJammer': onClickJammer(); break;
             case 'onClickPoisonMist': onClickPoisonMist(); break;
+            case 'onClickGlacier': onClickGlacier(); break;
+            case 'onClickFlareBurst': onClickFlareBurst(); break;
         }
     };
 
@@ -282,7 +287,10 @@ export const Game = (props: GameProps) => {
         // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
         if (result.chargeClicks && result.chargeClicks.length > 0) {
             const steps: (number | string)[] = [];
-            for (const c of result.chargeClicks) steps.push(c.skill, c.target);
+            for (const c of result.chargeClicks) {
+                steps.push(c.skill);
+                if (c.target !== undefined) steps.push(c.target);
+            }
             steps.push(...result.skills);
             if (result.lockTargets) steps.push(...result.lockTargets);
             if (result.stompTarget !== undefined) steps.push(result.stompTarget);
@@ -521,6 +529,21 @@ export const Game = (props: GameProps) => {
             return;
         }
 
+        if (useFreeze) {
+            exeFreeze(i);
+            return;
+        }
+
+        if (useIgnite) {
+            exeIgnite(i);
+            return;
+        }
+
+        if (useFlare) {
+            exeFlare(i);
+            return;
+        }
+
         if (useLock > 0) {
             applyLock(nextBoard, i);
             harvestMagic(1);
@@ -569,6 +592,11 @@ export const Game = (props: GameProps) => {
             return;
         }
 
+        // ❄氷結中の自陣コマには重ねて強化できない（氷結師は除く）
+        if (currentBoard[i].player === currentTurnPlayer && overwriteBlocked(currentBoard[i], currentCharacter)) {
+            return;
+        }
+
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
         playSfx('place');
 
@@ -579,11 +607,11 @@ export const Game = (props: GameProps) => {
         const decayNow = shouldDecay(placements, seatCount);
         setPlacements(placements + 1);
         for (let s = 0; decayNow && s < nextBoard.length; s++) {
-            const square = nextBoard[s];
-            if ((square.player || square.effects.filter((x) => x.effect === '🔑').length !== 0) && square.bind > 0) square.bind--;
-            // 毒: スタック数だけ追加で bind を減らす（毎ターン bind-1 × 毒の数）
+            // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
+            // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
+            const square = decayTick(nextBoard[s], characters);
+            nextBoard[s] = square;
             const poison = square.effects.filter((x) => x.effect === '☠').length;
-            if (poison > 0 && square.bind > 0) square.bind = Math.max(0, square.bind - poison);
             // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
             const expiredLock = square.bind === 0 ? square.effects.find((x) => x.effect === '🔑') : undefined;
             if (square.bind === 0) {
@@ -910,18 +938,32 @@ export const Game = (props: GameProps) => {
     const unlockCost = 4;
     const onClickUnlock = () => {};
 
+    // 「ライフを0にする」スキルを1マスに当てる。氷結中ならライフはそのまま氷結だけ解除（false）、そうでなければ0にして🔥も消す（true）
+    const zeroBySkill = (board: SquareInfo[], idx: number): boolean => {
+        const guard = absorbDestroy(board[idx]);
+        if (guard.blocked) {
+            board[idx] = guard.sq;
+            return false;
+        }
+        board[idx] = zeroOut(board[idx]);
+        return true;
+    };
+
     const onClickOpium = () => {
         addLog('「オピウム」を使用（相手の全コマのライフ-2・ターン終了）');
         const board = currentBoard.slice();
         const affected: number[] = [];
+        const iceBroken: number[] = [];
         board.forEach((square, idx) => {
             if (square.player !== currentTurnPlayer && square.player && square.bind > 0 && !isGuarded(square, characters)) {
-                const calclatedBind = square.bind - 2;
-                if (calclatedBind > 1) square.bind = square.bind - 2;
-                else square.bind = 0;
-                affected.push(idx);
+                // スキルダメージ: 氷結なら解除だけ、🔥なら1.5倍。-2して1以下になったマスはライフ0
+                const hit = applyDamage(square, 2, 'skill');
+                board[idx] = hit.blocked || hit.sq.bind > 1 ? hit.sq : { ...hit.sq, bind: 0 };
+                if (hit.blocked) iceBroken.push(idx);
+                else affected.push(idx);
             }
         });
+        if (iceBroken.length > 0) addLog(`氷結が身代わりになった（${iceBroken.map(posName).join('・')}）`);
         flashCells(affected);
         playEffect('opium');
         setCurrentBoard(board);
@@ -935,8 +977,7 @@ export const Game = (props: GameProps) => {
         const affected: number[] = [];
         for (const idx of geo.antiDiagonal) {
             if (!isGuarded(board[idx], characters)) {
-                board[idx].bind = 0;
-                affected.push(idx);
+                if (zeroBySkill(board, idx)) affected.push(idx);
             }
         }
         flashCells(affected);
@@ -951,8 +992,7 @@ export const Game = (props: GameProps) => {
         const affected: number[] = [];
         for (const idx of geo.mainDiagonal) {
             if (!isGuarded(board[idx], characters)) {
-                board[idx].bind = 0;
-                affected.push(idx);
+                if (zeroBySkill(board, idx)) affected.push(idx);
             }
         }
         flashCells(affected);
@@ -1113,8 +1153,14 @@ export const Game = (props: GameProps) => {
         let destroyed = 0;
         for (const stompIndex of stompIndexes) {
             if (currentBoard[stompIndex].player === currentTurnPlayer) {
-                currentBoard[stompIndex].bind = currentBoard[stompIndex].bind > 5 ? currentBoard[stompIndex].bind - 5 : 0;
+                // 自陣のコマは-5（氷結なら解除だけ・🔥なら1.5倍）
+                currentBoard[stompIndex] = applyDamage(currentBoard[stompIndex], 5, 'skill').sq;
             } else {
+                const guard = absorbDestroy(currentBoard[stompIndex]);
+                if (guard.blocked) {
+                    currentBoard[stompIndex] = guard.sq; // 氷結が身代わりになる
+                    continue;
+                }
                 if (currentBoard[stompIndex].player) destroyed++;
                 currentBoard[stompIndex] = { player: undefined, bind: 0, effects: [] };
             }
@@ -1147,11 +1193,18 @@ export const Game = (props: GameProps) => {
         const judgeIndexes = geo.judgeRange(i);
 
         let destroyed = 0;
+        let centerSurvived = false;
         for (const judgeIndex of judgeIndexes) {
             if (
                 !board[judgeIndex].effects.map((x) => x.effect).includes('🔑') ||
                 !(board[judgeIndex].player === currentTurnPlayer && board[judgeIndex].effects.map((x) => x.effect).includes('🌱'))
             ) {
+                const guard = absorbDestroy(board[judgeIndex]);
+                if (guard.blocked) {
+                    board[judgeIndex] = guard.sq; // 氷結が身代わりになる
+                    if (judgeIndex === i) centerSurvived = true;
+                    continue;
+                }
                 if (board[judgeIndex].player) destroyed++;
                 board[judgeIndex] = { player: undefined, bind: 0, effects: [] };
             }
@@ -1160,7 +1213,8 @@ export const Game = (props: GameProps) => {
 
         setUseMagicCountAt(turnSeat, 0);
 
-        board[i] = { player: currentTurnPlayer, bind: 2, effects: [{ effect: '🌱' }] };
+        // 中心は自分のコマになる。ただし氷結が身代わりになって残った敵コマは奪えない
+        if (!centerSurvived) board[i] = { player: currentTurnPlayer, bind: 2, effects: [{ effect: '🌱' }] };
         addLog(`${posName(i)}を中心に審判の日を実行`);
         flashCells(judgeIndexes);
         playEffect('judge');
@@ -1192,13 +1246,18 @@ export const Game = (props: GameProps) => {
         } else {
             board.forEach((square, idx) => {
                 if (square.player && square.player !== currentTurnPlayer) {
-                    square.bind = square.bind - 2;
+                    // スキルダメージ: 氷結なら解除だけ、🔥なら1.5倍。ライフ1以下になったら破壊
+                    const hit = applyDamage(square, 2, 'skill');
+                    if (hit.blocked) {
+                        board[idx] = hit.sq;
+                        return;
+                    }
                     affected.push(idx);
-                    if (square.bind < 1) {
-                        square.player = undefined;
-                        square.effects = [];
-                        square.bind = 0;
+                    if (hit.sq.bind < 1) {
+                        board[idx] = { player: undefined, bind: 0, effects: [] };
                         destroyed++;
+                    } else {
+                        board[idx] = hit.sq;
                     }
                 }
             });
@@ -1505,6 +1564,72 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
+
+    // --- 氷結・火炎（thermal.ts。氷結師・炎使い） ---
+    const [useFreeze, setUseFreeze] = useState<boolean>(false);
+    const [useIgnite, setUseIgnite] = useState<boolean>(false);
+    const [useFlare, setUseFlare] = useState<boolean>(false);
+    // 氷結: 選んだコマに❄を付与する（敵味方どちらでも。付与しただけではダメージは出ない）
+    const onClickFreeze = () => {
+        addLog('「氷結」を使用（コマを選択）');
+        setUseFreeze(true);
+        spendMagic(calculateCost(seatCosts.onClickFreeze));
+    };
+    // 火炎付与: 選んだコマに🔥を1つ付与する。そのマスと縦横隣の氷結は即座に解ける
+    const onClickIgnite = () => {
+        addLog('「火炎付与」を使用（コマを選択）');
+        setUseIgnite(true);
+        spendMagic(calculateCost(seatCosts.onClickIgnite));
+    };
+    // 固有スキル 氷河期（氷結師）: 自陣のライフが残るコマすべてに❄を付与する。クリック不要
+    const onClickGlacier = () => {
+        const board = currentBoard.slice();
+        const done = freeze(board, glacierTargets(board, currentTurnPlayer));
+        addLog(`「氷河期」を使用（${done.length}コマが氷結）`);
+        flashCells(done);
+        playEffect('freeze');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickGlacier), false);
+    };
+    // 固有スキル フレアバースト（炎使い）: 選んだマスと縦横隣の敵コマ（ライフ>0・🔑なし）に🔥を付与する
+    const onClickFlareBurst = () => {
+        addLog('「フレアバースト」を使用（中心のマスを選択）');
+        setUseFlare(true);
+        spendMagic(calculateCost(seatCosts.onClickFlareBurst), false);
+    };
+    const exeFreeze = (i: number) => {
+        if (!canFreeze(currentBoard[i])) return; // 空きマス・氷結済み・🔑ロック中は選び直せる
+        const board = currentBoard.slice();
+        freeze(board, [i]);
+        addLog(`${posName(i)}を氷結`);
+        playEffect('freeze', i);
+        setUseFreeze(false);
+        setCurrentBoard(board);
+    };
+    // 🔥を付けたあとの共通処理: 解けた氷結をログに出す
+    const igniteCells = (board: SquareInfo[], cells: number[]) => {
+        const { thawed } = ignite(board, cells, geo.size);
+        if (thawed.length > 0) addLog(`発火で氷結が解けた（${thawed.map(posName).join('・')}）`);
+        flashCells(cells);
+        playEffect('flame', cells[0]);
+        setCurrentBoard(board);
+    };
+    const exeIgnite = (i: number) => {
+        if (!currentBoard[i].player) return; // コマのないマスは選び直せる
+        const board = currentBoard.slice();
+        addLog(`${posName(i)}に🔥を付与`);
+        setUseIgnite(false);
+        igniteCells(board, [i]);
+    };
+    const exeFlare = (i: number) => {
+        const targets = flareTargets(currentBoard, i, geo.size, currentTurnPlayer);
+        if (targets.length === 0) return; // 燃やせる敵コマが無いマスは選び直せる
+        const board = currentBoard.slice();
+        addLog(`${posName(i)}を中心にフレアバースト（${targets.length}コマに🔥）`);
+        setUseFlare(false);
+        igniteCells(board, targets);
+    };
+
     // 次の手番の席。基本は席順どおりで、次が巨人のときだけ5ターンに1回その席を飛ばす
     const judgeNextSeat = (): number => {
         if (currentTurn === 1) {
@@ -1605,6 +1730,10 @@ export const Game = (props: GameProps) => {
                 return [{ name: 'ミアズマ', cost: miasmaCost(symbols[seat]) }];
             case 'electrician':
                 return [{ name: '帯電拡散', cost: chargeSpreadCost(symbols[seat]) }];
+            case 'cryomancer':
+                return [{ name: '氷河期', cost: g(sc.onClickGlacier) }];
+            case 'pyromancer':
+                return [{ name: 'フレアバースト', cost: g(sc.onClickFlareBurst) }];
             default:
                 return [];
         }
@@ -1722,6 +1851,9 @@ export const Game = (props: GameProps) => {
         setUseChargeSpread(false);
         setUseChargeArea(false);
         setUseJammer(false);
+        setUseFreeze(false);
+        setUseIgnite(false);
+        setUseFlare(false);
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
@@ -1765,10 +1897,13 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
+        else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
+        else if (useIgnite) setPreviewCells(currentBoard[i].player ? [i] : []);
+        else if (useFlare) setPreviewCells(flareTargets(currentBoard, i, geo.size, currentTurnPlayer));
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useFlare) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -1784,6 +1919,12 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
+        : useFreeze
+        ? '氷結'
+        : useIgnite
+        ? '火炎付与'
+        : useFlare
+        ? 'フレアバースト'
         : null;
     const skillAnnounce = pendingSkillName
         ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
@@ -1837,6 +1978,8 @@ export const Game = (props: GameProps) => {
         { idx: 27, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(seatCosts.onClickHailMary)}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(seatCosts.onClickHailMary) },
         { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(seatCosts.onClickSilence)}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(seatCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
         { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true)}`, paragraph: `盤上の全コマ（敵味方問わず）に毒を1付与します 🔑ロック中・無敵のコマは対象外です`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
+        { idx: 30, onClick: onClickFreeze, buttonText: `氷結-${calculateCost(seatCosts.onClickFreeze)}`, paragraph: `コマを選択し、❄氷結を付与します（敵味方どちらでも）\n氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず（そのマスの⚡は休眠）、スキルのダメージは氷結が解除される代わりに無効になります（毒は通ります）\n自陣の氷結コマには重ねて強化できません`, disabled: checkSkillDisable(seatCosts.onClickFreeze) || !currentBoard.some(canFreeze) },
+        { idx: 31, onClick: onClickIgnite, buttonText: `火炎付与-${calculateCost(seatCosts.onClickIgnite)}`, paragraph: `コマを選択し、🔥火炎を1つ付与します（重複可）\n毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) || !currentBoard.some((sq) => sq.player) },
     ];
 
     return (
@@ -1990,6 +2133,22 @@ export const Game = (props: GameProps) => {
                         hidden={currentCharacter !== 'electrician'}
                         exclusive
                         disabled={magic[turnSeat] < chargeSpreadCost()}
+                    />
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
+                        onClick={onClickGlacier}
+                        buttonText={`氷河期-${calculateCost(seatCosts.onClickGlacier)}`}
+                        paragraph={'自陣のライフが残っているコマすべてに❄氷結を付与します 氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず、スキルのダメージも氷結が肩代わりします'}
+                        hidden={currentCharacter !== 'cryomancer'}
+                        exclusive
+                        disabled={checkSkillDisable(seatCosts.onClickGlacier) || glacierTargets(currentBoard, currentTurnPlayer).length === 0}
+                    />
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
+                        onClick={onClickFlareBurst}
+                        buttonText={`フレアバースト-${calculateCost(seatCosts.onClickFlareBurst)}`}
+                        paragraph={'マスを選択し、そのマスと縦横隣の敵コマ(ライフが残るもの)に🔥火炎を付与します 付与したマスと縦横隣の氷結は即座に解けます'}
+                        hidden={currentCharacter !== 'pyromancer'}
+                        exclusive
+                        disabled={checkSkillDisable(seatCosts.onClickFlareBurst)}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickYingYangSkll}

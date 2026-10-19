@@ -15,6 +15,8 @@ export const LIFE_MEANS = {
     yinYangMaster_yang: 7,
     yinYangMaster_ying: 4,
     electrician: 6,
+    cryomancer: 5,
+    pyromancer: 5,
     default: 5,
 } as const;
 

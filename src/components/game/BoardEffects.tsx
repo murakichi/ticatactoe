@@ -20,7 +20,9 @@ export type SkillEffectType =
     | 'proliferate'
     | 'zap'
     | 'overload'
-    | 'silence';
+    | 'silence'
+    | 'freeze'
+    | 'flame';
 
 export type SkillEffect = {
     type: SkillEffectType;
@@ -82,6 +84,8 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     silence: { label: 'サイレンス', bg: '#1d2236', fg: '#c7d0ff' },
     proliferate: { label: '増殖', bg: '#5fd06a', fg: '#082a0c' },
     overload: { label: '⚡過負荷！', bg: '#fff44f', fg: '#2a2500' },
+    freeze: { label: '氷結', bg: '#bfe9ff', fg: '#06324d' },
+    flame: { label: '火炎', bg: '#ff7a2f', fg: '#2a0d00' },
 };
 
 export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
@@ -232,6 +236,22 @@ export const BoardEffects: React.FC<Props> = ({ effect, size }) => {
                     <>
                         <div className={styles.haze} />
                         {riseParticles('☠')}
+                    </>
+                );
+            case 'freeze':
+                // 氷結: 冷気の靄と降る雪片
+                return (
+                    <>
+                        <div className={styles.haze} />
+                        {fallParticles('❄')}
+                    </>
+                );
+            case 'flame':
+                // 火炎: 赤いオーラと立ち昇る炎
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraRed}`} />
+                        {riseParticles('🔥')}
                     </>
                 );
             case 'proliferate':

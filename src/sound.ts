@@ -210,6 +210,18 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             noise(ctx, d, { t: T(0), dur: 0.4, gain: 0.25, filter: 'highpass', f0: 3000 });
             return 0.6;
         }
+        case 'freeze': {
+            // 氷結: 高い澄んだ音が連なり、ぱきんと凍る
+            [2093, 2637, 3136, 4186].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(i * 0.04), dur: 0.25, gain: 0.25 }));
+            noise(ctx, d, { t: T(0.12), dur: 0.1, gain: 0.35, filter: 'highpass', f0: 6000 });
+            return 0.5;
+        }
+        case 'flame': {
+            // 火炎: 低く唸る炎のゴウッという噴き上がり
+            noise(ctx, d, { t: T(0), dur: 0.55, gain: 0.5, filter: 'bandpass', f0: 400, f1: 1800, q: 0.7 });
+            tone(ctx, d, { type: 'sawtooth', f0: 110, f1: 220, t: T(0), dur: 0.4, gain: 0.35, lowpass: 900 });
+            return 0.6;
+        }
         case 'proliferate': {
             [523, 587, 659, 784, 880, 1047].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.25, t: T(i * 0.05), dur: 0.12, gain: 0.4 }));
             return 0.45;

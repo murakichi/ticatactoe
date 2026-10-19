@@ -121,3 +121,15 @@ export const geometryForCells = (cells: number): BoardGeometry => geometryOf(Mat
 /** 盤が大きいほどマスを小さくして、7x7でも画面に収める（px） */
 export const cellPixelsFor = (size: number): number =>
     size <= 4 ? 64 : size === 5 ? 60 : size === 6 ? 56 : size === 7 ? 52 : size === 8 ? 48 : size === 9 ? 44 : 40;
+
+/** 縦横に隣接するマス（size x size, index = row*size + col） */
+export const orthoNeighbors = (i: number, size: number): number[] => {
+    const r = Math.floor(i / size);
+    const c = i % size;
+    const out: number[] = [];
+    if (r > 0) out.push(i - size);
+    if (r < size - 1) out.push(i + size);
+    if (c > 0) out.push(i - 1);
+    if (c < size - 1) out.push(i + 1);
+    return out;
+};

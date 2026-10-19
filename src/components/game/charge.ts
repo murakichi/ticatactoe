@@ -4,6 +4,10 @@ import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
+import { orthoNeighbors } from './boardGeometry';
+import { applyDamage, isFrozen } from './thermal';
+
+export { orthoNeighbors };
 
 /** 席ごとのキャラ（添字 = 席番号。シンボルからは seatOf で引く）。sim/engine.js の s.chars と同じ */
 export type PlayerCharacters = readonly CharacterId[];
@@ -12,18 +16,6 @@ const charOf = (chars: PlayerCharacters, player: Player): CharacterId | undefine
 
 /** ⚡の個数（スタック数） */
 export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '⚡').length;
-
-/** 縦横に隣接するマス（size x size, index = row*size + col） */
-export const orthoNeighbors = (i: number, size: number): number[] => {
-    const r = Math.floor(i / size);
-    const c = i % size;
-    const out: number[] = [];
-    if (r > 0) out.push(i - size);
-    if (r < size - 1) out.push(i + size);
-    if (c > 0) out.push(i - 1);
-    if (c < size - 1) out.push(i + 1);
-    return out;
-};
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
 
@@ -54,15 +46,16 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
     const fired: number[] = [];
     const damaged: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
-        if (chargeStacks(board[k]) === 0) continue;
+        if (chargeStacks(board[k]) === 0 || isFrozen(board[k])) continue; // 氷結中の⚡は休眠（発火せず消えもしない）
         fired.push(k);
         for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (hasLock(sq)) continue; // ロックは貫通しない
+            if (isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
-            board[n] = { ...sq, bind: sq.bind - 1 };
+            board[n] = applyDamage(sq, 1, 'electric').sq; // 電気は氷結を貫通する。ダメージが通れば🔥は消える
             damaged.push(n);
         }
         board[k] = { ...board[k], effects: board[k].effects.filter((e) => e.effect !== '⚡') };
@@ -110,13 +103,13 @@ export const randomChargeCandidates = (board: SquareInfo[], chars: PlayerCharact
 
 /** ジャマーが選べるマスか: ⚡があり、無敵マスなら自分のものだけ（弱点を解く唯一の手段）。他人の無敵マスは不可 */
 export const canJam = (board: SquareInfo[], i: number, current: Player, chars: PlayerCharacters): boolean =>
-    chargeStacks(board[i]) > 0 && !(isShielded(board[i], chars) && board[i].player !== current);
+    chargeStacks(board[i]) > 0 && !isFrozen(board[i]) && !(isShielded(board[i], chars) && board[i].player !== current);
 
 /** ジャマーのダメージ対象: i の縦横隣接の敵コマ（ライフ>0・🔑なし。current 以外のコマ） */
 export const jammerTargets = (board: SquareInfo[], i: number, size: number, current: Player): number[] =>
     orthoNeighbors(i, size).filter((j) => {
         const sq = board[j];
-        return !!sq.player && sq.player !== current && sq.bind > 0 && !hasLock(sq);
+        return !!sq.player && sq.player !== current && sq.bind > 0 && !hasLock(sq) && !isFrozen(sq);
     });
 
 export type JammerResult = {
@@ -135,9 +128,9 @@ export const applyJammer = (board: SquareInfo[], i: number, size: number, curren
     const damaged = jammerTargets(board, i, size, current);
     const zeroed: number[] = [];
     for (const j of damaged) {
-        const bind = Math.max(0, board[j].bind - stacks);
-        board[j] = { ...board[j], bind };
-        if (bind === 0) zeroed.push(j);
+        // ジャマーの電気ダメージも氷結を貫通する
+        board[j] = applyDamage(board[j], stacks, 'electric').sq;
+        if (board[j].bind === 0) zeroed.push(j);
     }
     board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
     return { damaged, zeroed };

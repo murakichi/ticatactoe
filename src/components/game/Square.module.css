@@ -169,3 +169,17 @@
     box-shadow: 0 0 0 3px #fde047 inset, 0 0 14px rgba(250, 204, 21, 0.9);
     cursor: not-allowed;
 }
+
+/* ❄氷結したマス（青白い氷の縁） */
+.frozen {
+    box-shadow: 0 0 0 3px #bfe9ff inset, 0 0 10px rgba(125, 211, 252, 0.8);
+}
+
+/* 🔥火炎のマス（橙の縁。氷結と重なったときは氷の縁を上に重ねる） */
+.burning {
+    box-shadow: 0 0 0 2px #fb923c inset, 0 0 10px rgba(249, 115, 22, 0.7);
+}
+
+.frozen.burning {
+    box-shadow: 0 0 0 3px #bfe9ff inset, 0 0 0 5px #fb923c inset, 0 0 10px rgba(125, 211, 252, 0.8);
+}

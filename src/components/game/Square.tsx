@@ -36,6 +36,8 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
 
     if (props.shielded) classes.push(styles.shielded);
     else if (info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
+    if (info.effects.some((e) => e.effect === '❄')) classes.push(styles.frozen);
+    if (info.effects.some((e) => e.effect === '🔥')) classes.push(styles.burning);
 
     // 効果を記号ごとに集計してバッジ表示 (🌱×3 など)
     const counts: Record<string, number> = {};

@@ -4,10 +4,11 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
+import { glacierTargets, flareTargets, freeze, ignite, isFrozen } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..29)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 30;
+// 汎用スキルプールの大きさ (idx 0..31)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 32;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -25,15 +26,15 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
-    /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
-    chargeClicks?: { skill: string; target: number }[];
+    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷結師の氷河期(target なし)・炎使いのフレアバースト */
+    chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
 };
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
-    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7,
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 6,
 };
 
 class AIPlayer {
@@ -85,11 +86,11 @@ class AIPlayer {
         const size = this.sizeOf(board);
         let gain = 0;
         for (const k of orthoNeighbors(i, size)) {
-            if (chargeStacks(board[k]) === 0) continue;
+            if (chargeStacks(board[k]) === 0 || isFrozen(board[k])) continue;
             for (const n of orthoNeighbors(k, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
-                if (sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (sq.effects.some((e) => e.effect === '🔑') || isFrozen(sq)) continue; // 氷結は隣接⚡を受けない
                 if (sq.player === board[k].player && this.characterOf(sq.player) === 'electrician') continue; // 自陣由来の発火は雷霆の巫に効かない
                 const w = 3 + (sq.bind === 1 ? 4 : 0);
                 gain += this.isEnemy(sq.player) ? w : -w;
@@ -211,11 +212,11 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let k = 0; k < board.length; k++) {
             const n = chargeStacks(board[k]);
-            if (n === 0 || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
+            if (n === 0 || isFrozen(board[k]) || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
             let zeroed = 0, critical = 0, dmg = 0;
             for (const j of orthoNeighbors(k, size)) {
                 const sq = board[j];
-                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑') || isFrozen(sq)) continue;
                 dmg += Math.min(n, sq.bind);
                 if (sq.bind <= n) { zeroed++; if (this.inOppReachLine(board, j)) critical++; }
             }
@@ -225,6 +226,26 @@ class AIPlayer {
             }
         }
         return bestIdx;
+    }
+
+    /** 氷河期を撃つ価値があるか: 自陣のライフ3以上の未氷結コマが2個以上（sim/ai.js と同方針） */
+    shouldGlacier(board: SquareInfo[]): boolean {
+        return glacierTargets(board, this.playerSymbol).filter((i) => board[i].bind >= 3).length >= 2;
+    }
+
+    /** フレアバーストの中心: 巻き込める敵コマが最多（2個以上）のマス。同数なら敵ライフの合計が大きい方 */
+    findFlareTarget(board: SquareInfo[]): number | null {
+        const size = this.sizeOf(board);
+        let best: number | null = null, bestN = 1, bestLife = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i)) continue;
+            const targets = flareTargets(board, i, size, this.playerSymbol);
+            const life = targets.reduce((n, k) => n + board[k].bind, 0);
+            if (targets.length > bestN || (targets.length === bestN && targets.length >= 2 && life > bestLife)) {
+                best = i; bestN = targets.length; bestLife = life;
+            }
+        }
+        return best;
     }
 
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
@@ -1031,7 +1052,7 @@ class AIPlayer {
         // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
         // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
-        const chargeClicks: { skill: string; target: number }[] = [];
+        const chargeClicks: { skill: string; target?: number }[] = [];
         const chargeCost = (base: number) => reducedChargeCost(base, board, (c) => this.calculateAICost(c));
         if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const spreadCost = chargeCost(costs.onClickChargeSpread);
@@ -1074,6 +1095,27 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 氷結師の氷河期（クリック不要・手番は続く）/ 炎使いのフレアバースト（中心をクリックしてから着手）
+        if (this.character === 'cryomancer') {
+            const cost = this.calculateAICost(costs.onClickGlacier);
+            if (magic >= cost && this.shouldGlacier(board)) {
+                chargeClicks.push({ skill: 'onClickGlacier' });
+                board = board.slice();
+                freeze(board, glacierTargets(board, this.playerSymbol));
+                magic -= cost;
+            }
+        }
+        if (this.character === 'pyromancer' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const cost = this.calculateAICost(costs.onClickFlareBurst);
+            const center = magic >= cost ? this.findFlareTarget(board) : null;
+            if (center !== null) {
+                chargeClicks.push({ skill: 'onClickFlareBurst', target: center });
+                board = board.slice();
+                ignite(board, flareTargets(board, center, this.sizeOf(board), this.playerSymbol), this.sizeOf(board));
+                magic -= cost;
+            }
+        }
+
         const chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
@@ -1108,7 +1150,7 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+        const skills = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
