@@ -120,7 +120,8 @@ const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // �
 const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
 // ギア向けの戦略を使うか: そのギアを装備している席、または検証用に forceAi で指定された席。GEAR_AI=0 で全て無効化(A/B用)
 const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
-const TK_AI = process.env.TK_AI !== '0'; // トークン軸のギアの専用行動（A/B用に無効化できる）
+const TK_AI = process.env.TK_AI !== '0'; // トークン系スキルを残すロック（A/B用に無効化できる）
+const TK_CHARS = (process.env.TK_CHARS || 'poisoner,magician').split(','); // 対象のキャラ
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
 const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
@@ -719,10 +720,11 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
-    // トークン軸のギア(道連れの鍵・増援・軽量トークン): トークン系スキルを毎手番使えるようにロックして残す。TK_AI=0 で無効化(A/B用)
-    const tokenGearAi = TK_AI && ['bindingLock', 'reinforce', 'lightToken'].some((id) => gearAi(s, id));
-    // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化
-    if (!tokenGearAi && (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster')) return [];
+    // トークン系スキルを手札でロックして、毎手番トークンを撃てるようにする(毒使い・魔法使い)。ギアとは無関係の通常のAI改善。
+    // A/B(ギアなし、500試合×seed2): 毒使い 0.346→0.425、魔法使い 0.600→0.662。巨人は +0.5pt、陰陽師は -2.7pt で対象外。TK_AI=0 で無効化(A/B用)
+    const tokenLockAi = TK_AI && TK_CHARS.includes(character0);
+    // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化（魔法使いはトークンを残すため例外）
+    if (!tokenLockAi && (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster')) return [];
     const me = curPlayer(s);
     const character = curChar(s);
     const board = s.board;
@@ -735,7 +737,7 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx))
-        || (tokenGearAi && gearTokenIdx.includes(idx));
+        || (tokenLockAi && gearTokenIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
