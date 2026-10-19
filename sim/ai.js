@@ -11,8 +11,9 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
+const { hasGear } = require('./gear');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -114,6 +115,9 @@ function miasmaScore(s, me) {
 
 const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
 const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
+const BLOOM_AI = process.env.BLOOM_AI !== '0'; // 毒使い×毒花の専用行動（A/B用に無効化できる）
+const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // 自陣の毒スタックの上限
+const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
@@ -873,6 +877,30 @@ function faithfulMakeMove(s) {
             if (sq.player !== me || shield.has(i)) return;
             const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
             if (n > bestN) { bestN = n; best = i; }
+        });
+        if (best !== null) {
+            SKILLS.injection(s);
+            placeMove(s, best);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
+        }
+    }
+
+    // 毒使い×毒花: 毒を自陣のコマに盛るとバッズ(魔力の元)が付き、ミアズマでその毒を敵に送れる。
+    // インジェクションが手札にあるとき、敵に隣接する自コマ(毒で消えない程度のライフ)に積極的に毒を盛る。
+    // 自陣の毒マスが多すぎると自コマが毒で消えるので上限を設ける。BLOOM_AI=0 で無効化(A/B用)
+    if (ch0 === 'poisoner' && BLOOM_AI && hasGear(s.gears[s.turn], 'toxicBloom') && availableSkills.includes(15)
+        && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true) && countReaches(s.board, me) === 0
+        && poisonCountFor(s.board, me) < BLOOM_MAX_OWN_POISON) {
+        const geo = geometryForCells(s.board.length);
+        let best = null, bestScore = -1;
+        s.board.forEach((sq, i) => {
+            if (sq.player !== me || shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) return;
+            const own = sq.effects.filter((e) => e.effect === '☠').length;
+            if (sq.bind < BLOOM_MIN_BIND + own) return; // 毒で次々に削れるので、ライフに余裕があるコマだけ
+            const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
+            const score = n * 10 + sq.bind - own * 5; // 敵に近いコマ優先。同じコマに毒を重ねない
+            if (score > bestScore) { bestScore = score; best = i; }
         });
         if (best !== null) {
             SKILLS.injection(s);
