@@ -22,6 +22,16 @@ const opponentsOf = (s) => otherSeats(s).map((seat) => SYMBOLS[seat]);
 const searchDepth = (board) => (board.length <= 16 ? 3 : board.length <= 25 ? 2 : 1);
 
 const TURN_ENDING = ['charge', 'opium', 'tsunami'];
+
+// ---- A/B 検証用のノブ ----
+// 採用済みの設定は AI_DEFAULTS に書く。検証中は s.aiFlags[seat] = { 名前: 値 } で席ごとに上書きできる
+// （probe-ai.js が同一シードで改修前後を paired 比較する）。採用が決まったら AI_DEFAULTS へ移し、不採用なら分岐ごと消す。
+const AI_DEFAULTS = {};
+let F = AI_DEFAULTS;
+function loadFlags(s) {
+    const o = s.aiFlags && s.aiFlags[s.turn];
+    F = o ? Object.assign({}, AI_DEFAULTS, o) : AI_DEFAULTS;
+}
 const INJ_MIN = 10; // インジェクション発動の最低ライン価値 (A/B: seed1-3 で毒使い勝率 +1.3〜+3.8pt)
 // 対策ロックの対象(敵がこのキャラなら、自コマを事前にロックして守る)
 const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
@@ -34,7 +44,8 @@ function bestStompTarget(board, me) {
     for (let i = 0; i < board.length; i++) {
         if (shield.has(i)) continue;
         let enemies = 0;
-        for (const idx of geo.stompRange(i)) if (isEnemy(board[idx].player, me)) enemies++;
+        // 氷結中の敵コマはスキルダメージを❄1つ肩代わりするだけで壊れないので数えない
+        for (const idx of geo.stompRange(i)) if (isEnemy(board[idx].player, me) && !thermal.isFrozen(board[idx])) enemies++;
         const emptyCenter = !board[i].player; // 中心が空なら巨人のコマを配置できる
         if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
             bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -55,6 +66,7 @@ function bestJudgeTarget(board, me) {
             const locked = sq.effects.some(e => e.effect === '🔑');
             const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
             if (locked && protectedBud) continue; // 守られている駒は消えない
+            if (thermal.isFrozen(sq)) continue; // 氷結中は❄1つが身代わりになり、敵も自陣も壊れない
             if (isEnemy(sq.player, me)) enemy++;
             else if (sq.player === me) mine++;
         }
@@ -89,7 +101,8 @@ function bestInjectionTarget(board, me, minValue) {
         const sq = board[i];
         if (!isEnemy(sq.player, me) || shield.has(i)) continue;
         const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数
-        const turns = Math.ceil(sq.bind / (1 + p)); // 1手ごとに 1+毒数 減る
+        // 1手ごとに 1+毒数 減る（氷結中は自然減衰が無く毒数だけ）
+        const turns = Math.ceil(sq.bind / (thermal.isFrozen(sq) ? p : 1 + p));
         if (turns > 2) continue;
         let val = 0;
         for (const line of geo.winLines) {
@@ -198,11 +211,11 @@ function bestChargeOneTarget(board, me) {
     let bestIdx = null, bestScore = 0;
     for (let i = 0; i < board.length; i++) {
         if (shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
-        if (chargeStacks(board[i]) > 0) continue;
+        if (chargeStacks(board[i]) > 0 || thermal.isFrozen(board[i])) continue; // 氷結中のマスの⚡は休眠
         let attack = 0;
         for (const n of orthoNeighbors(i, size)) {
             const sq = board[n];
-            if (!sq.player || sq.bind <= 0) continue;
+            if (!sq.player || sq.bind <= 0 || thermal.isFrozen(sq)) continue; // 氷結中のコマは隣接⚡のダメージを受けない
             if (isEnemy(sq.player, me)) attack++; else attack--;
         }
         let defend = 0;
@@ -230,9 +243,9 @@ function bestChargeSpreadTarget(board, me) {
         let reach = false;
         for (const k of cells) if (board[k].player === me && bestOwnLineCount(board, k, me) >= 3) reach = true;
         const adj = new Set();
-        for (const k of cells) for (const n of orthoNeighbors(k, size)) if (isEnemy(board[n].player, me) && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+        for (const k of cells) for (const n of orthoNeighbors(k, size)) if (isEnemy(board[n].player, me) && board[n].bind > 0 && !thermal.isFrozen(board[n]) && !cells.includes(n)) adj.add(n);
         // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
-        for (const k of cells) if (isEnemy(board[k].player, me) && board[k].bind > 0) adj.add(k);
+        for (const k of cells) if (isEnemy(board[k].player, me) && board[k].bind > 0 && !thermal.isFrozen(board[k])) adj.add(k);
         const ok = reach || (mine >= 3 && adj.size >= 2);
         if (!ok) continue;
         const score = adj.size + mine + (reach ? 10 : 0);
@@ -251,7 +264,7 @@ function bestChargeAreaTarget(board, me) {
         let score = 0;
         for (const k of geo.stompRange(i)) {
             const sq = board[k];
-            if (!sq.player || sq.bind <= 0) continue;
+            if (!sq.player || sq.bind <= 0 || thermal.isFrozen(sq)) continue;
             if (isEnemy(sq.player, me)) score++; else score--;
         }
         if (score > bestScore) { bestScore = score; bestIdx = i; }
@@ -295,6 +308,8 @@ function symbolsWith(board, i, symbol) {
 function evaluateBoard(board, me) {
     let score = 0;
     for (const line of geometryForCells(board.length).winLines) {
+        // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない
+        if (line.some((idx) => thermal.emptyBlocked(board[idx]))) continue;
         let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
         // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
         const enemiesInLine = new Set();
@@ -327,12 +342,15 @@ function evaluateBoard(board, me) {
 function countReaches(board, player) {
     let reaches = 0;
     for (const line of geometryForCells(board.length).winLines) {
-        let my = 0, op = 0;
+        let my = 0, op = 0, blocked = false;
         for (const idx of line) {
-            if (board[idx].player === player) my++;
-            else if (board[idx].player) op++;
+            const sq = board[idx];
+            if (sq.player === player) my++;
+            else if (sq.player) op++;
+            // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
+            else if (thermal.emptyBlocked(sq) || (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) blocked = true;
         }
-        if (my === 3 && op === 0) reaches++;
+        if (my === 3 && op === 0 && !blocked) reaches++;
     }
     return reaches;
 }
@@ -505,14 +523,18 @@ function chooseSkills(s, availableSkills) {
     const geo = geometryForCells(board.length);
 
     const oppReaches = opps.reduce((n, o) => n + countReaches(board, o), 0);
-    let myPieces = 0, oppPieces = 0;
-    const piecesOf = new Map();
+    let myPieces = 0, oppPieces = 0, oppHit = 0;
+    const piecesOf = new Map(), hitOf = new Map();
     for (const sq of board) {
         if (sq.player === me) myPieces++;
-        else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) || 0) + 1);
+        else if (sq.player) {
+            piecesOf.set(sq.player, (piecesOf.get(sq.player) || 0) + 1);
+            if (!thermal.isFrozen(sq)) hitOf.set(sq.player, (hitOf.get(sq.player) || 0) + 1); // スキルダメージが通る敵コマ
+        }
     }
     // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
     piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
+    hitOf.forEach((n) => { oppHit = Math.max(oppHit, n); });
     const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
     function cost(base, isToken) { return calculateCost(s, base, isToken || false); }
@@ -553,7 +575,7 @@ function chooseSkills(s, availableSkills) {
         // 凶荒の舞(相手-2)
         if (character === 'yinYangMaster') {
             const yyCost = cost(costsOf(s).onClickYingYangSkill);
-            if (remaining >= yyCost && (oppPieces > myPieces || myPieces >= 3)) spend(yyCost, 'yyDance');
+            if (remaining >= yyCost && (oppHit > myPieces || myPieces >= 3)) spend(yyCost, 'yyDance');
         }
 
         if (character === 'tactician') {
@@ -615,6 +637,7 @@ function chooseSkills(s, availableSkills) {
         if (availableSkills.includes(5)) {
             let oppOn = 0, myOn = 0;
             for (const idx of geo.antiDiagonal) {
+                if (thermal.isFrozen(board[idx])) continue; // 氷結中は❄1つが身代わり（敵も自陣も無傷）
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
@@ -623,6 +646,7 @@ function chooseSkills(s, availableSkills) {
         if (skills.length === 0 && availableSkills.includes(6)) {
             let oppOn = 0, myOn = 0;
             for (const idx of geo.mainDiagonal) {
+                if (thermal.isFrozen(board[idx])) continue;
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
@@ -708,8 +732,9 @@ function chooseLocks(s, availableSkills) {
     const oppMagic = Math.max(...otherSeats(s).map((seat) => s.magic[seat]));
     const life = s.life;
     let myPieces = 0, oppPieces = 0, empties = 0;
-    for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player) oppPieces++; else if (!sq.player) empties++; }
-    const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !board[i].effects.some((e) => e.effect === '🔑')).length;
+    // オピウム等のダメージが通る敵コマだけを数える（氷結中は肩代わりされる）
+    for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player) { if (!thermal.isFrozen(sq)) oppPieces++; } else if (!thermal.isFrozen(sq)) empties++; }
+    const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !thermal.isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx));
     const valued = (idx) => {
@@ -746,8 +771,10 @@ function bestRescueCenter(board, me, opps, kind) {
         let killed = 0;
         for (const idx of (kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i))) {
             const sq = nb[idx];
-            if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+            if (kind === 'stomp' && sq.player === me) { nb[idx] = thermal.applyDamage(sq, 5, 'skill').sq; continue; }
             if (kind === 'judge' && sq.effects.some(e => e.effect === '🔑') && sq.player === me && sq.effects.some(e => e.effect === '🌱')) continue;
+            const guard = thermal.absorbDestroy(sq);
+            if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
             if (isEnemy(sq.player, me)) killed++;
             nb[idx] = { player: undefined, bind: 0, effects: [] };
         }
@@ -760,6 +787,7 @@ function bestRescueCenter(board, me, opps, kind) {
 
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 function faithfulMakeMove(s) {
+    loadFlags(s);
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const magic = curMagic(s);
