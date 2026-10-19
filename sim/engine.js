@@ -179,9 +179,9 @@ const skillCosts = {
     // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
     onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
-    onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
     onClickGlacier: (config.thermal && config.thermal.glacierCost) || 10,
     onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
+    onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
     onClickFlareBurst: (config.thermal && config.thermal.flareCost) || 6,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
