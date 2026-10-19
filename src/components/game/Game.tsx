@@ -174,7 +174,7 @@ export const Game = (props: GameProps) => {
 
     const aiBySeat = props.players.map((p, seat) =>
         p.isAI
-            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken) => gearCost(cost, seat, isToken))
+            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken) => gearCost(cost, seat, isToken), hasGear(gearsBySeat[seat], 'toxicBloom'))
             : null
     );
     const currentAI = aiBySeat[turnSeat];
@@ -219,6 +219,7 @@ export const Game = (props: GameProps) => {
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
             case 'onClickInjection': onClickInjection(); break;
+            case 'onClickMiasma': onClickMiasma(); break;
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
