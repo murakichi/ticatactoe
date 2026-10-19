@@ -2,6 +2,7 @@
 // sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
 //
 // ❄氷結（スタックする。❄が1つでもあれば氷結中）
+//   - 空きマスにも置ける。氷結中の空きマスには🔑ロック中と同様に誰も着手できない
 //   - 氷結が付いた時点でそのマスの🌱バッズは消える。氷結中のマスには🔑ロックを掛けられない
 //   - ターン進行（自然減衰・火炎の継続ダメージ）でライフが減らない。毒のダメージは受ける
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
@@ -45,9 +46,8 @@ export const thawOne = (sq: SquareInfo): SquareInfo => {
 /** 氷結中の自陣コマへの上書き（強化）が禁じられているか */
 export const overwriteBlocked = (sq: SquareInfo): boolean => isFrozen(sq);
 
-/** 氷室の番人が手番で押すと氷結を解除できるマスか: 氷結中でライフが0でない敵コマ */
-export const canThawByClick = (sq: SquareInfo, me: SquareInfo['player']): boolean =>
-    !!sq.player && sq.player !== me && sq.bind > 0 && isFrozen(sq);
+/** 氷結中の空きマス: 🔑ロックと同様に、誰も着手（設置）できない */
+export const emptyBlocked = (sq: SquareInfo): boolean => !sq.player && isFrozen(sq);
 
 /** 氷室の番人のライフ平均への加算: 自陣コマの氷結スタック総数 × 0.5 */
 export const frozenLifeBonus = (board: SquareInfo[], player: SquareInfo['player']): number =>
@@ -115,8 +115,8 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number): { th
     return { thawed: Array.from(thawed) };
 };
 
-/** 氷結を付けられるマスか: コマがあり、🔑ロック中でない（氷結済みでも重ねられる） */
-export const canFreeze = (sq: SquareInfo): boolean => !!sq.player && !hasLock(sq);
+/** 氷結を付けられるマスか: 🔑ロック中でない（空きマスにも置け、氷結済みでも重ねられる） */
+export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq);
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
 export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
@@ -129,9 +129,62 @@ export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
     return done;
 };
 
-/** 氷河期（氷室の番人）: 自陣のライフが残っているコマで、まだ氷結していないマス */
-export const glacierTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
-    board.map((sq, i) => (sq.player === player && sq.bind > 0 && !isFrozen(sq) && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+/** 絶対零度の基礎コスト。sim/config.js の thermal.glacierCost と同値 */
+export const GLACIER_BASE_COST = 10;
+/** 絶対零度が敵コマに与えるダメージ（敵マスに乗っていた❄1スタックにつき） */
+export const GLACIER_DAMAGE_PER_STACK = 3;
+
+/** ❄が付いているマスの数（スタック数ではなくマス数。空きマス・敵味方問わず） */
+export const frozenCellCount = (board: SquareInfo[]): number => board.filter(isFrozen).length;
+
+/**
+ * 絶対零度（氷室の番人）の実コスト: 基礎コストを、盤面の❄のマス数だけ軽減してからキャラ補正（calc）をかけ、下限は1。
+ * sim/engine.js の glacierCost と同じ
+ */
+export const reducedGlacierCost = (baseCost: number, board: SquareInfo[], calc: (cost: number) => number): number =>
+    Math.max(1, calc(baseCost - frozenCellCount(board)));
+
+/** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
+export const freezeAll = (board: SquareInfo[]): number[] =>
+    freeze(
+        board,
+        board.map((_, i) => i)
+    );
+
+export type DetonateResult = {
+    /** ❄のダメージを受けたマス（破壊されたマス含む） */
+    damaged: number[];
+    /** ライフが0になって破壊されたマス */
+    destroyed: number[];
+};
+
+/**
+ * 絶対零度の発動（使用者 me の次の手番開始時）: me 以外のコマのうち❄が付いているマスに、スタック数×3ダメージ
+ * （倍率なし。ダメージが通れば🔥は消える）を与えて❄を全部解除し、ライフが0になったマスは破壊（空きマス化）する。
+ * 全マスが凍って誰も着手できなくなるのを避けるため、空きマスの❄も全部解除する（ダメージなし）。自陣のコマの❄だけそのまま。
+ * board を直接書き換える
+ */
+export const detonate = (board: SquareInfo[], me: SquareInfo['player']): DetonateResult => {
+    const damaged: number[] = [];
+    const destroyed: number[] = [];
+    board.forEach((sq, i) => {
+        if (!isFrozen(sq)) return;
+        if (!sq.player) {
+            board[i] = thaw(sq);
+            return;
+        }
+        if (sq.player === me) return;
+        const hit = applyDamage(thaw(sq), frozenStacks(sq) * GLACIER_DAMAGE_PER_STACK, 'poison').sq;
+        damaged.push(i);
+        if (hit.bind <= 0) {
+            board[i] = { player: undefined, bind: 0, effects: [] };
+            destroyed.push(i);
+        } else {
+            board[i] = hit;
+        }
+    });
+    return { damaged, destroyed };
+};
 
 /** フレアバースト（煉獄の鍛冶師）: 中心と縦横隣のうち、🔥を付けられる敵コマ（ライフ>0・🔑なし） */
 export const flareTargets = (board: SquareInfo[], center: number, size: number, me: SquareInfo['player']): number[] =>

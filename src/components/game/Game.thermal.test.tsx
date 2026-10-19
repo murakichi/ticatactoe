@@ -15,37 +15,48 @@ describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
 
     it('固有スキルのボタンとパネルのコストが出る', () => {
         render(<Game players={cfg('cryomancer', 'pyromancer')} />);
-        expect(screen.getByRole('button', { name: /氷河期-7/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /絶対零度-10/ })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /フレアバースト/ })).toBeNull();
-        expect(screen.getAllByText(/氷河期/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/絶対零度/).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/フレアバースト/).length).toBeGreaterThan(0);
     });
 
-    it('氷河期: 自陣のコマが凍り、ライフが減らず、重ねて強化もできなくなる', () => {
+    it('氷室の番人は常在のロックの代わりに氷結(コスト2)を持ち、空きマスを凍らせると誰も置けなくなる', () => {
         const { container } = render(<Game players={cfg('cryomancer', 'you')} />);
-        // 魔力を7まで貯める: 💙チャージ(+3) → ⭕着手 → 💙(魔力6)着手 → ⭕着手 → 💙(魔力7)
-        fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
-        fireEvent.click(cells(container)[15]);
-        fireEvent.click(cells(container)[0]); // 💙のコマ
-        fireEvent.click(cells(container)[14]);
-        fireEvent.click(cells(container)[1]); // 💙のコマ2つ目…ではなく着手は手番ごと1回
-        fireEvent.click(cells(container)[13]);
-        const glacier = screen.getByRole('button', { name: /氷河期-7/ });
-        expect(glacier).not.toBeDisabled();
-        fireEvent.click(glacier);
-        expect(badgesAt(container, 0)).toContain('❄');
-        expect(badgesAt(container, 1)).toContain('❄');
-        expect(badgesAt(container, 15)).not.toContain('❄');
-
-        // 氷結中は減衰しない: ⭕が着手しても💙の凍結コマのライフは変わらない
-        fireEvent.click(cells(container)[12]); // 💙(氷室の番人)が空きマスに着手 → ⭕の手番
-        const before = lifeAt(container, 0);
-        fireEvent.click(cells(container)[11]); // ⭕着手
-        expect(lifeAt(container, 0)).toBe(before);
-
-        // 氷結中の自陣コマには重ねて強化できない（クリックしても何も起きず、手番も進まない）
+        expect(screen.queryByRole('button', { name: /^ロック-/ })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '氷結-2' }));
+        fireEvent.click(cells(container)[5]); // 空きマスを氷結
+        expect(badgesAt(container, 5)).toContain('❄');
+        // 同じ手番のまま💙が別のマスに着手 → ⭕の手番。⭕は凍った空きマスに置けない
         fireEvent.click(cells(container)[0]);
-        expect(lifeAt(container, 0)).toBe(before);
-        expect(screen.getAllByText('⭕').length).toBeGreaterThan(0);
+        fireEvent.click(cells(container)[5]);
+        expect(cells(container)[5].querySelector('.life')).toBeNull();
+        expect(container.querySelector('.turn .player')?.textContent).toBe('⭕'); // まだ⭕の手番
+        fireEvent.click(cells(container)[6]);
+        expect(lifeAt(container, 6)).toBe(9);
+    });
+
+    it('絶対零度: 全マスに❄が足され、次の自分の手番開始時に敵コマへ3ダメージ×スタックで氷結が解ける', () => {
+        const { container } = render(<Game players={cfg('cryomancer', 'you')} />);
+        // 魔力を貯める: 💙チャージ(+3)=5 → ⭕着手 → 💙(6)チャージ(+3)=9 → ⭕着手 → 💙(10)で絶対零度(コスト10)
+        fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
+        fireEvent.click(cells(container)[15]); // ⭕のコマ(ライフ9)
+        fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
+        fireEvent.click(cells(container)[14]); // ⭕のコマ
+        const zero = screen.getByRole('button', { name: /絶対零度-/ });
+        expect(zero).not.toBeDisabled();
+        const bindBefore = lifeAt(container, 15);
+        fireEvent.click(zero);
+        expect(badgesAt(container, 0)).toContain('❄'); // 空きマスにも
+        expect(badgesAt(container, 15)).toContain('❄');
+        // 全マスが凍っているので誰も着手できない。💙も⭕もチャージでパスし、💙の手番開始時に発動する
+        fireEvent.click(cells(container)[3]);
+        expect(cells(container)[3].querySelector('.life')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
+        expect(lifeAt(container, 15)).toBe(bindBefore); // 氷結中は減衰しない
+        fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
+        expect(badgesAt(container, 15)).not.toContain('❄');
+        expect(lifeAt(container, 15)).toBe(bindBefore - 3);
+        expect(badgesAt(container, 0)).not.toContain('❄'); // 空きマスの氷結も解ける
     });
 });

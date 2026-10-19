@@ -53,6 +53,10 @@ const SKILL_META: Record<string, Meta> = {
     パンデミック: { icon: '🦠', category: 'poison' },
     毒霧: { icon: '🌫️', category: 'poison' },
     ミアズマ: { icon: '☠', category: 'poison' },
+    氷結: { icon: '❄', category: 'control' },
+    火炎付与: { icon: '🔥', category: 'support' },
+    絶対零度: { icon: '🥶', category: 'attack' },
+    フレアバースト: { icon: '💥', category: 'attack' },
 };
 
 export const metaOf = (name: string): Meta => SKILL_META[name] ?? { icon: '✨', category: 'basic' };

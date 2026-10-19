@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 
@@ -359,7 +359,7 @@ function findThreatSquares(board, player) {
             const sq = board[idx];
             if (sq.player === player) pCount++;
             else if (sq.player) oCount++;
-            else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
+            else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) && !thermal.emptyBlocked(sq)) emptyIdx = idx;
         }
         if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
             if (!threats.includes(emptyIdx)) threats.push(emptyIdx);
@@ -394,6 +394,7 @@ function getValidMoves(board, me, character) {
         const sq = board[i];
         if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
+        if (thermal.emptyBlocked(sq)) continue; // 氷結中の空きマスには置けない
         if (!sq.player) {
             if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
         } else if (isEnemy(sq.player, me)) {
@@ -410,6 +411,7 @@ function getMovesFor(board, player, life) {
         const sq = board[i];
         if (shield.has(i)) continue;
         if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
+        if (thermal.emptyBlocked(sq)) continue;
         if (!sq.player) {
             if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
         } else if (sq.player !== player) {
@@ -857,9 +859,9 @@ function faithfulMakeMove(s) {
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
 
-    // 氷室の番人 氷河期: 自陣のライフ3以上の未氷結コマが2個以上あれば全部凍らせる（クリック不要・手番は進まない）
-    if (curChar(s) === 'cryomancer' && curMagic(s) >= calculateCost(s, costsOf(s).onClickGlacier)
-        && thermal.glacierTargets(s.board, me).filter((k) => s.board[k].bind >= 3).length >= 2) {
+    // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
+    if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3) {
         SKILLS.glacier(s);
     }
 

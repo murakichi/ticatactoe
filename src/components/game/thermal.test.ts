@@ -10,17 +10,22 @@ import {
     ignite,
     canFreeze,
     freeze,
-    glacierTargets,
     flareTargets,
     decayTick,
     frozenStacks,
     thawOne,
     lockable,
-    canThawByClick,
+    emptyBlocked,
+    reducedGlacierCost,
+    frozenCellCount,
+    freezeAll,
+    detonate,
+    GLACIER_BASE_COST,
     frozenLifeBonus,
     FLAME_BURN_DAMAGE,
 } from './thermal';
 import { fireCharges, applyJammer, chargeStacks, canJam } from './charge';
+import { findEmptyIndexes } from '../../util';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Effect } from '../../types/Effect';
 import { Player } from '../../types/Player';
@@ -88,11 +93,11 @@ describe('❄氷結', () => {
         expect(absorbDestroy(sq('⭕', 4)).blocked).toBe(false);
     });
 
-    it('氷結は重ねられるが、コマの無いマス・ロック中には付かない', () => {
+    it('氷結は重ねられるが、ロック中には付かない', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '🔑');
-        expect(freeze(b, [0, 0, 1, 2])).toEqual([0, 0]); // 氷結済みでも重ねられる。ロック中・空きマスは付かない
+        expect(freeze(b, [0, 0, 1, 2])).toEqual([0, 0, 2]); // 氷結済みでも重ねられ、空きマスにも付く。ロック中は付かない
         expect(frozenStacks(b[0])).toBe(2);
         expect(canFreeze(b[0])).toBe(true);
     });
@@ -138,11 +143,66 @@ describe('❄氷結', () => {
         expect(freeze(l, [0])).toEqual([]);
     });
 
-    it('氷室の番人の解除クリック: ライフが残る敵の氷結マスだけ', () => {
-        expect(canThawByClick(sq('⭕', 3, '❄'), '💙')).toBe(true);
-        expect(canThawByClick(sq('⭕', 0, '❄'), '💙')).toBe(false);
-        expect(canThawByClick(sq('💙', 3, '❄'), '💙')).toBe(false);
-        expect(canThawByClick(sq('⭕', 3), '💙')).toBe(false);
+    it('空きマスにも氷結を置け、氷結中の空きマスには着手できない（🔑中は付かない）', () => {
+        const b = emptyBoard();
+        b[0] = sq(undefined, 0, '🔑');
+        expect(freeze(b, [0, 1])).toEqual([1]);
+        expect(emptyBlocked(b[1])).toBe(true);
+        expect(emptyBlocked(b[2])).toBe(false);
+        expect(emptyBlocked(sq('💙', 3, '❄'))).toBe(false); // コマのあるマスは対象外（上書き禁止は別ルール）
+        // 空きマスへのスキルダメージ（範囲スキル）は❄を1つ減らす
+        expect(absorbDestroy(b[1]).blocked).toBe(true);
+        expect(findEmptyIndexes(b)).not.toContain(1);
+    });
+
+    it('絶対零度のコスト: 盤面の氷結マスの数だけ軽減（スタックでなくマス数・空き含む）、下限1', () => {
+        const b = emptyBoard();
+        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c)).toBe(10);
+        b[0] = sq('💙', 3, '❄', '❄');
+        b[1] = sq(undefined, 0, '❄');
+        b[2] = sq('⭕', 3, '❄');
+        expect(frozenCellCount(b)).toBe(3);
+        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c)).toBe(7);
+        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c + 1)).toBe(8); // キャラ補正は軽減後に掛かる
+        const full = emptyBoard().map(() => sq('⭕', 3, '❄'));
+        expect(reducedGlacierCost(GLACIER_BASE_COST, full, (c) => c)).toBe(1);
+    });
+
+    it('絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄+1', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱');
+        b[1] = sq('⭕', 3, '❄');
+        b[2] = sq('⭕', 3, '🔑');
+        const done = freezeAll(b);
+        expect(done).toHaveLength(15);
+        expect(done).not.toContain(2);
+        expect(frozenStacks(b[0])).toBe(1);
+        expect(b[0].effects.some((e) => e.effect === '🌱')).toBe(false);
+        expect(frozenStacks(b[1])).toBe(2);
+        expect(frozenStacks(b[5])).toBe(1); // 空きマス
+        expect(frozenStacks(b[2])).toBe(0);
+    });
+
+    it('絶対零度の発動: 他者のコマの❄×3ダメージで氷結を解除、ライフ0は破壊。空きマスの❄も解除、自陣の❄は残る', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 10, '❄', '❄'); // 6ダメージ → 4
+        b[1] = sq('⭕', 3, '❄'); // 3ダメージ → 0 で破壊
+        b[2] = sq('⭕', 0, '❄'); // 0 → 破壊
+        b[3] = sq('⭕', 5); // 氷結なし → 無傷
+        b[4] = sq('💙', 5, '❄', '❄'); // 自陣 → そのまま
+        b[5] = sq(undefined, 0, '❄', '❄'); // 空きマス → ダメージなしで解除
+        b[6] = sq('⭕', 9, '❄', '🔥'); // 3ダメージ、🔥は消える
+        const r = detonate(b, '💙');
+        expect(r.damaged.sort((a, c) => a - c)).toEqual([0, 1, 2, 6]);
+        expect(r.destroyed.sort((a, c) => a - c)).toEqual([1, 2]);
+        expect(b[0].bind).toBe(4);
+        expect(isFrozen(b[0])).toBe(false);
+        expect(b[1]).toEqual({ player: undefined, bind: 0, effects: [] });
+        expect(b[3].bind).toBe(5);
+        expect(frozenStacks(b[4])).toBe(2);
+        expect(frozenStacks(b[5])).toBe(0);
+        expect(b[6].bind).toBe(6);
+        expect(flameStacks(b[6])).toBe(0);
     });
 
     it('氷室の番人のライフ加算は自陣の氷結スタック総数×0.5', () => {
@@ -154,14 +214,6 @@ describe('❄氷結', () => {
         expect(frozenLifeBonus(b, '⭕')).toBe(1.5);
     });
 
-    it('氷河期の対象は自陣のライフが残る未氷結のコマ', () => {
-        const b = emptyBoard();
-        b[0] = sq('💙', 3);
-        b[1] = sq('💙', 0);
-        b[2] = sq('💙', 2, '❄');
-        b[3] = sq('⭕', 5);
-        expect(glacierTargets(b, '💙')).toEqual([0]);
-    });
 });
 
 describe('🔥火炎', () => {
@@ -260,6 +312,7 @@ describe('sim/thermal.js との一致', () => {
     const kinds = ['skill', 'electric', 'poison'] as const;
     const combos: Effect['effect'][][] = [[], ['❄'], ['❄', '❄'], ['🌱', '❄'], ['🔥'], ['🔥', '🔥'], ['❄', '🔥'], ['🔑'], ['☠', '🔥'], ['⚡', '❄']];
     const squares = [0, 1, 3, 8].flatMap((bind) => combos.map((e) => sq('💙', bind, ...e)));
+    squares.push(sq(undefined, 0, '❄'), sq(undefined, 0));
 
     it('applyDamage / absorbDestroy / zeroOut が一致', () => {
         for (const s of squares) {
@@ -271,7 +324,7 @@ describe('sim/thermal.js との一致', () => {
             expect(sim.frozenStacks(s)).toBe(frozenStacks(s));
             expect(sim.thawOne(s)).toEqual(thawOne(s));
             expect(sim.lockable(s)).toBe(lockable(s));
-            expect(sim.canThawByClick(s, '⭕')).toBe(canThawByClick(s, '⭕'));
+            expect(sim.emptyBlocked(s)).toBe(emptyBlocked(s));
         }
     });
 
@@ -301,7 +354,12 @@ describe('sim/thermal.js との一致', () => {
         const d = mk();
         expect(sim.freeze(c, [0, 4, 9, 10, 1])).toEqual(freeze(d, [0, 4, 9, 10, 1]));
         expect(c).toEqual(d);
-        expect(sim.glacierTargets(mk(), '💙')).toEqual(glacierTargets(mk(), '💙'));
+        const e = mk();
+        const f = mk();
+        expect(sim.freezeAll(e)).toEqual(freezeAll(f));
+        expect(e).toEqual(f);
+        expect(sim.detonate(e, '💙')).toEqual(detonate(f, '💙'));
+        expect(e).toEqual(f);
         for (let i = 0; i < 16; i++) expect(sim.flareTargets(mk(), i, 4, '💙')).toEqual(flareTargets(mk(), i, 4, '💙'));
     });
 });

@@ -43,7 +43,8 @@ module.exports = {
     "thermal": {
         "freezeCost": 3,
         "igniteCost": 3,
-        "glacierCost": 7,
+        "glacierCost": 10,
+        "cryoFreezeCost": 2,
         "flareCost": 6
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること

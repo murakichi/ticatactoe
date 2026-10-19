@@ -71,7 +71,10 @@ function ignite(board, cells, size) {
     }
     return { thawed: Array.from(thawed) };
 }
-const canFreeze = (sq) => !!sq.player && !hasLock(sq);
+/** 氷結中の空きマス: 🔑ロックと同様に、誰も着手（設置）できない */
+const emptyBlocked = (sq) => !sq.player && isFrozen(sq);
+/** 氷結を付けられるマスか: 🔑ロック中でない（空きマスにも置け、氷結済みでも重ねられる） */
+const canFreeze = (sq) => !hasLock(sq);
 function freeze(board, cells) {
     const done = [];
     for (const k of cells) {
@@ -82,8 +85,25 @@ function freeze(board, cells) {
     }
     return done;
 }
-const glacierTargets = (board, player) =>
-    board.map((sq, i) => (sq.player === player && sq.bind > 0 && canFreeze(sq) && !isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+/** 絶対零度の使用時効果: 🔑のない全マス（空きマス含む）に❄を1つ。付いたマスを返す。board を直接書き換える */
+const freezeAll = (board) => freeze(board, board.map((_, i) => i));
+/**
+ * 絶対零度の発動（使用者の次の手番開始時）: 使用者 me 以外のコマで❄が付いたマスに、❄スタック数×3の
+ * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
+ * 空きマスの❄・自陣コマの❄は触らない。board を直接書き換える
+ */
+function detonate(board, me) {
+    const damaged = [], destroyed = [];
+    for (let k = 0; k < board.length; k++) {
+        const sq = board[k];
+        if (!sq.player || sq.player === me || !isFrozen(sq)) continue;
+        const hit = applyDamage(sq, frozenStacks(sq) * 3, 'poison').sq;
+        damaged.push(k);
+        if (hit.bind <= 0) { board[k] = { player: undefined, bind: 0, effects: [] }; destroyed.push(k); }
+        else board[k] = thaw(hit);
+    }
+    return { damaged, destroyed };
+}
 const flareTargets = (board, center, size, me) =>
     [center, ...orthoNeighbors(center, size)].filter((k) => {
         const sq = board[k];
@@ -95,6 +115,6 @@ const canThawByClick = (sq, me) => !!sq.player && sq.player !== me && sq.bind > 
 
 module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, freeze, glacierTargets, flareTargets,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, flareTargets,
     lockable, canThawByClick,
 };

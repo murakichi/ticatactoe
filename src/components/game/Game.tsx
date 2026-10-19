@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, thaw, canThawByClick, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, canFreeze, glacierTargets, flareTargets, overwriteBlocked } from './thermal';
+import { isFrozen, emptyBlocked, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, flareTargets, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -214,7 +214,7 @@ export const Game = (props: GameProps) => {
             case 'onClickWalpurgisNight': onClickWalpurgisNight(); break;
             case 'onClickTotalAssault': onClickTotalAssault(); break;
             case 'onClickNecromancy': onClickNecromancy(); break;
-            case 'onClickUseLock': onClickUseLock(); break;
+            case 'onClickUseLock': (currentCharacter === 'cryomancer' ? onClickCryoFreeze : onClickUseLock)(); break;
             case 'onClickUseDoubleLock': onClickUseDoubleLock(); break;
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
@@ -266,10 +266,13 @@ export const Game = (props: GameProps) => {
             if (move !== null) onCellClick(move);
             return;
         }
+        ai.glacierPending = glacierPending[turnSeat];
         const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
 
         // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
-        if (result.lockTargets?.some((t) => !lockable(currentBoard[t]))) {
+        // （氷室の番人はロックの代わりに氷結を撃つので、氷結が付けられるかで見る）
+        const canMark = (t: number) => (currentCharacter === 'cryomancer' ? canFreeze(currentBoard[t]) : lockable(currentBoard[t]));
+        if (result.lockTargets?.some((t) => !canMark(t))) {
             result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
             result.lockTargets = undefined;
         }
@@ -420,6 +423,9 @@ export const Game = (props: GameProps) => {
         calculateLife(characters[0], yinYangMode[0], gearLifeBonus(gearsBySeat[0]), gearLifeStd(gearsBySeat[0], LIFE_STD))
     );
 
+    // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
+    const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+
     useEffect(() => {
         if (currentTurn === 1) {
             return;
@@ -433,6 +439,22 @@ export const Game = (props: GameProps) => {
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
             gearTurn.current.echoNext[nextSeat] = false;
+            // 絶対零度: 使用者の手番開始時に、他の席の氷結マスへ❄×3のダメージを与えて氷結を解除する
+            if (glacierPending[nextSeat]) {
+                const board = currentBoard.slice();
+                const r = detonate(board, nextSymbol);
+                setGlacierPendingAt(nextSeat, false);
+                setCurrentBoard(board);
+                setGameLog((prev) => [
+                    ...prev,
+                    `ターン${currentTurn} ${nextSymbol}: 絶対零度が発動（${r.damaged.length}コマにダメージ${r.destroyed.length > 0 ? `・${r.destroyed.length}コマが破壊` : ''}）`,
+                ]);
+                if (r.damaged.length > 0) {
+                    flashCells(r.damaged);
+                    playEffect('freeze');
+                }
+                addCorpses(r.destroyed.length);
+            }
         }
         // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
         // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
@@ -592,21 +614,17 @@ export const Game = (props: GameProps) => {
         if (calculateWinner(currentBoard.map((x) => x.player))) {
             return;
         } else if (currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer) {
-            // 氷室の番人: ライフが残る敵の氷結マスを押すと、氷結を全部解除する（着手の代わりに手番を終える）
-            if (currentCharacter === 'cryomancer' && canThawByClick(currentBoard[i], currentTurnPlayer)) {
-                nextBoard[i] = thaw(nextBoard[i]);
-                addLog(`${posName(i)}の氷結を解除`);
-                playEffect('flame', i);
-                setCurrentBoard(nextBoard);
-                setCurrentTurn(currentTurn + 1);
-                return;
-            }
             if (currentBoard[i].bind > 0 && currentCharacter !== 'giant') {
                 return;
             }
         }
 
         if (nextBoard[i].effects.find((x) => x.effect === '🔑') && nextBoard[i].bind > 0) {
+            return;
+        }
+
+        // ❄氷結中の空きマスには、🔑ロック中と同様に誰も着手できない
+        if (emptyBlocked(currentBoard[i])) {
             return;
         }
 
@@ -1600,15 +1618,27 @@ export const Game = (props: GameProps) => {
         setUseIgnite(true);
         spendMagic(calculateCost(seatCosts.onClickIgnite));
     };
-    // 固有スキル 氷河期（氷室の番人）: 自陣のライフが残るコマすべてに❄を付与する。クリック不要
+    // 固有スキル 絶対零度（氷室の番人）: 全マス（空きマス含む。🔑は除く）に❄を足す。クリック不要・手番は続く。
+    // 次の自分の手番開始時に、他の席の氷結マスへ❄1スタックにつき3ダメージを与えて氷結を解除し、ライフ0のマスは破壊する
+    const glacierCost = (player: Player = currentTurnPlayer): number =>
+        reducedGlacierCost(costTableFor(seatOf(player)).onClickGlacier, currentBoard, (c) => calculateCost(c, false, false, player));
     const onClickGlacier = () => {
+        if (glacierPending[turnSeat]) return;
+        const cost = glacierCost();
         const board = currentBoard.slice();
-        const done = freeze(board, glacierTargets(board, currentTurnPlayer));
-        addLog(`「氷河期」を使用（${done.length}コマが氷結）`);
+        const done = freezeAll(board);
+        addLog(`「絶対零度」を使用（${done.length}マスが氷結。次の手番開始時に発動）`);
         flashCells(done);
         playEffect('freeze');
         setCurrentBoard(board);
-        spendMagic(calculateCost(seatCosts.onClickGlacier), false);
+        setGlacierPendingAt(turnSeat, true);
+        spendMagic(cost, false);
+    };
+    // 氷室の番人は常在のロックの代わりにこの「氷結」を持つ: マスを1つ選んで❄を付ける（空きマス可）
+    const onClickCryoFreeze = () => {
+        addLog('「氷結」を使用（マスを選択）');
+        setUseFreeze(true);
+        spendMagic(calculateCost(seatCosts.onClickCryoFreeze));
     };
     // 固有スキル フレアバースト（煉獄の鍛冶師）: 選んだマスと縦横隣の敵コマ（ライフ>0・🔑なし）に🔥を付与する
     const onClickFlareBurst = () => {
@@ -1617,7 +1647,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickFlareBurst), false);
     };
     const exeFreeze = (i: number) => {
-        if (!canFreeze(currentBoard[i])) return; // 空きマス・氷結済み・🔑ロック中は選び直せる
+        if (!canFreeze(currentBoard[i])) return; // 🔑ロック中は選び直せる
         const board = currentBoard.slice();
         freeze(board, [i]);
         addLog(`${posName(i)}を氷結`);
@@ -1750,7 +1780,7 @@ export const Game = (props: GameProps) => {
             case 'electrician':
                 return [{ name: '帯電拡散', cost: chargeSpreadCost(symbols[seat]) }];
             case 'cryomancer':
-                return [{ name: '氷河期', cost: g(sc.onClickGlacier) }];
+                return [{ name: '絶対零度', cost: glacierCost(symbols[seat]) }];
             case 'pyromancer':
                 return [{ name: 'フレアバースト', cost: g(sc.onClickFlareBurst) }];
             default:
@@ -1873,6 +1903,7 @@ export const Game = (props: GameProps) => {
         setUseFreeze(false);
         setUseIgnite(false);
         setUseFlare(false);
+        setGlacierPendingAll(Array(seatCount).fill(false));
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
@@ -2091,9 +2122,17 @@ export const Game = (props: GameProps) => {
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickUseLock}
+                        hidden={currentCharacter === 'cryomancer'}
                         buttonText={`ロック-${calculateCost(seatCosts.onClickUseLock)}`}
                         paragraph={`選択したマスを${gearLockBind(turnGears)}ターン以上ロックします`}
                         disabled={checkSkillDisable(seatCosts.onClickUseLock)}
+                    />
+                    <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
+                        onClick={onClickCryoFreeze}
+                        buttonText={`氷結-${calculateCost(seatCosts.onClickCryoFreeze)}`}
+                        paragraph={'マスを1つ選び、❄氷結を付与します（空きマスも可）\n氷結中の空きマスには誰も着手できません。氷結したコマはターン進行でライフが減らず、スキルのダメージを❄1つで肩代わりしますが、自分も重ねて強化できません'}
+                        hidden={currentCharacter !== 'cryomancer'}
+                        disabled={checkSkillDisable(seatCosts.onClickCryoFreeze)}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickTotalAssault}
@@ -2155,11 +2194,11 @@ export const Game = (props: GameProps) => {
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickGlacier}
-                        buttonText={`氷河期-${calculateCost(seatCosts.onClickGlacier)}`}
-                        paragraph={'自陣のライフが残っているコマすべてに❄氷結を付与します 氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず、スキルのダメージも氷結が肩代わりします'}
+                        buttonText={`絶対零度-${glacierCost()}`}
+                        paragraph={`全てのマス（空きマス含む。🔑ロック中を除く）に❄を1つ足します\n次の自分の手番開始時に、他のプレイヤーの氷結マスへ❄1つにつき3ダメージを与えて氷結を解除し、ライフが0になったマスを破壊します\nコストは盤面の氷結マスの数だけ軽減されます（下限1）${glacierPending[turnSeat] ? '\n発動待ちです' : ''}`}
                         hidden={currentCharacter !== 'cryomancer'}
                         exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickGlacier) || glacierTargets(currentBoard, currentTurnPlayer).length === 0}
+                        disabled={magic[turnSeat] < glacierCost() || glacierPending[turnSeat]}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickFlareBurst}
@@ -2190,7 +2229,7 @@ export const Game = (props: GameProps) => {
                             buttonText={s.buttonText}
                             paragraph={s.paragraph}
                             disabled={s.disabled}
-                            hidden={!skills.includes(s.idx)}
+                            hidden={!skills.includes(s.idx) || (s.idx === 30 && currentCharacter === 'cryomancer')}
                             locked={currentLockedSkills.includes(s.idx)}
                             onToggleLock={() => toggleLock(s.idx)}
                             onHoverStart={s.onHoverStart}

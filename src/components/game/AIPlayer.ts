@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { glacierTargets, flareTargets, freeze, ignite, isFrozen } from './thermal';
+import { flareTargets, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..31)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -26,7 +26,7 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
-    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の氷河期(target なし)・煉獄の鍛冶師のフレアバースト */
+    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の絶対零度(target なし)・煉獄の鍛冶師のフレアバースト */
     chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
@@ -47,6 +47,8 @@ class AIPlayer {
     characters: readonly CharacterId[];
     /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
     shield: Set<number> = new Set();
+    /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */
+    glacierPending: boolean = false;
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean) => number;
@@ -228,9 +230,9 @@ class AIPlayer {
         return bestIdx;
     }
 
-    /** 氷河期を撃つ価値があるか: 自陣のライフ3以上の未氷結コマが2個以上（sim/ai.js と同方針） */
+    /** 絶対零度を撃つ価値があるか: ライフが残る敵コマが3個以上（全マスに❄が足され、次の手番に3ダメージ。sim/ai.js と同方針） */
     shouldGlacier(board: SquareInfo[]): boolean {
-        return glacierTargets(board, this.playerSymbol).filter((i) => board[i].bind >= 3).length >= 2;
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
     }
 
     /** フレアバーストの中心: 巻き込める敵コマが最多（2個以上）のマス。同数なら敵ライフの合計が大きい方 */
@@ -335,7 +337,7 @@ class AIPlayer {
                 const sq = board[idx];
                 if (sq.player === player) pCount++;
                 else if (sq.player) oCount++;
-                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
+                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) && !emptyBlocked(sq)) emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
                 if (!threats.includes(emptyIdx)) threats.push(emptyIdx);
@@ -386,7 +388,7 @@ class AIPlayer {
 
             if (!sq.player) {
                 // 空きマス (ロックされていない)
-                if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
+                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
             } else if (this.isEnemy(sq.player)) {
                 // bind=0の敵マスは無条件で乗っ取り可能
                 if (sq.bind <= 0) {
@@ -408,7 +410,7 @@ class AIPlayer {
             if (this.shield.has(i)) continue;
             if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
             if (!sq.player) {
-                if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
+                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
             } else if (sq.player !== player) {
                 if (sq.bind <= 0) moves.push(i);
             }
@@ -1095,13 +1097,13 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
-        // 氷室の番人の氷河期（クリック不要・手番は続く）/ 煉獄の鍛冶師のフレアバースト（中心をクリックしてから着手）
+        // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師のフレアバースト（中心をクリックしてから着手）
         if (this.character === 'cryomancer') {
-            const cost = this.calculateAICost(costs.onClickGlacier);
-            if (magic >= cost && this.shouldGlacier(board)) {
+            const cost = reducedGlacierCost(costs.onClickGlacier, board, (c) => this.calculateAICost(c));
+            if (!this.glacierPending && magic >= cost && this.shouldGlacier(board)) {
                 chargeClicks.push({ skill: 'onClickGlacier' });
                 board = board.slice();
-                freeze(board, glacierTargets(board, this.playerSymbol));
+                freezeAll(board);
                 magic -= cost;
             }
         }

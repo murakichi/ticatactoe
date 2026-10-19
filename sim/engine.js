@@ -111,7 +111,7 @@ function findEmptyIndexes(board) {
     const out = [];
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
-        if (sq.player === undefined && sq.effects.filter((e) => e.effect === '🔑').length === 0) out.push(i);
+        if (sq.player === undefined && sq.effects.filter((e) => e.effect === '🔑').length === 0 && !thermal.emptyBlocked(sq)) out.push(i);
     }
     return out;
 }
@@ -179,7 +179,8 @@ const skillCosts = {
     // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
     onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
-    onClickGlacier: (config.thermal && config.thermal.glacierCost) || 7,
+    onClickGlacier: (config.thermal && config.thermal.glacierCost) || 10,
+    onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
     onClickFlareBurst: (config.thermal && config.thermal.flareCost) || 6,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
@@ -483,6 +484,7 @@ function newGame(opts = {}) {
         useChargeArea: false,
         useJammer: false,
         useFreeze: false,
+        glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
         useIgnite: false,
         useFlare: false,
         stats: {},
@@ -629,6 +631,13 @@ function advanceTurn(s) {
         else { s.proliferate[next] = false; s.proliferateCount[next] = 0; }
     }
     s.magic[next] = nextMagic;
+    // 絶対零度: 使用者の手番開始時に敵の❄マスを爆破（ダメージ→❄全除去、0以下なら破壊=墓地+）
+    if (s.glacierPending[next]) {
+        s.glacierPending[next] = false;
+        const det = thermal.detonate(s.board, sym);
+        addCorpses(s, det.destroyed.length);
+        bumpStat(s, 'glacierDestroyed', det.destroyed.length);
+    }
     s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + (ch === 'cryomancer' ? 0.5 * frozenStacksFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
@@ -724,18 +733,13 @@ function placeMove(s, i) {
     }
 
     if (s.winner) return false;
-    // 氷室の番人: ライフが残る敵の氷結マスを着手でクリックすると❄を全部解除する（奪わない・置かない）。着手の代わりに手番を終える（減衰なし）
-    if (curChar(s) === 'cryomancer' && board[i].player && board[i].player !== curPlayer(s) && board[i].bind > 0 && thermal.isFrozen(board[i])) {
-        board[i] = thermal.thaw(board[i]);
-        bumpStat(s, 'wardenThaw');
-        endTurn(s);
-        return true;
-    }
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
+    // 氷結中の空きマスには誰も着手できない
+    if (thermal.emptyBlocked(board[i])) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
     if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i])) return false;
 
@@ -909,6 +913,14 @@ function onClickDoubleBuds(s) {
     bumpMagicCount(s);
 }
 function onClickUseLock(s) {
+    // 氷室の番人: 常在のロックは「氷結」（コスト2・対象1マスに❄。空きマス可）に置き換わる
+    if (curChar(s) === 'cryomancer') {
+        s.useFreeze = true;
+        spendMagic(s, calculateCost(s, costsOf(s).onClickCryoFreeze));
+        bumpMagicCount(s);
+        bumpStat(s, 'cryoFreeze');
+        return;
+    }
     s.useLock += 1;
     spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock));
     bumpMagicCount(s);
@@ -1071,7 +1083,7 @@ function exeStomp(s, i) {
         }
     }
     addCorpses(s, destroyed);
-    if (s.board[i].player === undefined) s.board[i] = { player: cur, bind: s.life, effects: [] };
+    if (s.board[i].player === undefined && !thermal.emptyBlocked(s.board[i])) s.board[i] = { player: cur, bind: s.life, effects: [] };
     s.useStomp = false;
 }
 
@@ -1424,9 +1436,19 @@ function onClickIgnite(s) {
     bumpStat(s, 'ignite');
 }
 // 氷室の番人の固有スキル 氷河期: 自陣のライフが残るコマすべてに❄（クリック不要・ターン継続）
+// 絶対零度（氷室の番人）: 全マスに❄を足し、次の自分の手番開始時に敵の❄マスを爆破する。盤上の❄マスの数だけ安い（下限1）
+function frozenCells(board) {
+    return board.filter((sq) => thermal.isFrozen(sq)).length;
+}
+function glacierCost(s) {
+    return Math.max(1, calculateCost(s, costsOf(s).onClickGlacier - frozenCells(s.board)));
+}
 function onClickGlacier(s) {
-    const done = thermal.freeze(s.board, thermal.glacierTargets(s.board, curPlayer(s)));
-    spendMagic(s, calculateCost(s, costsOf(s).onClickGlacier));
+    if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
+    const cost = glacierCost(s);
+    const done = thermal.freezeAll(s.board);
+    s.glacierPending[s.turn] = true;
+    spendMagic(s, cost);
     bumpStat(s, 'glacier');
     bumpStat(s, 'glacierCells', done.length);
 }
@@ -1509,5 +1531,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };
