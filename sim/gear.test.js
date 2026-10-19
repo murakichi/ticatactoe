@@ -220,7 +220,7 @@ test('収穫: ロックを1つかけるごとに魔力+1', () => {
     assert.strictEqual(s.magic[0], afterSkill + 1);
 });
 
-test('毒花: 敵に毒を注入すると、自陣のコマ1つにバッズが付く', () => {
+test('毒花: 敵のコマに毒を注入しても、毒花を持たない側のコマ・自分のコマにはバッズが付かない', () => {
     const s = game([['toxicBloom'], []]);
     s.board[0] = { player: H, bind: 3, effects: [] };
     s.board[5] = { player: C, bind: 3, effects: [] };
@@ -228,8 +228,7 @@ test('毒花: 敵に毒を注入すると、自陣のコマ1つにバッズが�
     e.SKILLS.injection(s);
     e.placeMove(s, 5);
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
-    assert.ok(s.board[0].effects.some((x) => x.effect === '🌱'));
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🌱'), '敵のコマにはバッズを付けない');
+    assert.ok(!s.board.some((sq) => sq.effects.some((x) => x.effect === '🌱')));
 });
 
 test('毒花: 自陣のコマに毒を打てば、そのコマにバッズが付く', () => {
@@ -241,13 +240,27 @@ test('毒花: 自陣のコマに毒を打てば、そのコマにバッズが付
     assert.deepStrictEqual(s.board[0].effects.map((x) => x.effect).sort(), ['☠', '🌱']);
 });
 
-test('毒花: 自陣のコマがなければ何も起きない', () => {
-    const s = game([['toxicBloom'], []]);
+test('毒花: 相手から毒を付けられた自陣のコマにも発動する（毒を付ける側の装備は関係ない）', () => {
+    const s = game([[], ['toxicBloom']]);
+    s.board[0] = { player: H, bind: 3, effects: [] };
     s.board[5] = { player: C, bind: 3, effects: [] };
     s.magic[0] = 20;
-    e.SKILLS.injection(s);
+    e.SKILLS.injection(s); // 💙（毒花なし）が⭕のコマに毒
     e.placeMove(s, 5);
-    assert.ok(!s.board.some((x) => x.effects.some((y) => y.effect === '🌱')));
+    assert.deepStrictEqual(s.board[5].effects.map((x) => x.effect).sort(), ['☠', '🌱'], '⭕のコマにバッズ');
+    assert.ok(!s.board[0].effects.some((x) => x.effect === '🌱'), '毒を付けた側には付かない');
+});
+
+test('毒花: 毒霧（全コマに毒）では、毒花を持つ側のコマ全部にバッズが付く', () => {
+    const s = game([['toxicBloom'], []]);
+    s.board[0] = { player: H, bind: 3, effects: [] };
+    s.board[1] = { player: H, bind: 3, effects: [] };
+    s.board[5] = { player: C, bind: 3, effects: [] };
+    s.magic[0] = 30;
+    e.SKILLS.poisonMist(s);
+    assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '🌱').length, 1);
+    assert.strictEqual(s.board[1].effects.filter((x) => x.effect === '🌱').length, 1);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🌱').length, 0);
 });
 
 test('伝播: バッズトークンを置くと、周囲の自陣のコマにバッズが広がる', () => {

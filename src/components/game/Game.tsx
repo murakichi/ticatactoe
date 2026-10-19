@@ -533,7 +533,7 @@ export const Game = (props: GameProps) => {
 
         if (useInjection > 0) {
             nextBoard[i] = poisonStrike({ ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '☠' }] });
-            toxicBloom(nextBoard, i);
+            toxicBloom(nextBoard, [i]);
             harvestMagic(1);
             addLog(`${posName(i)}に毒を注入`);
             setUseInjection(useInjection - 1);
@@ -799,17 +799,15 @@ export const Game = (props: GameProps) => {
         const lock: Effect = owner ? { effect: '🔑', value: owner } : { effect: '🔑' };
         board[idx] = { ...sq, effects: [...sq.effects, lock], bind: sq.bind < lockBind ? lockBind : sq.bind };
     };
-    // 毒花: 毒を付与するスキルを使ったとき、自陣のコマ1つにバッズも付く。target が自陣のコマならそこ、なければランダムな自陣のコマ
-    const toxicBloom = (board: SquareInfo[], target: number | null) => {
-        if (!hasGear(turnGears, 'toxicBloom')) return;
-        let idx = target;
-        if (idx === null || board[idx].player !== currentTurnPlayer) {
-            const mine = board.map((_, k) => k).filter((k) => board[k].player === currentTurnPlayer && !isGuarded(board[k], characters));
-            if (mine.length === 0) return;
-            idx = randomPick(mine);
+    // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
+    // 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
+    const toxicBloom = (board: SquareInfo[], cells: number[]) => {
+        for (const k of cells) {
+            const owner = board[k].player;
+            if (!owner || !hasGear(gearsBySeat[seatOf(owner)], 'toxicBloom')) continue;
+            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+            addLog(`毒花: ${posName(k)}にバッズ`);
         }
-        board[idx] = { ...board[idx], effects: [...board[idx].effects, { effect: '🌱' }] };
-        addLog(`毒花: ${posName(idx)}にバッズ`);
     };
     // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
@@ -845,6 +843,7 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return;
         const t = randomPick(targets);
         board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
+        toxicBloom(board, [t]);
     };
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
@@ -1080,7 +1079,10 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return null;
         const index = randomPick(targets);
         board[index] = { ...board[index], effects: [...board[index].effects, item] };
-        if (isPoisoner) board[index] = poisonStrike(board[index]);
+        if (isPoisoner) {
+            board[index] = poisonStrike(board[index]);
+            toxicBloom(board, [index]);
+        }
         return `${posName(index)}に${item.effect}を追加`;
     };
 
@@ -1323,7 +1325,7 @@ export const Game = (props: GameProps) => {
             }
         });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`ミアズマ（敵${targets.length}マスに毒、自陣の毒はすべて消えた）`);
         flashCells(targets);
         playEffect('poison');
@@ -1348,7 +1350,7 @@ export const Game = (props: GameProps) => {
         board[index] = poisonStrike({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] });
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
         harvestMagic(afterTokenPlaced(board, index, '☠'));
-        toxicBloom(board, index);
+        toxicBloom(board, [index]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickPoisonToken, true, true));
         setUseToken(true);
@@ -1380,7 +1382,7 @@ export const Game = (props: GameProps) => {
             }
         });
         harvestMagic(added);
-        if (added > 0) toxicBloom(board, null);
+        toxicBloom(board, affected);
         flashCells(affected);
         playEffect('poison');
         setCurrentBoard(board);
@@ -1398,7 +1400,7 @@ export const Game = (props: GameProps) => {
         const targets = geo.stompRange(i).filter((j) => board[j].player && !isGuarded(board[j], characters));
         for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison', i);
@@ -1412,7 +1414,7 @@ export const Game = (props: GameProps) => {
         const targets = board.map((_, k) => k).filter((k) => board[k].player && !isGuarded(board[k], characters));
         for (const k of targets) board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, { effect: '☠' }] });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`「毒霧」を使用（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison');

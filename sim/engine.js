@@ -233,6 +233,7 @@ function spreadPoisonAround(board, idx, rng, s) {
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
     poisonStrike(s, board[t]);
+    toxicBloom(s, [t]);
 }
 
 // ---- 帯電（雷霆の巫） ------------------------------------------------------
@@ -333,19 +334,15 @@ function applyLock(s, idx) {
     const bind = gear.gearLockBind(g);
     if (sq.bind < bind) sq.bind = bind;
 }
-// 毒花: 毒を付与するスキルを使ったとき、自陣のコマ1つにバッズも付く。target が自陣のコマならそこ、なければランダムな自陣のコマ
-function toxicBloom(s, target) {
-    if (!hasGear(s.gears[s.turn], 'toxicBloom')) return;
-    const me = curPlayer(s);
-    let idx = target;
-    if (idx == null || s.board[idx].player !== me) {
-        const mine = [];
-        s.board.forEach((sq, k) => { if (sq.player === me && !isGuarded(s, sq)) mine.push(k); });
-        if (!mine.length) return;
-        idx = randomPick(mine, s.rng);
+// 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
+// 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
+function toxicBloom(s, cells) {
+    for (const k of cells) {
+        const sq = s.board[k];
+        if (!sq.player || !hasGear(s.gears[seatOf(sq.player)], 'toxicBloom')) continue;
+        sq.effects.push({ effect: '🌱' });
+        bumpStat(s, 'toxicBloom');
     }
-    s.board[idx].effects.push({ effect: '🌱' });
-    bumpStat(s, 'toxicBloom');
 }
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
@@ -668,7 +665,7 @@ function placeMove(s, i) {
         board[i].effects.push({ effect: '☠' });
         poisonStrike(s, board[i]);
         harvestMagic(s, 1);
-        toxicBloom(s, i);
+        toxicBloom(s, [i]);
         s.useInjection -= 1;
         return true;
     }
@@ -1060,9 +1057,10 @@ function applyProliferate(s, step) {
         if (isPoisoner ? sq.player && sq.player !== me : sq.player === me) targets.push(i);
     }
     if (!targets.length) return false;
-    const pick = s.board[randomPick(targets, s.rng)];
+    const pickIdx = randomPick(targets, s.rng);
+    const pick = s.board[pickIdx];
     pick.effects.push({ effect: isPoisoner ? '☠' : '🌱' });
-    if (isPoisoner) poisonStrike(s, pick);
+    if (isPoisoner) { poisonStrike(s, pick); toxicBloom(s, [pickIdx]); }
     return true;
 }
 function onClickProliferate(s) {
@@ -1126,7 +1124,7 @@ function exeMiasma(s) {
     }
     for (const sq of s.board) if (sq.player === me) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
     harvestMagic(s, plan.size);
-    if (plan.size) toxicBloom(s, null);
+    toxicBloom(s, Array.from(plan.keys()));
 }
 function onClickMiasma(s) {
     spendMagic(s, miasmaCost(s));
@@ -1144,7 +1142,7 @@ function onClickPoisonToken(s) {
         const idx = randomPick(empties, s.rng);
         s.board[idx] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
         granted = afterTokenPlaced(s, idx, '☠');
-        toxicBloom(s, idx);
+        toxicBloom(s, [idx]);
     }
     harvestMagic(s, granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true));
@@ -1160,14 +1158,15 @@ function onClickSerum(s) {
 }
 function onClickIntensify(s) {
     let added = 0;
-    for (const sq of s.board) {
+    const poisoned = [];
+    s.board.forEach((sq, idx) => {
         const p = poisonStacks(sq);
         for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
-        if (p > 0) poisonStrike(s, sq);
+        if (p > 0) { poisonStrike(s, sq); poisoned.push(idx); }
         added += p;
-    }
+    });
     harvestMagic(s, added);
-    if (added) toxicBloom(s, null);
+    toxicBloom(s, poisoned);
     spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true));
     bumpMagicCount(s);
 }
@@ -1180,7 +1179,7 @@ function exePandemic(s, i) {
     const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     harvestMagic(s, targets.length);
-    if (targets.length) toxicBloom(s, null);
+    toxicBloom(s, targets);
     s.usePandemic = false;
 }
 
@@ -1189,14 +1188,16 @@ function onClickPoisonMist(s) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true));
     bumpMagicCount(s);
     let n = 0;
-    for (const sq of s.board) {
-        if (!sq.player || isGuarded(s, sq)) continue;
+    const poisoned = [];
+    s.board.forEach((sq, idx) => {
+        if (!sq.player || isGuarded(s, sq)) return;
         sq.effects.push({ effect: '☠' });
         poisonStrike(s, sq);
+        poisoned.push(idx);
         n++;
-    }
+    });
     harvestMagic(s, n);
-    if (n) toxicBloom(s, null);
+    toxicBloom(s, poisoned);
 }
 
 // ---- 雷霆の巫 スキル ----

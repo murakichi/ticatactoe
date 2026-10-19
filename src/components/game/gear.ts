@@ -79,7 +79,7 @@ export const GEARS: GearDef[] = [
     { id: 'titanCost', name: '剛腕の代償', icon: '🏋️', desc: `ライフ平均+${P.titanLife}。全スキルのコスト+${P.titanCost}` },
     { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンスキルで置くコマのライフ+${P.reinforceTokenLife}` },
     { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクト(🌱🔑☠⚡)を付与するスキルを使うと、付与した数だけ魔力+1（1回につき最大${P.harvestCap}）` },
-    { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '毒を付与するスキルを使うと、自陣のコマ1つにバッズも付く（付与先が自陣ならそのコマ。敵ならランダムな自陣のコマ）' },
+    { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '自陣のコマに毒が付くと、そのコマにバッズも付く（自分で付けた毒でも、相手から付けられた毒でも）' },
     { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがそれぞれランダムに-${P.priceRange}〜+${P.priceRange}される（下限${P.priceFloor}。試合中は固定）` },
     { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: 'スキルを使うたび、そのターンの間は全スキルのコスト-1（重複する。下限1）' },
     { id: 'propagate', name: '伝播', icon: '🌊', desc: 'エフェクト付きトークンを置くと、周囲8マスのランダムなコマに同じエフェクトが広がる' },
