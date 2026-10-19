@@ -57,10 +57,10 @@ describe('ライフ・ロック・トークンの補正', () => {
         expect(gearLockBind([])).toBe(6);
     });
 
-    it('トークンのライフ: 増援+1 / 軽量トークン-1 / 両方で相殺', () => {
-        expect(gearTokenBindDelta(['reinforce'])).toBe(1);
+    it('トークンのライフ: 増援+2 / 軽量トークン-1 / 両方で+1', () => {
+        expect(gearTokenBindDelta(['reinforce'])).toBe(2);
         expect(gearTokenBindDelta(['lightToken'])).toBe(-1);
-        expect(gearTokenBindDelta(['reinforce', 'lightToken'])).toBe(0);
+        expect(gearTokenBindDelta(['reinforce', 'lightToken'])).toBe(1);
     });
 });
 

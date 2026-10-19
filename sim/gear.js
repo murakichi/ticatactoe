@@ -17,7 +17,7 @@ const GEAR_PARAMS = {
     sturdyLife: 1,
     titanLife: 3,
     titanCost: 3,
-    reinforceTokenLife: 1,
+    reinforceTokenLife: 2,
     lightTokenLife: -1,
     lightTokenCost: -1,
     harvestCap: 5,

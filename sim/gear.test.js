@@ -183,11 +183,11 @@ test('道連れの鍵: 外れたらロックは付かない', () => {
     assert.ok(!sq.effects.some((x) => x.effect === '🔑'));
 });
 
-test('増援 / 軽量トークン: トークンのライフが+1 / -1（コストは軽量トークンだけ-1）', () => {
+test('増援 / 軽量トークン: トークンのライフが+2 / -1（コストは軽量トークンだけ-1）', () => {
     const a = game([['reinforce'], []]);
     a.magic[0] = 99;
     e.SKILLS.token(a);
-    assert.strictEqual(a.board.find((x) => x.player === H).bind, 5);
+    assert.strictEqual(a.board.find((x) => x.player === H).bind, 6);
     const b = game([['lightToken'], []]);
     b.magic[0] = 99;
     assert.strictEqual(e.calculateCost(b, 4, true), 3);

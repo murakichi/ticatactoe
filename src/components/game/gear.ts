@@ -46,7 +46,7 @@ export const GEAR_PARAMS = {
     titanLife: 3,
     titanCost: 3,
     /** 増援 / 軽量トークン: トークンスキルで置くコマのライフの変化 */
-    reinforceTokenLife: 1,
+    reinforceTokenLife: 2,
     lightTokenLife: -1,
     /** 軽量トークン: トークン系スキルのコスト変化 */
     lightTokenCost: -1,
