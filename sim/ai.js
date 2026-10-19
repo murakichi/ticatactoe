@@ -13,6 +13,7 @@ const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromanc
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
+const gearLib = require('./gear');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -523,7 +524,19 @@ function chooseSkills(s, availableSkills) {
         if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
-    function spend(c, name) {
+    // ギア: 計画に積んだスキルの数だけ、連鎖割引は安く・四連の極意は4つ目が無料になる。
+    // 先に見積もった c は手番の最初の状態で出しているので、計画中のスキル数ぶん補正して「実際に払う額」で数える
+    const myGears = s.gears[s.turn];
+    const GEAR_PLAN = !process.env.NO_GEAR_PLAN;
+    function planCost(c) {
+        const k = skills.length;
+        if (!GEAR_PLAN || k === 0 || !myGears) return c;
+        if (gearLib.hasGear(myGears, 'quadMastery') && s.gearSkills[s.turn] + k === gearLib.GEAR_PARAMS.quadCount) return 0;
+        if (gearLib.hasGear(myGears, 'chainDiscount')) return Math.min(c, Math.max(1, c - k));
+        return c;
+    }
+    function spend(c0, name) {
+        const c = planCost(c0);
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
