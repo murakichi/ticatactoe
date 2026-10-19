@@ -176,7 +176,7 @@ const skillCosts = {
     onClickHailMary: 6, // idx 27
     onClickSilence: 5, // idx 28
     onClickPoisonMist: 7, // idx 29
-    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷結師・フレアバーストは炎使いの固有スキル
+    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
     onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
     onClickGlacier: (config.thermal && config.thermal.glacierCost) || 7,
@@ -299,13 +299,14 @@ function bumpStat(s, key, n = 1) {
 function fireCharges(s, i, mover) {
     const board = s.board;
     for (const k of orthoNeighbors(i, s.size)) {
-        if (chargeStacks(board[k]) === 0) continue;
+        if (chargeStacks(board[k]) === 0 || thermal.isFrozen(board[k])) continue; // 氷結中の⚡は休眠（発火せず消えもしない）
         bumpStat(s, 'fires');
         bumpStat(s, charOfPlayer(s, mover) === 'electrician' ? 'firesByElectrician' : 'firesByOther');
         for (const n of orthoNeighbors(k, s.size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
+            if (thermal.isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && charOfPlayer(s, sq.player) === 'electrician') continue;
             board[n] = thermal.applyDamage(sq, FIRE_DAMAGE, 'electric').sq; // 電気は氷結を貫通する。ダメージが通れば🔥は消える
@@ -642,7 +643,7 @@ function placeMove(s, i) {
 
     // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。他人の無敵マスは選べない
     if (s.useJammer) {
-        if (chargeStacks(board[i]) === 0) return false;
+        if (chargeStacks(board[i]) === 0 || thermal.isFrozen(board[i])) return false; // 氷結中の⚡は休眠
         if (isShielded(s, board[i]) && board[i].player !== curPlayer(s)) return false;
         exeJammer(s, i);
         return true;
@@ -719,7 +720,7 @@ function placeMove(s, i) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
-    // ❄氷結中の自陣コマには重ねて強化できない（氷結師は除く）
+    // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
     if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i], curChar(s))) return false;
 
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
@@ -1356,7 +1357,7 @@ function exeJammer(s, i) {
     for (const j of orthoNeighbors(i, s.size)) {
         const sq = s.board[j];
         if (!sq.player || sq.player === cur || sq.bind <= 0) continue;
-        if (sq.effects.some((e) => e.effect === '🔑')) continue; // ロックは貫通しない
+        if (sq.effects.some((e) => e.effect === '🔑') || thermal.isFrozen(sq)) continue; // ロックは貫通しない・氷結中は電気を受けない
         const before = sq.bind;
         s.board[j] = thermal.applyDamage(sq, stacks, 'electric').sq; // ジャマーの電気も氷結を貫通する
         bumpStat(s, 'jammerDmg', before - s.board[j].bind);
@@ -1406,14 +1407,14 @@ function onClickIgnite(s) {
     bumpMagicCount(s);
     bumpStat(s, 'ignite');
 }
-// 氷結師の固有スキル 氷河期: 自陣のライフが残るコマすべてに❄（クリック不要・ターン継続）
+// 氷室の番人の固有スキル 氷河期: 自陣のライフが残るコマすべてに❄（クリック不要・ターン継続）
 function onClickGlacier(s) {
     const done = thermal.freeze(s.board, thermal.glacierTargets(s.board, curPlayer(s)));
     spendMagic(s, calculateCost(s, costsOf(s).onClickGlacier));
     bumpStat(s, 'glacier');
     bumpStat(s, 'glacierCells', done.length);
 }
-// 炎使いの固有スキル フレアバースト: 選んだマスと縦横隣の敵コマに🔥
+// 煉獄の鍛冶師の固有スキル フレアバースト: 選んだマスと縦横隣の敵コマに🔥
 function onClickFlareBurst(s) {
     s.useFlare = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickFlareBurst));

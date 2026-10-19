@@ -26,7 +26,7 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
-    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷結師の氷河期(target なし)・炎使いのフレアバースト */
+    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の氷河期(target なし)・煉獄の鍛冶師のフレアバースト */
     chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
@@ -1095,7 +1095,7 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
-        // 氷結師の氷河期（クリック不要・手番は続く）/ 炎使いのフレアバースト（中心をクリックしてから着手）
+        // 氷室の番人の氷河期（クリック不要・手番は続く）/ 煉獄の鍛冶師のフレアバースト（中心をクリックしてから着手）
         if (this.character === 'cryomancer') {
             const cost = this.calculateAICost(costs.onClickGlacier);
             if (magic >= cost && this.shouldGlacier(board)) {

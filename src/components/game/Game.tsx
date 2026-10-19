@@ -592,7 +592,7 @@ export const Game = (props: GameProps) => {
             return;
         }
 
-        // ❄氷結中の自陣コマには重ねて強化できない（氷結師は除く）
+        // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
         if (currentBoard[i].player === currentTurnPlayer && overwriteBlocked(currentBoard[i], currentCharacter)) {
             return;
         }
@@ -1565,7 +1565,7 @@ export const Game = (props: GameProps) => {
     };
 
 
-    // --- 氷結・火炎（thermal.ts。氷結師・炎使い） ---
+    // --- 氷結・火炎（thermal.ts。氷室の番人・煉獄の鍛冶師） ---
     const [useFreeze, setUseFreeze] = useState<boolean>(false);
     const [useIgnite, setUseIgnite] = useState<boolean>(false);
     const [useFlare, setUseFlare] = useState<boolean>(false);
@@ -1581,7 +1581,7 @@ export const Game = (props: GameProps) => {
         setUseIgnite(true);
         spendMagic(calculateCost(seatCosts.onClickIgnite));
     };
-    // 固有スキル 氷河期（氷結師）: 自陣のライフが残るコマすべてに❄を付与する。クリック不要
+    // 固有スキル 氷河期（氷室の番人）: 自陣のライフが残るコマすべてに❄を付与する。クリック不要
     const onClickGlacier = () => {
         const board = currentBoard.slice();
         const done = freeze(board, glacierTargets(board, currentTurnPlayer));
@@ -1591,7 +1591,7 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickGlacier), false);
     };
-    // 固有スキル フレアバースト（炎使い）: 選んだマスと縦横隣の敵コマ（ライフ>0・🔑なし）に🔥を付与する
+    // 固有スキル フレアバースト（煉獄の鍛冶師）: 選んだマスと縦横隣の敵コマ（ライフ>0・🔑なし）に🔥を付与する
     const onClickFlareBurst = () => {
         addLog('「フレアバースト」を使用（中心のマスを選択）');
         setUseFlare(true);

@@ -136,7 +136,7 @@ function bestAntiNecroLockTarget(board, me) {
     return bestIdx;
 }
 
-// 炎使いフレアバースト: 中心+縦横隣の敵コマ(ライフ>0・🔑なし)に🔥。巻き込む敵が2個以上で最も価値の高い中心（ライフ4以上は+1）
+// 煉獄の鍛冶師フレアバースト: 中心+縦横隣の敵コマ(ライフ>0・🔑なし)に🔥。巻き込む敵が2個以上で最も価値の高い中心（ライフ4以上は+1）
 function bestFlareTarget(board, me) {
     const size = Math.round(Math.sqrt(board.length));
     let bestIdx = null, bestScore = 0;
@@ -172,11 +172,11 @@ function fireGain(board, i, me, electricians) {
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
     for (const k of orthoNeighbors(i, size)) {
-        if (chargeStacks(board[k]) === 0) continue;
+        if (chargeStacks(board[k]) === 0 || thermal.isFrozen(board[k])) continue; // 氷結中の⚡は休眠
         for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
-            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (sq.effects.some((e) => e.effect === '🔑') || thermal.isFrozen(sq)) continue;
             if (sq.player === board[k].player && electricians.has(sq.player)) continue; // 自陣由来の発火は雷霆の巫に効かない
             // 発火ダメージで 0 になる(=奪取可能になる/守りが剥がれる)コマは重く見る
             const w = 3 * Math.min(FIRE_DAMAGE, sq.bind) + (sq.bind <= FIRE_DAMAGE ? 4 : 0);
@@ -282,11 +282,11 @@ function bestJammerTarget(board, me) {
     let bestIdx = null, bestScore = 0;
     for (let k = 0; k < board.length; k++) {
         const n = chargeStacks(board[k]);
-        if (n === 0 || (shield.has(k) && board[k].player !== me)) continue;
+        if (n === 0 || thermal.isFrozen(board[k]) || (shield.has(k) && board[k].player !== me)) continue; // 氷結中の⚡は休眠
         let zeroed = 0, critical = 0, dmg = 0;
         for (const j of orthoNeighbors(k, size)) {
             const sq = board[j];
-            if (!isEnemy(sq.player, me) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (!isEnemy(sq.player, me) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑') || thermal.isFrozen(sq)) continue;
             dmg += Math.min(n, sq.bind);
             if (sq.bind <= n) { zeroed++; if (inOppReachLine(board, j, me)) critical++; }
         }
@@ -857,7 +857,7 @@ function faithfulMakeMove(s) {
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
 
-    // 氷結師 氷河期: 自陣のライフ3以上の未氷結コマが2個以上あれば全部凍らせる（クリック不要・手番は進まない）
+    // 氷室の番人 氷河期: 自陣のライフ3以上の未氷結コマが2個以上あれば全部凍らせる（クリック不要・手番は進まない）
     if (curChar(s) === 'cryomancer' && curMagic(s) >= calculateCost(s, costsOf(s).onClickGlacier)
         && thermal.glacierTargets(s.board, me).filter((k) => s.board[k].bind >= 3).length >= 2) {
         SKILLS.glacier(s);
@@ -924,7 +924,7 @@ function faithfulMakeMove(s) {
                 return { move: null, turnEnded: true };
             }
         }
-        // 炎使い フレアバースト: 敵2個以上を巻き込む中心に撃ち、同じ手番で通常着手へ続ける
+        // 煉獄の鍛冶師 フレアバースト: 敵2個以上を巻き込む中心に撃ち、同じ手番で通常着手へ続ける
         if (ch === 'pyromancer' && magic >= calculateCost(s, costsOf(s).onClickFlareBurst)) {
             const target = bestFlareTarget(s.board, me);
             if (target !== null) {

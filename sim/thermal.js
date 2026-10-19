@@ -5,9 +5,9 @@
  * square は {player, bind, effects:[{effect}]}。関数は新しい square を返し、元は書き換えない
  * （ignite / freeze だけは thermal.ts と同じく board を直接書き換える）。
  *
- * ❄氷結（スタックしない）: ターン進行でライフが減らない（毒・電気は通る）／スキルダメージは氷結が解除される代わりに無効／
- *   自陣のコマへの上書き（強化）不可（氷結師は除く）／自マスか縦横隣に🔥が付くと即解除
- * 🔥火炎（スタックする）: ターン進行で1スタック2ダメージ（炎使いの自陣は受けない）／ダメージで全スタック消える
+ * ❄氷結（スタックしない）: ターン進行でライフが減らない（毒は通る）／隣接⚡のダメージを受けず自マスの⚡は休眠／スキルダメージは氷結が解除される代わりに無効／
+ *   自陣のコマへの上書き（強化）不可（氷室の番人は除く）／自マスか縦横隣に🔥が付くと即解除
+ * 🔥火炎（スタックする）: ターン進行で1スタック2ダメージ（煉獄の鍛冶師の自陣は受けない）／ダメージで全スタック消える
  *   （自然減衰と火炎自身の継続ダメージでは消えない）／スキルダメージ1.5倍（切り上げ）
  */
 
@@ -39,11 +39,12 @@ function burnDamageOf(sq, chars, symbols) {
     if (sq.player && chars[symbols.indexOf(sq.player)] === 'pyromancer') return 0;
     return stacks * FLAME_BURN_DAMAGE;
 }
-const decaysNaturally = (sq) => !isFrozen(sq);
 
 /** kind: 'skill' | 'electric' | 'poison' */
 function applyDamage(sq, amount, kind) {
     if (kind === 'skill' && isFrozen(sq)) return { sq: thaw(sq), dealt: 0, blocked: true };
+    // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）。毒は貫通する
+    if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
     const real = kind === 'skill' && flameStacks(sq) > 0 ? Math.ceil(amount * FLAME_SKILL_MULT) : amount;
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
@@ -82,6 +83,6 @@ const flareTargets = (board, center, size, me) =>
     });
 
 module.exports = {
-    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, flameStacks, thaw, overwriteBlocked, burnDamageOf, decaysNaturally,
+    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, flameStacks, thaw, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, freeze, glacierTargets, flareTargets,
 };

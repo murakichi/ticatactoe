@@ -92,7 +92,7 @@ describe('❄氷結', () => {
         expect(canFreeze(b[0])).toBe(false);
     });
 
-    it('自陣への上書き（強化）は氷結師以外できない', () => {
+    it('自陣への上書き（強化）は氷室の番人以外できない', () => {
         expect(overwriteBlocked(sq('💙', 3, '❄'), 'you')).toBe(true);
         expect(overwriteBlocked(sq('💙', 3, '❄'), 'cryomancer')).toBe(false);
         expect(overwriteBlocked(sq('💙', 3), 'you')).toBe(false);
@@ -126,7 +126,7 @@ describe('🔥火炎', () => {
         expect(burnDamageOf(sq('💙', 5, '🔥'), chars)).toBe(2);
     });
 
-    it('炎使いの自陣の🔥は継続ダメージを与えない（相手の🔥コマは受ける）', () => {
+    it('煉獄の鍛冶師の自陣の🔥は継続ダメージを与えない（相手の🔥コマは受ける）', () => {
         const cs: CharacterId[] = ['pyromancer', 'you'];
         expect(burnDamageOf(sq('💙', 5, '🔥'), cs)).toBe(0);
         expect(burnDamageOf(sq('⭕', 5, '🔥'), cs)).toBe(2);
@@ -194,5 +194,54 @@ describe('🔥火炎', () => {
         b[1] = sq('⭕', 3, '🔑'); // ロック
         b[10] = sq('⭕', 3); // 斜め
         expect(flareTargets(b, 5, 4, '💙').sort((a, c) => a - c)).toEqual([4, 5]);
+    });
+});
+
+// sim/thermal.js（ヘッドレス版）との一致確認。様々なマスに同じ操作をして結果が同じことを見る
+describe('sim/thermal.js との一致', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sim = require('../../../sim/thermal.js');
+    const kinds = ['skill', 'electric', 'poison'] as const;
+    const combos: Effect['effect'][][] = [[], ['❄'], ['🔥'], ['🔥', '🔥'], ['❄', '🔥'], ['🔑'], ['☠', '🔥'], ['⚡', '❄']];
+    const squares = [0, 1, 3, 8].flatMap((bind) => combos.map((e) => sq('💙', bind, ...e)));
+
+    it('applyDamage / absorbDestroy / zeroOut が一致', () => {
+        for (const s of squares) {
+            for (const kind of kinds) for (const amount of [1, 2, 5]) expect(sim.applyDamage(s, amount, kind)).toEqual(applyDamage(s, amount, kind));
+            expect(sim.absorbDestroy(s)).toEqual(absorbDestroy(s));
+            expect(sim.zeroOut(s)).toEqual(zeroOut(s));
+            expect(sim.canFreeze(s)).toBe(canFreeze(s));
+            for (const mover of ['you', 'cryomancer']) expect(sim.overwriteBlocked(s, mover)).toBe(overwriteBlocked(s, mover as CharacterId));
+        }
+    });
+
+    it('burnDamageOf が一致（煉獄の鍛冶師の自陣含む）', () => {
+        const cs: CharacterId[] = ['pyromancer', 'you'];
+        for (const s of [...squares, ...squares.map((x) => ({ ...x, player: '⭕' as Player }))]) {
+            expect(sim.burnDamageOf(s, cs, ['💙', '⭕'])).toBe(burnDamageOf(s, cs));
+        }
+    });
+
+    it('ignite / freeze / glacierTargets / flareTargets が一致', () => {
+        const mk = () => {
+            const b = emptyBoard();
+            b[5] = sq('💙', 4, '❄');
+            b[6] = sq('⭕', 4, '❄');
+            b[9] = sq('⭕', 3, '🔥');
+            b[10] = sq('💙', 2);
+            b[1] = sq('⭕', 5, '🔑');
+            b[4] = sq('⭕', 0);
+            return b;
+        };
+        const a = mk();
+        const b = mk();
+        expect(sim.ignite(a, [5, 10], 4)).toEqual(ignite(b, [5, 10], 4));
+        expect(a).toEqual(b);
+        const c = mk();
+        const d = mk();
+        expect(sim.freeze(c, [0, 4, 9, 10, 1])).toEqual(freeze(d, [0, 4, 9, 10, 1]));
+        expect(c).toEqual(d);
+        expect(sim.glacierTargets(mk(), '💙')).toEqual(glacierTargets(mk(), '💙'));
+        for (let i = 0; i < 16; i++) expect(sim.flareTargets(mk(), i, 4, '💙')).toEqual(flareTargets(mk(), i, 4, '💙'));
     });
 });

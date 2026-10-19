@@ -5,10 +5,10 @@
 //   - ターン進行（自然減衰・火炎の継続ダメージ）でライフが減らない。毒のダメージは受ける
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
 //   - スキルでダメージを受けるとき、ダメージの代わりに氷結が解除される
-//   - 自陣のコマへの上書き（強化）ができなくなる（氷結師は除く）
+//   - 自陣のコマへの上書き（強化）ができなくなる（氷室の番人は除く）
 //   - 隣（縦横）のマスや自マスに🔥が付く（発火する）と即座に解除される
 // 🔥火炎（スタックする）
-//   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。炎使いの自陣コマは受けない
+//   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師の自陣コマは受けない
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
 import { CharacterId } from '../../types/Character';
@@ -34,11 +34,11 @@ const without = (sq: SquareInfo, ...kinds: string[]): SquareInfo => ({
 /** 氷結を解除した（マスのコピーを返す。氷結が無ければ同じ参照） */
 export const thaw = (sq: SquareInfo): SquareInfo => (isFrozen(sq) ? without(sq, '❄') : sq);
 
-/** 氷結中の自陣コマへの上書き（強化）が禁じられているか。氷結師は氷結していても強化できる */
+/** 氷結中の自陣コマへの上書き（強化）が禁じられているか。氷室の番人は氷結していても強化できる */
 export const overwriteBlocked = (sq: SquareInfo, mover: CharacterId | undefined): boolean =>
     isFrozen(sq) && mover !== 'cryomancer';
 
-/** ターン進行の火炎ダメージ（スタック×2）。炎使いの自陣・氷結・🔑ロックは受けない */
+/** ターン進行の火炎ダメージ（スタック×2）。煉獄の鍛冶師の自陣・氷結・🔑ロックは受けない */
 export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): number => {
     const stacks = flameStacks(sq);
     if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
@@ -111,11 +111,11 @@ export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
     return done;
 };
 
-/** 氷河期（氷結師）: 自陣のライフが残っているコマで、まだ氷結していないマス */
+/** 氷河期（氷室の番人）: 自陣のライフが残っているコマで、まだ氷結していないマス */
 export const glacierTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === player && sq.bind > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
-/** フレアバースト（炎使い）: 中心と縦横隣のうち、🔥を付けられる敵コマ（ライフ>0・🔑なし） */
+/** フレアバースト（煉獄の鍛冶師）: 中心と縦横隣のうち、🔥を付けられる敵コマ（ライフ>0・🔑なし） */
 export const flareTargets = (board: SquareInfo[], center: number, size: number, me: SquareInfo['player']): number[] =>
     [center, ...orthoNeighbors(center, size)].filter((k) => {
         const sq = board[k];

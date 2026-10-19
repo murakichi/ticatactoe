@@ -45,7 +45,7 @@ export const skillCosts = {
     onClickSilence: 5,
     // 毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与。idx 29。毒系なので毒使いは-1
     onClickPoisonMist: 7,
-    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷結師・フレアバーストは炎使いの固有スキル
+    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: 3,
     onClickIgnite: 3,
     onClickGlacier: 7,

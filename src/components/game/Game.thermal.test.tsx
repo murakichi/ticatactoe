@@ -9,7 +9,7 @@ const badgesAt = (container: HTMLElement, i: number) => cells(container)[i].quer
 const cfg = (...characters: string[]): PlayerConfig[] => characters.map((character) => ({ character: character as never, isAI: false }));
 
 // Math.random を 0.25 に固定すると正規乱数のライフが毎回 9 になる
-describe('氷結師・炎使い（ブラウザ版）', () => {
+describe('氷室の番人・煉獄の鍛冶師（ブラウザ版）', () => {
     beforeEach(() => jest.spyOn(Math, 'random').mockReturnValue(0.25));
     afterEach(() => jest.restoreAllMocks());
 
@@ -21,7 +21,7 @@ describe('氷結師・炎使い（ブラウザ版）', () => {
         expect(screen.getAllByText(/フレアバースト/).length).toBeGreaterThan(0);
     });
 
-    it('氷河期: 自陣のコマが凍り、ライフが減らず、氷結師だけは重ねて強化できる', () => {
+    it('氷河期: 自陣のコマが凍り、ライフが減らず、氷室の番人だけは重ねて強化できる', () => {
         const { container } = render(<Game players={cfg('cryomancer', 'you')} />);
         // 魔力を7まで貯める: 💙チャージ(+3) → ⭕着手 → 💙(魔力6)着手 → ⭕着手 → 💙(魔力7)
         fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
@@ -38,12 +38,12 @@ describe('氷結師・炎使い（ブラウザ版）', () => {
         expect(badgesAt(container, 15)).not.toContain('❄');
 
         // 氷結中は減衰しない: ⭕が着手しても💙の凍結コマのライフは変わらない
-        fireEvent.click(cells(container)[12]); // 💙(氷結師)が空きマスに着手 → ⭕の手番
+        fireEvent.click(cells(container)[12]); // 💙(氷室の番人)が空きマスに着手 → ⭕の手番
         const before = lifeAt(container, 0);
         fireEvent.click(cells(container)[11]); // ⭕着手
         expect(lifeAt(container, 0)).toBe(before);
 
-        // 氷結師は氷結中の自陣コマにも重ねて強化できる
+        // 氷室の番人は氷結中の自陣コマにも重ねて強化できる
         fireEvent.click(cells(container)[0]);
         expect(lifeAt(container, 0)).toBeGreaterThan(before);
     });
