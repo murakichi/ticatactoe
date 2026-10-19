@@ -636,7 +636,8 @@ function chooseSkills(s, availableSkills) {
             if (!sq.player) emptyCount++;
             if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
         }
-        if (emptyCount >= 6 && myBuds < 3) {
+        const eager = !process.env.NO_GEAR_EAGER && (gearLib.hasGear(myGears, 'chainDiscount') || gearLib.hasGear(myGears, 'quadMastery'));
+        if (eager ? (emptyCount >= 3 && myBuds < 5) : (emptyCount >= 6 && myBuds < 3)) {
             spend(cost(costsOf(s).onClickBuds), 'buds');
         }
     }
