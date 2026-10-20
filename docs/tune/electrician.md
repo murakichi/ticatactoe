@@ -4,11 +4,12 @@
 - 現在の推奨設定: gears=[sturdy,harvest] deck=[0,3,8,12,21,22,23,24,26,28,49,53](浄化32・ランダム帯電25 → 特売53・慈雨49) AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 2
+- 連続不採用回数: 3
 - 状態: refining(トップ到達後の洗練中)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 6 | meta(対magician) | `--opp magician --scan deck --swap 2` 40候補(seed6/80試合)で対magician勝率を上げる札 | 最良 50.0%±11.0(80試合・単独相手では誤差が大きく、全候補が誤差内) | 不採用(再測定に値する候補なし) |
 | 5 | strategy | 相手にリーチがあっても帯電拡散/範囲帯電/帯電付与を撃つ(F.elecSpreadAlways) | seed5/250試合: 61.2→60.5(-0.7±2.8)、差なし | 不採用(ノブ削除) |
 | 4 | gear(再スキャン,新デッキ) | 29近傍(seed4/80試合)。最良 lightToken+harvest 67.1% vs base 65.3% | 再測定 seed5/250試合: 61.2→62.1(+0.9±2.8)。最低効果量+1.5pt未満。magician戦は36→47と改善、yinYang戦は68→58と悪化 | 不採用(gearは2回測定済み・保留解消) |
 | 3 | synergy/deck | 未使用札(浄化32・ランダム帯電25)を 特売53+慈雨49 に入れ替え。探索(vs tactician,giant,magician,60試合,2枚swap40候補)で最良63.3% vs base54.4%(閾値z未達)。全環境で再測定 | seed2/150試合: 57.6→63.8(+6.2、9/9キャラで改善) / seed3/200試合: 61.7→65.6(+3.9±1.6)。tactician戦も47→53 | 採用(deck.ts/deck.js ミラー済み。本番AIでは未計測) |
