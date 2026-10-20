@@ -12,6 +12,7 @@
  *   node sim/probe-top.js --rank --games 60 --seed 1 [--target X --gears ..]              # 全キャラ総当たり→環境順位表（--target があればその設定を環境に反映）
  *   node sim/probe-top.js --target X --scan gears --games 60                              # ギア1枠ずつ差し替えた近傍を全部測る
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
+ *   node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant              # デッキの各札を1枚ずつ使用禁止(ban)・各ギアを1つずつ外した寄与。結果が基準と完全一致=「差なし」（未使用の疑い。probe-usage.js で確認）
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
 
@@ -147,7 +148,8 @@ function summarize(results, variant, target, opps) {
         sum += p;
         varSum += n ? (p * (1 - p)) / n : 0;
     }
-    return { per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4) };
+    const tally = results.filter((x) => x.variant === variant && x.a === target).map((x) => `${x.b}:${x.w}-${x.l}-${x.d}`).sort().join(' ');
+    return { per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4), tally };
 }
 
 async function main() {
@@ -235,12 +237,34 @@ async function main() {
         }
     }
 
+    if (args.scan === 'audit') {
+        // 札の寄与: ban=idx で同じ乱数のまま使用だけ禁止する。AIが一度も使っていない札なら全試合の結果が基準と完全に一致する
+        const deck = cand.deck || deckMod.recommendedDeck(target);
+        const gears = cand.gears || gearMod.recommendedGears(target);
+        variants = [{ ...cand, deck, gears }]; labels = ['base'];
+        for (const idx of deck) {
+            variants.push({ ...cand, deck, gears, flags: { ...(cand.flags || {}), ban: idx } });
+            labels.push(`card ${idx}(${deckMod.SKILL_CATALOG[idx].name}) を禁止`);
+        }
+        for (const g of gears) {
+            variants.push({ ...cand, deck, gears: gears.filter((x) => x !== g) });
+            labels.push(`gear ${g} を外す`);
+        }
+    }
+
     const tasks = [];
     variants.forEach((_, v) => { for (const o of opps) tasks.push({ a: target, b: o, variant: v, aCand: true, bCand: false }); });
     const res = await runWorkers(tasks, variants, workers);
     const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps) }));
     const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, rows };
     if (args.json) { console.log(JSON.stringify(out)); return; }
+    if (args.scan === 'audit') {
+        const base = rows[0];
+        console.log(`base ${(base.field * 100).toFixed(1)}%（寄与 = base − 禁止/除去後。同一シードなので差は札/ギアの寄与。「差なし」= 全試合の結果が基準と完全一致。AIが使っていないか、banが効かない経路で使っているかのどちらかなので、probe-usage.js で使用回数を確認すること）`);
+        rows.slice(1).forEach((r) => console.log(`${r.tally === base.tally ? '差なし  ' : `${((base.field - r.field) * 100 >= 0 ? '+' : '')}${((base.field - r.field) * 100).toFixed(1)}pt`.padEnd(8)} ${r.label}`));
+        console.log('RESULT ' + JSON.stringify(out));
+        return;
+    }
     const sorted = rows.map((r, i) => ({ ...r, i })).sort((x, y) => y.field - x.field);
     for (const r of args.scan ? sorted : rows) {
         console.log(`${(r.field * 100).toFixed(1)}% ±${(1.96 * r.se * 100).toFixed(1)}  ${r.label}`);
