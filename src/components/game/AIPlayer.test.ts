@@ -458,3 +458,41 @@ describe('AIPlayer cryomancer frost cards (sim/ai.js F.cryoCards と同一)', ()
         expect(skills).not.toContain('onClickFrostToken');
     });
 });
+
+describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直し（sim/ai.js の discountPlan>=2）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const mk = (character: 'magician' | 'giant' = 'magician') => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you']);
+        ai.rerollsLeft = 2;
+        return ai;
+    };
+    const board = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] } as SquareInfo));
+    const run = (ai: AIPlayer, magic: number, hand: number[]) => ai.makeMove(board(), magic, skillCosts, 2, 5, hand, false);
+
+    it('手札が軽減札だけで魔力に余裕があれば、軽減札を撃ってから引き直す', () => {
+        const r = run(mk(), 12, [60, 53]);
+        expect(r.reroll).toBeDefined();
+        expect(r.reroll?.discount).toBeDefined();
+        expect(r.skills).toEqual([]);
+    });
+    it('魔力が足りない（軽減札+シャッフル+撃つ分）ときは引き直さない', () => {
+        expect(run(mk(), 4, [53]).reroll).toBeUndefined();
+    });
+    it('引き直しの回数が残っていなければ引き直さない', () => {
+        const ai = mk();
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使い以外は引き直さない', () => {
+        expect(run(mk('giant'), 12, [53]).reroll).toBeUndefined();
+    });
+    it('引き直しの途中（軽減済み）は、魔力に余裕があればシャッフルだけ行う', () => {
+        const ai = mk();
+        ai.discountActive = true;
+        ai.rerollsLeft = 1;
+        const r = run(ai, 12, [53]);
+        expect(r.reroll).toEqual({});
+        expect(run(ai, 2, [53]).reroll).toBeUndefined();
+    });
+});
