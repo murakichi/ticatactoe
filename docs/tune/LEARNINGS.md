@@ -71,4 +71,4 @@
 
 - 2026-10-20 electrician: 相手を上位2相手に絞った3枚swapスキャン→上位2案に共通する札(大特価58追加・オピウム8/トークン3削除)を拾って上位3相手400試合で再測定、が有効だった(+7.1、全体+3.9)。スキャン上位の共通項を読むのが近道。
 
-- 2026-10-20 electrician: `--rank --oppGears none` で雷霆の巫が2位(1位 magician 68.8%, 差11.8pt)に落ちたが、`--target electrician --opp magician --oppGears none` 単体では対magician 68%と勝てる。rank 表の行対(対 magician 29%/71%)と --target 単体の結果が食い違う原因は未解明(rank モードでの候補/相手のギア設定の扱いを `sim/probe-top.js` で要確認)。ギアなし条件の順位は鵜呑みにしない。
+- 2026-10-20 electrician: **`--rank` は `--target <char>` を付けないと、`--oppGears none|random`/`--envDeck varied` が全員(対象含む)に掛かる**(`sim/probe-top.js` の `aCand: a === target`)。完了判定の4条件は必ず `--rank --target <char> ...` で測る。付け忘れると、ギア寄与の大きいキャラ(雷霆の巫: ギアを外すと-30pt)が『自分もギアなし』で測られて不当に落ちる。(PR #95 時点の4条件確認も --target なしで測っていたので、再測定が必要。)
