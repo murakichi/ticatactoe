@@ -2330,7 +2330,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickInferno}
                         buttonText={`業火-${calculateCost(seatCosts.onClickInferno)}`}
-                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が減ります。🔥が付いたマスの縦横隣の氷結は即座に解けます'}
+                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます'}
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickInferno) || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}

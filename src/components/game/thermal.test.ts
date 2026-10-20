@@ -336,24 +336,24 @@ describe('🔥火炎', () => {
         expect(b[10].effects.map((e) => e.effect)).toEqual(['🌱']);
     });
 
-    it('氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が1スタック減る（隣は解けない）', () => {
+    it('氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が全スタック解除される（隣は解けない）', () => {
         const b = emptyBoard();
-        b[5] = sq('⭕', 4, '❄', '❄');
+        b[5] = sq('⭕', 4, '❄', '❄', '❄');
         b[6] = sq('⭕', 4, '❄');
         const r = ignite(b, [5], 4);
-        expect(frozenStacks(b[5])).toBe(1);
+        expect(frozenStacks(b[5])).toBe(0);
         expect(flameStacks(b[5])).toBe(0);
         expect(isFrozen(b[6])).toBe(true); // 🔥は付いていないので発火しない
         expect(r.thawed).toEqual([5]);
     });
 
-    it('2スタック付与: 氷結が先に減り、余りが🔥になる。氷結が尽きて🔥が付くと隣も解ける', () => {
+    it('2スタック付与: 氷結が先に全解除され、余りが🔥になる。🔥が付くと隣の氷結も解ける', () => {
         const b = emptyBoard();
-        b[5] = sq('⭕', 4, '❄'); // 1スタックだけ
+        b[5] = sq('⭕', 4, '❄', '❄'); // 2スタックでも1つ目で全解除
         b[6] = sq('⭕', 4, '❄', '❄');
         ignite(b, [5], 4, 2);
         expect(isFrozen(b[5])).toBe(false);
-        expect(flameStacks(b[5])).toBe(1); // 1つ目は氷結を減らし、2つ目が🔥になる
+        expect(flameStacks(b[5])).toBe(1); // 1つ目は氷結を全解除、2つ目が🔥になる
         expect(isFrozen(b[6])).toBe(false); // 🔥が付いたので隣の氷結は全部解ける
         const c = emptyBoard();
         c[5] = sq('⭕', 4);

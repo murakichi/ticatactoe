@@ -82,13 +82,13 @@ function inOppReachLine(board, i, me) {
     const owner = board[i].player;
     for (const line of geometryForCells(board.length).winLines) {
         if (!line.includes(i)) continue;
-        let op = 0, other = 0, empty = 0;
+        let op = 0, other = 0, empty = 0, blocked = false;
         for (const idx of line) {
             if (board[idx].player === owner) op++;
             else if (board[idx].player) other++; // 自駒や別の敵駒が混ざっていれば脅威ではない
-            else empty++;
+            else { empty++; if (thermal.emptyBlocked(board[idx])) blocked = true; } // 着手不能（氷結中の空き）な4つ目は脅威ではない
         }
-        if (op === 3 && other === 0 && empty === 1) return true;
+        if (op === 3 && other === 0 && empty === 1 && !blocked) return true;
     }
     return false;
 }
@@ -296,6 +296,54 @@ function bestJammerTarget(board, me) {
         }
     }
     return bestIdx;
+}
+
+// 対氷結の能動策 (ai-improve)。自分のリーチの4つ目が氷結中の空きマスで塞がれているときの、そのマスと、解凍に使える隣のコマ
+function blockedReachCell(board, me) {
+    for (const line of geometryForCells(board.length).winLines) {
+        let mine = 0, other = 0, blockedIdx = -1, free = 0;
+        for (const idx of line) {
+            const sq = board[idx];
+            if (sq.player === me) mine++;
+            else if (sq.player) other++;
+            else if (thermal.emptyBlocked(sq)) blockedIdx = idx;
+            else free++;
+        }
+        if (mine === 3 && other === 0 && blockedIdx !== -1 && free === 0) return blockedIdx;
+    }
+    return null;
+}
+// 火炎付与で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先。allowOwn なら自陣も可）
+function thawIgniteTarget(board, k, me, allowOwn) {
+    const size = sizeOf(board);
+    let own = null;
+    for (const n of orthoNeighbors(k, size)) {
+        const sq = board[n];
+        if (!sq.player || thermal.isFrozen(sq) || shield.has(n) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        if (isEnemy(sq.player, me)) return n;
+        if (own === null) own = n;
+    }
+    return allowOwn ? own : null;
+}
+
+// 氷結を削る範囲スキル（スラッシュ idx5 / バックスラッシュ idx6 / 巨人のストンプ）で打てるマスを作る。打てたらその手、だめなら null
+function breakIceMove(s, availableSkills, me) {
+    const geo = geometryForCells(s.board.length);
+    const frozenIn = (idxs) => idxs.filter((i) => thermal.isFrozen(s.board[i])).length;
+    const tries = [];
+    if (curChar(s) === 'giant' && curMagic(s) >= calculateCost(s, costsOf(s).onClickStomp)) {
+        let best = null, bestN = 0;
+        for (let i = 0; i < s.board.length; i++) { const n = frozenIn(geo.stompRange(i)); if (n > bestN) { bestN = n; best = i; } }
+        if (best !== null) tries.push(() => { SKILLS.stomp(s); placeMove(s, best); });
+    }
+    if (availableSkills.includes(5) && curMagic(s) >= calculateCost(s, costsOf(s).onClickSlash) && frozenIn(geo.antiDiagonal) > 0) tries.push(() => SKILLS.slash(s));
+    if (availableSkills.includes(6) && curMagic(s) >= calculateCost(s, costsOf(s).onClickBackSlash) && frozenIn(geo.mainDiagonal) > 0) tries.push(() => SKILLS.backSlash(s));
+    for (const t of tries) {
+        t();
+        const mv = getEnhancedBestMove(s);
+        if (mv !== null) return mv;
+    }
+    return null;
 }
 
 // ---- helpers ----
@@ -788,7 +836,17 @@ function bestRescueCenter(board, me, opps, kind) {
 }
 
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
+// 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
+function clearPending(s) {
+    s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false;
+}
 function faithfulMakeMove(s) {
+    clearPending(s);
+    const r = faithfulMakeMoveInner(s);
+    if (!r.turnEnded) clearPending(s);
+    return r;
+}
+function faithfulMakeMoveInner(s) {
     loadFlags(s);
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -806,6 +864,30 @@ function faithfulMakeMove(s) {
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
     s.lockedSkills[s.turn] = locks;
+
+    // 対氷結(A): 敵の絶対零度が発動待ちで、自陣の❄コマが次の発動で破壊されそうなら先に浄化で剥がす
+    if (F.antiGl && curChar(s) !== 'cryomancer' && curChar(s) !== 'electrician' && availableSkills.includes(32)
+        && s.glacierPending.some((p, seat) => p && seat !== s.turn)
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickCleanse)) {
+        let doomed = 0, hit = 0;
+        for (const sq of s.board) {
+            if (sq.player !== me || !thermal.isFrozen(sq)) continue;
+            hit++;
+            if (sq.bind <= 3 * thermal.frozenStacks(sq)) doomed++;
+        }
+        if (F.antiGl === 1 ? doomed >= 1 : hit >= 2) SKILLS.cleanse(s);
+    }
+    // 対氷結(B): 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火炎付与で隣のコマを燃やして解凍し、同じ手番で完成させる
+    if (F.unblock && availableSkills.includes(31) && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite)) {
+        const k = blockedReachCell(s.board, me);
+        const t = k === null ? null : thawIgniteTarget(s.board, k, me, F.unblock >= 2);
+        if (t !== null) {
+            SKILLS.ignite(s);
+            placeMove(s, t);
+            const mv = getEnhancedBestMove(s);
+            if (mv !== null) return { move: mv, turnEnded: false };
+        }
+    }
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
@@ -1010,7 +1092,9 @@ function faithfulMakeMove(s) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
-    const move = getEnhancedBestMove(s);
+    let move = getEnhancedBestMove(s);
+    // 対氷結(D): 全マス凍結などで打てるマスが無いとき、範囲スキルで氷結を削って打てるようにする
+    if (move === null && F.breakIce) move = breakIceMove(s, availableSkills, me);
     // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
     if (move === null) {
         SKILLS.charge(s);

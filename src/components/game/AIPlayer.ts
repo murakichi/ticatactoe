@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..36)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -79,7 +79,7 @@ class AIPlayer {
     updateShield(board: SquareInfo[]): void {
         this.shield = new Set();
         board.forEach((sq, i) => {
-            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0) this.shield.add(i);
+            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結・火炎中は⚡が休眠で無敵でない
         });
     }
 
@@ -92,7 +92,7 @@ class AIPlayer {
         const size = this.sizeOf(board);
         let gain = 0;
         for (const k of orthoNeighbors(i, size)) {
-            if (chargeStacks(board[k]) === 0 || isFrozen(board[k])) continue;
+            if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マス（氷結・火炎中）の⚡は発火しない
             for (const n of orthoNeighbors(k, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
@@ -129,7 +129,7 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
-            if (chargeStacks(board[i]) > 0 || isFrozen(board[i])) continue; // 氷結中のマスの⚡は休眠
+            if (chargeStacks(board[i]) > 0 || isDormant(board[i])) continue; // 休眠マスの⚡は働かない
             let attack = 0;
             for (const n of orthoNeighbors(i, size)) {
                 const sq = board[n];
@@ -198,13 +198,13 @@ class AIPlayer {
         const owner = board[i].player;
         for (const line of geometryForCells(board.length).winLines) {
             if (!line.includes(i)) continue;
-            let op = 0, other = 0, empty = 0;
+            let op = 0, other = 0, empty = 0, blocked = false;
             for (const idx of line) {
                 if (board[idx].player === owner) op++;
                 else if (board[idx].player) other++;
-                else empty++;
+                else { empty++; if (emptyBlocked(board[idx])) blocked = true; } // 着手不能（氷結中の空き）な4つ目は脅威ではない
             }
-            if (op === 3 && other === 0 && empty === 1) return true;
+            if (op === 3 && other === 0 && empty === 1 && !blocked) return true;
         }
         return false;
     }
@@ -218,7 +218,7 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let k = 0; k < board.length; k++) {
             const n = chargeStacks(board[k]);
-            if (n === 0 || isFrozen(board[k]) || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
+            if (n === 0 || isDormant(board[k]) || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
             let zeroed = 0, critical = 0, dmg = 0;
             for (const j of orthoNeighbors(k, size)) {
                 const sq = board[j];
@@ -298,7 +298,7 @@ class AIPlayer {
 
         // バッズ・ロックボーナス
         for (const sq of board) {
-            const buds = sq.effects.filter(e => e.effect === '🌱').length;
+            const buds = activeBuds(sq); // 休眠マスの🌱は数えない
             const hasLock = sq.effects.some(e => e.effect === '🔑');
             if (sq.player === this.playerSymbol) {
                 score += buds * 3 + (hasLock ? 5 : 0);
@@ -745,7 +745,7 @@ class AIPlayer {
         // 血清: 自陣の毒で次の減衰までに消えそうなコマ(毒数>=bind)があれば除去
         // (ランダム枠に出ているときのみ)
         if (availableSkills.includes(17)) {
-            const doomed = board.filter(sq => sq.player === this.playerSymbol
+            const doomed = board.filter(sq => sq.player === this.playerSymbol && !isDormant(sq)
                 && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
                 && sq.effects.some(e => e.effect === '☠')).length;
             if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true), 'onClickSerum');
@@ -797,8 +797,9 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (!this.isEnemy(sq.player) || this.shield.has(i)) continue;
+            if (isDormant(sq)) continue; // 休眠マス（氷結・火炎中）の毒は継続ダメージなし
             const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
-            const turns = Math.ceil(sq.bind / (isFrozen(sq) ? p : 1 + p)); // 氷結中は自然減衰が無く毒数だけ
+            const turns = Math.ceil(sq.bind / (1 + p));
             if (turns > 2) continue;
             let val = 0;
             for (const line of geo.winLines) {
@@ -1150,14 +1151,16 @@ class AIPlayer {
         {
             const size = this.sizeOf(board);
             const threatened = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || c === 'pyromancer'));
-            const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + budStacks(sq) : n), 0);
-            if (availableSkills.includes(34) && threatened && !this.budGuard && ownBuds() >= 3 && magic >= this.calculateAICost(costs.onClickSolstice)) {
+            const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + activeBuds(sq, this.budGuard) : n), 0);
+            // 冬至の種子: 自陣の休眠マス（氷結・火炎中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
+            const dormantBuds = board.reduce((n, sq) => (sq.player === this.playerSymbol && isDormant(sq) ? n + budStacks(sq) : n), 0);
+            if (availableSkills.includes(34) && dormantBuds >= 2 && !this.budGuard && magic >= this.calculateAICost(costs.onClickSolstice)) {
                 chargeClicks.push({ skill: 'onClickSolstice' });
                 magic -= this.calculateAICost(costs.onClickSolstice);
             } else if (availableSkills.includes(33) && threatened && this.character !== 'magician' && ownBuds() >= 4 && magic >= this.calculateAICost(costs.onClickHarvestEve)) {
                 chargeClicks.push({ skill: 'onClickHarvestEve' });
                 board = board.slice();
-                magic += harvestBuds(board, this.playerSymbol) - this.calculateAICost(costs.onClickHarvestEve);
+                magic += harvestBuds(board, this.playerSymbol, this.budGuard) - this.calculateAICost(costs.onClickHarvestEve);
             }
             if (availableSkills.includes(35) && magic >= this.calculateAICost(costs.onClickSucker)) {
                 let best = -1, bestN = 1;
