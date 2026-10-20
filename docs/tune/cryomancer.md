@@ -1,13 +1,15 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: f55e71a
-- 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=既定
+- 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1(既定)
 - 基準線: 環境勝率 56.6% / 3位 / 1位 tactician 63.3%, 2位 electrician 58.3%  (seed=3, games=200, ギア afterglow,sturdy 反映後)
-- 連続不採用回数: 1
+- 連続不採用回数: 0
 - 状態: running(トップ未達)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 4 | strategy | 未使用札の監査: probe-usage で氷系8枚中、霜降り・氷結トークン系が一度も使われない。既存の暫定ノブ useNew を氷室のみに限定した F.cryoCards を既定ON | seed1/100: 58.6→66.6。seed2/200: 55.3→64.3(SE1.1) = +9.1pt | 採用(sim/ai.js + 本番AIPlayer.ts にミラー、回帰テスト追加。本番AIでは環境勝率は未計測) |
+| 3 | synergy | 氷系3枚同時入れ替え(--swap 3 --cat ice) | 候補ゼロ(デッキの氷系札が入替対象を使い切っており近傍が生成されず) | 無効/再試行不要 |
 | 2 | deck | 1枚差し替え30近傍(seed1,60。base 59.2%) | 最良 +1.5pt(氷結拡散→バッズトークン 60.7±3.8)。n=30の閾値z≥3.0に届かず全て誤差。トークン(3)抜きは -8〜-12pt で必須 | 不採用 |
 | 1 | gear | 余韻(afterglow): スキル使用の次ターン最初のスキル-1 → 氷結(2)が毎ターン1で撃てる(ユーザー案)。harvest→afterglow | seed1/100: 46.3→58.6(SE1.6)。seed2/200: 42.3→55.3(SE1.1) = +13.0pt | 採用(gears=afterglow,sturdy)。afterglow+harvestは seed1 49.8 で不採用 |
 ## 次に試す候補(軸の順 gear → deck → synergy → strategy → メタ → joint)
