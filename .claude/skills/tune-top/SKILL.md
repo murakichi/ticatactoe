@@ -35,6 +35,7 @@ node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補�
 ```
 # tune-top: <char>
 - 目標: 環境1位 & 2位と +2pt 以上
+- 最後に検証したmaster: <sha>
 - 現在の推奨設定: gears=[..] deck=[..] AIフラグ=..
 - 基準線: 環境勝率 xx.x% / 順位 n位 / 1位 <char> yy.y%   (seed, games を併記)
 - 連続不採用回数: n   (採用が出たら0に戻す)
@@ -46,7 +47,7 @@ node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補�
 
 ## 1イテレーションの手順
 
-1. **読む**: `docs/tune/<char>.md`(無ければ作成し、`--rank --games 60 --seed 1` で基準線を記録)。`状態: done/blocked` なら **何もせず「完了済み/停止中」と報告して終了**(loop を止めるよう伝える)。
+1. **読む**: `docs/tune/<char>.md`(無ければ作成し、`--rank --games 60 --seed 1` で基準線を記録)。`状態: blocked` なら **何もせず「停止中」と報告して終了**(loop を止めるよう伝える)。`状態: done` なら **手順8(再検証)** を行う。
 2. **完了判定**: 直近の採用後に `--rank --games 200 --seed 3` と `--envDeck varied` の両方で「1位かつ2位との差 ≥ 2pt」→ 手順7へ。
 3. **軸を1つ選ぶ**(ログの巡回順で、まだ近傍を測っていない軸):
    - **gear**: `--scan gears` で近傍(1枠差し替え)を測り、上位2〜3個を採用候補に。「あなた」は3枠。
@@ -58,9 +59,16 @@ node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補�
    - 不採用 → 撤回し、却下理由つきでログへ。`連続不採用回数 += 1`。
 6. **コミット**: `docs/tune/<char>.md` と変更ファイルを `tune(<char>): ...` でコミット・現在ブランチに push。1イテレーション=1コミット(不採用でもログだけコミット)。PR は求められたときだけ作る。
 7. **終了判定**:
-   - **達成**: `状態: done` にして `/work-diary` で日記を書く(CLAUDE.md の workflow)。積み残しは issue にも起票。「loop を止めてよい」と伝える。
+   - **達成**: `状態: done`・`最後に検証したmaster: <git rev-parse origin/master>` を記録して `/work-diary` で日記を書く(CLAUDE.md の workflow)。積み残しは issue にも起票。そのあと **手順8 に進む**(ここで loop を止めない。master が動くまで待つ)。
    - **行き詰まり**: `連続不採用回数 ≥ 6`(gear/deck/strategy を各1周以上測った後)→ **改善案 issue を起票**(下記)、`状態: blocked(issue #N)`、日記を書き、loop を止めるよう伝える。
    - それ以外は 1 行で進捗(基準線 → 今回の結果 → 次の候補)を報告して終了。
+8. **再検証(done 後・毎回)**: トップは他の変更で崩れるので、done のあとも呼ばれるたびに確認する。
+   1. `git fetch origin master` して `origin/master` が `最後に検証したmaster`から**進んでいなければ**、何もせず「master 変更なし・トップ維持」と1行報告して終了(loop は継続)。
+   2. 進んでいたら最新 master を作業ブランチに取り込む(`git merge origin/master`。コンフリクトは推奨設定の行を両方残すよう解消し、テストを通す)。
+   3. 手順2 の完了判定(`--rank --games 200 --seed 3` と `--envDeck varied`)をやり直す。
+   4. **トップ維持**(1位かつ2位と +2pt 以上): `最後に検証したmaster` を更新、ログに「再検証OK」を1行追記してコミット・push。
+   5. **トップ陥落**: `状態: running`・`連続不採用回数: 0` に戻し、ログに「master <sha> で陥落: 1位 <char> / 差」と原因の見当(`git log` で gear/deck/skill/AI/コスト/キャラ変更を確認)を記録。そのまま手順3〜7 のチューニングを再開する(基準線も新 master で取り直す)。
+   - 再開後に行き詰まったら通常どおり手順7の issue 起票(既存の issue があれば追記コメント)で `blocked`。
 
 ## ミラー(採用した変更を本番へ。sim と src は必ず対で)
 
