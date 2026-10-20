@@ -236,7 +236,30 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     return { threshold, targets, thawed };
 }
 
+const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+
+// バーンアウト（thermal.ts と同じ）
+const BURNOUT_FREE_FLAMES = 4;
+const totalFlames = (board) => board.reduce((n, sq) => n + flameStacks(sq), 0);
+const burnoutCostOf = (baseCost, flames, calc) => (flames >= BURNOUT_FREE_FLAMES ? 0 : calc(baseCost));
+function burnoutTargets(board, chars, symbols) {
+    return board.map((sq, i) => {
+        if (flameStacks(sq) === 0) return -1;
+        if (sq.player && chars[symbols.indexOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+        return i;
+    }).filter((i) => i !== -1);
+}
+function burnout(board, cells) {
+    let destroyed = 0;
+    for (const k of cells) {
+        if (board[k].player) destroyed++;
+        board[k] = { player: undefined, bind: 0, effects: [] };
+    }
+    return destroyed;
+}
 module.exports = {
+    BURNOUT_FREE_FLAMES, totalFlames, burnoutCostOf, burnoutTargets, burnout,
+    FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,

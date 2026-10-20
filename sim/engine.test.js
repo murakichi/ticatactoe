@@ -1153,6 +1153,28 @@ test('火炎: ターン進行で1スタックにつき2ダメージ（スタッ�
     assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 2);
 });
 
+test('バーンアウト: 🔥が乗っているマスを全て破壊（敵味方問わず）。盤面に🔥が4つ以上あればタダ、なければ5コスト', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 20; s.life = 3;
+    s.board[1] = { player: '⭕', bind: 5, effects: [FLM] };
+    s.board[2] = { player: '💙', bind: 5, effects: [FLM] };
+    s.board[3] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.burnoutCost(s), 5);
+    s.board[4] = { player: '⭕', bind: 5, effects: [FLM, FLM] }; // 合計4スタック（マスの数ではなくスタック）
+    assert.strictEqual(e.burnoutCost(s), 0);
+    const before = s.heartMagic;
+    e.SKILLS.burnout(s);
+    assert.strictEqual(s.heartMagic, before);
+    for (const k of [1, 2, 4]) assert.deepStrictEqual(s.board[k], { player: undefined, bind: 0, effects: [] });
+    assert.strictEqual(s.board[3].player, '⭕');
+    s.board[1] = { player: '⭕', bind: 5, effects: [FLM] };
+    const m = s.heartMagic;
+    e.SKILLS.burnout(s); // 🔥1つなので5コスト
+    assert.strictEqual(s.heartMagic, m - 5);
+    e.SKILLS.burnout(s); // 対象なし: 何も起きない
+    assert.strictEqual(s.heartMagic, m - 5);
+});
+
 test('火炎: スキルダメージは1.5倍（切り上げ）で、通れば🔥は消える', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
@@ -1379,8 +1401,10 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     s.board[8] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ] };  // 1つ目で氷結が全解除 → 2つ目が🔥
     s.board[11] = { player: '⭕', bind: 3, effects: [FRZ] };           // 氷結1つ減って、余り1スタックが🔥
     const before = s.heartMagic;
+    const cost = e.infernoCost(s);
+    assert.strictEqual(cost, 9);
     e.SKILLS.inferno(s);
-    assert.strictEqual(s.heartMagic, before - 9);
+    assert.strictEqual(s.heartMagic, before - cost);
     assert.strictEqual(s.heartTurn, true);
     const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
@@ -1858,7 +1882,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -1895,6 +1919,155 @@ test('AI: ⚡で無敵の自コマを対策ロックの対象にしない（4人
             assert.notStrictEqual(s.currentTurn, before, `seed ${g}: 手番が進まない (turn ${before})`);
         }
     }
+});
+
+
+test('業火: 1手番に異なるスキルを3種類使うと無料権が付く（同じスキルの連打は1種類）。手番を跨いで持ち越し、撃つとリセット', () => {
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    for (let i = 1; i < 6; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    const base = e.infernoCost(s);
+    assert.strictEqual(base, 9);
+    for (let i = 0; i < 5; i++) e.spendMagic(s, 1, 'onClickWindborne'); // 同じスキルは何度撃っても1種類
+    e.spendMagic(s, 1, 'onClickSolstice');
+    assert.strictEqual(e.infernoCost(s), base);
+    e.spendMagic(s, 1, 'onClickInferno'); // 業火自身は数えない
+    assert.strictEqual(e.infernoCost(s), base);
+    e.spendMagic(s, 1, 'onClickCleanse');
+    assert.strictEqual(e.infernoCost(s), 0);
+    // 手番を跨いでも持ち越す
+    e.SKILLS.charge(s);
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(e.infernoCost(s), 0);
+    const before = s.heartMagic;
+    e.SKILLS.inferno(s);
+    assert.strictEqual(s.heartMagic, before); // 無料
+    assert.strictEqual(e.infernoCost(s), base); // 撃ったのでリセット
+    e.spendMagic(s, 0, 'onClickWindborne');
+    e.spendMagic(s, 0, 'onClickSolstice');
+    assert.strictEqual(e.infernoCost(s), base); // リセット後は再び3種類必要
+    e.spendMagic(s, 0, 'onClickCleanse');
+    assert.strictEqual(e.infernoCost(s), 0);
+});
+
+test('コスト軽減スキル: 次に打つスキル-3は軽減札でないスキルで消費され、下限は1。手番を跨がない', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 30; s.life = 3;
+    const bud = () => e.calculateCost(s, e.skillCosts.onClickBuds, false, false, 'onClickBuds');
+    const base = bud();
+    e.SKILLS.markdown(s);
+    assert.strictEqual(bud(), Math.max(1, base - 3));
+    e.SKILLS.clearance(s); // 足し算（-3 + -7）
+    assert.strictEqual(bud(), 1);
+    e.spendMagic(s, 0, 'onClickBuds'); // 軽減札でないスキルで消える
+    assert.strictEqual(bud(), base);
+    e.SKILLS.markdown(s);
+    e.SKILLS.charge(s); e.SKILLS.charge(s); // 手番を跨ぐと消える
+    assert.strictEqual(bud(), base);
+});
+
+test('コスト軽減スキル: エフェクト付与/トークン/固有の永続軽減。固有割引は1ターン1度でライフ-1、活力特売はライフ+1', () => {
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 40; s.life = 3;
+    const freeze = () => e.calculateCost(s, e.skillCosts.onClickFreeze, false, false, 'onClickFreeze');
+    const token = () => e.calculateCost(s, e.skillCosts.onClickToken, true, false, 'onClickToken');
+    const slash = () => e.calculateCost(s, e.skillCosts.onClickSlash, false, false, 'onClickSlash');
+    const [f0, t0, sl0, inf0] = [freeze(), token(), slash(), e.infernoCost(s)];
+    e.SKILLS.effectDiscount(s); e.SKILLS.tokenDiscount(s);
+    assert.strictEqual(freeze(), f0 - 1); assert.strictEqual(token(), t0 - 1); assert.strictEqual(slash(), sl0);
+    e.spendMagic(s, 0, 'onClickFreeze');
+    assert.strictEqual(freeze(), f0 - 1); // 永続（そのターン中は打つたびに効く）
+    e.SKILLS.uniqueDiscount(s);
+    assert.strictEqual(s.life, 2);
+    assert.strictEqual(e.infernoCost(s), 0); // 付与割引・トークン割引・固有割引の3種類で業火の無料権が付く（inf0=9のはず）
+    assert.strictEqual(inf0, 9);
+    const m = s.heartMagic;
+    e.SKILLS.uniqueDiscount(s); // 1ターンに一度だけ
+    assert.strictEqual(s.heartMagic, m); assert.strictEqual(s.life, 2);
+    e.SKILLS.vitalMarkdown(s);
+    assert.strictEqual(s.life, 3);
+    const low = game('magician', 'you');
+    low.heartTurn = true; low.heartMagic = 10; low.life = 1;
+    e.SKILLS.uniqueDiscount(low); // ライフ1では使えない
+    assert.strictEqual(low.heartMagic, 10);
+});
+
+
+test('AI(discountPlan): 鍛冶師は軽減札で業火が撃てるようになるなら、軽減札を先に撃ってから業火を撃つ', () => {
+    const ai = require('./ai');
+    const mk = (flags) => {
+        const s = game('pyromancer', 'you');
+        s.heartTurn = true; s.heartMagic = 6; s.life = 3;
+        for (const i of [1, 2, 3]) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+        s.skills = [58, 53, 0];
+        s.aiFlags = [flags, flags];
+        return s;
+    };
+    const on = mk({ pyroChain: 0, discountPlan: 1, discountInferno: 1 });
+    assert.strictEqual(e.infernoCost(on), 9);
+    ai.makeMove(on, 'faithful');
+    assert.ok(on.stats && on.stats.inferno >= 1, '業火が撃たれる');
+    assert.ok(on.heartMagic < 6, '軽減札と業火の分、魔力が減る');
+    const off = mk({ pyroChain: 0, discountPlan: 0 });
+    ai.makeMove(off, 'faithful');
+    assert.ok(!(off.stats && off.stats.inferno), '軽減札を使わなければ魔力6では業火は撃てない');
+});
+
+
+test('返し特売: 直前の相手の手番に相手がスキルを使っていれば0コスト。次のスキル-3・ライフ+1', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 3;
+    const cost = () => e.calculateCost(s, e.skillCosts.onClickCounterMarkdown, false, false, 'onClickCounterMarkdown');
+    assert.strictEqual(cost(), 2); // 相手がスキルを使っていない
+    e.SKILLS.charge(s); // 席0 → 席1（席1の手番の頭）
+    e.spendMagic(s, 1, 'onClickBuds'); // 席1（相手）がスキルを使う
+    e.SKILLS.charge(s); // 席1 → 席0
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(cost(), 0);
+    const m = s.heartMagic, life = s.life;
+    e.SKILLS.counterMarkdown(s);
+    assert.strictEqual(s.heartMagic, m);
+    assert.strictEqual(s.life, life + 1);
+    assert.strictEqual(e.calculateCost(s, 6, false, false, 'onClickStomp'), 3); // 次のスキル-3
+    e.SKILLS.charge(s); e.SKILLS.charge(s); // 相手はスキルを使わなかったので次は有料
+    assert.strictEqual(cost(), 2);
+});
+
+
+test('煉獄の鍛冶師のパッシブ: 🔥を付与するスキルは常に-1（下限1）。業火や他のスキルは変わらない。他キャラは変わらない', () => {
+    const p = game('pyromancer', 'you');
+    p.heartTurn = true;
+    const c = (s, k, tok = false) => e.calculateCost(s, e.skillCosts[k], tok, false, k);
+    const y = game('magician', 'you');
+    y.heartTurn = true;
+    for (const [k, tok] of [['onClickIgnite', false], ['onClickFlameToken', true], ['onClickDoubleFlameToken', true], ['onClickSacrifice', false], ['onClickSwidden', false]]) {
+        assert.strictEqual(c(p, k, tok), Math.max(1, e.skillCosts[k] - 1), k);
+        assert.strictEqual(c(y, k, tok), e.skillCosts[k], k);
+    }
+    assert.strictEqual(c(p, 'onClickFreeze'), e.skillCosts.onClickFreeze); // 氷結は対象外
+    assert.strictEqual(e.infernoCost(p), 9); // 業火は固有スキルなので対象外
+    e.SKILLS.markdown(p); // 軽減札とは足し算（下限1）
+    assert.strictEqual(c(p, 'onClickIgnite'), Math.max(1, e.skillCosts.onClickIgnite - 1 - 3));
+});
+
+
+test('AI(burnoutAfter/pyroLock): 鍛冶師は業火のあとバーンアウトで🔥の敵コマを壊す。軽減札を手札に固定する', () => {
+    const ai = require('./ai');
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 12; s.life = 3;
+    for (const i of [1, 2, 3, 6]) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    s.skills = [61, 0, 3];
+    s.aiFlags = [{ pyroChain: 0, discountPlan: 0 }, {}];
+    ai.makeMove(s, 'faithful');
+    assert.ok(s.stats && s.stats.inferno >= 1 && s.stats.burnout >= 1, '業火のあとバーンアウトが撃たれる');
+    assert.strictEqual(s.board.filter((sq) => sq.player === '⭕').length, 0, '🔥の敵コマが全て壊れる');
+    const t = game('pyromancer', 'you');
+    t.heartTurn = true; t.heartMagic = 12; t.life = 3;
+    t.skills = [53, 3, 60];
+    t.aiFlags = [{ pyroLock: 1 }, {}];
+    ai.makeMove(t, 'faithful');
+    assert.ok(t.lockedSkills[0].includes(53) && t.lockedSkills[0].includes(60), '軽減札が固定される');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

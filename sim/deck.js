@@ -63,7 +63,17 @@ const SKILL_CATALOG = [
     { idx: 50, name: '縮地', icon: '👣', category: 'support' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack' },
+    { idx: 53, name: '特売', icon: '🏷️', category: 'support' },
+    { idx: 54, name: '付与割引', icon: '🎫', category: 'support' },
+    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support' },
+    { idx: 56, name: '活力特売', icon: '💖', category: 'support' },
+    { idx: 57, name: '固有割引', icon: '👑', category: 'support' },
+    { idx: 58, name: '大特価', icon: '💸', category: 'support' },
+    { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
+    { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
+    { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
 ];
+
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1） */
 const CATALOG_SIZE = SKILL_CATALOG.length;
@@ -79,7 +89,7 @@ const RECOMMENDED_DECKS = {
     poisoner: [0, 3, 8, 12, 15, 16, 17, 18, 19, 28, 29, 32],
     electrician: [0, 3, 8, 12, 21, 22, 23, 24, 25, 26, 28, 32],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 12, 28, 31, 32, 37, 38, 39, 40],
+    pyromancer: [0, 3, 5, 8, 12, 28, 31, 32, 53, 56, 58, 61],
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

@@ -3,6 +3,7 @@
 /*
  * キャラ間の勝率行列用: 1ペア分を回して "MATRIX {json}" を出す（集計は probe-matrix-sum.js）。
  * 使い方: SIM_POOL_SIZE=30 node sim/probe-matrix.js --a giant --b necromancer --games 200 --seed 1 [--flags useNew=1]
+ * --decks 1 で全席が推奨デッキから手札を引く（本番と同じ）。--adeck 0,1,... で a 側だけデッキを差し替える。
  * 試合ごとに先手を入れ替え、a 側の勝敗を数える。--flags は両席に同じ設定を渡す（AI の設定そのものを切り替える用）。
  */
 const engine = require('./engine');
@@ -17,7 +18,8 @@ let w = 0, l = 0, d = 0;
 for (let g = 0; g < games; g++) {
     const aFirst = g % 2 === 0;
     const chars = aFirst ? [args.a, args.b] : [args.b, args.a];
-    const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100003 + g) });
+    const decks = args.decks ? (args.adeck ? chars.map((c, i) => (i === (aFirst ? 0 : 1) ? args.adeck.split(',').map(Number) : null)) : true) : undefined;
+    const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100003 + g), decks });
     s.aiFlags = chars.map(() => flags);
     let t = 0;
     while (!s.winner && t++ < 600) {

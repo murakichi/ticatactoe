@@ -74,6 +74,15 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 50, name: '縮地', icon: '👣', category: 'support', costKey: 'onClickRelocate', desc: '自陣のコマを空きマスへ移動します（エフェクトごと）' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support', costKey: 'onClickClone', desc: '自陣のコマの隣の空きマスに、ライフ半分の写しを置きます' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack', costKey: 'onClickPlunder', desc: 'ライフ0の敵コマを1つ、自陣のコマ（ライフ1）にします' },
+    { idx: 53, name: '特売', icon: '🏷️', category: 'support', costKey: 'onClickMarkdown', desc: '次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）' },
+    { idx: 54, name: '付与割引', icon: '🎫', category: 'support', costKey: 'onClickEffectDiscount', desc: 'このターン、エフェクト（🌱⚡☠❄🔥）を付与するスキルのコストを、打つたびに1軽減します' },
+    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support', costKey: 'onClickTokenDiscount', desc: 'このターン、トークンを付与するスキルのコストを、打つたびに1軽減します' },
+    { idx: 56, name: '活力特売', icon: '💖', category: 'support', costKey: 'onClickVitalMarkdown', desc: '次に打つスキルのコストを4軽減し、次の一手のライフを+1します' },
+    { idx: 57, name: '固有割引', icon: '👑', category: 'support', costKey: 'onClickUniqueDiscount', desc: 'このターン、固有スキルのコストを6軽減します。1ターンに一度のみ・ライフ-1（ライフ2以上で使用可）' },
+    { idx: 58, name: '大特価', icon: '💸', category: 'support', costKey: 'onClickClearance', desc: '次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）' },
+    { idx: 59, name: '福引き', icon: '🎰', category: 'support', costKey: 'onClickRandomCast', desc: '自分のデッキ（12枚）の中から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します（手札に出ていないスキルも対象）' },
+    { idx: 60, name: '返し特売', icon: '↩️', category: 'support', costKey: 'onClickCounterMarkdown', desc: '次に打つスキルのコストを3軽減し、次の一手のライフを+1します。直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます' },
+    { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire', costKey: 'onClickBurnout', desc: '🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）。盤面に🔥が4つ以上あればコスト0で使えます' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -95,7 +104,7 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     poisoner: [0, 3, 8, 12, 15, 16, 17, 18, 19, 28, 29, 32],
     electrician: [0, 3, 8, 12, 21, 22, 23, 24, 25, 26, 28, 32],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 12, 28, 31, 32, 37, 38, 39, 40],
+    pyromancer: [0, 3, 5, 8, 12, 28, 31, 32, 53, 56, 58, 61],
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

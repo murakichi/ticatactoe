@@ -1,5 +1,11 @@
 import {
     isFrozen,
+    infernoCostOf,
+    FLAME_SKILL_KEYS,
+    totalFlames,
+    burnoutCostOf,
+    burnoutTargets,
+    burnout,
     flameStacks,
     thaw,
     overwriteBlocked,
@@ -834,5 +840,46 @@ describe('氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷�
         const e = mk();
         expect(sim.placeFrostToken(d, 9, '💙', 4)).toBe(placeFrostToken(e, 9, '💙', 4));
         expect(d).toEqual(e);
+    });
+});
+
+describe('業火の無料化', () => {
+    it('無料権があれば0、なければキャラ補正後の基礎コスト', () => {
+        expect(infernoCostOf(9, false, (c) => c)).toBe(9);
+        expect(infernoCostOf(9, false, (c) => c + 1)).toBe(10);
+        expect(infernoCostOf(9, true, (c) => c)).toBe(0);
+    });
+});
+
+describe('煉獄の鍛冶師の火炎スキル割引', () => {
+    it('対象のスキルキーが sim と一致する', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simThermal = require('../../../sim/thermal');
+        expect(Array.from(simThermal.FLAME_SKILL_KEYS).sort()).toEqual(Array.from(FLAME_SKILL_KEYS).sort());
+    });
+});
+
+describe('バーンアウト', () => {
+    it('バーンアウトは🔥の合計が4以上でタダ。🔥のマスを全て破壊し、雷霆の巫の⚡無敵コマは除く', () => {
+        expect(burnoutCostOf(5, 3, (c) => c)).toBe(5);
+        expect(burnoutCostOf(5, 4, (c) => c)).toBe(0);
+        const b = emptyBoard();
+        b[1] = sq('⭕', 5, '🔥', '🔥');
+        b[2] = sq('💙', 5, '🔥');
+        b[3] = sq('⭕', 5);
+        b[4] = sq('🟩', 5, '🔥', '⚡');
+        expect(totalFlames(b)).toBe(4);
+        const cs = ['you', 'you', 'electrician'] as CharacterId[];
+        expect(burnoutTargets(b, cs)).toEqual([1, 2]);
+        expect(burnout(b, [1, 2])).toBe(2);
+        expect(b[1].player).toBeUndefined();
+        expect(b[3].player).toBe('⭕');
+        // sim と同じ対象・結果
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simT = require('../../../sim/thermal');
+        const c = emptyBoard();
+        c[1] = sq('⭕', 5, '🔥');
+        c[4] = sq('🟩', 5, '🔥', '⚡');
+        expect(simT.burnoutTargets(c, cs, ['💙', '⭕', '🟩'])).toEqual(burnoutTargets(c, cs));
     });
 });

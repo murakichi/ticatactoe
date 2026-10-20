@@ -181,6 +181,14 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
  */
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
+/** 煉獄の鍛冶師のパッシブでコストが常に-1される、🔥を付与するスキル（コストキー。業火は固有スキルなので含めない）。sim/thermal.js と同じ */
+export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+/** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
+export const INFERNO_FREE_SKILLS = 3;
+/** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。
+ *  無料権は、1手番に異なる種類のスキルを3種類使うと得られ、手番を跨いで持ち越し、業火を撃つと消える（同じスキルの連打は1回と数える） */
+export const infernoCostOf = (baseCost: number, infernoReady: boolean, calc: (cost: number) => number): number =>
+    infernoReady ? 0 : calc(baseCost);
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
 export const freezeAll = (board: SquareInfo[]): number[] =>
     freeze(
@@ -252,6 +260,33 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
     return next;
+};
+
+// ---- バーンアウト（汎用スキル）----
+/** 盤面に🔥がこの数（スタック合計）以上あればバーンアウトはコスト0 */
+export const BURNOUT_FREE_FLAMES = 4;
+/** 盤面の🔥のスタック合計 */
+export const totalFlames = (board: SquareInfo[]): number => board.reduce((n, sq) => n + flameStacks(sq), 0);
+/** バーンアウトの実コスト: 盤面に🔥が4つ以上あれば0、なければ calc(基礎コスト)。sim/engine.js の burnoutCost と同じ */
+export const burnoutCostOf = (baseCost: number, flames: number, calc: (cost: number) => number): number =>
+    flames >= BURNOUT_FREE_FLAMES ? 0 : calc(baseCost);
+/** バーンアウトの対象: 🔥が乗っているマス全て（敵味方問わず。🔑も関係なし）。雷霆の巫の⚡無敵コマは除く */
+export const burnoutTargets = (board: SquareInfo[], chars: readonly CharacterId[]): number[] =>
+    board
+        .map((sq, i) => {
+            if (flameStacks(sq) === 0) return -1;
+            if (sq.player && chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            return i;
+        })
+        .filter((i) => i !== -1);
+/** バーンアウト: cells を空きマスにする。破壊したコマの数を返す。board を直接書き換える */
+export const burnout = (board: SquareInfo[], cells: number[]): number => {
+    let destroyed = 0;
+    for (const k of cells) {
+        if (board[k].player) destroyed++;
+        board[k] = { player: undefined, bind: 0, effects: [] };
+    }
+    return destroyed;
 };
 
 // ---- バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）の純粋ロジック ----

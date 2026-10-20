@@ -49,6 +49,8 @@ function makeRng(seed) {
 const config = require('./config');
 const { boardSizeFor, geometryOf, geometryForCells, lineCells } = require('./geometry');
 const gear = require('./gear');
+const deckMod = require('./deck');
+const discountMod = require('./discount');
 const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
 
@@ -207,6 +209,16 @@ const skillCosts = {
     onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
+    // コスト軽減スキル(idx 53-58)。discount.ts
+    onClickMarkdown: 1,
+    onClickEffectDiscount: 1,
+    onClickTokenDiscount: 1,
+    onClickVitalMarkdown: 2,
+    onClickUniqueDiscount: 3,
+    onClickClearance: 4,
+    onClickRandomCast: 2, // 福引き(idx 59)
+    onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
+    onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -305,10 +317,10 @@ function boardChargeCount(board) {
 }
 // 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ軽減、下限 CHARGE_MIN_COST (#43。ミアズマと同じ流儀)
 function chargeOneCost(s) {
-    return Math.max(CHARGE_MIN_COST, calculateCost(s, costsOf(s).onClickChargeOne - boardChargeCount(s.board)));
+    return Math.max(CHARGE_MIN_COST, calculateCost(s, costsOf(s).onClickChargeOne - boardChargeCount(s.board), false, false, 'onClickChargeOne'));
 }
 function chargeSpreadCost(s) {
-    return Math.max(CHARGE_MIN_COST, calculateCost(s, costsOf(s).onClickChargeSpread - boardChargeCount(s.board)));
+    return Math.max(CHARGE_MIN_COST, calculateCost(s, costsOf(s).onClickChargeSpread - boardChargeCount(s.board), false, false, 'onClickChargeSpread'));
 }
 // ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡と🔑を取り除き、全マスのライフを0にする
 function checkDischarge(s) {
@@ -469,7 +481,10 @@ function newGame(opts = {}) {
     const fill = (v) => Array.from({ length: n }, () => v);
     // ギア: 席ごとの装備 (opts.gears[seat] = GearId[])。省略時は全席なし
     const gears = chars.map((_, i) => ((opts.gears && opts.gears[i]) || []).slice());
+    // opts.decks: 席ごとのデッキ（idx 12枚。null/不正なら推奨デッキ）。true なら全席が推奨デッキ。省略時は従来どおり 0..POOL_SIZE から引く
+    const decks = opts.decks ? chars.map((c, i) => deckMod.resolveDeck(Array.isArray(opts.decks) ? opts.decks[i] : null, c)) : null;
     const state = {
+        decks,
         board: Array.from({ length: size * size }, newSquare),
         size,
         chars,
@@ -505,6 +520,11 @@ function newGame(opts = {}) {
         // ギア。gearSkills=この手番に使ったスキル数 / echoReady=余韻の割引が有効 / echoNext=次の手番に余韻が付く
         gears,
         gearSkills: fill(0),
+        skillKinds: Array.from({ length: n }, () => new Set()), // 手番内に使ったスキルの種類（業火の無料権の数え方）
+        infernoReady: fill(false), // 業火の無料権。手番を跨いで持ち越し、業火を撃つと消える
+        discount: Array.from({ length: n }, () => discountMod.emptyDiscount()), // コスト軽減スキルの状態（手番内だけ有効）
+        oppSkilled: fill(false), // 自分の前の手番以降に他の席がスキルを使った
+        oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
         echoReady: fill(false),
         echoNext: fill(false),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
@@ -540,7 +560,8 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     if (typeof seat === 'boolean') seat = seat ? 0 : 1;
     const keep = s.lockedSkills[seat].slice(0, 3);
     const pool = [];
-    for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
+    if (s.decks) { for (const i of s.decks[seat]) if (!keep.includes(i)) pool.push(i); }
+    else for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
     const fill = randomAnyPick(pool, Math.max(0, 3 - keep.length), s.rng);
     return [...keep, ...fill];
 }
@@ -564,8 +585,11 @@ function gearCtx(s, seat) {
     return { skillsThisTurn: s.gearSkills[seat], echoReady: s.echoReady[seat] };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
-function gearCost(s, cost, isToken = false, seat = s.turn) {
-    return gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken);
+function gearCost(s, cost, isToken = false, seat = s.turn, key) {
+    const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken);
+    if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
+    return seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
 function noteSkillUsed(s) {
@@ -582,29 +606,46 @@ function harvestMagic(s, n) {
 }
 
 // スキル使用で魔力を払う。幸運の財布なら確率で0円
-function spendMagic(s, amount) {
+function spendMagic(s, amount, skillId) {
     if (amount > 0 && hasGear(s.gears[s.turn], 'luckyPurse') && s.rng() < GP.luckyPurseChance) {
         amount = 0;
         bumpStat(s, 'luckyFree');
     }
     s.magic[s.turn] -= amount;
     noteSkillUsed(s);
+    if (skillId) {
+        s.discount[s.turn] = discountMod.afterSkill(s.discount[s.turn], skillId);
+        s.oppSkilled = s.oppSkilled.map((v, i) => (i === s.turn ? v : true));
+    }
+    // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
+    if (skillId && skillId !== 'onClickInferno') {
+        s.skillKinds[s.turn].add(skillId);
+        if (s.skillKinds[s.turn].size >= INFERNO_FREE_SKILLS) s.infernoReady[s.turn] = true;
+    }
+}
+// シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
+function shuffleHand(s) {
+    s.magic[s.turn] -= costsOf(s).onClickShuffle;
+    s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
+    s.useMagicCount[s.turn]++;
 }
 function bumpMagicCount(s) {
     s.useMagicCount[s.turn]++;
 }
 
 // [FAITHFUL] Game.tsx calculateCost
-function characterCost(s, cost, isToken, isPoison) {
+function characterCost(s, cost, isToken, isPoison, key) {
     const c = curChar(s);
+    // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
+    if (c === 'pyromancer') return key && thermal.FLAME_SKILL_KEYS.has(key) && cost > 1 ? cost - 1 : cost;
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
     if (c === 'tactician') return isToken ? cost - 1 : cost + 2;
     if (c === 'yinYangMaster' && curYY(s) === 'yang') return cost + 1;
     return cost;
 }
-function calculateCost(s, cost, isToken = false, isPoison = false) {
-    return gearCost(s, characterCost(s, cost, isToken, isPoison), isToken);
+function calculateCost(s, cost, isToken = false, isPoison = false, key) {
+    return gearCost(s, characterCost(s, cost, isToken, isPoison, key), isToken, s.turn, key);
 }
 
 // [FAITHFUL] Game.tsx calculateTokenBind
@@ -676,6 +717,10 @@ function advanceTurn(s) {
     s.usedTokenThisTurn = false;
     // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
     s.gearSkills[next] = 0;
+    s.skillKinds[next] = new Set();
+    s.discount[next] = discountMod.emptyDiscount();
+    s.oppSkillPrev[next] = s.oppSkilled[next];
+    s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
     s.turn = next;
@@ -948,12 +993,19 @@ function onClickCharge(s) {
 }
 function onClickAddLife(s) {
     s.life += 3;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickAddLife));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
+    bumpMagicCount(s);
+}
+// コスト軽減スキル(idx 53-58)。効果の中身は discount.js。使えないときは何もしない
+function useDiscountSkill(s, key) {
+    if (!discountMod.canUseDiscountSkill(s.discount[s.turn], key, s.life)) return;
+    spendMagic(s, calculateCost(s, costsOf(s)[key], false, false, key), key);
+    s.life += discountMod.lifeDeltaOf(key);
     bumpMagicCount(s);
 }
 function onClickBibine(s) {
     s.life *= 2;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickBibine));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBibine, false, false, 'onClickBibine'), 'onClickBibine');
     bumpMagicCount(s);
 }
 function onClickDepressionCherry(s) {
@@ -964,36 +1016,36 @@ function onClickDepressionCherry(s) {
 function onClickBuds(s) {
     s.useBuds = [true, s.useBuds[1] + 1];
     harvestMagic(s, 1);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickBuds));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBuds, false, false, 'onClickBuds'), 'onClickBuds');
     bumpMagicCount(s);
 }
 function onClickDoubleBuds(s) {
     s.useBuds = [true, s.useBuds[1] + 2];
     harvestMagic(s, 2);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleBuds));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleBuds, false, false, 'onClickDoubleBuds'), 'onClickDoubleBuds');
     bumpMagicCount(s);
 }
 function onClickUseLock(s) {
     // 氷室の番人: 常在のロックは「氷結」（コスト2・対象1マスに❄。空きマス可）に置き換わる
     if (curChar(s) === 'cryomancer') {
         s.useFreeze = true;
-        spendMagic(s, calculateCost(s, costsOf(s).onClickCryoFreeze));
+        spendMagic(s, calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze'), 'onClickCryoFreeze');
         bumpMagicCount(s);
         bumpStat(s, 'cryoFreeze');
         return;
     }
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock'), 'onClickUseLock');
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {
     s.useLock += 2;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleLock, false, false, 'onClickDoubleLock'), 'onClickDoubleLock');
     bumpMagicCount(s);
 }
 function onClickTripleLock(s) {
     s.useLock += 3;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickTripleLock));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickTripleLock, false, false, 'onClickTripleLock'), 'onClickTripleLock');
     bumpMagicCount(s);
 }
 function onClickToken(s) {
@@ -1005,7 +1057,7 @@ function onClickToken(s) {
         granted = afterTokenPlaced(s, idx, undefined);
     }
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickToken, true, false, 'onClickToken'), 'onClickToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1017,7 +1069,7 @@ function onClickDoubleToken(s) {
     if (a != null) { s.board[a] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, a, undefined); }
     if (b != null) { s.board[b] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, b, undefined); }
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleToken, true, false, 'onClickDoubleToken'), 'onClickDoubleToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1031,7 +1083,7 @@ function onClickBudsToken(s) {
         granted = afterTokenPlaced(s, idx, '🌱');
     }
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickBudsToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBudsToken, true, false, 'onClickBudsToken'), 'onClickBudsToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1046,7 +1098,7 @@ function onClickBothToken(s) {
         if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
     });
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickBothToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBothToken, true, false, 'onClickBothToken'), 'onClickBothToken');
     s.useMagicCount[s.turn]++;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1058,12 +1110,12 @@ function zeroBySkill(s, idx) {
 }
 function onClickSlash(s) {
     for (const idx of geometryOf(s.size).antiDiagonal) if (!isGuarded(s, s.board[idx])) zeroBySkill(s, idx);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSlash));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSlash, false, false, 'onClickSlash'), 'onClickSlash');
     bumpMagicCount(s);
 }
 function onClickBackSlash(s) {
     for (const idx of geometryOf(s.size).mainDiagonal) if (!isGuarded(s, s.board[idx])) zeroBySkill(s, idx);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickBackSlash));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBackSlash, false, false, 'onClickBackSlash'), 'onClickBackSlash');
     bumpMagicCount(s);
 }
 function onClickOpium(s) {
@@ -1076,14 +1128,14 @@ function onClickOpium(s) {
             s.board[k] = hit.blocked || hit.sq.bind > 1 ? hit.sq : { ...hit.sq, bind: 0 };
         }
     }
-    spendMagic(s, calculateCost(s, costsOf(s).onClickOpium));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickOpium, false, false, 'onClickOpium'), 'onClickOpium');
     bumpMagicCount(s);
     endTurn(s);
 }
 function onClickTsunami(s) {
     // 相手全員のマジックを0に
     for (const seat of otherSeats(s)) s.magic[seat] = 0;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickTsunami));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
     s.useMagicCount[s.turn]++;
     endTurn(s);
 }
@@ -1093,7 +1145,7 @@ function onClickWalpurgisNight(s) {
         if (sq.player && !sq.effects.some((e) => e.effect === '🔑')) { sq.effects.push({ effect: '🌱' }); planted++; }
     }
     harvestMagic(s, planted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickWalpurgisNight));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickWalpurgisNight, false, false, 'onClickWalpurgisNight'), 'onClickWalpurgisNight');
     bumpMagicCount(s);
 }
 
@@ -1101,11 +1153,11 @@ function onClickWalpurgisNight(s) {
 function onClickToggleYingYang(s) {
     // [FAITHFUL] note: source has a known bug toggling heart's mode when reading circle; we toggle the active player's own mode.
     s.yy[s.turn] = s.yy[s.turn] === 'yang' ? 'ying' : 'yang';
-    spendMagic(s, gearCost(s, costsOf(s).onClickToggleYingYang));
+    spendMagic(s, gearCost(s, costsOf(s).onClickToggleYingYang, false, s.turn, 'onClickToggleYingYang'), 'onClickToggleYingYang');
 }
 function onClickYingYangSkill(s) {
     applyYingYangDance(s, curYY(s));
-    spendMagic(s, gearCost(s, costsOf(s).onClickYingYangSkill));
+    spendMagic(s, gearCost(s, costsOf(s).onClickYingYangSkill, false, s.turn, 'onClickYingYangSkill'), 'onClickYingYangSkill');
 }
 function applyYingYangDance(s, mode) {
     const cur = curPlayer(s);
@@ -1129,7 +1181,7 @@ function applyYingYangDance(s, mode) {
 // giant
 function onClickStomp(s) {
     s.useStomp = true;
-    spendMagic(s, gearCost(s, costsOf(s).onClickStomp));
+    spendMagic(s, gearCost(s, costsOf(s).onClickStomp, false, s.turn, 'onClickStomp'), 'onClickStomp');
 }
 function exeStomp(s, i) {
     const cur = curPlayer(s);
@@ -1152,10 +1204,10 @@ function exeStomp(s, i) {
 function judgeDayCost(s) {
     const used = s.useMagicCount[s.turn];
     const base = used < costsOf(s).onClickJudgeDay ? costsOf(s).onClickJudgeDay - used : 0;
-    return gearCost(s, base);
+    return gearCost(s, base, false, s.turn, 'onClickJudgeDay');
 }
 function onClickJudgeDay(s) {
-    spendMagic(s, judgeDayCost(s));
+    spendMagic(s, judgeDayCost(s), 'onClickJudgeDay');
     s.useMagicCount[s.turn] = 0;
     s.useJudgeDay = true;
 }
@@ -1183,13 +1235,13 @@ function exeJudgeDay(s, i) {
 }
 
 function totalAssaultCost(s) {
-    return gearCost(s, costsOf(s).onClickTotalAssault - s.useTokenCount[s.turn] * 2);
+    return gearCost(s, costsOf(s).onClickTotalAssault - s.useTokenCount[s.turn] * 2, false, s.turn, 'onClickTotalAssault');
 }
 function onClickTotalAssault(s) {
     s.useAssault[s.turn] = 3;
     const pay = totalAssaultCost(s);
     s.useTokenCount[s.turn] = 0;
-    spendMagic(s, pay);
+    spendMagic(s, pay, 'onClickTotalAssault');
 }
 
 // ---- 増殖 (ループ召喚) ----
@@ -1223,7 +1275,7 @@ function applyProliferate(s, step) {
 function onClickProliferate(s) {
     s.proliferate[s.turn] = true;
     s.proliferateCount[s.turn] = 0;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickProliferate));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickProliferate, false, false, 'onClickProliferate'), 'onClickProliferate');
     bumpMagicCount(s);
 }
 
@@ -1233,7 +1285,7 @@ function necromancyCost(s) {
 }
 // 実際に払う魔力（ギア補正込み）。召喚数は墓地(necroCost)で決まり、ギアでは変わらない
 function necromancyPay(s) {
-    return gearCost(s, s.necroCost[s.turn]);
+    return gearCost(s, s.necroCost[s.turn], false, s.turn, 'onClickNecromancy');
 }
 function summonCorpses(s, corpses) {
     const cur = curPlayer(s);
@@ -1246,7 +1298,7 @@ function onClickNecromancy(s) {
     const curCost = s.necroCost[s.turn];
     // 墓地に貯まった死体数だけ召喚 (上限・空きマスでクランプ)
     summonCorpses(s, baseNecromancyCost - curCost);
-    spendMagic(s, gearCost(s, curCost));
+    spendMagic(s, gearCost(s, curCost, false, s.turn, 'onClickNecromancy'), 'onClickNecromancy');
     s.useMagicCount[s.turn]++;
     s.remainNecro[s.turn] = necromancyDuration;
     s.necroCost[s.turn] = baseNecromancyCost;
@@ -1256,7 +1308,7 @@ function onClickNecromancy(s) {
 const MIASMA_MIN_COST = 1; // Game.tsx / skillCosts.ts と同値
 // ミアズマの実コスト: 基礎 - 自陣の毒の数、毒使い割引(-1)、下限は MIASMA_MIN_COST
 function miasmaCost(s) {
-    return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - poisonCountFor(s.board, curPlayer(s)), false, true));
+    return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - poisonCountFor(s.board, curPlayer(s)), false, true, 'onClickMiasma'));
 }
 // 自陣の毒が乗っているマスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与する毒の数。
 // 毒マスごとに1つずつ付与する（重複あり: 毒マスが隣り合うほど同じ敵マスに積み上がる）
@@ -1284,12 +1336,12 @@ function exeMiasma(s) {
     if (plan.size) toxicBloom(s, null);
 }
 function onClickMiasma(s) {
-    spendMagic(s, miasmaCost(s));
+    spendMagic(s, miasmaCost(s), 'onClickMiasma');
     exeMiasma(s);
 }
 function onClickInjection(s) {
     s.useInjection += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickInjection, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickInjection, false, true, 'onClickInjection'), 'onClickInjection');
     bumpMagicCount(s);
 }
 function onClickPoisonToken(s) {
@@ -1302,7 +1354,7 @@ function onClickPoisonToken(s) {
         toxicBloom(s, idx);
     }
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1310,7 +1362,7 @@ function onClickPoisonToken(s) {
 function onClickSerum(s) {
     const cur = curPlayer(s);
     for (const sq of s.board) if (sq.player === cur) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSerum, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSerum, false, true, 'onClickSerum'), 'onClickSerum');
     bumpMagicCount(s);
 }
 function onClickIntensify(s) {
@@ -1323,12 +1375,12 @@ function onClickIntensify(s) {
     }
     harvestMagic(s, added);
     if (added) toxicBloom(s, null);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify'), 'onClickIntensify');
     bumpMagicCount(s);
 }
 function onClickPandemic(s) {
     s.usePandemic = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickPandemic, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPandemic, false, true, 'onClickPandemic'), 'onClickPandemic');
     bumpMagicCount(s);
 }
 function exePandemic(s, i) {
@@ -1341,7 +1393,7 @@ function exePandemic(s, i) {
 
 // 毒霧 (idx 29): 盤上の全コマ（敵味方問わず。🔑ロック・無敵は除く）に毒を1付与する。対象選択なし [FAITHFUL] Game.tsx onClickPoisonMist
 function onClickPoisonMist(s) {
-    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true, 'onClickPoisonMist'), 'onClickPoisonMist');
     bumpMagicCount(s);
     let n = 0;
     for (const sq of s.board) {
@@ -1364,7 +1416,7 @@ function onClickChargeToken(s) {
         granted = afterTokenPlaced(s, idx, '⚡');
     }
     harvestMagic(s, granted);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1373,14 +1425,14 @@ function onClickChargeToken(s) {
 }
 function onClickChargeOne(s) {
     s.useChargeOne = true;
-    spendMagic(s, chargeOneCost(s));
+    spendMagic(s, chargeOneCost(s), 'onClickChargeOne');
     bumpMagicCount(s);
     bumpStat(s, 'chargeOne');
 }
 // 固有スキル: 選んだコマのあるマスから、コマのあるマスだけを縦横に辿ってすべてに⚡を付与（発火はしない）
 function onClickChargeSpread(s) {
     s.useChargeSpread = true;
-    spendMagic(s, chargeSpreadCost(s));
+    spendMagic(s, chargeSpreadCost(s), 'onClickChargeSpread');
     bumpStat(s, 'chargeSpread');
 }
 function exeChargeSpread(s, i) {
@@ -1399,7 +1451,7 @@ function onClickDoubleChargeToken(s) {
     for (const idx of randomAnyPick(empties, 2, s.rng)) {
         if (idx != null) s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
     }
-    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleChargeToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1409,7 +1461,7 @@ function onClickDoubleChargeToken(s) {
 // 範囲帯電: 選んだマスを中心に3x3へ⚡を付与（発火はしない）
 function onClickChargeArea(s) {
     s.useChargeArea = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeArea));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeArea, false, false, 'onClickChargeArea'), 'onClickChargeArea');
     bumpMagicCount(s);
     bumpStat(s, 'chargeArea');
 }
@@ -1428,7 +1480,7 @@ function onClickChargeRandom(s) {
     }
     const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
     for (const k of randomAnyPick(cands, n, s.rng)) s.board[k].effects.push({ effect: '⚡' });
-    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeRandom));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom'), 'onClickChargeRandom');
     bumpMagicCount(s);
     bumpStat(s, 'chargeRandom');
     checkDischarge(s);
@@ -1436,7 +1488,7 @@ function onClickChargeRandom(s) {
 // ジャマー: 選んだマスの⚡を発散。縦横に隣接する**敵**コマ(ライフ>0・ロックなし)に⚡のスタック数だけダメージ、⚡は消える
 function onClickJammer(s) {
     s.useJammer = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickJammer));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickJammer, false, false, 'onClickJammer'), 'onClickJammer');
     bumpMagicCount(s);
     bumpStat(s, 'jammer');
 }
@@ -1459,7 +1511,7 @@ function exeJammer(s, i) {
 // ヘイルメアリー (idx 27): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
 // 対象選択が要るもの(ストンプ/審判の日/帯電拡散)は use* フラグを立てるだけ。ミアズマは対象選択が無いのでその場で発動。対象クリックは呼び出し側(AI)の責任
 function onClickHailMary(s) {
-    spendMagic(s, calculateCost(s, costsOf(s).onClickHailMary));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickHailMary, false, false, 'onClickHailMary'), 'onClickHailMary');
     const choices = [
         () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
         () => { s.useStomp = true; },
@@ -1479,20 +1531,20 @@ function onClickHailMary(s) {
 // サイレンス (idx 28): 自分以外の全席を次の手番スキル禁止にする [FAITHFUL] Game.tsx onClickSilence
 function onClickSilence(s) {
     otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSilence));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
 }
 
 // ---- 氷結・火炎 (src/components/game/thermal.ts) ----
 // 氷結 (idx 30): 選んだコマに❄。火炎付与 (idx 31): 選んだコマに🔥（そのマスと縦横隣の氷結は解ける）
 function onClickFreeze(s) {
     s.useFreeze = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFreeze));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFreeze, false, false, 'onClickFreeze'), 'onClickFreeze');
     bumpMagicCount(s);
     bumpStat(s, 'freeze');
 }
 function onClickIgnite(s) {
     s.useIgnite = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickIgnite));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite'), 'onClickIgnite');
     bumpMagicCount(s);
     bumpStat(s, 'ignite');
 }
@@ -1500,7 +1552,7 @@ function onClickIgnite(s) {
 // 絶対零度（氷室の番人）: 全マスに❄を足し、次の自分の手番開始時に敵の❄マスを爆破する。
 // 氷結スキルで❄が作られるたび（誰が使っても）全席のカウンタが+1され、実コスト=max(1, calc(10−カウンタ))。撃った席のカウンタは0に戻る
 function glacierCost(s, seat = s.turn) {
-    return Math.max(1, calculateCost(s, costsOf(s).onClickGlacier - s.glacierCharge[seat]));
+    return Math.max(1, calculateCost(s, costsOf(s).onClickGlacier - s.glacierCharge[seat], false, false, 'onClickGlacier'));
 }
 function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
@@ -1508,7 +1560,7 @@ function onClickGlacier(s) {
     s.glacierCharge[s.turn] = 0; // 自身の freezeAll で付く❄は数えない
     const done = thermal.freezeAll(s.board);
     s.glacierPending[s.turn] = true;
-    spendMagic(s, cost);
+    spendMagic(s, cost, 'onClickGlacier');
     bumpStat(s, 'glacier');
     bumpStat(s, 'glacierCells', done.length);
 }
@@ -1526,7 +1578,7 @@ function ownBuds(s) {
 function onClickHarvestEve(s) {
     if (ownBuds(s) < 1) return;
     const n = thermal.harvestBuds(s.board, curPlayer(s), s.budGuard[s.turn]);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickHarvestEve));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve'), 'onClickHarvestEve');
     s.magic[s.turn] += n;
     bumpMagicCount(s);
     bumpStat(s, 'harvestEve');
@@ -1536,7 +1588,7 @@ function onClickHarvestEve(s) {
 function onClickSolstice(s) {
     if (s.budGuard[s.turn]) return;
     s.budGuard[s.turn] = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSolstice));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSolstice, false, false, 'onClickSolstice'), 'onClickSolstice');
     bumpMagicCount(s);
     bumpStat(s, 'solstice');
 }
@@ -1570,7 +1622,7 @@ function exeSucker(s, i) {
 function onClickSucker(s) {
     if (suckerTargets(s).length === 0) return; // 選べるコマが無ければ不発
     s.useSucker = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSucker));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSucker, false, false, 'onClickSucker'), 'onClickSucker');
     bumpMagicCount(s);
     bumpStat(s, 'sucker');
 }
@@ -1580,7 +1632,7 @@ function onClickWindborne(s) {
     if (!cands.length) return;
     const picks = [0, 1, 2].map(() => randomPick(cands, s.rng));
     thermal.sow(s.board, picks);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'onClickWindborne');
     bumpMagicCount(s);
     bumpStat(s, 'windborne');
 }
@@ -1598,7 +1650,7 @@ function freezeCells(s, cells) {
 // 範囲氷結 (idx41): 中心と周囲8マス(盤端で切れる3x3)の canFreeze なマスに❄+1
 function onClickFrostArea(s) {
     s.useFrostArea = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostArea));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostArea, false, false, 'onClickFrostArea'), 'onClickFrostArea');
     bumpMagicCount(s);
     bumpStat(s, 'frostArea');
 }
@@ -1608,7 +1660,7 @@ function exeFrostArea(s, i) {
 // 氷柱 (idx42): マスと方向を選び、その線（盤の端から端まで）の canFreeze なマス全部に❄+1
 function onClickIcicle(s) {
     s.useIcicle = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickIcicle));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIcicle, false, false, 'onClickIcicle'), 'onClickIcicle');
     bumpMagicCount(s);
     bumpStat(s, 'icicle');
 }
@@ -1620,14 +1672,14 @@ function onClickRandomFreeze(s) {
     const cands = thermal.randomFreezeCandidates(s.board);
     const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
     freezeCells(s, randomAnyPick(cands, n, s.rng));
-    spendMagic(s, calculateCost(s, costsOf(s).onClickRandomFreeze));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickRandomFreeze, false, false, 'onClickRandomFreeze'), 'onClickRandomFreeze');
     bumpMagicCount(s);
     bumpStat(s, 'randomFreeze');
 }
 // 氷結拡散 (idx44): コマを選ぶと、コマのあるマスだけを縦横に辿って届く全コマ（敵味方問わず）の canFreeze なマスに❄+1
 function onClickFreezeSpread(s) {
     s.useFrostSpread = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFreezeSpread));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFreezeSpread, false, false, 'onClickFreezeSpread'), 'onClickFreezeSpread');
     bumpMagicCount(s);
     bumpStat(s, 'freezeSpread');
 }
@@ -1645,7 +1697,7 @@ function placeFrostTokens(s, n, costKey) {
         chargeGlacier(s, thermal.placeFrostToken(s.board, idx, curPlayer(s), calculateTokenBind(s)));
         harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない扱い
     }
-    spendMagic(s, calculateCost(s, costsOf(s)[costKey], true));
+    spendMagic(s, calculateCost(s, costsOf(s)[costKey], true, false, costKey), costKey);
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1661,7 +1713,7 @@ function shatterTargets(s) {
 function onClickShatter(s) {
     if (shatterTargets(s).length === 0) return;
     s.useShatter = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickShatter));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShatter, false, false, 'onClickShatter'), 'onClickShatter');
     bumpMagicCount(s);
     bumpStat(s, 'shatter');
 }
@@ -1677,7 +1729,7 @@ function onClickFrostfall(s) {
     const targets = thermal.frostfallTargets(s.board, curPlayer(s));
     if (targets.length === 0) return;
     freezeCells(s, targets);
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostfall));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
     bumpMagicCount(s);
     bumpStat(s, 'frostfall');
 }
@@ -1691,7 +1743,7 @@ function onClickFlameToken(s) {
         thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
         harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない（収穫/伝播ギアとは連動しない）
     }
-    spendMagic(s, calculateCost(s, costsOf(s).onClickFlameToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFlameToken, true, false, 'onClickFlameToken'), 'onClickFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1705,7 +1757,7 @@ function onClickDoubleFlameToken(s) {
         thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
         harvestMagic(s, afterTokenPlaced(s, idx));
     }
-    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleFlameToken, true));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleFlameToken, true, false, 'onClickDoubleFlameToken'), 'onClickDoubleFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
@@ -1726,7 +1778,7 @@ function exeSwidden(s, i) {
 function onClickSwidden(s) {
     if (swiddenTargets(s).length === 0) return;
     s.useSwidden = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSwidden));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSwidden, false, false, 'onClickSwidden'), 'onClickSwidden');
     bumpMagicCount(s);
     bumpStat(s, 'swidden');
 }
@@ -1748,7 +1800,7 @@ function exeSacrifice(s, i) {
 function onClickSacrifice(s) {
     if (sacrificeCandidates(s).length === 0) return;
     s.useSacrifice = true;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickSacrifice));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSacrifice, false, false, 'onClickSacrifice'), 'onClickSacrifice');
     bumpMagicCount(s);
     bumpStat(s, 'sacrifice');
 }
@@ -1756,7 +1808,7 @@ function onClickSacrifice(s) {
 function onClickCleanse(s) {
     if (!hasAilment(s.board, curPlayer(s))) return;
     const done = thermal.cleanse(s.board, curPlayer(s));
-    spendMagic(s, calculateCost(s, costsOf(s).onClickCleanse));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickCleanse, false, false, 'onClickCleanse'), 'onClickCleanse');
     bumpMagicCount(s);
     bumpStat(s, 'cleanse');
     bumpStat(s, 'cleanseCells', done.length);
@@ -1768,11 +1820,33 @@ function infernoTargets(s) {
 function keepBudsOf(s) {
     return (sq) => !!sq.player && !!s.budGuard[seatOf(sq.player)];
 }
+// 業火の実コスト: 無料権があれば0、なければ calc(基礎)。無料権は1手番に異なる種類のスキルを INFERNO_FREE_SKILLS(3) 種類使うと付き、手番を跨いで持ち越し、撃つと消える
+const INFERNO_FREE_SKILLS = 3;
+function infernoCost(s, seat = s.turn) {
+    return s.infernoReady[seat] ? 0 : calculateCost(s, costsOf(s).onClickInferno, false, false, 'onClickInferno');
+}
+// バーンアウト: 🔥が乗っているマスを全て破壊する。盤面に🔥が4つ以上あればコスト0。クリック不要・手番は続く
+function burnoutTargets(s) {
+    return s.board.map((sq, i) => (thermal.flameStacks(sq) > 0 && !isShielded(s, sq) ? i : -1)).filter((i) => i !== -1);
+}
+function burnoutCost(s) {
+    return thermal.burnoutCostOf(costsOf(s).onClickBurnout, thermal.totalFlames(s.board), (c) => calculateCost(s, c, false, false, 'onClickBurnout'));
+}
+function onClickBurnout(s) {
+    const targets = burnoutTargets(s);
+    if (!targets.length) return;
+    const cost = burnoutCost(s);
+    addCorpses(s, thermal.burnout(s.board, targets));
+    spendMagic(s, cost, 'onClickBurnout');
+    bumpStat(s, 'burnout');
+}
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
     thermal.ignite(s.board, targets, s.size, 2, keepBudsOf(s));
-    spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
+    spendMagic(s, infernoCost(s), 'onClickInferno');
+    s.infernoReady[s.turn] = false; // 撃ったら無料権とカウントをリセット
+    s.skillKinds[s.turn] = new Set();
     bumpStat(s, 'inferno');
     bumpStat(s, 'infernoCells', targets.length);
 }
@@ -1840,6 +1914,14 @@ const SKILLS = {
     sucker: onClickSucker,
     windborne: onClickWindborne,
     inferno: onClickInferno,
+    burnout: onClickBurnout,
+    markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
+    effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
+    tokenDiscount: (s) => useDiscountSkill(s, 'onClickTokenDiscount'),
+    vitalMarkdown: (s) => useDiscountSkill(s, 'onClickVitalMarkdown'),
+    uniqueDiscount: (s) => useDiscountSkill(s, 'onClickUniqueDiscount'),
+    counterMarkdown: (s) => useDiscountSkill(s, 'onClickCounterMarkdown'),
+    clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
 };
 
 // ---- Rendering ------------------------------------------------------------
@@ -1860,11 +1942,11 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
+    spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

@@ -382,3 +382,57 @@ describe('対氷結: 氷結中の空きマスで塞がれた自分のリーチ�
         expect(ai.thawIgniteTarget(b, 3)).toBe(2); // 敵が氷結中 → 自陣(2)にフォールバック
     });
 });
+
+describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const setup = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        [1, 2, 3].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力が足りないとき、軽減札を先に撃ってから業火を撃つ', () => {
+        const r = setup(6, [58, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickInferno']);
+    });
+    it('軽減札が手札にない・魔力が足りなければ業火は撃たない', () => {
+        expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
+        expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
+    });
+    it('業火のあと、敵のコマが自陣より2つ以上多く壊れるならバーンアウトを撃つ（🔥合計4以上でタダ）', () => {
+        const r = setup(9, [61, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
+        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
+    });
+    it('鍛冶師は軽減札を固定しない（固定すると勝ち数が下がった）', () => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        expect(ai.chooseLocks(b, 2, 5, [53, 3, 60])).not.toEqual(expect.arrayContaining([53, 60]));
+    });
+});
+
+describe('軽減札を先に撃って通常スキルを撃てるようにする', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        // 劣勢（敵3コマ・自陣なし）で、敵が斜めに2つ並んでいる → スラッシュ（5）を撃つ
+        [0, 3, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力4ではスラッシュ（5）を撃てないが、特売（1）を先に撃てばスラッシュが2で撃てる', () => {
+        expect(run(4, [5, 12, 0]).skills).not.toContain('onClickSlash');
+        const r = run(4, [53, 5, 12]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+        expect(r.skills).toContain('onClickSlash');
+    });
+    it('撃てるスキルが増えなくても、特売のコストより軽減が大きく魔力が余るなら先に撃つ', () => {
+        expect(run(5, [53, 5, 12]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+    });
+    it('軽減札が手札にない・撃てるスキルが無いなら軽減札は撃たない', () => {
+        expect(run(5, [5, 12, 0]).chargeClicks).toBeUndefined();
+        expect(run(0, [53, 5, 12]).chargeClicks).toBeUndefined();
+    });
+});
