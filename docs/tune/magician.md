@@ -1,6 +1,6 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: cac491e(PR #87 マージ。4条件の計測時点の master との差は演出追加 #84 のみで、バランス変更なし)
+- 最後に検証したmaster: 2c7c1bc(PR #90 マージ。4条件: 基本70.3%/envDeck varied 71.4%/oppGears none 80.0%/random 77.1% すべて1位)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
 - 連続不採用回数: 0(洗練に入ってからの数)
