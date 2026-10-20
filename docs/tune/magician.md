@@ -3,8 +3,8 @@
 - 最後に検証したmaster: 2c7c1bc(4条件1位は 2c7c1bc 時点で確認。以降の master 変更は演出等のみ)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
-- 連続不採用回数: 6(洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
-- 状態: done(洗練が飽和: 6種類の軸を測り、W3採用後の連続不採用が6)- 洗練後の基準: 環境勝率 71.0%±1.4(seed3/400)、envDeck varied 順位表 71.4% で1位(2位 electrician 60.2)
+- 連続不採用回数: 0(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
+- 状態: refining(ユーザー指示「さらにトップを目指して」で再開。AI改修=strategy 軸を新規仮説で。連続不採用0に戻す)- 洗練後の基準: 環境勝率 71.0%±1.4(seed3/400)、envDeck varied 順位表 71.4% で1位(2位 electrician 60.2)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
@@ -23,6 +23,8 @@
 | 1 | gear | 1枠差し替え近傍(30通り)を `--scan gears --games 60 --seed 1`(master edf73fb)で測定。基準 [sturdy,ironLock] 59.3%±3.9 が最上位。次点 slot0→luckyPurse 57.4%、gambler 56.9%。全近傍が基準以下 | 不採用(現ギアが局所最適) |
 | 0 | - | 基準線測定のみ。対tactician 23%・対electrician 43%・対necromancer 42% が弱点 | - | - |
 ## 次に試す候補
+- strategy(AI) 再開: 審判の日の撃つ閾値 judgeMin(既定2)=1/3、ロックの運用、特売系を先に撃つ順序、バッズ増殖の撃ち順 など（sim/ai.js に F ノブ→probe-top --flags で測定→有効なら AIPlayer.ts にミラー+回帰テスト）
+
 - strategy(AI改修): 両トークン(4)・ダブルバッズ(10)をAIが撃たない理由を `sim/ai.js` で調べ、撃てるようにする(F.xxx ノブ+probe-ai.js paired A/B。本番AIへのミラーが必要)
 (軸の順 gear → deck → synergy → strategy → joint を巡回)
 - joint: Y採用後のデッキに対し、トークン2枚(4,9)追加型(X1)や他のコスト軽減札(58大特価,60返し特売,54付与割引)を `--scan deck --swap 2` で再探索
