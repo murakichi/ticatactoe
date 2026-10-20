@@ -3,12 +3,13 @@
 - 最後に検証したmaster: 2c7c1bc(PR #90 マージ。4条件: 基本70.3%/envDeck varied 71.4%/oppGears none 80.0%/random 77.1% すべて1位)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
-- 連続不採用回数: 3(洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 がいずれも不採用)
+- 連続不採用回数: 4(洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) がいずれも不採用)
 - 状態: refining(トップ到達後の洗練中)- 洗練後の基準: 環境勝率 71.0%±1.4(seed3/400)、envDeck varied 順位表 71.4% で1位(2位 electrician 60.2)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 11 | メタ(対tactician) | `--scan deck --opp tactician --neighbors 40 --games 120`(seed1)。基準60.8%±8.7、上位は -10+58 65.8・-4+任意 62.5 と、全環境で既に再測定済み(不採用)の候補と同じ。95%CI が±8.5と広く、基準との差は誤差の内側 | 不採用(新しい候補なし。対tactician 62%はすでに洗練前の47%から改善済み) |
 | 10 | strategy(再監査) | 新デッキの `probe-usage.js --chars magician,tactician`(100試合): 使われている札 lock2.89・judgeDay2.34・markdown1.08・vitalMarkdown0.93・token0.60・buds0.55・counterMarkdown0.47・budsToken0.33・doubleToken0.28・sucker0.28。**両トークン(4)とダブルバッズ(10)は出力に現れない=撃たれていない**。ただし抜いて他の札に替えても(C)+0.4ptで差なし | 不採用: 死に札を替えても得るものが無い。AIが両トークン/ダブルバッズを撃てるようにする方が筋(AI改修。未着手) |
 | 9 | deck(1枚近傍) | 新デッキで `--scan deck --neighbors 30`(seed1/60)。上位: -10+58 73.5・-4+任意 73.0〜73.3(基準70.0)。seed3/400 で再測定: A(-10+58) 71.1(+0.1)・B(-4+15) 69.6(-1.4)・C(-10-4+58+50) 71.4(+0.4)。基準71.0 | 不採用(60試合の+3ptは勝者の呪いで消えた) |
 | 8 | joint(gear再スキャン) | 新デッキ(W3)で `--scan gears --games 60 --seed 1`。基準 [sturdy,ironLock] 70.0%±3.7 が最上位、次点 vengeance 69.1・luckyPurse 68.2。全近傍が基準以下 | 不採用(ギアは再スキャンでも現状が最適) |
