@@ -28,3 +28,4 @@
 - 環境(master 4b849ea, seed1, games60): 1位 tactician 67.8%、2位 electrician 60.2%、最下位 pyromancer 38.9%。pyromancer は tactician/magician/electrician に 20〜30% しか勝てない。
 - (2026-10-20 pyromancer) gear 32近傍 ×60試合はSE±4.1ptで、+1〜2pt差は判別不能。多重比較補正(n=32で z≥3)を満たすには+8pt級が必要=gear 1枠の差し替えで届くのは大きな差だけ。推奨ギアが既に近傍の最適なら gear 軸は1回で打ち切ってよい。`--target` 単体の base と `--rank` の同キャラ勝率は一致しない(45.9 vs 38.9)ので、基準線は同じ計測モードで比べる。
 - (2026-10-20 pyromancer) `--swap 3 --cat fire` 30近傍: 最良+0.6pt(ノイズ内)。鍛冶師は🔥札を増やしても効かない=札構成の問題ではなく AI/固有スキル側の可能性。次は probe-usage で使用率を見る。`&` 付きの内部バックグラウンドはコンテナ側で落ちやすい。run_in_background でコマンド自体を直接走らせる。
+- (2026-10-20 pyromancer) 60試合の探索(SE±4)で上位が「同じ札で揃う」とき、それは単発のノイズより信頼できる信号。補正閾値を超えなくても、別シードを2本(200+300試合)プールすれば+2pt台の差を判定できる。`--json` 出力は最終行の `field`,`se` を grep すると集計しやすい。node_modules が無いセッションは `npm ci` 後に `npx react-scripts test`(素の `npx jest` は babel設定が無く失敗)。
