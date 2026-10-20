@@ -3,12 +3,14 @@
 - 最後に検証したmaster: 2c7c1bc(PR #90 マージ。4条件: 基本70.3%/envDeck varied 71.4%/oppGears none 80.0%/random 77.1% すべて1位)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
-- 連続不採用回数: 1(洗練中。W3採用後に gear 再スキャンが不採用)
+- 連続不採用回数: 3(洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 がいずれも不採用)
 - 状態: refining(トップ到達後の洗練中)- 洗練後の基準: 環境勝率 71.0%±1.4(seed3/400)、envDeck varied 順位表 71.4% で1位(2位 electrician 60.2)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 10 | strategy(再監査) | 新デッキの `probe-usage.js --chars magician,tactician`(100試合): 使われている札 lock2.89・judgeDay2.34・markdown1.08・vitalMarkdown0.93・token0.60・buds0.55・counterMarkdown0.47・budsToken0.33・doubleToken0.28・sucker0.28。**両トークン(4)とダブルバッズ(10)は出力に現れない=撃たれていない**。ただし抜いて他の札に替えても(C)+0.4ptで差なし | 不採用: 死に札を替えても得るものが無い。AIが両トークン/ダブルバッズを撃てるようにする方が筋(AI改修。未着手) |
+| 9 | deck(1枚近傍) | 新デッキで `--scan deck --neighbors 30`(seed1/60)。上位: -10+58 73.5・-4+任意 73.0〜73.3(基準70.0)。seed3/400 で再測定: A(-10+58) 71.1(+0.1)・B(-4+15) 69.6(-1.4)・C(-10-4+58+50) 71.4(+0.4)。基準71.0 | 不採用(60試合の+3ptは勝者の呪いで消えた) |
 | 8 | joint(gear再スキャン) | 新デッキ(W3)で `--scan gears --games 60 --seed 1`。基準 [sturdy,ironLock] 70.0%±3.7 が最上位、次点 vengeance 69.1・luckyPurse 68.2。全近傍が基準以下 | 不採用(ギアは再スキャンでも現状が最適) |
 | 7 | strategy(監査) | `probe-usage.js --chars magician,tactician` でデッキ内のオピウム8・刈り入れ前夜33・冬至の種子34がAIに1度も撃たれない死に札と判明(ひこばえ35も0.19回/試合)。3枚を使われる札に替える: W3=+4両トークン+9バッズトークン+60返し特売。seed2/200: base 63.4 → W3 70.5(+7.1)。再測定 seed3/400: base 65.2 → W3 71.0±1.4(+5.8pt、対tactician 47→61, electrician 62→74, cryomancer 77→86。悪化なし)。envDeck varied 順位表 71.4% 1位(2位 electrician 60.2) | **採用** W3(ミラー済み・jest 80件通過。本番AIで同じ札が死に札かは未確認 #88) |
 | 6 | synergy(洗練) | swap2 support(現デッキ, seed1/60): 最良 Z=-8オピウム-34冬至の種子 +60返し特売+54付与割引 69.3%(基準66.8)、他は+0.8以下。再測定 seed3/400: base 65.2 → Z 66.8(+1.6pt, 対tactician 47→52, electrician 62→67)。差のSE≈1.1なので2SE(2.1)に届かない | 保留(要追試): 基準の+1.5pt以上は満たすが約2SE未満。同種(synergy)の繰り返しなので連続不採用には数えない |
@@ -17,7 +19,9 @@
 | 3 | deck | 札1枚差し替え近傍30通り(seed1/60)の上位3つが全て +11ダブルトークン追加。再測定 seed2/200: base 57.2, A(-8) 58.6, B(-28) 59.2, C(-14) 59.1 → 境界のため追試 seed3/400: base 58.6±1.5 → B 61.2±1.5(+2.6pt、対tactician 39→43, 対cryomancer 65→72、悪化なし) | **採用** B: -28サイレンス +11ダブルトークン(sim/deck.js, src/deck.ts にミラー。jest 80件・gear.test 通過。本番AIでは未計測) |
 | 1 | gear | 1枠差し替え近傍(30通り)を `--scan gears --games 60 --seed 1`(master edf73fb)で測定。基準 [sturdy,ironLock] 59.3%±3.9 が最上位。次点 slot0→luckyPurse 57.4%、gambler 56.9%。全近傍が基準以下 | 不採用(現ギアが局所最適) |
 | 0 | - | 基準線測定のみ。対tactician 23%・対electrician 43%・対necromancer 42% が弱点 | - | - |
-## 次に試す候補(軸の順 gear → deck → synergy → strategy → joint を巡回)
+## 次に試す候補
+- strategy(AI改修): 両トークン(4)・ダブルバッズ(10)をAIが撃たない理由を `sim/ai.js` で調べ、撃てるようにする(F.xxx ノブ+probe-ai.js paired A/B。本番AIへのミラーが必要)
+(軸の順 gear → deck → synergy → strategy → joint を巡回)
 - joint: Y採用後のデッキに対し、トークン2枚(4,9)追加型(X1)や他のコスト軽減札(58大特価,60返し特売,54付与割引)を `--scan deck --swap 2` で再探索
 - deck(済: 1枚近傍): `--scan audit`(札の寄与)、`probe-usage.js --chars magician,tactician`
 - メタ: 対tactician(23%)に絞った `--opp tactician` の札/ギア探索
