@@ -210,6 +210,92 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             noise(ctx, d, { t: T(0), dur: 0.4, gain: 0.25, filter: 'highpass', f0: 3000 });
             return 0.6;
         }
+        case 'freeze': {
+            // 氷結: 高い澄んだ音が連なり、ぱきんと凍る
+            [2093, 2637, 3136, 4186].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(i * 0.04), dur: 0.25, gain: 0.25 }));
+            noise(ctx, d, { t: T(0.12), dur: 0.1, gain: 0.35, filter: 'highpass', f0: 6000 });
+            return 0.5;
+        }
+        case 'flame': {
+            // 火炎: 低く唸る炎のゴウッという噴き上がり
+            noise(ctx, d, { t: T(0), dur: 0.55, gain: 0.5, filter: 'bandpass', f0: 400, f1: 1800, q: 0.7 });
+            tone(ctx, d, { type: 'sawtooth', f0: 110, f1: 220, t: T(0), dur: 0.4, gain: 0.35, lowpass: 900 });
+            return 0.6;
+        }
+        case 'glacier': {
+            // 絶対零度: 重い低音の後、冷たい下降音と結晶のきらめきが降り注ぐ
+            boom(ctx, d, T(0), 0.8);
+            tone(ctx, d, { type: 'triangle', f0: 2400, f1: 300, t: T(0.05), dur: 0.7, gain: 0.3, lowpass: 5000 });
+            noise(ctx, d, { t: T(0.1), dur: 0.6, gain: 0.3, filter: 'highpass', f0: 4000 });
+            sparkle(ctx, d, T(0.3), [C6, E6, G5 * 2, C6 * 2, E6 * 2], 0.07, 0.22);
+            return 1.0;
+        }
+        case 'glacierBurst': {
+            // 氷結崩壊: ガラスが砕ける連打と衝撃
+            boom(ctx, d, T(0), 0.95);
+            noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.7, filter: 'highpass', f0: 3000 });
+            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 3800 - i * 350, f1: 1200, t: T(0.04 + i * 0.05), dur: 0.12, gain: 0.3 });
+            sparkle(ctx, d, T(0.4), [E6, C6, G5 * 2], 0.06, 0.2);
+            return 0.9;
+        }
+        case 'inferno': {
+            // 業火: 低く唸る炎が立ち上がり、爆ぜる
+            boom(ctx, d, T(0), 0.9);
+            noise(ctx, d, { t: T(0.02), dur: 0.9, gain: 0.55, filter: 'bandpass', f0: 300, f1: 2400, q: 0.6 });
+            tone(ctx, d, { type: 'sawtooth', f0: 90, f1: 260, t: T(0), dur: 0.8, gain: 0.4, lowpass: 900 });
+            for (let i = 0; i < 6; i++) noise(ctx, d, { t: T(0.2 + i * 0.08), dur: 0.05, gain: 0.35, filter: 'highpass', f0: 2500 });
+            return 1.0;
+        }
+        case 'cleanse': {
+            // 浄化: 澄んだ鐘の上昇アルペジオ
+            tone(ctx, d, { f0: C5, t: T(0), dur: 0.6, gain: 0.25 });
+            sparkle(ctx, d, T(0.05), [C5, E5, G5, C6, E6, G5 * 2], 0.07, 0.24);
+            return 0.8;
+        }
+        case 'harvestEve': {
+            // 刈り入れ前夜: 低い温かな音と、硬貨がチャリンと鳴る
+            tone(ctx, d, { type: 'triangle', f0: 196, t: T(0), dur: 0.5, gain: 0.35 });
+            for (let i = 0; i < 4; i++) {
+                tone(ctx, d, { type: 'square', f0: 1760, t: T(0.12 + i * 0.09), dur: 0.05, gain: 0.14, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2349, t: T(0.17 + i * 0.09), dur: 0.12, gain: 0.14, lowpass: 5000 });
+            }
+            return 0.7;
+        }
+        case 'solstice': {
+            // 冬至の種子: 静かな低い和音に、小さな鐘
+            [130.8, 196, 261.6].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(i * 0.04), dur: 0.9, gain: 0.22 }));
+            sparkle(ctx, d, T(0.3), [G5, C6, E6], 0.12, 0.16);
+            return 0.9;
+        }
+        case 'sprout': {
+            // ひこばえ: ぽん、ぽん、ぽんと芽が出る
+            [C5, E5, G5].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.6, t: T(i * 0.08), dur: 0.12, gain: 0.35 }));
+            return 0.45;
+        }
+        case 'windborne': {
+            // 風の落とし子: 風が吹き抜け、種がぱらぱら落ちる
+            noise(ctx, d, { t: T(0), dur: 0.6, gain: 0.4, filter: 'bandpass', f0: 600, f1: 3000, q: 0.8 });
+            for (let i = 0; i < 3; i++) tone(ctx, d, { f0: 880 + i * 220, f1: 1400 + i * 200, t: T(0.35 + i * 0.07), dur: 0.08, gain: 0.25 });
+            return 0.7;
+        }
+        case 'iceBreak': {
+            // 氷結が砕けて身代わりになる: パリン
+            noise(ctx, d, { t: T(0), dur: 0.1, gain: 0.6, filter: 'highpass', f0: 4500 });
+            for (let i = 0; i < 4; i++) tone(ctx, d, { f0: 3600 - i * 500, f1: 1500, t: T(i * 0.04), dur: 0.1, gain: 0.28 });
+            return 0.3;
+        }
+        case 'thaw': {
+            // 解凍: 水滴がぽとん
+            tone(ctx, d, { f0: 1100, f1: 500, t: T(0), dur: 0.12, gain: 0.35 });
+            tone(ctx, d, { f0: 900, f1: 420, t: T(0.12), dur: 0.12, gain: 0.28 });
+            return 0.3;
+        }
+        case 'burn': {
+            // 燃焼: ぱちぱちと爆ぜる
+            for (let i = 0; i < 5; i++) noise(ctx, d, { t: T(i * 0.06), dur: 0.05, gain: 0.4, filter: 'bandpass', f0: 2200, f1: 900, q: 1 });
+            tone(ctx, d, { type: 'sawtooth', f0: 140, f1: 90, t: T(0), dur: 0.3, gain: 0.2, lowpass: 600 });
+            return 0.4;
+        }
         case 'proliferate': {
             [523, 587, 659, 784, 880, 1047].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.25, t: T(i * 0.05), dur: 0.12, gain: 0.4 }));
             return 0.45;

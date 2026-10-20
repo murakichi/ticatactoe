@@ -45,6 +45,40 @@ export const skillCosts = {
     onClickSilence: 5,
     // 毒霧: 盤上の全コマ（敵味方問わず）に毒を1付与。idx 29。毒系なので毒使いは-1
     onClickPoisonMist: 7,
+    // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、絶対零度は氷室の番人・業火は煉獄の鍛冶師の固有スキル
+    onClickFreeze: 3,
+    onClickIgnite: 3,
+    onClickGlacier: 10,
+    // 氷室の番人は常在のロックの代わりにこの「氷結」(マスを1つ選んで❄)を持つ
+    onClickCryoFreeze: 2,
+    // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
+    onClickCleanse: 5,
+    onClickInferno: 9,
+    // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
+    onClickHarvestEve: 2,
+    onClickSolstice: 4,
+    onClickSucker: 4,
+    onClickWindborne: 3,
+    // 火炎系の汎用スキル(idx 37-39)。氷結への対抗手段
+    onClickFlameToken: 3,
+    onClickDoubleFlameToken: 6,
+    onClickSwidden: 3,
+    // 殉火（仮名）: 自陣のコマを犠牲にして、ライフがそれ以下の敵コマ全てに🔥。idx 40
+    onClickSacrifice: 5,
+    // 氷結系の汎用スキル(idx 41-48)。氷結を作った数は絶対零度のコスト軽減に1個ずつ数える
+    onClickFrostArea: 5,
+    onClickIcicle: 6,
+    onClickRandomFreeze: 3,
+    onClickFreezeSpread: 7,
+    onClickFrostToken: 3,
+    onClickDoubleFrostToken: 6,
+    onClickShatter: 4,
+    onClickFrostfall: 3,
+    // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
+    onClickBoost: 4,
+    onClickRelocate: 3,
+    onClickClone: 4,
+    onClickPlunder: 5,
 };
 
 export type SkillCosts = typeof skillCosts;
