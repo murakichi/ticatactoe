@@ -5,7 +5,7 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -795,8 +795,18 @@ class AIPlayer {
         }
 
         // --- トークン系 ---
+        // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
+        const freeCells = findEmptyIndexes(board).length;
+        const cryo = this.character === 'cryomancer';
+        if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
+            spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
+        }
         if (!tokenUsed) {
-            if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
+            if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
+                spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
+            } else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
+                spend(this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken'), 'onClickFrostToken');
+            } else if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
             } else if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken')) {
                 spend(this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');

@@ -157,9 +157,9 @@ export const Game = (props: GameProps) => {
     const [previewCells, setPreviewCells] = useState<number[]>([]);
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
-    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[]) => {
+    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string) => {
         playSfx(type);
-        setBoardEffect((prev) => ({ type, index, indexes, nonce: (prev?.nonce ?? 0) + 1 }));
+        setBoardEffect((prev) => ({ type, index, indexes, label, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardEffect(null), 1400);
     };
     // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
@@ -606,7 +606,7 @@ export const Game = (props: GameProps) => {
         if (useChargeOne) {
             nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '⚡' }] };
             addLog(`${posName(i)}に⚡を付与`);
-            playEffect('zap', i);
+            playEffect('zap', i, undefined, '帯電付与');
             harvestMagic(1);
             setUseChargeOne(false);
             setCurrentBoard(withOverload(nextBoard));
@@ -617,7 +617,7 @@ export const Game = (props: GameProps) => {
             const cells = geo.stompRange(i);
             addLog(`${posName(i)}を中心に範囲帯電（${cells.length}マスに⚡）`);
             flashCells(cells);
-            playEffect('zap', i);
+            playEffect('zap', i, undefined, '範囲帯電');
             setUseChargeArea(false);
             setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
@@ -629,7 +629,7 @@ export const Game = (props: GameProps) => {
             harvestMagic(cells.length);
             addLog(`${posName(i)}から帯電拡散（${cells.length}マスに⚡）`);
             flashCells(cells);
-            playEffect('zap');
+            playEffect('zap', undefined, undefined, '帯電拡散');
             setUseChargeSpread(false);
             setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
@@ -701,7 +701,7 @@ export const Game = (props: GameProps) => {
             applyLock(nextBoard, i);
             harvestMagic(1);
             addLog(`${posName(i)}をロック`);
-            playSfx('lock');
+            playEffect('lock', i);
             setUseLock(useLock - 1);
             setCurrentBoard(nextBoard);
             return;
@@ -903,7 +903,7 @@ export const Game = (props: GameProps) => {
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
-            playEffect('zap', fire.fired[0]);
+            playEffect('zap', fire.fired[0], undefined, '⚡発火');
         }
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
@@ -937,7 +937,7 @@ export const Game = (props: GameProps) => {
 
     const charge = 3;
     const onClickCharge = () => {
-        playSfx('charge');
+        playEffect('chargeUp', undefined, undefined, `チャージ+${charge}`);
         addLog(`「チャージ」を使用（ターン終了・マジック+${charge}）`);
         setMagicAt(turnSeat, (m) => m + charge);
         setCurrentTurn(currentTurn + 1);
@@ -945,12 +945,14 @@ export const Game = (props: GameProps) => {
 
     const onClickAddLife = () => {
         addLog('「ライフ3」を使用（ライフ+3）');
+        playEffect('heal');
         setLife(life + 3);
         spendMagic(calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife'), true, true, 'onClickAddLife');
     };
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
+        playEffect('shuffle');
         // 手札はデッキ（12枚）から引く
         setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills));
         spendMagic(seatCosts.onClickShuffle, true, false);
@@ -958,6 +960,7 @@ export const Game = (props: GameProps) => {
 
     const onClickBibine = () => {
         addLog('「バイバイン」を使用（ライフ2倍）');
+        playEffect('double');
         setLife(life * 2);
         spendMagic(calculateCost(seatCosts.onClickBibine, false, false, currentTurnPlayer, 'onClickBibine'), true, true, 'onClickBibine');
     };
@@ -1070,6 +1073,7 @@ export const Game = (props: GameProps) => {
 
     const onClickBuds = () => {
         addLog('「バッズ」を使用（次の一手でバッズを植える）');
+        playEffect('bloom', undefined, undefined, 'バッズ');
         harvestMagic(1);
         setUseBuds([true, useBuds[1] + 1]);
         spendMagic(calculateCost(seatCosts.onClickBuds, false, false, currentTurnPlayer, 'onClickBuds'), true, true, 'onClickBuds');
@@ -1077,6 +1081,7 @@ export const Game = (props: GameProps) => {
 
     const onClickDoubleBuds = () => {
         addLog('「ダブルバッズ」を使用（次の一手でバッズを2つ植える）');
+        playEffect('bloom', undefined, undefined, 'ダブルバッズ');
         harvestMagic(2);
         setUseBuds([true, useBuds[1] + 2]);
         spendMagic(calculateCost(seatCosts.onClickDoubleBuds, false, false, currentTurnPlayer, 'onClickDoubleBuds'), true, true, 'onClickDoubleBuds');
@@ -1185,6 +1190,7 @@ export const Game = (props: GameProps) => {
             if (seat === turnSeat) granted += afterTokenPlaced(board, idx);
         });
         harvestMagic(granted);
+        playEffect('token', undefined, picks, '両トークン');
         spendMagic(calculateCost(seatCosts.onClickBothToken, true, false, currentTurnPlayer, 'onClickBothToken'), true, true, 'onClickBothToken');
         setCurrentBoard(board);
         setUseToken(true);
@@ -1196,6 +1202,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         addLog(`「トークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'トークン');
         harvestMagic(afterTokenPlaced(board, index));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickToken, true, false, currentTurnPlayer, 'onClickToken'), true, true, 'onClickToken');
@@ -1209,6 +1216,7 @@ export const Game = (props: GameProps) => {
         board[emptyIndex1] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         board[emptyIndex2] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         addLog(`「ダブルトークン」を使用（${posName(emptyIndex1)}・${posName(emptyIndex2)}に設置）`);
+        playEffect('token', undefined, [emptyIndex1, emptyIndex2], 'ダブルトークン');
         harvestMagic(afterTokenPlaced(board, emptyIndex1) + afterTokenPlaced(board, emptyIndex2));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleToken, true, false, currentTurnPlayer, 'onClickDoubleToken'), true, true, 'onClickDoubleToken');
@@ -1228,6 +1236,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '🌱' }] };
         addLog(`「バッズトークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'バッズトークン');
         harvestMagic(afterTokenPlaced(board, index, '🌱'));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBudsToken, true, false, currentTurnPlayer, 'onClickBudsToken'), true, true, 'onClickBudsToken');
@@ -1587,6 +1596,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = poisonStrike({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] });
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'ポイズントークン');
         harvestMagic(afterTokenPlaced(board, index, '☠'));
         toxicBloom(board, index);
         setCurrentBoard(board);
@@ -1596,6 +1606,7 @@ export const Game = (props: GameProps) => {
 
     const onClickSerum = () => {
         addLog('「血清」を使用（自陣の毒をすべて除去）');
+        playEffect('cleanse', undefined, undefined, '血清');
         const board = currentBoard.slice();
         board.forEach((sq, idx) => {
             if (sq.player === currentTurnPlayer && sq.effects.some((e) => e.effect === '☠')) {
@@ -1679,7 +1690,7 @@ export const Game = (props: GameProps) => {
             board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
             addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
             harvestMagic(afterTokenPlaced(board, index, '⚡'));
-            playEffect('zap', index);
+            playEffect('zap', index, undefined, '帯電トークン');
             setCurrentBoard(withOverload(board));
         }
         spendMagic(calculateCost(seatCosts.onClickChargeToken, true, false, currentTurnPlayer, 'onClickChargeToken'), true, true, 'onClickChargeToken');
@@ -1705,7 +1716,7 @@ export const Game = (props: GameProps) => {
             board[idx] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
         }
         addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
-        if (picks.length > 0) playEffect('zap', picks[0]);
+        if (picks.length > 0) playEffect('zap', picks[0], undefined, '帯電ダブルトークン');
         setCurrentBoard(withOverload(board));
         spendMagic(calculateCost(seatCosts.onClickDoubleChargeToken, true, false, currentTurnPlayer, 'onClickDoubleChargeToken'), true, true, 'onClickDoubleChargeToken');
         setUseToken(true);
@@ -1724,7 +1735,7 @@ export const Game = (props: GameProps) => {
         addLog(`「ランダム帯電」を使用（${picks.map(posName).join('・')}に⚡）`);
         if (picks.length > 0) {
             flashCells(picks);
-            playEffect('zap', picks[0]);
+            playEffect('zap', picks[0], undefined, 'ランダム帯電');
         }
         setCurrentBoard(withOverload(withCharge(currentBoard, picks)));
         spendMagic(calculateCost(seatCosts.onClickChargeRandom, false, false, currentTurnPlayer, 'onClickChargeRandom'), true, true, 'onClickChargeRandom');
@@ -1740,7 +1751,7 @@ export const Game = (props: GameProps) => {
         const r = applyJammer(board, i, geo.size, currentTurnPlayer);
         addLog(`${posName(i)}のジャマー（${r.damaged.length}コマのライフを減少${r.zeroed.length > 0 ? `・${r.zeroed.length}コマがライフ0` : ''}）`);
         flashCells(r.damaged);
-        playEffect('zap', i);
+        playEffect('zap', i, undefined, 'ジャマー');
         setUseJammer(false);
         setCurrentBoard(board);
     };
@@ -1948,6 +1959,7 @@ export const Game = (props: GameProps) => {
         if ('token' in e) parts.push(`トークン付与スキル-${e.token}`);
         if ('unique' in e) parts.push(`固有スキル-${e.unique}`);
         addLog(`「${DISCOUNT_NAMES[key]}」を使用（${parts.join('・')}）`);
+        playEffect('discount', undefined, undefined, DISCOUNT_NAMES[key]);
         spendMagic(calculateCost(seatCosts[key], false, false, currentTurnPlayer, key), true, true, key);
         const delta = lifeDeltaOf(key);
         if (delta !== 0) setLife(life + delta);
