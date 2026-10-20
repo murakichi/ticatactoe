@@ -840,7 +840,7 @@ function chooseSkills(s, availableSkills) {
         if (character === 'tactician') {
             // 実コストは「9−使用トークン×2」。calculateCostの+2ペナルティは誤りなので totalAssaultCost を使う
             const taCost = totalAssaultCost(s);
-            if (remaining >= taCost && myPieces >= 2) spend(taCost, 'totalAssault');
+            if (remaining >= taCost && myPieces >= (F.taMinPieces || 2) && s.useTokenCount[s.turn] >= (F.taMinTok || 0)) spend(taCost, 'totalAssault');
         }
 
         // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
