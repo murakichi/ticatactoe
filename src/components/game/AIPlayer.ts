@@ -1,6 +1,7 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -53,6 +54,10 @@ class AIPlayer {
     glacierCharge: number = 0;
     /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
     infernoReady: boolean = false;
+    /** chooseSkills が直前に計画したスキルの合計コスト */
+    lastSpent: number = 0;
+    /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
+    hypoCut: number = 0;
     skillKinds: Set<string> = new Set();
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
@@ -608,7 +613,9 @@ class AIPlayer {
         if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
         else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
         else if (this.character === 'pyromancer' && skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1) cost -= 1; // 🔥付与スキルは常に-1
-        return this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
+        const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
+        // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
+        return this.hypoCut > 0 && paid > 0 && !(skillKey && isDiscountSkill(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;
     }
 
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
@@ -754,7 +761,11 @@ class AIPlayer {
 
 
         // ターン終了スキルが選ばれていたらここで返す
-        if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) return skills;
+        if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
+            this.lastSpent = magic - remaining;
+            this.lastSpent = magic - remaining;
+        return skills;
+        }
 
         // --- 準備スキル (配置前に追加) ---
 
@@ -1325,7 +1336,7 @@ class AIPlayer {
             }
         }
 
-        const chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
+        let chargeResult: { skill: string; target?: number }[] | undefined = chargeClicks.length > 0 ? chargeClicks : undefined;
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
         if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
@@ -1359,7 +1370,40 @@ class AIPlayer {
             }
         }
 
-        const skills = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+        // 軽減札を先に撃つと、この手番に撃てるスキルが増える/魔力が余るなら撃つ（sim/ai.js の discountPlan と同方針。
+        // chooseSkills を「次のスキルを軽減した状態」で選び直して比べる）。クリック不要の計画（chargeClicks）に軽減札以外があると
+        // 「次に打つ」の軽減をそちらが消費してしまうので、そのときは行わない
+        let planned = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+        if (chargeClicks.every((c) => isDiscountSkill(c.skill)) && !planned.some((s) => TURN_ENDING_SKILLS.includes(s))) {
+            const baseLeft = magic - this.lastSpent;
+            const reducers: { idx: number; key: keyof typeof costs; cut: number }[] = [
+                { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
+                { idx: 58, key: 'onClickClearance', cut: 7 },
+                { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
+                { idx: 53, key: 'onClickMarkdown', cut: 3 },
+            ];
+            let best: { r: (typeof reducers)[number]; rc: number; plan: string[]; left: number } | null = null;
+            for (const r of reducers) {
+                if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key)) continue;
+                const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+                if (magic < rc) continue;
+                this.hypoCut = r.cut;
+                const plan = [...this.chooseSkills(board, magic - rc, costs, opponentMagic, life, availableSkills.filter((i) => i !== r.idx), tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+                const left = magic - rc - this.lastSpent;
+                this.hypoCut = 0;
+                if (plan.length > planned.length || (plan.length === planned.length && plan.length > 0 && left > baseLeft)) {
+                    if (!best || plan.length > best.plan.length || (plan.length === best.plan.length && left > best.left)) best = { r, rc, plan, left };
+                }
+            }
+            if (best) {
+                chargeClicks.push({ skill: best.r.key });
+                magic -= best.rc;
+                planned = best.plan;
+                chargeResult = chargeClicks;
+            }
+        }
+        this.hypoCut = 0;
+        const skills = planned;
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {

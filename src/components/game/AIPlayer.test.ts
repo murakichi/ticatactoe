@@ -411,3 +411,28 @@ describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
         expect(ai.chooseLocks(b, 2, 5, [53, 3, 60])).not.toEqual(expect.arrayContaining([53, 60]));
     });
 });
+
+describe('軽減札を先に撃って通常スキルを撃てるようにする', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        // 劣勢（敵3コマ・自陣なし）で、敵が斜めに2つ並んでいる → スラッシュ（5）を撃つ
+        [0, 3, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力4ではスラッシュ（5）を撃てないが、特売（1）を先に撃てばスラッシュが2で撃てる', () => {
+        expect(run(4, [5, 12, 0]).skills).not.toContain('onClickSlash');
+        const r = run(4, [53, 5, 12]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+        expect(r.skills).toContain('onClickSlash');
+    });
+    it('撃てるスキルが増えなくても、特売のコストより軽減が大きく魔力が余るなら先に撃つ', () => {
+        expect(run(5, [53, 5, 12]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+    });
+    it('軽減札が手札にない・撃てるスキルが無いなら軽減札は撃たない', () => {
+        expect(run(5, [5, 12, 0]).chargeClicks).toBeUndefined();
+        expect(run(0, [53, 5, 12]).chargeClicks).toBeUndefined();
+    });
+});
