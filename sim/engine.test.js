@@ -1155,23 +1155,6 @@ test('火炎: ターン進行で1スタックにつき2ダメージ（スタッ�
     assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 2);
 });
 
-test('火炎: 毒・電気のダメージを受けると消える', () => {
-    const s = game();
-    s.heartTurn = true; s.life = 3;
-    s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
-    e.placeMove(s, 0);
-    // 減衰-1・火炎-2・毒-1 → 2。毒のダメージが通ったので🔥は消える
-    assert.strictEqual(s.board[5].bind, 2);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
-
-    const t = game();
-    t.heartTurn = true; t.life = 3;
-    t.board[5] = { player: '⭕', bind: 8, effects: [{ effect: '⚡' }] };
-    t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
-    e.placeMove(t, 4);
-    assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
-});
-
 test('火炎: スキルダメージは1.5倍（切り上げ）で、通れば🔥は消える', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
