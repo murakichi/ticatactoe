@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, enemyPieceCount, reducedInfernoCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -51,6 +51,9 @@ class AIPlayer {
     glacierPending: boolean = false;
     /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
     glacierCharge: number = 0;
+    /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
+    infernoReady: boolean = false;
+    skillKinds: Set<string> = new Set();
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
 
@@ -1232,9 +1235,39 @@ class AIPlayer {
             }
         }
         if (this.character === 'pyromancer') {
-            const cost = reducedInfernoCost(costs.onClickInferno, enemyPieceCount(board, this.playerSymbol), (c) => this.calculateAICost(c));
             const targets = infernoTargets(board, this.playerSymbol, this.characters);
-            if (magic >= cost && targets.length > 0 && this.shouldInferno(board)) {
+            const worth = targets.length > 0 && this.shouldInferno(board);
+            // 業火は前回の業火から3回スキルを使うと無料。クリック不要の軽いスキルを足りない回数だけ先に撃ち、
+            // その合計が業火の通常コスト以下なら連打してから無料で撃つ（sim/ai.js の pyroChain と同方針）
+            const kinds = new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]);
+            const need = this.infernoReady ? 0 : INFERNO_FREE_SKILLS - kinds.size;
+            const normal = this.calculateAICost(costs.onClickInferno);
+            // 無料権は手番を跨いで持ち越せるので、業火を撃てる状況でなくても先に貯める
+            if (need > 0) {
+                const mine = (f: (sq: SquareInfo) => boolean) => board.some((sq) => sq.player === this.playerSymbol && f(sq));
+                const fillers = [
+                    { idx: 0, skill: 'onClickAddLife', cost: this.calculateAICost(costs.onClickAddLife), ok: true },
+                    { idx: 1, skill: 'onClickBibine', cost: this.calculateAICost(costs.onClickBibine), ok: true },
+                    { idx: 36, skill: 'onClickWindborne', cost: this.calculateAICost(costs.onClickWindborne), ok: sowCandidates(board, this.playerSymbol).length > 0 },
+                    { idx: 34, skill: 'onClickSolstice', cost: this.calculateAICost(costs.onClickSolstice), ok: !this.budGuard && mine(() => true) },
+                    { idx: 32, skill: 'onClickCleanse', cost: this.calculateAICost(costs.onClickCleanse), ok: mine((sq) => ailmentStacks(sq) > 0) },
+                    { idx: 33, skill: 'onClickHarvestEve', cost: this.calculateAICost(costs.onClickHarvestEve), ok: mine((sq) => activeBuds(sq, this.budGuard) > 0) },
+                ].filter((f) => availableSkills.includes(f.idx) && f.ok && !kinds.has(f.skill));
+                const chosen = [...fillers].sort((a, b) => a.cost - b.cost).slice(0, need);
+                const total = chosen.reduce((n, f) => n + f.cost, 0);
+                if (chosen.length === need && total <= normal && total <= magic) {
+                    for (const f of fillers.filter((x) => chosen.includes(x))) {
+                        chargeClicks.push({ skill: f.skill });
+                        board = board.slice();
+                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, 3));
+                        else if (f.idx === 32) cleanse(board, this.playerSymbol);
+                        else if (f.idx === 33) magic += harvestBuds(board, this.playerSymbol, this.budGuard);
+                        magic -= f.cost;
+                    }
+                }
+            }
+            const cost = infernoCostOf(costs.onClickInferno, this.infernoReady || new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]).size >= INFERNO_FREE_SKILLS, (c) => this.calculateAICost(c));
+            if (magic >= cost && worth) {
                 chargeClicks.push({ skill: 'onClickInferno' });
                 board = board.slice();
                 ignite(board, targets, this.sizeOf(board), INFERNO_STACKS);

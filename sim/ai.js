@@ -11,7 +11,7 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -31,6 +31,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -394,6 +395,34 @@ function forceTable(s, me) {
         47: { key: 'shatter', cost: 'onClickShatter', cands: () => E.shatterTargets(s), apply: (b, c) => thermal.shatter(b, c) },
         48: { key: 'frostfall', cost: 'onClickFrostfall', legal: () => thermal.frostfallTargets(s.board, me).length > 0 },
     };
+}
+// 撃つ順（ライフ3→バイバインの順で次の駒のライフが伸びる。刈り入れ前夜は🌱を刈るので最後）。0/1 は常に撃てる
+const PYRO_FILLERS = [36, 0, 1, 34, 32, 33];
+const PYRO_EXTRA = { 0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' } };
+function pyroChain(s, me, availableSkills) {
+    if (!F.pyroChain || curChar(s) !== 'pyromancer') return;
+    // 無料権は手番を跨いで持ち越せるので、業火を撃てる状況でなくても先に貯める（業火が撃てる状況なら直後に無料で撃つ）
+    const kinds = s.skillKinds[s.turn];
+    const need = INFERNO_FREE_SKILLS - kinds.size;
+    const normal = infernoCost(s);
+    if (s.infernoReady[s.turn] || need <= 0 || normal === 0) return;
+    const table = forceTable(s, me);
+    const picks = [];
+    for (const idx of PYRO_FILLERS) {
+        const t = PYRO_EXTRA[idx] || table[idx];
+        if (!availableSkills.includes(idx) || !t || kinds.has(t.cost) || (t.legal && !t.legal())) continue;
+        picks.push({ idx, t, cost: calculateCost(s, costsOf(s)[t.cost]) });
+    }
+    const chosen = picks.sort((a, b) => a.cost - b.cost).slice(0, need);
+    if (chosen.length < need) return;
+    const total = chosen.reduce((n, c) => n + c.cost, 0);
+    if (total > normal || total > curMagic(s)) return;
+    chosen.sort((a, b) => PYRO_FILLERS.indexOf(a.idx) - PYRO_FILLERS.indexOf(b.idx));
+    for (const c of chosen) {
+        if (c.t.legal && !c.t.legal()) return;
+        if (curMagic(s) < calculateCost(s, costsOf(s)[c.t.cost])) return;
+        SKILLS[c.t.key](s);
+    }
 }
 /** 強制使用。撃ったら true */
 function forceUse(s, me, availableSkills) {
@@ -1071,6 +1100,10 @@ function faithfulMakeMoveInner(s) {
         const target = bestJammerTarget(s.board, me);
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
     }
+
+    // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
+    // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
+    pyroChain(s, me, availableSkills);
 
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= infernoCost(s)

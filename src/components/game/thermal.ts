@@ -17,7 +17,7 @@
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
 import { CharacterId } from '../../types/Character';
 import { Effect } from '../../types/Effect';
-import { Player, seatOf } from '../../types/Player';
+import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { orthoNeighbors } from './boardGeometry';
 
@@ -181,11 +181,12 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
  */
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
-/** 業火のコスト軽減: 盤面にいる敵コマ（他の席のコマ）の数 */
-export const enemyPieceCount = (board: SquareInfo[], me: Player): number => board.filter((sq) => sq.player && sq.player !== me).length;
-/** 業火の実コスト = max(1, キャラ補正(基礎コスト − 敵コマの数))。sim/engine.js の infernoCost と同じ */
-export const reducedInfernoCost = (baseCost: number, enemies: number, calc: (cost: number) => number): number =>
-    Math.max(1, calc(baseCost - enemies));
+/** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
+export const INFERNO_FREE_SKILLS = 3;
+/** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。
+ *  無料権は、1手番に異なる種類のスキルを3種類使うと得られ、手番を跨いで持ち越し、業火を撃つと消える（同じスキルの連打は1回と数える） */
+export const infernoCostOf = (baseCost: number, infernoReady: boolean, calc: (cost: number) => number): number =>
+    infernoReady ? 0 : calc(baseCost);
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
 export const freezeAll = (board: SquareInfo[]): number[] =>
     freeze(

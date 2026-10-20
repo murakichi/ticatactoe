@@ -1380,7 +1380,7 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     s.board[11] = { player: '⭕', bind: 3, effects: [FRZ] };           // 氷結1つ減って、余り1スタックが🔥
     const before = s.heartMagic;
     const cost = e.infernoCost(s);
-    assert.ok(cost < 9); // 敵コマの数だけ軽減される
+    assert.strictEqual(cost, 9);
     e.SKILLS.inferno(s);
     assert.strictEqual(s.heartMagic, before - cost);
     assert.strictEqual(s.heartTurn, true);
@@ -1900,19 +1900,33 @@ test('AI: ⚡で無敵の自コマを対策ロックの対象にしない（4人
 });
 
 
-test('業火: 盤面の敵コマ1つにつきコスト-1（下限1）。撃つと軽減後のコストで魔力が減る', () => {
+test('業火: 1手番に異なるスキルを3種類使うと無料権が付く（同じスキルの連打は1種類）。手番を跨いで持ち越し、撃つとリセット', () => {
     const s = game('pyromancer', 'you');
     s.heartTurn = true; s.heartMagic = 30;
+    for (let i = 1; i < 6; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
     const base = e.infernoCost(s);
-    s.board[1] = { player: '⭕', bind: 5, effects: [] };
-    s.board[2] = { player: '⭕', bind: 5, effects: [] };
-    assert.strictEqual(e.infernoCost(s), base - 2);
-    for (let i = 3; i < 15; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
-    assert.strictEqual(e.infernoCost(s), 1);
+    assert.strictEqual(base, 9);
+    for (let i = 0; i < 5; i++) e.spendMagic(s, 1, 'onClickWindborne'); // 同じスキルは何度撃っても1種類
+    e.spendMagic(s, 1, 'onClickSolstice');
+    assert.strictEqual(e.infernoCost(s), base);
+    e.spendMagic(s, 1, 'onClickInferno'); // 業火自身は数えない
+    assert.strictEqual(e.infernoCost(s), base);
+    e.spendMagic(s, 1, 'onClickCleanse');
+    assert.strictEqual(e.infernoCost(s), 0);
+    // 手番を跨いでも持ち越す
+    e.SKILLS.charge(s);
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(e.infernoCost(s), 0);
     const before = s.heartMagic;
     e.SKILLS.inferno(s);
-    assert.strictEqual(s.heartMagic, before - 1);
+    assert.strictEqual(s.heartMagic, before); // 無料
+    assert.strictEqual(e.infernoCost(s), base); // 撃ったのでリセット
+    e.spendMagic(s, 0, 'onClickWindborne');
+    e.spendMagic(s, 0, 'onClickSolstice');
+    assert.strictEqual(e.infernoCost(s), base); // リセット後は再び3種類必要
+    e.spendMagic(s, 0, 'onClickCleanse');
+    assert.strictEqual(e.infernoCost(s), 0);
 });
-
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

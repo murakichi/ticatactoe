@@ -1,7 +1,6 @@
 import {
     isFrozen,
-    enemyPieceCount,
-    reducedInfernoCost,
+    infernoCostOf,
     flameStacks,
     thaw,
     overwriteBlocked,
@@ -839,15 +838,10 @@ describe('氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷�
     });
 });
 
-describe('業火のコスト軽減', () => {
-    it('盤面の敵コマ1つにつき-1、キャラ補正をかけて下限1', () => {
-        const b = emptyBoard();
-        b[0] = sq('💙', 3);
-        b[1] = sq('⭕', 3);
-        b[2] = sq('🟩', 3);
-        expect(enemyPieceCount(b, '💙')).toBe(2);
-        expect(reducedInfernoCost(9, 2, (c) => c)).toBe(7);
-        expect(reducedInfernoCost(9, 20, (c) => c)).toBe(1);
-        expect(reducedInfernoCost(9, 2, (c) => c + 1)).toBe(8);
+describe('業火の無料化', () => {
+    it('無料権があれば0、なければキャラ補正後の基礎コスト', () => {
+        expect(infernoCostOf(9, false, (c) => c)).toBe(9);
+        expect(infernoCostOf(9, false, (c) => c + 1)).toBe(10);
+        expect(infernoCostOf(9, true, (c) => c)).toBe(0);
     });
 });
