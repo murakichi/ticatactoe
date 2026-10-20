@@ -13,7 +13,7 @@
  *   char を指定すると、装備側の席のキャラをそのキャラに固定する（相手は毎試合ランダム）
  */
 // 戦略の無効化は ai.js を読み込む前に環境変数で行う（ai.js は読み込み時に EL_AI を読む）
-if (['gear', 'none'].includes(process.argv[5] || 'none')) { process.env.EL_AI = '0'; process.env.GEAR_AI = '0'; process.env.TK_AI = '0'; }
+if (['gear', 'none'].includes(process.argv[5] || 'none')) { process.env.EL_AI = '0'; process.env.GEAR_AI = '0'; process.env.TK_AI = '0'; process.env.GB_AI = '0'; }
 const engine = require('./engine');
 const ai = require('./ai');
 
