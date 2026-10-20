@@ -121,3 +121,33 @@ export const geometryForCells = (cells: number): BoardGeometry => geometryOf(Mat
 /** 盤が大きいほどマスを小さくして、7x7でも画面に収める（px） */
 export const cellPixelsFor = (size: number): number =>
     size <= 4 ? 64 : size === 5 ? 60 : size === 6 ? 56 : size === 7 ? 52 : size === 8 ? 48 : size === 9 ? 44 : 40;
+
+/** 縦横に隣接するマス（size x size, index = row*size + col） */
+export const orthoNeighbors = (i: number, size: number): number[] => {
+    const r = Math.floor(i / size);
+    const c = i % size;
+    const out: number[] = [];
+    if (r > 0) out.push(i - size);
+    if (r < size - 1) out.push(i + size);
+    if (c > 0) out.push(i - 1);
+    if (c < size - 1) out.push(i + 1);
+    return out;
+};
+
+export type LineDir = 'row' | 'col' | 'diag' | 'anti';
+
+/**
+ * cell を通る、盤の端から端までの線上のマス（昇順）。氷柱用。
+ * row=同じ行 / col=同じ列 / diag=左上→右下(row-col 一定) / anti=右上→左下(row+col 一定)
+ */
+export const lineCells = (size: number, cell: number, dir: LineDir): number[] => {
+    const r = Math.floor(cell / size);
+    const c = cell % size;
+    const out: number[] = [];
+    for (let rr = 0; rr < size; rr++) {
+        for (let cc = 0; cc < size; cc++) {
+            if (dir === 'row' ? rr === r : dir === 'col' ? cc === c : dir === 'diag' ? rr - cc === r - c : rr + cc === r + c) out.push(rr * size + cc);
+        }
+    }
+    return out;
+};

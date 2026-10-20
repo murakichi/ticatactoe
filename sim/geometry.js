@@ -71,6 +71,19 @@ function build(size) {
     };
 }
 
+/** cell を通る線（盤の端から端まで）のマス（昇順）。dir: 'row'=同じ行 / 'col'=同じ列 / 'diag'=左上→右下(row-col一定) / 'anti'=右上→左下(row+col一定) */
+function lineCells(size, cell, dir) {
+    const r = Math.floor(cell / size), c = cell % size;
+    const out = [];
+    for (let rr = 0; rr < size; rr++) {
+        for (let cc = 0; cc < size; cc++) {
+            const hit = dir === 'row' ? rr === r : dir === 'col' ? cc === c : dir === 'diag' ? rr - cc === r - c : rr + cc === r + c;
+            if (hit) out.push(rr * size + cc);
+        }
+    }
+    return out;
+}
+
 const cache = new Map();
 function geometryOf(size) {
     let g = cache.get(size);
@@ -79,4 +92,4 @@ function geometryOf(size) {
 }
 const geometryForCells = (cells) => geometryOf(Math.round(Math.sqrt(cells)));
 
-module.exports = { WIN_LENGTH, boardSizeFor, geometryOf, geometryForCells };
+module.exports = { WIN_LENGTH, boardSizeFor, geometryOf, geometryForCells, lineCells };

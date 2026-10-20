@@ -15,6 +15,8 @@ export const LIFE_MEANS = {
     yinYangMaster_yang: 7,
     yinYangMaster_ying: 4,
     electrician: 6,
+    cryomancer: 5,
+    pyromancer: 5,
     default: 5,
 } as const;
 
@@ -73,6 +75,6 @@ const normRand = (m: number, s: number): number => {
 const range = (start: number, count: number): number[] => Array.from({ length: count }, (_, i) => start + i);
 
 const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) =>
-    ary.map((x, i) => (x?.player === undefined && x?.effects.filter((effect) => effect.effect === '🔑').length === 0 ? i : -1)).filter((x) => x !== -1);
+    ary.map((x, i) => (x?.player === undefined && x?.effects.filter((effect) => effect.effect === '🔑' || effect.effect === '❄').length === 0 ? i : -1)).filter((x) => x !== -1);
 
 export {calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };

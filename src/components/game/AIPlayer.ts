@@ -1,13 +1,15 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..29)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 30;
+// 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 62;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -25,15 +27,15 @@ export type AIResult = {
     skills: string[];
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
-    /** 雷霆の巫: 「スキル→対象マスのクリック」を順に行う帯電スキル（帯電拡散→帯電付与の順） */
-    chargeClicks?: { skill: string; target: number }[];
+    /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の絶対零度(target なし)・煉獄の鍛冶師の業火 */
+    chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
 };
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
-    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7,
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9,
 };
 
 class AIPlayer {
@@ -46,16 +48,29 @@ class AIPlayer {
     characters: readonly CharacterId[];
     /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
     shield: Set<number> = new Set();
+    /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */
+    glacierPending: boolean = false;
+    /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
+    glacierCharge: number = 0;
+    /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
+    infernoReady: boolean = false;
+    /** chooseSkills が直前に計画したスキルの合計コスト */
+    lastSpent: number = 0;
+    /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
+    hypoCut: number = 0;
+    skillKinds: Set<string> = new Set();
+    /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
+    budGuard: boolean = false;
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
-    gearCostFn?: (cost: number, isToken: boolean) => number;
+    gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
 
     constructor(
         playerSymbol: Player,
         character: CharacterId,
         opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
         characters: readonly CharacterId[] = [],
-        gearCostFn?: (cost: number, isToken: boolean) => number
+        gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -72,7 +87,7 @@ class AIPlayer {
     updateShield(board: SquareInfo[]): void {
         this.shield = new Set();
         board.forEach((sq, i) => {
-            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0) this.shield.add(i);
+            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結中は⚡が休眠で無敵でない
         });
     }
 
@@ -85,11 +100,11 @@ class AIPlayer {
         const size = this.sizeOf(board);
         let gain = 0;
         for (const k of orthoNeighbors(i, size)) {
-            if (chargeStacks(board[k]) === 0) continue;
+            if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マス（氷結中）の⚡は発火しない
             for (const n of orthoNeighbors(k, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
-                if (sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (sq.effects.some((e) => e.effect === '🔑') || isFrozen(sq)) continue; // 氷結は隣接⚡を受けない
                 if (sq.player === board[k].player && this.characterOf(sq.player) === 'electrician') continue; // 自陣由来の発火は雷霆の巫に効かない
                 const w = 3 + (sq.bind === 1 ? 4 : 0);
                 gain += this.isEnemy(sq.player) ? w : -w;
@@ -122,11 +137,11 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
-            if (chargeStacks(board[i]) > 0) continue;
+            if (chargeStacks(board[i]) > 0 || isDormant(board[i])) continue; // 休眠マスの⚡は働かない
             let attack = 0;
             for (const n of orthoNeighbors(i, size)) {
                 const sq = board[n];
-                if (!sq.player || sq.bind <= 0) continue;
+                if (!sq.player || sq.bind <= 0 || isFrozen(sq)) continue; // 氷結中のコマは隣接⚡のダメージを受けない
                 if (this.isEnemy(sq.player)) attack++; else attack--;
             }
             let defend = 0;
@@ -153,11 +168,11 @@ class AIPlayer {
             const adj = new Set<number>();
             for (const k of cells) {
                 for (const n of orthoNeighbors(k, size)) {
-                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !cells.includes(n)) adj.add(n);
+                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !isFrozen(board[n]) && !cells.includes(n)) adj.add(n);
                 }
             }
             // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
-            for (const k of cells) if (this.isEnemy(board[k].player) && board[k].bind > 0) adj.add(k);
+            for (const k of cells) if (this.isEnemy(board[k].player) && board[k].bind > 0 && !isFrozen(board[k])) adj.add(k);
             const ok = reach || (mine >= 3 && adj.size >= 2);
             if (!ok) continue;
             const score = adj.size + mine + (reach ? 10 : 0);
@@ -178,7 +193,7 @@ class AIPlayer {
             let score = 0;
             for (const k of geo.stompRange(i)) {
                 const sq = board[k];
-                if (!sq.player || sq.bind <= 0) continue;
+                if (!sq.player || sq.bind <= 0 || isFrozen(sq)) continue;
                 if (this.isEnemy(sq.player)) score++; else score--;
             }
             if (score > bestScore) { bestScore = score; bestIdx = i; }
@@ -191,13 +206,13 @@ class AIPlayer {
         const owner = board[i].player;
         for (const line of geometryForCells(board.length).winLines) {
             if (!line.includes(i)) continue;
-            let op = 0, other = 0, empty = 0;
+            let op = 0, other = 0, empty = 0, blocked = false;
             for (const idx of line) {
                 if (board[idx].player === owner) op++;
                 else if (board[idx].player) other++;
-                else empty++;
+                else { empty++; if (emptyBlocked(board[idx])) blocked = true; } // 着手不能（氷結中の空き）な4つ目は脅威ではない
             }
-            if (op === 3 && other === 0 && empty === 1) return true;
+            if (op === 3 && other === 0 && empty === 1 && !blocked) return true;
         }
         return false;
     }
@@ -211,11 +226,11 @@ class AIPlayer {
         let bestIdx: number | null = null, bestScore = 0;
         for (let k = 0; k < board.length; k++) {
             const n = chargeStacks(board[k]);
-            if (n === 0 || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
+            if (n === 0 || isDormant(board[k]) || (this.shield.has(k) && board[k].player !== this.playerSymbol)) continue;
             let zeroed = 0, critical = 0, dmg = 0;
             for (const j of orthoNeighbors(k, size)) {
                 const sq = board[j];
-                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑')) continue;
+                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑') || isFrozen(sq)) continue;
                 dmg += Math.min(n, sq.bind);
                 if (sq.bind <= n) { zeroed++; if (this.inOppReachLine(board, j)) critical++; }
             }
@@ -225,6 +240,16 @@ class AIPlayer {
             }
         }
         return bestIdx;
+    }
+
+    /** 絶対零度を撃つ価値があるか: ライフが残る敵コマが3個以上（全マスに❄が足され、次の手番に3ダメージ。sim/ai.js と同方針） */
+    shouldGlacier(board: SquareInfo[]): boolean {
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
+    }
+
+    /** 業火を撃つ価値があるか: ライフが残る敵コマが3個以上（sim/ai.js と同方針） */
+    shouldInferno(board: SquareInfo[]): boolean {
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
     }
 
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
@@ -246,6 +271,8 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
 
         for (const line of geometryForCells(board.length).winLines) {
+            // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない
+            if (line.some((idx) => emptyBlocked(board[idx]))) continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
             const enemiesInLine = new Set<Player>();
@@ -279,7 +306,7 @@ class AIPlayer {
 
         // バッズ・ロックボーナス
         for (const sq of board) {
-            const buds = sq.effects.filter(e => e.effect === '🌱').length;
+            const buds = activeBuds(sq); // 休眠マスの🌱は数えない
             const hasLock = sq.effects.some(e => e.effect === '🔑');
             if (sq.player === this.playerSymbol) {
                 score += buds * 3 + (hasLock ? 5 : 0);
@@ -295,14 +322,45 @@ class AIPlayer {
     countReaches(board: SquareInfo[], player: Player): number {
         let reaches = 0;
         for (const line of geometryForCells(board.length).winLines) {
-            let my = 0, op = 0;
+            let my = 0, op = 0, blocked = false;
             for (const idx of line) {
-                if (board[idx].player === player) my++;
-                else if (board[idx].player) op++;
+                const sq = board[idx];
+                if (sq.player === player) my++;
+                else if (sq.player) op++;
+                // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
+                else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)) blocked = true;
             }
-            if (my === 3 && op === 0) reaches++;
+            if (my === 3 && op === 0 && !blocked) reaches++;
         }
         return reaches;
+    }
+
+    /** 自分のリーチ（自コマ3つ・他のコマ無し）の残り1マスが氷結中の空きマスで塞がれているときの、そのマス (sim/ai.js blockedReachCell) */
+    blockedReachCell(board: SquareInfo[]): number | null {
+        for (const line of geometryForCells(board.length).winLines) {
+            let mine = 0, other = 0, blockedIdx = -1, free = 0;
+            for (const idx of line) {
+                const sq = board[idx];
+                if (sq.player === this.playerSymbol) mine++;
+                else if (sq.player) other++;
+                else if (emptyBlocked(sq)) blockedIdx = idx;
+                else free++;
+            }
+            if (mine === 3 && other === 0 && blockedIdx !== -1 && free === 0) return blockedIdx;
+        }
+        return null;
+    }
+
+    /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。sim/ai.js thawIgniteTarget(allowOwn) */
+    thawIgniteTarget(board: SquareInfo[], k: number): number | null {
+        let own: number | null = null;
+        for (const n of orthoNeighbors(k, this.sizeOf(board))) {
+            const sq = board[n];
+            if (!sq.player || isFrozen(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (this.isEnemy(sq.player)) return n;
+            if (own === null) own = n;
+        }
+        return own;
     }
 
     /** 相手がリーチしているラインの残り1マス（脅威マス）を列挙 */
@@ -314,7 +372,7 @@ class AIPlayer {
                 const sq = board[idx];
                 if (sq.player === player) pCount++;
                 else if (sq.player) oCount++;
-                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)) emptyIdx = idx;
+                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) && !emptyBlocked(sq)) emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
                 if (!threats.includes(emptyIdx)) threats.push(emptyIdx);
@@ -365,7 +423,7 @@ class AIPlayer {
 
             if (!sq.player) {
                 // 空きマス (ロックされていない)
-                if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
+                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
             } else if (this.isEnemy(sq.player)) {
                 // bind=0の敵マスは無条件で乗っ取り可能
                 if (sq.bind <= 0) {
@@ -387,7 +445,7 @@ class AIPlayer {
             if (this.shield.has(i)) continue;
             if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
             if (!sq.player) {
-                if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
+                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
             } else if (sq.player !== player) {
                 if (sq.bind <= 0) moves.push(i);
             }
@@ -505,14 +563,15 @@ class AIPlayer {
             return [];
         }
         let myPieces = 0, oppPieces = 0, empties = 0;
+        // オピウム等のダメージが通る敵コマだけを数える（氷結中は❄が肩代わりする）
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player) oppPieces++;
-            else if (!sq.player) empties++;
+            else if (sq.player) { if (!isFrozen(sq)) oppPieces++; }
+            else if (!isFrozen(sq)) empties++;
         }
         const geo = geometryForCells(board.length);
         const enemiesOn = (idxs: number[]) =>
-            idxs.filter((i) => this.isEnemy(board[i].player) && !board[i].effects.some((e) => e.effect === '🔑')).length;
+            idxs.filter((i) => this.isEnemy(board[i].player) && !isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
 
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
@@ -549,11 +608,14 @@ class AIPlayer {
     }
 
     /** AI用コスト計算 (軍師のトークン割引など) */
-    calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false): number {
+    calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false, skillKey?: string): number {
         let cost = baseCost;
         if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
         else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
-        return this.gearCostFn ? this.gearCostFn(cost, isToken) : cost;
+        else if (this.character === 'pyromancer' && skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1) cost -= 1; // 🔥付与スキルは常に-1
+        const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
+        // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
+        return this.hypoCut > 0 && paid > 0 && !(skillKey && isDiscountSkill(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;
     }
 
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
@@ -576,14 +638,19 @@ class AIPlayer {
         const skills: string[] = [];
         let remaining = magic;
         const oppReaches = this.opponents.reduce((n, o) => n + this.countReaches(board, o), 0);
-        let myPieces = 0, oppPieces = 0;
+        let myPieces = 0, oppPieces = 0, oppHit = 0;
         const piecesOf = new Map<Player, number>();
+        const hitOf = new Map<Player, number>();
         for (const sq of board) {
             if (sq.player === this.playerSymbol) myPieces++;
-            else if (sq.player) piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
+            else if (sq.player) {
+                piecesOf.set(sq.player, (piecesOf.get(sq.player) ?? 0) + 1);
+                if (!isFrozen(sq)) hitOf.set(sq.player, (hitOf.get(sq.player) ?? 0) + 1); // スキルダメージが通る敵コマ
+            }
         }
         // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
         piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
+        hitOf.forEach((n) => { oppHit = Math.max(oppHit, n); });
         const geo = geometryForCells(board.length);
         const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
@@ -614,8 +681,8 @@ class AIPlayer {
 
             // 陰陽師: 凶荒の舞(相手-2)
             if (this.character === 'yinYangMaster') {
-                const yyCost = this.calculateAICost(costs.onClickYingYangSkill);
-                if (remaining >= yyCost && (oppPieces > myPieces || myPieces >= 3)) {
+                const yyCost = this.calculateAICost(costs.onClickYingYangSkill, false, false, 'onClickYingYangSkill');
+                if (remaining >= yyCost && (oppHit > myPieces || myPieces >= 3)) {
                     spend(yyCost, 'onClickYingYangSkill');
                 }
             }
@@ -628,7 +695,7 @@ class AIPlayer {
             // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
             // (発動が遅いほど盤面が埋まりループの旨味が減るため、序盤〜中盤限定)
             if (!proliferateActive && availableSkills.includes(20)) {
-                const proliferateCost = this.calculateAICost(costs.onClickProliferate);
+                const proliferateCost = this.calculateAICost(costs.onClickProliferate, false, false, 'onClickProliferate');
                 const emptyCount = board.filter((sq) => !sq.player).length;
                 if (remaining >= proliferateCost + 1 && emptyCount >= 5) {
                     spend(proliferateCost, 'onClickProliferate');
@@ -646,7 +713,7 @@ class AIPlayer {
                 if (sq.player === this.playerSymbol) mine++;
                 else theirs++;
             }
-            if (theirs >= 4 && theirs >= mine + 2) spend(this.calculateAICost(costs.onClickPoisonMist, false, true), 'onClickPoisonMist');
+            if (theirs >= 4 && theirs >= mine + 2) spend(this.calculateAICost(costs.onClickPoisonMist, false, true, 'onClickPoisonMist'), 'onClickPoisonMist');
         }
 
         if (
@@ -658,7 +725,7 @@ class AIPlayer {
                 return (seatMagic[seat] ?? 0) + 1 >= (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity);
             })
         ) {
-            spend(this.calculateAICost(costs.onClickSilence), 'onClickSilence');
+            spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
         }
 
         // --- ターン終了系は単独で返す ---
@@ -671,39 +738,45 @@ class AIPlayer {
             if (availableSkills.includes(5)) {
                 let oppOn = 0, myOn = 0;
                 for (const idx of geo.antiDiagonal) {
+                    if (isFrozen(board[idx])) continue; // 氷結中は❄1つが身代わり（敵も自陣も無傷）
                     if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
-                if (oppOn > myOn) spend(this.calculateAICost(costs.onClickSlash), 'onClickSlash');
+                if (oppOn > myOn) spend(this.calculateAICost(costs.onClickSlash, false, false, 'onClickSlash'), 'onClickSlash');
             }
             if (skills.length === 0 && availableSkills.includes(6)) {
                 let oppOn = 0, myOn = 0;
                 for (const idx of geo.mainDiagonal) {
+                    if (isFrozen(board[idx])) continue;
                     if (this.isEnemy(board[idx].player) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                     if (board[idx].player === this.playerSymbol && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
                 }
-                if (oppOn > myOn) spend(this.calculateAICost(costs.onClickBackSlash), 'onClickBackSlash');
+                if (oppOn > myOn) spend(this.calculateAICost(costs.onClickBackSlash, false, false, 'onClickBackSlash'), 'onClickBackSlash');
             }
             if (skills.length === 0 && availableSkills.includes(7) && opponentMagic >= 6) {
-                spend(this.calculateAICost(costs.onClickTsunami), 'onClickTsunami');
+                spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
         }
 
 
 
         // ターン終了スキルが選ばれていたらここで返す
-        if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) return skills;
+        if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
+            this.lastSpent = magic - remaining;
+            this.lastSpent = magic - remaining;
+        return skills;
+        }
 
         // --- 準備スキル (配置前に追加) ---
 
         // ライフが低い時: AddLife で +3
         if (life <= 2 && availableSkills.includes(0)) {
-            spend(this.calculateAICost(costs.onClickAddLife), 'onClickAddLife');
+            spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
         }
 
         // バッズ: コスト4で毎ターン+1マジック → 4ターン以上残りそうなら元が取れる
         if (availableSkills.includes(2)) {
-            const budsCost = this.calculateAICost(costs.onClickBuds);
+            const budsCost = this.calculateAICost(costs.onClickBuds, false, false, 'onClickBuds');
             const emptyCount = board.filter(sq => !sq.player).length;
             const myBuds = board.filter(sq => sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱')).length;
             // 空きマスが多い(序盤〜中盤) かつ バッズが少ない時のみ
@@ -715,40 +788,40 @@ class AIPlayer {
         // 血清: 自陣の毒で次の減衰までに消えそうなコマ(毒数>=bind)があれば除去
         // (ランダム枠に出ているときのみ)
         if (availableSkills.includes(17)) {
-            const doomed = board.filter(sq => sq.player === this.playerSymbol
+            const doomed = board.filter(sq => sq.player === this.playerSymbol && !isDormant(sq)
                 && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
                 && sq.effects.some(e => e.effect === '☠')).length;
-            if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true), 'onClickSerum');
+            if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true, 'onClickSerum'), 'onClickSerum');
         }
 
         // --- トークン系 ---
         if (!tokenUsed) {
-            if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true)) {
-                spend(this.calculateAICost(costs.onClickDoubleChargeToken, true), 'onClickDoubleChargeToken');
-            } else if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true)) {
-                spend(this.calculateAICost(costs.onClickChargeToken, true), 'onClickChargeToken');
+            if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
+                spend(this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
+            } else if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken')) {
+                spend(this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');
             } else if (this.character === 'tactician') {
-                if (availableSkills.includes(11) && remaining >= this.calculateAICost(costs.onClickDoubleToken, true)) {
-                    spend(this.calculateAICost(costs.onClickDoubleToken, true), 'onClickDoubleToken');
-                } else if (availableSkills.includes(9) && remaining >= this.calculateAICost(costs.onClickBudsToken, true)) {
-                    spend(this.calculateAICost(costs.onClickBudsToken, true), 'onClickBudsToken');
-                } else if (availableSkills.includes(3) && remaining >= this.calculateAICost(costs.onClickToken, true)) {
-                    spend(this.calculateAICost(costs.onClickToken, true), 'onClickToken');
+                if (availableSkills.includes(11) && remaining >= this.calculateAICost(costs.onClickDoubleToken, true, false, 'onClickDoubleToken')) {
+                    spend(this.calculateAICost(costs.onClickDoubleToken, true, false, 'onClickDoubleToken'), 'onClickDoubleToken');
+                } else if (availableSkills.includes(9) && remaining >= this.calculateAICost(costs.onClickBudsToken, true, false, 'onClickBudsToken')) {
+                    spend(this.calculateAICost(costs.onClickBudsToken, true, false, 'onClickBudsToken'), 'onClickBudsToken');
+                } else if (availableSkills.includes(3) && remaining >= this.calculateAICost(costs.onClickToken, true, false, 'onClickToken')) {
+                    spend(this.calculateAICost(costs.onClickToken, true, false, 'onClickToken'), 'onClickToken');
                 }
             } else {
-                if (availableSkills.includes(11) && remaining >= this.calculateAICost(costs.onClickDoubleToken, true)) {
-                    spend(this.calculateAICost(costs.onClickDoubleToken, true), 'onClickDoubleToken');
-                } else if (availableSkills.includes(9) && remaining >= this.calculateAICost(costs.onClickBudsToken, true)) {
-                    spend(this.calculateAICost(costs.onClickBudsToken, true), 'onClickBudsToken');
-                } else if (availableSkills.includes(3) && remaining >= this.calculateAICost(costs.onClickToken, true)) {
-                    spend(this.calculateAICost(costs.onClickToken, true), 'onClickToken');
+                if (availableSkills.includes(11) && remaining >= this.calculateAICost(costs.onClickDoubleToken, true, false, 'onClickDoubleToken')) {
+                    spend(this.calculateAICost(costs.onClickDoubleToken, true, false, 'onClickDoubleToken'), 'onClickDoubleToken');
+                } else if (availableSkills.includes(9) && remaining >= this.calculateAICost(costs.onClickBudsToken, true, false, 'onClickBudsToken')) {
+                    spend(this.calculateAICost(costs.onClickBudsToken, true, false, 'onClickBudsToken'), 'onClickBudsToken');
+                } else if (availableSkills.includes(3) && remaining >= this.calculateAICost(costs.onClickToken, true, false, 'onClickToken')) {
+                    spend(this.calculateAICost(costs.onClickToken, true, false, 'onClickToken'), 'onClickToken');
                 }
             }
         }
 
         // 雷霆の巫: 他に撃つものが無く、魔力に余裕があるときだけランダム帯電（コスト+1 以上残る）
         if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
-            const rc = this.calculateAICost(costs.onClickChargeRandom);
+            const rc = this.calculateAICost(costs.onClickChargeRandom, false, false, 'onClickChargeRandom');
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
         }
 
@@ -767,6 +840,7 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (!this.isEnemy(sq.player) || this.shield.has(i)) continue;
+            if (isDormant(sq)) continue; // 休眠マス（氷結中）の毒は継続ダメージなし
             const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
             const turns = Math.ceil(sq.bind / (1 + p));
             if (turns > 2) continue;
@@ -797,7 +871,8 @@ class AIPlayer {
         let bestVal = 0;
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
@@ -820,7 +895,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
             let enemies = 0;
-            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player)) enemies++;
+            // 氷結中の敵コマはスキルダメージを❄1つ肩代わりするだけで壊れないので数えない
+            for (const idx of geo.stompRange(i)) if (this.isEnemy(board[idx].player) && !isFrozen(board[idx])) enemies++;
             const emptyCenter = !board[i].player;
             if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
@@ -833,10 +909,12 @@ class AIPlayer {
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
         for (const idx of geometryForCells(board.length).stompRange(i)) {
-            if (nb[idx].player === player) nb[idx].bind = nb[idx].bind > 5 ? nb[idx].bind - 5 : 0;
-            else nb[idx] = { player: undefined, bind: 0, effects: [] };
+            if (nb[idx].player === player) { nb[idx] = applyDamage(nb[idx], 5, 'skill').sq; continue; }
+            const guard = absorbDestroy(nb[idx]);
+            if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
+            nb[idx] = { player: undefined, bind: 0, effects: [] };
         }
-        if (nb[i].player === undefined) nb[i] = { player, bind: life, effects: [] };
+        if (nb[i].player === undefined && !emptyBlocked(nb[i])) nb[i] = { player, bind: life, effects: [] };
         return nb;
     }
 
@@ -852,6 +930,7 @@ class AIPlayer {
                 const locked = sq.effects.some(e => e.effect === '🔑');
                 const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
                 if (locked && protectedBud) continue;
+                if (isFrozen(sq)) continue; // 氷結中は❄1つが身代わりになり、敵も自陣も壊れない
                 if (this.isEnemy(sq.player)) enemy++;
                 else if (sq.player === this.playerSymbol) mine++;
             }
@@ -872,8 +951,10 @@ class AIPlayer {
             let killed = 0;
             for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
                 const sq = nb[idx];
-                if (kind === 'stomp' && sq.player === me) { sq.bind = sq.bind > 5 ? sq.bind - 5 : 0; continue; }
+                if (kind === 'stomp' && sq.player === me) { nb[idx] = applyDamage(sq, 5, 'skill').sq; continue; }
                 if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱')) continue;
+                const guard = absorbDestroy(sq);
+                if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
                 if (this.isEnemy(sq.player)) killed++;
                 nb[idx] = { player: undefined, bind: 0, effects: [] };
             }
@@ -936,17 +1017,43 @@ class AIPlayer {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
 
+        // 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火遁（onClickIgnite）で隣のコマを燃やして解凍し、同じ手番で完成させる
+        // （sim/ai.js の unblock=2 と同一。A/B: 氷室の番人相手に全キャラ平均 +3.2pt、魔法使い +10.3±5.5(n=600)、氷室の番人でない相手では差 0.0）
+        if (availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
+            const k = this.blockedReachCell(board);
+            const t = k === null ? null : this.thawIgniteTarget(board, k);
+            if (t !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                ignite(post, [t], this.sizeOf(board), 1);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickIgnite'], lockTargets: [t] };
+                this.updateShield(board);
+            }
+        }
+
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
         const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
+
+        // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
+        // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
+        if (this.character === 'cryomancer' && threatSquares.length === 1 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            freeze(post, [threatSquares[0]]);
+            this.updateShield(post);
+            const followup = this.getBestMove(post, life);
+            if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [threatSquares[0]] };
+            this.updateShield(board); // 打てるマスが無くなるなら氷結せず通常の流れへ
+        }
         if (threatSquares.length >= 2) {
             const lockOptions: { skill: string; count: number; cost: number }[] = [
-                { skill: 'onClickUseLock', count: 1, cost: this.calculateAICost(costs.onClickUseLock) },
+                { skill: 'onClickUseLock', count: 1, cost: this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock') },
             ];
             if (availableSkills.includes(12)) {
-                lockOptions.push({ skill: 'onClickUseDoubleLock', count: 2, cost: this.calculateAICost(costs.onClickDoubleLock) });
+                lockOptions.push({ skill: 'onClickUseDoubleLock', count: 2, cost: this.calculateAICost(costs.onClickDoubleLock, false, false, 'onClickDoubleLock') });
             }
             if (availableSkills.includes(13)) {
-                lockOptions.push({ skill: 'onClickUseTripleLock', count: 3, cost: this.calculateAICost(costs.onClickTripleLock) });
+                lockOptions.push({ skill: 'onClickUseTripleLock', count: 3, cost: this.calculateAICost(costs.onClickTripleLock, false, false, 'onClickTripleLock') });
             }
             // 脅威数 - 1 個ロックして、残り1つに配置
             const needed = threatSquares.length - 1;
@@ -975,7 +1082,7 @@ class AIPlayer {
             // 詰み(ロックでは全脅威を塞げない)で自分に即勝ちもない: ヘイルメアリーに賭ける
             if (
                 availableSkills.includes(27) &&
-                magic >= this.calculateAICost(costs.onClickHailMary) &&
+                magic >= this.calculateAICost(costs.onClickHailMary, false, false, 'onClickHailMary') &&
                 this.findThreatSquares(board, this.playerSymbol).length === 0
             ) {
                 return { move: null, skills: [], hailMary: true };
@@ -1004,7 +1111,7 @@ class AIPlayer {
                     ['necromancer', 'poisoner', 'yinYangMaster'].includes(c) &&
                     !(c === 'necromancer' && this.character === 'necromancer')
             ) &&
-            magic >= this.calculateAICost(costs.onClickUseLock)
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')
         ) {
             const lockCell = this.findAntiNecroLockTarget(board);
             if (lockCell !== null) {
@@ -1016,7 +1123,7 @@ class AIPlayer {
         if (
             this.character === 'poisoner' &&
             availableSkills.includes(15) &&
-            magic >= this.calculateAICost(costs.onClickInjection, false, true) &&
+            magic >= this.calculateAICost(costs.onClickInjection, false, true, 'onClickInjection') &&
             this.countReaches(board, this.playerSymbol) === 0
         ) {
             const inj = this.findInjectionTarget(board, 10);
@@ -1031,7 +1138,7 @@ class AIPlayer {
         // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
         // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
-        const chargeClicks: { skill: string; target: number }[] = [];
+        const chargeClicks: { skill: string; target?: number }[] = [];
         const chargeCost = (base: number) => reducedChargeCost(base, board, (c) => this.calculateAICost(c));
         if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const spreadCost = chargeCost(costs.onClickChargeSpread);
@@ -1044,12 +1151,12 @@ class AIPlayer {
                     this.updateShield(board);
                 }
             }
-            if (availableSkills.includes(24) && magic >= this.calculateAICost(costs.onClickChargeArea)) {
+            if (availableSkills.includes(24) && magic >= this.calculateAICost(costs.onClickChargeArea, false, false, 'onClickChargeArea')) {
                 const center = this.bestChargeAreaTarget(board);
                 if (center !== null) {
                     chargeClicks.push({ skill: 'onClickChargeArea', target: center });
                     board = withCharge(board, geometryForCells(board.length).stompRange(center));
-                    magic -= this.calculateAICost(costs.onClickChargeArea);
+                    magic -= this.calculateAICost(costs.onClickChargeArea, false, false, 'onClickChargeArea');
                     this.updateShield(board);
                 }
             }
@@ -1064,21 +1171,176 @@ class AIPlayer {
                 }
             }
         }
-        if (this.character === 'electrician' && availableSkills.includes(26) && magic >= this.calculateAICost(costs.onClickJammer)) {
+        if (this.character === 'electrician' && availableSkills.includes(26) && magic >= this.calculateAICost(costs.onClickJammer, false, false, 'onClickJammer')) {
             const target = this.bestJammerTarget(board);
             if (target !== null) {
                 chargeClicks.push({ skill: 'onClickJammer', target });
                 board = board.slice();
                 applyJammer(board, target, this.sizeOf(board), this.playerSymbol);
-                magic -= this.calculateAICost(costs.onClickJammer);
+                magic -= this.calculateAICost(costs.onClickJammer, false, false, 'onClickJammer');
                 this.updateShield(board);
             }
         }
-        const chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
+        // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
+        if (this.character === 'cryomancer') {
+            const cost = reducedGlacierCost(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
+            if (!this.glacierPending && magic >= cost && this.shouldGlacier(board)) {
+                chargeClicks.push({ skill: 'onClickGlacier' });
+                board = board.slice();
+                freezeAll(board);
+                magic -= cost;
+            }
+        }
+        // 浄化（汎用スキル）: 自陣のコマ（ライフ>0）の状態異常が合計3スタック以上で撃つ。雷霆の巫の⚡無敵は数えない
+        if (availableSkills.includes(32)) {
+            const cost = this.calculateAICost(costs.onClickCleanse, false, false, 'onClickCleanse');
+            const stacks = board.reduce(
+                (n, sq, i) => (sq.player === this.playerSymbol && sq.bind > 0 ? n + ailmentStacks(sq) - (this.shield.has(i) ? chargeStacks(sq) : 0) : n),
+                0
+            );
+            if (magic >= cost && stacks >= 3) {
+                chargeClicks.push({ skill: 'onClickCleanse' });
+                board = board.slice();
+                cleanse(board, this.playerSymbol);
+                magic -= cost;
+                this.updateShield(board);
+            }
+        }
+        // バッズ系の汎用スキル。氷結・火炎で🌱が消えるキャラ（氷室の番人・煉獄の鍛冶師）が他席にいるときに守りに使う
+        {
+            const size = this.sizeOf(board);
+            const threatened = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || c === 'pyromancer'));
+            const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + activeBuds(sq, this.budGuard) : n), 0);
+            // 冬至の種子: 自陣の休眠マス（氷結中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
+            const dormantBuds = board.reduce((n, sq) => (sq.player === this.playerSymbol && isDormant(sq) ? n + budStacks(sq) : n), 0);
+            if (availableSkills.includes(34) && dormantBuds >= 2 && !this.budGuard && magic >= this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice')) {
+                chargeClicks.push({ skill: 'onClickSolstice' });
+                magic -= this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice');
+            } else if (availableSkills.includes(33) && threatened && this.character !== 'magician' && ownBuds() >= 4 && magic >= this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve')) {
+                chargeClicks.push({ skill: 'onClickHarvestEve' });
+                board = board.slice();
+                magic += harvestBuds(board, this.playerSymbol, this.budGuard) - this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve');
+            }
+            if (availableSkills.includes(35) && magic >= this.calculateAICost(costs.onClickSucker, false, false, 'onClickSucker')) {
+                let best = -1, bestN = 1;
+                board.forEach((sq, i) => {
+                    if (sq.player !== this.playerSymbol || budStacks(sq) === 0 || this.shield.has(i)) return;
+                    const n = budReceivers(board, i, this.playerSymbol, size).length;
+                    if (n > bestN) { best = i; bestN = n; }
+                });
+                if (best !== -1) {
+                    chargeClicks.push({ skill: 'onClickSucker', target: best });
+                    board = board.slice();
+                    graft(board, best, this.playerSymbol, size, budReceivers(board, best, this.playerSymbol, size).slice(0, GRAFT_MAX));
+                    magic -= this.calculateAICost(costs.onClickSucker, false, false, 'onClickSucker');
+                }
+            }
+            if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne')) {
+                const cands = sowCandidates(board, this.playerSymbol);
+                if (cands.length >= 3 && ownBuds() < 3) {
+                    chargeClicks.push({ skill: 'onClickWindborne' });
+                    // 実際の配置はランダム。AIの内部盤面は代表として先頭3マスに足して見積もる
+                    board = board.slice();
+                    sow(board, cands.slice(0, 3));
+                    magic -= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne');
+                }
+            }
+        }
+        if (this.character === 'pyromancer') {
+            const targets = infernoTargets(board, this.playerSymbol, this.characters);
+            const worth = targets.length > 0 && this.shouldInferno(board);
+            // 業火は前回の業火から3回スキルを使うと無料。クリック不要の軽いスキルを足りない回数だけ先に撃ち、
+            // その合計が業火の通常コスト以下なら連打してから無料で撃つ（sim/ai.js の pyroChain と同方針）
+            const kinds = new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]);
+            const need = this.infernoReady ? 0 : INFERNO_FREE_SKILLS - kinds.size;
+            const normal = this.calculateAICost(costs.onClickInferno, false, false, 'onClickInferno');
+            // 無料権は手番を跨いで持ち越せるので、業火を撃てる状況でなくても先に貯める
+            if (need > 0) {
+                const mine = (f: (sq: SquareInfo) => boolean) => board.some((sq) => sq.player === this.playerSymbol && f(sq));
+                const fillers = [
+                    { idx: 53, skill: 'onClickMarkdown', cost: this.calculateAICost(costs.onClickMarkdown, false, false, 'onClickMarkdown'), ok: true },
+                    { idx: 54, skill: 'onClickEffectDiscount', cost: this.calculateAICost(costs.onClickEffectDiscount, false, false, 'onClickEffectDiscount'), ok: true },
+                    { idx: 55, skill: 'onClickTokenDiscount', cost: this.calculateAICost(costs.onClickTokenDiscount, false, false, 'onClickTokenDiscount'), ok: true },
+                    { idx: 56, skill: 'onClickVitalMarkdown', cost: this.calculateAICost(costs.onClickVitalMarkdown, false, false, 'onClickVitalMarkdown'), ok: true },
+                    { idx: 0, skill: 'onClickAddLife', cost: this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), ok: true },
+                    { idx: 1, skill: 'onClickBibine', cost: this.calculateAICost(costs.onClickBibine, false, false, 'onClickBibine'), ok: true },
+                    { idx: 36, skill: 'onClickWindborne', cost: this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne'), ok: sowCandidates(board, this.playerSymbol).length > 0 },
+                    { idx: 34, skill: 'onClickSolstice', cost: this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice'), ok: !this.budGuard && mine(() => true) },
+                    { idx: 32, skill: 'onClickCleanse', cost: this.calculateAICost(costs.onClickCleanse, false, false, 'onClickCleanse'), ok: mine((sq) => ailmentStacks(sq) > 0) },
+                    { idx: 33, skill: 'onClickHarvestEve', cost: this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve'), ok: mine((sq) => activeBuds(sq, this.budGuard) > 0) },
+                ].filter((f) => availableSkills.includes(f.idx) && f.ok && !kinds.has(f.skill));
+                const chosen = [...fillers].sort((a, b) => a.cost - b.cost).slice(0, need);
+                const total = chosen.reduce((n, f) => n + f.cost, 0);
+                if (chosen.length === need && total <= normal && total <= magic) {
+                    for (const f of fillers.filter((x) => chosen.includes(x))) {
+                        chargeClicks.push({ skill: f.skill });
+                        board = board.slice();
+                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, 3));
+                        else if (f.idx === 32) cleanse(board, this.playerSymbol);
+                        else if (f.idx === 33) magic += harvestBuds(board, this.playerSymbol, this.budGuard);
+                        magic -= f.cost;
+                    }
+                }
+            }
+            // 軽減札で業火が安くなる/撃てるようになるなら先に撃つ（sim/ai.js の discountInferno と同方針）。
+            // 計画中の軽減量は plannedCut に持ち、業火の見積もりから引く
+            let plannedCut = 0;
+            const freeNow = () => this.infernoReady || new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]).size >= INFERNO_FREE_SKILLS;
+            const infernoBase = () => this.calculateAICost(costs.onClickInferno, false, false, 'onClickInferno');
+            const infernoNow = () => (freeNow() ? 0 : Math.max(1, infernoBase() - plannedCut));
+            if (worth && !freeNow()) {
+                const reducers: { idx: number; key: keyof typeof costs; cut: number; unique?: boolean }[] = [
+                    { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
+                    { idx: 58, key: 'onClickClearance', cut: 7 },
+                    { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
+                    { idx: 53, key: 'onClickMarkdown', cut: 3 },
+                    { idx: 57, key: 'onClickUniqueDiscount', cut: 6, unique: true },
+                ];
+                for (let i = 0; i < 3; i++) {
+                    const cur = infernoNow();
+                    if (cur === 0) break;
+                    let pick: { r: (typeof reducers)[number]; rc: number; total: number } | null = null;
+                    for (const r of reducers) {
+                        if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key)) continue;
+                        if (r.unique && (life < 2 || this.skillKinds.has(r.key))) continue; // 固有割引は1ターン1度・ライフ-1
+                        const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+                        if (magic < rc) continue;
+                        const total = rc + Math.max(1, infernoBase() - plannedCut - r.cut);
+                        if (total <= magic && total < cur && (!pick || total < pick.total)) pick = { r, rc, total };
+                    }
+                    if (!pick) break;
+                    chargeClicks.push({ skill: pick.r.key });
+                    magic -= pick.rc;
+                    plannedCut += pick.r.cut;
+                }
+            }
+            const cost = infernoNow();
+            if (magic >= cost && worth) {
+                chargeClicks.push({ skill: 'onClickInferno' });
+                board = board.slice();
+                ignite(board, targets, this.sizeOf(board), INFERNO_STACKS);
+                magic -= cost;
+            }
+            // バーンアウト: 🔥のマスを全て壊す。敵のコマが自陣より2つ以上多く壊れるなら撃つ（業火の直後は敵全員が🔥2つなので、合計4以上でタダになりやすい）
+            if (availableSkills.includes(61)) {
+                const burnTargets = burnoutTargets(board, this.characters);
+                const foes = burnTargets.filter((k) => this.isEnemy(board[k].player)).length;
+                const own = burnTargets.filter((k) => board[k].player === this.playerSymbol).length;
+                const burnCost = burnoutCostOf(costs.onClickBurnout, totalFlames(board), (c) => this.calculateAICost(c, false, false, 'onClickBurnout'));
+                if (foes - own >= 2 && magic >= burnCost) {
+                    chargeClicks.push({ skill: 'onClickBurnout' });
+                    board = board.slice();
+                    burnout(board, burnTargets);
+                    magic -= burnCost;
+                }
+            }
+        }
+
+        let chargeResult: { skill: string; target?: number }[] | undefined = chargeClicks.length > 0 ? chargeClicks : undefined;
 
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
         if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            if (this.character === 'giant' && magic >= this.calculateAICost(costs.onClickStomp)) {
+            if (this.character === 'giant' && magic >= this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp')) {
                 const target = this.findStompTarget(board);
                 if (target !== null) {
                     // ストンプは手番を終えないので、破壊後の盤面で通常着手も返す
@@ -1095,7 +1357,7 @@ class AIPlayer {
                 }
             }
             // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-            if (this.character === 'magician' && magic >= this.calculateAICost(costs.onClickUseLock)) {
+            if (this.character === 'magician' && magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
                 const budCell = board.findIndex(
                     (sq) =>
                         sq.player === this.playerSymbol &&
@@ -1108,7 +1370,40 @@ class AIPlayer {
             }
         }
 
-        const skills = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+        // 軽減札を先に撃つと、この手番に撃てるスキルが増える/魔力が余るなら撃つ（sim/ai.js の discountPlan と同方針。
+        // chooseSkills を「次のスキルを軽減した状態」で選び直して比べる）。クリック不要の計画（chargeClicks）に軽減札以外があると
+        // 「次に打つ」の軽減をそちらが消費してしまうので、そのときは行わない
+        let planned = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+        if (chargeClicks.every((c) => isDiscountSkill(c.skill)) && !planned.some((s) => TURN_ENDING_SKILLS.includes(s))) {
+            const baseLeft = magic - this.lastSpent;
+            const reducers: { idx: number; key: keyof typeof costs; cut: number }[] = [
+                { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
+                { idx: 58, key: 'onClickClearance', cut: 7 },
+                { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
+                { idx: 53, key: 'onClickMarkdown', cut: 3 },
+            ];
+            let best: { r: (typeof reducers)[number]; rc: number; plan: string[]; left: number } | null = null;
+            for (const r of reducers) {
+                if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key)) continue;
+                const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+                if (magic < rc) continue;
+                this.hypoCut = r.cut;
+                const plan = [...this.chooseSkills(board, magic - rc, costs, opponentMagic, life, availableSkills.filter((i) => i !== r.idx), tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+                const left = magic - rc - this.lastSpent;
+                this.hypoCut = 0;
+                if (plan.length > planned.length || (plan.length === planned.length && plan.length > 0 && left > baseLeft)) {
+                    if (!best || plan.length > best.plan.length || (plan.length === best.plan.length && left > best.left)) best = { r, rc, plan, left };
+                }
+            }
+            if (best) {
+                chargeClicks.push({ skill: best.r.key });
+                magic -= best.rc;
+                planned = best.plan;
+                chargeResult = chargeClicks;
+            }
+        }
+        this.hypoCut = 0;
+        const skills = planned;
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {

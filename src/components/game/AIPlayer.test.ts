@@ -205,3 +205,234 @@ describe('サイレンス (先回りの封印)', () => {
         expect(plain.makeMove(quiet(), 8, costs, 9, 5, [28, 0, 1], false, 0, 0, 99, 99, false, [8, 9]).skills).not.toContain('onClickSilence');
     });
 });
+
+describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
+    const FRZ = { effect: '❄' as const };
+    const ai = new AIPlayer('💙', 'giant', ['⭕']);
+    const frozen = (b: SquareInfo[], i: number, player: Player, bind = 5): void => {
+        b[i] = { player, bind, effects: [FRZ] };
+    };
+
+    it('countReaches: 残り1マスが氷結中の空きマスならリーチと数えない（解けば数える）', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        expect(ai.countReaches(b, '💙')).toBe(1);
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        expect(ai.countReaches(b, '💙')).toBe(0);
+    });
+
+    it('countReaches: ロック中（ライフ>0）の空きマスもリーチと数えない（findThreatSquares と同じ判定）', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        b[3] = { player: undefined, bind: 3, effects: [{ effect: '🔑' }] };
+        expect(ai.countReaches(b, '⭕')).toBe(0);
+        expect(ai.findThreatSquares(b, '⭕')).toEqual([]);
+    });
+
+    it('evaluateBoard: 氷結中の空きマスを含むラインは評価しない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        const open = ai.evaluateBoard(b);
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        expect(ai.evaluateBoard(b)).toBeLessThan(open);
+    });
+
+    it('findStompTarget: 氷結中の敵は数えない（スキルダメージは❄1つが肩代わりする）', () => {
+        const b = emptyBoard();
+        frozen(b, 5, '⭕');
+        frozen(b, 6, '⭕');
+        expect(ai.findStompTarget(b)).toBeNull();
+        put(b, 9, '⭕');
+        expect(ai.findStompTarget(b)).toBeNull(); // 効く敵は1体だけ
+        put(b, 10, '⭕');
+        expect(ai.findStompTarget(b)).not.toBeNull();
+    });
+
+    it('simulateStomp: 氷結中の敵は壊れず❄が1つ減るだけ。自陣の氷結コマも守られる', () => {
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 5, effects: [FRZ, FRZ] };
+        frozen(b, 6, '💙', 8);
+        const nb = ai.simulateStomp(b, 5, '💙', 4);
+        expect(nb[5].player).toBe('⭕');
+        expect(nb[5].effects.filter((e) => e.effect === '❄')).toHaveLength(1);
+        expect(nb[6].bind).toBe(8);
+        expect(nb[6].effects).toHaveLength(0);
+    });
+
+    it('findJudgeTarget: 氷結中の敵は数えず、氷結中の自コマは壊れない扱い', () => {
+        const b = emptyBoard();
+        frozen(b, 5, '⭕');
+        frozen(b, 6, '⭕');
+        frozen(b, 9, '⭕');
+        const mage = new AIPlayer('💙', 'magician', ['⭕']);
+        expect(mage.findJudgeTarget(b)).toBeNull();
+        put(b, 4, '⭕');
+        put(b, 7, '⭕');
+        expect(mage.findJudgeTarget(b)).not.toBeNull();
+    });
+
+    it('findRescueCenter: 氷結中の敵コマは壊せたものとして数えない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => frozen(b, i, '⭕'));
+        // 氷結中の3つ並びは壊れないので、どの中心でも脅威(3)は消えない
+        const c = ai.findRescueCenter(b, 'judge');
+        expect(c).not.toBeNull();
+        const threatsAfter = (center: number) => {
+            const nb = b.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            return ai.findThreatSquares(nb, '⭕').length;
+        };
+        expect(threatsAfter(c as number)).toBe(1);
+    });
+});
+
+describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2 B)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const threatBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 6));
+        [4, 5].forEach((i) => put(b, i, '💙', 6));
+        return b;
+    };
+
+    it('魔力が足りるとロック(=氷結)で脅威マス3を塞ぎ、着手は別のマスにする', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        const r = ai.makeMove(threatBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([3]);
+        expect(r.move).not.toBeNull();
+        expect(r.move).not.toBe(3);
+    });
+
+    it('魔力が足りない・氷室の番人でないときは従来どおり（脅威マスに自分で置く）', () => {
+        const cryo = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        expect(cryo.makeMove(threatBoard(), 1, costs, 0, 4, [0, 1, 2], false).move).toBe(3);
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const r = plain.makeMove(threatBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).not.toContain('onClickUseLock');
+        expect(r.move).toBe(3);
+    });
+});
+
+describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () => {
+    const FRZ = { effect: '❄' as const };
+    const FLM = { effect: '🔥' as const };
+
+    it('雷霆の巫の⚡コマでも、氷結・火炎中は無敵（shield）に数えない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'you']);
+        const b = emptyBoard();
+        b[1] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+        b[2] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FRZ] };
+        b[3] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FLM] };
+        ai.updateShield(b);
+        expect(ai.shield.has(1)).toBe(true);
+        expect(ai.shield.has(2)).toBe(false);
+        expect(ai.shield.has(3)).toBe(true); // 🔥だけでは⚡は休眠しない
+    });
+
+    it('休眠マス（氷結・火炎中）の毒は継続ダメージがないので、インジェクションの標的にしない', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', 'you']);
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }] });
+        expect(ai.findInjectionTarget(b, 1)).not.toBeNull();
+        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }, FRZ] });
+        expect(ai.findInjectionTarget(b, 1)).toBeNull();
+    });
+
+    it('evaluateBoard: 休眠マスの🌱は評価しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }] };
+        const awake = ai.evaluateBoard(b);
+        b[5] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }, FRZ] };
+        expect(ai.evaluateBoard(b)).toBeLessThan(awake);
+    });
+});
+
+describe('対氷結: 氷結中の空きマスで塞がれた自分のリーチを火遁で解く (AI追随)', () => {
+    const FRZ = { effect: '❄' as const };
+    const costs = { onClickIgnite: 3, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const blockedBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙', 5));
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        put(b, 7, '⭕', 5);
+        return b;
+    };
+
+    it('火遁が手札にあり魔力が足りれば、隣の敵コマ(7)を燃やして解凍し、そのマス(3)に着手する', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const r = ai.makeMove(blockedBoard(), 10, costs, 0, 4, [31, 0, 1], false);
+        expect(r.skills).toEqual(['onClickIgnite']);
+        expect(r.lockTargets).toEqual([7]);
+        expect(r.move).toBe(3);
+    });
+
+    it('火遁が無い・魔力が足りないときは使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        expect(ai.makeMove(blockedBoard(), 10, costs, 0, 4, [0, 1, 2], false).skills).not.toContain('onClickIgnite');
+        expect(ai.makeMove(blockedBoard(), 2, costs, 0, 4, [31, 0, 1], false).skills).not.toContain('onClickIgnite');
+    });
+
+    it('blockedReachCell / thawIgniteTarget: 敵のコマを優先し、氷結中のコマは選ばない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b = blockedBoard();
+        expect(ai.blockedReachCell(b)).toBe(3);
+        expect(ai.thawIgniteTarget(b, 3)).toBe(7);
+        b[7] = { player: '⭕', bind: 5, effects: [FRZ] };
+        expect(ai.thawIgniteTarget(b, 3)).toBe(2); // 敵が氷結中 → 自陣(2)にフォールバック
+    });
+});
+
+describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const setup = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        [1, 2, 3].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力が足りないとき、軽減札を先に撃ってから業火を撃つ', () => {
+        const r = setup(6, [58, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickInferno']);
+    });
+    it('軽減札が手札にない・魔力が足りなければ業火は撃たない', () => {
+        expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
+        expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
+    });
+    it('業火のあと、敵のコマが自陣より2つ以上多く壊れるならバーンアウトを撃つ（🔥合計4以上でタダ）', () => {
+        const r = setup(9, [61, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
+        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
+    });
+    it('鍛冶師は軽減札を固定しない（固定すると勝ち数が下がった）', () => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        expect(ai.chooseLocks(b, 2, 5, [53, 3, 60])).not.toEqual(expect.arrayContaining([53, 60]));
+    });
+});
+
+describe('軽減札を先に撃って通常スキルを撃てるようにする', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        // 劣勢（敵3コマ・自陣なし）で、敵が斜めに2つ並んでいる → スラッシュ（5）を撃つ
+        [0, 3, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力4ではスラッシュ（5）を撃てないが、特売（1）を先に撃てばスラッシュが2で撃てる', () => {
+        expect(run(4, [5, 12, 0]).skills).not.toContain('onClickSlash');
+        const r = run(4, [53, 5, 12]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+        expect(r.skills).toContain('onClickSlash');
+    });
+    it('撃てるスキルが増えなくても、特売のコストより軽減が大きく魔力が余るなら先に撃つ', () => {
+        expect(run(5, [53, 5, 12]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickMarkdown']);
+    });
+    it('軽減札が手札にない・撃てるスキルが無いなら軽減札は撃たない', () => {
+        expect(run(5, [5, 12, 0]).chargeClicks).toBeUndefined();
+        expect(run(0, [53, 5, 12]).chargeClicks).toBeUndefined();
+    });
+});
