@@ -6,12 +6,13 @@
 - 基準線(採用#5後・旧 master): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
-- 連続不採用回数: 3(採用#5のあと strategy / gear再走査 / 業火コスト)
+- 連続不採用回数: 4(採用#5のあと strategy / gear再走査 / 業火コスト / 対魔法使いメタ)
 - 状態: blocked(issue #99)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 9 | メタ(対魔法使い専用) | `--opp magician --scan deck --swap 2` 50近傍(seed9,150試合,±6.9) | 最良 24.7%(血清+猛毒化など)。対魔法使いは基準17〜33%付近から 50% に程遠く、デッキでは埋まらない | 不採用 |
 | 8 | 数値(ユーザー許可) | 業火基礎コスト 9/7/5 を sim で比較(seed8,200試合,最新master 837a29b) | 41.7 / 42.2 / 44.2%。コスト5でも +2.5pt で1位(魔法使い64.7%)に遠く、対魔法使い17%は不変。#99 にコメント | 不採用(数値変更せず。config は9のまま) |
 | 7 | gear再走査 | 新デッキでギア32近傍(seed7,60試合,±4.1) | base 45.2%、最良 afterglow 45.9%(+0.7) ノイズ内 | 不採用 |
 | 6 | strategy | AIノブ A/B(採用デッキ,seed5,150試合): pyroChain=2 / discountPlan=2 / pyroLock=1。pyroLock=1 は seed6/300試合で再測定 | 42.6 / 45.6 / 47.9%(基準45.6)。pyroLock=1 再測定は 46.7 vs 基準 46.8%(差なし) | 全て不採用(pyroChain=2 は -3pt) |
