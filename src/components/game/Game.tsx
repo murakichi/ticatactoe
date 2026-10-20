@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, frozenLifeBonus, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -280,6 +280,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         ai.glacierPending = glacierPending[turnSeat];
+        ai.glacierCharge = glacierCharge[turnSeat];
         ai.budGuard = budGuard[turnSeat];
         const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
 
@@ -442,6 +443,11 @@ export const Game = (props: GameProps) => {
     // 冬至の種子: その席のコマの🌱が氷結・火炎で消えない間のフラグ（その席の次の手番開始時に解除）
     const [budGuard, setBudGuardAt, setBudGuardAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const keepBuds = (sq: SquareInfo): boolean => !!sq.player && budGuard[seatOf(sq.player)];
+    // 絶対零度のコスト軽減: 氷結が作られた回数（誰が作っても全席で数え、その席が撃つとリセット）
+    const [glacierCharge, setGlacierChargeAt, setGlacierChargeAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
+    const bumpGlacierCharge = (n: number) => {
+        if (n > 0) setGlacierChargeAll((prev) => prev.map((c) => c + n));
+    };
 
     useEffect(() => {
         if (currentTurn === 1) {
@@ -510,7 +516,6 @@ export const Game = (props: GameProps) => {
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
-                (nextCharacter === 'cryomancer' ? frozenLifeBonus(currentBoard, nextSymbol) : 0) +
                 gearLifeBonus(nextGears),
             gearLifeStd(nextGears, LIFE_STD)
         );
@@ -1657,11 +1662,12 @@ export const Game = (props: GameProps) => {
     // 固有スキル 絶対零度（氷室の番人）: 全マス（空きマス含む。🔑は除く）に❄を足す。クリック不要・手番は続く。
     // 次の自分の手番開始時に、他の席の氷結マスへ❄1スタックにつき3ダメージを与えて氷結を解除し、ライフ0のマスは破壊する
     const glacierCost = (player: Player = currentTurnPlayer): number =>
-        reducedGlacierCost(costTableFor(seatOf(player)).onClickGlacier, currentBoard, (c) => calculateCost(c, false, false, player));
+        reducedGlacierCost(costTableFor(seatOf(player)).onClickGlacier, glacierCharge[seatOf(player)], (c) => calculateCost(c, false, false, player));
     const onClickGlacier = () => {
         if (glacierPending[turnSeat]) return;
         const cost = glacierCost();
         const board = currentBoard.slice();
+        setGlacierChargeAt(turnSeat, 0); // 撃ったらリセット（この❄は数えない）
         const done = freezeAll(board, keepBuds);
         addLog(`「絶対零度」を使用（${done.length}マスが氷結。次の手番開始時に発動）`);
         flashCells(done);
@@ -1763,9 +1769,10 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickInferno), false);
     };
     const exeFreeze = (i: number) => {
-        if (!canFreeze(currentBoard[i])) return; // 🔑ロック中は選び直せる
+        if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
-        freeze(board, [i], keepBuds);
+        const made = freeze(board, [i], keepBuds);
+        bumpGlacierCharge(made.length);
         addLog(`${posName(i)}を氷結`);
         playEffect('freeze', i);
         setUseFreeze(false);
@@ -2013,6 +2020,7 @@ export const Game = (props: GameProps) => {
         setUseFreeze(false);
         setUseIgnite(false);
         setGlacierPendingAll(Array(seatCount).fill(false));
+        setGlacierChargeAll(Array(seatCount).fill(0));
         setBudGuardAll(Array(seatCount).fill(false));
         setUseSucker(false);
         setRemainNecroAll(zeros());

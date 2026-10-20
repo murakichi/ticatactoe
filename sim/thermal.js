@@ -90,8 +90,8 @@ function ignite(board, cells, size, n = 1, keepBuds) {
 }
 /** 氷結中の空きマス: 🔑ロックと同様に、誰も着手（設置）できない */
 const emptyBlocked = (sq) => !sq.player && isFrozen(sq);
-/** 氷結を付けられるマスか: 🔑ロック中でない（空きマスにも置け、氷結済みでも重ねられる） */
-const canFreeze = (sq) => !hasLock(sq);
+/** 氷結を付けられるマスか: 🔑ロック中でなく、🔥火炎も無い（空きマスにも置け、氷結済みでも重ねられる） */
+const canFreeze = (sq) => !hasLock(sq) && flameStacks(sq) === 0;
 function freeze(board, cells, keepBuds) {
     const done = [];
     for (const k of cells) {

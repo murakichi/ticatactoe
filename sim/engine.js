@@ -492,6 +492,7 @@ function newGame(opts = {}) {
         useFreeze: false,
         useSucker: false,
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
+        glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
         useIgnite: false,
         stats: {},
@@ -584,13 +585,6 @@ function calculateTokenBind(s) {
     return delta === 0 ? base : Math.max(1, base + delta);
 }
 
-// 自陣コマの❄の総数（氷室の番人のライフ期待値 +0.5/個）
-function frozenStacksFor(board, player) {
-    let n = 0;
-    for (const sq of board) if (sq.player === player) n += thermal.frozenStacks(sq);
-    return n;
-}
-
 function budsCount(board, player) {
     return board
         .filter((x) => x.player === player)
@@ -647,7 +641,7 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + (ch === 'cryomancer' ? 0.5 * frozenStacksFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
@@ -701,7 +695,8 @@ function placeMove(s, i) {
     }
     if (s.useFreeze) {
         if (!thermal.canFreeze(board[i])) return false; // 空きマス・氷結済み・ロック中は選び直せる
-        thermal.freeze(board, [i], keepBudsFn(s));
+        const made = thermal.freeze(board, [i], keepBudsFn(s)).length;
+        for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made; // 氷結が作られるたび、全席の絶対零度が安くなる
         s.useFreeze = false;
         return true;
     }
@@ -1443,16 +1438,15 @@ function onClickIgnite(s) {
     bumpStat(s, 'ignite');
 }
 // 氷室の番人の固有スキル 氷河期: 自陣のライフが残るコマすべてに❄（クリック不要・ターン継続）
-// 絶対零度（氷室の番人）: 全マスに❄を足し、次の自分の手番開始時に敵の❄マスを爆破する。盤上の❄マスの数だけ安い（下限1）
-function frozenCells(board) {
-    return board.filter((sq) => thermal.isFrozen(sq)).length;
-}
-function glacierCost(s) {
-    return Math.max(1, calculateCost(s, costsOf(s).onClickGlacier - frozenCells(s.board)));
+// 絶対零度（氷室の番人）: 全マスに❄を足し、次の自分の手番開始時に敵の❄マスを爆破する。
+// 氷結スキルで❄が作られるたび（誰が使っても）全席のカウンタが+1され、実コスト=max(1, calc(10−カウンタ))。撃った席のカウンタは0に戻る
+function glacierCost(s, seat = s.turn) {
+    return Math.max(1, calculateCost(s, costsOf(s).onClickGlacier - s.glacierCharge[seat]));
 }
 function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
     const cost = glacierCost(s);
+    s.glacierCharge[s.turn] = 0; // 自身の freezeAll で付く❄は数えない
     const done = thermal.freezeAll(s.board, keepBudsFn(s));
     s.glacierPending[s.turn] = true;
     spendMagic(s, cost);
@@ -1632,5 +1626,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, frozenCells, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

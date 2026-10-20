@@ -833,20 +833,46 @@ test('氷結中のマスにはロックが掛からない（ロック系スキ�
     assert.strictEqual(s.useLock, 1);
 });
 
-test('氷室の番人: 手番開始のライフ期待値が自陣の❄1個につき+0.5', () => {
-    const s = game('you', 'cryomancer');
-    s.heartTurn = true; s.life = 3;
-    for (let k = 0; k < 6; k++) s.board[k] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ, FRZ] }; // ❄24個 → +12
-    let sum = 0;
-    for (let k = 0; k < 50; k++) {
-        const g = game('you', 'cryomancer');
-        g.rng = e.makeRng(100 + k);
-        g.board = s.board.map((x) => ({ ...x, effects: x.effects.slice() }));
-        g.heartTurn = true; g.life = 3;
-        e.placeMove(g, 15); // 次は⭕(氷室の番人)の手番 → ライフ抽選
-        sum += g.life;
-    }
-    assert.ok(sum / 50 > 12, 'avg ' + sum / 50);
+test('氷室の番人: ライフ平均は5で、自陣の❄によるライフ加算は無い', () => {
+    const mean = (board) => {
+        let sum = 0;
+        for (let k = 0; k < 200; k++) {
+            const g = game('you', 'cryomancer');
+            g.rng = e.makeRng(100 + k);
+            g.board = board.map((x) => ({ ...x, effects: x.effects.slice() }));
+            g.heartTurn = true; g.life = 3;
+            e.placeMove(g, 15); // 次は⭕(氷室の番人)の手番 → ライフ抽選
+            sum += g.life;
+        }
+        return sum / 200;
+    };
+    const plain = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const icy = plain.map((x, k) => (k < 6 ? { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ, FRZ] } : x));
+    assert.ok(Math.abs(mean(plain) - 5) < 1, 'plain ' + mean(plain));
+    assert.ok(Math.abs(mean(icy) - 5) < 1, 'icy ' + mean(icy)); // ❄24個でも加算なし
+    assert.strictEqual(require('./config').lifeMeans.cryomancer, 5);
+});
+
+test('氷結は🔥のあるマスには付かない（空きマス・氷結済みへの重ね掛けは可）。freezeAll も🔥マスを飛ばす', () => {
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[1] = { player: '⭕', bind: 3, effects: [FLM] };
+    b[2] = { player: '⭕', bind: 3, effects: [FRZ] };
+    b[3] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+    assert.strictEqual(th.canFreeze(b[1]), false);
+    assert.strictEqual(th.canFreeze(b[2]), true);
+    assert.strictEqual(th.canFreeze(b[0]), true);
+    assert.strictEqual(th.canFreeze(b[3]), false);
+    const done = th.freezeAll(b);
+    assert.ok(!done.includes(1) && !done.includes(3));
+    assert.strictEqual(b[1].effects.length, 1);
+    // 氷結スキルの対象選択でも🔥のマスは選べない
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 3, effects: [FLM] };
+    e.SKILLS.freeze(s);
+    assert.strictEqual(e.placeMove(s, 5), false);
+    assert.strictEqual(s.useFreeze, true);
 });
 
 test('氷室の番人でも、ライフが残る敵の氷結マスをクリックしても解除できない（旧パッシブ廃止）。ライフ0なら通常どおり奪う', () => {
@@ -1201,15 +1227,47 @@ test('氷室の番人: 常在のロックは「氷結」に置き換わる（コ
     assert.strictEqual(t.useLock, 1);
 });
 
-test('絶対零度: コスト=10−(❄のあるマスの数・スタックでなくマス数)、下限1', () => {
-    const s = game('cryomancer', 'you');
-    s.heartTurn = true;
+test('絶対零度のコスト: 氷結が作られるたび全席-1（誰が使っても）、撃ったらその席だけリセット、下限1', () => {
+    const s = game('cryomancer', 'cryomancer');
+    s.heartTurn = true; s.heartMagic = 60;
+    assert.deepStrictEqual(s.glacierCharge, [0, 0]);
     assert.strictEqual(e.glacierCost(s), 10);
-    s.board[0] = { player: undefined, bind: 0, effects: [FRZ, FRZ, FRZ] };
-    s.board[1] = { player: '⭕', bind: 2, effects: [FRZ] };
+    // 自分の氷結（氷室の番人のロック置換）で作る
+    e.SKILLS.lock(s); e.placeMove(s, 0);
+    assert.deepStrictEqual(s.glacierCharge, [1, 1]);
+    assert.strictEqual(e.glacierCost(s), 9);
+    // 汎用の氷結(idx30)でも数える。ここでは席1が撃つ想定で手番を渡す
+    s.heartTurn = false; s.circleMagic = 60;
+    e.SKILLS.freeze(s); e.placeMove(s, 1);
+    assert.deepStrictEqual(s.glacierCharge, [2, 2]);
+    // 席0が戻って、他席の氷結でも安くなっている
+    s.heartTurn = true;
     assert.strictEqual(e.glacierCost(s), 8);
-    for (let k = 2; k < 16; k++) s.board[k] = { player: undefined, bind: 0, effects: [FRZ] };
-    assert.strictEqual(e.glacierCost(s), 1); // 16マス全部 → 10-16 → 下限1
+    // 氷結の対象選択が通らなかった（🔥のマス）ときは数えない。氷結済みへの重ね掛けは数える
+    s.board[5] = { player: '⭕', bind: 3, effects: [FLM] };
+    e.SKILLS.freeze(s); assert.strictEqual(e.placeMove(s, 5), false);
+    assert.deepStrictEqual(s.glacierCharge, [2, 2]);
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.deepStrictEqual(s.glacierCharge, [3, 3]);
+    // 撃つと席0だけ0に戻る。自身の freezeAll の❄は数えない
+    const cost = e.glacierCost(s);
+    assert.strictEqual(cost, 7);
+    const before = s.heartMagic;
+    s.board[5] = { player: undefined, bind: 0, effects: [] };
+    e.SKILLS.glacier(s);
+    assert.strictEqual(s.heartMagic, before - cost);
+    assert.deepStrictEqual(s.glacierCharge, [0, 3]);
+    // 席1はまだ軽減が残っている
+    // 下限1
+    s.glacierCharge[0] = 50;
+    assert.strictEqual(e.glacierCost(s), 1);
+    // 業火・発火による氷結の増減は数えない
+    const t = game('pyromancer', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    t.board[1] = { player: '⭕', bind: 3, effects: [FRZ] };
+    t.board[2] = { player: '⭕', bind: 3, effects: [] };
+    e.SKILLS.inferno(t);
+    assert.deepStrictEqual(t.glacierCharge, [0, 0]);
 });
 
 test('絶対零度: 使用時に🔑のない全マス（空きマス含む）に❄+1。手番は続き、発動待ちの再使用は不可', () => {
@@ -1237,7 +1295,7 @@ test('絶対零度: 使用時に🔑のない全マス（空きマス含む）�
 test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄スタック×3ダメージ→❄全除去。0以下は破壊。空きマスの❄は全除去、自陣の❄は残す', () => {
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 30; s.life = 3;
-    s.board[4] = { player: '⭕', bind: 12, effects: [FRZ, FRZ, { effect: '🔥' }] }; // 使用で❄3 → 9ダメージ → 3、🔥消える
+    s.board[4] = { player: '⭕', bind: 12, effects: [FRZ, FRZ, { effect: '🔥' }] }; // 🔥のマスには使用で❄が増えない → ❄2 → 6ダメージ → 6、🔥消える
     s.board[5] = { player: '⭕', bind: 5, effects: [FRZ, FRZ] };                       // ❄3 → 9ダメージ → 破壊
     s.board[6] = { player: '⭕', bind: 8, effects: [] };                               // ❄なし → 全マス+1で❄1 → 3ダメージ
     s.board[7] = { player: '💙', bind: 5, effects: [FRZ] };                            // 自陣
@@ -1251,7 +1309,7 @@ test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄ス
     assert.strictEqual(s.heartTurn, true);
     assert.strictEqual(s.glacierPending[0], false);
     // チャージは減衰しない
-    assert.strictEqual(s.board[4].bind, 12 - 9);
+    assert.strictEqual(s.board[4].bind, 12 - 6);
     assert.ok(s.board[4].effects.length === 0);
     assert.strictEqual(s.board[5].player, undefined);
     assert.strictEqual(s.board[5].effects.length, 0);
@@ -1298,7 +1356,7 @@ test('業火: 雷霆の巫の⚡無敵コマは対象外', () => {
     assert.strictEqual(s.board[6].effects.filter((x) => x.effect === '🔥').length, 2);
 });
 
-test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人6・煉獄の鍛冶師5', () => {
+test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人5・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
     assert.strictEqual(e.POOL_SIZE, 37);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
@@ -1306,7 +1364,7 @@ test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録さ�
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
     assert.strictEqual(e.skillCosts.onClickIgnite, 3);
     const mean = (c, bonus = 0) => Array.from({ length: 400 }, (_, k) => e.calculateLife(c, undefined, e.makeRng(k + 1), bonus)).reduce((a, b) => a + b, 0) / 400;
-    assert.ok(Math.abs(mean('cryomancer') - 6) < 1);
+    assert.ok(Math.abs(mean('cryomancer') - 5) < 1);
     assert.ok(Math.abs(mean('pyromancer') - 5) < 1);
 });
 

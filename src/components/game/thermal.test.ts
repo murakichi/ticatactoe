@@ -28,11 +28,9 @@ import {
     lockable,
     emptyBlocked,
     reducedGlacierCost,
-    frozenCellCount,
     freezeAll,
     detonate,
     GLACIER_BASE_COST,
-    frozenLifeBonus,
     FLAME_BURN_DAMAGE,
 } from './thermal';
 import { fireCharges, applyJammer, chargeStacks, canJam } from './charge';
@@ -166,17 +164,26 @@ describe('❄氷結', () => {
         expect(findEmptyIndexes(b)).not.toContain(1);
     });
 
-    it('絶対零度のコスト: 盤面の氷結マスの数だけ軽減（スタックでなくマス数・空き含む）、下限1', () => {
+    it('絶対零度のコスト: 氷結が作られた回数だけ軽減（撃つとリセットされる回数）、キャラ補正は軽減後、下限1', () => {
+        expect(reducedGlacierCost(GLACIER_BASE_COST, 0, (c) => c)).toBe(10);
+        expect(reducedGlacierCost(GLACIER_BASE_COST, 3, (c) => c)).toBe(7);
+        expect(reducedGlacierCost(GLACIER_BASE_COST, 3, (c) => c + 1)).toBe(8);
+        expect(reducedGlacierCost(GLACIER_BASE_COST, 30, (c) => c)).toBe(1);
+    });
+
+    it('氷結は🔑・🔥のあるマスには置けない（空きマスや氷結済みは可）', () => {
         const b = emptyBoard();
-        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c)).toBe(10);
-        b[0] = sq('💙', 3, '❄', '❄');
-        b[1] = sq(undefined, 0, '❄');
-        b[2] = sq('⭕', 3, '❄');
-        expect(frozenCellCount(b)).toBe(3);
-        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c)).toBe(7);
-        expect(reducedGlacierCost(GLACIER_BASE_COST, b, (c) => c + 1)).toBe(8); // キャラ補正は軽減後に掛かる
-        const full = emptyBoard().map(() => sq('⭕', 3, '❄'));
-        expect(reducedGlacierCost(GLACIER_BASE_COST, full, (c) => c)).toBe(1);
+        b[0] = sq('💙', 3, '🔥');
+        b[1] = sq('💙', 3, '🔑');
+        b[2] = sq('💙', 3, '❄');
+        expect(canFreeze(b[0])).toBe(false);
+        expect(canFreeze(b[1])).toBe(false);
+        expect(canFreeze(b[2])).toBe(true);
+        expect(canFreeze(b[3])).toBe(true);
+        expect(freeze(b, [0, 1, 2, 3])).toEqual([2, 3]);
+        const all = emptyBoard();
+        all[0] = sq('💙', 3, '🔥');
+        expect(freezeAll(all)).toHaveLength(15); // 🔥のマスは飛ばす
     });
 
     it('絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄+1', () => {
@@ -216,14 +223,6 @@ describe('❄氷結', () => {
         expect(flameStacks(b[6])).toBe(0);
     });
 
-    it('氷室の番人のライフ加算は自陣の氷結スタック総数×0.5', () => {
-        const b = emptyBoard();
-        b[0] = sq('💙', 3, '❄', '❄');
-        b[1] = sq('💙', 3, '❄');
-        b[2] = sq('⭕', 3, '❄', '❄', '❄');
-        expect(frozenLifeBonus(b, '💙')).toBe(1.5);
-        expect(frozenLifeBonus(b, '⭕')).toBe(1.5);
-    });
 
 });
 

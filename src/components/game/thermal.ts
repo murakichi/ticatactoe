@@ -54,10 +54,6 @@ export const overwriteBlocked = (sq: SquareInfo): boolean => isFrozen(sq);
 /** 氷結中の空きマス: 🔑ロックと同様に、誰も着手（設置）できない */
 export const emptyBlocked = (sq: SquareInfo): boolean => !sq.player && isFrozen(sq);
 
-/** 氷室の番人のライフ平均への加算: 自陣コマの氷結スタック総数 × 0.5 */
-export const frozenLifeBonus = (board: SquareInfo[], player: SquareInfo['player']): number =>
-    board.reduce((n, sq) => (sq.player === player ? n + frozenStacks(sq) : n), 0) * 0.5;
-
 /** 🔑ロックを掛けられるマスか: 氷結中でない */
 export const lockable = (sq: SquareInfo): boolean => !isFrozen(sq);
 
@@ -141,8 +137,8 @@ export const ignite = (
     return { thawed: Array.from(thawed) };
 };
 
-/** 氷結を付けられるマスか: 🔑ロック中でない（空きマスにも置け、氷結済みでも重ねられる） */
-export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq);
+/** 氷結を付けられるマスか: 🔑ロック・🔥火炎がない（空きマスにも置け、氷結済みでも重ねられる） */
+export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq) && flameStacks(sq) === 0;
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
 export const freeze = (board: SquareInfo[], cells: number[], keepBuds?: (sq: SquareInfo) => boolean): number[] => {
@@ -177,16 +173,12 @@ export const GLACIER_BASE_COST = 10;
 /** 絶対零度が敵コマに与えるダメージ（敵マスに乗っていた❄1スタックにつき） */
 export const GLACIER_DAMAGE_PER_STACK = 3;
 
-/** ❄が付いているマスの数（スタック数ではなくマス数。空きマス・敵味方問わず） */
-export const frozenCellCount = (board: SquareInfo[]): number => board.filter(isFrozen).length;
-
 /**
- * 絶対零度（氷室の番人）の実コスト: 基礎コストを、盤面の❄のマス数だけ軽減してからキャラ補正（calc）をかけ、下限は1。
- * sim/engine.js の glacierCost と同じ
+ * 絶対零度（氷室の番人）の実コスト: 基礎コストを、氷結が作られた回数（charges。撃つとリセット）だけ軽減してから
+ * キャラ補正（calc）をかけ、下限は1。sim/engine.js の glacierCost と同じ
  */
-export const reducedGlacierCost = (baseCost: number, board: SquareInfo[], calc: (cost: number) => number): number =>
-    Math.max(1, calc(baseCost - frozenCellCount(board)));
-
+export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
+    Math.max(1, calc(baseCost - charges));
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
 export const freezeAll = (board: SquareInfo[], keepBuds?: (sq: SquareInfo) => boolean): number[] =>
     freeze(

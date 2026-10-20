@@ -810,7 +810,7 @@ function faithfulMakeMove(s) {
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
     // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
     // （A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上。非氷室は手札に氷結が来ないと撃てず差なしなので対象外）
-    if (F.frzBlock && curChar(s) === 'cryomancer' && threats.length === 1 && !s.silenced[s.turn]
+    if (F.frzBlock && curChar(s) === 'cryomancer' && threats.length === 1 && !s.silenced[s.turn] && thermal.canFreeze(s.board[threats[0]])
         && curMagic(s) >= calculateCost(s, costsOf(s).onClickCryoFreeze)) {
         SKILLS.lock(s); // 氷室の番人ではロック=氷結（対象1マス）
         if (placeMove(s, threats[0])) {

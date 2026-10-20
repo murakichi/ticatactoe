@@ -49,6 +49,8 @@ class AIPlayer {
     shield: Set<number> = new Set();
     /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */
     glacierPending: boolean = false;
+    /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
+    glacierCharge: number = 0;
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
 
@@ -1121,7 +1123,7 @@ class AIPlayer {
         }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
         if (this.character === 'cryomancer') {
-            const cost = reducedGlacierCost(costs.onClickGlacier, board, (c) => this.calculateAICost(c));
+            const cost = reducedGlacierCost(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
             if (!this.glacierPending && magic >= cost && this.shouldGlacier(board)) {
                 chargeClicks.push({ skill: 'onClickGlacier' });
                 board = board.slice();
