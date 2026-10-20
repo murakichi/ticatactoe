@@ -101,9 +101,9 @@ function bestInjectionTarget(board, me, minValue) {
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
         if (!isEnemy(sq.player, me) || shield.has(i)) continue;
-        const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数
-        // 1手ごとに 1+毒数 減る（氷結中は自然減衰が無く毒数だけ）
-        const turns = Math.ceil(sq.bind / (thermal.isFrozen(sq) ? p : 1 + p));
+        const p = sq.effects.filter(e => e.effect === '☠').length + 1; // 付与後の毒数（休眠マスは継続ダメージが無く、毒では倒れない）
+        if (thermal.isDormant(sq)) continue;
+        const turns = Math.ceil(sq.bind / (1 + p)); // 1手ごとに 1+毒数 減る
         if (turns > 2) continue;
         let val = 0;
         for (const line of geo.winLines) {
@@ -172,7 +172,7 @@ function fireGain(board, i, me, electricians) {
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
     for (const k of orthoNeighbors(i, size)) {
-        if (chargeStacks(board[k]) === 0 || thermal.isFrozen(board[k])) continue; // 氷結中の⚡は休眠
+        if (chargeStacks(board[k]) === 0 || thermal.isDormant(board[k])) continue; // 休眠マス（氷結・火炎中）の⚡は発火しない
         for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
@@ -212,7 +212,7 @@ function bestChargeOneTarget(board, me) {
     let bestIdx = null, bestScore = 0;
     for (let i = 0; i < board.length; i++) {
         if (shield.has(i) || board[i].effects.some((e) => e.effect === '🔑')) continue;
-        if (chargeStacks(board[i]) > 0 || thermal.isFrozen(board[i])) continue; // 氷結中のマスの⚡は休眠
+        if (chargeStacks(board[i]) > 0 || thermal.isDormant(board[i])) continue; // 休眠マスの⚡は働かない
         let attack = 0;
         for (const n of orthoNeighbors(i, size)) {
             const sq = board[n];
@@ -282,7 +282,7 @@ function bestJammerTarget(board, me) {
     let bestIdx = null, bestScore = 0;
     for (let k = 0; k < board.length; k++) {
         const n = chargeStacks(board[k]);
-        if (n === 0 || thermal.isFrozen(board[k]) || (shield.has(k) && board[k].player !== me)) continue; // 氷結中の⚡は休眠
+        if (n === 0 || thermal.isDormant(board[k]) || (shield.has(k) && board[k].player !== me)) continue; // 氷結中の⚡は休眠
         let zeroed = 0, critical = 0, dmg = 0;
         for (const j of orthoNeighbors(k, size)) {
             const sq = board[j];
@@ -332,7 +332,7 @@ function evaluateBoard(board, me) {
         score += myBindSum * 0.5 - oppBindSum * 0.5;
     }
     for (const sq of board) {
-        const buds = sq.effects.filter(e => e.effect === '🌱').length;
+        const buds = thermal.activeBuds(sq); // 氷結中の🌱は休眠
         const hasLock = sq.effects.some(e => e.effect === '🔑');
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
         else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
@@ -610,8 +610,9 @@ function chooseSkills(s, availableSkills) {
     const myBuds = ownBuds(s);
     // 刈り入れ前夜: 魔法使い以外が🌱を4個以上抱えていて、燃やされ/凍らされる相手がいるなら魔力に換える
     if (character !== 'magician' && availableSkills.includes(33) && myBuds >= 4 && thermalFoe) spend(calculateCost(s, costsOf(s).onClickHarvestEve), 'harvestEve');
-    // 冬至の種子: 🌱が3個以上あり、まだガード中でなければ
-    if (availableSkills.includes(34) && myBuds >= 3 && thermalFoe && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice), 'solstice');
+    // 冬至の種子: 自陣の休眠マス（氷結・火炎中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
+    const dormantBuds = board.reduce((n, sq) => (sq.player === me && thermal.isDormant(sq) ? n + thermal.budStacks(sq) : n), 0);
+    if (availableSkills.includes(34) && dormantBuds >= 2 && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice), 'solstice');
     // 風の落とし子: 自陣のコマ(🌱を持てる)が3個以上あり🌱が3個未満なら撒く
     if (availableSkills.includes(36) && myBuds < 3 && thermal.sowCandidates(board, me).length >= 3) spend(calculateCost(s, costsOf(s).onClickWindborne), 'windborne');
 
@@ -682,7 +683,7 @@ function chooseSkills(s, availableSkills) {
         let doomed = 0;
         for (const sq of board) {
             if (sq.player !== me) continue;
-            const p = sq.effects.filter(e => e.effect === '☠').length;
+            const p = thermal.isDormant(sq) ? 0 : sq.effects.filter(e => e.effect === '☠').length; // 休眠マス（氷結・火炎中）の毒は継続ダメージなし
             if (p > 0 && p >= sq.bind) doomed++;
         }
         if (doomed >= 1) spend(serumCost, 'serum');

@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -440,9 +440,8 @@ export const Game = (props: GameProps) => {
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
     const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
-    // 冬至の種子: その席のコマの🌱が氷結・火炎で消えない間のフラグ（その席の次の手番開始時に解除）
+    // 冬至の種子: その席のコマの🌱が氷結・火炎中のマスでも休眠しない間のフラグ（その席の次の手番開始時に解除）
     const [budGuard, setBudGuardAt, setBudGuardAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
-    const keepBuds = (sq: SquareInfo): boolean => !!sq.player && budGuard[seatOf(sq.player)];
     // 絶対零度のコスト軽減: 氷結が作られた回数（誰が作っても全席で数え、その席が撃つとリセット）
     const [glacierCharge, setGlacierChargeAt, setGlacierChargeAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const bumpGlacierCharge = (n: number) => {
@@ -484,7 +483,7 @@ export const Game = (props: GameProps) => {
         // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
         const magicCharacter: CharacterId[] = ['magician'];
         // 50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
-        let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + budsCount(nextSymbol);
+        let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + activeBudsCount(nextSymbol);
         if (magicCharacter.includes(nextCharacter)) {
             nextMagic++;
         }
@@ -495,7 +494,7 @@ export const Game = (props: GameProps) => {
 
         // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準の+1に追加で+2)。バッズ蓄積→スキル連打のコンセプト
         if (nextCharacter === 'magician') {
-            nextMagic += budsCount(nextSymbol) * 2;
+            nextMagic += activeBudsCount(nextSymbol) * 2;
         }
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
@@ -869,7 +868,7 @@ export const Game = (props: GameProps) => {
     // 指定プレイヤーの自陣にある毒スタック数
     const poisonCount = (player: Player): number =>
         currentBoard
-            .filter((x) => x.player === player)
+            .filter((x) => x.player === player && !isDormant(x)) // 休眠マスの☠は数えない
             .map((x) => x.effects)
             .flat()
             .filter((e) => e.effect === '☠').length;
@@ -947,7 +946,7 @@ export const Game = (props: GameProps) => {
     const miasmaPlan = (board: SquareInfo[], player: Player): Map<number, number> => {
         const plan = new Map<number, number>();
         board.forEach((sq, i) => {
-            if (sq.player !== player || !sq.effects.some((e) => e.effect === '☠')) return;
+            if (sq.player !== player || isDormant(sq) || !sq.effects.some((e) => e.effect === '☠')) return;
             for (const j of geo.surroundRange(i)) {
                 const target = board[j];
                 if (target.player && target.player !== player && !isGuarded(target, characters)) plan.set(j, (plan.get(j) ?? 0) + 1);
@@ -965,6 +964,9 @@ export const Game = (props: GameProps) => {
             .flat()
             .filter((x) => x.effect === '🌱').length;
     };
+    // 休眠マス（氷結中・火炎中）の🌱は消えないが魔力ボーナスに数えない（冬至の種子のガード中を除く）
+    const activeBudsCount = (player: Player): number =>
+        currentBoard.filter((x) => x.player === player).reduce((n, sq) => n + activeBuds(sq, budGuard[seatOf(player)]), 0);
 
     const onClickBuds = () => {
         addLog('「バッズ」を使用（次の一手でバッズを植える）');
@@ -1668,7 +1670,7 @@ export const Game = (props: GameProps) => {
         const cost = glacierCost();
         const board = currentBoard.slice();
         setGlacierChargeAt(turnSeat, 0); // 撃ったらリセット（この❄は数えない）
-        const done = freezeAll(board, keepBuds);
+        const done = freezeAll(board);
         addLog(`「絶対零度」を使用（${done.length}マスが氷結。次の手番開始時に発動）`);
         flashCells(done);
         playEffect('glacier');
@@ -1679,10 +1681,10 @@ export const Game = (props: GameProps) => {
     // --- バッズ系の汎用スキル（idx 33-36） ---
     const [useSucker, setUseSucker] = useState<boolean>(false);
     // 刈り入れ前夜: 自陣の🌱を全部刈り取り、その数だけ魔力を得る（クリック不要・手番は続く）
-    const ownBudTotal = (): number => currentBoard.reduce((n, sq) => (sq.player === currentTurnPlayer ? n + budStacks(sq) : n), 0);
+    const ownBudTotal = (): number => currentBoard.reduce((n, sq) => (sq.player === currentTurnPlayer ? n + activeBuds(sq, budGuard[turnSeat]) : n), 0);
     const onClickHarvestEve = () => {
         const board = currentBoard.slice();
-        const n = harvestBuds(board, currentTurnPlayer);
+        const n = harvestBuds(board, currentTurnPlayer, budGuard[turnSeat]);
         if (n === 0) return;
         addLog(`「刈り入れ前夜」を使用（🌱${n}個を刈り取り、魔力+${n}）`);
         playEffect('harvestEve');
@@ -1690,10 +1692,10 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickHarvestEve));
         setMagicAt(turnSeat, (m) => m + n);
     };
-    // 冬至の種子: 次の自分の手番開始時まで、自陣の🌱が氷結・火炎で消えない
+    // 冬至の種子: 次の自分の手番開始時まで、自陣の🌱が氷結・火炎中のマスでも休眠しない
     const onClickSolstice = () => {
         if (budGuard[turnSeat]) return;
-        addLog('「冬至の種子」を使用（次の自分の手番まで🌱は氷結・火炎で消えない）');
+        addLog('「冬至の種子」を使用（次の自分の手番まで、氷結・火炎中のマスでも🌱が働く）');
         playEffect('solstice');
         setBudGuardAt(turnSeat, true);
         spendMagic(calculateCost(seatCosts.onClickSolstice));
@@ -1760,7 +1762,7 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return;
         const board = currentBoard.slice();
         addLog(`「業火」を使用（${targets.length}コマに🔥+${INFERNO_STACKS}）`);
-        const { thawed } = ignite(board, targets, geo.size, INFERNO_STACKS, keepBuds);
+        const { thawed } = ignite(board, targets, geo.size, INFERNO_STACKS);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(targets);
         playEffect('inferno', undefined, targets);
@@ -1771,7 +1773,7 @@ export const Game = (props: GameProps) => {
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
-        const made = freeze(board, [i], keepBuds);
+        const made = freeze(board, [i]);
         bumpGlacierCharge(made.length);
         addLog(`${posName(i)}を氷結`);
         playEffect('freeze', i);
@@ -1780,7 +1782,7 @@ export const Game = (props: GameProps) => {
     };
     // 🔥を付けたあとの共通処理: 解けた氷結をログに出す
     const igniteCells = (board: SquareInfo[], cells: number[]) => {
-        const { thawed } = ignite(board, cells, geo.size, 1, keepBuds);
+        const { thawed } = ignite(board, cells, geo.size, 1);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(cells);
         playEffect('flame', cells[0]);
@@ -1862,7 +1864,7 @@ export const Game = (props: GameProps) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
-        if (budGuard[seat]) labels.push('冬至の種子 🌱は氷結・火炎で消えない');
+        if (budGuard[seat]) labels.push('冬至の種子 🌱は氷結・火炎中でも働く');
         const necro = remainNecro[seat];
         if (necro > 0) labels.push(`蘇生 残り${necro}ターン`);
         if (proliferate[seat]) {
@@ -2152,7 +2154,7 @@ export const Game = (props: GameProps) => {
         { idx: 31, onClick: onClickIgnite, buttonText: `火炎付与-${calculateCost(seatCosts.onClickIgnite)}`, paragraph: `コマを選択し、🔥火炎を1つ付与します（重複可）\n毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) || !currentBoard.some((sq) => sq.player) },
         { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse)}`, paragraph: `自陣のコマの状態異常（☠毒・🔥火炎・❄氷結・⚡帯電）をすべて回復します\n🌱バッズと🔑ロックはそのままです`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
         { idx: 33, onClick: onClickHarvestEve, buttonText: `刈り入れ前夜-${calculateCost(seatCosts.onClickHarvestEve)}`, paragraph: `自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます\n氷結や火炎で失う前に現金化できます`, disabled: checkSkillDisable(seatCosts.onClickHarvestEve) || ownBudTotal() === 0 },
-        { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice)}`, paragraph: `次の自分の手番が来るまで、自陣のコマの🌱が氷結・火炎で消えなくなります`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
+        { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice)}`, paragraph: `次の自分の手番が来るまで、自陣のコマの🌱が氷結中・火炎中のマスでも休眠せず、魔力や刈り入れ前夜に働きます`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
         { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker)}`, paragraph: `🌱を持つ自陣のコマを選ぶと、縦横に隣り合う自陣のコマに🌱が1つずつ付きます（隣が3つ以上ならランダムに2つ）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
         { idx: 36, onClick: onClickWindborne, buttonText: `風の落とし子-${calculateCost(seatCosts.onClickWindborne)}`, paragraph: `自陣のコマにランダムで🌱を3つ配ります（同じコマに重なることもあります）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickWindborne) || sowCandidates(currentBoard, currentTurnPlayer).length === 0 },
     ];

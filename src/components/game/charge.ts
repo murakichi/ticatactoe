@@ -5,7 +5,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
 import { orthoNeighbors } from './boardGeometry';
-import { applyDamage, isFrozen } from './thermal';
+import { applyDamage, isFrozen, isDormant } from './thermal';
 
 export { orthoNeighbors };
 
@@ -21,7 +21,7 @@ const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect ===
 
 /** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 export const isShielded = (sq: SquareInfo, chars: PlayerCharacters): boolean =>
-    !!sq.player && charOf(chars, sq.player) === 'electrician' && chargeStacks(sq) > 0;
+    !!sq.player && charOf(chars, sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq); // 休眠マス（氷結中・火炎中）は⚡が休眠して無敵も働かない
 
 /** 🔑ロックまたは⚡の無敵＝ダメージ系スキルの対象外にするマス */
 export const isGuarded = (sq: SquareInfo, chars: PlayerCharacters): boolean => hasLock(sq) || isShielded(sq, chars);
@@ -46,7 +46,7 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
     const fired: number[] = [];
     const damaged: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
-        if (chargeStacks(board[k]) === 0 || isFrozen(board[k])) continue; // 氷結中の⚡は休眠（発火せず消えもしない）
+        if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マスの⚡は発火源にならない（発火せず消えもしない）
         fired.push(k);
         for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
@@ -88,7 +88,7 @@ export const withCharge = (board: SquareInfo[], cells: number[]): SquareInfo[] =
 };
 
 /** 盤面全体の⚡の数（スタック込み）。sim/engine.js の boardChargeCount と同じ */
-export const boardChargeCount = (board: SquareInfo[]): number => board.reduce((n, sq) => n + chargeStacks(sq), 0);
+export const boardChargeCount = (board: SquareInfo[]): number => board.reduce((n, sq) => (isDormant(sq) ? n : n + chargeStacks(sq)), 0); // 休眠マスの⚡は数えない
 
 /**
  * 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ基礎コストを軽減してからキャラ補正（calc）をかけ、
@@ -103,7 +103,7 @@ export const randomChargeCandidates = (board: SquareInfo[], chars: PlayerCharact
 
 /** ジャマーが選べるマスか: ⚡があり、無敵マスなら自分のものだけ（弱点を解く唯一の手段）。他人の無敵マスは不可 */
 export const canJam = (board: SquareInfo[], i: number, current: Player, chars: PlayerCharacters): boolean =>
-    chargeStacks(board[i]) > 0 && !isFrozen(board[i]) && !(isShielded(board[i], chars) && board[i].player !== current);
+    chargeStacks(board[i]) > 0 && !isDormant(board[i]) && !(isShielded(board[i], chars) && board[i].player !== current);
 
 /** ジャマーのダメージ対象: i の縦横隣接の敵コマ（ライフ>0・🔑なし。current 以外のコマ） */
 export const jammerTargets = (board: SquareInfo[], i: number, size: number, current: Player): number[] =>
@@ -137,7 +137,7 @@ export const applyJammer = (board: SquareInfo[], i: number, size: number, curren
 };
 
 /** 全マス（空きマス含む）に⚡が1つ以上あるか。sim/engine.js checkDischarge の判定と同じ */
-export const isFullyCharged = (board: SquareInfo[]): boolean => board.length > 0 && board.every((sq) => chargeStacks(sq) > 0);
+export const isFullyCharged = (board: SquareInfo[]): boolean => board.length > 0 && board.every((sq) => chargeStacks(sq) > 0 && !isDormant(sq));
 
 /**
  * 過負荷: 全マスが⚡で埋まっていたら、全⚡と全🔑を取り除き、全マスのライフを0にした新しい盤面を返す。

@@ -3,7 +3,7 @@
 //
 // ❄氷結（スタックする。❄が1つでもあれば氷結中）
 //   - 空きマスにも置ける。氷結中の空きマスには🔑ロック中と同様に誰も着手できない
-//   - 氷結が付いた時点でそのマスの🌱バッズは消える。氷結中のマスには🔑ロックを掛けられない
+//   - 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠する（魔力・発火・継続ダメージなどに働かない）。氷結中のマスには🔑ロックを掛けられない
 //   - ターン進行（自然減衰・火炎の継続ダメージ）でライフが減らない。毒のダメージは受ける
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
 //   - スキルでダメージを受けるとき、ダメージを受ける代わりに氷結が1スタック減る
@@ -11,7 +11,7 @@
 //   - 🔥を付けられそうになると、🔥の代わりに❄が1スタック減る
 //   - 隣（縦横）のマスに🔥が付く（発火する）と、全スタックが即座に解除される
 // 🔥火炎（スタックする）
-//   - 🔥が付いた時点でそのマスの🌱バッズは消える
+//   - 火炎中のマスの他のエフェクト（🌱⚡☠）も、氷結と同じく消えないが休眠する
 //   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師がいれば敵のマスは1回の継続ダメージにつき追加で+1
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
@@ -31,6 +31,8 @@ export const FLAME_SKILL_MULT = 1.5;
 export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
 export const flameStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🔥').length;
+/** 休眠マス: 氷結中または火炎中。マスの他のエフェクト（🌱⚡☠）は消えないが効力を発揮しない */
+export const isDormant = (sq: SquareInfo): boolean => isFrozen(sq) || flameStacks(sq) > 0;
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
 
@@ -109,13 +111,7 @@ export const zeroOut = (sq: SquareInfo): SquareInfo => (sq.bind > 0 ? without({ 
  * 氷結中のマスなら🔥は付かず代わりに❄が1つ減る。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
  * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
  */
-export const ignite = (
-    board: SquareInfo[],
-    cells: number[],
-    size: number,
-    n: number = 1,
-    keepBuds?: (sq: SquareInfo) => boolean
-): { thawed: number[] } => {
+export const ignite = (board: SquareInfo[], cells: number[], size: number, n: number = 1): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
         for (let c = 0; c < n; c++) {
@@ -124,8 +120,7 @@ export const ignite = (
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くとそのマスの🌱バッズは燃えて消える（冬至の種子のガード中は消えない）
-            board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
+            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] }; // 🌱⚡☠は消えないが休眠する
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -141,11 +136,11 @@ export const ignite = (
 export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq) && flameStacks(sq) === 0;
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-export const freeze = (board: SquareInfo[], cells: number[], keepBuds?: (sq: SquareInfo) => boolean): number[] => {
+export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
     const done: number[] = [];
     for (const k of cells) {
         if (!canFreeze(board[k])) continue;
-        board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '❄' }] }; // 氷結が付くとバッズは消える（ガード中は除く）
+        board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] }; // 🌱は消えないが、氷結中は休眠する（activeBuds）
         done.push(k);
     }
     return done;
@@ -180,11 +175,10 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-export const freezeAll = (board: SquareInfo[], keepBuds?: (sq: SquareInfo) => boolean): number[] =>
+export const freezeAll = (board: SquareInfo[]): number[] =>
     freeze(
         board,
-        board.map((_, i) => i),
-        keepBuds
+        board.map((_, i) => i)
     );
 
 export type DetonateResult = {
@@ -247,26 +241,30 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
-    const poison = next.effects.filter((e) => e.effect === '☠').length;
+    // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
+    const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
     return next;
 };
 
 // ---- バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）の純粋ロジック ----
 // sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
-// 冬至の種子の「🌱ガード」は、freeze / freezeAll / ignite の keepBuds 述語として渡す。
+// 冬至の種子の「🌱ガード」は、activeBuds / harvestBuds の guarded 引数として渡す（休眠マスでも🌱が働く）。
 
 /** マスの🌱の数 */
 export const budStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🌱').length;
 
+/** 効力を発揮している🌱の数。休眠マス（氷結中・火炎中）の🌱は消えないが魔力ボーナスに数えない。guarded（冬至の種子）なら休眠しない */
+export const activeBuds = (sq: SquareInfo, guarded: boolean = false): number => (!guarded && isDormant(sq) ? 0 : budStacks(sq));
+
 /** 新しく🌱を持てるコマか: コマがあり、氷結中でなく、🔥が付いていない（付けても氷結・火炎ですぐ消えるため） */
 export const canBud = (sq: SquareInfo): boolean => !!sq.player && !isFrozen(sq) && flameStacks(sq) === 0;
 
-/** 刈り入れ前夜: player のコマの🌱を全部除去して、除去した数を返す。board を直接書き換える */
-export const harvestBuds = (board: SquareInfo[], player: SquareInfo['player']): number => {
+/** 刈り入れ前夜: player のコマの🌱を全部除去して、除去した数を返す（休眠マスの🌱には触れない。guarded=冬至の種子なら触れる）。board を直接書き換える */
+export const harvestBuds = (board: SquareInfo[], player: SquareInfo['player'], guarded: boolean = false): number => {
     let n = 0;
     board.forEach((sq, i) => {
-        if (sq.player !== player) return;
+        if (sq.player !== player || (!guarded && isDormant(sq))) return;
         const k = budStacks(sq);
         if (k === 0) return;
         n += k;

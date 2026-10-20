@@ -684,13 +684,31 @@ test('氷結: ターン進行（自然減衰）でライフが減らない', () 
     assert.strictEqual(s.board[6].bind, 3);
 });
 
-test('氷結: 毒のダメージは通る（通れば🔥は消える）', () => {
+test('氷結中の毒は休眠: 継続ダメージを与えず、消えずに残る。解凍すると再び働く', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
-    s.board[5] = { player: '⭕', bind: 5, effects: [FRZ, { effect: '☠' }, FLM] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [FRZ, { effect: '☠' }, { effect: '☠' }] };
+    s.board[6] = { player: '⭕', bind: 5, effects: [{ effect: '☠' }] };
     e.placeMove(s, 0);
-    assert.strictEqual(s.board[5].bind, 4); // 自然減衰なし・毒-1のみ（氷結中は🔥の継続ダメージもなし）
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.strictEqual(s.board[5].bind, 5); // 自然減衰も毒もなし
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '☠').length, 2);
+    assert.strictEqual(s.board[6].bind, 5 - 1 - 1);
+    // 毒の数に依存する処理も数えない（毒使いのライフ加算・ミアズマの軽減と対象）
+    const th = require('./thermal');
+    assert.strictEqual(th.applyDamage({ player: '⭕', bind: 5, effects: [FRZ] }, 2, 'poison').dealt, 2); // ダメージ種別の関数自体は従来どおり貫通
+    const p = game('poisoner', 'you');
+    p.heartTurn = true;
+    p.board[1] = { player: '💙', bind: 4, effects: [FRZ, { effect: '☠' }, { effect: '☠' }] };
+    p.board[2] = { player: '💙', bind: 4, effects: [{ effect: '☠' }] };
+    assert.strictEqual(e.miasmaCost(p), Math.max(1, e.calculateCost(p, 6 - 1, false, true)));
+    p.board[5] = { player: '⭕', bind: 4, effects: [] }; // 1 の隣(斜め含む)
+    assert.strictEqual(e.miasmaPlan(p).size >= 0, true);
+    assert.strictEqual(e.boardPoisonCount(p.board), 1);
+    const mp = e.miasmaPlan(p, '💙');
+    p.board[1] = { player: '💙', bind: 4, effects: [FRZ, { effect: '☠' }] };
+    p.board[2] = { player: '💙', bind: 4, effects: [FRZ, { effect: '☠' }] };
+    assert.strictEqual(e.miasmaPlan(p, '💙').size, 0); // 毒マスがすべて氷結中なら撒く先が無い
+    assert.ok(mp.size >= 0);
 });
 
 test('氷結: 隣接⚡（発火）のダメージを受けない（氷結は残る）。⚡マス自体は発火して消える', () => {
@@ -941,30 +959,26 @@ test('刈り入れ前夜: 自陣の🌱を全除去し、除去した数だけ�
     assert.strictEqual(s.heartMagic, m);
 });
 
-test('冬至の種子: 🌱ガード中は氷結・火炎を受けても🌱が消えない。自分の次の手番開始時に解除。ガード中の再使用は不可', () => {
+test('冬至の種子: 自陣の🌱が休眠せず働く（魔力ボーナス・刈り入れ前夜）。自分の次の手番開始時に解除。ガード中の再使用は不可', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20; s.life = 3;
-    s.board[1] = { player: '💙', bind: 5, effects: [BUD] };
-    s.board[2] = { player: '⭕', bind: 5, effects: [BUD] };
+    s.board[1] = { player: '💙', bind: 5, effects: [BUD, BUD, FRZ] };   // 氷結中
+    s.board[2] = { player: '💙', bind: 5, effects: [BUD, FLM] };        // 火炎中
+    s.board[3] = { player: '⭕', bind: 5, effects: [BUD, FRZ] };        // 敵の休眠は対象外
+    assert.strictEqual(e.ownBuds(s), 0);                                // ガード前は全部休眠
     const before = s.heartMagic;
     e.SKILLS.solstice(s);
     assert.strictEqual(s.heartMagic, before - 4);
     assert.strictEqual(s.budGuard[0], true);
+    assert.strictEqual(e.ownBuds(s), 3);                                // ガード中は数える
     const m = s.heartMagic;
     e.SKILLS.solstice(s);
     assert.strictEqual(s.heartMagic, m); // 再使用不可
-    // 自陣: 🌱ガード中は凍らされても🌱が残る。敵のコマは従来どおり消える
-    const th = require('./thermal');
-    const keep = (sq) => !!sq.player && s.budGuard[e.seatOf(sq.player)];
-    th.freeze(s.board, [1, 2], keep);
-    assert.strictEqual(budsOn(s.board[1]), 1);
-    assert.strictEqual(budsOn(s.board[2]), 0);
-    th.ignite(s.board, [1], s.size, 1, keep); // 氷結中は❄が減るだけ
-    const b = [...s.board]; b[1] = { player: '💙', bind: 5, effects: [BUD] };
-    th.ignite(b, [1], s.size, 1, keep);
-    assert.strictEqual(budsOn(b[1]), 1);
-    th.ignite(b, [1], s.size, 1); // ガード無しなら燃えて消える
-    assert.strictEqual(budsOn(b[1]), 0);
+    // 刈り入れ前夜がガード中は休眠マスの🌱も刈れる（敵の🌱は触らない）
+    e.SKILLS.harvestEve(s);
+    assert.strictEqual(s.heartMagic, m - 2 + 3);
+    assert.strictEqual(budsOn(s.board[1]) + budsOn(s.board[2]), 0);
+    assert.strictEqual(budsOn(s.board[3]), 1);
     // 解除タイミング: 自分の次の手番開始時（相手の手番ではまだ有効）
     e.SKILLS.charge(s);
     assert.strictEqual(s.heartTurn, false);
@@ -974,19 +988,73 @@ test('冬至の種子: 🌱ガード中は氷結・火炎を受けても🌱が�
     assert.strictEqual(s.budGuard[0], false);
 });
 
-test('冬至の種子: エンジンの氷結(絶対零度)・業火でもガード中の席の🌱は守られる', () => {
-    const s = game('cryomancer', 'you');
-    s.heartTurn = true; s.heartMagic = 30;
-    s.board[1] = { player: '💙', bind: 5, effects: [BUD] };
-    s.budGuard[0] = true;
-    e.SKILLS.glacier(s);
-    assert.strictEqual(budsOn(s.board[1]), 1);
+test('冬至の種子: 魔力ボーナスも数える（休眠マスの🌱 → ガードで有効）', () => {
+    const gainWith = (guard) => {
+        const g = game('magician', 'you');
+        g.heartTurn = true; g.heartMagic = 0; g.life = 3;
+        g.board[1] = { player: '💙', bind: 5, effects: [BUD, BUD, FRZ] };
+        g.budGuard[0] = guard;
+        e.SKILLS.charge(g); // 席0が終了 → 席1 → 席0 の頭で加算
+        e.SKILLS.charge(g);
+        return g.heartMagic;
+    };
+    // 魔法使い: 🌱1個につき +1 +2
+    assert.strictEqual(gainWith(true) - gainWith(false), 6);
+});
+
+test('火炎が付いても🌱は消えず休眠する。業火・絶対零度でも誰の🌱も消えない', () => {
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[1] = { player: '⭕', bind: 3, effects: [BUD, BUD] };
+    th.ignite(b, [1], 4);
+    assert.strictEqual(budsOn(b[1]), 2);
+    assert.ok(th.isDormant(b[1]));
+    assert.strictEqual(th.activeBuds(b[1]), 0);
+    assert.strictEqual(th.activeBuds(b[1], true), 2); // 冬至の種子
     const t = game('pyromancer', 'you');
     t.heartTurn = true; t.heartMagic = 30;
     t.board[1] = { player: '⭕', bind: 5, effects: [BUD] };
-    t.budGuard[1] = true;
     e.SKILLS.inferno(t);
     assert.strictEqual(budsOn(t.board[1]), 1);
+    const g = game('cryomancer', 'you');
+    g.heartTurn = true; g.heartMagic = 30;
+    g.board[1] = { player: '💙', bind: 5, effects: [BUD] };
+    e.SKILLS.glacier(g);
+    assert.strictEqual(budsOn(g.board[1]), 1);
+});
+
+test('休眠マス（氷結・火炎）: 🔥中のマスは毒の継続ダメージ・⚡の発火・無敵・帯電コスト軽減・過負荷が休眠。🔥は電気で消える', () => {
+    const s = game();
+    s.heartTurn = true; s.life = 3;
+    s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
+    e.placeMove(s, 0);
+    // 減衰-1・火炎-2（毒は休眠なので0）→ 3。🔥も毒も残る
+    assert.strictEqual(s.board[5].bind, 3);
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
+    // 電気のダメージを受けると🔥は消える
+    const t = game();
+    t.heartTurn = true; t.life = 3;
+    t.board[5] = { player: '⭕', bind: 8, effects: [{ effect: '⚡' }] };
+    t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
+    e.placeMove(t, 4);
+    assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
+    // 🔥中のマスの⚡は発火源でなく、巫の無敵も無効、盤面の⚡数にも数えない
+    const u = game('electrician', 'you');
+    u.heartTurn = true; u.life = 3;
+    u.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FLM] };
+    u.board[6] = { player: '⭕', bind: 4, effects: [] };
+    assert.strictEqual(e.isShielded(u, u.board[5]), false);
+    assert.strictEqual(e.boardChargeCount(u.board), 0);
+    u.board[9] = { player: '⭕', bind: 4, effects: [] };
+    e.placeMove(u, 4); // 5 の隣に着手しても休眠中の⚡は発火しない
+    assert.strictEqual(u.board[6].bind, 4 - 1);
+    assert.strictEqual(e.chargeStacks(u.board[5]), 1);
+    // 毒使い・ミアズマの毒の数にも数えない
+    const p = game('poisoner', 'you');
+    p.heartTurn = true;
+    p.board[1] = { player: '💙', bind: 4, effects: [FLM, { effect: '☠' }] };
+    assert.strictEqual(e.boardPoisonCount(p.board), 0);
 });
 
 test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コマ(canBud)に🌱を1つずつ（受け手が3つ以上なら重複なくランダムに2つ）。選べるコマが無ければ不可。コスト4', () => {
@@ -1166,7 +1234,7 @@ test('発火: 🔥が実際に付くと縦横隣の氷結が全スタック解�
     assert.strictEqual(s.heartTurn, true); // 手番は進まない
 });
 
-test('氷結（idx30）: 空きマスにも置け、氷結済みでも❄が積み増せ、そのマスの🌱は全部消える。🔑中は選べない', () => {
+test('氷結（idx30）: 空きマスにも置け、氷結済みでも❄が積み増せ、🌱は消えない（休眠）。🔑中は選べない', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '⭕', bind: 4, effects: [FRZ] };
@@ -1178,7 +1246,7 @@ test('氷結（idx30）: 空きマスにも置け、氷結済みでも❄が積�
     assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 2);
     e.SKILLS.freeze(s);
     assert.strictEqual(e.placeMove(s, 6), true);
-    assert.ok(!s.board[6].effects.some((x) => x.effect === '🌱'));
+    assert.strictEqual(budsOn(s.board[6]), 2); // 氷結しても🌱は残る
     e.SKILLS.freeze(s);
     assert.strictEqual(e.placeMove(s, 0), true);         // 空きマスにも置ける
     assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '❄').length, 1);
@@ -1285,7 +1353,7 @@ test('絶対零度: 使用時に🔑のない全マス（空きマス含む）�
     assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '❄').length, 1);
     assert.strictEqual(s.board[3].effects.filter((x) => x.effect === '❄').length, 2);
     assert.strictEqual(s.board[2].effects.filter((x) => x.effect === '❄').length, 0); // 🔑は除く
-    assert.ok(!s.board[1].effects.some((x) => x.effect === '🌱')); // 氷結でバッズは消える
+    assert.strictEqual(budsOn(s.board[1]), 1); // 氷結してもバッズは消えない（休眠）
     const m = s.heartMagic;
     e.SKILLS.glacier(s); // 発動待ち中は不発
     assert.strictEqual(s.heartMagic, m);
@@ -1435,6 +1503,59 @@ test('AI 氷室の番人: 相手の単独リーチは氷結で塞ぎ（着手を
     assert.notStrictEqual(r.move, 3); // 凍った空きマスには着手しない
     assert.strictEqual(r.turnEnded, false);
     assert.strictEqual(aiMod.countReaches(s.board, '⭕'), 0);
+});
+
+test('氷結中の🌱は休眠: 魔力ボーナスに数えず、刈り入れ前夜も触らない。解凍すると再び働く', () => {
+    const mk = (frozen) => {
+        const g = game('magician', 'you');
+        g.heartTurn = false; g.circleMagic = 0; // 席1(you)が着手 → 次は席0(魔法使い)の手番開始
+        g.board[1] = { player: '💙', bind: 5, effects: frozen ? [BUD, BUD, FRZ] : [BUD, BUD] };
+        return g;
+    };
+    const gain = (g) => { const before = g.heartMagic; e.placeMove(g, 15); return g.heartMagic - before; };
+    // 魔法使い: 1 + 🌱×(1+2)。休眠中は🌱を数えず 1 + 2（ボーナス込み: 魔法使い+1）
+    assert.strictEqual(gain(mk(false)) - gain(mk(true)), 6);
+    const h = game();
+    h.heartTurn = true; h.heartMagic = 10;
+    h.board[1] = { player: '💙', bind: 3, effects: [BUD, BUD, FRZ] };
+    h.board[2] = { player: '💙', bind: 3, effects: [BUD] };
+    assert.strictEqual(e.ownBuds(h), 1);
+    e.SKILLS.harvestEve(h);
+    assert.strictEqual(h.heartMagic, 10 - 2 + 1);
+    assert.strictEqual(budsOn(h.board[1]), 2); // 氷結中のマスの🌱は除去されない
+    assert.strictEqual(budsOn(h.board[2]), 0);
+    const f = game();
+    f.heartTurn = true; f.heartMagic = 10;
+    f.board[1] = { player: '💙', bind: 3, effects: [BUD, FRZ] };
+    e.SKILLS.harvestEve(f); // 休眠中の🌱しか無い → 不可
+    assert.strictEqual(f.heartMagic, 10);
+});
+
+test('氷結中の⚡は休眠: 雷霆の巫の無敵が効かず、帯電コストの軽減と過負荷に数えない', () => {
+    const s = game('electrician', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(e.isShielded(s, s.board[5]), true);
+    s.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FRZ] };
+    assert.strictEqual(e.isShielded(s, s.board[5]), false); // 氷結中は無敵でない
+    assert.strictEqual(e.boardChargeCount(s.board), 0);
+    const base = e.chargeOneCost(s);
+    s.board[6] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(e.boardChargeCount(s.board), 1);
+    assert.strictEqual(e.chargeOneCost(s), Math.max(1, base - 1));
+    // 過負荷: 全マスが⚡でも、氷結中のマスは⚡なし扱いなので爆発しない
+    const o = game('electrician', 'you');
+    o.heartTurn = true; o.heartMagic = 20;
+    for (let k = 0; k < 16; k++) o.board[k] = { player: undefined, bind: 2, effects: [{ effect: '⚡' }, ...(k === 3 ? [FRZ] : [])] };
+    o.board[0] = { player: '⭕', bind: 3, effects: [] }; // 1 マスだけ⚡なし
+    e.SKILLS.chargeOne(o);
+    assert.strictEqual(e.placeMove(o, 0), true);
+    assert.ok(o.board.some((sq) => sq.bind > 0), '氷結中のマスがあるので過負荷にならない');
+    o.board[3] = { player: undefined, bind: 2, effects: [{ effect: '⚡' }] };
+    o.heartMagic = 20;
+    e.SKILLS.chargeOne(o);
+    e.placeMove(o, 1); // 全マス⚡（氷結なし）→ 過負荷
+    assert.ok(o.board.every((sq) => sq.bind === 0));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

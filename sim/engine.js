@@ -212,8 +212,9 @@ function addCorpses(s, n) {
 }
 
 // ---- 毒（毒使い）ヘルパー --------------------------------------------------
+// 効力のある毒の数。休眠マス（氷結・火炎中）の☠は消えないが休眠する（継続ダメージ・毒数に依存する処理に数えない）
 function poisonStacks(sq) {
-    return sq.effects.filter((e) => e.effect === '☠').length;
+    return thermal.isDormant(sq) ? 0 : sq.effects.filter((e) => e.effect === '☠').length;
 }
 function boardPoisonCount(board) {
     let n = 0;
@@ -269,16 +270,16 @@ function charOfPlayer(s, player) {
 }
 // 雷霆の巫の⚡付き自陣マスは「ライフ0でも取られない」無敵。弱点として本人も触れない
 function isShielded(s, sq) {
-    return !!sq.player && charOfPlayer(s, sq.player) === 'electrician' && chargeStacks(sq) > 0;
+    return !!sq.player && charOfPlayer(s, sq.player) === 'electrician' && chargeStacks(sq) > 0 && !thermal.isDormant(sq); // 休眠中（氷結・火炎）は無敵でない（⚡が休眠）
 }
 // 🔑ロックまたは⚡の無敵＝ダメージ系スキルの対象外にするマス
 function isGuarded(s, sq) {
     return sq.effects.some((e) => e.effect === '🔑') || isShielded(s, sq);
 }
-// 盤面全体の⚡の数（スタック込み）
+// 盤面全体の⚡の数（スタック込み。氷結中のマスの⚡は休眠なので数えない）
 function boardChargeCount(board) {
     let n = 0;
-    for (const sq of board) n += chargeStacks(sq);
+    for (const sq of board) if (!thermal.isDormant(sq)) n += chargeStacks(sq);
     return n;
 }
 // 帯電付与・帯電拡散の実コスト: 盤面の⚡の数だけ軽減、下限 CHARGE_MIN_COST (#43。ミアズマと同じ流儀)
@@ -291,7 +292,7 @@ function chargeSpreadCost(s) {
 // ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡と🔑を取り除き、全マスのライフを0にする
 function checkDischarge(s) {
     if (!DISCHARGE) return false;
-    if (!s.board.every((sq) => chargeStacks(sq) > 0)) return false;
+    if (!s.board.every((sq) => chargeStacks(sq) > 0 && !thermal.isDormant(sq))) return false; // 休眠マスの⚡は⚡なし扱い
     for (const sq of s.board) {
         sq.effects = sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑');
         sq.bind = 0;
@@ -306,7 +307,7 @@ function bumpStat(s, key, n = 1) {
 function fireCharges(s, i, mover) {
     const board = s.board;
     for (const k of orthoNeighbors(i, s.size)) {
-        if (chargeStacks(board[k]) === 0 || thermal.isFrozen(board[k])) continue; // 氷結中の⚡は休眠（発火せず消えもしない）
+        if (chargeStacks(board[k]) === 0 || thermal.isDormant(board[k])) continue; // 休眠マス（氷結・火炎中）の⚡は発火しない（消えもしない）
         bumpStat(s, 'fires');
         bumpStat(s, charOfPlayer(s, mover) === 'electrician' ? 'firesByElectrician' : 'firesByOther');
         for (const n of orthoNeighbors(k, s.size)) {
@@ -585,9 +586,10 @@ function calculateTokenBind(s) {
     return delta === 0 ? base : Math.max(1, base + delta);
 }
 
-function budsCount(board, player) {
+// 魔力ボーナスに数える🌱（休眠マスの🌱は数えない。guarded=冬至の種子で🌱だけは休眠しない）
+function budsCount(board, player, guarded = false) {
     return board
-        .filter((x) => x.player === player)
+        .filter((x) => x.player === player && (guarded || !thermal.isDormant(x)))
         .flatMap((x) => x.effects)
         .filter((e) => e.effect === '🌱').length;
 }
@@ -620,11 +622,11 @@ function advanceTurn(s) {
     const ch = s.chars[next];
     const magicCharacter = ['magician'];
     // Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
-    let nextMagic = s.magic[next] + 1 + lateMagicBonus(s.currentTurn, seatCount(s)) + budsCount(s.board, sym);
+    let nextMagic = s.magic[next] + 1 + lateMagicBonus(s.currentTurn, seatCount(s)) + budsCount(s.board, sym, s.budGuard[next]);
     if (magicCharacter.includes(ch)) nextMagic++;
     if (ch === 'yinYangMaster' && s.yy[next] === 'ying') nextMagic++;
     // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
-    if (ch === 'magician') nextMagic += budsCount(s.board, sym) * 2;
+    if (ch === 'magician') nextMagic += budsCount(s.board, sym, s.budGuard[next]) * 2;
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
         const upkeep = proliferateUpkeep(s.proliferateCount[next]);
@@ -663,7 +665,7 @@ function placeMove(s, i) {
 
     // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。他人の無敵マスは選べない
     if (s.useJammer) {
-        if (chargeStacks(board[i]) === 0 || thermal.isFrozen(board[i])) return false; // 氷結中の⚡は休眠
+        if (chargeStacks(board[i]) === 0 || thermal.isDormant(board[i])) return false; // 休眠マスの⚡はジャマーの起点にならない
         if (isShielded(s, board[i]) && board[i].player !== curPlayer(s)) return false;
         exeJammer(s, i);
         return true;
@@ -695,14 +697,14 @@ function placeMove(s, i) {
     }
     if (s.useFreeze) {
         if (!thermal.canFreeze(board[i])) return false; // 空きマス・氷結済み・ロック中は選び直せる
-        const made = thermal.freeze(board, [i], keepBudsFn(s)).length;
+        const made = thermal.freeze(board, [i]).length;
         for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made; // 氷結が作られるたび、全席の絶対零度が安くなる
         s.useFreeze = false;
         return true;
     }
     if (s.useIgnite) {
         if (!board[i].player) return false;
-        thermal.ignite(board, [i], s.size, 1, keepBudsFn(s));
+        thermal.ignite(board, [i], s.size, 1);
         s.useIgnite = false;
         return true;
     }
@@ -756,9 +758,9 @@ function placeMove(s, i) {
         // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
         const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
         if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
-        const poison = sq.effects.filter((e) => e.effect === '☠').length;
+        const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
-            // 毒は氷結を貫通し、ダメージが通れば🔥は消える
+            // ダメージが通れば🔥は消える
             const hit = thermal.applyDamage(sq, poison, 'poison').sq;
             sq.bind = hit.bind;
             sq.effects = hit.effects;
@@ -779,7 +781,7 @@ function placeMove(s, i) {
             s.chars.forEach((c, seat) => { if (c === 'poisoner') s.magic[seat] += 1; });
         }
     }
-    const hadPoisonAtTarget = board[i].effects.some((e) => e.effect === '☠');
+    const hadPoisonAtTarget = poisonStacks(board[i]) > 0;
 
     const cur = curPlayer(s);
     const life = s.life;
@@ -1204,7 +1206,7 @@ function miasmaCost(s) {
 function miasmaPlan(s, me = curPlayer(s)) {
     const plan = new Map();
     s.board.forEach((sq, i) => {
-        if (sq.player !== me || poisonStacks(sq) === 0) return;
+        if (sq.player !== me || poisonStacks(sq) === 0) return; // 氷結中の毒は数えない
         for (const j of surroundRange(s, i)) {
             const t = s.board[j];
             if (t.player && t.player !== me && !isGuarded(s, t)) plan.set(j, (plan.get(j) || 0) + 1);
@@ -1220,7 +1222,7 @@ function exeMiasma(s) {
         for (let k = 0; k < n; k++) s.board[j].effects.push({ effect: '☠' });
         poisonStrike(s, s.board[j]);
     }
-    for (const sq of s.board) if (sq.player === me) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
+    for (const sq of s.board) if (sq.player === me && !thermal.isFrozen(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
     harvestMagic(s, plan.size);
     if (plan.size) toxicBloom(s, null);
 }
@@ -1257,7 +1259,7 @@ function onClickSerum(s) {
 function onClickIntensify(s) {
     let added = 0;
     for (const sq of s.board) {
-        const p = poisonStacks(sq);
+        const p = sq.effects.filter((e) => e.effect === '☠').length; // 氷結中の毒も倍にできる（付与は従来どおり）
         for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
         if (p > 0) poisonStrike(s, sq);
         added += p;
@@ -1447,7 +1449,7 @@ function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
     const cost = glacierCost(s);
     s.glacierCharge[s.turn] = 0; // 自身の freezeAll で付く❄は数えない
-    const done = thermal.freezeAll(s.board, keepBudsFn(s));
+    const done = thermal.freezeAll(s.board);
     s.glacierPending[s.turn] = true;
     spendMagic(s, cost);
     bumpStat(s, 'glacier');
@@ -1459,24 +1461,21 @@ function hasAilment(board, player) {
     return board.some((sq) => sq.player === player && sq.effects.some((e) => thermal.AILMENTS.includes(e.effect)));
 }
 // ---- 🌱バッズ系の汎用スキル (idx 33〜36) ----
-// 冬至の種子の🌱ガード: 氷結・火炎を受けてもその席のコマの🌱が消えない
-function keepBudsFn(s) {
-    return (sq) => !!sq.player && !!s.budGuard[seatOf(sq.player)];
-}
+// 冬至の種子の🌱ガード: 次の自分の手番開始まで、自陣の🌱は休眠しない（氷結・火炎中のマスでも魔力ボーナスに数えられ、刈り入れ前夜の対象になる）
 // 刈り入れ前夜 (idx 33): 自陣の🌱を全部取り除き、取り除いた数だけ魔力を得る。自陣に🌱が無ければ不発
 function ownBuds(s) {
-    return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + thermal.budStacks(sq) : n), 0);
+    return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + thermal.activeBuds(sq, s.budGuard[s.turn]) : n), 0); // 休眠マスの🌱は数えない（ガード中を除く）
 }
 function onClickHarvestEve(s) {
     if (ownBuds(s) < 1) return;
-    const n = thermal.harvestBuds(s.board, curPlayer(s));
+    const n = thermal.harvestBuds(s.board, curPlayer(s), s.budGuard[s.turn]);
     spendMagic(s, calculateCost(s, costsOf(s).onClickHarvestEve));
     s.magic[s.turn] += n;
     bumpMagicCount(s);
     bumpStat(s, 'harvestEve');
     bumpStat(s, 'harvestEveBuds', n);
 }
-// 冬至の種子 (idx 34): 自分に🌱ガードを付ける。ガード中の再使用は不可
+// 冬至の種子 (idx 34): 自分に🌱ガードを付ける（次の自分の手番開始まで自陣の🌱が休眠しない）。ガード中の再使用は不可
 function onClickSolstice(s) {
     if (s.budGuard[s.turn]) return;
     s.budGuard[s.turn] = true;
@@ -1543,7 +1542,7 @@ function infernoTargets(s) {
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
-    thermal.ignite(s.board, targets, s.size, 2, keepBudsFn(s));
+    thermal.ignite(s.board, targets, s.size, 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
     bumpStat(s, 'inferno');
     bumpStat(s, 'infernoCells', targets.length);

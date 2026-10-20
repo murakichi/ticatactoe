@@ -13,6 +13,8 @@ import {
     infernoTargets,
     decayTick,
     budStacks,
+    activeBuds,
+    isDormant,
     canBud,
     harvestBuds,
     budReceivers,
@@ -33,7 +35,7 @@ import {
     GLACIER_BASE_COST,
     FLAME_BURN_DAMAGE,
 } from './thermal';
-import { fireCharges, applyJammer, chargeStacks, canJam } from './charge';
+import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
 import { findEmptyIndexes } from '../../util';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Effect } from '../../types/Effect';
@@ -54,8 +56,11 @@ describe('❄氷結', () => {
         expect(decayTick(sq('💙', 4), chars).bind).toBe(3);
     });
 
-    it('毒のダメージは受ける', () => {
-        expect(decayTick(sq('💙', 4, '❄', '☠', '☠'), chars).bind).toBe(2);
+    it('氷結中のマスの☠は消えないが休眠していて、継続ダメージを与えない（氷結が解ければ再び働く）', () => {
+        const frozen = decayTick(sq('💙', 4, '❄', '☠', '☠'), chars);
+        expect(frozen.bind).toBe(4);
+        expect(frozen.effects.filter((e) => e.effect === '☠')).toHaveLength(2);
+        expect(decayTick(sq('💙', 4, '☠', '☠'), chars).bind).toBe(1); // 氷結していなければ -1 と毒2
     });
 
     it('隣接⚡のダメージ（発火・ジャマー）は受けず、氷結も残る', () => {
@@ -139,11 +144,14 @@ describe('❄氷結', () => {
         expect(isFrozen(b[5])).toBe(false);
     });
 
-    it('氷結が付くとバッズは消える。氷結中はロックできない', () => {
+    it('氷結が付いても🌱は消えず休眠する。氷結中はロックできない', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3, '🌱', '🌱');
         freeze(b, [0]);
-        expect(b[0].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱', '🌱', '❄']);
+        expect(budStacks(b[0])).toBe(2);
+        expect(activeBuds(b[0])).toBe(0); // 休眠
+        expect(activeBuds(thaw(b[0]))).toBe(2); // 解凍すれば再び働く
         expect(lockable(b[0])).toBe(false);
         expect(lockable(sq('💙', 3, '🌱'))).toBe(true);
         // ロック中のコマには氷結が付かない
@@ -195,7 +203,7 @@ describe('❄氷結', () => {
         expect(done).toHaveLength(15);
         expect(done).not.toContain(2);
         expect(frozenStacks(b[0])).toBe(1);
-        expect(b[0].effects.some((e) => e.effect === '🌱')).toBe(false);
+        expect(budStacks(b[0])).toBe(1); // 🌱は消えず休眠する
         expect(frozenStacks(b[1])).toBe(2);
         expect(frozenStacks(b[5])).toBe(1); // 空きマス
         expect(frozenStacks(b[2])).toBe(0);
@@ -269,7 +277,7 @@ describe('🔥火炎', () => {
         expect(flameStacks(applyDamage(sq('⭕', 10, '🔥', '🔥'), 1, 'electric').sq)).toBe(0);
         expect(flameStacks(applyDamage(sq('⭕', 0, '🔥'), 1, 'electric').sq)).toBe(1);
         expect(flameStacks(zeroOut(sq('⭕', 4, '🔥')))).toBe(0);
-        expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '☠'), chars))).toBe(0); // 毒のダメージで消える
+        expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '☠'), chars))).toBe(1); // 🔥中のマスの☠は休眠していて、毒では消えない
     });
 
     it('自然減衰だけでは🔥は消えない', () => {
@@ -301,13 +309,31 @@ describe('🔥火炎', () => {
         expect(r.thawed.sort((a, c) => a - c)).toEqual([6, 9]);
     });
 
-    it('🔥が付くとバッズは消える。氷結が肩代わりして🔥が付かなかったときは消えない', () => {
+    it('🔥が付いても🌱は消えず休眠する（氷結と同じ）。休眠マスの☠は継続ダメージなし、⚡は発火源・無敵にならない', () => {
         const b = emptyBoard();
-        b[0] = sq('💙', 3, '🌱', '🌱');
+        b[0] = sq('💙', 3, '🌱', '🌱', '☠', '⚡');
+        ignite(b, [0], 4);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱', '🌱', '☠', '⚡', '🔥']);
+        expect(isDormant(b[0])).toBe(true);
+        expect(activeBuds(b[0])).toBe(0);
+        expect(activeBuds(b[0], true)).toBe(2); // 冬至の種子のガード中は働く
+        // ☠は休眠: 自然減衰(-1)と🔥(2)だけ
+        expect(decayTick(sq('💙', 8, '☠', '☠', '🔥'), ['you']).bind).toBe(8 - 1 - 2);
+        const cs = ['you', 'electrician'] as CharacterId[];
+        expect(isShielded(sq('⭕', 3, '⚡', '🔥'), cs)).toBe(false);
+        const g = emptyBoard();
+        g[5] = sq('⭕', 3, '⚡', '🔥');
+        g[6] = sq('💙', 4);
+        expect(fireCharges(g, 4, 4).fired).toEqual([]);
+        expect(harvestBuds(b, '💙')).toBe(0); // 刈り入れ前夜も休眠マスの🌱には触れない
+        expect(harvestBuds(b, '💙', true)).toBe(2);
+    });
+
+    it('氷結が肩代わりして🔥が付かなかったときも🌱は残る', () => {
+        const b = emptyBoard();
         b[10] = sq('💙', 3, '🌱', '❄');
-        ignite(b, [0, 10], 4);
-        expect(b[0].effects.map((e) => e.effect)).toEqual(['🔥']);
-        expect(b[10].effects.map((e) => e.effect)).toEqual(['🌱']); // ❄は消えたが🔥は付かず、🌱は残る
+        ignite(b, [10], 4);
+        expect(b[10].effects.map((e) => e.effect)).toEqual(['🌱']);
     });
 
     it('氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が1スタック減る（隣は解けない）', () => {
@@ -473,25 +499,12 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(harvestBuds(b, '💙')).toBe(0);
     });
 
-    it('冬至の種子: keepBuds が真なら、氷結・火炎が付いても🌱は消えない（偽・省略なら消える）', () => {
-        const guarded = (x: SquareInfo) => x.player === '💙';
-        const b = emptyBoard();
-        b[0] = sq('💙', 3, '🌱');
-        b[5] = sq('⭕', 3, '🌱');
-        b[10] = sq('💙', 3, '🌱');
-        b[15] = sq('💙', 3, '🌱');
-        freeze(b, [0, 5], guarded);
-        expect(budStacks(b[0])).toBe(1); // 💙はガード
-        expect(budStacks(b[5])).toBe(0); // ⭕はガードなし
-        ignite(b, [10], 4, 1, guarded);
-        expect(budStacks(b[10])).toBe(1);
-        expect(flameStacks(b[10])).toBe(1);
-        freezeAll(b, guarded);
-        expect(budStacks(b[15])).toBe(1);
-        const c = emptyBoard();
-        c[10] = sq('💙', 3, '🌱');
-        ignite(c, [10], 4);
-        expect(budStacks(c[10])).toBe(0); // 省略時は従来どおり
+    it('冬至の種子: guarded なら、氷結・火炎中のマスの🌱も働く（魔力・刈り入れ前夜）', () => {
+        const dormantSq = sq('💙', 3, '🌱', '❄');
+        expect(activeBuds(dormantSq)).toBe(0);
+        expect(activeBuds(dormantSq, true)).toBe(1);
+        expect(activeBuds(sq('💙', 3, '🌱', '🔥'), true)).toBe(1);
+        expect(activeBuds(sq('💙', 3, '🌱'))).toBe(1);
     });
 
     it('ひこばえ: 縦横隣の自陣コマ全てに🌱を1つ。氷結・火炎中のコマ・敵・空きマス・斜めには付かない', () => {
@@ -579,18 +592,42 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         }
         const f = mk();
         const g = mk();
-        sim.freeze(f, [5, 10], guarded);
-        freeze(g, [5, 10], guarded);
+        sim.freeze(f, [5, 10]);
+        freeze(g, [5, 10]);
         expect(f).toEqual(g);
         const h = mk();
         const i = mk();
-        sim.ignite(h, [5, 10], 4, 1, guarded);
-        ignite(i, [5, 10], 4, 1, guarded);
+        sim.ignite(h, [5, 10], 4, 1);
+        ignite(i, [5, 10], 4, 1);
         expect(h).toEqual(i);
         const j = mk();
         const k = mk();
-        sim.freezeAll(j, guarded);
-        freezeAll(k, guarded);
+        sim.freezeAll(j);
+        freezeAll(k);
         expect(j).toEqual(k);
+    });
+});
+
+describe('氷結中のマスの他エフェクトは消えないが休眠する', () => {
+    it('刈り入れ前夜は氷結中のマスの🌱に触れない', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🌱', '❄');
+        b[1] = sq('💙', 3, '🌱', '🌱');
+        expect(harvestBuds(b, '💙')).toBe(2);
+        expect(budStacks(b[0])).toBe(1);
+    });
+
+    it('⚡: 氷結中は雷霆の巫の無敵が働かず、軽減・過負荷にも数えない', () => {
+        const cs = ['you', 'electrician'] as CharacterId[];
+        expect(isShielded(sq('⭕', 3, '⚡'), cs)).toBe(true);
+        expect(isShielded(sq('⭕', 3, '⚡', '❄'), cs)).toBe(false);
+        const b = emptyBoard();
+        b[0] = sq('⭕', 3, '⚡', '⚡');
+        b[1] = sq('⭕', 3, '⚡', '❄');
+        expect(boardChargeCount(b)).toBe(2);
+        const full = emptyBoard().map(() => sq(undefined, 0, '⚡'));
+        expect(isFullyCharged(full)).toBe(true);
+        full[3] = sq(undefined, 0, '⚡', '❄');
+        expect(isFullyCharged(full)).toBe(false);
     });
 });

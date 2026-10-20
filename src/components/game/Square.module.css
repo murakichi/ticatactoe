@@ -183,3 +183,8 @@
 .frozen.burning {
     box-shadow: 0 0 0 3px #bfe9ff inset, 0 0 0 5px #fb923c inset, 0 0 10px rgba(125, 211, 252, 0.8);
 }
+
+/* 氷結中のマスの他のエフェクトは休眠している（❄以外のバッジを薄くする） */
+.dormant {
+    opacity: 0.45;
+}
