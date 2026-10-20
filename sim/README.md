@@ -118,3 +118,4 @@ node sim/probe-top.js --rank --games 60 --seed 1                       # 全キ�
 node sim/probe-top.js --target pyromancer --scan gears --games 60      # ギア近傍の探索（--scan deck も可）
 ```
 対象キャラにだけ候補のデッキ/ギア/AIフラグを与え、他キャラは推奨設定のまま「環境勝率」を測る。詳細は `.claude/skills/tune-top/SKILL.md`（`/loop` から回す）。
+デッキのシナジー探索: `node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40`（`--swap` で同時に入れ替える枚数、`--cat` で入れる札のカテゴリを限る）。
