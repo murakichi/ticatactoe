@@ -3,12 +3,13 @@
 - 最後に検証したmaster: f55e71a
 - 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1(既定)
 - 基準線: 環境勝率 62.5% / 2位 / 1位 magician 67.3%  (seed=3, games=200, master 80d796c)
-- 連続不採用回数: 5
+- 連続不採用回数: 6
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
-- 状態: running(トップ未達。master 80d796c の魔法使い調整で陥落)
+- 状態: blocked(issue #94)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 10 | strategy | 絶対零度の発動条件ノブ glacierMin=2/4/5 (seed1/100, base 63.6) | 63.7 / 63.5 / 63.2。差なし | 不採用 |
 | 9 | strategy | 死に札を1枚ずつ強制使用(force=41/42/43/44/47, seed1/100, base 63.6) | 41:64.0 / 42:63.8 / 44:63.5 / 43:57.8 / 47:59.0。+1.5pt以上なし | 不採用 |
 | 8 | meta | 対magician/tactician に絞ったデッキ1枚近傍30(seed1,100。base 46.0±6.9) | 最良 +6.5pt(砕氷→毒霧 52.5±6.9)だが SE 6.9 で z≈0.9、閾値3.0に届かず | 不採用 |
 | 7 | strategy | 監査(--scan audit, vs magician/tactician 100): 範囲氷結41・氷柱42・ランダム氷結43・氷結拡散44・砕氷47 が「差なし」=AIが一度も使わない死に札。強制使用 force=41\|42\|43\|44\|47 を試す | seed1/100: 63.6→56.0 (-7.7pt, SE1.6) | 不採用(簡易評価で撃つと魔力を浪費して悪化。専用の撃ち所ロジックが要る=次回候補) |
@@ -24,3 +25,5 @@
 - 完了判定(cryoCards採用後, seed3/200): 基本 1位65.4(2位tactician62.2) / envDeck varied 1位63.9(2位electrician61.8) / oppGears none 1位58.6(2位magician58.1) / oppGears random 5位54.8(1位tactician56.8, -2.0pt)。(注: この4条件は --target 無しで測ったため、none/random では氷室自身も推奨ギアでなくなっていた。測り直し(--target cryomancer --gears afterglow,sturdy): none 1位77.8(2位tactician55.1) / random 1位71.0(2位tactician56.3))。**4条件すべて1位 = トップ到達**。
 - 順位(seed3/200, 旧): 1 tactician 63.3, 2 electrician 58.3, 3 cryomancer 56.6, 4 giant 56.3, 5 magician 55.7。8位→3位。本番AIでは未計測。
 - 次: deck(1枚/シナジー)走査、氷結を毎ターン撃つAIノブ(strategy)。
+
+- 6種類(gear/deck/synergy/strategy/meta/joint)を一巡、連続不採用6のため issue #94 を起票して blocked。
