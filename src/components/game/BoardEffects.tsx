@@ -33,7 +33,15 @@ export type SkillEffectType =
     | 'windborne'
     | 'iceBreak'
     | 'thaw'
-    | 'burn';
+    | 'burn'
+    | 'heal'
+    | 'double'
+    | 'bloom'
+    | 'discount'
+    | 'chargeUp'
+    | 'shuffle'
+    | 'token'
+    | 'lock';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
 export type BurstType = 'iceBreak' | 'thaw' | 'burn';
@@ -49,6 +57,8 @@ export type SkillEffect = {
     index?: number;
     /** 演出を出すマスが複数あるとき（ひこばえ・業火など） */
     indexes?: number[];
+    /** バナーの文言を上書きする（バッズ/ダブルバッズ、トークン各種など、同じ演出を共有するスキルの名前出し分け用） */
+    label?: string;
     nonce: number;
 };
 
@@ -118,6 +128,15 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     solstice: { label: '冬至の種子', bg: '#1d2a5a', fg: '#cfe0ff' },
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
+    zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
+    heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
+    double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
+    bloom: { label: 'バッズ', bg: '#5fd06a', fg: '#082a0c' },
+    discount: { label: '特売', bg: '#ffc24a', fg: '#2a1d00' },
+    chargeUp: { label: 'チャージ', bg: '#fff44f', fg: '#2a2500' },
+    shuffle: { label: 'シャッフル', bg: '#ffffff', fg: '#10131c' },
+    token: { label: 'トークン', bg: '#46a6ff', fg: '#06182e' },
+    lock: { label: 'ロック', bg: '#ffc24a', fg: '#2a1d00' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
@@ -402,6 +421,101 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {cellPops(effect.indexes, '🌱')}
                     </>
                 );
+            case 'silence':
+                // サイレンス: 周囲が暗く沈み、輪が内側へ吸い込まれて静寂の紋章が残る
+                return (
+                    <>
+                        <div className={styles.haze} style={{ background: 'rgba(20, 24, 54, 0.75)' }} />
+                        {RING_DELAYS.map((d) => (
+                            <div key={d} className={styles.hushRing} style={{ animationDelay: `${d}ms` }} />
+                        ))}
+                        <div className={styles.sigil}>🔇</div>
+                    </>
+                );
+            case 'heal':
+                // ライフ3: 癒しの緑のオーラと、立ち昇るハート。中央に大きなハート
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {riseParticles('💚')}
+                        {riseParticles('✨')}
+                        <div className={styles.sigil}>💚</div>
+                    </>
+                );
+            case 'double':
+                // バイバイン: 中央から輪が3重に広がり、大きな「×2」がドンと出る
+                return (
+                    <>
+                        <div className={styles.flashQuick} />
+                        {RING_DELAYS.map((d) => (
+                            <div key={d} className={styles.shockwave} style={{ left: '50%', top: '50%', animationDelay: `${d}ms` }} />
+                        ))}
+                        <div className={`${styles.sigil} ${styles.sigilText}`}>×2</div>
+                    </>
+                );
+            case 'bloom':
+                // バッズ: 緑のオーラから種が芽吹いて立ち昇る
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {riseParticles('🌱')}
+                        {riseParticles('🌿')}
+                        <div className={styles.sigil}>🌱</div>
+                    </>
+                );
+            case 'discount':
+                // 割引系: 金色のオーラと舞い上がる硬貨。中央に値札
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGold}`} />
+                        {riseParticles('🪙')}
+                        {riseParticles('💰')}
+                        <div className={styles.sigil}>🏷️</div>
+                    </>
+                );
+            case 'chargeUp':
+                // チャージ: 電池に力が満ちる。黄色のオーラと立ち昇る電光
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGold}`} />
+                        {riseParticles('⚡')}
+                        {riseParticles('🔋')}
+                        <div className={styles.sigil}>🔋</div>
+                    </>
+                );
+            case 'shuffle':
+                // シャッフル: カードが盤面を横切って切られ、中央で回る
+                return (
+                    <>
+                        <div className={styles.flashQuick} />
+                        {sweepParticles('🃏')}
+                        <div className={`${styles.sigil} ${styles.sigilSpin}`}>🔀</div>
+                    </>
+                );
+            case 'token':
+                // トークン: 置かれたマスに輪が広がり、星がはじける
+                return (
+                    <>
+                        {(effect.indexes ?? []).slice(0, 49).map((idx, i) => {
+                            const pos = cellCenter(idx, size);
+                            return <div key={`r-${idx}-${i}`} className={styles.impact} style={{ left: pos.left, top: pos.top, animationDelay: `${(i % 8) * 45}ms` }} />;
+                        })}
+                        {cellPops(effect.indexes, '✨')}
+                    </>
+                );
+            case 'lock': {
+                // ロック: 鍵が落ちて錠が掛かり、マスに輪が走る
+                const idxs = effect.indexes ?? (effect.index !== undefined ? [effect.index] : []);
+                return (
+                    <>
+                        {idxs.slice(0, 49).map((idx, i) => {
+                            const pos = cellCenter(idx, size);
+                            return <div key={`r-${idx}-${i}`} className={styles.impact} style={{ left: pos.left, top: pos.top, animationDelay: `${(i % 8) * 45}ms` }} />;
+                        })}
+                        {cellPops(idxs, '🔑', styles.burst_lock)}
+                    </>
+                );
+            }
             case 'proliferate':
                 // 増殖: 緑のオーラから増え続ける芽が湧き上がり、中央に無限記号
                 return (
@@ -456,7 +570,8 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
     };
 
     // nonce を key にして毎回アニメーションを再生
-    const banner = BANNERS[effect.type];
+    const base = BANNERS[effect.type];
+    const banner = base ? { ...base, label: effect.label ?? base.label } : undefined;
     return (
         <>
         {burstOverlay}

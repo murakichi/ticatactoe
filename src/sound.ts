@@ -91,10 +91,12 @@ const noise = (ctx: BaseAudioContext, dest: AudioNode, o: NoiseOpts) => {
     src.stop(o.t + o.dur + 0.02);
 };
 
-// 腹に響く「ドン」。ほぼ全スキルの頭に入れて、バナーがドンと出る瞬間と合わせる
+// 腹に響きつつ音程が駆け上がる「ブォン↗」。ほぼ全スキルの頭に入れて、バナーが出る瞬間と合わせる。
+// スキル発動は「強くなる・上がる」感じにしたいので、音程は下げず、低音から高音へ上げる
 const boom = (ctx: BaseAudioContext, d: AudioNode, t: number, gain = 0.9) => {
-    tone(ctx, d, { f0: 150, f1: 38, t, dur: 0.42, gain });
-    noise(ctx, d, { t, dur: 0.14, gain: gain * 0.45, filter: 'lowpass', f0: 500, f1: 120 });
+    tone(ctx, d, { f0: 45, f1: 170, t, dur: 0.36, gain });
+    noise(ctx, d, { t, dur: 0.16, gain: gain * 0.45, filter: 'lowpass', f0: 150, f1: 1000 });
+    tone(ctx, d, { type: 'triangle', f0: 600, f1: 1500, t: t + 0.02, dur: 0.14, gain: gain * 0.3 });
 };
 
 // 上昇アルペジオなどの「きらめき」
@@ -118,37 +120,40 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
     switch (sfx) {
         case 'slash':
         case 'backslash': {
-            // 3連撃: 斬撃ラインが110msずつずれて走るのに合わせる
+            // 3連撃: 斬撃ラインが110msずつずれて走るのに合わせる。
+            // 低い「ブォン↗」で構えてから、1撃ごとに高さを上げながら斬る(下がる印象にならないよう、低音を先に鳴らす)
+            boom(ctx, d, T(0), 0.8);
+            const up = sfx === 'backslash';
             for (let i = 0; i < 3; i++) {
-                noise(ctx, d, { t: T(i * 0.11), dur: 0.2, gain: 0.5, filter: 'bandpass', f0: 2500, f1: 9000, q: 1.2 });
-                const up = sfx === 'backslash';
-                tone(ctx, d, { type: 'triangle', f0: up ? 1300 : 2200, f1: up ? 2400 : 1100, t: T(i * 0.11), dur: 0.14, gain: 0.16 });
+                noise(ctx, d, { t: T(i * 0.11), dur: 0.2, gain: 0.8, filter: 'bandpass', f0: 2000 + i * 1500, f1: 7000 + i * 1800, q: 1.2 });
+                tone(ctx, d, { type: 'triangle', f0: (up ? 1500 : 1100) + i * 350, f1: (up ? 2800 : 2200) + i * 500, t: T(i * 0.11), dur: 0.14, gain: 0.16 });
             }
-            boom(ctx, d, T(0.2), 0.5);
             return 0.7;
         }
         case 'stomp': {
-            tone(ctx, d, { f0: 140, f1: 32, t: T(0), dur: 0.55, gain: 1 });
-            noise(ctx, d, { t: T(0), dur: 0.35, gain: 0.8, filter: 'lowpass', f0: 700, f1: 90 });
-            // 衝撃波リングの余韻と、飛び散る瓦礫
-            tone(ctx, d, { f0: 110, f1: 40, t: T(0.14), dur: 0.3, gain: 0.35 });
-            tone(ctx, d, { f0: 90, f1: 40, t: T(0.28), dur: 0.3, gain: 0.25 });
+            tone(ctx, d, { f0: 32, f1: 140, t: T(0), dur: 0.55, gain: 1 });
+            noise(ctx, d, { t: T(0), dur: 0.35, gain: 0.8, filter: 'lowpass', f0: 90, f1: 700 });
+            // 衝撃波リングが広がるたびに音程が一段ずつ上がる、と瓦礫の飛び散り
+            tone(ctx, d, { f0: 40, f1: 110, t: T(0.14), dur: 0.3, gain: 0.35 });
+            tone(ctx, d, { f0: 55, f1: 150, t: T(0.28), dur: 0.3, gain: 0.3 });
             for (let i = 0; i < 6; i++) noise(ctx, d, { t: T(0.1 + i * 0.07), dur: 0.05, gain: 0.25, filter: 'highpass', f0: 2500 + i * 400 });
             return 0.8;
         }
         case 'judge': {
             // 雷鳴 + 2回のフラッシュに合わせた雷撃
-            noise(ctx, d, { t: T(0), dur: 1.0, gain: 0.8, filter: 'lowpass', f0: 3000, f1: 180 });
+            noise(ctx, d, { t: T(0), dur: 1.0, gain: 0.8, filter: 'lowpass', f0: 180, f1: 3000 });
             for (const s of [0, 0.26]) {
-                tone(ctx, d, { type: 'sawtooth', f0: 2000, f1: 100, t: T(s), dur: 0.25, gain: 0.28, lowpass: 5000 });
-                boom(ctx, d, T(s), 0.8);
+                tone(ctx, d, { type: 'sawtooth', f0: 100, f1: 2000, t: T(s), dur: 0.25, gain: 0.28, lowpass: 5000 });
+                boom(ctx, d, T(s), 0.55);
             }
+            // 最後は高域のきらめきが駆け上がって終わる
+            tone(ctx, d, { type: 'triangle', f0: 400, f1: 2400, t: T(0.5), dur: 0.5, gain: 0.25 });
             return 1.1;
         }
         case 'opium': {
-            tone(ctx, d, { f0: 220, f1: 105, t: T(0), dur: 1.0, gain: 0.6 });
-            tone(ctx, d, { f0: 226, f1: 110, t: T(0), dur: 1.0, gain: 0.5 });
-            noise(ctx, d, { t: T(0), dur: 0.8, gain: 0.3, filter: 'bandpass', f0: 500, q: 0.7 });
+            tone(ctx, d, { f0: 105, f1: 220, t: T(0), dur: 1.0, gain: 0.6 });
+            tone(ctx, d, { f0: 110, f1: 226, t: T(0), dur: 1.0, gain: 0.5 });
+            noise(ctx, d, { t: T(0), dur: 0.8, gain: 0.3, filter: 'bandpass', f0: 300, f1: 900, q: 0.7 });
             return 1.0;
         }
         case 'tsunami': {
@@ -159,19 +164,17 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             return 1.0;
         }
         case 'assault': {
-            // 行進の太鼓4連打 → 突撃ラッパ
+            // 行進の太鼓4連打(打つたびに音程が上がる) → 音階を駆け上がる突撃ラッパ
             for (let i = 0; i < 4; i++) {
-                tone(ctx, d, { f0: 130, f1: 50, t: T(i * 0.12), dur: 0.14, gain: 0.85 });
+                tone(ctx, d, { f0: 50 + i * 12, f1: 130 + i * 15, t: T(i * 0.12), dur: 0.14, gain: 0.85 });
                 noise(ctx, d, { t: T(i * 0.12 + 0.06), dur: 0.06, gain: 0.3, filter: 'highpass', f0: 1800 });
             }
-            tone(ctx, d, { type: 'sawtooth', f0: 220, t: T(0.5), dur: 0.55, gain: 0.2, lowpass: 1500 });
-            tone(ctx, d, { type: 'sawtooth', f0: 330, t: T(0.5), dur: 0.55, gain: 0.16, lowpass: 1500 });
-            tone(ctx, d, { type: 'sawtooth', f0: 440, t: T(0.5), dur: 0.55, gain: 0.12, lowpass: 1500 });
+            [220, 330, 440].forEach((f, i) => tone(ctx, d, { type: 'sawtooth', f0: f, t: T(0.48 + i * 0.12), dur: i === 2 ? 0.6 : 0.3, gain: 0.2, lowpass: 1500 }));
             return 1.1;
         }
         case 'necromancy': {
             boom(ctx, d, T(0), 0.6);
-            [329.6, 293.7, 261.6, 220].forEach((f, i) =>
+            [220, 261.6, 293.7, 329.6].forEach((f, i) =>
                 tone(ctx, d, { type: 'sawtooth', f0: f, t: T(0.1 + i * 0.16), dur: 0.4, gain: 0.22, lowpass: 900 })
             );
             tone(ctx, d, { f0: 880, f1: 1320, t: T(0.5), dur: 0.7, gain: 0.12 });
@@ -192,10 +195,10 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
         }
         case 'famine':
         case 'auraRed': {
-            [440, 415.3, 392, 370].forEach((f, i) =>
+            [370, 392, 415.3, 440].forEach((f, i) =>
                 tone(ctx, d, { type: 'sawtooth', f0: f, t: T(i * 0.12), dur: 0.3, gain: 0.4, lowpass: 1200 })
             );
-            noise(ctx, d, { t: T(0.1), dur: 0.5, gain: 0.3, filter: 'lowpass', f0: 1200, f1: 300 });
+            noise(ctx, d, { t: T(0.1), dur: 0.5, gain: 0.3, filter: 'lowpass', f0: 300, f1: 1200 });
             return 0.8;
         }
         case 'auraGreen': {
@@ -223,9 +226,9 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             return 0.6;
         }
         case 'glacier': {
-            // 絶対零度: 重い低音の後、冷たい下降音と結晶のきらめきが降り注ぐ
+            // 絶対零度: 重い低音の後、冷気が駆け上がる音と結晶のきらめきが降り注ぐ
             boom(ctx, d, T(0), 0.8);
-            tone(ctx, d, { type: 'triangle', f0: 2400, f1: 300, t: T(0.05), dur: 0.7, gain: 0.3, lowpass: 5000 });
+            tone(ctx, d, { type: 'triangle', f0: 300, f1: 2400, t: T(0.05), dur: 0.7, gain: 0.3, lowpass: 5000 });
             noise(ctx, d, { t: T(0.1), dur: 0.6, gain: 0.3, filter: 'highpass', f0: 4000 });
             sparkle(ctx, d, T(0.3), [C6, E6, G5 * 2, C6 * 2, E6 * 2], 0.07, 0.22);
             return 1.0;
@@ -234,7 +237,7 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             // 氷結崩壊: ガラスが砕ける連打と衝撃
             boom(ctx, d, T(0), 0.95);
             noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.7, filter: 'highpass', f0: 3000 });
-            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 3800 - i * 350, f1: 1200, t: T(0.04 + i * 0.05), dur: 0.12, gain: 0.3 });
+            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 1200 + i * 350, f1: 3800 + i * 100, t: T(0.04 + i * 0.05), dur: 0.12, gain: 0.3 });
             sparkle(ctx, d, T(0.4), [E6, C6, G5 * 2], 0.06, 0.2);
             return 0.9;
         }
@@ -281,19 +284,19 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
         case 'iceBreak': {
             // 氷結が砕けて身代わりになる: パリン
             noise(ctx, d, { t: T(0), dur: 0.1, gain: 0.6, filter: 'highpass', f0: 4500 });
-            for (let i = 0; i < 4; i++) tone(ctx, d, { f0: 3600 - i * 500, f1: 1500, t: T(i * 0.04), dur: 0.1, gain: 0.28 });
+            for (let i = 0; i < 4; i++) tone(ctx, d, { f0: 1500 + i * 500, f1: 3600 + i * 200, t: T(i * 0.04), dur: 0.1, gain: 0.28 });
             return 0.3;
         }
         case 'thaw': {
-            // 解凍: 水滴がぽとん
-            tone(ctx, d, { f0: 1100, f1: 500, t: T(0), dur: 0.12, gain: 0.35 });
-            tone(ctx, d, { f0: 900, f1: 420, t: T(0.12), dur: 0.12, gain: 0.28 });
+            // 解凍: 水滴がぴちょん↗
+            tone(ctx, d, { f0: 500, f1: 1100, t: T(0), dur: 0.12, gain: 0.35 });
+            tone(ctx, d, { f0: 420, f1: 900, t: T(0.12), dur: 0.12, gain: 0.28 });
             return 0.3;
         }
         case 'burn': {
             // 燃焼: ぱちぱちと爆ぜる
-            for (let i = 0; i < 5; i++) noise(ctx, d, { t: T(i * 0.06), dur: 0.05, gain: 0.4, filter: 'bandpass', f0: 2200, f1: 900, q: 1 });
-            tone(ctx, d, { type: 'sawtooth', f0: 140, f1: 90, t: T(0), dur: 0.3, gain: 0.2, lowpass: 600 });
+            for (let i = 0; i < 5; i++) noise(ctx, d, { t: T(i * 0.06), dur: 0.05, gain: 0.4, filter: 'bandpass', f0: 900, f1: 2200, q: 1 });
+            tone(ctx, d, { type: 'sawtooth', f0: 90, f1: 140, t: T(0), dur: 0.3, gain: 0.2, lowpass: 600 });
             return 0.4;
         }
         case 'proliferate': {
@@ -301,40 +304,89 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             return 0.45;
         }
         case 'zap': {
-            tone(ctx, d, { type: 'sawtooth', f0: 1800, f1: 300, t: T(0), dur: 0.15, gain: 0.6, lowpass: 5000 });
-            noise(ctx, d, { t: T(0), dur: 0.08, gain: 0.6, filter: 'highpass', f0: 3500 });
-            tone(ctx, d, { f0: 3000, t: T(0), dur: 0.03, gain: 0.3 });
+            // 駆け上がる電撃 → 最後にバチッと弾ける
+            tone(ctx, d, { type: 'sawtooth', f0: 300, f1: 1800, t: T(0), dur: 0.15, gain: 0.45, lowpass: 5000 });
+            noise(ctx, d, { t: T(0.1), dur: 0.08, gain: 0.4, filter: 'highpass', f0: 3500 });
+            tone(ctx, d, { f0: 3000, t: T(0.12), dur: 0.03, gain: 0.3 });
             return 0.25;
         }
         case 'overload': {
-            for (let i = 0; i < 3; i++) tone(ctx, d, { type: 'sawtooth', f0: 1800, f1: 250, t: T(i * 0.08), dur: 0.12, gain: 0.3, lowpass: 5000 });
-            noise(ctx, d, { t: T(0.2), dur: 0.6, gain: 0.7, filter: 'bandpass', f0: 4000, f1: 300, q: 0.9 });
-            boom(ctx, d, T(0.2), 0.95);
+            // 低い「ブォン↗」で溜めてから、電撃が3連で駆け上がり、最後は高域まで爆ぜる
+            boom(ctx, d, T(0), 0.95);
+            for (let i = 0; i < 3; i++) tone(ctx, d, { type: 'sawtooth', f0: 250 + i * 150, f1: 1800 + i * 400, t: T(0.15 + i * 0.08), dur: 0.12, gain: 0.45, lowpass: 6000 });
+            noise(ctx, d, { t: T(0.2), dur: 0.7, gain: 1.5, filter: 'bandpass', f0: 300, f1: 6000, q: 0.9 });
             return 0.9;
         }
         case 'silence': {
-            // サイレンス: 高い音が吸い込まれるように沈み、静けさが残る
-            tone(ctx, d, { type: 'triangle', f0: 1320, f1: 110, t: T(0), dur: 0.5, gain: 0.5, lowpass: 3000 });
-            tone(ctx, d, { f0: 660, f1: 55, t: T(0.05), dur: 0.45, gain: 0.4 });
-            noise(ctx, d, { t: T(0), dur: 0.3, gain: 0.3, filter: 'lowpass', f0: 2500, f1: 120 });
+            // サイレンス: 音が上へ吸い上げられるように駆け上がり、最後にふっと消える
+            tone(ctx, d, { type: 'triangle', f0: 110, f1: 1320, t: T(0), dur: 0.5, gain: 0.5, lowpass: 3000 });
+            tone(ctx, d, { f0: 55, f1: 660, t: T(0.05), dur: 0.45, gain: 0.4 });
+            noise(ctx, d, { t: T(0), dur: 0.3, gain: 0.3, filter: 'lowpass', f0: 120, f1: 2500 });
             return 0.6;
         }
         case 'lock': {
-            // 錠が掛かる「ガチャン」: 打撃の瞬間のノイズ + 非整数倍の金属倍音(チーン) + 重い低音のロック音
-            noise(ctx, d, { t: T(0), dur: 0.04, gain: 0.7, filter: 'highpass', f0: 3000 });
-            for (const [f, g] of [[1180, 0.28], [1770, 0.2], [2650, 0.14]] as const) {
-                tone(ctx, d, { type: 'square', f0: f, t: T(0), dur: 0.3, gain: g, lowpass: 6000 });
+            // 錠が掛かる「ゴン→ガチャッ↗」: 重い低音が上がって掛かり、その直後に金属音が階段状に駆け上がる(チャリン↗)
+            tone(ctx, d, { f0: 70, f1: 180, t: T(0), dur: 0.2, gain: 0.55 });
+            noise(ctx, d, { t: T(0), dur: 0.08, gain: 0.3, filter: 'lowpass', f0: 200, f1: 900 });
+            noise(ctx, d, { t: T(0.07), dur: 0.04, gain: 0.6, filter: 'highpass', f0: 3000 });
+            ([[1180, 0.07, 0.28], [1770, 0.09, 0.2], [2650, 0.11, 0.14]] as const).forEach(([f, s, g]) =>
+                tone(ctx, d, { type: 'square', f0: f, t: T(s), dur: 0.28, gain: g, lowpass: 6000 })
+            );
+            return 0.42;
+        }
+        case 'heal': {
+            // ライフ3: やさしい上昇アルペジオ(ふんわり満ちていく)
+            sparkle(ctx, d, T(0), [C5, E5, G5, C6], 0.08, 0.28);
+            tone(ctx, d, { f0: 400, f1: 800, t: T(0), dur: 0.4, gain: 0.22 });
+            tone(ctx, d, { f0: 2093, t: T(0.32), dur: 0.4, gain: 0.12 });
+            return 0.75;
+        }
+        case 'double': {
+            // バイバイン: 「ダブル!」と二段で跳ね上がる
+            tone(ctx, d, { type: 'square', f0: 330, f1: 660, t: T(0), dur: 0.12, gain: 0.25, lowpass: 3500 });
+            tone(ctx, d, { type: 'square', f0: 660, f1: 1320, t: T(0.13), dur: 0.2, gain: 0.25, lowpass: 3500 });
+            tone(ctx, d, { f0: 45, f1: 170, t: T(0.13), dur: 0.3, gain: 0.6 });
+            tone(ctx, d, { f0: 2640, t: T(0.28), dur: 0.35, gain: 0.12 });
+            return 0.65;
+        }
+        case 'bloom': {
+            // バッズ: ぽっ、ぽっ、ぽっと芽が出て、ふわっと開く
+            [G5 / 2, C5, E5, G5].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.5, t: T(i * 0.07), dur: 0.12, gain: 0.35 }));
+            tone(ctx, d, { type: 'triangle', f0: 600, f1: 1400, t: T(0.28), dur: 0.35, gain: 0.18 });
+            return 0.7;
+        }
+        case 'discount': {
+            // 割引: 硬貨がチャリンチャリンと弾み、音が上へ駆け上がる
+            for (let i = 0; i < 4; i++) {
+                tone(ctx, d, { type: 'square', f0: 1568 + i * 220, t: T(i * 0.07), dur: 0.05, gain: 0.14, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2093 + i * 293, t: T(i * 0.07 + 0.04), dur: 0.14, gain: 0.14, lowpass: 5000 });
             }
-            tone(ctx, d, { f0: 180, f1: 70, t: T(0.05), dur: 0.2, gain: 0.7 });
-            noise(ctx, d, { t: T(0.05), dur: 0.08, gain: 0.4, filter: 'lowpass', f0: 900, f1: 200 });
+            tone(ctx, d, { f0: 400, f1: 1200, t: T(0), dur: 0.35, gain: 0.2 });
+            return 0.6;
+        }
+        case 'shuffle': {
+            // シャッフル: カードをぱらぱらと切る(高さを上げながら小刻みに)
+            for (let i = 0; i < 8; i++) {
+                noise(ctx, d, { t: T(i * 0.04), dur: 0.04, gain: 0.35, filter: 'bandpass', f0: 2000 + i * 400, q: 2 });
+                tone(ctx, d, { type: 'triangle', f0: 500 + i * 120, f1: 700 + i * 140, t: T(i * 0.04), dur: 0.05, gain: 0.12 });
+            }
+            tone(ctx, d, { type: 'triangle', f0: 800, f1: 1800, t: T(0.32), dur: 0.2, gain: 0.2 });
+            return 0.55;
+        }
+        case 'token': {
+            // トークン: コマが置かれる「ポン」に、星がはじける上昇音
+            tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0), dur: 0.09, gain: 0.7 });
+            tone(ctx, d, { f0: 880, f1: 1760, t: T(0.06), dur: 0.15, gain: 0.3 });
+            sparkle(ctx, d, T(0.1), [G5, C6, E6], 0.05, 0.16);
             return 0.4;
         }
         case 'place': {
             // 駒を置く「ポン」
             tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0), dur: 0.09, gain: 0.8 });
-            tone(ctx, d, { f0: 1040, t: T(0), dur: 0.05, gain: 0.3 });
+            tone(ctx, d, { f0: 800, f1: 1400, t: T(0), dur: 0.06, gain: 0.3 });
             return 0.12;
         }
+        case 'chargeUp':
         case 'charge': {
             // コインを取ったような2音
             tone(ctx, d, { type: 'square', f0: 988, t: T(0), dur: 0.07, gain: 0.3, lowpass: 4000 });
