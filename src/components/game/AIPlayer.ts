@@ -9,8 +9,6 @@ import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedCharg
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 export const SKILL_POOL_SIZE = 62;
-/** 鍛冶師が手札に固定する軽量スキル: 返し特売・特売・付与割引・トークン割引・活力特売（sim/ai.js の PYRO_LOCK と同じ） */
-const PYRO_LOCK = [60, 53, 54, 55, 56];
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -575,8 +573,7 @@ class AIPlayer {
         const budsIdx = [2, 10];
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            (this.character === 'magician' && budsIdx.includes(idx)) ||
-            (this.character === 'pyromancer' && PYRO_LOCK.includes(idx)); // 鍛冶師は軽減札を手札に固定して連携に使う
+            (this.character === 'magician' && budsIdx.includes(idx));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {

@@ -2065,6 +2065,7 @@ test('AI(burnoutAfter/pyroLock): 鍛冶師は業火のあとバーンアウト�
     const t = game('pyromancer', 'you');
     t.heartTurn = true; t.heartMagic = 12; t.life = 3;
     t.skills = [53, 3, 60];
+    t.aiFlags = [{ pyroLock: 1 }, {}];
     ai.makeMove(t, 'faithful');
     assert.ok(t.lockedSkills[0].includes(53) && t.lockedSkills[0].includes(60), '軽減札が固定される');
 });

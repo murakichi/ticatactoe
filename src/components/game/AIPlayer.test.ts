@@ -405,10 +405,9 @@ describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
         expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
         expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
     });
-    it('鍛冶師は軽減札を手札に固定する', () => {
+    it('鍛冶師は軽減札を固定しない（固定すると勝ち数が下がった）', () => {
         const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
         const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
-        const locks = ai.chooseLocks(b, 2, 5, [53, 3, 60]);
-        expect(locks).toEqual(expect.arrayContaining([53, 60]));
+        expect(ai.chooseLocks(b, 2, 5, [53, 3, 60])).not.toEqual(expect.arrayContaining([53, 60]));
     });
 });
