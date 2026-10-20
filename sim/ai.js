@@ -808,7 +808,7 @@ function chooseSkills(s, availableSkills) {
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        if (reserve && (RESERVE_SKIP.includes(name) || (F.necroReserveAll && name !== 'necromancy')) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
     }
