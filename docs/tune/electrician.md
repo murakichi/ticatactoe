@@ -4,12 +4,13 @@
 - 現在の推奨設定: gears=[sturdy,harvest] deck=[0,3,8,12,21,22,23,24,26,28,49,53](浄化32・ランダム帯電25 → 特売53・慈雨49) AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 1
+- 連続不採用回数: 2
 - 状態: running(トップ未達。master 837a29b で陥落)
 - 陥落: master 837a29b(seed3/200試合)で 4位 59.2% / 1位 magician 65.3%(差6.1pt)・cryomancer 62.1%・tactician 59.2%。envDeck varied でも 2位 62.1% vs magician 63.7%。原因は magician(デッキ調整 #98)と cryomancer の調整。
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 11 | synergy/meta | 新環境の上位3相手(magician,cryomancer,tactician)に絞った2枚swap 40候補(seed10/80試合) | 最良 53.8%±6.2 vs base 51.7%、誤差内 | 不採用 |
 | 10 | strategy | ロックを使わない(F.elecNoLock)。対magicianで『ロックを使った試合の勝率3%』に着目 | seed3/200試合: 60.8→53.7(-7.1)。ロックは有益。使った試合の低勝率は『長引く試合ほど使う』という選択バイアス | 不採用(ノブ削除) |
 | 9 | joint | ギア lightToken,harvest 固定で 1枚差し替え30近傍(seed9/80試合) | 最良 63.1% vs base 61.9% 差なし | 不採用 |
 | 8 | synergy(3枚) | 3枚同時入れ替え40候補(seed8/80試合)。最良 66.3% vs base 61.9% (+4.4, SE≈3.4) | z≈0.9、閾値3.0に遠く再測定せず | 不採用 |
