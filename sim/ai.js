@@ -816,6 +816,9 @@ function chooseSkills(s, availableSkills) {
     }
 
     // --- トークン系 ---
+    const freeCells = findEmptyIndexes(board).length;
+    // 暫定(F.useNew): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
+    if (F.useNew && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall)) spend(cost(costsOf(s).onClickFrostfall), 'frostfall');
     if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true);
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true);
@@ -825,6 +828,14 @@ function chooseSkills(s, availableSkills) {
             spend(calculateCost(s, costsOf(s).onClickDoubleChargeToken, true), 'doubleChargeToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
             spend(chargeTokenCost, 'chargeToken');
+        } else if (F.useNew && freeCells >= 4 && availableSkills.includes(46) && remaining >= cost(costsOf(s).onClickDoubleFrostToken, true)) {
+            spend(cost(costsOf(s).onClickDoubleFrostToken, true), 'doubleFrostToken');
+        } else if (F.useNew && freeCells >= 3 && availableSkills.includes(45) && remaining >= cost(costsOf(s).onClickFrostToken, true)) {
+            spend(cost(costsOf(s).onClickFrostToken, true), 'frostToken');
+        } else if (F.useNew && freeCells >= 4 && availableSkills.includes(38) && remaining >= cost(costsOf(s).onClickDoubleFlameToken, true)) {
+            spend(cost(costsOf(s).onClickDoubleFlameToken, true), 'doubleFlameToken');
+        } else if (F.useNew && freeCells >= 3 && availableSkills.includes(37) && remaining >= cost(costsOf(s).onClickFlameToken, true)) {
+            spend(cost(costsOf(s).onClickFlameToken, true), 'flameToken');
         } else if (availableSkills.includes(11) && remaining >= cost(costsOf(s).onClickDoubleToken, true)) {
             spend(cost(costsOf(s).onClickDoubleToken, true), 'doubleToken');
         } else if (availableSkills.includes(9) && remaining >= cost(costsOf(s).onClickBudsToken, true)) {
