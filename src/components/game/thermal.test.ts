@@ -14,6 +14,8 @@ import {
     decayTick,
     budStacks,
     activeBuds,
+    swidden,
+    placeFlameToken,
     isDormant,
     canBud,
     harvestBuds,
@@ -629,5 +631,62 @@ describe('氷結中のマスの他エフェクトは消えないが休眠する'
         expect(isFullyCharged(full)).toBe(true);
         full[3] = sq(undefined, 0, '⚡', '❄');
         expect(isFullyCharged(full)).toBe(false);
+    });
+});
+
+describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
+    it('焼畑: 🌱を全て同じ数の🔥に変える。🌱の無いマスは何もしない', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 4, '🌱', '🌱', '🌱', '☠');
+        b[6] = sq('⭕', 4);
+        const r = swidden(b, 5, 4);
+        expect(r.n).toBe(3);
+        expect(budStacks(b[5])).toBe(0);
+        expect(flameStacks(b[5])).toBe(3);
+        expect(b[5].effects.some((e) => e.effect === '☠')).toBe(true);
+        expect(swidden(b, 6, 4)).toEqual({ n: 0, thawed: [] });
+    });
+
+    it('焼畑: 🔥が付いたマスの隣の氷結は全解除。氷結中のマス自身は最初のスタックで全解除され、残りが🔥', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 4, '🌱', '🌱', '❄', '❄');
+        b[6] = sq('⭕', 4, '❄', '❄');
+        const r = swidden(b, 5, 4);
+        expect(r.n).toBe(2);
+        expect(isFrozen(b[5])).toBe(false);
+        expect(flameStacks(b[5])).toBe(1); // 1つ目で氷結が全解除、2つ目が🔥
+        expect(isFrozen(b[6])).toBe(false);
+    });
+
+    it('火炎トークン: 🔥付きのコマを置き、縦横隣の氷結を全解除する', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 3, '❄', '❄');
+        b[10] = sq('⭕', 3, '❄'); // 斜め
+        const thawed = placeFlameToken(b, 6, '💙', 4, 4);
+        expect(b[6].player).toBe('💙');
+        expect(b[6].bind).toBe(4);
+        expect(flameStacks(b[6])).toBe(1);
+        expect(thawed).toEqual([5]);
+        expect(isFrozen(b[10])).toBe(true);
+    });
+
+    it('sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = () => {
+            const b = emptyBoard();
+            b[5] = sq('⭕', 4, '🌱', '🌱', '❄', '❄');
+            b[6] = sq('⭕', 4, '❄', '❄');
+            b[9] = sq('💙', 4, '🌱');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        expect(sim.swidden(a, 5, 4)).toEqual(swidden(c, 5, 4));
+        expect(a).toEqual(c);
+        const d = mk();
+        const e = mk();
+        expect(sim.placeFlameToken(d, 10, '💙', 4, 4)).toEqual(placeFlameToken(e, 10, '💙', 4, 4));
+        expect(d).toEqual(e);
     });
 });

@@ -312,3 +312,38 @@ describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2
         expect(r.move).toBe(3);
     });
 });
+
+describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () => {
+    const FRZ = { effect: '❄' as const };
+    const FLM = { effect: '🔥' as const };
+
+    it('雷霆の巫の⚡コマでも、氷結・火炎中は無敵（shield）に数えない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'you']);
+        const b = emptyBoard();
+        b[1] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+        b[2] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FRZ] };
+        b[3] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FLM] };
+        ai.updateShield(b);
+        expect(ai.shield.has(1)).toBe(true);
+        expect(ai.shield.has(2)).toBe(false);
+        expect(ai.shield.has(3)).toBe(false);
+    });
+
+    it('休眠マス（氷結・火炎中）の毒は継続ダメージがないので、インジェクションの標的にしない', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', 'you']);
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }] });
+        expect(ai.findInjectionTarget(b, 1)).not.toBeNull();
+        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }, i === 1 ? FRZ : FLM] });
+        expect(ai.findInjectionTarget(b, 1)).toBeNull();
+    });
+
+    it('evaluateBoard: 休眠マスの🌱は評価しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }] };
+        const awake = ai.evaluateBoard(b);
+        b[5] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }, FRZ] };
+        expect(ai.evaluateBoard(b)).toBeLessThan(awake);
+    });
+});

@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, swidden, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -245,6 +245,9 @@ export const Game = (props: GameProps) => {
             case 'onClickSolstice': onClickSolstice(); break;
             case 'onClickSucker': onClickSucker(); break;
             case 'onClickWindborne': onClickWindborne(); break;
+            case 'onClickFlameToken': onClickFlameToken(); break;
+            case 'onClickDoubleFlameToken': onClickDoubleFlameToken(); break;
+            case 'onClickSwidden': onClickSwidden(); break;
             case 'onClickInferno': onClickInferno(); break;
         }
     };
@@ -588,6 +591,11 @@ export const Game = (props: GameProps) => {
 
         if (useSucker) {
             exeSucker(i);
+            return;
+        }
+
+        if (useSwidden) {
+            exeSwidden(i);
             return;
         }
 
@@ -1655,9 +1663,9 @@ export const Game = (props: GameProps) => {
         setUseFreeze(true);
         spendMagic(calculateCost(seatCosts.onClickFreeze));
     };
-    // 火炎付与: 選んだコマに🔥を1つ付与する。そのマスと縦横隣の氷結は即座に解ける
+    // 火遁（旧・火炎付与）: 選んだコマに🔥を1つ付与する。そのマスと縦横隣の氷結は即座に解ける
     const onClickIgnite = () => {
-        addLog('「火炎付与」を使用（コマを選択）');
+        addLog('「火遁」を使用（コマを選択）');
         setUseIgnite(true);
         spendMagic(calculateCost(seatCosts.onClickIgnite));
     };
@@ -1735,6 +1743,58 @@ export const Game = (props: GameProps) => {
         playEffect('windborne', undefined, Array.from(new Set(picks)));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickWindborne));
+    };
+
+    // --- 火炎系の汎用スキル（idx 37-39）。氷結への対抗手段 ---
+    // 火炎トークン: 🔥付きの自陣コマをランダムな空きマスに置く（置いたマスの縦横隣の氷結は全解除）
+    const placeFlame = (board: SquareInfo[], idx: number): number[] =>
+        placeFlameToken(board, idx, currentTurnPlayer, calculateTokenBind(), geo.size);
+    const onClickFlameToken = () => {
+        const board = currentBoard.slice();
+        const emptyIndexes = findEmptyIndexes(board);
+        if (emptyIndexes.length > 0) {
+            const index = randomPick(emptyIndexes);
+            const thawed = placeFlame(board, index);
+            addLog(`「火炎トークン」を使用（${posName(index)}に設置）`);
+            if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+            playEffect('flame', index);
+            playBurst('thaw', thawed);
+            setCurrentBoard(board);
+        }
+        spendMagic(calculateCost(seatCosts.onClickFlameToken, true));
+        setUseToken(true);
+    };
+    const onClickDoubleFlameToken = () => {
+        const board = currentBoard.slice();
+        const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
+        const thawed = new Set<number>();
+        for (const idx of picks) placeFlame(board, idx).forEach((k) => thawed.add(k));
+        addLog(`「火炎ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
+        if (thawed.size > 0) addLog(`氷結が溶けた（${Array.from(thawed).map(posName).join('・')}）`);
+        if (picks.length > 0) playEffect('flame', picks[0]);
+        playBurst('thaw', Array.from(thawed));
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickDoubleFlameToken, true));
+        setUseToken(true);
+    };
+    // 焼畑: 🌱を持つマス（敵味方どちらでも）を選ぶと、その🌱を全て同じ数の🔥に変える
+    const [useSwidden, setUseSwidden] = useState<boolean>(false);
+    const onClickSwidden = () => {
+        addLog('「焼畑」を使用（🌱のあるマスを選択）');
+        setUseSwidden(true);
+        spendMagic(calculateCost(seatCosts.onClickSwidden));
+    };
+    const exeSwidden = (i: number) => {
+        if (budStacks(currentBoard[i]) === 0) return; // 🌱の無いマスは選び直せる
+        const board = currentBoard.slice();
+        const { n, thawed } = swidden(board, i, geo.size);
+        addLog(`${posName(i)}の🌱${n}個を焼畑で🔥に変えた`);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        flashCells([i]);
+        playEffect('flame', i);
+        playBurst('thaw', thawed);
+        setUseSwidden(false);
+        setCurrentBoard(board);
     };
 
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。クリック不要・手番は続く
@@ -2025,6 +2085,7 @@ export const Game = (props: GameProps) => {
         setGlacierChargeAll(Array(seatCount).fill(0));
         setBudGuardAll(Array(seatCount).fill(false));
         setUseSucker(false);
+        setUseSwidden(false);
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
@@ -2069,13 +2130,14 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
+        else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
         else if (useIgnite) setPreviewCells(currentBoard[i].player ? [i] : []);
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useSwidden) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -2091,12 +2153,14 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
+        : useSwidden
+        ? '焼畑'
         : useSucker
         ? 'ひこばえ'
         : useFreeze
         ? '氷結'
         : useIgnite
-        ? '火炎付与'
+        ? '火遁'
         : null;
     const skillAnnounce = pendingSkillName
         ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
@@ -2151,12 +2215,15 @@ export const Game = (props: GameProps) => {
         { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(seatCosts.onClickSilence)}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(seatCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
         { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true)}`, paragraph: `盤上の全コマ（敵味方問わず）に毒を1付与します 🔑ロック中・無敵のコマは対象外です`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
         { idx: 30, onClick: onClickFreeze, buttonText: `氷結-${calculateCost(seatCosts.onClickFreeze)}`, paragraph: `コマを選択し、❄氷結を付与します（敵味方どちらでも）\n氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず（そのマスの⚡は休眠）、スキルのダメージは氷結が解除される代わりに無効になります（毒は通ります）\n自陣の氷結コマには重ねて強化できません`, disabled: checkSkillDisable(seatCosts.onClickFreeze) || !currentBoard.some(canFreeze) },
-        { idx: 31, onClick: onClickIgnite, buttonText: `火炎付与-${calculateCost(seatCosts.onClickIgnite)}`, paragraph: `コマを選択し、🔥火炎を1つ付与します（重複可）\n毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) || !currentBoard.some((sq) => sq.player) },
+        { idx: 31, onClick: onClickIgnite, buttonText: `火遁-${calculateCost(seatCosts.onClickIgnite)}`, paragraph: `コマを選択し、🔥火炎を1つ付与します（重複可）\n毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) || !currentBoard.some((sq) => sq.player) },
         { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse)}`, paragraph: `自陣のコマの状態異常（☠毒・🔥火炎・❄氷結・⚡帯電）をすべて回復します\n🌱バッズと🔑ロックはそのままです`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
         { idx: 33, onClick: onClickHarvestEve, buttonText: `刈り入れ前夜-${calculateCost(seatCosts.onClickHarvestEve)}`, paragraph: `自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます\n氷結や火炎で失う前に現金化できます`, disabled: checkSkillDisable(seatCosts.onClickHarvestEve) || ownBudTotal() === 0 },
         { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice)}`, paragraph: `次の自分の手番が来るまで、自陣のコマの🌱が氷結中・火炎中のマスでも休眠せず、魔力や刈り入れ前夜に働きます`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
         { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker)}`, paragraph: `🌱を持つ自陣のコマを選ぶと、縦横に隣り合う自陣のコマに🌱が1つずつ付きます（隣が3つ以上ならランダムに2つ）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
         { idx: 36, onClick: onClickWindborne, buttonText: `風の落とし子-${calculateCost(seatCosts.onClickWindborne)}`, paragraph: `自陣のコマにランダムで🌱を3つ配ります（同じコマに重なることもあります）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickWindborne) || sowCandidates(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 37, onClick: onClickFlameToken, buttonText: `火炎トークン-${calculateCost(seatCosts.onClickFlameToken, true)}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickFlameToken, true) },
+        { idx: 38, onClick: onClickDoubleFlameToken, buttonText: `火炎ダブルトークン-${calculateCost(seatCosts.onClickDoubleFlameToken, true)}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFlameToken, true) },
+        { idx: 39, onClick: onClickSwidden, buttonText: `焼畑-${calculateCost(seatCosts.onClickSwidden)}`, paragraph: `🌱のあるマス（敵味方どちらでも）を選ぶと、そのマスの🌱を全て同じ数の🔥に変えます\n氷結中のマスは先に氷結が解除されます`, disabled: checkSkillDisable(seatCosts.onClickSwidden) || !currentBoard.some((sq) => budStacks(sq) > 0) },
     ];
 
     return (

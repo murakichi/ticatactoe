@@ -299,3 +299,25 @@ export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player'])
 export const sow = (board: SquareInfo[], picks: number[]): void => {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 };
+
+// ---- 火炎系の汎用スキル（火炎トークン・焼畑）の純粋ロジック ----
+
+/**
+ * 焼畑: cell の🌱を全て除去し、除去した数と同じ数の🔥に変える（ignite の規則どおり。氷結中なら最初のスタックで氷結が全解除）。
+ * 🌱が無いマスなら何もせず n=0。board を直接書き換える。sim/thermal.js の swidden と同じ
+ */
+export const swidden = (board: SquareInfo[], cell: number, size: number): { n: number; thawed: number[] } => {
+    const n = budStacks(board[cell]);
+    if (n === 0) return { n: 0, thawed: [] };
+    board[cell] = without(board[cell], '🌱');
+    return { n, thawed: ignite(board, [cell], size, n).thawed };
+};
+
+/**
+ * 火炎トークン: idx に player の🔥付きのコマ（ライフ bind）を置く。🔥が付くので縦横隣の氷結は全解除される。
+ * 解けたマスを返す。board を直接書き換える。sim/thermal.js の placeFlameToken と同じ
+ */
+export const placeFlameToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number, size: number): number[] => {
+    board[idx] = { player, bind, effects: [] };
+    return ignite(board, [idx], size).thawed;
+};
