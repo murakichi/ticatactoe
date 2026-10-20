@@ -4,7 +4,7 @@
 - 現在の推奨設定: 変更なし(推奨ギア・推奨デッキのまま) AIフラグ=なし
 - 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
 - 連続不採用回数: 6(トップ未達のため行き詰まり判定は6種類測定後)
-- 状態: running(4条件中 envDeck varied で3位 → トップ未達)
+- 状態: blocked(issue #85)
 ## 完了判定(4条件, --rank --target tactician --games 100 --seed 3, master edf73fb)
 | 条件 | 軍師 | 順位 |
 |---|---|---|
@@ -12,6 +12,7 @@
 | --oppGears none | 69.8% | 1位 (2位 magician 57.8%) |
 | --oppGears random | 67.2% | 1位 (2位 magician 57.0%) |
 | --envDeck varied | 59.0% | **3位** (1位 electrician 63.4% / giant 60.0%) |
+| --envDeck varied (seed3, 200試合) | 56.8% | **4位** (1位 electrician 63.3% / giant 58.9% / magician 57.7%) |
 → 相手のデッキが推奨から崩れると軍師だけ約-9pt落ちる(他は電気使い・巨人が上がる)。推奨デッキが相手の崩れに弱い=推奨デッキの頑健性が課題。
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
