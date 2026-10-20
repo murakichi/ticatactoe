@@ -14,7 +14,7 @@ import { resolveDeck } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, enemyPieceCount, reducedInfernoCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -2097,6 +2097,8 @@ export const Game = (props: GameProps) => {
     };
     // 固有スキル 業火（煉獄の鍛冶師）: 敵のコマ全て（🔑ロック中・⚡無敵を除く）に🔥を2スタックずつ付ける。クリック不要・手番は続く。
     // 氷結中のマスは🔥の代わりに❄が減る
+    const infernoCost = (player: Player = currentTurnPlayer): number =>
+        reducedInfernoCost(costTableFor(seatOf(player)).onClickInferno, enemyPieceCount(currentBoard, player), (c) => calculateCost(c, false, false, player));
     const onClickInferno = () => {
         const targets = infernoTargets(currentBoard, currentTurnPlayer, characters);
         if (targets.length === 0) return;
@@ -2108,7 +2110,7 @@ export const Game = (props: GameProps) => {
         playEffect('inferno', undefined, targets);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
-        spendMagic(calculateCost(seatCosts.onClickInferno), false);
+        spendMagic(infernoCost(), false);
     };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
@@ -2241,7 +2243,7 @@ export const Game = (props: GameProps) => {
             case 'cryomancer':
                 return [{ name: '絶対零度', cost: glacierCost(symbols[seat]) }];
             case 'pyromancer':
-                return [{ name: '業火', cost: g(sc.onClickInferno) }];
+                return [{ name: '業火', cost: infernoCost(symbols[seat]) }];
             default:
                 return [];
         }
@@ -2733,11 +2735,11 @@ export const Game = (props: GameProps) => {
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickInferno}
-                        buttonText={`業火-${calculateCost(seatCosts.onClickInferno)}`}
-                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます'}
+                        buttonText={`業火-${infernoCost()}`}
+                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます\nコストは盤面の敵コマの数だけ軽減されます（下限1）'}
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickInferno) || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
+                        disabled={magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
                     />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken}
                         onClick={onClickYingYangSkll}

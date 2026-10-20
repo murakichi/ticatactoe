@@ -1,5 +1,7 @@
 import {
     isFrozen,
+    enemyPieceCount,
+    reducedInfernoCost,
     flameStacks,
     thaw,
     overwriteBlocked,
@@ -834,5 +836,18 @@ describe('氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷�
         const e = mk();
         expect(sim.placeFrostToken(d, 9, '💙', 4)).toBe(placeFrostToken(e, 9, '💙', 4));
         expect(d).toEqual(e);
+    });
+});
+
+describe('業火のコスト軽減', () => {
+    it('盤面の敵コマ1つにつき-1、キャラ補正をかけて下限1', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 3);
+        b[2] = sq('🟩', 3);
+        expect(enemyPieceCount(b, '💙')).toBe(2);
+        expect(reducedInfernoCost(9, 2, (c) => c)).toBe(7);
+        expect(reducedInfernoCost(9, 20, (c) => c)).toBe(1);
+        expect(reducedInfernoCost(9, 2, (c) => c + 1)).toBe(8);
     });
 });

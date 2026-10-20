@@ -1768,11 +1768,16 @@ function infernoTargets(s) {
 function keepBudsOf(s) {
     return (sq) => !!sq.player && !!s.budGuard[seatOf(sq.player)];
 }
+// 業火の実コスト = max(1, calc(基礎 − 盤面の敵コマの数))
+function infernoCost(s, seat = s.turn) {
+    const me = SYMBOLS[seat];
+    return Math.max(1, calculateCost(s, costsOf(s).onClickInferno - s.board.filter((sq) => sq.player && sq.player !== me).length));
+}
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
     thermal.ignite(s.board, targets, s.size, 2, keepBudsOf(s));
-    spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
+    spendMagic(s, infernoCost(s));
     bumpStat(s, 'inferno');
     bumpStat(s, 'infernoCells', targets.length);
 }
@@ -1866,5 +1871,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

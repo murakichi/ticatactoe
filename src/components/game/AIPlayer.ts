@@ -4,7 +4,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, enemyPieceCount, reducedInfernoCost, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -1232,7 +1232,7 @@ class AIPlayer {
             }
         }
         if (this.character === 'pyromancer') {
-            const cost = this.calculateAICost(costs.onClickInferno);
+            const cost = reducedInfernoCost(costs.onClickInferno, enemyPieceCount(board, this.playerSymbol), (c) => this.calculateAICost(c));
             const targets = infernoTargets(board, this.playerSymbol, this.characters);
             if (magic >= cost && targets.length > 0 && this.shouldInferno(board)) {
                 chargeClicks.push({ skill: 'onClickInferno' });

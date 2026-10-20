@@ -1379,8 +1379,10 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     s.board[8] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ] };  // 1つ目で氷結が全解除 → 2つ目が🔥
     s.board[11] = { player: '⭕', bind: 3, effects: [FRZ] };           // 氷結1つ減って、余り1スタックが🔥
     const before = s.heartMagic;
+    const cost = e.infernoCost(s);
+    assert.ok(cost < 9); // 敵コマの数だけ軽減される
     e.SKILLS.inferno(s);
-    assert.strictEqual(s.heartMagic, before - 9);
+    assert.strictEqual(s.heartMagic, before - cost);
     assert.strictEqual(s.heartTurn, true);
     const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
@@ -1895,6 +1897,21 @@ test('AI: ⚡で無敵の自コマを対策ロックの対象にしない（4人
             assert.notStrictEqual(s.currentTurn, before, `seed ${g}: 手番が進まない (turn ${before})`);
         }
     }
+});
+
+
+test('業火: 盤面の敵コマ1つにつきコスト-1（下限1）。撃つと軽減後のコストで魔力が減る', () => {
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    const base = e.infernoCost(s);
+    s.board[1] = { player: '⭕', bind: 5, effects: [] };
+    s.board[2] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.infernoCost(s), base - 2);
+    for (let i = 3; i < 15; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.infernoCost(s), 1);
+    const before = s.heartMagic;
+    e.SKILLS.inferno(s);
+    assert.strictEqual(s.heartMagic, before - 1);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
