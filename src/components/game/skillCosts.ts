@@ -79,6 +79,14 @@ export const skillCosts = {
     onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
+    // コスト軽減スキル(idx 53-58)。discount.ts
+    onClickMarkdown: 1,
+    onClickEffectDiscount: 1,
+    onClickTokenDiscount: 1,
+    onClickVitalMarkdown: 2,
+    onClickUniqueDiscount: 3,
+    onClickClearance: 4,
+    onClickRandomCast: 2, // 福引き(idx 59)
 };
 
 export type SkillCosts = typeof skillCosts;

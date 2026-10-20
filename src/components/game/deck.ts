@@ -74,6 +74,13 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 50, name: '縮地', icon: '👣', category: 'support', costKey: 'onClickRelocate', desc: '自陣のコマを空きマスへ移動します（エフェクトごと）' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support', costKey: 'onClickClone', desc: '自陣のコマの隣の空きマスに、ライフ半分の写しを置きます' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack', costKey: 'onClickPlunder', desc: 'ライフ0の敵コマを1つ、自陣のコマ（ライフ1）にします' },
+    { idx: 53, name: '特売', icon: '🏷️', category: 'support', costKey: 'onClickMarkdown', desc: '次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）' },
+    { idx: 54, name: '付与割引', icon: '🎫', category: 'support', costKey: 'onClickEffectDiscount', desc: 'このターン、エフェクト（🌱⚡☠❄🔥）を付与するスキルのコストを、打つたびに1軽減します' },
+    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support', costKey: 'onClickTokenDiscount', desc: 'このターン、トークンを付与するスキルのコストを、打つたびに1軽減します' },
+    { idx: 56, name: '活力特売', icon: '💖', category: 'support', costKey: 'onClickVitalMarkdown', desc: '次に打つスキルのコストを4軽減し、次の一手のライフを+1します' },
+    { idx: 57, name: '固有割引', icon: '👑', category: 'support', costKey: 'onClickUniqueDiscount', desc: 'このターン、固有スキルのコストを6軽減します。1ターンに一度のみ・ライフ-1（ライフ2以上で使用可）' },
+    { idx: 58, name: '大特価', icon: '💸', category: 'support', costKey: 'onClickClearance', desc: '次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）' },
+    { idx: 59, name: '福引き', icon: '🎰', category: 'support', costKey: 'onClickRandomCast', desc: '自分のデッキ（12枚）の中から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します（手札に出ていないスキルも対象）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

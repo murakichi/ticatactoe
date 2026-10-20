@@ -1860,7 +1860,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -1928,5 +1928,48 @@ test('業火: 1手番に異なるスキルを3種類使うと無料権が付く�
     e.spendMagic(s, 0, 'onClickCleanse');
     assert.strictEqual(e.infernoCost(s), 0);
 });
+
+test('コスト軽減スキル: 次に打つスキル-3は軽減札でないスキルで消費され、下限は1。手番を跨がない', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 30; s.life = 3;
+    const bud = () => e.calculateCost(s, e.skillCosts.onClickBuds, false, false, 'onClickBuds');
+    const base = bud();
+    e.SKILLS.markdown(s);
+    assert.strictEqual(bud(), Math.max(1, base - 3));
+    e.SKILLS.clearance(s); // 足し算（-3 + -7）
+    assert.strictEqual(bud(), 1);
+    e.spendMagic(s, 0, 'onClickBuds'); // 軽減札でないスキルで消える
+    assert.strictEqual(bud(), base);
+    e.SKILLS.markdown(s);
+    e.SKILLS.charge(s); e.SKILLS.charge(s); // 手番を跨ぐと消える
+    assert.strictEqual(bud(), base);
+});
+
+test('コスト軽減スキル: エフェクト付与/トークン/固有の永続軽減。固有割引は1ターン1度でライフ-1、活力特売はライフ+1', () => {
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 40; s.life = 3;
+    const freeze = () => e.calculateCost(s, e.skillCosts.onClickFreeze, false, false, 'onClickFreeze');
+    const token = () => e.calculateCost(s, e.skillCosts.onClickToken, true, false, 'onClickToken');
+    const slash = () => e.calculateCost(s, e.skillCosts.onClickSlash, false, false, 'onClickSlash');
+    const [f0, t0, sl0, inf0] = [freeze(), token(), slash(), e.infernoCost(s)];
+    e.SKILLS.effectDiscount(s); e.SKILLS.tokenDiscount(s);
+    assert.strictEqual(freeze(), f0 - 1); assert.strictEqual(token(), t0 - 1); assert.strictEqual(slash(), sl0);
+    e.spendMagic(s, 0, 'onClickFreeze');
+    assert.strictEqual(freeze(), f0 - 1); // 永続（そのターン中は打つたびに効く）
+    e.SKILLS.uniqueDiscount(s);
+    assert.strictEqual(s.life, 2);
+    assert.strictEqual(e.infernoCost(s), 0); // 付与割引・トークン割引・固有割引の3種類で業火の無料権が付く（inf0=9のはず）
+    assert.strictEqual(inf0, 9);
+    const m = s.heartMagic;
+    e.SKILLS.uniqueDiscount(s); // 1ターンに一度だけ
+    assert.strictEqual(s.heartMagic, m); assert.strictEqual(s.life, 2);
+    e.SKILLS.vitalMarkdown(s);
+    assert.strictEqual(s.life, 3);
+    const low = game('magician', 'you');
+    low.heartTurn = true; low.heartMagic = 10; low.life = 1;
+    e.SKILLS.uniqueDiscount(low); // ライフ1では使えない
+    assert.strictEqual(low.heartMagic, 10);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

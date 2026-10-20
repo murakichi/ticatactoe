@@ -8,7 +8,7 @@ import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, g
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 53;
+export const SKILL_POOL_SIZE = 60;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1246,6 +1246,10 @@ class AIPlayer {
             if (need > 0) {
                 const mine = (f: (sq: SquareInfo) => boolean) => board.some((sq) => sq.player === this.playerSymbol && f(sq));
                 const fillers = [
+                    { idx: 53, skill: 'onClickMarkdown', cost: this.calculateAICost(costs.onClickMarkdown), ok: true },
+                    { idx: 54, skill: 'onClickEffectDiscount', cost: this.calculateAICost(costs.onClickEffectDiscount), ok: true },
+                    { idx: 55, skill: 'onClickTokenDiscount', cost: this.calculateAICost(costs.onClickTokenDiscount), ok: true },
+                    { idx: 56, skill: 'onClickVitalMarkdown', cost: this.calculateAICost(costs.onClickVitalMarkdown), ok: true },
                     { idx: 0, skill: 'onClickAddLife', cost: this.calculateAICost(costs.onClickAddLife), ok: true },
                     { idx: 1, skill: 'onClickBibine', cost: this.calculateAICost(costs.onClickBibine), ok: true },
                     { idx: 36, skill: 'onClickWindborne', cost: this.calculateAICost(costs.onClickWindborne), ok: sowCandidates(board, this.playerSymbol).length > 0 },

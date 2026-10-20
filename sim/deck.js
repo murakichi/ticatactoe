@@ -63,7 +63,15 @@ const SKILL_CATALOG = [
     { idx: 50, name: '縮地', icon: '👣', category: 'support' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack' },
+    { idx: 53, name: '特売', icon: '🏷️', category: 'support' },
+    { idx: 54, name: '付与割引', icon: '🎫', category: 'support' },
+    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support' },
+    { idx: 56, name: '活力特売', icon: '💖', category: 'support' },
+    { idx: 57, name: '固有割引', icon: '👑', category: 'support' },
+    { idx: 58, name: '大特価', icon: '💸', category: 'support' },
+    { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
 ];
+
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1） */
 const CATALOG_SIZE = SKILL_CATALOG.length;

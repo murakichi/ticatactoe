@@ -397,11 +397,16 @@ function forceTable(s, me) {
     };
 }
 // 撃つ順（ライフ3→バイバインの順で次の駒のライフが伸びる。刈り入れ前夜は🌱を刈るので最後）。0/1 は常に撃てる
-const PYRO_FILLERS = [36, 0, 1, 34, 32, 33];
-const PYRO_EXTRA = { 0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' } };
+const PYRO_FILLERS = [53, 54, 55, 56, 36, 0, 1, 34, 32, 33];
+const PYRO_EXTRA = {
+    0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' },
+    // コスト軽減札(idx 53-56)は1〜2コストで、足りない種類数を安く埋められる
+    53: { key: 'markdown', cost: 'onClickMarkdown' }, 54: { key: 'effectDiscount', cost: 'onClickEffectDiscount' },
+    55: { key: 'tokenDiscount', cost: 'onClickTokenDiscount' }, 56: { key: 'vitalMarkdown', cost: 'onClickVitalMarkdown' },
+};
 // 軽量→シャッフル→軽量: 手札に軽いスキルが無ければ1コストで引き直しながら、異なる3種類を揃える。
 // 揃えるのに必要な魔力（軽い順の3種類 + シャッフル余裕）が手元にあるときだけ始める
-const PYRO_COSTS = [2, 3, 3, 3, 4, 5];
+const PYRO_COSTS = [1, 1, 1, 2, 2, 3];
 function pyroChainShuffle(s, me, table) {
     const kinds = s.skillKinds[s.turn];
     let need = INFERNO_FREE_SKILLS - kinds.size;
