@@ -1144,15 +1144,13 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickWindborne, 3);
 });
 
-test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。そのあとスタックが1つ減り、0で消える', () => {
+test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 9, effects: [FLM, FLM] };
     e.placeMove(s, 0);
     assert.strictEqual(s.board[5].bind, 9 - 1 - 4);
-    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 1); // 継続ダメージのあとスタック-1
-    e.placeMove(s, 1); // 次のターン進行: 2ダメージ(1スタック)のあと🔥が消える
-    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 0);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 2);
 });
 
 test('バーンアウト: 🔥が乗っているマスを全て破壊（敵味方問わず）。盤面に🔥が4つ以上あればタダ、なければ5コスト', () => {
@@ -2051,6 +2049,24 @@ test('煉獄の鍛冶師のパッシブ: 🔥を付与するスキルは常に-1
     assert.strictEqual(e.infernoCost(p), 9); // 業火は固有スキルなので対象外
     e.SKILLS.markdown(p); // 軽減札とは足し算（下限1）
     assert.strictEqual(c(p, 'onClickIgnite'), Math.max(1, e.skillCosts.onClickIgnite - 1 - 3));
+});
+
+
+test('AI(burnoutAfter/pyroLock): 鍛冶師は業火のあとバーンアウトで🔥の敵コマを壊す。軽減札を手札に固定する', () => {
+    const ai = require('./ai');
+    const s = game('pyromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 12; s.life = 3;
+    for (const i of [1, 2, 3, 6]) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    s.skills = [61, 0, 3];
+    s.aiFlags = [{ pyroChain: 0, discountPlan: 0 }, {}];
+    ai.makeMove(s, 'faithful');
+    assert.ok(s.stats && s.stats.inferno >= 1 && s.stats.burnout >= 1, '業火のあとバーンアウトが撃たれる');
+    assert.strictEqual(s.board.filter((sq) => sq.player === '⭕').length, 0, '🔥の敵コマが全て壊れる');
+    const t = game('pyromancer', 'you');
+    t.heartTurn = true; t.heartMagic = 12; t.life = 3;
+    t.skills = [53, 3, 60];
+    ai.makeMove(t, 'faithful');
+    assert.ok(t.lockedSkills[0].includes(53) && t.lockedSkills[0].includes(60), '軽減札が固定される');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

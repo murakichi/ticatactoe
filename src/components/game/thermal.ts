@@ -259,13 +259,7 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
-    // 🔥はターン進行のたびにスタックが1つ減る（継続ダメージを与えたあと）
-    return dropOneFlame(next);
-};
-/** 🔥を1スタック減らす（なければそのまま） */
-export const dropOneFlame = (sq: SquareInfo): SquareInfo => {
-    const at = sq.effects.map((e) => e.effect).lastIndexOf('🔥');
-    return at === -1 ? sq : { ...sq, effects: sq.effects.filter((_, k) => k !== at) };
+    return next;
 };
 
 // ---- バーンアウト（汎用スキル）----

@@ -867,7 +867,6 @@ function placeMove(s, i) {
             sq.bind = hit.bind;
             sq.effects = hit.effects;
         }
-        thermal.dropOneFlame(sq); // 🔥はターン進行のたびにスタックが1つ減る
         // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
         const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');

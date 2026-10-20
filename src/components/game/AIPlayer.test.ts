@@ -400,4 +400,15 @@ describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
         expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
         expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
     });
+    it('業火のあと、敵のコマが自陣より2つ以上多く壊れるならバーンアウトを撃つ（🔥合計4以上でタダ）', () => {
+        const r = setup(9, [61, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
+        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
+    });
+    it('鍛冶師は軽減札を手札に固定する', () => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        const locks = ai.chooseLocks(b, 2, 5, [53, 3, 60]);
+        expect(locks).toEqual(expect.arrayContaining([53, 60]));
+    });
 });

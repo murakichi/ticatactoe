@@ -32,6 +32,8 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    pyroLock: 1, // 鍛冶師が軽減札を手札に固定する（A/B）
+    burnoutAfter: 1, // 鍛冶師が業火のあと（🔥のマスで敵が自陣より2つ以上多く壊れるなら）バーンアウトを撃つ（A/B）
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
     discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
@@ -468,6 +470,8 @@ function discountPlan(s, me, availableSkills) {
         }
     }
 }
+// 鍛冶師が手札に固定する軽量スキル: 軽減札（特売・付与割引・トークン割引・活力特売・返し特売）。毎ターン手札に残して連携に使う
+const PYRO_LOCK = [60, 53, 54, 55, 56];
 const PYRO_FILLERS = [53, 54, 55, 56, 36, 0, 1, 34, 32, 33];
 const PYRO_EXTRA = {
     0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' },
@@ -1003,7 +1007,7 @@ function chooseLocks(s, availableSkills) {
     for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player) { if (!thermal.isFrozen(sq)) oppPieces++; } else if (!thermal.isFrozen(sq)) empties++; }
     const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !thermal.isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
-    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx));
+    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
@@ -1020,7 +1024,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= POOL_SIZE) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 62)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1210,6 +1214,13 @@ function faithfulMakeMoveInner(s) {
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3
         && infernoTargets(s).length > 0) {
         SKILLS.inferno(s);
+    }
+    // バーンアウト: 🔥のマスを全て壊す。敵のコマが2つ以上多く壊れるなら撃つ（業火の直後は敵全員が🔥2つなので、合計4以上でタダになりやすい）
+    if (curChar(s) === 'pyromancer' && availableSkills.includes(61) && F.burnoutAfter) {
+        const targets = E.burnoutTargets(s);
+        const foes = targets.filter((k) => s.board[k].player && s.board[k].player !== me).length;
+        const own = targets.filter((k) => s.board[k].player === me).length;
+        if (foes - own >= 2 && curMagic(s) >= E.burnoutCost(s)) SKILLS.burnout(s);
     }
 
     // ひこばえ: 🌱を持つ自陣コマの隣に受け取れる自陣コマが2つ以上あれば撃つ（対象クリックが要る2段階スキル。手番は進まない）

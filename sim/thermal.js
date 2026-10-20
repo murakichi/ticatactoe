@@ -238,12 +238,6 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
 
 const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
 
-// 🔥はターン進行のたびにスタックが1つ減る（src/components/game/thermal.ts の dropOneFlame と同じ）
-function dropOneFlame(sq) {
-    const at = sq.effects.map((e) => e.effect).lastIndexOf('🔥');
-    if (at === -1) return;
-    sq.effects = sq.effects.filter((_, k) => k !== at);
-}
 // バーンアウト（thermal.ts と同じ）
 const BURNOUT_FREE_FLAMES = 4;
 const totalFlames = (board) => board.reduce((n, sq) => n + flameStacks(sq), 0);
@@ -264,7 +258,7 @@ function burnout(board, cells) {
     return destroyed;
 }
 module.exports = {
-    dropOneFlame, BURNOUT_FREE_FLAMES, totalFlames, burnoutCostOf, burnoutTargets, burnout,
+    BURNOUT_FREE_FLAMES, totalFlames, burnoutCostOf, burnoutTargets, burnout,
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,

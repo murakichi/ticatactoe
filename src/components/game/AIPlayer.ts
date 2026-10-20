@@ -4,11 +4,13 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
+import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 export const SKILL_POOL_SIZE = 62;
+/** 鍛冶師が手札に固定する軽量スキル: 返し特売・特売・付与割引・トークン割引・活力特売（sim/ai.js の PYRO_LOCK と同じ） */
+const PYRO_LOCK = [60, 53, 54, 55, 56];
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -573,7 +575,8 @@ class AIPlayer {
         const budsIdx = [2, 10];
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            (this.character === 'magician' && budsIdx.includes(idx));
+            (this.character === 'magician' && budsIdx.includes(idx)) ||
+            (this.character === 'pyromancer' && PYRO_LOCK.includes(idx)); // 鍛冶師は軽減札を手札に固定して連携に使う
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
@@ -1309,6 +1312,19 @@ class AIPlayer {
                 board = board.slice();
                 ignite(board, targets, this.sizeOf(board), INFERNO_STACKS);
                 magic -= cost;
+            }
+            // バーンアウト: 🔥のマスを全て壊す。敵のコマが自陣より2つ以上多く壊れるなら撃つ（業火の直後は敵全員が🔥2つなので、合計4以上でタダになりやすい）
+            if (availableSkills.includes(61)) {
+                const burnTargets = burnoutTargets(board, this.characters);
+                const foes = burnTargets.filter((k) => this.isEnemy(board[k].player)).length;
+                const own = burnTargets.filter((k) => board[k].player === this.playerSymbol).length;
+                const burnCost = burnoutCostOf(costs.onClickBurnout, totalFlames(board), (c) => this.calculateAICost(c, false, false, 'onClickBurnout'));
+                if (foes - own >= 2 && magic >= burnCost) {
+                    chargeClicks.push({ skill: 'onClickBurnout' });
+                    board = board.slice();
+                    burnout(board, burnTargets);
+                    magic -= burnCost;
+                }
             }
         }
 
