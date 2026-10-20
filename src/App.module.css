@@ -271,3 +271,16 @@
     color: var(--color-text-dim);
     line-height: 1.4;
 }
+
+.deckWarn {
+    margin: var(--space-2) 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-circle, #ff4d79);
+    text-align: center;
+}
+
+.start:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

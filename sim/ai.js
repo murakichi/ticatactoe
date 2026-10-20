@@ -14,6 +14,8 @@ const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromanc
         miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
+const E = require('./engine');
+const { lineCells } = require('./geometry');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -327,6 +329,99 @@ function thawIgniteTarget(board, k, me, allowOwn) {
         if (own === null) own = n;
     }
     return allowOwn ? own : null;
+}
+
+// ---- スキル単体の強さを測るための強制使用 (F.force) ----
+// F.force='33|36': そのidxのスキルが手札にあり（F.forceAny なら手札に関わらず毎手番使える扱い）、魔力が足り、使える状況なら、
+// 手番の中で1回、簡易評価で最善の対象を選んで撃つ。自分に即勝ちの着手がある手番は撃たない。AI本体の方針（撃つ条件）の検証ではなく、
+// 「撃てたときの価値」を測るための較正用。F.useNew は暫定の採用候補（別途）。
+function forceEval(board, me) {
+    let sc = evaluateBoard(board, me);
+    for (const sq of board) {
+        if (!sq.player || sq.bind <= 0) continue;
+        const sgn = sq.player === me ? -1 : 1; // 敵に付けば+、自陣に付けば−
+        sc += sgn * 3 * Math.min(3, thermal.flameStacks(sq));
+        sc += sgn * 2 * (sq.effects.filter((e) => e.effect === '☠').length);
+        sc -= sgn * 2 * Math.min(2, thermal.frozenStacks(sq)); // 氷結は自陣に付けば+、敵に付けば−
+        sc += sgn * 1 * Math.min(2, sq.effects.filter((e) => e.effect === '⚡').length);
+    }
+    return sc;
+}
+const copyBoard = (board) => board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
+function pickByEval(s, me, cands, apply) {
+    let best = null, bestSc = -Infinity;
+    for (const c of cands) {
+        const b = copyBoard(s.board);
+        apply(b, c);
+        const sc = forceEval(b, me);
+        if (sc > bestSc) { bestSc = sc; best = c; }
+    }
+    return best;
+}
+const pieceCells = (s) => s.board.map((sq, i) => (sq.player && !shield.has(i) ? i : -1)).filter((i) => i !== -1);
+const allCells = (s) => s.board.map((_, i) => i).filter((i) => !shield.has(i));
+function forceTable(s, me) {
+    const size = s.size;
+    const geo = geometryForCells(s.board.length);
+    const empties = () => findEmptyIndexes(s.board).length > 0;
+    return {
+        2: { key: 'buds', cost: 'onClickBuds' },
+        10: { key: 'doubleBuds', cost: 'onClickDoubleBuds' },
+        3: { key: 'token', cost: 'onClickToken', token: true, legal: empties },
+        14: { key: 'walpurgis', cost: 'onClickWalpurgisNight', legal: () => s.board.some((sq) => sq.player) },
+        15: { key: 'injection', cost: 'onClickInjection', poison: true, cands: () => pieceCells(s).filter((i) => isEnemy(s.board[i].player, me)), apply: (b, c) => b[c].effects.push({ effect: '☠' }) },
+        19: { key: 'pandemic', cost: 'onClickPandemic', poison: true, cands: () => allCells(s), apply: (b, c) => { for (const k of geo.stompRange(c)) if (b[k].player) b[k].effects.push({ effect: '☠' }); } },
+        22: { key: 'chargeOne', costFn: () => chargeOneCost(s), cands: () => allCells(s).filter((i) => !s.board[i].effects.some((e) => e.effect === '🔑')), apply: (b, c) => b[c].effects.push({ effect: '⚡' }), pick: () => bestChargeOneTarget(s.board, me) },
+        29: { key: 'poisonMist', cost: 'onClickPoisonMist', poison: true, legal: () => s.board.some((sq) => sq.player) },
+        30: { key: 'freeze', cost: 'onClickFreeze', cands: () => allCells(s).filter((i) => thermal.canFreeze(s.board[i])), apply: (b, c) => thermal.freeze(b, [c]) },
+        31: { key: 'ignite', cost: 'onClickIgnite', cands: () => pieceCells(s), apply: (b, c) => thermal.ignite(b, [c], size, 1) },
+        32: { key: 'cleanse', cost: 'onClickCleanse', legal: () => hasAilment(s.board, me) },
+        33: { key: 'harvestEve', cost: 'onClickHarvestEve', legal: () => ownBuds(s) >= 1 },
+        34: { key: 'solstice', cost: 'onClickSolstice', legal: () => !s.budGuard[s.turn] },
+        35: { key: 'sucker', cost: 'onClickSucker', cands: () => E.suckerTargets(s), pick: () => bestSuckerTarget(s) },
+        36: { key: 'windborne', cost: 'onClickWindborne', legal: () => thermal.sowCandidates(s.board, me).length > 0 },
+        37: { key: 'flameToken', cost: 'onClickFlameToken', token: true, legal: empties },
+        38: { key: 'doubleFlameToken', cost: 'onClickDoubleFlameToken', token: true, legal: empties },
+        39: { key: 'swidden', cost: 'onClickSwidden', cands: () => E.swiddenTargets(s), apply: (b, c) => thermal.swidden(b, c, size) },
+        40: { key: 'sacrifice', cost: 'onClickSacrifice', cands: () => E.sacrificeCandidates(s), apply: (b, c) => thermal.sacrificeFlame(b, c, me, size, null) },
+        41: { key: 'frostArea', cost: 'onClickFrostArea', cands: () => allCells(s), apply: (b, c) => thermal.freeze(b, geo.stompRange(c)) },
+        42: { key: 'icicle', cost: 'onClickIcicle', cands: () => { const o = []; for (const c of allCells(s)) for (const d of ['row', 'col', 'diag', 'anti']) o.push({ c, d }); return o; }, apply: (b, x) => thermal.freeze(b, lineCells(size, x.c, x.d)), place: (x) => { s.icicleDir = x.d; return x.c; } },
+        43: { key: 'randomFreeze', cost: 'onClickRandomFreeze', legal: () => thermal.randomFreezeCandidates(s.board).length > 0 },
+        44: { key: 'freezeSpread', cost: 'onClickFreezeSpread', cands: () => pieceCells(s), apply: (b, c) => thermal.freeze(b, connectedPieces(b, c, size)) },
+        45: { key: 'frostToken', cost: 'onClickFrostToken', token: true, legal: empties },
+        46: { key: 'doubleFrostToken', cost: 'onClickDoubleFrostToken', token: true, legal: empties },
+        47: { key: 'shatter', cost: 'onClickShatter', cands: () => E.shatterTargets(s), apply: (b, c) => thermal.shatter(b, c) },
+        48: { key: 'frostfall', cost: 'onClickFrostfall', legal: () => thermal.frostfallTargets(s.board, me).length > 0 },
+    };
+}
+/** 強制使用。撃ったら true */
+function forceUse(s, me, availableSkills) {
+    const list = String(F.force).split('|').map(Number);
+    const table = forceTable(s, me);
+    // 勝ち手があるなら先に着手する
+    const moves = new Set([...findEmptyIndexes(s.board), ...getValidMoves(s.board, me, curChar(s))]);
+    for (const m of moves) if (calculateWinner(simulatePlace(s.board, m, me, s.life).map((q) => q.player)) === me) return false;
+    for (const idx of list) {
+        if (!(F.forceAny || availableSkills.includes(idx))) continue;
+        const t = table[idx];
+        if (!t) continue;
+        if (t.token && s.usedTokenThisTurn) continue;
+        if (t.legal && !t.legal()) continue;
+        const cost = t.costFn ? t.costFn() : calculateCost(s, costsOf(s)[t.cost], !!t.token, !!t.poison);
+        if (curMagic(s) < cost) continue;
+        let target = null;
+        if (t.cands) {
+            const cands = t.cands();
+            if (!cands.length) continue;
+            target = t.pick ? t.pick() : null;
+            if (target === null || target === undefined) target = t.apply ? pickByEval(s, me, cands, t.apply) : cands[0];
+            if (target === null || target === undefined) continue;
+        }
+        SKILLS[t.key](s);
+        if (t.cands) placeMove(s, t.place ? t.place(target) : target);
+        return true;
+    }
+    return false;
 }
 
 // ---- helpers ----
@@ -843,6 +938,9 @@ function faithfulMakeMoveInner(s) {
     let availableSkills = s.skills.slice();
     // A/B検証用: F.ban='33|36' のように指定したスキルidxは手札にあっても使わない（スキル単体の寄与を測る）
     if (F.ban !== undefined) { const ban = String(F.ban).split('|'); availableSkills = availableSkills.filter((i) => !ban.includes(String(i))); }
+
+    // 検証用: 指定スキルを強制的に1回撃つ
+    if (F.force !== undefined && forceUse(s, me, availableSkills)) availableSkills = availableSkills.filter(() => true);
 
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);

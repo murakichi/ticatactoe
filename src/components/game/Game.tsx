@@ -4,12 +4,14 @@ import { Effect } from '../../types/Effect';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
-import AIPlayer, { TURN_ENDING_SKILLS, SKILL_POOL_SIZE } from './AIPlayer';
+import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
 import { shouldDecay } from './decay';
+import { resolveDeck } from './deck';
+import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
@@ -41,6 +43,8 @@ export type PlayerConfig = {
     isAI: boolean;
     /** 装備するギア（省略時はなし） */
     gears?: GearId[];
+    /** デッキ（手札3枠を引く汎用スキルの idx、DECK_SIZE枚）。省略・不正ならキャラの推奨デッキ */
+    deck?: number[];
 };
 
 type GameProps = {
@@ -107,6 +111,8 @@ export const Game = (props: GameProps) => {
 
     // --- ギア（キャラ選択時に装備する追加パッシブ。定義は gear.ts、ヘッドレス版は sim/gear.js） ---
     const gearsBySeat: GearId[][] = props.players.map((p) => p.gears ?? []);
+    // 席ごとのデッキ（手札3枠の引き元）。指定が無い・不正ならキャラの推奨デッキ
+    const deckBySeat: number[][] = props.players.map((p) => resolveDeck(p.deck, p.character));
     const turnGears = gearsBySeat[turnSeat];
     // 価格破壊: 席ごとのコスト表。試合開始時(リスタート時)に1回だけ抽選して固定する
     const rollPriceTables = (): (SkillCosts | null)[] =>
@@ -249,6 +255,7 @@ export const Game = (props: GameProps) => {
             case 'onClickDoubleFlameToken': onClickDoubleFlameToken(); break;
             case 'onClickSwidden': onClickSwidden(); break;
             case 'onClickSacrifice': onClickSacrifice(); break;
+            case 'onClickBoost': onClickBoost(); break;
             case 'onClickRandomFreeze': onClickRandomFreeze(); break;
             case 'onClickFrostToken': onClickFrostToken(); break;
             case 'onClickDoubleFrostToken': onClickDoubleFrostToken(); break;
@@ -420,10 +427,10 @@ export const Game = (props: GameProps) => {
     const toggleLock = (i: number) => {
         setLockedSkillsAt(turnSeat, (prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].slice(0, 3)));
     };
-    // ロック済みスキルを残しつつ、残り枠を [0,poolEnd) からランダムに埋める
-    const reshuffledSkills = (poolEnd: number, locks: number[]): number[] => {
+    // ロック済みスキルを残しつつ、残り枠を席のデッキからランダムに埋める
+    const reshuffledSkills = (deck: number[], locks: number[]): number[] => {
         const keep = locks.slice(0, 3);
-        const pool = range(0, poolEnd).filter((i) => !keep.includes(i));
+        const pool = deck.filter((i) => !keep.includes(i));
         return [...keep, ...randomAnyPick(pool, Math.max(0, 3 - keep.length))];
     };
 
@@ -540,7 +547,7 @@ export const Game = (props: GameProps) => {
 
     useEffect(() => {
         // 次に手番が来るプレイヤーのロックを固定して再シャッフル
-        setSkills(reshuffledSkills(SKILL_POOL_SIZE, lockedSkills[judgeNextSeat()]));
+        setSkills(reshuffledSkills(deckBySeat[judgeNextSeat()], lockedSkills[judgeNextSeat()]));
     }, [history]);
 
     const onCellClick = (i: number) => {
@@ -612,6 +619,21 @@ export const Game = (props: GameProps) => {
 
         if (useFrostArea) {
             exeFrostArea(i);
+            return;
+        }
+
+        if (useRelocate) {
+            exeRelocate(i);
+            return;
+        }
+
+        if (useClone) {
+            exeClone(i);
+            return;
+        }
+
+        if (usePlunder) {
+            exePlunder(i);
             return;
         }
 
@@ -891,8 +913,8 @@ export const Game = (props: GameProps) => {
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
-        // プールは全33スキル。8 だと毒スキル(15-19)・増殖(20)・帯電(21-26)・ヘイルメアリー(27)・サイレンス(28)を永久に引けなかった
-        setSkills(reshuffledSkills(SKILL_POOL_SIZE, currentLockedSkills));
+        // 手札はデッキ（12枚）から引く
+        setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills));
         spendMagic(seatCosts.onClickShuffle, true, false);
     };
 
@@ -1829,6 +1851,86 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
+    // --- 汎用スキル（idx 49-52）: 底上げ・縮地・写し身・追い剥ぎ ---
+    const [useRelocate, setUseRelocate] = useState<boolean>(false);
+    const [relocateFrom, setRelocateFrom] = useState<number | null>(null);
+    const [useClone, setUseClone] = useState<boolean>(false);
+    const [usePlunder, setUsePlunder] = useState<boolean>(false);
+    // 底上げ: 自陣の全コマのライフ+1（クリック不要・手番は続く）
+    const onClickBoost = () => {
+        const board = currentBoard.slice();
+        const done = boostAll(board, currentTurnPlayer);
+        if (done.length === 0) return;
+        addLog(`「底上げ」を使用（${done.length}コマのライフ+1）`);
+        flashCells(done);
+        playEffect('harvest');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickBoost));
+    };
+    // 縮地: 自陣のコマ（🔑・氷結中は不可）を選び、空きマスを選ぶと、ライフ・エフェクトごと移動する
+    const relocateSources = (): number[] =>
+        currentBoard.map((sq, i) => (canRelocate(sq, currentTurnPlayer) ? i : -1)).filter((i) => i !== -1);
+    const onClickRelocate = () => {
+        addLog('「縮地」を使用（動かす自陣のコマを選択）');
+        setUseRelocate(true);
+        setRelocateFrom(null);
+        spendMagic(calculateCost(seatCosts.onClickRelocate));
+    };
+    const exeRelocate = (i: number) => {
+        if (relocateFrom === null) {
+            if (canRelocate(currentBoard[i], currentTurnPlayer)) setRelocateFrom(i); // 動かせるコマだけ選べる
+            return;
+        }
+        if (canRelocate(currentBoard[i], currentTurnPlayer)) {
+            setRelocateFrom(i); // 別のコマに選び直せる
+            return;
+        }
+        const board = currentBoard.slice();
+        if (!relocate(board, relocateFrom, i, currentTurnPlayer)) return; // 置けないマスは選び直せる
+        addLog(`${posName(relocateFrom)}のコマを${posName(i)}へ移動`);
+        flashCells([i]);
+        playEffect('windborne', undefined, [i]);
+        setUseRelocate(false);
+        setRelocateFrom(null);
+        setCurrentBoard(board);
+    };
+    // 写し身: 自陣のコマを選ぶと、縦横隣のランダムな空きマスにライフ半分の写しが現れる
+    const cloneSources = (): number[] =>
+        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && cloneTargets(currentBoard, i, geo.size).length > 0 ? i : -1)).filter((i) => i !== -1);
+    const onClickClone = () => {
+        addLog('「写し身」を使用（自陣のコマを選択）');
+        setUseClone(true);
+        spendMagic(calculateCost(seatCosts.onClickClone));
+    };
+    const exeClone = (i: number) => {
+        if (!cloneSources().includes(i)) return; // 縦横隣に空きマスの無いコマ・敵のコマは選び直せる
+        const to = randomPick(cloneTargets(currentBoard, i, geo.size));
+        const board = currentBoard.slice();
+        cloneInto(board, i, to, currentTurnPlayer);
+        addLog(`${posName(i)}の写し身が${posName(to)}に現れた`);
+        flashCells([to]);
+        playEffect('sprout', undefined, [to]);
+        setUseClone(false);
+        setCurrentBoard(board);
+    };
+    // 追い剥ぎ: ライフ0の敵のコマを1つ選ぶと、自陣のコマ（ライフ1）にする。手番は続く
+    const onClickPlunder = () => {
+        addLog('「追い剥ぎ」を使用（ライフ0の敵のコマを選択）');
+        setUsePlunder(true);
+        spendMagic(calculateCost(seatCosts.onClickPlunder));
+    };
+    const exePlunder = (i: number) => {
+        if (!plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i)) return; // 対象外は選び直せる
+        const board = currentBoard.slice();
+        plunder(board, i, currentTurnPlayer);
+        addCorpses(1);
+        addLog(`${posName(i)}のライフ0の敵コマを奪った`);
+        flashCells([i]);
+        playEffect('famine');
+        setUsePlunder(false);
+        setCurrentBoard(board);
+    };
+
     // --- 氷結系の汎用スキル（idx 41-48）。作った❄は1個ずつ絶対零度のコスト軽減に数える ---
     const [useFrostArea, setUseFrostArea] = useState<boolean>(false);
     const [useIcicle, setUseIcicle] = useState<boolean>(false);
@@ -2259,6 +2361,10 @@ export const Game = (props: GameProps) => {
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseFrostArea(false);
+        setUseRelocate(false);
+        setRelocateFrom(null);
+        setUseClone(false);
+        setUsePlunder(false);
         setUseIcicle(false);
         setIcicleCell(null);
         setUseFreezeSpread(false);
@@ -2307,6 +2413,9 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
+        else if (useRelocate) setPreviewCells(relocateFrom === null ? (canRelocate(currentBoard[i], currentTurnPlayer) ? [i] : []) : isPlaceable(currentBoard[i]) ? [i] : []);
+        else if (useClone) setPreviewCells(cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []);
+        else if (usePlunder) setPreviewCells(plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []);
         else if (useFrostArea) setPreviewCells(geo.stompRange(i));
         else if (useIcicle) setPreviewCells([i]);
         else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
@@ -2319,7 +2428,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useSwidden || useSacrifice || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useSwidden || useSacrifice || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -2335,6 +2444,12 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
+        : useRelocate
+        ? '縮地'
+        : useClone
+        ? '写し身'
+        : usePlunder
+        ? '追い剥ぎ'
         : useFrostArea
         ? '範囲氷結'
         : useIcicle
@@ -2425,6 +2540,10 @@ export const Game = (props: GameProps) => {
         { idx: 46, onClick: onClickDoubleFrostToken, buttonText: `氷結ダブルトークン-${calculateCost(seatCosts.onClickDoubleFrostToken, true)}`, paragraph: `❄付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFrostToken, true) },
         { idx: 47, onClick: onClickShatter, buttonText: `砕氷-${calculateCost(seatCosts.onClickShatter)}`, paragraph: `氷結中のコマを選択し、❄を全て砕いて❄1つにつき3ダメージを与えます（ライフが0になったら破壊）\n自陣のコマにも使えます`, disabled: checkSkillDisable(seatCosts.onClickShatter) || !currentBoard.some((sq) => sq.player && isFrozen(sq)) },
         { idx: 48, onClick: onClickFrostfall, buttonText: `霜降り-${calculateCost(seatCosts.onClickFrostfall)}`, paragraph: `自陣のライフ2以下のコマすべてに❄を1つ付与します`, disabled: checkSkillDisable(seatCosts.onClickFrostfall) || frostfallTargets(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 49, onClick: onClickBoost, buttonText: `底上げ-${calculateCost(seatCosts.onClickBoost)}`, paragraph: `自陣の全コマのライフを+1します（ライフ0のコマも）`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
+        { idx: 50, onClick: onClickRelocate, buttonText: `縮地-${calculateCost(seatCosts.onClickRelocate)}`, paragraph: `自陣のコマを選び、空きマスを選ぶと、ライフ・エフェクトごと移動します\n🔑ロック中・氷結中のコマは動かせません`, disabled: checkSkillDisable(seatCosts.onClickRelocate) || relocateSources().length === 0 || !currentBoard.some(isPlaceable) },
+        { idx: 51, onClick: onClickClone, buttonText: `写し身-${calculateCost(seatCosts.onClickClone)}`, paragraph: `自陣のコマを選ぶと、縦横隣のランダムな空きマスに、ライフが半分（切り捨て・最低1）の写しが現れます`, disabled: checkSkillDisable(seatCosts.onClickClone) || cloneSources().length === 0 },
+        { idx: 52, onClick: onClickPlunder, buttonText: `追い剥ぎ-${calculateCost(seatCosts.onClickPlunder)}`, paragraph: `ライフ0の敵のコマを1つ選んで、自陣のコマ（ライフ1）にします\n🔑ロック中のコマ・無敵のコマは奪えません。手番は続きます`, disabled: checkSkillDisable(seatCosts.onClickPlunder) || plunderTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
     ];
 
     return (

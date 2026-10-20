@@ -74,6 +74,11 @@ export const skillCosts = {
     onClickDoubleFrostToken: 6,
     onClickShatter: 4,
     onClickFrostfall: 3,
+    // 汎用スキル(idx 49-52)。底上げ・縮地・写し身・追い剥ぎ
+    onClickBoost: 4,
+    onClickRelocate: 3,
+    onClickClone: 4,
+    onClickPlunder: 3,
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -131,7 +131,7 @@ describe('ギアの選択', () => {
         const { container } = render(<App />);
         const card = cards(container)[1];
         fireEvent.click(within(card).getByRole('button', { name: /プレイヤー2のギアをランダムに/ }));
-        const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+        const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true' && !b.closest('details')); // デッキのチップは除く
         expect(pressed).toHaveLength(3); // 「あなた」は3枠
     });
 
@@ -139,11 +139,45 @@ describe('ギアの選択', () => {
         const { container } = render(<App />);
         fireEvent.click(screen.getByRole('button', { name: /全員のギアをランダム/ }));
         cards(container).forEach((card) => {
-            const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+            const pressed = within(card).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true' && !b.closest('details')); // デッキのチップは除く
             expect(pressed).toHaveLength(3);
         });
         fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
         expect(container.querySelectorAll('[class*="gear"]').length).toBeGreaterThanOrEqual(6);
+    });
+
+    describe('デッキ', () => {
+        it('未指定は推奨デッキ（12/12）。チップを外すと11/12のカスタムになり、開始できなくなる。推奨に戻せる', () => {
+            const { container } = render(<App />);
+            const card = cards(container)[0];
+            expect(card).toHaveTextContent('デッキ 12/12（推奨）');
+            const start = screen.getByRole('button', { name: /対戦スタート/ });
+            expect(start).not.toBeDisabled();
+            fireEvent.click(within(card).getByRole('button', { name: /ライフ3/ }));
+            expect(card).toHaveTextContent('デッキ 11/12（カスタム）');
+            expect(start).toBeDisabled();
+            expect(screen.getByText(/デッキが12枚ではありません/)).toBeInTheDocument();
+            fireEvent.click(within(card).getByRole('button', { name: '推奨' }));
+            expect(card).toHaveTextContent('デッキ 12/12（推奨）');
+            expect(start).not.toBeDisabled();
+        });
+
+        it('AI席の未指定は「推奨ベース・一部ランダム」と表示される', () => {
+            const { container } = render(<App />);
+            expect(cards(container)[1]).toHaveTextContent('デッキ 12/12（推奨ベース・一部ランダム）');
+        });
+
+        it('自分で組んだデッキが対戦の手札の引き元になる（デッキ外のスキルは手札に出ない）', () => {
+            const { container } = render(<App />);
+            const card = cards(container)[0];
+            // 12枚のカスタムにする: ライフ3→外して、ロック系以外の別スキルを足す
+            fireEvent.click(within(card).getByRole('button', { name: /ライフ3/ }));
+            fireEvent.click(within(card).getByRole('button', { name: /バイバイン/ }));
+            expect(card).toHaveTextContent('デッキ 12/12（カスタム）');
+            fireEvent.click(screen.getByRole('button', { name: /対戦スタート/ }));
+            // 1手番目の手札3枠はすべてデッキ内。デッキ外の代表（ヘイルメアリー/帯電付与/氷結拡散）は出ない
+            ['ヘイルメアリー-', '帯電付与-', '氷結拡散-'].forEach((n) => expect(screen.queryByRole('button', { name: new RegExp(n) })).toBeNull());
+        });
     });
 
     it('選んだギアが対戦に引き継がれる', () => {

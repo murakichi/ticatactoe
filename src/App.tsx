@@ -6,6 +6,7 @@ import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
 import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, recommendedGears } from './components/game/gear';
+import { DECK_SIZE, SKILL_CATALOG, isValidDeck, randomDeck, recommendedDeck, variedAIDeck } from './components/game/deck';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -61,6 +62,8 @@ export const App = () => {
     // 盤面サイズ: 'auto'=人数に応じた既定(おまかせ) / 数値=人数に関わらずその一辺のマス数
     const [boardSizeChoice, setBoardSizeChoice] = useState<'auto' | number>('auto');
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
+    // 対戦開始時に確定した席の設定（AIのデッキのランダム入れ替えは開始時に1回だけ決める）
+    const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) =>
@@ -84,17 +87,23 @@ export const App = () => {
                 return { ...p, character: pool[Math.floor(Math.random() * pool.length)].id };
             })
         );
-    // ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）
-    const gamePlayers = players
-        .slice(0, playerCount)
-        .map((p) => (p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: recommendedGears(p.character) } : p));
+    // 開始時に席の設定を確定する。ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）。
+    // デッキを指定していない席は推奨デッキ。ただしAI席は推奨デッキをベースに一部をランダムに入れ替える
+    const buildGamePlayers = (): PlayerConfig[] =>
+        players.slice(0, playerCount).map((p) => {
+            const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: recommendedGears(p.character) } : p;
+            if (isValidDeck(p.deck)) return withGears;
+            return { ...withGears, deck: p.isAI ? variedAIDeck(p.character) : recommendedDeck(p.character) };
+        });
+    // デッキを自分で組んだ席が不正（12枚でない）なら開始できない
+    const invalidDeckSeat = players.slice(0, playerCount).findIndex((p) => p.deck !== undefined && !isValidDeck(p.deck));
     const hasAISeat = players.slice(0, playerCount).some((p) => p.isAI);
 
     return (
         <div className='App'>
             {isGameStarted ? (
                 <div className='App-game'>
-                    <Game players={gamePlayers} boardSize={boardSize} />
+                    <Game players={startedPlayers} boardSize={boardSize} />
                 </div>
             ) : (
                 <div className={styles.prep}>
@@ -157,10 +166,24 @@ export const App = () => {
                                 gears={players[seat].gears ?? []}
                                 onChangeGears={(gears) => updatePlayer(seat, { gears })}
                                 onRandomGears={() => randomizeGears(seat)}
+                                deck={players[seat].deck}
+                                onChangeDeck={(deck) => updatePlayer(seat, { deck })}
                             />
                         ))}
                     </div>
-                    <button className={styles.start} onClick={() => setIsGameStarted(true)}>
+                    {invalidDeckSeat >= 0 && (
+                        <div className={styles.deckWarn}>
+                            プレイヤー{invalidDeckSeat + 1}のデッキが{DECK_SIZE}枚ではありません（「推奨」に戻すか、{DECK_SIZE}枚に調整してください）
+                        </div>
+                    )}
+                    <button
+                        className={styles.start}
+                        disabled={invalidDeckSeat >= 0}
+                        onClick={() => {
+                            setStartedPlayers(buildGamePlayers());
+                            setIsGameStarted(true);
+                        }}
+                    >
                         ⚔️ 対戦スタート
                     </button>
                 </div>
@@ -180,6 +203,9 @@ type PlayerSettingProps = {
     gears: GearId[];
     onChangeGears: (gears: GearId[]) => void;
     onRandomGears: () => void;
+    /** 組んだデッキ（未指定なら推奨デッキ） */
+    deck: number[] | undefined;
+    onChangeDeck: (deck: number[] | undefined) => void;
 };
 
 const PlayerSetting = (props: PlayerSettingProps) => {
@@ -257,6 +283,13 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                         );
                     })}
                 </div>
+                <DeckBox
+                    seat={props.seat}
+                    character={props.checkedCharacter}
+                    isAI={props.isAI}
+                    deck={props.deck}
+                    onChangeDeck={props.onChangeDeck}
+                />
                 {props.gears.length > 0 && (
                     <div className={styles.gearNote}>
                         {props.gears.map((id) => (
@@ -268,5 +301,64 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                 )}
             </div>
         </div>
+    );
+};
+
+type DeckBoxProps = {
+    seat: number;
+    character: CharacterId;
+    isAI: boolean;
+    deck: number[] | undefined;
+    onChangeDeck: (deck: number[] | undefined) => void;
+};
+
+/** デッキ選び: 未指定は推奨デッキ（AI席は推奨をベースに数枚ランダムに入れ替わる）。自分で組むときは汎用スキルから12枚 */
+const DeckBox = (props: DeckBoxProps) => {
+    const custom = props.deck !== undefined;
+    const shown = props.deck ?? recommendedDeck(props.character);
+    const toggle = (idx: number) => {
+        const next = shown.includes(idx) ? shown.filter((x) => x !== idx) : [...shown, idx];
+        if (next.length > DECK_SIZE) return;
+        props.onChangeDeck(next.sort((a, b) => a - b));
+    };
+    return (
+        <details className={styles.gearBox}>
+            <summary className={styles.gearHead}>
+                <span>
+                    デッキ {shown.length}/{DECK_SIZE}（{custom ? 'カスタム' : props.isAI ? '推奨ベース・一部ランダム' : '推奨'}）
+                </span>
+            </summary>
+            <div className={styles.gearHead}>
+                <span>手札の3枠はこのデッキから引きます</span>
+                <span>
+                    <button className={styles.gearMiniBtn} onClick={() => props.onChangeDeck(undefined)} disabled={!custom}>
+                        推奨
+                    </button>{' '}
+                    <button
+                        className={styles.gearMiniBtn}
+                        onClick={() => props.onChangeDeck(randomDeck())}
+                        aria-label={`プレイヤー${props.seat + 1}のデッキをランダムに`}
+                    >
+                        🎲
+                    </button>
+                </span>
+            </div>
+            <div className={styles.gearGrid}>
+                {SKILL_CATALOG.map((c) => {
+                    const active = shown.includes(c.idx);
+                    return (
+                        <button
+                            key={c.idx}
+                            className={`${styles.gearChip} ${active ? styles.gearChipActive : ''}`}
+                            onClick={() => toggle(c.idx)}
+                            disabled={!active && shown.length >= DECK_SIZE}
+                            aria-pressed={active}
+                        >
+                            {c.icon} {c.name}
+                        </button>
+                    );
+                })}
+            </div>
+        </details>
     );
 };
