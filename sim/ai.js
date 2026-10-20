@@ -32,6 +32,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    cryoCards: 1, // 氷室の番人が霜降り・氷結トークン・氷結ダブルトークンを使う（tune-top: 環境勝率 seed2/200 で +9.1pt）
     pyroLock: 0, // 鍛冶師が軽減札を手札に固定する。A/Bで勝ち数が下がった(あなた-8/巨人-8)ので無効（1で有効）
     burnoutAfter: 1, // 鍛冶師が業火のあと（🔥のマスで敵が自陣より2つ以上多く壊れるなら）バーンアウトを撃つ（A/B）
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
@@ -949,8 +950,9 @@ function chooseSkills(s, availableSkills) {
 
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
-    // 暫定(F.useNew): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
-    if (F.useNew && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
+    const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer');
+    // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
+    if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
     if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
@@ -960,9 +962,9 @@ function chooseSkills(s, availableSkills) {
             spend(calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'doubleChargeToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
             spend(chargeTokenCost, 'chargeToken');
-        } else if (F.useNew && freeCells >= 4 && availableSkills.includes(46) && remaining >= cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken')) {
+        } else if (frostUse && freeCells >= 4 && availableSkills.includes(46) && remaining >= cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken')) {
             spend(cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken'), 'doubleFrostToken');
-        } else if (F.useNew && freeCells >= 3 && availableSkills.includes(45) && remaining >= cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken')) {
+        } else if (frostUse && freeCells >= 3 && availableSkills.includes(45) && remaining >= cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken')) {
             spend(cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken'), 'frostToken');
         } else if (F.useNew && freeCells >= 4 && availableSkills.includes(38) && remaining >= cost(costsOf(s).onClickDoubleFlameToken, true, 'onClickDoubleFlameToken')) {
             spend(cost(costsOf(s).onClickDoubleFlameToken, true, 'onClickDoubleFlameToken'), 'doubleFlameToken');
