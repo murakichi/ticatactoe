@@ -827,7 +827,7 @@ function chooseSkills(s, availableSkills) {
                 }
                 // 死体が1つでもあれば即発動。相手がロックで守っても蘇生の窓(4手番)の間に切れるので待つ意味がない
                 // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
-                if (corpses >= 1 || absorbable >= 2) spend(npay, 'necromancy');
+                if (corpses >= (F.necroMin || 1) || absorbable >= 2) spend(npay, 'necromancy');
             }
         }
 
