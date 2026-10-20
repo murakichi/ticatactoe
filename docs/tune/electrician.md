@@ -1,0 +1,23 @@
+# tune-top: electrician (雷霆の巫)
+- 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
+- 最後に検証したmaster: edf73fb
+- 現在の推奨設定: gears=[sturdy,harvest] deck=[0,3,8,12,21,22,23,24,26,28,49,53](浄化32・ランダム帯電25 → 特売53・慈雨49) AIフラグ=なし
+- 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
+- トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
+- 連続不採用回数: 0
+- 状態: refining(トップ到達後の洗練中)
+## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
+| # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
+|---|---|---|---|---|
+| 3 | synergy/deck | 未使用札(浄化32・ランダム帯電25)を 特売53+慈雨49 に入れ替え。探索(vs tactician,giant,magician,60試合,2枚swap40候補)で最良63.3% vs base54.4%(閾値z未達)。全環境で再測定 | seed2/150試合: 57.6→63.8(+6.2、9/9キャラで改善) / seed3/200試合: 61.7→65.6(+3.9±1.6)。tactician戦も47→53 | 採用(deck.ts/deck.js ミラー済み。本番AIでは未計測) |
+| 2 | deck(audit) | 寄与監査。差なし札: 12,25,26,28,32 | 下記メモ参照 | 情報のみ |
+| 1 | gear | 1枠差し替え全29近傍(seed1,60試合)。基準[sturdy,harvest]63.5%、最良 lightToken+harvest 66.7%(+3.2) / afterglow+harvest 65.9%(+2.4)。SE≈2.0なのでz≈1.1、n≤40の閾値3.0に届かず | 再測定せず不採用(保留: 要追試。lightToken/afterglow は slot0 で上位2つ) | 不採用 |
+## 監査メモ(seed1, 60試合, 相手 tactician,giant,magician, base 54.4%)
+- 寄与: 帯電トークン(21) +11.7 / harvest +10.5 / sturdy +5.5 / オピウム(8) +2.2 / ライフ3(0) +1.1 / 帯電付与(22) +0.5 / トークン(3) -1.1 / 帯電ダブルトークン(23)・範囲帯電(24) -0.6
+- 差なし(未使用): ダブルロック(12) ランダム帯電(25) ジャマー(26) サイレンス(28) 浄化(32) → 入れ替え候補5枠
+- 使用率(vs tactician,100試合): 1試合あたり全スキル計≈1.6回と少ない。帯電トークン0.34回が主力、固有の範囲帯電0.07回
+## 次に試す候補(軸の順 gear → deck → synergy → strategy → joint)
+- synergy: `--scan deck --swap 3 --cat charge --neighbors 40`(帯電付与+発火)
+- deck: `--scan deck --neighbors 30`
+- gear保留: lightToken/afterglow を seed2・200試合で後追い可
+- 対 tactician 50.0%、対 giant 55%、対 magician 56.7%(基準線 per より)
