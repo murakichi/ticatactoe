@@ -33,6 +33,7 @@ node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補�
 
 - **キャラは英語ID**で指定する(`magician` `tactician` `giant` `yinYangMaster` `necromancer` `you` `poisoner` `electrician` `cryomancer` `pyromancer`)。日本語名(魔法使い等)で呼ばれたら対応するIDに読み替え、状態ファイルは `docs/tune/<ID>.md`。
 - **重い計測は必ずバックグラウンド**(`run_in_background`)で走らせ、出力をファイルに落として待つ。`--rank --games 60` ≈ 3分、`--scan gears` は10分超になりうる(フォアグラウンドはツールのタイムアウト600秒で切られる)。完了判定(4条件×200試合)は特に長いので、1条件ずつ別実行にする。
+- **コンテナは再起動で計測プロセスも `ScheduleWakeup` も失われうる**。対策として、(1) 重い計測は必ず `--cache .tune-cache`(`--chunk N` で小分け、既定12タスク)を付ける。済んだ分はファイルに残り、同じコマンドの打ち直しで再開する(キーに `sim/*.js` の中身を含むので、コードが変われば自動で無効)。(2) 次回起動は `ScheduleWakeup` ではなく **`send_later`(再起動をまたいで届く)** で予約する。(3) 起動のたびに、前回の計測が生きているか(`ps` で確認。`pgrep -f` は自分自身にマッチするので使わない)を見て、死んでいたら同じコマンドで再開する。状態ファイルは毎回コミットして push する。
 - 計測中に master のマージ・`sim/` の編集をしない(走行中のプロセスと結果がずれる)。マージは計測の合間に行う。
 
 ## 状態ファイル `docs/tune/<char>.md`
