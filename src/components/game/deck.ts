@@ -60,7 +60,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 46, name: '氷結ダブルトークン', icon: '🪙', category: 'ice' },
     { idx: 47, name: '砕氷', icon: '🔨', category: 'ice' },
     { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice' },
-    { idx: 49, name: '底上げ', icon: '⬆️', category: 'support' },
+    { idx: 49, name: '慈雨', icon: '⬆️', category: 'support' },
     { idx: 50, name: '縮地', icon: '👣', category: 'support' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack' },

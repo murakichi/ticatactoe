@@ -1851,17 +1851,17 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
-    // --- 汎用スキル（idx 49-52）: 底上げ・縮地・写し身・追い剥ぎ ---
+    // --- 汎用スキル（idx 49-52）: 慈雨・縮地・写し身・追い剥ぎ ---
     const [useRelocate, setUseRelocate] = useState<boolean>(false);
     const [relocateFrom, setRelocateFrom] = useState<number | null>(null);
     const [useClone, setUseClone] = useState<boolean>(false);
     const [usePlunder, setUsePlunder] = useState<boolean>(false);
-    // 底上げ: 自陣の全コマのライフ+1（クリック不要・手番は続く）
+    // 慈雨: 自陣の全コマのライフ+1（クリック不要・手番は続く）
     const onClickBoost = () => {
         const board = currentBoard.slice();
         const done = boostAll(board, currentTurnPlayer);
         if (done.length === 0) return;
-        addLog(`「底上げ」を使用（${done.length}コマのライフ+1）`);
+        addLog(`「慈雨」を使用（${done.length}コマのライフ+1）`);
         flashCells(done);
         playEffect('harvest');
         setCurrentBoard(board);
@@ -2540,7 +2540,7 @@ export const Game = (props: GameProps) => {
         { idx: 46, onClick: onClickDoubleFrostToken, buttonText: `氷結ダブルトークン-${calculateCost(seatCosts.onClickDoubleFrostToken, true)}`, paragraph: `❄付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFrostToken, true) },
         { idx: 47, onClick: onClickShatter, buttonText: `砕氷-${calculateCost(seatCosts.onClickShatter)}`, paragraph: `氷結中のコマを選択し、❄を全て砕いて❄1つにつき3ダメージを与えます（ライフが0になったら破壊）\n自陣のコマにも使えます`, disabled: checkSkillDisable(seatCosts.onClickShatter) || !currentBoard.some((sq) => sq.player && isFrozen(sq)) },
         { idx: 48, onClick: onClickFrostfall, buttonText: `霜降り-${calculateCost(seatCosts.onClickFrostfall)}`, paragraph: `自陣のライフ2以下のコマすべてに❄を1つ付与します`, disabled: checkSkillDisable(seatCosts.onClickFrostfall) || frostfallTargets(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 49, onClick: onClickBoost, buttonText: `底上げ-${calculateCost(seatCosts.onClickBoost)}`, paragraph: `自陣の全コマのライフを+1します（ライフ0のコマも）`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
+        { idx: 49, onClick: onClickBoost, buttonText: `慈雨-${calculateCost(seatCosts.onClickBoost)}`, paragraph: `自陣の全コマのライフを+1します（ライフ0のコマも）`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
         { idx: 50, onClick: onClickRelocate, buttonText: `縮地-${calculateCost(seatCosts.onClickRelocate)}`, paragraph: `自陣のコマを選び、空きマスを選ぶと、ライフ・エフェクトごと移動します\n🔑ロック中・氷結中のコマは動かせません`, disabled: checkSkillDisable(seatCosts.onClickRelocate) || relocateSources().length === 0 || !currentBoard.some(isPlaceable) },
         { idx: 51, onClick: onClickClone, buttonText: `写し身-${calculateCost(seatCosts.onClickClone)}`, paragraph: `自陣のコマを選ぶと、縦横隣のランダムな空きマスに、ライフが半分（切り捨て・最低1）の写しが現れます`, disabled: checkSkillDisable(seatCosts.onClickClone) || cloneSources().length === 0 },
         { idx: 52, onClick: onClickPlunder, buttonText: `追い剥ぎ-${calculateCost(seatCosts.onClickPlunder)}`, paragraph: `ライフ0の敵のコマを1つ選んで、自陣のコマ（ライフ1）にします\n🔑ロック中のコマ・無敵のコマは奪えません。手番は続きます`, disabled: checkSkillDisable(seatCosts.onClickPlunder) || plunderTargets(currentBoard, currentTurnPlayer, characters).length === 0 },

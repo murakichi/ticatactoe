@@ -1,4 +1,4 @@
-// 汎用スキル（底上げ・縮地・写し身・追い剥ぎ）の純粋ロジック。sim/generic.js と同じ仕様（generic.test.ts が一致を確認する）。
+// 汎用スキル（慈雨・縮地・写し身・追い剥ぎ）の純粋ロジック。sim/generic.js と同じ仕様（generic.test.ts が一致を確認する）。
 import { CharacterId } from '../../types/Character';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -10,7 +10,7 @@ const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect ===
 /** 追い剥ぎで奪ったコマのライフ */
 export const PLUNDER_LIFE = 1;
 
-/** 底上げ: player の全コマのライフを +amount する（ライフ0のコマも）。底上げしたマスを返す。board を直接書き換える */
+/** 慈雨: player の全コマのライフを +amount する（ライフ0のコマも）。慈雨したマスを返す。board を直接書き換える */
 export const boostAll = (board: SquareInfo[], player: SquareInfo['player'], amount: number = 1): number[] => {
     const done: number[] = [];
     board.forEach((sq, i) => {

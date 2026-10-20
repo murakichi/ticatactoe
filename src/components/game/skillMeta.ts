@@ -65,7 +65,7 @@ const SKILL_META: Record<string, Meta> = {
     氷結ダブルトークン: { icon: '🪙', category: 'token' },
     砕氷: { icon: '🔨', category: 'attack' },
     霜降り: { icon: '🌫️', category: 'support' },
-    底上げ: { icon: '⬆️', category: 'support' },
+    慈雨: { icon: '⬆️', category: 'support' },
     縮地: { icon: '👣', category: 'control' },
     写し身: { icon: '🪞', category: 'support' },
     追い剥ぎ: { icon: '🏴‍☠️', category: 'attack' },

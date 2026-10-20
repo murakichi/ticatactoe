@@ -7,8 +7,8 @@ import { CharacterId } from '../../types/Character';
 const emptyBoard = (size = 4): SquareInfo[] => Array.from({ length: size * size }, () => ({ player: undefined, bind: 0, effects: [] }));
 const sq = (player: Player | undefined, bind: number, ...effects: Effect['effect'][]): SquareInfo => ({ player, bind, effects: effects.map((effect) => ({ effect })) });
 
-describe('汎用スキル（底上げ・縮地・写し身・追い剥ぎ）', () => {
-    it('底上げ: 自陣の全コマのライフ+1（ライフ0も）。敵・空きマスは触らない', () => {
+describe('汎用スキル（慈雨・縮地・写し身・追い剥ぎ）', () => {
+    it('慈雨: 自陣の全コマのライフ+1（ライフ0も）。敵・空きマスは触らない', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 0);
