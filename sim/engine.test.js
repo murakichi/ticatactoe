@@ -1190,14 +1190,14 @@ test('火炎: 煉獄の鍛冶師が敵席に居ると、持ち主以外の火炎
     assert.strictEqual(th.burnDamageOf({ player: '⭕', bind: 5, effects: [FLM] }, ['you', 'you'], e.SYMBOLS), 2);
 });
 
-test('火炎付与: 氷結中のマスは❄が1つ減るだけで🔥は付かず、隣の氷結も解けない', () => {
+test('火炎付与: 氷結中のマスは❄が全スタック解除されるだけで🔥は付かず、隣の氷結も解けない', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '⭕', bind: 4, effects: [FRZ, FRZ] };
     s.board[6] = { player: '⭕', bind: 4, effects: [FRZ] };
     e.SKILLS.ignite(s);
     assert.strictEqual(e.placeMove(s, 5), true);
-    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 0);
     assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[6].effects.some((x) => x.effect === '❄'));
     assert.strictEqual(s.heartTurn, true);
@@ -1378,7 +1378,7 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     s.board[6] = { player: '⭕', bind: 0, effects: [] };
     s.board[4] = { player: '💙', bind: 3, effects: [] };
     s.board[9] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
-    s.board[8] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ] };  // 氷結が先に2つ減る → 🔥は付かない
+    s.board[8] = { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ] };  // 1つ目で氷結が全解除 → 2つ目が🔥
     s.board[11] = { player: '⭕', bind: 3, effects: [FRZ] };           // 氷結1つ減って、余り1スタックが🔥
     const before = s.heartMagic;
     e.SKILLS.inferno(s);
@@ -1388,7 +1388,7 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
     assert.strictEqual(fl(5), 2); assert.strictEqual(fl(6), 2);
     assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
-    assert.strictEqual(fr(8), 1); assert.strictEqual(fl(8), 0);
+    assert.strictEqual(fr(8), 0); assert.strictEqual(fl(8), 1); // 1つ目で氷結が全解除、2つ目が🔥
     assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
     // 対象が無ければ不発（魔力を払わない）
     const t = game('pyromancer', 'you');

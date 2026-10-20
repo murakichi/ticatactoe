@@ -66,16 +66,16 @@ const absorbDestroy = (sq) => (isFrozen(sq) ? { sq: thawOne(sq), blocked: true }
 const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
 
 /**
- * cells の各マスに n スタック分、1スタックずつ火炎を付ける。氷結中のマスは「❄を1つ減らすだけで🔥は付けない」。
- * 🔥が実際に付いたときだけ、縦横隣の氷結を全スタック解除する（氷結が減っただけなら隣は解除しない）。
- * 戻り値 thawed = 氷結が減った/解除されたマスの添字（重複なし）。cells を先頭から順に処理する。board を直接書き換える
+ * cells の各マスに n スタック分、1スタックずつ火炎を付ける。氷結中のマスは「❄を全スタック解除するだけで🔥は付けない」（そのスタックは解凍に使う）。
+ * 🔥が実際に付いたときだけ、縦横隣の氷結を全スタック解除する（自マスを解凍しただけなら隣は解除しない）。
+ * 戻り値 thawed = 解凍されたマスの添字（重複なし）。cells を先頭から順に処理する。board を直接書き換える
  */
 function ignite(board, cells, size, n = 1) {
     const thawed = new Set();
     for (const k of cells) {
         for (let t = 0; t < n; t++) {
             if (isFrozen(board[k])) {
-                board[k] = thawOne(board[k]);
+                board[k] = thaw(board[k]); // 氷結中のマスには🔥が付かず、❄を全スタック解除する
                 thawed.add(k);
                 continue;
             }
