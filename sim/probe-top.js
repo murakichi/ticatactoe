@@ -12,6 +12,7 @@
  *   node sim/probe-top.js --rank --games 60 --seed 1 [--target X --gears ..]              # 全キャラ総当たり→環境順位表（--target があればその設定を環境に反映）
  *   node sim/probe-top.js --target X --scan gears --games 60                              # ギア1枠ずつ差し替えた近傍を全部測る
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
+ *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
  * 共通: --size N（盤面。既定 4）, --envDeck varied（相手は本番と同じ「推奨から3枚入れ替え」デッキ。既定は推奨のまま）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
@@ -212,16 +213,22 @@ async function main() {
         variants = [{ ...cand, deck: base.slice().sort((a, b) => a - b) }]; labels = ['base'];
         const seen = new Set();
         let guard = 0;
+        const k = Math.max(1, parseInt(args.swap || '1', 10)); // 同時に入れ替える枚数。2〜3 にすると組み合わせ（シナジー）でしか効かない変更が見つかる
+        const cat = args.cat || null; // 入れる札をこのカテゴリ（support/buds/token/attack/control/poison/charge/ice/fire）に限る
         while (variants.length < n + 1 && guard++ < n * 20) {
-            const out = base[Math.floor(rng() * base.length)];
-            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i));
-            const inn = pool[Math.floor(rng() * pool.length)];
-            const key = out + '>' + inn;
+            const keep = base.slice();
+            const outs = [], ins = [];
+            for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
+            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            if (pool.length < k) break;
+            for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+            const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
             if (seen.has(key)) continue;
             seen.add(key);
-            const d = base.filter((x) => x !== out).concat(inn).sort((a, b) => a - b);
+            const d = keep.concat(ins).sort((a, b) => a - b);
             variants.push({ ...cand, deck: d });
-            labels.push(`-${out}(${deckMod.SKILL_CATALOG[out].name}) +${inn}(${deckMod.SKILL_CATALOG[inn].name})  [${d.join(',')}]`);
+            const nm = (i) => `${i}(${deckMod.SKILL_CATALOG[i].name})`;
+            labels.push(`-${outs.map(nm).join(',')} +${ins.map(nm).join(',')}  [${d.join(',')}]`);
         }
     }
 
