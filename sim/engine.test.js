@@ -1409,7 +1409,7 @@ test('業火: 雷霆の巫の⚡無敵コマは対象外', () => {
 
 test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人5・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
-    assert.strictEqual(e.POOL_SIZE, 37);
+    assert.strictEqual(e.POOL_SIZE, 41);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
     assert.strictEqual(e.skillCosts.onClickInferno, 9);
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
@@ -1539,6 +1539,134 @@ test('氷結中の⚡は休眠: 雷霆の巫の無敵が効かず、帯電コス
     e.SKILLS.chargeOne(o);
     e.placeMove(o, 1); // 全マス⚡（氷結なし）→ 過負荷
     assert.ok(o.board.every((sq) => sq.bind === 0));
+});
+
+// ---- 火炎系の汎用スキル idx37〜40（火炎トークン / 火炎ダブルトークン / 焼畑 / 殉火） ----
+const flames = (sq) => sq.effects.filter((x) => x.effect === '🔥').length;
+const frosts = (sq) => sq.effects.filter((x) => x.effect === '❄').length;
+
+test('火炎トークン: 空きマスに自陣のコマを置き🔥を1つ付け、縦横隣の氷結を全解除する。凍った空きマスには置かない。トークン扱いでコスト3', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    for (let k = 0; k < 16; k++) s.board[k] = { player: '⭕', bind: 3, effects: [FRZ, FRZ] };
+    s.board[5] = { player: undefined, bind: 0, effects: [] };           // 唯一の置ける空きマス
+    s.board[0] = { player: undefined, bind: 0, effects: [FRZ] };        // 凍った空きマスは対象外
+    const before = s.heartMagic;
+    e.SKILLS.flameToken(s);
+    assert.strictEqual(s.heartMagic, before - 3);
+    assert.strictEqual(s.board[5].player, '💙');
+    assert.strictEqual(flames(s.board[5]), 1);
+    assert.strictEqual(frosts(s.board[5]), 0);
+    for (const k of [1, 4, 6, 9]) assert.strictEqual(frosts(s.board[k]), 0, '縦横隣の氷結は全解除: ' + k);
+    assert.strictEqual(frosts(s.board[2]), 2);                           // 離れたマスは凍ったまま
+    assert.strictEqual(s.board[0].player, undefined);
+    assert.strictEqual(s.usedTokenThisTurn, true);
+    assert.strictEqual(s.heartTurn, true);
+    // 空きマスが無ければ不発（魔力は払う）
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    for (let k = 0; k < 16; k++) t.board[k] = { player: '⭕', bind: 3, effects: [] };
+    e.SKILLS.flameToken(t);
+    assert.strictEqual(t.heartMagic, 17);
+    assert.ok(t.board.every((sq) => flames(sq) === 0));
+});
+
+test('火炎ダブルトークン: 空きマス2つに置いてそれぞれ🔥を1つ。コスト6、トークン扱い', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    e.SKILLS.doubleFlameToken(s);
+    assert.strictEqual(s.heartMagic, 14);
+    const mine = s.board.filter((sq) => sq.player === '💙');
+    assert.strictEqual(mine.length, 2);
+    assert.ok(mine.every((sq) => flames(sq) === 1));
+    assert.strictEqual(s.usedTokenThisTurn, true);
+});
+
+test('焼畑: 🌱を持つマス（敵味方どちらでも）を選ぶと🌱を全て除去し、同数の火炎を付ける。氷結中は最初のスタックで全解除。🌱が無ければ使えない', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 4, effects: [BUD, BUD, BUD] };
+    s.board[6] = { player: '⭕', bind: 4, effects: [BUD, BUD, FRZ, FRZ] };
+    s.board[9] = { player: '💙', bind: 4, effects: [BUD] };
+    s.board[10] = { player: '⭕', bind: 4, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.swidden(s);
+    assert.strictEqual(s.heartMagic, before - 3);
+    assert.strictEqual(e.placeMove(s, 10), false);  // 🌱の無いマスは選び直し
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(budsOn(s.board[5]), 0);
+    assert.strictEqual(flames(s.board[5]), 3);
+    assert.strictEqual(s.heartTurn, true);
+    e.SKILLS.swidden(s);
+    assert.strictEqual(e.placeMove(s, 6), true);    // 氷結中: 1つ目で氷結が全解除、残り1つが🔥
+    assert.strictEqual(frosts(s.board[6]), 0);
+    assert.strictEqual(flames(s.board[6]), 1);
+    e.SKILLS.swidden(s);
+    assert.strictEqual(e.placeMove(s, 9), true);    // 自陣のマスも選べる
+    assert.strictEqual(flames(s.board[9]), 1);
+    const m = s.heartMagic;
+    e.SKILLS.swidden(s);                             // もう🌱が無い → 不可（魔力も払わない）
+    assert.strictEqual(s.heartMagic, m);
+    assert.strictEqual(s.useSwidden, false);
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    assert.deepStrictEqual(th.swidden(b, 0, 4), { n: 0, thawed: [] });
+});
+
+test('殉火: 自コマのライフをゼロにして、ライフがそれ以下の敵コマ全て（ライフ0含む）に🔥を1つ。🔑・無敵は除く。対象0なら使えない。コスト5', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '💙', bind: 3, effects: [FLM] };                   // 犠牲にする自コマ（L=3）
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };                       // L以下 → 対象
+    s.board[1] = { player: '⭕', bind: 0, effects: [] };                       // ライフ0も対象
+    s.board[2] = { player: '⭕', bind: 4, effects: [] };                       // L超 → 対象外
+    s.board[3] = { player: '⭕', bind: 2, effects: [{ effect: '🔑' }] };      // ロック → 対象外
+    s.board[4] = { player: '⭕', bind: 1, effects: [{ effect: '⚡' }] };       // 巫の⚡無敵 → 対象外
+    s.board[6] = { player: '⭕', bind: 2, effects: [FRZ] };                    // 氷結 → 解凍のみ
+    s.board[7] = { player: '⭕', bind: 3, effects: [] };
+    s.board[8] = { player: '⭕', bind: 3, effects: [FRZ] };                    // 7 に🔥が付くと隣の氷結が全解除
+    const before = s.heartMagic;
+    e.SKILLS.sacrifice(s);
+    assert.strictEqual(s.heartMagic, before - 5);
+    assert.strictEqual(e.placeMove(s, 0), false);                              // 自コマ以外は選べない
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].bind, 0);
+    assert.strictEqual(flames(s.board[5]), 0);                                 // 自コマの🔥は消える
+    assert.strictEqual(flames(s.board[0]), 1);
+    assert.strictEqual(flames(s.board[1]), 1);
+    assert.strictEqual(flames(s.board[2]), 0);
+    assert.strictEqual(flames(s.board[3]), 0);
+    assert.strictEqual(flames(s.board[4]), 0);
+    assert.strictEqual(frosts(s.board[6]), 0); assert.strictEqual(flames(s.board[6]), 0); // 氷結中: 解凍のみで🔥は付かない
+    assert.strictEqual(flames(s.board[7]), 1);
+    assert.strictEqual(frosts(s.board[8]), 0);                                 // 隣に🔥が付いて解凍
+    assert.strictEqual(s.heartTurn, true);
+    // 条件を満たす自コマ／対象の敵が無ければ使えない
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    t.board[5] = { player: '💙', bind: 3, effects: [] };
+    t.board[0] = { player: '⭕', bind: 9, effects: [] };
+    e.SKILLS.sacrifice(t);
+    assert.strictEqual(t.heartMagic, 20);
+    assert.strictEqual(t.useSacrifice, false);
+    const th = require('./thermal');
+    const b = t.board.map((x) => ({ ...x, effects: x.effects.slice() }));
+    const r = th.sacrificeFlame(b, 5, '💙', 4, null);
+    assert.deepStrictEqual(r, { threshold: 3, targets: [], thawed: [] });
+    assert.strictEqual(th.sacrificeFlame(b, 0, '💙', 4, null).threshold, 0); // 敵のコマは犠牲にできない
+});
+
+test('火炎トークン/火炎ダブルトークン/焼畑/殉火のコスト（毒使い+1・軍師: トークン-1・他+2）', () => {
+    const p = game('poisoner', 'you'); p.heartTurn = true; p.heartMagic = 30;
+    e.SKILLS.flameToken(p);
+    assert.strictEqual(p.heartMagic, 30 - 4);
+    const t = game('tactician', 'you'); t.heartTurn = true; t.heartMagic = 30;
+    e.SKILLS.flameToken(t);
+    assert.strictEqual(t.heartMagic, 30 - 2);
+    assert.strictEqual(e.skillCosts.onClickFlameToken, 3);
+    assert.strictEqual(e.skillCosts.onClickDoubleFlameToken, 6);
+    assert.strictEqual(e.skillCosts.onClickSwidden, 3);
+    assert.strictEqual(e.skillCosts.onClickSacrifice, 5);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -664,13 +664,13 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
     it('火炎トークン: 🔥付きのコマを置き、縦横隣の氷結を全解除する', () => {
         const b = emptyBoard();
         b[5] = sq('⭕', 3, '❄', '❄');
-        b[10] = sq('⭕', 3, '❄'); // 斜め
+        b[9] = sq('⭕', 3, '❄'); // 斜め
         const thawed = placeFlameToken(b, 6, '💙', 4, 4);
         expect(b[6].player).toBe('💙');
         expect(b[6].bind).toBe(4);
         expect(flameStacks(b[6])).toBe(1);
         expect(thawed).toEqual([5]);
-        expect(isFrozen(b[10])).toBe(true);
+        expect(isFrozen(b[9])).toBe(true);
     });
 
     it('sim/thermal.js と一致', () => {
