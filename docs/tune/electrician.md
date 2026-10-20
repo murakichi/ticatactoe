@@ -4,7 +4,7 @@
 - 現在の推奨設定: gears=[lightToken,harvest] deck=[12,21,22,23,24,26,28,49,50,51,53,58] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 2
+- 連続不採用回数: 3
 - 状態: running(トップ未達。master 837a29b で陥落)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
@@ -13,6 +13,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 16 | meta(対ギアなしmagician) | `--opp magician --oppGears none` 3枚swap 40候補(seed18/100試合) | 最良 72.0%±8.8 vs base 68.0%、誤差内。なお `--rank --oppGears none` の失敗は『ギアなしの雷霆の巫自身』が弱いため(lightToken -16.7/harvest -14.3pt の寄与)で、対magician単体(68%)は問題なし | 不採用 |
 | 14 | deck(監査→手作り) | 採用デッキの監査で未使用6枚(12,28,49,50,51,58)。それらをランダム帯電25・軽減系(56,57,60,54)に替えた案A/B/C/D | 上位3相手 seed17/300: base 59.0, A 63.3, B 63.1, C 59.0, D 61.9。全キャラ seed3/250: base 67.0, A 66.7(-0.3), B 67.4(+0.4) | 不採用(上位相手のみ+、全体は差なし) |
 | 15 | gear(joint,新デッキ) | 上位3相手 seed15/100試合のギア近傍 | 現行 lightToken,harvest 60.3% が最上位(次点 59.7) | 不採用 |
 | 13 | synergy/meta | 上位2相手(magician,cryomancer)向け3枚swap 40候補(seed13/100試合)の上位。共通項=大特価58追加・オピウム8/トークン3削除。候補2: トークン3・ライフ3・オピウム8 → 縮地50・写し身51・大特価58 | 上位3相手 seed14/400試合: 52.4→59.5(+7.1)。全キャラ seed3/200試合: 62.5→66.4(+3.9、全相手で同等以上、対magician 49→64) | 採用(deck.ts/deck.js ミラー済み。本番AIでは未計測) |
