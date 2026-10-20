@@ -105,3 +105,9 @@ node sim/gear.test.js                                   # ギアの単体テス�
 ## 既知の移植上の差異
 - マジック付与のソースバグ（後手が先手のマジックを参照）は**正しい挙動**で実装。
   詳細は `BALANCE.md` を参照。
+
+## AI の paired A/B（ai-improve）
+
+- `node sim/probe-ai.js --mode vs|h2h --chars A,B --games N --seed S --flagsA k=v [--modB ai.old.js]  # ai.old.js は git show <旧コミット>:sim/ai.js > sim/ai.old.js で作る` — 同一シード・席入れ替えで AI 設定を比較（結果は `RESULT {json}` 行。`| node sim/probe-sum.js` で勝率と 95%CI に集計）
+- `node sim/probe-usage.js --chars A,B --games N [--size N] [--flags k=v]` — スキルの使用回数/試合と、使った試合の勝率
+- `sim/ai.js` の `AI_DEFAULTS`（採用済み）と `F.xxx`（検証用ノブ。`s.aiFlags[seat]` で席ごとに上書き）

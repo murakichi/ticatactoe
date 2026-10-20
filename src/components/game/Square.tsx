@@ -34,8 +34,13 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     if (props.highlight === 'destroy') classes.push(styles.destroy);
     else if (props.highlight === 'preview') classes.push(styles.preview);
 
+    const frozen = info.effects.some((e) => e.effect === '❄');
+    const burning = info.effects.some((e) => e.effect === '🔥');
+    const dormant = frozen; // 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠（火炎中は休眠しない）
     if (props.shielded) classes.push(styles.shielded);
-    else if (info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
+    else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
+    if (frozen) classes.push(styles.frozen);
+    if (burning) classes.push(styles.burning);
 
     // 効果を記号ごとに集計してバッジ表示 (🌱×3 など)
     const counts: Record<string, number> = {};
@@ -55,7 +60,8 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
             {Object.keys(counts).length > 0 && (
                 <span className={styles.effects}>
                     {Object.entries(counts).map(([symbol, n]) => (
-                        <span key={symbol} className={styles.badge}>
+                        // 休眠マスの他のエフェクト（🌱⚡☠）は薄く出す
+                        <span key={symbol} className={`${styles.badge}${dormant && symbol !== '❄' ? ` ${styles.dormant}` : ''}`}>
                             {symbol}
                             {n > 1 ? n : ''}
                         </span>
