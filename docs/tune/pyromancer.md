@@ -1,8 +1,9 @@
 # tune-top: pyromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 993d291(未達のため参考。done になったら更新)
+- 最後に検証したmaster: 837a29b(PR #100 マージ後。トップ未達)
 - 現在の推奨設定: gears=[sturdy, harvest] deck=[0,3,5,8,11,12,28,31,53,56,58,61]  (旧: 32浄化→11ダブルトークン) AIフラグ=なし
-- 基準線(採用#5後): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
+- 基準線(最新 master 837a29b, seed3, 100試合, `--rank`): 環境勝率 39.2% / 8位 / 1位 magician 64.7%(他キャラの調整で環境が強くなり相対的に低下)
+- 基準線(採用#5後・旧 master): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
 - 連続不採用回数: 1(採用#5のあと strategy)
