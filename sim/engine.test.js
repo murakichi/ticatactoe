@@ -1190,7 +1190,7 @@ test('火炎: 煉獄の鍛冶師が敵席に居ると、持ち主以外の火炎
     assert.strictEqual(th.burnDamageOf({ player: '⭕', bind: 5, effects: [FLM] }, ['you', 'you'], e.SYMBOLS), 2);
 });
 
-test('火炎付与: 氷結中のマスは❄が全スタック解除されるだけで🔥は付かず、隣の氷結も解けない', () => {
+test('火遁: 氷結中のマスは❄が全スタック解除されるだけで🔥は付かず、隣の氷結も解けない', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '⭕', bind: 4, effects: [FRZ, FRZ] };

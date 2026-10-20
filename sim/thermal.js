@@ -179,7 +179,38 @@ const infernoTargets = (board, me) =>
 /** 🔑ロックを掛けられるマスか: 氷結中でない */
 const lockable = (sq) => !isFrozen(sq);
 
+// ---- 焼畑 / 火炎トークン / 殉火 ----
+/** 焼畑: cell の🌱を全て除去し、除去した数と同じ数だけ ignite する（氷結中なら最初のスタックで氷結が全解除、残りが🔥）。🌱が無ければ n=0。board を直接書き換える */
+function swidden(board, cell, size) {
+    const n = budStacks(board[cell]);
+    if (n === 0) return { n: 0, thawed: [] };
+    board[cell] = without(board[cell], '🌱');
+    const { thawed } = ignite(board, [cell], size, n);
+    return { n, thawed };
+}
+/** 火炎トークン: idx に player のコマ（ライフ bind）を置き、直後に🔥を1つ付けて縦横隣の氷結を全解除する。解けたマスを返す。board を直接書き換える */
+function placeFlameToken(board, idx, player, bind, size) {
+    board[idx] = { player, bind, effects: [] };
+    return ignite(board, [idx], size, 1).thawed;
+}
+/** 殉火の対象の敵マス: cell の自コマのライフ L 以下の、自分以外のコマ（ライフ0も含む。🔑ロック中・isShieldedFn が真の無敵コマは除く）。昇順 */
+function sacrificeTargets(board, cell, me, size, isShieldedFn) {
+    const L = board[cell].bind;
+    return board.map((sq, k) => (sq.player && sq.player !== me && sq.bind <= L && !hasLock(sq) && !(isShieldedFn && isShieldedFn(sq)) ? k : -1)).filter((k) => k !== -1);
+}
+/** 殉火: 自コマ cell（ライフ>0・🔑なし）のライフをゼロにして、ライフがそれ以下の敵コマ全てに🔥を1スタック。選べない cell なら何もしない。board を直接書き換える */
+function sacrificeFlame(board, cell, me, size, isShieldedFn) {
+    const sq = board[cell];
+    if (!sq.player || sq.player !== me || sq.bind <= 0 || hasLock(sq)) return { threshold: 0, targets: [], thawed: [] };
+    const threshold = sq.bind;
+    const targets = sacrificeTargets(board, cell, me, size, isShieldedFn);
+    board[cell] = zeroOut(sq);
+    const { thawed } = ignite(board, targets, size, 1);
+    return { threshold, targets, thawed };
+}
+
 module.exports = {
+    swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,

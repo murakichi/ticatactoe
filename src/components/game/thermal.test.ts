@@ -15,6 +15,9 @@ import {
     budStacks,
     activeBuds,
     swidden,
+    canSacrifice,
+    sacrificeTargets,
+    sacrificeFlame,
     placeFlameToken,
     isDormant,
     canBud,
@@ -688,5 +691,47 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
         const e = mk();
         expect(sim.placeFlameToken(d, 10, '💙', 4, 4)).toEqual(placeFlameToken(e, 10, '💙', 4, 4));
         expect(d).toEqual(e);
+    });
+});
+
+describe('殉火（仮名）', () => {
+    const cs: CharacterId[] = ['you', 'you', 'electrician'];
+    it('犠牲にできるのは自陣のライフが残る🔑なしのコマだけ', () => {
+        expect(canSacrifice(sq('💙', 3), '💙')).toBe(true);
+        expect(canSacrifice(sq('💙', 0), '💙')).toBe(false);
+        expect(canSacrifice(sq('💙', 3, '🔑'), '💙')).toBe(false);
+        expect(canSacrifice(sq('⭕', 3), '💙')).toBe(false);
+        expect(canSacrifice(sq(undefined, 0), '💙')).toBe(false);
+    });
+
+    it('自陣のコマのライフをゼロにして、そのライフ以下の敵コマ全て（ライフ0含む）に🔥を1つ。大きい敵・🔑・自陣・無敵は対象外', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 4, '🔥'); // 犠牲（🔥は消える）
+        b[1] = sq('⭕', 4); // 4以下 → 対象
+        b[2] = sq('⭕', 2); // 対象
+        b[3] = sq('⭕', 0); // ライフ0も対象
+        b[4] = sq('⭕', 5); // 大きい → 対象外
+        b[5] = sq('⭕', 3, '🔑'); // ロック → 対象外
+        b[6] = sq('💙', 2); // 自陣 → 対象外
+        b[7] = sq('🟩', 1, '⚡'); // 雷霆の巫の無敵 → 対象外
+        const r = sacrificeFlame(b, 0, '💙', cs, 4);
+        expect(r.threshold).toBe(4);
+        expect(r.targets).toEqual([1, 2, 3]);
+        expect(b[0].bind).toBe(0);
+        expect(flameStacks(b[0])).toBe(0);
+        [1, 2, 3].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        [4, 5, 6, 7].forEach((k) => expect(flameStacks(b[k])).toBe(0));
+    });
+
+    it('氷結中の敵は🔥の代わりに氷結が全解除される', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 2, '❄', '❄');
+        const r = sacrificeFlame(b, 0, '💙', ['you', 'you'], 4);
+        expect(r.targets).toEqual([1]);
+        expect(isFrozen(b[1])).toBe(false);
+        expect(flameStacks(b[1])).toBe(0);
+        expect(r.thawed).toEqual([1]);
+        expect(sacrificeTargets(b, 3, '💙', ['you', 'you'])).toEqual([1]);
     });
 });

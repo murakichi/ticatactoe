@@ -63,6 +63,8 @@ export const skillCosts = {
     onClickFlameToken: 3,
     onClickDoubleFlameToken: 6,
     onClickSwidden: 3,
+    // 殉火（仮名）: 自陣のコマを犠牲にして、ライフがそれ以下の敵コマ全てに🔥。idx 40
+    onClickSacrifice: 5,
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -57,6 +57,7 @@ const SKILL_META: Record<string, Meta> = {
     火遁: { icon: '🔥', category: 'support' },
     火炎トークン: { icon: '🪙', category: 'token' },
     火炎ダブルトークン: { icon: '🪙', category: 'token' },
+    殉火: { icon: '🕯️', category: 'attack' },
     焼畑: { icon: '🌾', category: 'attack' },
     刈り入れ前夜: { icon: '🌾', category: 'support' },
     冬至の種子: { icon: '🌰', category: 'support' },

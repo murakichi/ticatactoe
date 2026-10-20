@@ -12,7 +12,7 @@ import { boardSizeFor, clampBoardSize, geometryOf } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, swidden, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
+import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, freezeAll, detonate, reducedGlacierCost, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -248,6 +248,7 @@ export const Game = (props: GameProps) => {
             case 'onClickFlameToken': onClickFlameToken(); break;
             case 'onClickDoubleFlameToken': onClickDoubleFlameToken(); break;
             case 'onClickSwidden': onClickSwidden(); break;
+            case 'onClickSacrifice': onClickSacrifice(); break;
             case 'onClickInferno': onClickInferno(); break;
         }
     };
@@ -596,6 +597,11 @@ export const Game = (props: GameProps) => {
 
         if (useSwidden) {
             exeSwidden(i);
+            return;
+        }
+
+        if (useSacrifice) {
+            exeSacrifice(i);
             return;
         }
 
@@ -1797,6 +1803,30 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
+    // 殉火（仮名）: 自陣のコマを1つ選んでライフをゼロにし、そのライフ以下の敵のコマ全てに🔥を付ける。手番は続く
+    const [useSacrifice, setUseSacrifice] = useState<boolean>(false);
+    const sacrificeCandidates = (): number[] =>
+        currentBoard
+            .map((sq, i) => (canSacrifice(sq, currentTurnPlayer) && sacrificeTargets(currentBoard, sq.bind, currentTurnPlayer, characters).length > 0 ? i : -1))
+            .filter((i) => i !== -1);
+    const onClickSacrifice = () => {
+        addLog('「殉火」を使用（犠牲にする自陣のコマを選択）');
+        setUseSacrifice(true);
+        spendMagic(calculateCost(seatCosts.onClickSacrifice));
+    };
+    const exeSacrifice = (i: number) => {
+        if (!sacrificeCandidates().includes(i)) return; // 自陣のライフが残るコマ以外・対象の敵がいないコマは選び直せる
+        const board = currentBoard.slice();
+        const r = sacrificeFlame(board, i, currentTurnPlayer, characters, geo.size);
+        addLog(`${posName(i)}（ライフ${r.threshold}）を犠牲に、ライフ${r.threshold}以下の敵${r.targets.length}コマに🔥`);
+        if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
+        flashCells([i, ...r.targets]);
+        playEffect('flame', i, r.targets);
+        playBurst('thaw', r.thawed);
+        setUseSacrifice(false);
+        setCurrentBoard(board);
+    };
+
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。クリック不要・手番は続く
     const ownAilmentCells = (): number[] =>
         currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && ailmentStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
@@ -2086,6 +2116,7 @@ export const Game = (props: GameProps) => {
         setBudGuardAll(Array(seatCount).fill(false));
         setUseSucker(false);
         setUseSwidden(false);
+        setUseSacrifice(false);
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
@@ -2130,6 +2161,7 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
+        else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
         else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
@@ -2137,7 +2169,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useSwidden) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useSwidden || useSacrifice) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -2153,6 +2185,8 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
+        : useSacrifice
+        ? '殉火'
         : useSwidden
         ? '焼畑'
         : useSucker
@@ -2224,6 +2258,7 @@ export const Game = (props: GameProps) => {
         { idx: 37, onClick: onClickFlameToken, buttonText: `火炎トークン-${calculateCost(seatCosts.onClickFlameToken, true)}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickFlameToken, true) },
         { idx: 38, onClick: onClickDoubleFlameToken, buttonText: `火炎ダブルトークン-${calculateCost(seatCosts.onClickDoubleFlameToken, true)}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFlameToken, true) },
         { idx: 39, onClick: onClickSwidden, buttonText: `焼畑-${calculateCost(seatCosts.onClickSwidden)}`, paragraph: `🌱のあるマス（敵味方どちらでも）を選ぶと、そのマスの🌱を全て同じ数の🔥に変えます\n氷結中のマスは先に氷結が解除されます`, disabled: checkSkillDisable(seatCosts.onClickSwidden) || !currentBoard.some((sq) => budStacks(sq) > 0) },
+        { idx: 40, onClick: onClickSacrifice, buttonText: `殉火-${calculateCost(seatCosts.onClickSacrifice)}`, paragraph: `自陣のコマを1つ選ぶと、そのコマのライフをゼロにして、そのライフ以下の敵のコマ全てに🔥を付与します\n氷結中の敵は🔥の代わりに氷結が解除されます`, disabled: checkSkillDisable(seatCosts.onClickSacrifice) || sacrificeCandidates().length === 0 },
     ];
 
     return (

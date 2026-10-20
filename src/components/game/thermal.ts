@@ -321,3 +321,29 @@ export const placeFlameToken = (board: SquareInfo[], idx: number, player: Square
     board[idx] = { player, bind, effects: [] };
     return ignite(board, [idx], size).thawed;
 };
+
+// ---- 殉火（仮名）: 自陣のコマを犠牲にして、ライフがそれ以下の敵コマ全てに🔥を付ける ----
+
+/** 殉火の犠牲にできる自陣のコマか: 自分のコマで、ライフが残っていて、🔑ロック中でない */
+export const canSacrifice = (sq: SquareInfo, me: SquareInfo['player']): boolean => !!sq.player && sq.player === me && sq.bind > 0 && !hasLock(sq);
+
+/** 殉火の🔥の対象: 使用者以外のコマのうち、ライフが threshold 以下で、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
+export const sacrificeTargets = (board: SquareInfo[], threshold: number, me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
+    infernoTargets(board, me, chars).filter((i) => board[i].bind <= threshold);
+
+/**
+ * 殉火: cell の自陣のコマのライフをゼロにして、そのライフ(threshold)以下の敵コマ全てに🔥を1スタック付ける
+ * （ignite の規則どおり。氷結中のマスは氷結が全解除されて🔥は付かない）。board を直接書き換える。sim/thermal.js の sacrificeFlame と同じ
+ */
+export const sacrificeFlame = (
+    board: SquareInfo[],
+    cell: number,
+    me: SquareInfo['player'],
+    chars: readonly CharacterId[],
+    size: number
+): { threshold: number; targets: number[]; thawed: number[] } => {
+    const threshold = board[cell].bind;
+    board[cell] = zeroOut(board[cell]);
+    const targets = sacrificeTargets(board, threshold, me, chars);
+    return { threshold, targets, thawed: ignite(board, targets, size, 1).thawed };
+};

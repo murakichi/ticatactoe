@@ -76,7 +76,7 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 33; // SIM_POOL_SIZE: A/B検証用の上書き
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 41; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -188,6 +188,11 @@ const skillCosts = {
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
     onClickSucker: (config.thermal && config.thermal.suckerCost) || 4,
     onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
+    // 火炎系の汎用スキル idx 37〜40（対氷結の手段）
+    onClickFlameToken: (config.thermal && config.thermal.flameTokenCost) || 3,
+    onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
+    onClickSwidden: (config.thermal && config.thermal.swiddenCost) || 3,
+    onClickSacrifice: (config.thermal && config.thermal.sacrificeCost) || 5,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -492,6 +497,8 @@ function newGame(opts = {}) {
         useJammer: false,
         useFreeze: false,
         useSucker: false,
+        useSwidden: false,
+        useSacrifice: false,
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
@@ -688,6 +695,16 @@ function placeMove(s, i) {
     }
     if (s.useChargeArea) {
         exeChargeArea(s, i);
+        return true;
+    }
+    if (s.useSwidden) {
+        if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
+        s.useSwidden = false;
+        return true;
+    }
+    if (s.useSacrifice) {
+        if (!exeSacrifice(s, i)) return false;
+        s.useSacrifice = false;
         return true;
     }
     if (s.useSucker) {
@@ -1528,6 +1545,77 @@ function onClickWindborne(s) {
     bumpStat(s, 'windborne');
 }
 
+// ---- 火炎系の汎用スキル (idx 37〜40) ----
+// 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
+function onClickFlameToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
+        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない（収穫/伝播ギアとは連動しない）
+    }
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFlameToken, true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'flameToken');
+}
+// 火炎ダブルトークン (idx38): 空きマス2つに同様
+function onClickDoubleFlameToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    for (const idx of randomAnyPick(empties, 2, s.rng)) {
+        if (idx == null) continue;
+        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
+        harvestMagic(s, afterTokenPlaced(s, idx));
+    }
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleFlameToken, true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'doubleFlameToken');
+}
+// 焼畑 (idx39): 🌱を持つマス（敵味方どちらでも）を選ぶと、🌱を全て除去し、同数だけ火炎を付ける。盤上に🌱が無ければ使えない
+function swiddenTargets(s) {
+    const out = [];
+    s.board.forEach((sq, i) => { if (thermal.budStacks(sq) > 0 && !isShielded(s, sq)) out.push(i); });
+    return out;
+}
+function exeSwidden(s, i) {
+    if (!swiddenTargets(s).includes(i)) return false;
+    const r = thermal.swidden(s.board, i, s.size);
+    bumpStat(s, 'swiddenBuds', r.n);
+    return true;
+}
+function onClickSwidden(s) {
+    if (swiddenTargets(s).length === 0) return;
+    s.useSwidden = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSwidden));
+    bumpMagicCount(s);
+    bumpStat(s, 'swidden');
+}
+// 殉火 (idx40・仮名): 自コマ（ライフ>0・🔑なし）を選ぶと、そのライフをゼロにして、ライフがそれ以下の敵コマ全てに🔥を1つ。対象の敵が0なら使えない
+function sacrificeCandidates(s) {
+    const me = curPlayer(s);
+    const out = [];
+    s.board.forEach((sq, i) => {
+        if (sq.player === me && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑') && thermal.sacrificeTargets(s.board, i, me, s.size, (t) => isShielded(s, t)).length > 0) out.push(i);
+    });
+    return out;
+}
+function exeSacrifice(s, i) {
+    if (!sacrificeCandidates(s).includes(i)) return false;
+    const r = thermal.sacrificeFlame(s.board, i, curPlayer(s), s.size, (t) => isShielded(s, t));
+    bumpStat(s, 'sacrificeTargets', r.targets.length);
+    return true;
+}
+function onClickSacrifice(s) {
+    if (sacrificeCandidates(s).length === 0) return;
+    s.useSacrifice = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSacrifice));
+    bumpMagicCount(s);
+    bumpStat(s, 'sacrifice');
+}
+
 function onClickCleanse(s) {
     if (!hasAilment(s.board, curPlayer(s))) return;
     const done = thermal.cleanse(s.board, curPlayer(s));
@@ -1595,6 +1683,10 @@ const SKILLS = {
     glacier: onClickGlacier,
     cleanse: onClickCleanse,
     harvestEve: onClickHarvestEve,
+    flameToken: onClickFlameToken,
+    doubleFlameToken: onClickDoubleFlameToken,
+    swidden: onClickSwidden,
+    sacrifice: onClickSacrifice,
     solstice: onClickSolstice,
     sucker: onClickSucker,
     windborne: onClickWindborne,
@@ -1625,5 +1717,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };
