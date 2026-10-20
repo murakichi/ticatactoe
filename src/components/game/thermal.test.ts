@@ -1,6 +1,7 @@
 import {
     isFrozen,
     infernoCostOf,
+    FLAME_SKILL_KEYS,
     flameStacks,
     thaw,
     overwriteBlocked,
@@ -843,5 +844,13 @@ describe('業火の無料化', () => {
         expect(infernoCostOf(9, false, (c) => c)).toBe(9);
         expect(infernoCostOf(9, false, (c) => c + 1)).toBe(10);
         expect(infernoCostOf(9, true, (c) => c)).toBe(0);
+    });
+});
+
+describe('煉獄の鍛冶師の火炎スキル割引', () => {
+    it('対象のスキルキーが sim と一致する', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simThermal = require('../../../sim/thermal');
+        expect(Array.from(simThermal.FLAME_SKILL_KEYS).sort()).toEqual(Array.from(FLAME_SKILL_KEYS).sort());
     });
 });

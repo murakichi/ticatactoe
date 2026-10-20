@@ -633,8 +633,10 @@ function bumpMagicCount(s) {
 }
 
 // [FAITHFUL] Game.tsx calculateCost
-function characterCost(s, cost, isToken, isPoison) {
+function characterCost(s, cost, isToken, isPoison, key) {
     const c = curChar(s);
+    // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
+    if (c === 'pyromancer') return key && thermal.FLAME_SKILL_KEYS.has(key) && cost > 1 ? cost - 1 : cost;
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
     if (c === 'tactician') return isToken ? cost - 1 : cost + 2;
@@ -642,7 +644,7 @@ function characterCost(s, cost, isToken, isPoison) {
     return cost;
 }
 function calculateCost(s, cost, isToken = false, isPoison = false, key) {
-    return gearCost(s, characterCost(s, cost, isToken, isPoison), isToken, s.turn, key);
+    return gearCost(s, characterCost(s, cost, isToken, isPoison, key), isToken, s.turn, key);
 }
 
 // [FAITHFUL] Game.tsx calculateTokenBind

@@ -15,7 +15,7 @@ import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTarget
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
+import { FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -2248,11 +2248,15 @@ export const Game = (props: GameProps) => {
     // player 省略時は手番プレイヤー。パネルで非手番側のコストを出すために指定できる。
     // キャラ補正(characterCost)のあと、ギアのコスト補正(gearCost)を掛ける
     const calculateCost = (cost: number, isToken: boolean = false, isPoison: boolean = false, player: Player = currentTurnPlayer, skillKey?: string) =>
-        gearCost(characterCost(cost, isToken, isPoison, player), seatOf(player), isToken, skillKey);
+        gearCost(characterCost(cost, isToken, isPoison, player, skillKey), seatOf(player), isToken, skillKey);
 
-    const characterCost = (cost: number, isToken: boolean, isPoison: boolean, player: Player) => {
+    const characterCost = (cost: number, isToken: boolean, isPoison: boolean, player: Player, skillKey?: string) => {
         const seat = seatOf(player);
         const characterId = characters[seat];
+        // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
+        if (characterId === 'pyromancer') {
+            return skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
+        }
         // 毒使い: 毒系スキルは-1、それ以外は+1
         if (characterId === 'poisoner') {
             return isPoison ? cost - 1 : cost + 1;

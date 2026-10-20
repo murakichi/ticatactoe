@@ -2012,5 +2012,22 @@ test('返し特売: 直前の相手の手番に相手がスキルを使ってい
     assert.strictEqual(cost(), 2);
 });
 
+
+test('煉獄の鍛冶師のパッシブ: 🔥を付与するスキルは常に-1（下限1）。業火や他のスキルは変わらない。他キャラは変わらない', () => {
+    const p = game('pyromancer', 'you');
+    p.heartTurn = true;
+    const c = (s, k, tok = false) => e.calculateCost(s, e.skillCosts[k], tok, false, k);
+    const y = game('magician', 'you');
+    y.heartTurn = true;
+    for (const [k, tok] of [['onClickIgnite', false], ['onClickFlameToken', true], ['onClickDoubleFlameToken', true], ['onClickSacrifice', false], ['onClickSwidden', false]]) {
+        assert.strictEqual(c(p, k, tok), Math.max(1, e.skillCosts[k] - 1), k);
+        assert.strictEqual(c(y, k, tok), e.skillCosts[k], k);
+    }
+    assert.strictEqual(c(p, 'onClickFreeze'), e.skillCosts.onClickFreeze); // 氷結は対象外
+    assert.strictEqual(e.infernoCost(p), 9); // 業火は固有スキルなので対象外
+    e.SKILLS.markdown(p); // 軽減札とは足し算（下限1）
+    assert.strictEqual(c(p, 'onClickIgnite'), Math.max(1, e.skillCosts.onClickIgnite - 1 - 3));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
