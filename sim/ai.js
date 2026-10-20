@@ -37,7 +37,7 @@ const AI_DEFAULTS = {
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
     discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
-    judgeMin: 2, // 魔法使いの審判の日を撃つ最低の純増（敵破壊-自軍破壊）。検証用ノブ（既定2=従来）
+    magLock: 1, // 魔法使いが審判を撃たない手番にバッズ駒を🔑ロックする（検証用ノブ。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -86,7 +86,7 @@ function bestJudgeTarget(board, me) {
         const net = enemy - mine;
         if (net > bestNet) { bestNet = net; bestIdx = i; }
     }
-    return bestNet >= F.judgeMin ? bestIdx : null;
+    return bestNet >= 2 ? bestIdx : null;
 }
 
 // 敵駒 i が「どかさないと負ける列」(その持ち主が3つ揃い・自駒なし・他の敵駒なし・残り1マスが空き) に含まれるか
@@ -1304,7 +1304,7 @@ function faithfulMakeMoveInner(s) {
         if (ch === 'magician') {
             const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
             const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
-            if (magic >= lockCost && budCell !== -1) {
+            if (F.magLock && magic >= lockCost && budCell !== -1) {
                 SKILLS.lock(s);
                 placeMove(s, budCell);  // ロック対象クリック(手番は進まない)
                 const move = getEnhancedBestMove(s);
