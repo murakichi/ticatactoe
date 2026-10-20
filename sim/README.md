@@ -120,3 +120,4 @@ node sim/probe-top.js --target pyromancer --scan gears --games 60      # ギア�
 対象キャラにだけ候補のデッキ/ギア/AIフラグを与え、他キャラは推奨設定のまま「環境勝率」を測る。詳細は `.claude/skills/tune-top/SKILL.md`（`/loop` から回す）。
 デッキのシナジー探索: `node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40`（`--swap` で同時に入れ替える枚数、`--cat` で入れる札のカテゴリを限る）。
 `--oppGears none|random` で相手のギアを無し/ランダムにして頑健性を測れる（tune-top の完了判定で使う）。
+札・ギアの寄与と未使用の確認: `node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant`、使用回数は `node sim/probe-usage.js --chars X,you --deck ... --gears ...`。
