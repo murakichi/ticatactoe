@@ -5,7 +5,7 @@
 - 基準線(採用#5後): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
-- 連続不採用回数: 0(採用: ダブルトークン)
+- 連続不採用回数: 1(採用#5のあと strategy)
 - 状態: running(トップ未達)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
