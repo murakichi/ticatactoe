@@ -1,6 +1,6 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 993d291
+- 最後に検証したmaster: edf73fb
 - 現在の推奨設定: (sim/gear.js・sim/deck.js の RECOMMENDED を参照。未変更)
 - 基準線: 環境勝率 60.2% / 2位 / 1位 tactician 67.8%   (seed 1, games 60, size 4, master 4b849ea)
 - 連続不採用回数: 1
