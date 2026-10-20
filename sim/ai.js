@@ -148,9 +148,6 @@ const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // �
 const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
 const TK_AI = process.env.TK_AI !== '0'; // トークン系スキルを残すロック（A/B用に無効化できる）
 const TK_CHARS = (process.env.TK_CHARS || 'poisoner').split(','); // 対象のキャラ
-const GB_AI = process.env.GB_AI !== '0';            // 賭博師の骰子の専用行動（A/B用に無効化できる）
-const GB_HI = Number(process.env.GB_HI) || 10;       // バイバインを撃つライフの下限
-const GB_LOCK = process.env.GB_LOCK !== '0';         // ライフ3・バイバインを手札でロックして残す
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
 const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
@@ -970,10 +967,6 @@ function chooseSkills(s, availableSkills) {
     if (s.life <= 2 && availableSkills.includes(0)) {
         spend(cost(costsOf(s).onClickAddLife, false, 'onClickAddLife'), 'addLife');
     }
-    // 賭博師の骰子: ライフを高く引いたらバイバイン(2倍)で長く生きる強いコマを置く。GB_AI=0 で無効化(A/B用)
-    if (GB_AI && gearAi(s, 'gambler') && s.life >= GB_HI && availableSkills.includes(1) && !skills.includes('addLife')) {
-        spend(cost(costsOf(s).onClickBibine, false, 'onClickBibine'), 'bibine');
-    }
 
     if (availableSkills.includes(2) && remaining >= cost(costsOf(s).onClickBuds, false, 'onClickBuds')) {
         let emptyCount = 0, myBuds = 0;
@@ -1064,8 +1057,7 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx))
-        || (GB_AI && GB_LOCK && gearAi(s, 'gambler') && (idx === 0 || idx === 1));
+        || (tokenLockAi && gearTokenIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
