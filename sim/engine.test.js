@@ -1144,13 +1144,37 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickWindborne, 3);
 });
 
-test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
+test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。そのあとスタックが1つ減り、0で消える', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 9, effects: [FLM, FLM] };
     e.placeMove(s, 0);
     assert.strictEqual(s.board[5].bind, 9 - 1 - 4);
-    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 2);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 1); // 継続ダメージのあとスタック-1
+    e.placeMove(s, 1); // 次のターン進行: 2ダメージ(1スタック)のあと🔥が消える
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🔥').length, 0);
+});
+
+test('バーンアウト: 🔥が乗っているマスを全て破壊（敵味方問わず）。盤面に🔥が4つ以上あればタダ、なければ5コスト', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 20; s.life = 3;
+    s.board[1] = { player: '⭕', bind: 5, effects: [FLM] };
+    s.board[2] = { player: '💙', bind: 5, effects: [FLM] };
+    s.board[3] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.burnoutCost(s), 5);
+    s.board[4] = { player: '⭕', bind: 5, effects: [FLM, FLM] }; // 合計4スタック（マスの数ではなくスタック）
+    assert.strictEqual(e.burnoutCost(s), 0);
+    const before = s.heartMagic;
+    e.SKILLS.burnout(s);
+    assert.strictEqual(s.heartMagic, before);
+    for (const k of [1, 2, 4]) assert.deepStrictEqual(s.board[k], { player: undefined, bind: 0, effects: [] });
+    assert.strictEqual(s.board[3].player, '⭕');
+    s.board[1] = { player: '⭕', bind: 5, effects: [FLM] };
+    const m = s.heartMagic;
+    e.SKILLS.burnout(s); // 🔥1つなので5コスト
+    assert.strictEqual(s.heartMagic, m - 5);
+    e.SKILLS.burnout(s); // 対象なし: 何も起きない
+    assert.strictEqual(s.heartMagic, m - 5);
 });
 
 test('火炎: スキルダメージは1.5倍（切り上げ）で、通れば🔥は消える', () => {
@@ -1860,7 +1884,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;

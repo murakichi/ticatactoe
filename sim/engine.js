@@ -218,6 +218,7 @@ const skillCosts = {
     onClickClearance: 4,
     onClickRandomCast: 2, // 福引き(idx 59)
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
+    onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -866,6 +867,7 @@ function placeMove(s, i) {
             sq.bind = hit.bind;
             sq.effects = hit.effects;
         }
+        thermal.dropOneFlame(sq); // 🔥はターン進行のたびにスタックが1つ減る
         // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
         const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
         if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
@@ -1824,6 +1826,21 @@ const INFERNO_FREE_SKILLS = 3;
 function infernoCost(s, seat = s.turn) {
     return s.infernoReady[seat] ? 0 : calculateCost(s, costsOf(s).onClickInferno, false, false, 'onClickInferno');
 }
+// バーンアウト: 🔥が乗っているマスを全て破壊する。盤面に🔥が4つ以上あればコスト0。クリック不要・手番は続く
+function burnoutTargets(s) {
+    return s.board.map((sq, i) => (thermal.flameStacks(sq) > 0 && !isShielded(s, sq) ? i : -1)).filter((i) => i !== -1);
+}
+function burnoutCost(s) {
+    return thermal.burnoutCostOf(costsOf(s).onClickBurnout, thermal.totalFlames(s.board), (c) => calculateCost(s, c, false, false, 'onClickBurnout'));
+}
+function onClickBurnout(s) {
+    const targets = burnoutTargets(s);
+    if (!targets.length) return;
+    const cost = burnoutCost(s);
+    addCorpses(s, thermal.burnout(s.board, targets));
+    spendMagic(s, cost, 'onClickBurnout');
+    bumpStat(s, 'burnout');
+}
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
@@ -1898,6 +1915,7 @@ const SKILLS = {
     sucker: onClickSucker,
     windborne: onClickWindborne,
     inferno: onClickInferno,
+    burnout: onClickBurnout,
     markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
     effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
     tokenDiscount: (s) => useDiscountSkill(s, 'onClickTokenDiscount'),
@@ -1931,5 +1949,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

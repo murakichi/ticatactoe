@@ -88,6 +88,7 @@ export const skillCosts = {
     onClickClearance: 4,
     onClickRandomCast: 2, // 福引き(idx 59)
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
+    onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
 };
 
 export type SkillCosts = typeof skillCosts;

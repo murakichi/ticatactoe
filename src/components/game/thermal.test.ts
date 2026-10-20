@@ -2,6 +2,11 @@ import {
     isFrozen,
     infernoCostOf,
     FLAME_SKILL_KEYS,
+    dropOneFlame,
+    totalFlames,
+    burnoutCostOf,
+    burnoutTargets,
+    burnout,
     flameStacks,
     thaw,
     overwriteBlocked,
@@ -247,10 +252,10 @@ describe('❄氷結', () => {
 });
 
 describe('🔥火炎', () => {
-    it('ターン進行でスタックごとに2ダメージ。重複する。🔥は消えない', () => {
+    it('ターン進行でスタックごとに2ダメージ。重複する。継続ダメージのあと🔥は1スタック減る', () => {
         const one = decayTick(sq('💙', 10, '🔥'), chars);
         expect(one.bind).toBe(10 - 1 - FLAME_BURN_DAMAGE);
-        expect(flameStacks(one)).toBe(1);
+        expect(flameStacks(one)).toBe(0);
         expect(decayTick(sq('💙', 10, '🔥', '🔥', '🔥'), chars).bind).toBe(10 - 1 - 3 * FLAME_BURN_DAMAGE);
     });
 
@@ -292,8 +297,8 @@ describe('🔥火炎', () => {
         expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '☠'), chars))).toBe(0); // 🔥中でも☠は働き、ダメージで🔥は消える
     });
 
-    it('自然減衰だけでは🔥は消えない', () => {
-        expect(flameStacks(decayTick(sq('⭕', 5, '🔥'), chars))).toBe(1);
+    it('自然減衰では🔥が全部は消えず、1スタックずつ減る', () => {
+        expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '🔥'), chars))).toBe(1);
     });
 
     it('電気の発火で🔥が消える', () => {
@@ -852,5 +857,37 @@ describe('煉獄の鍛冶師の火炎スキル割引', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const simThermal = require('../../../sim/thermal');
         expect(Array.from(simThermal.FLAME_SKILL_KEYS).sort()).toEqual(Array.from(FLAME_SKILL_KEYS).sort());
+    });
+});
+
+describe('火炎の減衰とバーンアウト', () => {
+    it('ターン進行（decayTick）で🔥が1スタック減り、継続ダメージは減る前のスタックで受ける', () => {
+        const r = decayTick(sq('⭕', 9, '🔥', '🔥'), chars);
+        expect(flameStacks(r)).toBe(1);
+        expect(r.bind).toBe(9 - 1 - 4);
+        expect(flameStacks(decayTick(r, chars))).toBe(0);
+        expect(flameStacks(dropOneFlame(sq('⭕', 3)))).toBe(0);
+    });
+    it('バーンアウトは🔥の合計が4以上でタダ。🔥のマスを全て破壊し、雷霆の巫の⚡無敵コマは除く', () => {
+        expect(burnoutCostOf(5, 3, (c) => c)).toBe(5);
+        expect(burnoutCostOf(5, 4, (c) => c)).toBe(0);
+        const b = emptyBoard();
+        b[1] = sq('⭕', 5, '🔥', '🔥');
+        b[2] = sq('💙', 5, '🔥');
+        b[3] = sq('⭕', 5);
+        b[4] = sq('🟩', 5, '🔥', '⚡');
+        expect(totalFlames(b)).toBe(4);
+        const cs = ['you', 'you', 'electrician'] as CharacterId[];
+        expect(burnoutTargets(b, cs)).toEqual([1, 2]);
+        expect(burnout(b, [1, 2])).toBe(2);
+        expect(b[1].player).toBeUndefined();
+        expect(b[3].player).toBe('⭕');
+        // sim と同じ対象・結果
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simT = require('../../../sim/thermal');
+        const c = emptyBoard();
+        c[1] = sq('⭕', 5, '🔥');
+        c[4] = sq('🟩', 5, '🔥', '⚡');
+        expect(simT.burnoutTargets(c, cs, ['💙', '⭕', '🟩'])).toEqual(burnoutTargets(c, cs));
     });
 });

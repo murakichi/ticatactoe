@@ -15,7 +15,7 @@ import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTarget
 import { lateMagicBonus } from './lateMagic';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -274,6 +274,7 @@ export const Game = (props: GameProps) => {
             case 'onClickIgnite': onClickIgnite(); break;
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
+            case 'onClickBurnout': onClickBurnout(); break;
             case 'onClickCounterMarkdown':
             case 'onClickMarkdown': case 'onClickEffectDiscount': case 'onClickTokenDiscount':
             case 'onClickVitalMarkdown': case 'onClickUniqueDiscount': case 'onClickClearance':
@@ -1915,6 +1916,22 @@ export const Game = (props: GameProps) => {
         gearTurn.current.freeCast = true;
         picked.onClick();
     };
+    // バーンアウト(idx 61): 🔥が乗っているマスを全て破壊する（クリック不要・手番は続く）。盤面に🔥が4つ以上あればコスト0
+    const burnoutCost = (): number =>
+        burnoutCostOf(seatCosts.onClickBurnout, totalFlames(currentBoard), (c) => calculateCost(c, false, false, currentTurnPlayer, 'onClickBurnout'));
+    const onClickBurnout = () => {
+        const targets = burnoutTargets(currentBoard, characters);
+        if (targets.length === 0) return;
+        const board = currentBoard.slice();
+        const cost = burnoutCost();
+        const destroyed = burnout(board, targets);
+        addCorpses(destroyed);
+        addLog(`「バーンアウト」を使用（🔥のあるマス${targets.length}個を破壊${cost === 0 ? '・🔥が' + BURNOUT_FREE_FLAMES + 'つ以上でタダ' : ''}）`);
+        flashCells(targets);
+        playEffect('inferno', undefined, targets);
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickBurnout');
+    };
     // コスト軽減スキル(idx 53-58): 手番内だけ有効。効果の中身は discount.ts
     const DISCOUNT_NAMES: Record<DiscountKey, string> = {
         onClickMarkdown: '特売', onClickEffectDiscount: '付与割引', onClickTokenDiscount: 'トークン割引',
@@ -2659,6 +2676,7 @@ export const Game = (props: GameProps) => {
         { idx: 58, onClick: () => onClickDiscount('onClickClearance'), buttonText: `大特価-${calculateCost(seatCosts.onClickClearance, false, false, currentTurnPlayer, 'onClickClearance')}`, paragraph: `次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: !canUseDiscount('onClickClearance') },
         { idx: 59, onClick: onClickRandomCast, buttonText: `福引き-${calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast')}`, paragraph: `自分のデッキ（12枚）から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します\n手札に出ていないスキルも対象です（今撃てるものだけ）`, disabled: checkSkillDisable(seatCosts.onClickRandomCast) },
         { idx: 60, onClick: () => onClickDiscount('onClickCounterMarkdown'), buttonText: `返し特売-${calculateCost(seatCosts.onClickCounterMarkdown, false, false, currentTurnPlayer, 'onClickCounterMarkdown')}`, paragraph: `次に打つスキルのコストを3軽減し、次の一手のライフを+1します\n直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます`, disabled: !canUseDiscount('onClickCounterMarkdown') },
+        { idx: 61, onClick: onClickBurnout, buttonText: `バーンアウト-${burnoutCost()}`, paragraph: `🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）\n盤面に🔥が${BURNOUT_FREE_FLAMES}つ以上あればコスト0で使えます（現在${totalFlames(currentBoard)}つ）`, disabled: magic[turnSeat] < burnoutCost() || burnoutTargets(currentBoard, characters).length === 0 },
     ];
 
     return (

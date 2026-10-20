@@ -259,7 +259,40 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
-    return next;
+    // 🔥はターン進行のたびにスタックが1つ減る（継続ダメージを与えたあと）
+    return dropOneFlame(next);
+};
+/** 🔥を1スタック減らす（なければそのまま） */
+export const dropOneFlame = (sq: SquareInfo): SquareInfo => {
+    const at = sq.effects.map((e) => e.effect).lastIndexOf('🔥');
+    return at === -1 ? sq : { ...sq, effects: sq.effects.filter((_, k) => k !== at) };
+};
+
+// ---- バーンアウト（汎用スキル）----
+/** 盤面に🔥がこの数（スタック合計）以上あればバーンアウトはコスト0 */
+export const BURNOUT_FREE_FLAMES = 4;
+/** 盤面の🔥のスタック合計 */
+export const totalFlames = (board: SquareInfo[]): number => board.reduce((n, sq) => n + flameStacks(sq), 0);
+/** バーンアウトの実コスト: 盤面に🔥が4つ以上あれば0、なければ calc(基礎コスト)。sim/engine.js の burnoutCost と同じ */
+export const burnoutCostOf = (baseCost: number, flames: number, calc: (cost: number) => number): number =>
+    flames >= BURNOUT_FREE_FLAMES ? 0 : calc(baseCost);
+/** バーンアウトの対象: 🔥が乗っているマス全て（敵味方問わず。🔑も関係なし）。雷霆の巫の⚡無敵コマは除く */
+export const burnoutTargets = (board: SquareInfo[], chars: readonly CharacterId[]): number[] =>
+    board
+        .map((sq, i) => {
+            if (flameStacks(sq) === 0) return -1;
+            if (sq.player && chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            return i;
+        })
+        .filter((i) => i !== -1);
+/** バーンアウト: cells を空きマスにする。破壊したコマの数を返す。board を直接書き換える */
+export const burnout = (board: SquareInfo[], cells: number[]): number => {
+    let destroyed = 0;
+    for (const k of cells) {
+        if (board[k].player) destroyed++;
+        board[k] = { player: undefined, bind: 0, effects: [] };
+    }
+    return destroyed;
 };
 
 // ---- バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）の純粋ロジック ----
