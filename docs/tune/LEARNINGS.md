@@ -54,4 +54,5 @@
   - 3枚同時入替・ギア2枠同時入替・寄与監査はいずれも現状が天井。洗練が飽和したあとの上積みは、AI（本番ミラー込み）か数値変更の領域
 
 - 2026-10-20 magician 再検証OK（master ae193e7）: cryomancer の調整(余韻+頑丈ギア・霜降り/氷結トークン)で cryomancer が魔法使いの最大の競合になった（envDeck varied で差2.2pt）。複数キャラを並列にトップへ上げると互いの余裕が減る。差が2pt台になったら、envDeck varied を毎回の再検証で重点的に見る
+- 2026-10-20 magician 再々検証OK（master 8f8e484）: electrician もデッキ調整(特売+慈雨)でトップ到達。envDeck varied で electrician が魔法使いに1.8pt差まで迫る。複数キャラが同時にトップを取ると差が誤差の範囲まで縮む=『差は問わず1位』の判定は envDeck varied で順位が入れ替わりやすい。この条件は games を増やして(400以上)判定するとよい
 
