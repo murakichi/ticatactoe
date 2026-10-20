@@ -226,9 +226,9 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             return 0.6;
         }
         case 'glacier': {
-            // 絶対零度: 重い低音の後、冷たい下降音と結晶のきらめきが降り注ぐ
+            // 絶対零度: 重い低音の後、冷気が駆け上がる音と結晶のきらめきが降り注ぐ
             boom(ctx, d, T(0), 0.8);
-            tone(ctx, d, { type: 'triangle', f0: 2400, f1: 300, t: T(0.05), dur: 0.7, gain: 0.3, lowpass: 5000 });
+            tone(ctx, d, { type: 'triangle', f0: 300, f1: 2400, t: T(0.05), dur: 0.7, gain: 0.3, lowpass: 5000 });
             noise(ctx, d, { t: T(0.1), dur: 0.6, gain: 0.3, filter: 'highpass', f0: 4000 });
             sparkle(ctx, d, T(0.3), [C6, E6, G5 * 2, C6 * 2, E6 * 2], 0.07, 0.22);
             return 1.0;
@@ -237,7 +237,7 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             // 氷結崩壊: ガラスが砕ける連打と衝撃
             boom(ctx, d, T(0), 0.95);
             noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.7, filter: 'highpass', f0: 3000 });
-            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 3800 - i * 350, f1: 1200, t: T(0.04 + i * 0.05), dur: 0.12, gain: 0.3 });
+            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 1200 + i * 350, f1: 3800 + i * 100, t: T(0.04 + i * 0.05), dur: 0.12, gain: 0.3 });
             sparkle(ctx, d, T(0.4), [E6, C6, G5 * 2], 0.06, 0.2);
             return 0.9;
         }
@@ -284,19 +284,19 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
         case 'iceBreak': {
             // 氷結が砕けて身代わりになる: パリン
             noise(ctx, d, { t: T(0), dur: 0.1, gain: 0.6, filter: 'highpass', f0: 4500 });
-            for (let i = 0; i < 4; i++) tone(ctx, d, { f0: 3600 - i * 500, f1: 1500, t: T(i * 0.04), dur: 0.1, gain: 0.28 });
+            for (let i = 0; i < 4; i++) tone(ctx, d, { f0: 1500 + i * 500, f1: 3600 + i * 200, t: T(i * 0.04), dur: 0.1, gain: 0.28 });
             return 0.3;
         }
         case 'thaw': {
-            // 解凍: 水滴がぽとん
-            tone(ctx, d, { f0: 1100, f1: 500, t: T(0), dur: 0.12, gain: 0.35 });
-            tone(ctx, d, { f0: 900, f1: 420, t: T(0.12), dur: 0.12, gain: 0.28 });
+            // 解凍: 水滴がぴちょん↗
+            tone(ctx, d, { f0: 500, f1: 1100, t: T(0), dur: 0.12, gain: 0.35 });
+            tone(ctx, d, { f0: 420, f1: 900, t: T(0.12), dur: 0.12, gain: 0.28 });
             return 0.3;
         }
         case 'burn': {
             // 燃焼: ぱちぱちと爆ぜる
-            for (let i = 0; i < 5; i++) noise(ctx, d, { t: T(i * 0.06), dur: 0.05, gain: 0.4, filter: 'bandpass', f0: 2200, f1: 900, q: 1 });
-            tone(ctx, d, { type: 'sawtooth', f0: 140, f1: 90, t: T(0), dur: 0.3, gain: 0.2, lowpass: 600 });
+            for (let i = 0; i < 5; i++) noise(ctx, d, { t: T(i * 0.06), dur: 0.05, gain: 0.4, filter: 'bandpass', f0: 900, f1: 2200, q: 1 });
+            tone(ctx, d, { type: 'sawtooth', f0: 90, f1: 140, t: T(0), dur: 0.3, gain: 0.2, lowpass: 600 });
             return 0.4;
         }
         case 'proliferate': {
@@ -334,12 +334,59 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             );
             return 0.42;
         }
+        case 'heal': {
+            // ライフ3: やさしい上昇アルペジオ(ふんわり満ちていく)
+            sparkle(ctx, d, T(0), [C5, E5, G5, C6], 0.08, 0.28);
+            tone(ctx, d, { f0: 400, f1: 800, t: T(0), dur: 0.4, gain: 0.22 });
+            tone(ctx, d, { f0: 2093, t: T(0.32), dur: 0.4, gain: 0.12 });
+            return 0.75;
+        }
+        case 'double': {
+            // バイバイン: 「ダブル!」と二段で跳ね上がる
+            tone(ctx, d, { type: 'square', f0: 330, f1: 660, t: T(0), dur: 0.12, gain: 0.25, lowpass: 3500 });
+            tone(ctx, d, { type: 'square', f0: 660, f1: 1320, t: T(0.13), dur: 0.2, gain: 0.25, lowpass: 3500 });
+            tone(ctx, d, { f0: 45, f1: 170, t: T(0.13), dur: 0.3, gain: 0.6 });
+            tone(ctx, d, { f0: 2640, t: T(0.28), dur: 0.35, gain: 0.12 });
+            return 0.65;
+        }
+        case 'bloom': {
+            // バッズ: ぽっ、ぽっ、ぽっと芽が出て、ふわっと開く
+            [G5 / 2, C5, E5, G5].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.5, t: T(i * 0.07), dur: 0.12, gain: 0.35 }));
+            tone(ctx, d, { type: 'triangle', f0: 600, f1: 1400, t: T(0.28), dur: 0.35, gain: 0.18 });
+            return 0.7;
+        }
+        case 'discount': {
+            // 割引: 硬貨がチャリンチャリンと弾み、音が上へ駆け上がる
+            for (let i = 0; i < 4; i++) {
+                tone(ctx, d, { type: 'square', f0: 1568 + i * 220, t: T(i * 0.07), dur: 0.05, gain: 0.14, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2093 + i * 293, t: T(i * 0.07 + 0.04), dur: 0.14, gain: 0.14, lowpass: 5000 });
+            }
+            tone(ctx, d, { f0: 400, f1: 1200, t: T(0), dur: 0.35, gain: 0.2 });
+            return 0.6;
+        }
+        case 'shuffle': {
+            // シャッフル: カードをぱらぱらと切る(高さを上げながら小刻みに)
+            for (let i = 0; i < 8; i++) {
+                noise(ctx, d, { t: T(i * 0.04), dur: 0.04, gain: 0.35, filter: 'bandpass', f0: 2000 + i * 400, q: 2 });
+                tone(ctx, d, { type: 'triangle', f0: 500 + i * 120, f1: 700 + i * 140, t: T(i * 0.04), dur: 0.05, gain: 0.12 });
+            }
+            tone(ctx, d, { type: 'triangle', f0: 800, f1: 1800, t: T(0.32), dur: 0.2, gain: 0.2 });
+            return 0.55;
+        }
+        case 'token': {
+            // トークン: コマが置かれる「ポン」に、星がはじける上昇音
+            tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0), dur: 0.09, gain: 0.7 });
+            tone(ctx, d, { f0: 880, f1: 1760, t: T(0.06), dur: 0.15, gain: 0.3 });
+            sparkle(ctx, d, T(0.1), [G5, C6, E6], 0.05, 0.16);
+            return 0.4;
+        }
         case 'place': {
             // 駒を置く「ポン」
             tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0), dur: 0.09, gain: 0.8 });
             tone(ctx, d, { f0: 800, f1: 1400, t: T(0), dur: 0.06, gain: 0.3 });
             return 0.12;
         }
+        case 'chargeUp':
         case 'charge': {
             // コインを取ったような2音
             tone(ctx, d, { type: 'square', f0: 988, t: T(0), dur: 0.07, gain: 0.3, lowpass: 4000 });
