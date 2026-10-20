@@ -22,3 +22,7 @@
 ## 次に生かすメモ
 
 (まだ無し)
+
+## 追記(2026-10-20 pyromancer)
+- 計測: 4コアで `--rank --games 60` ≈ 3分、`--scan gears --games 60` は近傍32個で20分超。フォアグラウンド上限(10分)を超えるのでバックグラウンド+出力ファイルで回す。キャラ引数は id(鍛冶師=`pyromancer`)。
+- 環境(master 4b849ea, seed1, games60): 1位 tactician 67.8%、2位 electrician 60.2%、最下位 pyromancer 38.9%。pyromancer は tactician/magician/electrician に 20〜30% しか勝てない。
