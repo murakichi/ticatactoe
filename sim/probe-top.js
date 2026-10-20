@@ -109,7 +109,37 @@ if (args.worker) {
 }
 
 // ---- 親 ----
-function runWorkers(tasks, variants, workers) {
+/**
+ * --cache <dir> 指定時はタスクを小分け(--chunk、既定12)にして結果をファイルに保存する。
+ * コンテナ再起動などで途切れても、同じコマンドを打ち直せば済んだ分は読み込んで再開する。
+ * キーは (タスク・変種・games・seed・size・オプション・sim/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
+ */
+function simHash() {
+    const h = require('crypto').createHash('sha1');
+    const dir = __dirname;
+    for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
+    if (args.modA) h.update(require('fs').readFileSync(args.modA));
+    return h.digest('hex');
+}
+async function runWorkers(tasks, variants, workers) {
+    if (!args.cache) return runWorkersRaw(tasks, variants, workers);
+    const fs = require('fs'), path = require('path'), crypto = require('crypto');
+    fs.mkdirSync(args.cache, { recursive: true });
+    const chunk = parseInt(args.chunk || '12', 10);
+    const base = simHash();
+    const all = [];
+    for (let i = 0; i < tasks.length; i += chunk) {
+        const part = tasks.slice(i, i + chunk);
+        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears })).digest('hex');
+        const file = path.join(args.cache, key + '.json');
+        let res;
+        if (fs.existsSync(file)) { res = JSON.parse(fs.readFileSync(file, 'utf8')); console.error(`[cache] hit ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
+        else { res = await runWorkersRaw(part, variants, workers); fs.writeFileSync(file + '.tmp', JSON.stringify(res)); fs.renameSync(file + '.tmp', file); console.error(`[cache] saved ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
+        all.push(...res);
+    }
+    return all;
+}
+function runWorkersRaw(tasks, variants, workers) {
     // 試合数を worker 数で分割（各タスクの g 範囲を分ける。席交互が崩れないよう分割幅は偶数）
     const per = Math.ceil(games / workers / 2) * 2;
     const jobs = [];
