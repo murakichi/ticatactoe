@@ -1,10 +1,15 @@
 # tune-top: tactician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: edf73fb(sim エンジン・AI に変更なし)
+- 最後に検証したmaster: 80d796c(魔法使いの推奨デッキ更新が入った。sim エンジン・AI は不変)
 - 現在の推奨設定: 変更なし(推奨ギア・推奨デッキのまま) AIフラグ=なし
 - 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
 - 連続不採用回数: 6(トップ未達のため行き詰まり判定は6種類測定後)
 - 状態: blocked(issue #85)
+## master 80d796c で再基準(seed3, 100試合, --cache)
+- 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
+- 軍師の対キャラ別: magician 40% / giant 49% / 他は58〜75%。
+- gear 再スキャン(対 magician+giant, seed1, 80試合): base 48.1%、最良 luckyPurse/gambler 51.9%(+3.8pt, z≈0.7)=誤差 → 不採用。
+
 ## 完了判定(4条件, --rank --target tactician --games 100 --seed 3, master edf73fb)
 | 条件 | 軍師 | 順位 |
 |---|---|---|
@@ -18,6 +23,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 7 | gear(新master) | 対 magician+giant の1枠差し替え全近傍(seed1, 80試合) | 最良 +3.8pt(z≈0.7)=誤差 | 不採用 |
 | 6 | joint | gears=vengeance,priceWreck × デッキ1枚差し替え10近傍(varied, seed1, 60試合): 最良 69.3 vs base 69.1 | 差なし(+0.2pt) | 不採用 |
 | 5 | strategy | 総攻撃は使った試合の勝率82%(対巨人)だが使用は0.09回/試合。相手リーチ中(oppReaches>0)でも撃つ `F.taAlways` を追加 | 対巨人66-84、対電気使い48-102 とも基準と完全一致=一度も発動せず(リーチ中は別経路で手番が決まる)。ノブ削除 | 不採用 |
 | 4 | meta/deck | envDeck varied で対巨人47%・対電気使い52%が弱点(他は57〜71%、全体62.0% seed1/100)。`--opp giant,electrician --envDeck varied --scan deck --swap 2 --neighbors 14 --games 80`: 基準54.4%±7.6、最良58.8%(+4.4, z≈0.8)。上位候補は共通の札が無く一貫性なし | 補正閾値z≥2.7に遠く誤差。不採用 | 不採用 |
