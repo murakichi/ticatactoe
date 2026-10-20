@@ -39,6 +39,7 @@ const AI_DEFAULTS = {
     discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
     elecNoLock: 0, // 雷霆の巫がロックを使わない（tune-top検証中。1で有効）
+    silenceEarly: 0, // サイレンスを相手の固有スキル最低魔力のN手前から撃つ（tune-top検証中。0で従来）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -888,7 +889,7 @@ function chooseSkills(s, availableSkills) {
 
     // サイレンス: 相手が次の手番に固有スキルを撃てそうなら先回りで封じる (自分に即勝ちがあるときは勝ち優先)
     if (oppReaches === 0 && availableSkills.includes(28) && countReaches(board, me) === 0
-        && otherSeats(s).some((seat) => s.magic[seat] + 1 >= (EXCLUSIVE_MIN_MAGIC[s.chars[seat]] || Infinity))) {
+        && otherSeats(s).some((seat) => s.magic[seat] + 1 + (F.silenceEarly || 0) >= (EXCLUSIVE_MIN_MAGIC[s.chars[seat]] || Infinity))) {
         spend(cost(costsOf(s).onClickSilence, false, 'onClickSilence'), 'silence');
     }
 
