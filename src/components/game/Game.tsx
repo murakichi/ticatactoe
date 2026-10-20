@@ -4,7 +4,7 @@ import { Effect } from '../../types/Effect';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
-import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
+import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
@@ -216,6 +216,8 @@ export const Game = (props: GameProps) => {
     // ヘイルメアリーのルーレット演出 (intro=「ヘイルメアリー！」/ spin=抽選中 / reveal=当選)。非 null の間は入力とAIキューを止める
     const [hailMarySpin, setHailMarySpin] = useState<{ label: string; phase: 'intro' | 'spin' | 'reveal' } | null>(null);
 
+    // 魔法使いAIの引き直し（軽減札→シャッフル→再計画）の手番内の状態。手番開始時に初期化する
+    const aiReroll = useRef({ left: MAX_REROLLS, started: false });
     const executeSkillForAI = (skill: string) => {
         // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
         if (skill.startsWith('onClickHailMary:')) {
@@ -275,6 +277,8 @@ export const Game = (props: GameProps) => {
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
             case 'onClickBurnout': onClickBurnout(); break;
+            case 'onClickShuffle': onClickShuffle(); break;
+            case 'aiReplan': runAIMove(); break; // 引き直しのあと、新しい手札で計画し直す
             case 'onClickCounterMarkdown':
             case 'onClickMarkdown': case 'onClickEffectDiscount': case 'onClickTokenDiscount':
             case 'onClickVitalMarkdown': case 'onClickUniqueDiscount': case 'onClickClearance':
@@ -286,6 +290,12 @@ export const Game = (props: GameProps) => {
         if (pendingAIMove !== null && pendingAIMove.length > 0 && !hailMarySpin) {
             const timer = setTimeout(() => {
                 const [next, ...rest] = pendingAIMove;
+                // 再計画は新しいキューを積むので、先に今のキューを空にしてから呼ぶ（後から null で上書きしない）
+                if (next === 'aiReplan') {
+                    setPendingAIMove(rest.length > 0 ? rest : null);
+                    executeSkillForAI(next);
+                    return;
+                }
                 if (typeof next === 'string') executeSkillForAI(next);
                 else onCellClick(next);
                 setPendingAIMove(rest.length > 0 ? rest : null);
@@ -317,6 +327,8 @@ export const Game = (props: GameProps) => {
         ai.budGuard = budGuard[turnSeat];
         ai.infernoReady = gearTurn.current.infernoReady[turnSeat];
         ai.skillKinds = gearTurn.current.kinds[turnSeat];
+        ai.rerollsLeft = aiReroll.current.left;
+        ai.discountActive = aiReroll.current.started;
         const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
 
         // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
@@ -330,6 +342,16 @@ export const Game = (props: GameProps) => {
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         setLockedSkillsAt(turnSeat, aiLocks);
+
+        // 魔法使い: 撃てるスキルが無いので、軽減札を撃ってから1コストで手札を引き直し、新しい手札で計画し直す
+        if (result.reroll) {
+            aiReroll.current = { left: aiReroll.current.left - 1, started: true };
+            const steps: string[] = [];
+            if (result.reroll.discount) steps.push(result.reroll.discount);
+            steps.push('onClickShuffle', 'aiReplan');
+            setPendingAIMove(steps);
+            return;
+        }
 
         // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選んでキューに積む
         if (result.hailMary) {
@@ -387,6 +409,7 @@ export const Game = (props: GameProps) => {
         if (isAllAI && !autoPlay) return;
 
         const timer = setTimeout(() => {
+            aiReroll.current = { left: MAX_REROLLS, started: false };
             runAIMove();
         }, 500);
 
@@ -399,6 +422,7 @@ export const Game = (props: GameProps) => {
         if (stepRequest === 0) return;
         if (!currentAI) return;
         if (calculateWinner(currentBoard.map(x => x.player))) return;
+        aiReroll.current = { left: MAX_REROLLS, started: false };
         runAIMove();
     }, [stepRequest]);
 
