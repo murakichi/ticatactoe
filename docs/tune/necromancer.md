@@ -4,10 +4,11 @@
 - 現在の推奨設定: 既定(推奨ギア/デッキそのまま)
 - 基準線: 環境勝率 42.6% / 9位 / 1位 tactician 67.8%  (--rank, seed 1, games 60, 2026-10-20)
 - 連続不採用回数: 6 (種類: gear, deck, synergy, strategy, meta, joint=6種類を各1回測定済み)
-- 状態: running (ユーザー指示で探索続行。issue #92 は起票済み)
+- 状態: blocked(issue #92)  # ユーザー指示で探索続行→AIノブ3件(necroReserveAll/necroMin/necroFeed)も不採用で再停止
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 10 | strategy(AI) | necroFeed: 負けていなくてもスラッシュ系を撃って死体を増やす(seed1 games150) | 43.0→42.9%(±2.6)。対キャラ別も不変。分岐削除 | 不採用 |
 | 9 | strategy(AI) | necroMin: 降霊の最低死体数 1/2/3/4 (seed1 games150) | 43.0 / 41.2 / 37.1 / 35.5%(±2.6)。待つほど悪化=即発動が最適。分岐削除 | 不採用 |
 | 8 | joint | ギアを vengeance+afterglow に変えてデッキ1枚30近傍(seed1 games60) | 最良44.1%±4.1。ギア単独(#1)で-6ptだったafterglowをデッキで補えず、現推奨(45.5%)を超えない | 不採用 |
 | 7 | strategy(AI) | necroReserveAll: 降霊前は全スキルの支払いを温存(seed1 games150) | 基準43.0%±2.6に対し43.4%(+0.4pt)。対キャラ別もほぼ同一=ほぼ発動しない。分岐は削除 | 不採用 |
