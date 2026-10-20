@@ -1,6 +1,6 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 993d291
+- 最後に検証したmaster: edf73fb
 - 現在の推奨設定: gears=[sturdy,harvest] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=既定
 - 基準線: 環境勝率 43.5% / 8位 / 1位 tactician 67.8%  (seed=1, games=60, master 4b849ea。新master 993d291 では未取り直し)
 - 連続不採用回数: 0
