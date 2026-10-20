@@ -27,7 +27,10 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // 採用済みの設定は AI_DEFAULTS に書く。検証中は s.aiFlags[seat] = { 名前: 値 } で席ごとに上書きできる
 // （probe-ai.js が同一シードで改修前後を paired 比較する）。採用が決まったら AI_DEFAULTS へ移し、不採用なら分岐ごと消す。
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
-const AI_DEFAULTS = { frzBlock: 1 }; // frzBlock: 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+const AI_DEFAULTS = {
+    frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
+};
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -324,26 +327,6 @@ function thawIgniteTarget(board, k, me, allowOwn) {
         if (own === null) own = n;
     }
     return allowOwn ? own : null;
-}
-
-// 氷結を削る範囲スキル（スラッシュ idx5 / バックスラッシュ idx6 / 巨人のストンプ）で打てるマスを作る。打てたらその手、だめなら null
-function breakIceMove(s, availableSkills, me) {
-    const geo = geometryForCells(s.board.length);
-    const frozenIn = (idxs) => idxs.filter((i) => thermal.isFrozen(s.board[i])).length;
-    const tries = [];
-    if (curChar(s) === 'giant' && curMagic(s) >= calculateCost(s, costsOf(s).onClickStomp)) {
-        let best = null, bestN = 0;
-        for (let i = 0; i < s.board.length; i++) { const n = frozenIn(geo.stompRange(i)); if (n > bestN) { bestN = n; best = i; } }
-        if (best !== null) tries.push(() => { SKILLS.stomp(s); placeMove(s, best); });
-    }
-    if (availableSkills.includes(5) && curMagic(s) >= calculateCost(s, costsOf(s).onClickSlash) && frozenIn(geo.antiDiagonal) > 0) tries.push(() => SKILLS.slash(s));
-    if (availableSkills.includes(6) && curMagic(s) >= calculateCost(s, costsOf(s).onClickBackSlash) && frozenIn(geo.mainDiagonal) > 0) tries.push(() => SKILLS.backSlash(s));
-    for (const t of tries) {
-        t();
-        const mv = getEnhancedBestMove(s);
-        if (mv !== null) return mv;
-    }
-    return null;
 }
 
 // ---- helpers ----
@@ -865,18 +848,6 @@ function faithfulMakeMoveInner(s) {
     const locks = chooseLocks(s, availableSkills);
     s.lockedSkills[s.turn] = locks;
 
-    // 対氷結(A): 敵の絶対零度が発動待ちで、自陣の❄コマが次の発動で破壊されそうなら先に浄化で剥がす
-    if (F.antiGl && curChar(s) !== 'cryomancer' && curChar(s) !== 'electrician' && availableSkills.includes(32)
-        && s.glacierPending.some((p, seat) => p && seat !== s.turn)
-        && curMagic(s) >= calculateCost(s, costsOf(s).onClickCleanse)) {
-        let doomed = 0, hit = 0;
-        for (const sq of s.board) {
-            if (sq.player !== me || !thermal.isFrozen(sq)) continue;
-            hit++;
-            if (sq.bind <= 3 * thermal.frozenStacks(sq)) doomed++;
-        }
-        if (F.antiGl === 1 ? doomed >= 1 : hit >= 2) SKILLS.cleanse(s);
-    }
     // 対氷結(B): 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火炎付与で隣のコマを燃やして解凍し、同じ手番で完成させる
     if (F.unblock && availableSkills.includes(31) && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite)) {
         const k = blockedReachCell(s.board, me);
@@ -1092,9 +1063,7 @@ function faithfulMakeMoveInner(s) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
-    let move = getEnhancedBestMove(s);
-    // 対氷結(D): 全マス凍結などで打てるマスが無いとき、範囲スキルで氷結を削って打てるようにする
-    if (move === null && F.breakIce) move = breakIceMove(s, availableSkills, me);
+    const move = getEnhancedBestMove(s);
     // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
     if (move === null) {
         SKILLS.charge(s);

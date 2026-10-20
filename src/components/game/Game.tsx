@@ -249,6 +249,7 @@ export const Game = (props: GameProps) => {
             case 'onClickDoubleFlameToken': onClickDoubleFlameToken(); break;
             case 'onClickSwidden': onClickSwidden(); break;
             case 'onClickSacrifice': onClickSacrifice(); break;
+            case 'onClickIgnite': onClickIgnite(); break;
             case 'onClickInferno': onClickInferno(); break;
         }
     };

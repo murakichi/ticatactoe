@@ -1586,7 +1586,7 @@ test('焼畑: 🌱を持つマス（敵味方どちらでも）を選ぶと🌱�
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '⭕', bind: 4, effects: [BUD, BUD, BUD] };
-    s.board[6] = { player: '⭕', bind: 4, effects: [BUD, BUD, FRZ, FRZ] };
+    s.board[11] = { player: '⭕', bind: 4, effects: [BUD, BUD, FRZ, FRZ] };
     s.board[9] = { player: '💙', bind: 4, effects: [BUD] };
     s.board[10] = { player: '⭕', bind: 4, effects: [] };
     const before = s.heartMagic;
@@ -1598,9 +1598,9 @@ test('焼畑: 🌱を持つマス（敵味方どちらでも）を選ぶと🌱�
     assert.strictEqual(flames(s.board[5]), 3);
     assert.strictEqual(s.heartTurn, true);
     e.SKILLS.swidden(s);
-    assert.strictEqual(e.placeMove(s, 6), true);    // 氷結中: 1つ目で氷結が全解除、残り1つが🔥
-    assert.strictEqual(frosts(s.board[6]), 0);
-    assert.strictEqual(flames(s.board[6]), 1);
+    assert.strictEqual(e.placeMove(s, 11), true);   // 氷結中: 1つ目で氷結が全解除、残り1つが🔥
+    assert.strictEqual(frosts(s.board[11]), 0);
+    assert.strictEqual(flames(s.board[11]), 1);
     e.SKILLS.swidden(s);
     assert.strictEqual(e.placeMove(s, 9), true);    // 自陣のマスも選べる
     assert.strictEqual(flames(s.board[9]), 1);
@@ -1667,6 +1667,30 @@ test('火炎トークン/火炎ダブルトークン/焼畑/殉火のコスト�
     assert.strictEqual(e.skillCosts.onClickDoubleFlameToken, 6);
     assert.strictEqual(e.skillCosts.onClickSwidden, 3);
     assert.strictEqual(e.skillCosts.onClickSacrifice, 5);
+});
+
+test('AI 対氷結: 自分のリーチの4つ目が氷結中の空きマスで塞がれていたら、火遁で隣の敵コマを燃やして解凍し、同じ手番で完成させる', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 4;
+    s.skills = [31, 0, 1];
+    for (const i of [0, 1, 2]) s.board[i] = { player: '💙', bind: 5, effects: [] };
+    s.board[3] = { player: undefined, bind: 0, effects: [FRZ] };      // 4つ目が凍っている
+    s.board[7] = { player: '⭕', bind: 5, effects: [] };               // 隣の敵コマ
+    const before = s.heartMagic;
+    const r = aiMod.makeMove(s, 'faithful');
+    assert.strictEqual(r.move, 3);
+    assert.strictEqual(s.board[7].effects.filter((x) => x.effect === '🔥').length, 1);
+    assert.ok(!s.board[3].effects.some((x) => x.effect === '❄'));
+    assert.strictEqual(s.heartMagic, before - 3);
+    // 手札に火遁が無ければ何もしない（凍結マスには着手できない）
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 10; t.life = 4; t.skills = [0, 1, 2];
+    for (const i of [0, 1, 2]) t.board[i] = { player: '💙', bind: 5, effects: [] };
+    t.board[3] = { player: undefined, bind: 0, effects: [FRZ] };
+    t.board[7] = { player: '⭕', bind: 5, effects: [] };
+    const r2 = aiMod.makeMove(t, 'faithful');
+    assert.notStrictEqual(r2.move, 3);
+    assert.ok(t.board[3].effects.some((x) => x.effect === '❄'));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

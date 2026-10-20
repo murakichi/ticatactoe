@@ -347,3 +347,38 @@ describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () =>
         expect(ai.evaluateBoard(b)).toBeLessThan(awake);
     });
 });
+
+describe('対氷結: 氷結中の空きマスで塞がれた自分のリーチを火遁で解く (AI追随)', () => {
+    const FRZ = { effect: '❄' as const };
+    const costs = { onClickIgnite: 3, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const blockedBoard = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙', 5));
+        b[3] = { player: undefined, bind: 0, effects: [FRZ] };
+        put(b, 7, '⭕', 5);
+        return b;
+    };
+
+    it('火遁が手札にあり魔力が足りれば、隣の敵コマ(7)を燃やして解凍し、そのマス(3)に着手する', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const r = ai.makeMove(blockedBoard(), 10, costs, 0, 4, [31, 0, 1], false);
+        expect(r.skills).toEqual(['onClickIgnite']);
+        expect(r.lockTargets).toEqual([7]);
+        expect(r.move).toBe(3);
+    });
+
+    it('火遁が無い・魔力が足りないときは使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        expect(ai.makeMove(blockedBoard(), 10, costs, 0, 4, [0, 1, 2], false).skills).not.toContain('onClickIgnite');
+        expect(ai.makeMove(blockedBoard(), 2, costs, 0, 4, [31, 0, 1], false).skills).not.toContain('onClickIgnite');
+    });
+
+    it('blockedReachCell / thawIgniteTarget: 敵のコマを優先し、氷結中のコマは選ばない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b = blockedBoard();
+        expect(ai.blockedReachCell(b)).toBe(3);
+        expect(ai.thawIgniteTarget(b, 3)).toBe(7);
+        b[7] = { player: '⭕', bind: 5, effects: [FRZ] };
+        expect(ai.thawIgniteTarget(b, 3)).toBe(2); // 敵が氷結中 → 自陣(2)にフォールバック
+    });
+});

@@ -327,6 +327,34 @@ class AIPlayer {
         return reaches;
     }
 
+    /** 自分のリーチ（自コマ3つ・他のコマ無し）の残り1マスが氷結中の空きマスで塞がれているときの、そのマス (sim/ai.js blockedReachCell) */
+    blockedReachCell(board: SquareInfo[]): number | null {
+        for (const line of geometryForCells(board.length).winLines) {
+            let mine = 0, other = 0, blockedIdx = -1, free = 0;
+            for (const idx of line) {
+                const sq = board[idx];
+                if (sq.player === this.playerSymbol) mine++;
+                else if (sq.player) other++;
+                else if (emptyBlocked(sq)) blockedIdx = idx;
+                else free++;
+            }
+            if (mine === 3 && other === 0 && blockedIdx !== -1 && free === 0) return blockedIdx;
+        }
+        return null;
+    }
+
+    /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。sim/ai.js thawIgniteTarget(allowOwn) */
+    thawIgniteTarget(board: SquareInfo[], k: number): number | null {
+        let own: number | null = null;
+        for (const n of orthoNeighbors(k, this.sizeOf(board))) {
+            const sq = board[n];
+            if (!sq.player || isFrozen(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (this.isEnemy(sq.player)) return n;
+            if (own === null) own = n;
+        }
+        return own;
+    }
+
     /** 相手がリーチしているラインの残り1マス（脅威マス）を列挙 */
     findThreatSquares(board: SquareInfo[], player: Player): number[] {
         const threats: number[] = [];
@@ -972,6 +1000,21 @@ class AIPlayer {
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+
+        // 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火遁（onClickIgnite）で隣のコマを燃やして解凍し、同じ手番で完成させる
+        // （sim/ai.js の unblock=2 と同一。A/B: 氷室の番人相手に全キャラ平均 +3.2pt、魔法使い +10.3±5.5(n=600)、氷室の番人でない相手では差 0.0）
+        if (availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite)) {
+            const k = this.blockedReachCell(board);
+            const t = k === null ? null : this.thawIgniteTarget(board, k);
+            if (t !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                ignite(post, [t], this.sizeOf(board), 1);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickIgnite'], lockTargets: [t] };
+                this.updateShield(board);
+            }
+        }
 
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
         const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
