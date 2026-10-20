@@ -27,3 +27,4 @@
 - 計測: 4コアで `--rank --games 60` ≈ 3分、`--scan gears --games 60` は近傍32個で20分超。フォアグラウンド上限(10分)を超えるのでバックグラウンド+出力ファイルで回す。キャラ引数は id(鍛冶師=`pyromancer`)。
 - 環境(master 4b849ea, seed1, games60): 1位 tactician 67.8%、2位 electrician 60.2%、最下位 pyromancer 38.9%。pyromancer は tactician/magician/electrician に 20〜30% しか勝てない。
 - (2026-10-20 pyromancer) gear 32近傍 ×60試合はSE±4.1ptで、+1〜2pt差は判別不能。多重比較補正(n=32で z≥3)を満たすには+8pt級が必要=gear 1枠の差し替えで届くのは大きな差だけ。推奨ギアが既に近傍の最適なら gear 軸は1回で打ち切ってよい。`--target` 単体の base と `--rank` の同キャラ勝率は一致しない(45.9 vs 38.9)ので、基準線は同じ計測モードで比べる。
+- (2026-10-20 pyromancer) `--swap 3 --cat fire` 30近傍: 最良+0.6pt(ノイズ内)。鍛冶師は🔥札を増やしても効かない=札構成の問題ではなく AI/固有スキル側の可能性。次は probe-usage で使用率を見る。`&` 付きの内部バックグラウンドはコンテナ側で落ちやすい。run_in_background でコマンド自体を直接走らせる。
