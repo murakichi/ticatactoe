@@ -70,6 +70,7 @@ const SKILL_CATALOG = [
     { idx: 57, name: '固有割引', icon: '👑', category: 'support' },
     { idx: 58, name: '大特価', icon: '💸', category: 'support' },
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
+    { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
 ];
 
 

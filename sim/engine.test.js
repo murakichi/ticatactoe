@@ -1860,7 +1860,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -1969,6 +1969,47 @@ test('コスト軽減スキル: エフェクト付与/トークン/固有の永�
     low.heartTurn = true; low.heartMagic = 10; low.life = 1;
     e.SKILLS.uniqueDiscount(low); // ライフ1では使えない
     assert.strictEqual(low.heartMagic, 10);
+});
+
+
+test('AI(discountPlan): 鍛冶師は軽減札で業火が撃てるようになるなら、軽減札を先に撃ってから業火を撃つ', () => {
+    const ai = require('./ai');
+    const mk = (flags) => {
+        const s = game('pyromancer', 'you');
+        s.heartTurn = true; s.heartMagic = 6; s.life = 3;
+        for (const i of [1, 2, 3]) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+        s.skills = [58, 53, 0];
+        s.aiFlags = [flags, flags];
+        return s;
+    };
+    const on = mk({ pyroChain: 0, discountPlan: 1, discountInferno: 1 });
+    assert.strictEqual(e.infernoCost(on), 9);
+    ai.makeMove(on, 'faithful');
+    assert.ok(on.stats && on.stats.inferno >= 1, '業火が撃たれる');
+    assert.ok(on.heartMagic < 6, '軽減札と業火の分、魔力が減る');
+    const off = mk({ pyroChain: 0, discountPlan: 0 });
+    ai.makeMove(off, 'faithful');
+    assert.ok(!(off.stats && off.stats.inferno), '軽減札を使わなければ魔力6では業火は撃てない');
+});
+
+
+test('返し特売: 直前の相手の手番に相手がスキルを使っていれば0コスト。次のスキル-3・ライフ+1', () => {
+    const s = game('magician', 'you');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 3;
+    const cost = () => e.calculateCost(s, e.skillCosts.onClickCounterMarkdown, false, false, 'onClickCounterMarkdown');
+    assert.strictEqual(cost(), 2); // 相手がスキルを使っていない
+    e.SKILLS.charge(s); // 席0 → 席1（席1の手番の頭）
+    e.spendMagic(s, 1, 'onClickBuds'); // 席1（相手）がスキルを使う
+    e.SKILLS.charge(s); // 席1 → 席0
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(cost(), 0);
+    const m = s.heartMagic, life = s.life;
+    e.SKILLS.counterMarkdown(s);
+    assert.strictEqual(s.heartMagic, m);
+    assert.strictEqual(s.life, life + 1);
+    assert.strictEqual(e.calculateCost(s, 6, false, false, 'onClickStomp'), 3); // 次のスキル-3
+    e.SKILLS.charge(s); e.SKILLS.charge(s); // 相手はスキルを使わなかったので次は有料
+    assert.strictEqual(cost(), 2);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

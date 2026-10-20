@@ -19,6 +19,7 @@ export const DISCOUNT_SKILLS = {
     onClickVitalMarkdown: { next: 4, life: 1 }, //        活力特売: 次に打つスキル-4、ライフ+1
     onClickUniqueDiscount: { unique: 6, life: -1 }, //    固有割引: このターン、固有スキル-6（1ターンに一度、ライフ-1）
     onClickClearance: { next: 7 }, //                     大特価: 次に打つスキル-7
+    onClickCounterMarkdown: { next: 3, life: 1 }, //      返し特売: 次に打つスキル-3、ライフ+1（直前の相手の手番に相手がスキルを使っていれば0コスト）
 } as const;
 export type DiscountKey = keyof typeof DISCOUNT_SKILLS;
 export const isDiscountSkill = (key: string): key is DiscountKey => key in DISCOUNT_SKILLS;

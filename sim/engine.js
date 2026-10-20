@@ -217,6 +217,7 @@ const skillCosts = {
     onClickUniqueDiscount: 3,
     onClickClearance: 4,
     onClickRandomCast: 2, // 福引き(idx 59)
+    onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -521,6 +522,8 @@ function newGame(opts = {}) {
         skillKinds: Array.from({ length: n }, () => new Set()), // 手番内に使ったスキルの種類（業火の無料権の数え方）
         infernoReady: fill(false), // 業火の無料権。手番を跨いで持ち越し、業火を撃つと消える
         discount: Array.from({ length: n }, () => discountMod.emptyDiscount()), // コスト軽減スキルの状態（手番内だけ有効）
+        oppSkilled: fill(false), // 自分の前の手番以降に他の席がスキルを使った
+        oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
         echoReady: fill(false),
         echoNext: fill(false),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
@@ -583,6 +586,7 @@ function gearCtx(s, seat) {
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken);
+    if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
     return seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
 }
@@ -608,7 +612,10 @@ function spendMagic(s, amount, skillId) {
     }
     s.magic[s.turn] -= amount;
     noteSkillUsed(s);
-    if (skillId) s.discount[s.turn] = discountMod.afterSkill(s.discount[s.turn], skillId);
+    if (skillId) {
+        s.discount[s.turn] = discountMod.afterSkill(s.discount[s.turn], skillId);
+        s.oppSkilled = s.oppSkilled.map((v, i) => (i === s.turn ? v : true));
+    }
     // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
     if (skillId && skillId !== 'onClickInferno') {
         s.skillKinds[s.turn].add(skillId);
@@ -709,6 +716,8 @@ function advanceTurn(s) {
     s.gearSkills[next] = 0;
     s.skillKinds[next] = new Set();
     s.discount[next] = discountMod.emptyDiscount();
+    s.oppSkillPrev[next] = s.oppSkilled[next];
+    s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
     s.turn = next;
@@ -1892,6 +1901,7 @@ const SKILLS = {
     tokenDiscount: (s) => useDiscountSkill(s, 'onClickTokenDiscount'),
     vitalMarkdown: (s) => useDiscountSkill(s, 'onClickVitalMarkdown'),
     uniqueDiscount: (s) => useDiscountSkill(s, 'onClickUniqueDiscount'),
+    counterMarkdown: (s) => useDiscountSkill(s, 'onClickCounterMarkdown'),
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
 };
 

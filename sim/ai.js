@@ -15,6 +15,7 @@ const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromanc
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
+const discountMod = require('./discount');
 const { lineCells } = require('./geometry');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
@@ -31,6 +32,8 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
+    discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
@@ -397,6 +400,74 @@ function forceTable(s, me) {
     };
 }
 // 撃つ順（ライフ3→バイバインの順で次の駒のライフが伸びる。刈り入れ前夜は🌱を刈るので最後）。0/1 は常に撃てる
+// 軽減札を使った連携: 軽減札(大特価・活力特売・特売)を先に撃つと、この手番に撃てるスキルが増える/魔力が余るなら撃つ。
+// 判定は chooseSkills をそのまま使い、軽減を掛けた状態で選び直した結果と比べる。discountPlan>=2 なら、撃てるスキルが出ないとき
+// 魔力に余裕があれば軽減札を撃ってから1コストで引き直し（最大2回）、軽減で撃てる別のスキルを探す
+const DISCOUNT_REDUCERS = [
+    { idx: 60, key: 'counterMarkdown', cost: 'onClickCounterMarkdown' }, // 直前に相手がスキルを使っていれば0コスト
+    { idx: 58, key: 'clearance', cost: 'onClickClearance' },
+    { idx: 56, key: 'vitalMarkdown', cost: 'onClickVitalMarkdown' },
+    { idx: 53, key: 'markdown', cost: 'onClickMarkdown' },
+];
+const DISCOUNT_ALL = DISCOUNT_REDUCERS.concat([{ idx: 57, key: 'uniqueDiscount', cost: 'onClickUniqueDiscount' }]);
+function discountPlan(s, me, availableSkills) {
+    if (!F.discountPlan || s.silenced[s.turn]) return;
+    const seat = s.turn;
+    // 業火: 撃てる状況(ライフが残る敵コマ3個以上)なら、軽減札で業火が安くなる/撃てるようになるとき、合計コストが最小の軽減札を先に撃つ
+    if (F.discountInferno && curChar(s) === 'pyromancer' && !s.infernoReady[seat]
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0) {
+        for (let i = 0; i < 3; i++) {
+            const cur = infernoCost(s);
+            if (cur === 0) break;
+            let pick = null;
+            for (const r of DISCOUNT_ALL) {
+                if (!availableSkills.includes(r.idx) || !discountMod.canUseDiscountSkill(s.discount[seat], r.cost, s.life)) continue;
+                const rc = calculateCost(s, costsOf(s)[r.cost], false, false, r.cost);
+                if (curMagic(s) < rc) continue;
+                const prevD = s.discount[seat];
+                s.discount[seat] = discountMod.afterSkill(prevD, r.cost);
+                const ic = infernoCost(s);
+                s.discount[seat] = prevD;
+                const total = rc + ic;
+                if (total <= curMagic(s) && total < cur && (!pick || total < pick.total)) pick = { r, total };
+            }
+            if (!pick) break;
+            SKILLS[pick.r.key](s);
+            availableSkills = availableSkills.filter((x) => x !== pick.r.idx);
+        }
+    }
+    if (s.discount[seat].next > 0) return;
+    const base = chooseSkills(s, availableSkills);
+    if (base.some((sk) => TURN_ENDING.includes(sk))) return;
+    const baseLeft = curMagic(s) - base.spent;
+    let best = null;
+    for (const r of DISCOUNT_REDUCERS) {
+        if (!availableSkills.includes(r.idx)) continue;
+        const rc = calculateCost(s, costsOf(s)[r.cost], false, false, r.cost);
+        if (curMagic(s) < rc) continue;
+        const prevMagic = s.magic[seat], prevD = s.discount[seat];
+        s.magic[seat] -= rc;
+        s.discount[seat] = discountMod.afterSkill(prevD, r.cost);
+        const plan = chooseSkills(s, availableSkills.filter((i) => i !== r.idx));
+        const left = s.magic[seat] - plan.spent;
+        s.magic[seat] = prevMagic; s.discount[seat] = prevD;
+        if (plan.length > base.length || (plan.length === base.length && plan.length > 0 && left > baseLeft)) {
+            if (!best || plan.length > best.n || (plan.length === best.n && left > best.left)) best = { r, n: plan.length, left };
+        }
+    }
+    if (best) { SKILLS[best.r.key](s); return; }
+    // 手札では撃てるスキルが増えない: 魔力に余裕があれば、軽減してから引き直して探す
+    if (F.discountPlan >= 2 && base.length === 0) {
+        const r = DISCOUNT_REDUCERS.find((x) => availableSkills.includes(x.idx) && curMagic(s) >= calculateCost(s, costsOf(s)[x.cost], false, false, x.cost) + 2 + 4);
+        if (!r) return;
+        SKILLS[r.key](s);
+        for (let i = 0; i < 2; i++) {
+            if (curMagic(s) < costsOf(s).onClickShuffle + 2) return;
+            E.shuffleHand(s);
+            if (chooseSkills(s, s.skills.filter((x) => x !== r.idx)).length > 0) return;
+        }
+    }
+}
 const PYRO_FILLERS = [53, 54, 55, 56, 36, 0, 1, 34, 32, 33];
 const PYRO_EXTRA = {
     0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' },
@@ -842,7 +913,7 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
-    if (skills.some(sk => TURN_ENDING.includes(sk))) return skills;
+    if (skills.some(sk => TURN_ENDING.includes(sk))) { skills.spent = curMagic(s) - remaining; return skills; }
 
     // --- 準備スキル ---
     if (s.life <= 2 && availableSkills.includes(0)) {
@@ -909,7 +980,7 @@ function chooseSkills(s, availableSkills) {
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
     }
 
-    return skills;
+    { skills.spent = curMagic(s) - remaining; return skills; }
 }
 
 // 盤面・キャラに応じて固定したいスキルを返す (AIPlayer.ts chooseLocks と同一ロジック)。最大2つ。
@@ -1130,6 +1201,7 @@ function faithfulMakeMoveInner(s) {
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
+    if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 

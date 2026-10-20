@@ -8,6 +8,7 @@ const DISCOUNT_SKILLS = {
     onClickVitalMarkdown: { next: 4, life: 1 },
     onClickUniqueDiscount: { unique: 6, life: -1 },
     onClickClearance: { next: 7 },
+    onClickCounterMarkdown: { next: 3, life: 1 },
 };
 const isDiscountSkill = (key) => Object.prototype.hasOwnProperty.call(DISCOUNT_SKILLS, key);
 const EFFECT_SKILL_KEYS = new Set([

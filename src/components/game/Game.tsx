@@ -131,6 +131,8 @@ export const Game = (props: GameProps) => {
         infernoReady: Array<boolean>(seatCount).fill(false), // 業火の無料権。手番を跨いで持ち越し、業火を撃つと消える
         discount: Array.from({ length: seatCount }, emptyDiscount), // コスト軽減スキルの状態（手番内だけ有効）
         freeCast: false, // 福引きで発動するスキルの支払いを0にする（次の spendMagic で消える）
+        oppSkilled: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がスキルを使った（返し特売の0コスト条件の元）
+        oppSkillPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での oppSkilled
         processedTurn: 1,
     });
     // 手番でない席のコスト表示は「その席の次の手番の頭」の状態で出す
@@ -142,6 +144,7 @@ export const Game = (props: GameProps) => {
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
         const adjusted = adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken);
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
+        if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         return seat === turnSeat ? applyDiscount(adjusted, discountAmount(gearTurn.current.discount[seat], skillKey, isToken)) : adjusted;
     };
 
@@ -271,6 +274,7 @@ export const Game = (props: GameProps) => {
             case 'onClickIgnite': onClickIgnite(); break;
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
+            case 'onClickCounterMarkdown':
             case 'onClickMarkdown': case 'onClickEffectDiscount': case 'onClickTokenDiscount':
             case 'onClickVitalMarkdown': case 'onClickUniqueDiscount': case 'onClickClearance':
                 onClickDiscount(skill as DiscountKey); break;
@@ -415,7 +419,10 @@ export const Game = (props: GameProps) => {
                 addLog('幸運の財布でコストが0になった');
             }
             gearTurn.current.skills[turnSeat] += 1;
-            if (skillId) gearTurn.current.discount[turnSeat] = afterDiscount(gearTurn.current.discount[turnSeat], skillId);
+            if (skillId) {
+                gearTurn.current.discount[turnSeat] = afterDiscount(gearTurn.current.discount[turnSeat], skillId);
+                gearTurn.current.oppSkilled = gearTurn.current.oppSkilled.map((v, i) => (i === turnSeat ? v : true));
+            }
             if (skillId && skillId !== 'onClickInferno') {
                 gearTurn.current.kinds[turnSeat].add(skillId);
                 if (gearTurn.current.kinds[turnSeat].size >= INFERNO_FREE_SKILLS) gearTurn.current.infernoReady[turnSeat] = true;
@@ -502,6 +509,8 @@ export const Game = (props: GameProps) => {
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.kinds[nextSeat] = new Set();
             gearTurn.current.discount[nextSeat] = emptyDiscount();
+            gearTurn.current.oppSkillPrev[nextSeat] = gearTurn.current.oppSkilled[nextSeat];
+            gearTurn.current.oppSkilled[nextSeat] = false;
             gearTurn.current.freeCast = false;
             gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
             gearTurn.current.echoNext[nextSeat] = false;
@@ -1909,7 +1918,7 @@ export const Game = (props: GameProps) => {
     // コスト軽減スキル(idx 53-58): 手番内だけ有効。効果の中身は discount.ts
     const DISCOUNT_NAMES: Record<DiscountKey, string> = {
         onClickMarkdown: '特売', onClickEffectDiscount: '付与割引', onClickTokenDiscount: 'トークン割引',
-        onClickVitalMarkdown: '活力特売', onClickUniqueDiscount: '固有割引', onClickClearance: '大特価',
+        onClickVitalMarkdown: '活力特売', onClickUniqueDiscount: '固有割引', onClickClearance: '大特価', onClickCounterMarkdown: '返し特売',
     };
     const canUseDiscount = (key: DiscountKey): boolean =>
         canUseDiscountSkill(gearTurn.current.discount[turnSeat], key, life) && magic[turnSeat] >= calculateCost(seatCosts[key], false, false, currentTurnPlayer, key);
@@ -2478,6 +2487,8 @@ export const Game = (props: GameProps) => {
             infernoReady: Array<boolean>(seatCount).fill(false),
             discount: Array.from({ length: seatCount }, emptyDiscount),
             freeCast: false,
+            oppSkilled: Array<boolean>(seatCount).fill(false),
+            oppSkillPrev: Array<boolean>(seatCount).fill(false),
             processedTurn: 1,
         };
         setPriceTables(rollPriceTables());
@@ -2643,6 +2654,7 @@ export const Game = (props: GameProps) => {
         { idx: 57, onClick: () => onClickDiscount('onClickUniqueDiscount'), buttonText: `固有割引-${calculateCost(seatCosts.onClickUniqueDiscount, false, false, currentTurnPlayer, 'onClickUniqueDiscount')}`, paragraph: `このターン、固有スキルのコストを6軽減します\n1ターンに一度のみ・ライフ-1（ライフ2以上で使用可）`, disabled: !canUseDiscount('onClickUniqueDiscount') },
         { idx: 58, onClick: () => onClickDiscount('onClickClearance'), buttonText: `大特価-${calculateCost(seatCosts.onClickClearance, false, false, currentTurnPlayer, 'onClickClearance')}`, paragraph: `次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: !canUseDiscount('onClickClearance') },
         { idx: 59, onClick: onClickRandomCast, buttonText: `福引き-${calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast')}`, paragraph: `自分のデッキ（12枚）から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します\n手札に出ていないスキルも対象です（今撃てるものだけ）`, disabled: checkSkillDisable(seatCosts.onClickRandomCast) },
+        { idx: 60, onClick: () => onClickDiscount('onClickCounterMarkdown'), buttonText: `返し特売-${calculateCost(seatCosts.onClickCounterMarkdown, false, false, currentTurnPlayer, 'onClickCounterMarkdown')}`, paragraph: `次に打つスキルのコストを3軽減し、次の一手のライフを+1します\n直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます`, disabled: !canUseDiscount('onClickCounterMarkdown') },
     ];
 
     return (
