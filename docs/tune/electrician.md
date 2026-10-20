@@ -1,14 +1,16 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 8f8e484
+- 最後に検証したmaster: 837a29b
 - 現在の推奨設定: gears=[sturdy,harvest] deck=[0,3,8,12,21,22,23,24,26,28,49,53](浄化32・ランダム帯電25 → 特売53・慈雨49) AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 5
-- 状態: refining(トップ到達後の洗練中)
+- 連続不採用回数: 0
+- 状態: running(トップ未達。master 837a29b で陥落)
+- 陥落: master 837a29b(seed3/200試合)で 4位 59.2% / 1位 magician 65.3%(差6.1pt)・cryomancer 62.1%・tactician 59.2%。envDeck varied でも 2位 62.1% vs magician 63.7%。原因は magician(デッキ調整 #98)と cryomancer の調整。
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 9 | joint | ギア lightToken,harvest 固定で 1枚差し替え30近傍(seed9/80試合) | 最良 63.1% vs base 61.9% 差なし | 不採用 |
 | 8 | synergy(3枚) | 3枚同時入れ替え40候補(seed8/80試合)。最良 66.3% vs base 61.9% (+4.4, SE≈3.4) | z≈0.9、閾値3.0に遠く再測定せず | 不採用 |
 | 7 | deck(1枚) | 1枚差し替え30近傍(seed7/80試合)。最良 62.9% vs base 61.3% (+1.6, SE≈3.4) | z≈0.3、閾値(2.7〜3.0)に遠く再測定せず | 不採用 |
 | 6 | meta(対magician) | `--opp magician --scan deck --swap 2` 40候補(seed6/80試合)で対magician勝率を上げる札 | 最良 50.0%±11.0(80試合・単独相手では誤差が大きく、全候補が誤差内) | 不採用(再測定に値する候補なし) |
