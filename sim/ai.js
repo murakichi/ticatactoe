@@ -549,6 +549,12 @@ function forceUse(s, me, availableSkills) {
             target = t.pick ? t.pick() : null;
             if (target === null || target === undefined) target = t.apply ? pickByEval(s, me, cands, t.apply) : cands[0];
             if (target === null || target === undefined) continue;
+            // 評価の改善幅が F.forceGain 未満なら撃たない（選んで撃つ: 無条件の強制使用は魔力を浪費して悪化したため）
+            if (F.forceGain && t.apply) {
+                const b = copyBoard(s.board);
+                t.apply(b, target);
+                if (forceEval(b, me) - forceEval(s.board, me) < F.forceGain) continue;
+            }
         }
         SKILLS[t.key](s);
         if (t.cands) placeMove(s, t.place ? t.place(target) : target);
