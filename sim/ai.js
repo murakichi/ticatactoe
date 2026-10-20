@@ -1236,7 +1236,7 @@ function faithfulMakeMoveInner(s) {
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
     if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3) {
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
         SKILLS.glacier(s);
     }
 
