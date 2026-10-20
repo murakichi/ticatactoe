@@ -12,6 +12,7 @@
  *   node sim/probe-top.js --rank --games 60 --seed 1 [--target X --gears ..]              # 全キャラ総当たり→環境順位表（--target があればその設定を環境に反映）
  *   node sim/probe-top.js --target X --scan gears --games 60                              # ギア1枠ずつ差し替えた近傍を全部測る
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
+ *   node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant              # デッキの各札を1枚ずつ使用禁止(ban)・各ギアを1つずつ外した寄与。結果が基準と完全一致=「差なし」（未使用の疑い。probe-usage.js で確認）
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
 
@@ -108,7 +109,37 @@ if (args.worker) {
 }
 
 // ---- 親 ----
-function runWorkers(tasks, variants, workers) {
+/**
+ * --cache <dir> 指定時はタスクを小分け(--chunk、既定12)にして結果をファイルに保存する。
+ * コンテナ再起動などで途切れても、同じコマンドを打ち直せば済んだ分は読み込んで再開する。
+ * キーは (タスク・変種・games・seed・size・オプション・sim/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
+ */
+function simHash() {
+    const h = require('crypto').createHash('sha1');
+    const dir = __dirname;
+    for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
+    if (args.modA) h.update(require('fs').readFileSync(args.modA));
+    return h.digest('hex');
+}
+async function runWorkers(tasks, variants, workers) {
+    if (!args.cache) return runWorkersRaw(tasks, variants, workers);
+    const fs = require('fs'), path = require('path'), crypto = require('crypto');
+    fs.mkdirSync(args.cache, { recursive: true });
+    const chunk = parseInt(args.chunk || '12', 10);
+    const base = simHash();
+    const all = [];
+    for (let i = 0; i < tasks.length; i += chunk) {
+        const part = tasks.slice(i, i + chunk);
+        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears })).digest('hex');
+        const file = path.join(args.cache, key + '.json');
+        let res;
+        if (fs.existsSync(file)) { res = JSON.parse(fs.readFileSync(file, 'utf8')); console.error(`[cache] hit ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
+        else { res = await runWorkersRaw(part, variants, workers); fs.writeFileSync(file + '.tmp', JSON.stringify(res)); fs.renameSync(file + '.tmp', file); console.error(`[cache] saved ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
+        all.push(...res);
+    }
+    return all;
+}
+function runWorkersRaw(tasks, variants, workers) {
     // 試合数を worker 数で分割（各タスクの g 範囲を分ける。席交互が崩れないよう分割幅は偶数）
     const per = Math.ceil(games / workers / 2) * 2;
     const jobs = [];
@@ -147,7 +178,8 @@ function summarize(results, variant, target, opps) {
         sum += p;
         varSum += n ? (p * (1 - p)) / n : 0;
     }
-    return { per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4) };
+    const tally = results.filter((x) => x.variant === variant && x.a === target).map((x) => `${x.b}:${x.w}-${x.l}-${x.d}`).sort().join(' ');
+    return { per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4), tally };
 }
 
 async function main() {
@@ -235,12 +267,34 @@ async function main() {
         }
     }
 
+    if (args.scan === 'audit') {
+        // 札の寄与: ban=idx で同じ乱数のまま使用だけ禁止する。AIが一度も使っていない札なら全試合の結果が基準と完全に一致する
+        const deck = cand.deck || deckMod.recommendedDeck(target);
+        const gears = cand.gears || gearMod.recommendedGears(target);
+        variants = [{ ...cand, deck, gears }]; labels = ['base'];
+        for (const idx of deck) {
+            variants.push({ ...cand, deck, gears, flags: { ...(cand.flags || {}), ban: idx } });
+            labels.push(`card ${idx}(${deckMod.SKILL_CATALOG[idx].name}) を禁止`);
+        }
+        for (const g of gears) {
+            variants.push({ ...cand, deck, gears: gears.filter((x) => x !== g) });
+            labels.push(`gear ${g} を外す`);
+        }
+    }
+
     const tasks = [];
     variants.forEach((_, v) => { for (const o of opps) tasks.push({ a: target, b: o, variant: v, aCand: true, bCand: false }); });
     const res = await runWorkers(tasks, variants, workers);
     const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps) }));
     const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, rows };
     if (args.json) { console.log(JSON.stringify(out)); return; }
+    if (args.scan === 'audit') {
+        const base = rows[0];
+        console.log(`base ${(base.field * 100).toFixed(1)}%（寄与 = base − 禁止/除去後。同一シードなので差は札/ギアの寄与。「差なし」= 全試合の結果が基準と完全一致。AIが使っていないか、banが効かない経路で使っているかのどちらかなので、probe-usage.js で使用回数を確認すること）`);
+        rows.slice(1).forEach((r) => console.log(`${r.tally === base.tally ? '差なし  ' : `${((base.field - r.field) * 100 >= 0 ? '+' : '')}${((base.field - r.field) * 100).toFixed(1)}pt`.padEnd(8)} ${r.label}`));
+        console.log('RESULT ' + JSON.stringify(out));
+        return;
+    }
     const sorted = rows.map((r, i) => ({ ...r, i })).sort((x, y) => y.field - x.field);
     for (const r of args.scan ? sorted : rows) {
         console.log(`${(r.field * 100).toFixed(1)}% ±${(1.96 * r.se * 100).toFixed(1)}  ${r.label}`);
