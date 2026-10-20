@@ -122,6 +122,8 @@ const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // �
 const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
 const TK_AI = process.env.TK_AI !== '0'; // トークン系スキルを残すロック（A/B用に無効化できる）
 const TK_CHARS = (process.env.TK_CHARS || 'poisoner').split(','); // 対象のキャラ
+const VG_AI = process.env.VG_AI !== '0'; // 復讐の刃の専用行動（A/B用に無効化できる）
+const VG_PEN = process.env.VG_PEN != null ? Number(process.env.VG_PEN) : 15; // 奪取の加点から引く量
 const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
 const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
 const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
@@ -521,7 +523,11 @@ function getEnhancedBestMove(s) {
         if (reaches >= 2) score += 200;        // フォーク
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
-        if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
+        if (isEnemy(board[i].player, me) && board[i].bind <= 0) {
+            score += 30;
+            // 復讐の刃: 通常の奪取は魔力-1。その分、奪取の加点を減らす（VG_AI=0 で無効化・VG_PEN で減らす量を変える）
+            if (VG_AI && gearAi(s, 'vengeance')) score -= VG_PEN;
+        }
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
         if (score > bestScore) { bestScore = score; bestMove = i; }
