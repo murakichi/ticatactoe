@@ -1,6 +1,6 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 8f8e484(4条件1位を再検証OK: 基本66.2/envDeck varied 63.7/oppGears none 78.9/random 75.2)
+- 最後に検証したmaster: 837a29b(再検証OK: 基本65.3%/envDeck varied(400) 63.5% で1位。none/random は省略)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
 - 連続不採用回数: 6(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
@@ -44,4 +44,5 @@
 ## 再検証 (2026-10-20)
 - master ae193e7（cryomancer のギア・AI調整 #86）取り込み後、4条件(seed3/200)すべて1位で維持。基本 67.3%(2位 cryomancer 62.5, 差4.7)／envDeck varied 63.9%(2位 cryomancer 61.8, 差2.2)／oppGears none 79.6%(2位 cryomancer 54.1)／random 75.9%(2位 tactician 53.8)。cryomancer が2位に上がり差が縮小(基本 8.8→4.7、envDeck varied 約11→2.2)
 - master 8f8e484（electrician のデッキ変更 #95 を含む）で再々検証。4条件(seed3/200)すべて1位: 基本 66.2%(2位 cryomancer 62.2, 差4.0)／envDeck varied 63.7%(2位 electrician 61.9, 差1.8＝誤差の範囲の接戦)／oppGears none 78.9%(2位 electrician 56.9)／random 75.2%(2位 electrician 56.1)
+- master 837a29b（pyromancer のデッキ変更 #100）で再検証。変更が波及しにくいので2条件に絞った: 基本(seed3/200) 65.3%・1位(2位 cryomancer 62.1, 差3.2)／envDeck varied(seed3/400) 63.5%・1位(2位 cryomancer 60.1, 3位 electrician 59.9, 差3.4)。oppGears none/random は前回の差が19pt以上のため省略
 
