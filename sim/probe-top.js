@@ -14,7 +14,8 @@
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
- * 共通: --size N（盤面。既定 4）, --envDeck varied（相手は本番と同じ「推奨から3枚入れ替え」デッキ。既定は推奨のまま）, --workers N（既定=コア数）,
+
+ * 共通: --oppGears recommended|none|random（相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（相手は本番と同じ「推奨から3枚入れ替え」デッキ。既定は推奨のまま）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
  * 出力の `field` が環境勝率（対象の対キャラ別勝率の単純平均）。`se` は標準誤差の概算。
  */
@@ -59,8 +60,9 @@ function play(chars, cfgs, seed) {
 }
 
 /** 環境のキャラ c の標準設定。deckRng が渡れば本番どおり「推奨から3枚入れ替え」 */
-function envCfg(c, mods, deckRng) {
-    return { deck: deckRng ? deckMod.variedAIDeck(c, deckRng) : deckMod.recommendedDeck(c), gears: gearMod.recommendedGears(c), flags: {}, mod: mods.base };
+function envCfg(c, mods, rng, varied, oppGears) {
+    const gears = oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : gearMod.recommendedGears(c);
+    return { deck: varied ? deckMod.variedAIDeck(c, rng) : deckMod.recommendedDeck(c), gears, flags: {}, mod: mods.base };
 }
 
 /** ワーカー: a と b の組を games 試合（席交互）。a の勝ち・負け・引分を返す */
@@ -89,7 +91,8 @@ if (args.worker) {
         // t = { a, b, aCand (a に候補設定を与えるか), bCand, variant, cand: {...} }
         const cand = job.variants[t.variant];
         const mk = (c, isCand) => (rng) => {
-            const e = envCfg(c, mods, job.envDeck === 'varied' ? rng : null);
+            // 対象（候補側）は相手設定の揺らぎ（ギアなし/ランダム）を受けず、推奨ギア（候補が指定すればそれ）を使う
+            const e = envCfg(c, mods, rng, job.envDeck === 'varied', isCand ? 'recommended' : job.oppGears);
             if (!isCand) return e;
             if (cand.deck) e.deck = cand.deck;
             if (cand.gears) e.gears = cand.gears;
@@ -111,7 +114,7 @@ function runWorkers(tasks, variants, workers) {
     const jobs = [];
     for (let from = 0; from < games; from += per) jobs.push({ from, to: Math.min(games, from + per) });
     return Promise.all(jobs.map((j) => new Promise((resolve, reject) => {
-        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck };
+        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears };
         const p = spawn(process.execPath, [__filename, '--worker', ...(size ? ['--size', String(size)] : [])], { env: { ...process.env, TOP_JOB: JSON.stringify(job) }, stdio: ['ignore', 'pipe', 'inherit'] });
         let buf = '';
         p.stdout.on('data', (d) => { buf += d; });
