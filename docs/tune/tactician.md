@@ -3,11 +3,12 @@
 - 最後に検証したmaster: edf73fb(sim エンジン・AI に変更なし)
 - 現在の推奨設定: 変更なし(推奨ギア・推奨デッキのまま) AIフラグ=なし
 - 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
-- 連続不採用回数: 1
+- 連続不採用回数: 2
 - 状態: refining(トップ到達の暫定確認のみ。4条件の判定は未完)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 2 | gear | `--scan gears` 1枠差し替え全近傍(seed1, 60試合, 全9相手): 基準 sturdy+priceWreck 69.1%±3.8 が最良。次点 slot0→vengeance 67.6%、priceWreck を替えると 58%台以下に低下 | 全近傍が基準以下(最良でも -1.5pt、有意でない)。先の監査の「priceWreck除去 +10.8pt」は対2相手60試合のノイズ | 不採用 |
 | 1 | strategy | 総攻撃を撃つ条件を絞る(`F.taMinTok`=使用済みトークン数の下限 / `F.taMinPieces`=自コマ数の下限)。使用率監査で対電気使い 33% | 対電気使い 65勝→A:65/66(基準66)、対巨人 84〜86(基準87)。taMinTok=1,2 / taMinPieces=3 すべて差 ±3勝以内=誤差(seed1, 200試合) | 不採用(ノブは削除) |
 ## 監査(scan audit, 対 electrician+giant, seed1, 60試合/相手, base 50.8%)
 - 寄与の大きい順: priceWreck を外すと +10.8pt(!)、トークン(3)を禁止 +5.8pt、バッズトークン(9)禁止 -3.3pt、sturdy を外す -3.3pt。
@@ -15,7 +16,7 @@
 - 注意: 60試合×2相手はノイズが大きい(SE≈±5pt)。priceWreck除去は有望な仮説だが未再測定(seed2,200試合で要確認)。
 
 ## 次に試す候補
-- **最優先**: gear の priceWreck 差し替え(`--scan gears`、再測定 seed2/200試合)。未使用8枚を有効な札に替える deck 探索(`--scan deck --swap 2`)
+- ~~gear の priceWreck 差し替え~~(試行#2で却下)。**次**: 未使用8枚を有効な札に替える deck 探索(`--scan deck --swap 2`)
 - strategy: 対電気使い(50%)・対巨人(51.7%)のメタ
 - gear: `--scan gears` / deck: `--scan deck --swap 2`
 - 完了判定の4条件(基本 / envDeck varied / oppGears none / random)を 200 試合で
