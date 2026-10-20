@@ -6,7 +6,21 @@ import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
 import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, recommendedGears } from './components/game/gear';
-import { DECK_SIZE, SKILL_CATALOG, isValidDeck, randomDeck, recommendedDeck, variedAIDeck } from './components/game/deck';
+import {
+    DECK_SIZE,
+    SKILL_CATALOG,
+    CATEGORY_ORDER,
+    MAX_SAVED_DECKS,
+    SavedDeck,
+    deleteSavedDeck,
+    describeSkill,
+    isValidDeck,
+    loadSavedDecks,
+    randomDeck,
+    recommendedDeck,
+    saveDeck,
+    variedAIDeck,
+} from './components/game/deck';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -316,10 +330,40 @@ type DeckBoxProps = {
 const DeckBox = (props: DeckBoxProps) => {
     const custom = props.deck !== undefined;
     const shown = props.deck ?? recommendedDeck(props.character);
+    // 効果を見るために指している（ホバー/フォーカス）スキル
+    const [pointed, setPointed] = useState<number | null>(null);
+    const [saved, setSaved] = useState<SavedDeck[]>(() => loadSavedDecks());
+    const [name, setName] = useState<string>('');
+    const [pick, setPick] = useState<string>('');
+    const [message, setMessage] = useState<string>('');
     const toggle = (idx: number) => {
         const next = shown.includes(idx) ? shown.filter((x) => x !== idx) : [...shown, idx];
         if (next.length > DECK_SIZE) return;
         props.onChangeDeck(next.sort((a, b) => a - b));
+    };
+    const canSave = isValidDeck(shown) && name.trim() !== '';
+    const onSave = () => {
+        const next = saveDeck(name, shown);
+        if (next === null) {
+            setMessage(saved.length >= MAX_SAVED_DECKS && !saved.some((d) => d.name === name.trim()) ? `保存できるのは${MAX_SAVED_DECKS}個までです` : '保存できませんでした');
+            return;
+        }
+        setSaved(next);
+        setPick(name.trim().slice(0, 20));
+        setMessage(`「${name.trim()}」を保存しました`);
+    };
+    const onLoad = () => {
+        const found = saved.find((d) => d.name === pick);
+        if (found) {
+            props.onChangeDeck([...found.deck]);
+            setMessage(`「${found.name}」を読み込みました`);
+        }
+    };
+    const onDelete = () => {
+        if (!pick) return;
+        setSaved(deleteSavedDeck(pick));
+        setMessage(`「${pick}」を削除しました`);
+        setPick('');
     };
     return (
         <details className={styles.gearBox}>
@@ -343,22 +387,71 @@ const DeckBox = (props: DeckBoxProps) => {
                     </button>
                 </span>
             </div>
-            <div className={styles.gearGrid}>
-                {SKILL_CATALOG.map((c) => {
-                    const active = shown.includes(c.idx);
-                    return (
-                        <button
-                            key={c.idx}
-                            className={`${styles.gearChip} ${active ? styles.gearChipActive : ''}`}
-                            onClick={() => toggle(c.idx)}
-                            disabled={!active && shown.length >= DECK_SIZE}
-                            aria-pressed={active}
-                        >
-                            {c.icon} {c.name}
-                        </button>
-                    );
-                })}
+            <div className={styles.deckInfo} aria-live='polite'>
+                {pointed === null ? 'スキルにカーソルを合わせる（タップ）と、効果と基礎コストが出ます' : describeSkill(pointed)}
             </div>
+            {CATEGORY_ORDER.map((cat) => {
+                const entries = SKILL_CATALOG.filter((c) => c.category === cat.id);
+                if (entries.length === 0) return null;
+                return (
+                    <div key={cat.id} className={styles.deckGroup}>
+                        <div className={styles.deckGroupLabel}>{cat.label}</div>
+                        <div className={styles.gearGrid}>
+                            {entries.map((c) => {
+                                const active = shown.includes(c.idx);
+                                return (
+                                    <button
+                                        key={c.idx}
+                                        className={`${styles.gearChip} ${active ? styles.gearChipActive : ''}`}
+                                        onClick={() => toggle(c.idx)}
+                                        onMouseEnter={() => setPointed(c.idx)}
+                                        onFocus={() => setPointed(c.idx)}
+                                        disabled={!active && shown.length >= DECK_SIZE}
+                                        aria-pressed={active}
+                                        title={describeSkill(c.idx)}
+                                    >
+                                        {c.icon} {c.name}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+            <div className={styles.deckSave}>
+                <input
+                    className={styles.deckInput}
+                    value={name}
+                    maxLength={20}
+                    placeholder='デッキ名'
+                    aria-label={`プレイヤー${props.seat + 1}のデッキ名`}
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <button className={styles.gearMiniBtn} onClick={onSave} disabled={!canSave}>
+                    保存
+                </button>
+                <select
+                    className={styles.deckInput}
+                    value={pick}
+                    aria-label={`プレイヤー${props.seat + 1}の保存済みデッキ`}
+                    onChange={(e) => setPick(e.target.value)}
+                    disabled={saved.length === 0}
+                >
+                    <option value=''>{saved.length === 0 ? '保存したデッキはありません' : '保存したデッキを選ぶ'}</option>
+                    {saved.map((d) => (
+                        <option key={d.name} value={d.name}>
+                            {d.name}
+                        </option>
+                    ))}
+                </select>
+                <button className={styles.gearMiniBtn} onClick={onLoad} disabled={!pick}>
+                    読み込む
+                </button>
+                <button className={styles.gearMiniBtn} onClick={onDelete} disabled={!pick}>
+                    削除
+                </button>
+            </div>
+            {message && <div className={styles.gearNote}>{message}</div>}
         </details>
     );
 };

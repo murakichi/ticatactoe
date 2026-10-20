@@ -284,3 +284,45 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ===== デッキ編集 ===== */
+.deckInfo {
+    min-height: 2.6em;
+    margin-bottom: var(--space-2);
+    padding: 6px 8px;
+    border-radius: var(--radius-md, 8px);
+    background: var(--color-surface-2);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-text);
+}
+
+.deckGroup {
+    margin-bottom: var(--space-2);
+}
+
+.deckGroupLabel {
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-dim);
+}
+
+.deckSave {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: var(--space-2);
+}
+
+.deckInput {
+    flex: 1 1 110px;
+    min-width: 0;
+    padding: 3px 8px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    font-size: 11px;
+}

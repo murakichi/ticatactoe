@@ -1,4 +1,24 @@
-import { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, recommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck, AI_DECK_SWAPS } from './deck';
+import {
+    DECK_SIZE,
+    CATALOG_SIZE,
+    SKILL_CATALOG,
+    CATEGORY_ORDER,
+    RECOMMENDED_DECKS,
+    MAX_SAVED_DECKS,
+    SAVED_DECKS_KEY,
+    recommendedDeck,
+    isValidDeck,
+    resolveDeck,
+    randomDeck,
+    variedAIDeck,
+    AI_DECK_SWAPS,
+    baseCostOf,
+    describeSkill,
+    loadSavedDecks,
+    saveDeck,
+    deleteSavedDeck,
+    DeckStorage,
+} from './deck';
 import { CharacterId } from '../../types/Character';
 import { skillCosts } from './skillCosts';
 import { SKILL_POOL_SIZE } from './AIPlayer';
@@ -60,5 +80,67 @@ describe('デッキ', () => {
 
     it('すべての汎用スキルにコストが定義されている（デッキに入れて撃てる）', () => {
         expect(Object.keys(skillCosts).length).toBeGreaterThan(CATALOG_SIZE);
+    });
+});
+
+describe('デッキ編集の表示データ', () => {
+    it('全スキルに効果の説明と、skillCosts に実在するコストのキーがある', () => {
+        SKILL_CATALOG.forEach((c) => {
+            expect(c.desc.length).toBeGreaterThan(5);
+            expect(skillCosts[c.costKey]).toBeGreaterThan(0);
+        });
+        expect(baseCostOf(3)).toBe(skillCosts.onClickToken);
+        expect(describeSkill(3)).toContain('トークン（基礎コスト');
+    });
+
+    it('すべてのカテゴリが表示順に載っていて、カタログのスキルがどれかの見出しに入る', () => {
+        const ids = CATEGORY_ORDER.map((c) => c.id);
+        SKILL_CATALOG.forEach((c) => expect(ids).toContain(c.category));
+    });
+});
+
+const fakeStorage = (): DeckStorage & { data: Record<string, string> } => {
+    const data: Record<string, string> = {};
+    return { data, getItem: (k) => (k in data ? data[k] : null), setItem: (k, v) => void (data[k] = v) };
+};
+
+describe('保存したデッキ', () => {
+    it('保存→読み込み→上書き→削除。名前は前後の空白を除き、デッキは昇順で保存される', () => {
+        const st = fakeStorage();
+        expect(loadSavedDecks(st)).toEqual([]);
+        const d1 = recommendedDeck('you').reverse();
+        const saved = saveDeck('  速攻  ', d1, st);
+        expect(saved).toEqual([{ name: '速攻', deck: [...d1].sort((a, b) => a - b) }]);
+        expect(loadSavedDecks(st)).toEqual(saved);
+        const d2 = recommendedDeck('poisoner');
+        expect(saveDeck('速攻', d2, st)).toEqual([{ name: '速攻', deck: [...d2].sort((a, b) => a - b) }]); // 同名は上書き
+        expect(saveDeck('毒', d1, st)).toHaveLength(2);
+        expect(deleteSavedDeck('速攻', st).map((d) => d.name)).toEqual(['毒']);
+        expect(loadSavedDecks(st).map((d) => d.name)).toEqual(['毒']);
+    });
+
+    it('不正なデッキ・空の名前は保存しない', () => {
+        const st = fakeStorage();
+        expect(saveDeck('x', [1, 2, 3], st)).toBeNull();
+        expect(saveDeck('   ', recommendedDeck('you'), st)).toBeNull();
+        expect(st.data[SAVED_DECKS_KEY]).toBeUndefined();
+    });
+
+    it('上限を超える保存はできない（既存名の上書きは可）', () => {
+        const st = fakeStorage();
+        for (let i = 0; i < MAX_SAVED_DECKS; i++) expect(saveDeck(`d${i}`, recommendedDeck('you'), st)).not.toBeNull();
+        expect(saveDeck('overflow', recommendedDeck('you'), st)).toBeNull();
+        expect(saveDeck('d0', recommendedDeck('giant'), st)).not.toBeNull();
+    });
+
+    it('壊れたデータ・不正なデッキ・書き込み失敗でも落ちない', () => {
+        const st = fakeStorage();
+        st.data[SAVED_DECKS_KEY] = '{broken';
+        expect(loadSavedDecks(st)).toEqual([]);
+        st.data[SAVED_DECKS_KEY] = JSON.stringify([{ name: 'ok', deck: recommendedDeck('you') }, { name: 'bad', deck: [1] }, 5]);
+        expect(loadSavedDecks(st).map((d) => d.name)).toEqual(['ok']);
+        const failing: DeckStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
+        expect(saveDeck('x', recommendedDeck('you'), failing)).toBeNull();
+        expect(loadSavedDecks(undefined)).toEqual([]);
     });
 });
