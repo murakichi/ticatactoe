@@ -3,8 +3,17 @@
 - 最後に検証したmaster: edf73fb(sim エンジン・AI に変更なし)
 - 現在の推奨設定: 変更なし(推奨ギア・推奨デッキのまま) AIフラグ=なし
 - 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
-- 連続不採用回数: 3
-- 状態: refining(トップ到達の暫定確認のみ。4条件の判定は未完)
+- 連続不採用回数: 3(トップ未達のため行き詰まり判定は6種類測定後)
+- 状態: running(4条件中 envDeck varied で3位 → トップ未達)
+## 完了判定(4条件, --rank --target tactician --games 100 --seed 3, master edf73fb)
+| 条件 | 軍師 | 順位 |
+|---|---|---|
+| 基本(seed1, 60試合, 暫定) | 67.8% | 1位 (2位 electrician 60.2%) |
+| --oppGears none | 69.8% | 1位 (2位 magician 57.8%) |
+| --oppGears random | 67.2% | 1位 (2位 magician 57.0%) |
+| --envDeck varied | 59.0% | **3位** (1位 electrician 63.4% / giant 60.0%) |
+→ 相手のデッキが推奨から崩れると軍師だけ約-9pt落ちる(他は電気使い・巨人が上がる)。推奨デッキが相手の崩れに弱い=推奨デッキの頑健性が課題。
+
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
@@ -17,6 +26,8 @@
 - 注意: 60試合×2相手はノイズが大きい(SE≈±5pt)。priceWreck除去は有望な仮説だが未再測定(seed2,200試合で要確認)。
 
 ## 次に試す候補
+- **次(具体コマンド)**: `node sim/probe-top.js --target tactician --envDeck varied --games 100 --seed 1` で対キャラ別を見て負け相手を特定 → その相手に `--opp X --envDeck varied` で `--scan deck --swap 2 --neighbors 15 --games 60`(1コマンド10分以内に分割)
+- 仮説: 軍師の推奨デッキは固有スキル(総攻撃)に偏った札に依存し、varied だと相手の対策札が増えて崩れる? 相手側の変動がなぜ軍師に不利かを per-opponent で確認
 - ~~gear の priceWreck 差し替え~~(試行#2で却下)。**次**: 未使用8枚を有効な札に替える deck 探索(`--scan deck --swap 2`)
 - strategy: 対電気使い(50%)・対巨人(51.7%)のメタ
 - gear: `--scan gears` / deck: `--scan deck --swap 2`
