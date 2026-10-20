@@ -79,7 +79,7 @@ class AIPlayer {
     updateShield(board: SquareInfo[]): void {
         this.shield = new Set();
         board.forEach((sq, i) => {
-            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結・火炎中は⚡が休眠で無敵でない
+            if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結中は⚡が休眠で無敵でない
         });
     }
 
@@ -92,7 +92,7 @@ class AIPlayer {
         const size = this.sizeOf(board);
         let gain = 0;
         for (const k of orthoNeighbors(i, size)) {
-            if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マス（氷結・火炎中）の⚡は発火しない
+            if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マス（氷結中）の⚡は発火しない
             for (const n of orthoNeighbors(k, size)) {
                 const sq = board[n];
                 if (!sq.player || sq.bind <= 0) continue;
@@ -825,7 +825,7 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (!this.isEnemy(sq.player) || this.shield.has(i)) continue;
-            if (isDormant(sq)) continue; // 休眠マス（氷結・火炎中）の毒は継続ダメージなし
+            if (isDormant(sq)) continue; // 休眠マス（氷結中）の毒は継続ダメージなし
             const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
             const turns = Math.ceil(sq.bind / (1 + p));
             if (turns > 2) continue;
@@ -1195,7 +1195,7 @@ class AIPlayer {
             const size = this.sizeOf(board);
             const threatened = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || c === 'pyromancer'));
             const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + activeBuds(sq, this.budGuard) : n), 0);
-            // 冬至の種子: 自陣の休眠マス（氷結・火炎中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
+            // 冬至の種子: 自陣の休眠マス（氷結中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
             const dormantBuds = board.reduce((n, sq) => (sq.player === this.playerSymbol && isDormant(sq) ? n + budStacks(sq) : n), 0);
             if (availableSkills.includes(34) && dormantBuds >= 2 && !this.budGuard && magic >= this.calculateAICost(costs.onClickSolstice)) {
                 chargeClicks.push({ skill: 'onClickSolstice' });

@@ -963,21 +963,20 @@ test('冬至の種子: 自陣の🌱が休眠せず働く（魔力ボーナス�
     const s = game();
     s.heartTurn = true; s.heartMagic = 20; s.life = 3;
     s.board[1] = { player: '💙', bind: 5, effects: [BUD, BUD, FRZ] };   // 氷結中
-    s.board[2] = { player: '💙', bind: 5, effects: [BUD, FLM] };        // 火炎中
     s.board[3] = { player: '⭕', bind: 5, effects: [BUD, FRZ] };        // 敵の休眠は対象外
     assert.strictEqual(e.ownBuds(s), 0);                                // ガード前は全部休眠
     const before = s.heartMagic;
     e.SKILLS.solstice(s);
     assert.strictEqual(s.heartMagic, before - 4);
     assert.strictEqual(s.budGuard[0], true);
-    assert.strictEqual(e.ownBuds(s), 3);                                // ガード中は数える
+    assert.strictEqual(e.ownBuds(s), 2);                                // ガード中は数える
     const m = s.heartMagic;
     e.SKILLS.solstice(s);
     assert.strictEqual(s.heartMagic, m); // 再使用不可
     // 刈り入れ前夜がガード中は休眠マスの🌱も刈れる（敵の🌱は触らない）
     e.SKILLS.harvestEve(s);
-    assert.strictEqual(s.heartMagic, m - 2 + 3);
-    assert.strictEqual(budsOn(s.board[1]) + budsOn(s.board[2]), 0);
+    assert.strictEqual(s.heartMagic, m - 2 + 2);
+    assert.strictEqual(budsOn(s.board[1]), 0);
     assert.strictEqual(budsOn(s.board[3]), 1);
     // 解除タイミング: 自分の次の手番開始時（相手の手番ではまだ有効）
     e.SKILLS.charge(s);
@@ -1002,20 +1001,24 @@ test('冬至の種子: 魔力ボーナスも数える（休眠マスの🌱 → 
     assert.strictEqual(gainWith(true) - gainWith(false), 6);
 });
 
-test('火炎が付いても🌱は消えず休眠する。業火・絶対零度でも誰の🌱も消えない', () => {
+test('後から火炎が付くと🌱は消える（冬至の種子のガード中は残る）。業火は敵の🌱を消し、絶対零度（氷結）は消さない', () => {
     const th = require('./thermal');
-    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
-    b[1] = { player: '⭕', bind: 3, effects: [BUD, BUD] };
+    const mk = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const b = mk();
+    b[1] = { player: '⭕', bind: 3, effects: [BUD, BUD, { effect: '☠' }, { effect: '⚡' }] };
     th.ignite(b, [1], 4);
-    assert.strictEqual(budsOn(b[1]), 2);
-    assert.ok(th.isDormant(b[1]));
-    assert.strictEqual(th.activeBuds(b[1]), 0);
-    assert.strictEqual(th.activeBuds(b[1], true), 2); // 冬至の種子
+    assert.strictEqual(budsOn(b[1]), 0);
+    assert.ok(b[1].effects.some((x) => x.effect === '☠') && b[1].effects.some((x) => x.effect === '⚡'));
+    assert.ok(!th.isDormant(b[1]));
+    const c = mk();
+    c[1] = { player: '⭕', bind: 3, effects: [BUD, BUD] };
+    th.ignite(c, [1], 4, 1, () => true);
+    assert.strictEqual(budsOn(c[1]), 2);
     const t = game('pyromancer', 'you');
     t.heartTurn = true; t.heartMagic = 30;
     t.board[1] = { player: '⭕', bind: 5, effects: [BUD] };
     e.SKILLS.inferno(t);
-    assert.strictEqual(budsOn(t.board[1]), 1);
+    assert.strictEqual(budsOn(t.board[1]), 0);
     const g = game('cryomancer', 'you');
     g.heartTurn = true; g.heartMagic = 30;
     g.board[1] = { player: '💙', bind: 5, effects: [BUD] };
@@ -1023,14 +1026,14 @@ test('火炎が付いても🌱は消えず休眠する。業火・絶対零度�
     assert.strictEqual(budsOn(g.board[1]), 1);
 });
 
-test('休眠マス（氷結・火炎）: 🔥中のマスは毒の継続ダメージ・⚡の発火・無敵・帯電コスト軽減・過負荷が休眠。🔥は電気で消える', () => {
+test('🔥中のマス: 毒・⚡は休眠せず働く。🔥はダメージで消える', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
     e.placeMove(s, 0);
-    // 減衰-1・火炎-2（毒は休眠なので0）→ 3。🔥も毒も残る
-    assert.strictEqual(s.board[5].bind, 3);
-    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
+    // 🔥中でも毒は働く。ダメージが通るので🔥は消え、毒は残る
+    assert.ok(s.board[5].bind < 6);
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
     // 電気のダメージを受けると🔥は消える
     const t = game();
@@ -1039,22 +1042,17 @@ test('休眠マス（氷結・火炎）: 🔥中のマスは毒の継続ダメ�
     t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
     e.placeMove(t, 4);
     assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
-    // 🔥中のマスの⚡は発火源でなく、巫の無敵も無効、盤面の⚡数にも数えない
+    // 🔥中のマスの⚡も働く: 巫の無敵が効き、盤面の⚡数にも数える
     const u = game('electrician', 'you');
     u.heartTurn = true; u.life = 3;
     u.board[5] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }, FLM] };
-    u.board[6] = { player: '⭕', bind: 4, effects: [] };
-    assert.strictEqual(e.isShielded(u, u.board[5]), false);
-    assert.strictEqual(e.boardChargeCount(u.board), 0);
-    u.board[9] = { player: '⭕', bind: 4, effects: [] };
-    e.placeMove(u, 4); // 5 の隣に着手しても休眠中の⚡は発火しない
-    assert.strictEqual(u.board[6].bind, 4 - 1);
-    assert.strictEqual(e.chargeStacks(u.board[5]), 1);
-    // 毒使い・ミアズマの毒の数にも数えない
+    assert.strictEqual(e.isShielded(u, u.board[5]), true);
+    assert.strictEqual(e.boardChargeCount(u.board), 1);
+    // 毒の数にも数える
     const p = game('poisoner', 'you');
     p.heartTurn = true;
     p.board[1] = { player: '💙', bind: 4, effects: [FLM, { effect: '☠' }] };
-    assert.strictEqual(e.boardPoisonCount(p.board), 0);
+    assert.strictEqual(e.boardPoisonCount(p.board), 1);
 });
 
 test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コマ(canBud)に🌱を1つずつ（受け手が3つ以上なら重複なくランダムに2つ）。選べるコマが無ければ不可。コスト4', () => {
@@ -1860,7 +1858,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;

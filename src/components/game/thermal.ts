@@ -3,7 +3,7 @@
 //
 // ❄氷結（スタックする。❄が1つでもあれば氷結中）
 //   - 空きマスにも置ける。氷結中の空きマスには🔑ロック中と同様に誰も着手できない
-//   - 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠する（魔力・発火・継続ダメージなどに働かない）。氷結中のマスには🔑ロックを掛けられない
+//   - 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠する（魔力・発火・継続ダメージなどに働かない）。氷結中のマスには🔑ロックを掛けられない（火炎中のマスは休眠しない）
 //   - ターン進行（自然減衰・火炎の継続ダメージ）でライフが減らない。毒のダメージは受ける
 //   - 隣接する⚡のダメージ（発火・ジャマー）を受けない。氷結中のマス自身の⚡は残るが休眠する（発火せず、ジャマーの起点にもならない。解凍すると再び働く）
 //   - スキルでダメージを受けるとき、ダメージを受ける代わりに氷結が1スタック減る
@@ -11,7 +11,7 @@
 //   - 氷結中のマスに🔥を付けようとすると、🔥の代わりに❄が全スタック解除される
 //   - 隣（縦横）のマスに🔥が付く（発火する）と、全スタックが即座に解除される
 // 🔥火炎（スタックする）
-//   - 火炎中のマスの他のエフェクト（🌱⚡☠）も、氷結と同じく消えないが休眠する
+//   - 🔥が付くとそのマスの🌱は消える（冬至の種子のガード中を除く）。⚡と☠は消えず、休眠せず重複して働く
 //   - ターン進行のたび、1スタックにつき2ダメージ（ライフ0が下限）。煉獄の鍛冶師がいれば敵のマスは1回の継続ダメージにつき追加で+1
 //   - ダメージを受けると全スタックが消える（自然減衰と火炎自身の継続ダメージでは消えない）
 //   - スキルでダメージを受けるとき、ダメージが1.5倍（切り上げ）
@@ -31,8 +31,8 @@ export const FLAME_SKILL_MULT = 1.5;
 export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
 export const flameStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🔥').length;
-/** 休眠マス: 氷結中または火炎中。マスの他のエフェクト（🌱⚡☠）は消えないが効力を発揮しない */
-export const isDormant = (sq: SquareInfo): boolean => isFrozen(sq) || flameStacks(sq) > 0;
+/** 休眠マス: 氷結中。マスの他のエフェクト（🌱⚡☠）は消えないが効力を発揮しない（火炎中のマスは休眠しない: 🌱は消え、⚡☠は重複して働く） */
+export const isDormant = (sq: SquareInfo): boolean => isFrozen(sq);
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
 
@@ -111,7 +111,13 @@ export const zeroOut = (sq: SquareInfo): SquareInfo => (sq.bind > 0 ? without({ 
  * 氷結中のマスなら🔥は付かず代わりに❄が全スタック解除される。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
  * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
  */
-export const ignite = (board: SquareInfo[], cells: number[], size: number, n: number = 1): { thawed: number[] } => {
+export const ignite = (
+    board: SquareInfo[],
+    cells: number[],
+    size: number,
+    n: number = 1,
+    keepBuds?: (sq: SquareInfo) => boolean
+): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
         for (let c = 0; c < n; c++) {
@@ -120,7 +126,8 @@ export const ignite = (board: SquareInfo[], cells: number[], size: number, n: nu
                 thawed.add(k);
                 continue;
             }
-            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] }; // 🌱⚡☠は消えないが休眠する
+            // 🔥が付くと🌱は燃えて消える（冬至の種子のガード中は消えない）。⚡☠は消えず、休眠もしない
+            board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -249,12 +256,12 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
 
 // ---- バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）の純粋ロジック ----
 // sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
-// 冬至の種子の「🌱ガード」は、activeBuds / harvestBuds の guarded 引数として渡す（休眠マスでも🌱が働く）。
+// 冬至の種子の「🌱ガード」は、activeBuds / harvestBuds の guarded 引数（氷結中でも🌱が働く）と、ignite の keepBuds 述語（🔥が付いても🌱が消えない）として渡す。
 
 /** マスの🌱の数 */
 export const budStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🌱').length;
 
-/** 効力を発揮している🌱の数。休眠マス（氷結中・火炎中）の🌱は消えないが魔力ボーナスに数えない。guarded（冬至の種子）なら休眠しない */
+/** 効力を発揮している🌱の数。氷結中のマスの🌱は消えないが魔力ボーナスに数えない。guarded（冬至の種子）なら休眠しない */
 export const activeBuds = (sq: SquareInfo, guarded: boolean = false): number => (!guarded && isDormant(sq) ? 0 : budStacks(sq));
 
 /** 新しく🌱を持てるコマか: コマがあり、氷結中でなく、🔥が付いていない（付けても氷結・火炎ですぐ消えるため） */
@@ -340,12 +347,13 @@ export const sacrificeFlame = (
     cell: number,
     me: SquareInfo['player'],
     chars: readonly CharacterId[],
-    size: number
+    size: number,
+    keepBuds?: (sq: SquareInfo) => boolean
 ): { threshold: number; targets: number[]; thawed: number[] } => {
     const threshold = board[cell].bind;
     board[cell] = zeroOut(board[cell]);
     const targets = sacrificeTargets(board, threshold, me, chars);
-    return { threshold, targets, thawed: ignite(board, targets, size, 1).thawed };
+    return { threshold, targets, thawed: ignite(board, targets, size, 1, keepBuds).thawed };
 };
 
 // ---- 氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷結・氷結拡散・氷結トークン・砕氷・霜降り）の純粋ロジック ----

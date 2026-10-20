@@ -27,7 +27,7 @@ function orthoNeighbors(i, size) {
 const frozenStacks = (sq) => sq.effects.filter((e) => e.effect === '❄').length;
 const isFrozen = (sq) => frozenStacks(sq) > 0;
 /** 休眠マス: 氷結中または火炎中。そのマスの🌱 / ⚡ / ☠ は消えないが効力を発揮しない（氷結と火炎は共存しない） */
-const isDormant = (sq) => isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥');
+const isDormant = (sq) => isFrozen(sq); // 休眠は氷結のみ（火炎中のマスは🌱が消え、⚡☠は重複して働く）
 const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
 const without = (sq, ...kinds) => ({ ...sq, effects: sq.effects.filter((e) => !kinds.includes(e.effect)) });
@@ -70,7 +70,7 @@ const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { .
  * 🔥が実際に付いたときだけ、縦横隣の氷結を全スタック解除する（自マスを解凍しただけなら隣は解除しない）。
  * 戻り値 thawed = 解凍されたマスの添字（重複なし）。cells を先頭から順に処理する。board を直接書き換える
  */
-function ignite(board, cells, size, n = 1) {
+function ignite(board, cells, size, n = 1, keepBuds) {
     const thawed = new Set();
     for (const k of cells) {
         for (let t = 0; t < n; t++) {
@@ -79,7 +79,8 @@ function ignite(board, cells, size, n = 1) {
                 thawed.add(k);
                 continue;
             }
-            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🔥' }] }; // 🌱は消えず、休眠するだけ
+            // 🔥が付くと🌱は燃えて消える（keepBuds が真=冬至の種子のガード中は消えない）
+            board[k] = { ...board[k], effects: [...(keepBuds && keepBuds(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
@@ -225,13 +226,13 @@ function sacrificeTargets(board, cell, me, size, isShieldedFn) {
     return board.map((sq, k) => (sq.player && sq.player !== me && sq.bind <= L && !hasLock(sq) && !(isShieldedFn && isShieldedFn(sq)) ? k : -1)).filter((k) => k !== -1);
 }
 /** 殉火: 自コマ cell（ライフ>0・🔑なし）のライフをゼロにして、ライフがそれ以下の敵コマ全てに🔥を1スタック。選べない cell なら何もしない。board を直接書き換える */
-function sacrificeFlame(board, cell, me, size, isShieldedFn) {
+function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     const sq = board[cell];
     if (!sq.player || sq.player !== me || sq.bind <= 0 || hasLock(sq)) return { threshold: 0, targets: [], thawed: [] };
     const threshold = sq.bind;
     const targets = sacrificeTargets(board, cell, me, size, isShieldedFn);
     board[cell] = zeroOut(sq);
-    const { thawed } = ignite(board, targets, size, 1);
+    const { thawed } = ignite(board, targets, size, 1, keepBuds);
     return { threshold, targets, thawed };
 }
 

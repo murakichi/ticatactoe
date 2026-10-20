@@ -36,7 +36,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
 
     const frozen = info.effects.some((e) => e.effect === '❄');
     const burning = info.effects.some((e) => e.effect === '🔥');
-    const dormant = frozen || burning; // 氷結中・火炎中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠
+    const dormant = frozen; // 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠（火炎中は休眠しない）
     if (props.shielded) classes.push(styles.shielded);
     else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
     if (frozen) classes.push(styles.frozen);
@@ -61,7 +61,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
                 <span className={styles.effects}>
                     {Object.entries(counts).map(([symbol, n]) => (
                         // 休眠マスの他のエフェクト（🌱⚡☠）は薄く出す
-                        <span key={symbol} className={`${styles.badge}${dormant && symbol !== '❄' && symbol !== '🔥' ? ` ${styles.dormant}` : ''}`}>
+                        <span key={symbol} className={`${styles.badge}${dormant && symbol !== '❄' ? ` ${styles.dormant}` : ''}`}>
                             {symbol}
                             {n > 1 ? n : ''}
                         </span>

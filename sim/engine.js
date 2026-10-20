@@ -202,6 +202,11 @@ const skillCosts = {
     onClickDoubleFrostToken: (config.thermal && config.thermal.doubleFrostTokenCost) || 6,
     onClickShatter: (config.thermal && config.thermal.shatterCost) || 4,
     onClickFrostfall: (config.thermal && config.thermal.frostfallCost) || 3,
+    // 汎用スキル(idx 49-52)。コスト表のキー順をブラウザ版と揃える（sim 側のスキル実装は未対応）
+    onClickBoost: 4,
+    onClickRelocate: 3,
+    onClickClone: 4,
+    onClickPlunder: 5,
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -756,7 +761,7 @@ function placeMove(s, i) {
     }
     if (s.useIgnite) {
         if (!board[i].player) return false;
-        thermal.ignite(board, [i], s.size, 1);
+        thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
         s.useIgnite = false;
         return true;
     }
@@ -1736,7 +1741,7 @@ function sacrificeCandidates(s) {
 }
 function exeSacrifice(s, i) {
     if (!sacrificeCandidates(s).includes(i)) return false;
-    const r = thermal.sacrificeFlame(s.board, i, curPlayer(s), s.size, (t) => isShielded(s, t));
+    const r = thermal.sacrificeFlame(s.board, i, curPlayer(s), s.size, (t) => isShielded(s, t), keepBudsOf(s));
     bumpStat(s, 'sacrificeTargets', r.targets.length);
     return true;
 }
@@ -1759,10 +1764,14 @@ function onClickCleanse(s) {
 function infernoTargets(s) {
     return thermal.infernoTargets(s.board, curPlayer(s)).filter((k) => !isShielded(s, s.board[k]));
 }
+/** 冬至の種子のガード中の席のコマは、🔥が付いても🌱が消えない */
+function keepBudsOf(s) {
+    return (sq) => !!sq.player && !!s.budGuard[seatOf(sq.player)];
+}
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
-    thermal.ignite(s.board, targets, s.size, 2);
+    thermal.ignite(s.board, targets, s.size, 2, keepBudsOf(s));
     spendMagic(s, calculateCost(s, costsOf(s).onClickInferno));
     bumpStat(s, 'inferno');
     bumpStat(s, 'infernoCells', targets.length);

@@ -326,7 +326,7 @@ describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () =>
         ai.updateShield(b);
         expect(ai.shield.has(1)).toBe(true);
         expect(ai.shield.has(2)).toBe(false);
-        expect(ai.shield.has(3)).toBe(false);
+        expect(ai.shield.has(3)).toBe(true); // 🔥だけでは⚡は休眠しない
     });
 
     it('休眠マス（氷結・火炎中）の毒は継続ダメージがないので、インジェクションの標的にしない', () => {
@@ -334,7 +334,7 @@ describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () =>
         const b = emptyBoard();
         [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }] });
         expect(ai.findInjectionTarget(b, 1)).not.toBeNull();
-        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }, i === 1 ? FRZ : FLM] });
+        [0, 1, 2].forEach((i) => b[i] = { player: '⭕', bind: 1, effects: [{ effect: '☠' }, FRZ] });
         expect(ai.findInjectionTarget(b, 1)).toBeNull();
     });
 

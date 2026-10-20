@@ -177,7 +177,7 @@ function fireGain(board, i, me, electricians) {
     let gain = 0;
     const W = Number(process.env.CHG_FIRE_W) || 1; // A/B検証用: 発火の損得の重み
     for (const k of orthoNeighbors(i, size)) {
-        if (chargeStacks(board[k]) === 0 || thermal.isDormant(board[k])) continue; // 休眠マス（氷結・火炎中）の⚡は発火しない
+        if (chargeStacks(board[k]) === 0 || thermal.isDormant(board[k])) continue; // 休眠マス（氷結中）の⚡は発火しない
         for (const n of orthoNeighbors(k, size)) {
             const sq = board[n];
             if (!sq.player || sq.bind <= 0) continue;
@@ -736,7 +736,7 @@ function chooseSkills(s, availableSkills) {
     const myBuds = ownBuds(s);
     // 刈り入れ前夜: 魔法使い以外が🌱を4個以上抱えていて、燃やされ/凍らされる相手がいるなら魔力に換える
     if (character !== 'magician' && availableSkills.includes(33) && myBuds >= 4 && thermalFoe) spend(calculateCost(s, costsOf(s).onClickHarvestEve), 'harvestEve');
-    // 冬至の種子: 自陣の休眠マス（氷結・火炎中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
+    // 冬至の種子: 自陣の休眠マス（氷結中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
     const dormantBuds = board.reduce((n, sq) => (sq.player === me && thermal.isDormant(sq) ? n + thermal.budStacks(sq) : n), 0);
     if (availableSkills.includes(34) && dormantBuds >= 2 && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice), 'solstice');
     // 風の落とし子: 自陣のコマ(🌱を持てる)が3個以上あり🌱が3個未満なら撒く
@@ -809,7 +809,7 @@ function chooseSkills(s, availableSkills) {
         let doomed = 0;
         for (const sq of board) {
             if (sq.player !== me) continue;
-            const p = thermal.isDormant(sq) ? 0 : sq.effects.filter(e => e.effect === '☠').length; // 休眠マス（氷結・火炎中）の毒は継続ダメージなし
+            const p = thermal.isDormant(sq) ? 0 : sq.effects.filter(e => e.effect === '☠').length; // 休眠マス（氷結中）の毒は継続ダメージなし
             if (p > 0 && p >= sq.bind) doomed++;
         }
         if (doomed >= 1) spend(serumCost, 'serum');

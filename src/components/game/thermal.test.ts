@@ -287,7 +287,7 @@ describe('🔥火炎', () => {
         expect(flameStacks(applyDamage(sq('⭕', 10, '🔥', '🔥'), 1, 'electric').sq)).toBe(0);
         expect(flameStacks(applyDamage(sq('⭕', 0, '🔥'), 1, 'electric').sq)).toBe(1);
         expect(flameStacks(zeroOut(sq('⭕', 4, '🔥')))).toBe(0);
-        expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '☠'), chars))).toBe(1); // 🔥中のマスの☠は休眠していて、毒では消えない
+        expect(flameStacks(decayTick(sq('⭕', 5, '🔥', '☠'), chars))).toBe(0); // 🔥中でも☠は働き、ダメージで🔥は消える
     });
 
     it('自然減衰だけでは🔥は消えない', () => {
@@ -319,24 +319,21 @@ describe('🔥火炎', () => {
         expect(r.thawed.sort((a, c) => a - c)).toEqual([6, 9]);
     });
 
-    it('🔥が付いても🌱は消えず休眠する（氷結と同じ）。休眠マスの☠は継続ダメージなし、⚡は発火源・無敵にならない', () => {
+    it('後から🔥が付くと🌱は消える（冬至の種子のガード中は残る）。☠・⚡は消えず働く', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3, '🌱', '🌱', '☠', '⚡');
         ignite(b, [0], 4);
-        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱', '🌱', '☠', '⚡', '🔥']);
-        expect(isDormant(b[0])).toBe(true);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['☠', '⚡', '🔥']);
+        expect(isDormant(b[0])).toBe(false);
         expect(activeBuds(b[0])).toBe(0);
-        expect(activeBuds(b[0], true)).toBe(2); // 冬至の種子のガード中は働く
-        // ☠は休眠: 自然減衰(-1)と🔥(2)だけ
-        expect(decayTick(sq('💙', 8, '☠', '☠', '🔥'), ['you']).bind).toBe(8 - 1 - 2);
+        const g0 = emptyBoard();
+        g0[0] = sq('💙', 3, '🌱', '🌱');
+        ignite(g0, [0], 4, 1, () => true);
+        expect(activeBuds(g0[0], true)).toBe(2);
         const cs = ['you', 'electrician'] as CharacterId[];
-        expect(isShielded(sq('⭕', 3, '⚡', '🔥'), cs)).toBe(false);
-        const g = emptyBoard();
-        g[5] = sq('⭕', 3, '⚡', '🔥');
-        g[6] = sq('💙', 4);
-        expect(fireCharges(g, 4, 4).fired).toEqual([]);
-        expect(harvestBuds(b, '💙')).toBe(0); // 刈り入れ前夜も休眠マスの🌱には触れない
-        expect(harvestBuds(b, '💙', true)).toBe(2);
+        expect(isShielded(sq('⭕', 3, '⚡', '🔥'), cs)).toBe(true); // 🔥だけでは⚡は休眠しない
+        expect(isShielded(sq('⭕', 3, '⚡', '❄'), cs)).toBe(false);
+        expect(harvestBuds(b, '💙')).toBe(0);
     });
 
     it('氷結が肩代わりして🔥が付かなかったときも🌱は残る', () => {
