@@ -15,5 +15,6 @@
 ## 次に試す候補(軸の順 gear → deck → synergy → strategy → メタ → joint)
 - 対tactician 26.7%/magician 26.7%/electrician 38.3%/you 36.7% が弱点。氷結札+砕氷のシナジー(--swap 3 --cat ice)、氷室AIの未使用操作監査。
 
-- 順位(seed3/200): 1 tactician 63.3, 2 electrician 58.3, 3 cryomancer 56.6, 4 giant 56.3, 5 magician 55.7。8位→3位。本番AIでは未計測。
+- 完了判定(cryoCards採用後, seed3/200): 基本 1位65.4(2位tactician62.2) / envDeck varied 1位63.9(2位electrician61.8) / oppGears none 1位58.6(2位magician58.1) / oppGears random 5位54.8(1位tactician56.8, -2.0pt)。→ random条件で未達、トップ未到達のまま。
+- 順位(seed3/200, 旧): 1 tactician 63.3, 2 electrician 58.3, 3 cryomancer 56.6, 4 giant 56.3, 5 magician 55.7。8位→3位。本番AIでは未計測。
 - 次: deck(1枚/シナジー)走査、氷結を毎ターン撃つAIノブ(strategy)。
