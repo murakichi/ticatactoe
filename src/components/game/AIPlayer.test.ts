@@ -436,3 +436,25 @@ describe('軽減札を先に撃って通常スキルを撃てるようにする'
         expect(run(0, [53, 5, 12]).chargeClicks).toBeUndefined();
     });
 });
+
+describe('AIPlayer cryomancer frost cards (sim/ai.js F.cryoCards と同一)', () => {
+    const { skillCosts } = require('./skillCosts');
+    const plan = (character: 'cryomancer' | 'you', avail: number[]) => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        put(b, 1, '💙', 2);
+        put(b, 15, '⭕', 5);
+        const ai = new AIPlayer('💙', character, ['⭕']);
+        return ai.chooseSkills(b, 20, skillCosts, 0, 5, avail, false);
+    };
+    it('氷室の番人は霜降り・氷結トークンを使う', () => {
+        const skills = plan('cryomancer', [45, 48]);
+        expect(skills).toContain('onClickFrostfall');
+        expect(skills).toContain('onClickFrostToken');
+    });
+    it('他キャラは使わない', () => {
+        const skills = plan('you', [45, 48]);
+        expect(skills).not.toContain('onClickFrostfall');
+        expect(skills).not.toContain('onClickFrostToken');
+    });
+});
