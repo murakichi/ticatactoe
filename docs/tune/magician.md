@@ -1,14 +1,15 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 2c7c1bc(4条件1位は 2c7c1bc 時点で確認。以降の master 変更は演出等のみ)
+- 最後に検証したmaster: ae193e7(4条件1位は 2c7c1bc で確認。以降の master 変更はドキュメントのみ)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
-- 連続不採用回数: 5(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
-- 状態: refining(ユーザー指示「さらにトップを目指して」で再開。AI改修=strategy 軸を新規仮説で。連続不採用0に戻す)- 洗練後の基準: 環境勝率 71.0%±1.4(seed3/400)、envDeck varied 順位表 71.4% で1位(2位 electrician 60.2)
+- 連続不採用回数: 6(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
+- 状態: done(再開後の洗練も飽和: 試行14〜19 の6件が連続不採用。discountPlan=2 は sim で +1.7pt だが本番AIに移植経路が無く issue #93)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 19 | joint(ギア2枠) | ギア2枠同時入替（seed2/200, 基準70.5）: vengeance+luckyPurse 65.0(-5.5)・luckyPurse+bindingLock 62.3(-8.2)・gambler+luckyPurse 64.5(-6.0) | 不採用（現ギア [sturdy, ironLock] が最適） |
 | 18 | synergy(3枚) | 新デッキで `--scan deck --swap 3 --neighbors 40 --games 60 --seed 5`（カテゴリ無制限）。基準69.6、最良 71.3（+1.7）、他は+1.1以下 | 不採用（閾値+3に届かず再測定せず） |
 | 17 | strategy(AI) | 既存ノブ discountPlan: 0(無効) 60.8(-9.7、特売系の先撃ちは必須)。2(手札に軽減で撃てる札が無いとき、軽減札を撃ってから1コストで引き直して探す) は seed2/200 +1.7・seed3/400 +1.7(71.0→72.7)・seed4/400 +1.8(70.1→71.9)。3回とも同じ向き、悪化なし(対tactician +4〜5, electrician +3) | **保留（移植コスト大）**: sim上は合算で約2.5σの有効。ただし本番AIにはターン中のシャッフル→再計画の経路が無く(AIPlayer.ts に shuffle なし。Game.tsx の onClickShuffle は人間用)、ミラーには AI ターンのループ改修が要る。本番に入らない限り意味が無いので採用せず issue 化 |
 | 16 | strategy(AI) | 審判の日を撃つ前にコスト+N の魔力を残す judgeBuf（seed2/200, 基準70.5）。N=1 68.6(-1.9)・N=2 67.5(-3.0) | 不採用（待たずに撃つのが最適。ノブは削除） |
