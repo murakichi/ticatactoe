@@ -65,6 +65,15 @@ export const skillCosts = {
     onClickSwidden: 3,
     // 殉火（仮名）: 自陣のコマを犠牲にして、ライフがそれ以下の敵コマ全てに🔥。idx 40
     onClickSacrifice: 5,
+    // 氷結系の汎用スキル(idx 41-48)。氷結を作った数は絶対零度のコスト軽減に1個ずつ数える
+    onClickFrostArea: 5,
+    onClickIcicle: 6,
+    onClickRandomFreeze: 3,
+    onClickFreezeSpread: 7,
+    onClickFrostToken: 3,
+    onClickDoubleFrostToken: 6,
+    onClickShatter: 4,
+    onClickFrostfall: 3,
 };
 
 export type SkillCosts = typeof skillCosts;

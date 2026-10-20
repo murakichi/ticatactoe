@@ -179,6 +179,32 @@ const infernoTargets = (board, me) =>
 /** 🔑ロックを掛けられるマスか: 氷結中でない */
 const lockable = (sq) => !isFrozen(sq);
 
+// ---- 氷結スキル群（範囲氷結 / 氷柱 / ランダム氷結 / 氷結拡散 / 氷結トークン / 砕氷 / 霜降り） ----
+/** ランダム氷結の候補: canFreeze なマス（空きマス含む）の昇順 */
+const randomFreezeCandidates = (board) => board.map((sq, i) => (canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+/** 氷結トークン: idx に player のコマ（ライフ bind）を❄付きで置く。作られた❄の数(1)を返す。board を直接書き換える */
+function placeFrostToken(board, idx, player, bind) {
+    board[idx] = { player, bind, effects: [{ effect: '❄' }] };
+    return 1;
+}
+/** 砕氷: 氷結中のコマを、❄を全除去して❄1スタックにつき3ダメージ（倍率なし・通れば🔥は消える）。ライフ0以下で破壊（空きマス化）。コマが無い/氷結中でなければ何もしない */
+function shatter(board, cell) {
+    const sq = board[cell];
+    if (!sq.player || !isFrozen(sq)) return { stacks: 0, damage: 0, destroyed: false };
+    const stacks = frozenStacks(sq);
+    const damage = stacks * 3;
+    const hit = applyDamage(sq, damage, 'poison').sq;
+    if (hit.bind <= 0) {
+        board[cell] = { player: undefined, bind: 0, effects: [] };
+        return { stacks, damage, destroyed: true };
+    }
+    board[cell] = thaw(hit);
+    return { stacks, damage, destroyed: false };
+}
+/** 霜降り: player のコマでライフ2以下（0含む）かつ canFreeze なマスの昇順 */
+const frostfallTargets = (board, player) =>
+    board.map((sq, i) => (sq.player === player && sq.bind <= 2 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
 // ---- 焼畑 / 火炎トークン / 殉火 ----
 /** 焼畑: cell の🌱を全て除去し、除去した数と同じ数だけ ignite する（氷結中なら最初のスタックで氷結が全解除、残りが🔥）。🌱が無ければ n=0。board を直接書き換える */
 function swidden(board, cell, size) {
@@ -210,7 +236,7 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn) {
 }
 
 module.exports = {
-    swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
+    randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,

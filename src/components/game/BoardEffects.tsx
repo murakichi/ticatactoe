@@ -306,6 +306,7 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     <>
                         <div className={styles.haze} />
                         {fallParticles('❄')}
+                        {cellPops(effect.indexes, '🧊')}
                     </>
                 );
             case 'flame':

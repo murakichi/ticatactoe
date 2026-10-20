@@ -15,6 +15,10 @@ import {
     budStacks,
     activeBuds,
     swidden,
+    randomFreezeCandidates,
+    placeFrostToken,
+    frostfallTargets,
+    shatter,
     canSacrifice,
     sacrificeTargets,
     sacrificeFlame,
@@ -40,6 +44,7 @@ import {
     GLACIER_BASE_COST,
     FLAME_BURN_DAMAGE,
 } from './thermal';
+import { lineCells } from './boardGeometry';
 import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
 import { findEmptyIndexes } from '../../util';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -733,5 +738,104 @@ describe('殉火（仮名）', () => {
         expect(flameStacks(b[1])).toBe(0);
         expect(r.thawed).toEqual([1]);
         expect(sacrificeTargets(b, 3, '💙', ['you', 'you'])).toEqual([1]);
+    });
+});
+
+describe('氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷結・氷結拡散・氷結トークン・砕氷・霜降り）', () => {
+    it('lineCells: 行・列・斜め2方向（盤の端から端まで、昇順）', () => {
+        expect(lineCells(4, 5, 'row')).toEqual([4, 5, 6, 7]);
+        expect(lineCells(4, 5, 'col')).toEqual([1, 5, 9, 13]);
+        expect(lineCells(4, 5, 'diag')).toEqual([0, 5, 10, 15]);
+        expect(lineCells(4, 6, 'anti')).toEqual([3, 6, 9, 12]);
+        expect(lineCells(4, 1, 'diag')).toEqual([1, 6, 11]);
+    });
+
+    it('範囲氷結・氷柱・氷結拡散: freeze が付けられるマスだけに付き、数は freeze の戻り値の長さ', () => {
+        const b = emptyBoard();
+        b[5] = sq('⭕', 3, '🔥');
+        b[6] = sq('💙', 3, '🔑');
+        b[4] = sq('💙', 3);
+        const made = freeze(b, lineCells(4, 4, 'row')); // 4,5,6,7 のうち 🔥(5)と🔑(6)は除く
+        expect(made).toEqual([4, 7]);
+        expect(frozenStacks(b[4])).toBe(1);
+        expect(isFrozen(b[7])).toBe(true); // 空きマスにも付く
+    });
+
+    it('ランダム氷結の候補は freeze できるマス（🔑・🔥は除く）', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3, '🔑');
+        b[1] = sq('💙', 3, '🔥');
+        b[2] = sq('💙', 3, '❄'); // 氷結済みにも重ねられる
+        const c = randomFreezeCandidates(b);
+        expect(c).not.toContain(0);
+        expect(c).not.toContain(1);
+        expect(c).toContain(2);
+        expect(c).toHaveLength(14);
+    });
+
+    it('氷結トークン: ❄付きの自陣コマを置く（作られた❄は1）', () => {
+        const b = emptyBoard();
+        expect(placeFrostToken(b, 5, '💙', 4)).toBe(1);
+        expect(b[5].player).toBe('💙');
+        expect(b[5].bind).toBe(4);
+        expect(frozenStacks(b[5])).toBe(1);
+    });
+
+    it('砕氷: ❄全部を砕き、1スタック3ダメージ。ライフ0以下なら破壊。氷結していない/空きマスは何もしない', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 10, '❄', '❄', '🔥'); // 6ダメージ → 4、🔥は消える
+        b[1] = sq('⭕', 3, '❄'); // 3ダメージ → 破壊
+        b[2] = sq('⭕', 5);
+        b[3] = sq(undefined, 0, '❄');
+        expect(shatter(b, 0)).toEqual({ stacks: 2, damage: 6, destroyed: false });
+        expect(b[0].bind).toBe(4);
+        expect(isFrozen(b[0])).toBe(false);
+        expect(flameStacks(b[0])).toBe(0);
+        expect(shatter(b, 1)).toEqual({ stacks: 1, damage: 3, destroyed: true });
+        expect(b[1]).toEqual({ player: undefined, bind: 0, effects: [] });
+        expect(shatter(b, 2)).toEqual({ stacks: 0, damage: 0, destroyed: false });
+        expect(shatter(b, 3)).toEqual({ stacks: 0, damage: 0, destroyed: false });
+        expect(b[3].effects).toHaveLength(1);
+    });
+
+    it('霜降り: 自陣のライフ2以下（0含む）で氷結を付けられるコマ。3以上・敵・🔑・🔥は対象外', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 2);
+        b[1] = sq('💙', 0);
+        b[2] = sq('💙', 3);
+        b[3] = sq('⭕', 1);
+        b[4] = sq('💙', 1, '🔑');
+        b[5] = sq('💙', 1, '🔥');
+        b[6] = sq('💙', 1, '❄'); // 氷結済みにも重ねられる
+        expect(frostfallTargets(b, '💙')).toEqual([0, 1, 6]);
+    });
+
+    it('sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simGeo = require('../../../sim/geometry.js');
+        for (const size of [4, 5, 7]) for (const dir of ['row', 'col', 'diag', 'anti'] as const) for (const cell of [0, size + 1, size * size - 1]) expect(simGeo.lineCells(size, cell, dir)).toEqual(lineCells(size, cell, dir));
+        const mk = () => {
+            const b = emptyBoard();
+            b[0] = sq('⭕', 10, '❄', '❄', '🔥');
+            b[1] = sq('⭕', 3, '❄');
+            b[2] = sq('💙', 2);
+            b[3] = sq('💙', 1, '🔑');
+            b[4] = sq('💙', 0, '❄');
+            return b;
+        };
+        expect(sim.randomFreezeCandidates(mk())).toEqual(randomFreezeCandidates(mk()));
+        expect(sim.frostfallTargets(mk(), '💙')).toEqual(frostfallTargets(mk(), '💙'));
+        for (const cell of [0, 1, 2, 4]) {
+            const a = mk();
+            const c = mk();
+            expect(sim.shatter(a, cell)).toEqual(shatter(c, cell));
+            expect(a).toEqual(c);
+        }
+        const d = mk();
+        const e = mk();
+        expect(sim.placeFrostToken(d, 9, '💙', 4)).toBe(placeFrostToken(e, 9, '💙', 4));
+        expect(d).toEqual(e);
     });
 });

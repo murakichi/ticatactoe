@@ -133,3 +133,21 @@ export const orthoNeighbors = (i: number, size: number): number[] => {
     if (c < size - 1) out.push(i + 1);
     return out;
 };
+
+export type LineDir = 'row' | 'col' | 'diag' | 'anti';
+
+/**
+ * cell を通る、盤の端から端までの線上のマス（昇順）。氷柱用。
+ * row=同じ行 / col=同じ列 / diag=左上→右下(row-col 一定) / anti=右上→左下(row+col 一定)
+ */
+export const lineCells = (size: number, cell: number, dir: LineDir): number[] => {
+    const r = Math.floor(cell / size);
+    const c = cell % size;
+    const out: number[] = [];
+    for (let rr = 0; rr < size; rr++) {
+        for (let cc = 0; cc < size; cc++) {
+            if (dir === 'row' ? rr === r : dir === 'col' ? cc === c : dir === 'diag' ? rr - cc === r - c : rr + cc === r + c) out.push(rr * size + cc);
+        }
+    }
+    return out;
+};

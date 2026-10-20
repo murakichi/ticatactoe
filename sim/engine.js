@@ -47,7 +47,7 @@ function makeRng(seed) {
 }
 
 const config = require('./config');
-const { boardSizeFor, geometryOf, geometryForCells } = require('./geometry');
+const { boardSizeFor, geometryOf, geometryForCells, lineCells } = require('./geometry');
 const gear = require('./gear');
 const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
@@ -76,7 +76,7 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
-const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 41; // SIM_POOL_SIZE: A/B検証用の上書き
+const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
 function normRand(m, s, rng) {
@@ -193,6 +193,15 @@ const skillCosts = {
     onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
     onClickSwidden: (config.thermal && config.thermal.swiddenCost) || 3,
     onClickSacrifice: (config.thermal && config.thermal.sacrificeCost) || 5,
+    // 氷結スキル群 idx 41〜48
+    onClickFrostArea: (config.thermal && config.thermal.frostAreaCost) || 5,
+    onClickIcicle: (config.thermal && config.thermal.icicleCost) || 6,
+    onClickRandomFreeze: (config.thermal && config.thermal.randomFreezeCost) || 3,
+    onClickFreezeSpread: (config.thermal && config.thermal.freezeSpreadCost) || 7,
+    onClickFrostToken: (config.thermal && config.thermal.frostTokenCost) || 3,
+    onClickDoubleFrostToken: (config.thermal && config.thermal.doubleFrostTokenCost) || 6,
+    onClickShatter: (config.thermal && config.thermal.shatterCost) || 4,
+    onClickFrostfall: (config.thermal && config.thermal.frostfallCost) || 3,
 };
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
@@ -498,6 +507,11 @@ function newGame(opts = {}) {
         useFreeze: false,
         useSucker: false,
         useSwidden: false,
+        useFrostArea: false,
+        useIcicle: false,
+        icicleDir: 'row', // 氷柱の方向（AI/テストは exeIcicle に直接渡す。placeMove 経由のときはこの値）
+        useFrostSpread: false,
+        useShatter: false,
         useSacrifice: false,
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -697,6 +711,26 @@ function placeMove(s, i) {
         exeChargeArea(s, i);
         return true;
     }
+    if (s.useFrostArea) {
+        exeFrostArea(s, i);
+        s.useFrostArea = false;
+        return true;
+    }
+    if (s.useIcicle) {
+        exeIcicle(s, i, s.icicleDir);
+        s.useIcicle = false;
+        return true;
+    }
+    if (s.useFrostSpread) {
+        if (!exeFreezeSpread(s, i)) return false; // 空きマスは起点にできない
+        s.useFrostSpread = false;
+        return true;
+    }
+    if (s.useShatter) {
+        if (!exeShatter(s, i)) return false; // 氷結中のコマを選び直す
+        s.useShatter = false;
+        return true;
+    }
     if (s.useSwidden) {
         if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
         s.useSwidden = false;
@@ -714,8 +748,7 @@ function placeMove(s, i) {
     }
     if (s.useFreeze) {
         if (!thermal.canFreeze(board[i])) return false; // 空きマス・氷結済み・ロック中は選び直せる
-        const made = thermal.freeze(board, [i]).length;
-        for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made; // 氷結が作られるたび、全席の絶対零度が安くなる
+        chargeGlacier(s, thermal.freeze(board, [i]).length); // 氷結が作られるたび、全席の絶対零度が安くなる
         s.useFreeze = false;
         return true;
     }
@@ -1545,6 +1578,103 @@ function onClickWindborne(s) {
     bumpStat(s, 'windborne');
 }
 
+// ---- 氷結スキル群 (idx 41〜48) ----
+// 氷結が実際に1スタック作られる度に、全席の絶対零度の軽減カウンタを+1する（作れなかったマスは数えない）
+function chargeGlacier(s, made) {
+    for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made;
+}
+function freezeCells(s, cells) {
+    const made = thermal.freeze(s.board, cells).length;
+    chargeGlacier(s, made);
+    return made;
+}
+// 範囲氷結 (idx41): 中心と周囲8マス(盤端で切れる3x3)の canFreeze なマスに❄+1
+function onClickFrostArea(s) {
+    s.useFrostArea = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostArea));
+    bumpMagicCount(s);
+    bumpStat(s, 'frostArea');
+}
+function exeFrostArea(s, i) {
+    bumpStat(s, 'frostAreaCells', freezeCells(s, geometryOf(s.size).stompRange(i)));
+}
+// 氷柱 (idx42): マスと方向を選び、その線（盤の端から端まで）の canFreeze なマス全部に❄+1
+function onClickIcicle(s) {
+    s.useIcicle = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickIcicle));
+    bumpMagicCount(s);
+    bumpStat(s, 'icicle');
+}
+function exeIcicle(s, i, dir) {
+    bumpStat(s, 'icicleCells', freezeCells(s, lineCells(s.size, i, dir)));
+}
+// ランダム氷結 (idx43): canFreeze なマス（空きマス含む）から重複なしにランダムな1〜4マスに❄+1。クリック不要
+function onClickRandomFreeze(s) {
+    const cands = thermal.randomFreezeCandidates(s.board);
+    const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
+    freezeCells(s, randomAnyPick(cands, n, s.rng));
+    spendMagic(s, calculateCost(s, costsOf(s).onClickRandomFreeze));
+    bumpMagicCount(s);
+    bumpStat(s, 'randomFreeze');
+}
+// 氷結拡散 (idx44): コマを選ぶと、コマのあるマスだけを縦横に辿って届く全コマ（敵味方問わず）の canFreeze なマスに❄+1
+function onClickFreezeSpread(s) {
+    s.useFrostSpread = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFreezeSpread));
+    bumpMagicCount(s);
+    bumpStat(s, 'freezeSpread');
+}
+function exeFreezeSpread(s, i) {
+    if (!s.board[i].player) return false;
+    bumpStat(s, 'freezeSpreadCells', freezeCells(s, connectedPieces(s.board, i, s.size)));
+    return true;
+}
+// 氷結トークン (idx45) / 氷結ダブルトークン (idx46): 空きマスにランダムで❄付きの自陣のコマを置く。トークン扱い（ターン1回）
+function placeFrostTokens(s, n, costKey) {
+    const empties = findEmptyIndexes(s.board);
+    const picks = n === 1 ? (empties.length ? [randomPick(empties, s.rng)] : []) : randomAnyPick(empties, n, s.rng);
+    for (const idx of picks) {
+        if (idx == null) continue;
+        chargeGlacier(s, thermal.placeFrostToken(s.board, idx, curPlayer(s), calculateTokenBind(s)));
+        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない扱い
+    }
+    spendMagic(s, calculateCost(s, costsOf(s)[costKey], true));
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+}
+function onClickFrostToken(s) { placeFrostTokens(s, 1, 'onClickFrostToken'); bumpStat(s, 'frostToken'); }
+function onClickDoubleFrostToken(s) { placeFrostTokens(s, 2, 'onClickDoubleFrostToken'); bumpStat(s, 'doubleFrostToken'); }
+// 砕氷 (idx47): 氷結中のコマ（敵味方どちらでも）を選ぶと、❄を全除去して❄1スタックにつき3ダメージ。ライフ0以下で破壊。氷結は作られないのでカウンタは増えない
+function shatterTargets(s) {
+    const out = [];
+    s.board.forEach((sq, i) => { if (sq.player && thermal.isFrozen(sq)) out.push(i); });
+    return out;
+}
+function onClickShatter(s) {
+    if (shatterTargets(s).length === 0) return;
+    s.useShatter = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShatter));
+    bumpMagicCount(s);
+    bumpStat(s, 'shatter');
+}
+function exeShatter(s, i) {
+    const r = thermal.shatter(s.board, i);
+    if (r.stacks === 0) return false;
+    if (r.destroyed) addCorpses(s, 1);
+    bumpStat(s, 'shatterDamage', r.damage);
+    return true;
+}
+// 霜降り (idx48): 自陣のコマでライフ2以下（0含む）かつ canFreeze なものすべてに❄+1。クリック不要。対象が0なら使えない
+function onClickFrostfall(s) {
+    const targets = thermal.frostfallTargets(s.board, curPlayer(s));
+    if (targets.length === 0) return;
+    freezeCells(s, targets);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickFrostfall));
+    bumpMagicCount(s);
+    bumpStat(s, 'frostfall');
+}
+
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
@@ -1686,6 +1816,14 @@ const SKILLS = {
     flameToken: onClickFlameToken,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
+    frostArea: onClickFrostArea,
+    icicle: onClickIcicle,
+    randomFreeze: onClickRandomFreeze,
+    freezeSpread: onClickFreezeSpread,
+    frostToken: onClickFrostToken,
+    doubleFrostToken: onClickDoubleFrostToken,
+    shatter: onClickShatter,
+    frostfall: onClickFrostfall,
     sacrifice: onClickSacrifice,
     solstice: onClickSolstice,
     sucker: onClickSucker,
@@ -1717,5 +1855,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

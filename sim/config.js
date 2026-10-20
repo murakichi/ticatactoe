@@ -17,7 +17,7 @@ module.exports = {
     "lifeStd": 3,
     "giantSkipModulo": 5,
     // 汎用スキルプールの大きさ。21 -> 23 (#39) -> 27 (#40) -> 29 (ヘイルメアリー・サイレンス) -> 30 (毒霧) -> 32 (氷結・火炎付与)
-    "poolSize": 41,
+    "poolSize": 49,
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。
     // 99 にすると全人数で従来どおり着手ごと（A/B検証用）
     "decayPerRoundMinPlayers": 3,
@@ -54,6 +54,14 @@ module.exports = {
         "flameDoubleTokenCost": 6,
         "swiddenCost": 3,
         "sacrificeCost": 5,
+        "frostAreaCost": 5,
+        "icicleCost": 6,
+        "randomFreezeCost": 3,
+        "freezeSpreadCost": 7,
+        "frostTokenCost": 3,
+        "doubleFrostTokenCost": 6,
+        "shatterCost": 4,
+        "frostfallCost": 3,
         "infernoCost": 9
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること

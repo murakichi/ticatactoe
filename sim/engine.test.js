@@ -1409,7 +1409,7 @@ test('業火: 雷霆の巫の⚡無敵コマは対象外', () => {
 
 test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録されている。ライフ平均は氷室の番人5・煉獄の鍛冶師5', () => {
     assert.ok(e.CHARACTERS.includes('cryomancer') && e.CHARACTERS.includes('pyromancer'));
-    assert.strictEqual(e.POOL_SIZE, 41);
+    assert.strictEqual(e.POOL_SIZE, 49);
     assert.strictEqual(e.skillCosts.onClickGlacier, 10);
     assert.strictEqual(e.skillCosts.onClickInferno, 9);
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
@@ -1691,6 +1691,192 @@ test('AI 対氷結: 自分のリーチの4つ目が氷結中の空きマスで�
     const r2 = aiMod.makeMove(t, 'faithful');
     assert.notStrictEqual(r2.move, 3);
     assert.ok(t.board[3].effects.some((x) => x.effect === '❄'));
+});
+
+// ---- 氷結スキル群 idx41〜48 ----
+const geo4 = require('./geometry');
+const chargeOf = (st) => st.glacierCharge.slice();
+
+test('範囲氷結: 中心と周囲8マスの canFreeze なマス（空きマス可）に❄+1。🔑・🔥のマスは飛ばす。作れた分だけ全席のカウンタ+1。コスト5', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 3, effects: [FRZ] };                 // 氷結済みにも重ねられる
+    s.board[6] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };    // 🔑 → 付かない
+    s.board[9] = { player: '⭕', bind: 3, effects: [FLM] };                 // 🔥 → 付かない
+    const before = s.heartMagic;
+    e.SKILLS.frostArea(s);
+    assert.strictEqual(s.heartMagic, before - 5);
+    assert.strictEqual(e.placeMove(s, 5), true);
+    const fz = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
+    assert.strictEqual(fz(5), 2);
+    assert.strictEqual(fz(6), 0); assert.strictEqual(fz(9), 0);
+    for (const k of [0, 1, 2, 4, 8, 10]) assert.strictEqual(fz(k), 1, 'マス' + k);
+    assert.strictEqual(fz(3) + fz(7) + fz(11) + fz(12) + fz(15), 0);       // 範囲外
+    assert.deepStrictEqual(chargeOf(s), [7, 7]);                            // 5,0,1,2,4,8,10 の7マス
+    assert.strictEqual(s.heartTurn, true);
+});
+
+test('氷柱: lineCells(row/col/diag/anti) の線の canFreeze なマス全部に❄+1。sim/geometry.js の lineCells は昇順', () => {
+    assert.deepStrictEqual(geo4.lineCells(4, 5, 'row'), [4, 5, 6, 7]);
+    assert.deepStrictEqual(geo4.lineCells(4, 5, 'col'), [1, 5, 9, 13]);
+    assert.deepStrictEqual(geo4.lineCells(4, 5, 'diag'), [0, 5, 10, 15]);
+    assert.deepStrictEqual(geo4.lineCells(4, 5, 'anti'), [2, 5, 8]);
+    assert.deepStrictEqual(geo4.lineCells(4, 1, 'diag'), [1, 6, 11]);
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[6] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+    const before = s.heartMagic;
+    e.SKILLS.icicle(s);
+    assert.strictEqual(s.heartMagic, before - 6);
+    e.exeIcicle(s, 5, 'row'); s.useIcicle = false;
+    const fz = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
+    assert.deepStrictEqual([4, 5, 6, 7].map(fz), [1, 1, 0, 1]);              // 🔑のマスは飛ばす
+    assert.deepStrictEqual(chargeOf(s), [3, 3]);
+    e.exeIcicle(s, 5, 'diag');
+    assert.deepStrictEqual([0, 5, 10, 15].map(fz), [1, 2, 1, 1]);
+});
+
+test('ランダム氷結: クリック不要。canFreeze なマスから重複なしにランダムな1〜4マスに❄+1（空きマス可）。コスト3', () => {
+    const seen = new Set();
+    for (let seed = 1; seed <= 40; seed++) {
+        const s = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        s.heartTurn = true; s.heartMagic = 20;
+        s.board[0] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+        e.SKILLS.randomFreeze(s);
+        assert.strictEqual(s.heartMagic, 17);
+        const n = s.board.reduce((a, sq) => a + sq.effects.filter((x) => x.effect === '❄').length, 0);
+        const cells = s.board.filter((sq) => sq.effects.some((x) => x.effect === '❄')).length;
+        assert.ok(n >= 1 && n <= 4 && n === cells, '重複なし 1〜4: ' + n);
+        assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '❄').length, 0);
+        assert.deepStrictEqual(chargeOf(s), [n, n]);
+        seen.add(n);
+    }
+    assert.ok(seen.size >= 3);
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[3] = { player: '⭕', bind: 1, effects: [FLM] };
+    assert.ok(!th.randomFreezeCandidates(b).includes(3));
+    assert.strictEqual(th.randomFreezeCandidates(b).length, 15);
+});
+
+test('氷結拡散: コマを選ぶと、コマだけを縦横に辿って届く全コマ（敵味方問わず）に❄+1。空きマスは起点にできない。コスト7', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    for (const k of [0, 1, 5]) s.board[k] = { player: '⭕', bind: 3, effects: [] };
+    s.board[2] = { player: '💙', bind: 3, effects: [] };
+    s.board[15] = { player: '⭕', bind: 3, effects: [] };                 // 離れたコマ
+    const before = s.heartMagic;
+    e.SKILLS.freezeSpread(s);
+    assert.strictEqual(s.heartMagic, before - 7);
+    assert.strictEqual(e.placeMove(s, 10), false);                         // 空きマス → 再選択
+    assert.strictEqual(e.placeMove(s, 0), true);
+    const fz = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
+    assert.deepStrictEqual([0, 1, 2, 5].map(fz), [1, 1, 1, 1]);
+    assert.strictEqual(fz(15), 0);
+    assert.deepStrictEqual(chargeOf(s), [4, 4]);
+});
+
+test('氷結トークン/氷結ダブルトークン: 空きマスに❄付きの自陣コマを置く（トークン扱い）。コスト3/6、カウンタは1個ずつ', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    const th = require('./thermal');
+    const b = [{ player: undefined, bind: 0, effects: [] }];
+    assert.strictEqual(th.placeFrostToken(b, 0, '💙', 4), 1);
+    assert.deepStrictEqual(b[0], { player: '💙', bind: 4, effects: [FRZ] });
+    s.board[0] = { player: undefined, bind: 0, effects: [FRZ] };           // 凍った空きマスには置けない
+    e.SKILLS.frostToken(s);
+    assert.strictEqual(s.heartMagic, 17);
+    const mine = s.board.filter((sq) => sq.player === '💙');
+    assert.strictEqual(mine.length, 1);
+    assert.strictEqual(mine[0].effects.length, 1);
+    assert.strictEqual(mine[0].effects[0].effect, '❄');
+    assert.strictEqual(s.usedTokenThisTurn, true);
+    assert.deepStrictEqual(chargeOf(s), [1, 1]);
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    e.SKILLS.doubleFrostToken(t);
+    assert.strictEqual(t.heartMagic, 14);
+    assert.strictEqual(t.board.filter((sq) => sq.player === '💙' && sq.effects.some((x) => x.effect === '❄')).length, 2);
+    assert.deepStrictEqual(chargeOf(t), [2, 2]);
+    const tac = game('tactician', 'you'); tac.heartTurn = true; tac.heartMagic = 20;
+    e.SKILLS.frostToken(tac);
+    assert.strictEqual(tac.heartMagic, 20 - 2);                              // 軍師はトークン-1
+});
+
+test('砕氷: 氷結中のコマ（敵味方どちらでも）の❄を全除去して❄1スタックにつき3ダメージ。0以下で破壊。氷結が作られないのでカウンタは増えない', () => {
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[0] = { player: '⭕', bind: 9, effects: [FRZ, FRZ, FLM] };
+    assert.deepStrictEqual(th.shatter(b, 0), { stacks: 2, damage: 6, destroyed: false });
+    assert.strictEqual(b[0].bind, 3);
+    assert.strictEqual(b[0].effects.length, 0);                              // ❄全除去・ダメージが通って🔥も消える
+    b[1] = { player: '⭕', bind: 6, effects: [FRZ, FRZ] };
+    assert.deepStrictEqual(th.shatter(b, 1), { stacks: 2, damage: 6, destroyed: true });
+    assert.deepStrictEqual(b[1], { player: undefined, bind: 0, effects: [] });
+    assert.deepStrictEqual(th.shatter(b, 2), { stacks: 0, damage: 0, destroyed: false });  // 空きマス
+    b[3] = { player: '⭕', bind: 4, effects: [] };
+    assert.deepStrictEqual(th.shatter(b, 3), { stacks: 0, damage: 0, destroyed: false });  // 氷結していない
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '💙', bind: 5, effects: [FRZ] };                  // 自陣にも使える
+    s.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.shatter(s);
+    assert.strictEqual(s.heartMagic, 16);
+    assert.strictEqual(e.placeMove(s, 6), false);                            // 氷結していない → 再選択
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].bind, 2);
+    assert.deepStrictEqual(chargeOf(s), [0, 0]);
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    e.SKILLS.shatter(t);                                                     // 氷結中のコマが無ければ使えない
+    assert.strictEqual(t.heartMagic, 20);
+});
+
+test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコマすべてに❄+1。クリック不要。対象が0なら使えない。コスト3', () => {
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[0] = { player: '💙', bind: 2, effects: [] };
+    b[1] = { player: '💙', bind: 0, effects: [] };
+    b[2] = { player: '💙', bind: 3, effects: [] };
+    b[3] = { player: '💙', bind: 1, effects: [FLM] };
+    b[4] = { player: '💙', bind: 1, effects: [{ effect: '🔑' }] };
+    b[5] = { player: '⭕', bind: 1, effects: [] };
+    assert.deepStrictEqual(th.frostfallTargets(b, '💙'), [0, 1]);
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board = b.map((x) => ({ ...x, effects: x.effects.slice() }));
+    e.SKILLS.frostfall(s);
+    assert.strictEqual(s.heartMagic, 17);
+    assert.deepStrictEqual([0, 1, 2, 5].map((i) => s.board[i].effects.length), [1, 1, 0, 0]);
+    assert.deepStrictEqual(chargeOf(s), [2, 2]);
+    assert.strictEqual(s.heartTurn, true);
+    const t = game();
+    t.heartTurn = true; t.heartMagic = 20;
+    t.board[2] = { player: '💙', bind: 5, effects: [] };
+    e.SKILLS.frostfall(t);
+    assert.strictEqual(t.heartMagic, 20);
+});
+
+test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
+    assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
+    const keys = Object.keys(e.skillCosts);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall']);
+    // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
+    const s = game('cryomancer', 'you');
+    s.heartTurn = true; s.heartMagic = 20; s.life = 4;
+    s.skills = [41, 45, 48];
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };
+    assert.doesNotThrow(() => aiMod.makeMove(s, 'faithful'));
+    for (let k = 0; k < 20; k++) {
+        const g = e.newGame({ chars: ['you', 'cryomancer'], rng: e.makeRng(50 + k) });
+        let n = 0;
+        while (!g.winner && n++ < 400) {
+            const r = aiMod.makeMove(g, 'faithful');
+            if (!r.turnEnded && r.move != null) e.placeMove(g, r.move);
+            else if (!r.turnEnded) e.SKILLS.charge(g);
+        }
+        assert.ok(n < 400);
+    }
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

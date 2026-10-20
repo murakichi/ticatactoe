@@ -347,3 +347,43 @@ export const sacrificeFlame = (
     const targets = sacrificeTargets(board, threshold, me, chars);
     return { threshold, targets, thawed: ignite(board, targets, size, 1).thawed };
 };
+
+// ---- 氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷結・氷結拡散・氷結トークン・砕氷・霜降り）の純粋ロジック ----
+// sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。氷結を作った数は絶対零度のコスト軽減に1個ずつ数える。
+
+/** 氷結を付けられるマスの昇順配列（ランダム氷結の候補） */
+export const randomFreezeCandidates = (board: SquareInfo[]): number[] => board.map((sq, i) => (canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 氷結トークン: idx に❄付きの player のコマ（ライフ bind）を置く。作られた❄の数（1）を返す。board を直接書き換える */
+export const placeFrostToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number): number => {
+    board[idx] = { player, bind, effects: [{ effect: '❄' }] };
+    return 1;
+};
+
+/** 霜降り: player のコマでライフが maxLife 以下（0含む）かつ氷結を付けられるマス（昇順） */
+export const frostfallTargets = (board: SquareInfo[], player: SquareInfo['player'], maxLife: number = FROSTFALL_MAX_LIFE): number[] =>
+    board.map((sq, i) => (sq.player === player && sq.bind <= maxLife && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 霜降りの対象になるライフの上限 */
+export const FROSTFALL_MAX_LIFE = 2;
+
+/** 砕氷が❄1スタックにつき与えるダメージ */
+export const SHATTER_DAMAGE_PER_STACK = 3;
+
+/**
+ * 砕氷: 氷結中のコマのある cell の❄を全部砕き、❄1スタックにつき3ダメージ（倍率なし。ダメージが通れば🔥は消える）。
+ * ライフが0以下になったら破壊（空きマス化）。コマが無い/氷結中でないマスは何もしない。board を直接書き換える
+ */
+export const shatter = (board: SquareInfo[], cell: number): { stacks: number; damage: number; destroyed: boolean } => {
+    const sq = board[cell];
+    if (!sq.player || !isFrozen(sq)) return { stacks: 0, damage: 0, destroyed: false };
+    const stacks = frozenStacks(sq);
+    const damage = stacks * SHATTER_DAMAGE_PER_STACK;
+    const hit = applyDamage(thaw(sq), damage, 'poison').sq;
+    if (hit.bind <= 0) {
+        board[cell] = { player: undefined, bind: 0, effects: [] };
+        return { stacks, damage, destroyed: true };
+    }
+    board[cell] = hit;
+    return { stacks, damage, destroyed: false };
+};
