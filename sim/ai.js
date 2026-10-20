@@ -827,7 +827,7 @@ function chooseSkills(s, availableSkills) {
                 }
                 // 死体が1つでもあれば即発動。相手がロックで守っても蘇生の窓(4手番)の間に切れるので待つ意味がない
                 // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
-                if (corpses >= (F.necroMin || 1) || absorbable >= 2) spend(npay, 'necromancy');
+                if (corpses >= 1 || absorbable >= 2) spend(npay, 'necromancy');
             }
         }
 
@@ -893,7 +893,7 @@ function chooseSkills(s, availableSkills) {
     // Opiumはリーチ防御に使わない (bindを下げるだけで空きマスは塞げない)
     // → getBestMoveでブロック配置させる
 
-    if (skills.length === 0 && isLosing && oppReaches === 0) {
+    if (skills.length === 0 && (isLosing || (F.necroFeed && character === 'necromancer')) && oppReaches === 0) {
         if (availableSkills.includes(5)) {
             let oppOn = 0, myOn = 0;
             for (const idx of geo.antiDiagonal) {
@@ -901,7 +901,7 @@ function chooseSkills(s, availableSkills) {
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
-            if (oppOn > myOn) spend(cost(costsOf(s).onClickSlash, false, 'onClickSlash'), 'slash');
+            if (oppOn > myOn + (isLosing ? 0 : 1)) spend(cost(costsOf(s).onClickSlash, false, 'onClickSlash'), 'slash');
         }
         if (skills.length === 0 && availableSkills.includes(6)) {
             let oppOn = 0, myOn = 0;
@@ -910,7 +910,7 @@ function chooseSkills(s, availableSkills) {
                 if (isEnemy(board[idx].player, me) && !board[idx].effects.some(e => e.effect === '🔑')) oppOn++;
                 if (board[idx].player === me && !board[idx].effects.some(e => e.effect === '🔑')) myOn++;
             }
-            if (oppOn > myOn) spend(cost(costsOf(s).onClickBackSlash, false, 'onClickBackSlash'), 'backSlash');
+            if (oppOn > myOn + (isLosing ? 0 : 1)) spend(cost(costsOf(s).onClickBackSlash, false, 'onClickBackSlash'), 'backSlash');
         }
         if (skills.length === 0 && availableSkills.includes(7) && oppMagic >= 6) {
             spend(cost(costsOf(s).onClickTsunami, false, 'onClickTsunami'), 'tsunami');
