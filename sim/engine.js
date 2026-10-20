@@ -602,6 +602,12 @@ function spendMagic(s, amount, skillId) {
         if (s.skillKinds[s.turn].size >= INFERNO_FREE_SKILLS) s.infernoReady[s.turn] = true;
     }
 }
+// シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
+function shuffleHand(s) {
+    s.magic[s.turn] -= costsOf(s).onClickShuffle;
+    s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
+    s.useMagicCount[s.turn]++;
+}
 function bumpMagicCount(s) {
     s.useMagicCount[s.turn]++;
 }
@@ -1880,7 +1886,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    spendMagic, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
+    spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,

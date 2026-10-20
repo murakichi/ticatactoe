@@ -399,6 +399,27 @@ function forceTable(s, me) {
 // 撃つ順（ライフ3→バイバインの順で次の駒のライフが伸びる。刈り入れ前夜は🌱を刈るので最後）。0/1 は常に撃てる
 const PYRO_FILLERS = [36, 0, 1, 34, 32, 33];
 const PYRO_EXTRA = { 0: { key: 'addLife', cost: 'onClickAddLife' }, 1: { key: 'bibine', cost: 'onClickBibine' } };
+// 軽量→シャッフル→軽量: 手札に軽いスキルが無ければ1コストで引き直しながら、異なる3種類を揃える。
+// 揃えるのに必要な魔力（軽い順の3種類 + シャッフル余裕）が手元にあるときだけ始める
+const PYRO_COSTS = [2, 3, 3, 3, 4, 5];
+function pyroChainShuffle(s, me, table) {
+    const kinds = s.skillKinds[s.turn];
+    let need = INFERNO_FREE_SKILLS - kinds.size;
+    const budget = PYRO_COSTS.slice(0, need).reduce((n, c) => n + c, 0) + need;
+    if (curMagic(s) < budget) return;
+    for (let step = 0; step < 8 && need > 0; step++) {
+        const picks = [];
+        for (const idx of PYRO_FILLERS) {
+            const t = PYRO_EXTRA[idx] || table[idx];
+            if (!s.skills.includes(idx) || !t || kinds.has(t.cost) || (t.legal && !t.legal())) continue;
+            picks.push({ t, cost: calculateCost(s, costsOf(s)[t.cost]) });
+        }
+        picks.sort((a, b) => a.cost - b.cost);
+        if (picks.length && curMagic(s) >= picks[0].cost) { SKILLS[picks[0].t.key](s); need = INFERNO_FREE_SKILLS - kinds.size; continue; }
+        if (curMagic(s) < costsOf(s).onClickShuffle + 2) return;
+        E.shuffleHand(s);
+    }
+}
 function pyroChain(s, me, availableSkills) {
     if (!F.pyroChain || curChar(s) !== 'pyromancer') return;
     // 無料権は手番を跨いで持ち越せるので、業火を撃てる状況でなくても先に貯める（業火が撃てる状況なら直後に無料で撃つ）
@@ -407,6 +428,7 @@ function pyroChain(s, me, availableSkills) {
     const normal = infernoCost(s);
     if (s.infernoReady[s.turn] || need <= 0 || normal === 0) return;
     const table = forceTable(s, me);
+    if (F.pyroChain >= 2) { pyroChainShuffle(s, me, table); return; }
     const picks = [];
     for (const idx of PYRO_FILLERS) {
         const t = PYRO_EXTRA[idx] || table[idx];
@@ -1104,6 +1126,7 @@ function faithfulMakeMoveInner(s) {
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
     pyroChain(s, me, availableSkills);
+    if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= infernoCost(s)
