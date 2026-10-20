@@ -382,3 +382,22 @@ describe('対氷結: 氷結中の空きマスで塞がれた自分のリーチ�
         expect(ai.thawIgniteTarget(b, 3)).toBe(2); // 敵が氷結中 → 自陣(2)にフォールバック
     });
 });
+
+describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const setup = (magic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        [1, 2, 3].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('魔力が足りないとき、軽減札を先に撃ってから業火を撃つ', () => {
+        const r = setup(6, [58, 0, 3]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickInferno']);
+    });
+    it('軽減札が手札にない・魔力が足りなければ業火は撃たない', () => {
+        expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
+        expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
+    });
+});
