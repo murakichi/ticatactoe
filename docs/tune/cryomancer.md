@@ -2,10 +2,10 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db
 - 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2)(既定)
-- 基準線: 環境勝率 60.7% / 3位 / 1位 poisoner 63.8%, 2位 magician 61.9%  (seed=3, games=200, master 3bc89db + freezeBuds)
+- 基準線: 環境勝率 61.0% / 2位 / 1位 poisoner 76.1%, 3位 magician 60.1%  (seed=3, games=200, master f494bb9 + 他セッションの毒使い調整 + antiPoison)
 - 連続不採用回数: 0
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
-- 状態: running(トップ未達。1位 poisoner と 3.1pt)
+- 状態: blocked(issue #94。1位 poisoner 76.1% と 15pt 差。毒使い側の調整が前提)
 ## 診断(2026-10-21、新ギア4種を含む master 3bc89db で再開)
 - 勝ち筋: 氷結(ロック置換、コスト2、余韻で1)で敵の単独リーチを毎手番塞ぎ、霜降り・氷結トークンで自陣を守りながら着手で攻める。固有の絶対零度は敵3コマ以上で撃つが使用は9%の試合のみ(対magician)。
 - ファネル(旧master): 氷結(lock)は1試合2.7回、使った試合の勝率36%(対magician)。デッキの氷系8枚のうち5枚は一度も撃たれない死に札。
