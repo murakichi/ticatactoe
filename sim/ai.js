@@ -38,6 +38,7 @@ const AI_DEFAULTS = {
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
     discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
+    cryoPoison: 1, // 毒使いが霜降り・氷結トークン系を使う(自陣の毒マスを凍らせて毒ダメージから守る)。デッキに45/46/48を入れる前提(tune-top poisoner: 環境勝率 seed5/150 +7.7pt, seed6/200 +4.5pt)
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
@@ -957,7 +958,7 @@ function chooseSkills(s, availableSkills) {
 
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
-    const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer');
+    const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
     // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
     if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
     if (!tokenUsed) {
