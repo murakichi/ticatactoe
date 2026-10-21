@@ -41,6 +41,7 @@ const AI_DEFAULTS = {
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
     cryoPoison: 1, // 毒使いが霜降り・氷結トークン系を使う(自陣の毒マスを凍らせて毒ダメージから守る)。デッキに45/46/48を入れる前提(tune-top poisoner: 環境勝率 seed5/150 +7.7pt, seed6/200 +4.5pt)
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
+    lsAggro: 1,  // 土壇場の防壁が未発動なら相手の1回目の勝ちは止めに行かず攻める(防壁が受ける)。軍師 seed2/4×200 で +2.7pt(合算400試合, CI±2.2)（A/B採用）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -789,8 +790,10 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
+    // 土壇場の防壁が未発動なら、相手の1回目の勝ちは防壁が受けてくれる(相手の列と自陣が消えるだけ)ので止めに行かず、攻めを続ける(AI_DEFAULTS.lsAggro)
+    const lsFree = F.lsAggro && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
     // block opponent win (including captures)
-    for (const o of opps) {
+    for (const o of lsFree ? [] : opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {

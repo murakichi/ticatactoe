@@ -603,3 +603,24 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
     });
 });
+
+describe('AIPlayer 土壇場の防壁 (lastStandReady)', () => {
+    // ⭕が3と7の二箇所で勝ち筋を持つ(片方しか塞げない)。💙は8,9で並べている
+    const setup = () => {
+        const b = emptyBoard();
+        [0, 1, 2, 4, 5, 6].forEach((i) => put(b, i, '⭕'));
+        [8, 9].forEach((i) => put(b, i, '💙'));
+        return b;
+    };
+
+    it('防壁なしなら相手の即勝ちマス(3か7)を塞ぐ', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        expect([3, 7]).toContain(ai.getBestMove(setup(), 3));
+    });
+
+    it('防壁が未発動なら塞ぎ手を強制せず、自分の列(10)を伸ばす', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        ai.lastStandReady = true;
+        expect([3, 7]).not.toContain(ai.getBestMove(setup(), 3));
+    });
+});
