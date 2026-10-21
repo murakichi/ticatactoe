@@ -19,6 +19,8 @@ const CHARGE_AREA_MIN_SCORE = 2;
 const JAMMER_MIN_DMG = 2;
 // ランダム帯電を撃つときに残しておく魔力の余裕 (sim/ai.js の CHG_RAND_MARGIN)
 const CHARGE_RANDOM_MARGIN = 1;
+/** この魔力以上あって撃てるスキルが手札に無いとき、魔法使い以外も1コストで手札を引き直す（防壁発動後の魔力の使い道） */
+const SURPLUS_MAGIC = 12;
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -1233,6 +1235,10 @@ class AIPlayer {
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
+        if (this.rerollsLeft > 0 && this.character !== 'magician' && magic >= SURPLUS_MAGIC) {
+            const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+            if (plan.length === 0) return { move: null, skills: [], reroll: {} };
+        }
         if (this.character === 'magician' && this.rerollsLeft > 0) {
             const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
             if (rr) return { move: null, skills: [], reroll: rr };

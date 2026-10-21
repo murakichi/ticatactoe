@@ -31,6 +31,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // 採用済みの設定は AI_DEFAULTS に書く。検証中は s.aiFlags[seat] = { 名前: 値 } で席ごとに上書きできる
 // （probe-ai.js が同一シードで改修前後を paired 比較する）。採用が決まったら AI_DEFAULTS へ移し、不採用なら分岐ごと消す。
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
+const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
@@ -544,6 +545,15 @@ function discountPlan(s, me, availableSkills) {
         }
     }
     if (best) { SKILLS[best.r.key](s); return; }
+    // 魔力が有り余っていて撃てるスキルが手札に無い（防壁発動後の+4など）: 魔法使い以外も引き直して探す (AIPlayer.makeMove と同じ)
+    if (curChar(s) !== 'magician' && base.length === 0 && curMagic(s) >= SURPLUS_MAGIC) {
+        for (let i = 0; i < 2; i++) {
+            if (curMagic(s) < SURPLUS_MAGIC) return;
+            E.shuffleHand(s);
+            if (chooseSkills(s, s.skills).length > 0) return;
+        }
+        return;
+    }
     // 手札では撃てるスキルが増えない: 魔力に余裕があれば、軽減してから引き直して探す
     if ((F.discountPlan >= 2 || curChar(s) === 'magician') && base.length === 0) { // 魔法使いは引き直しが有効（A/B: 環境勝率 +1.7pt）。本番AIは AIPlayer.planReroll
         const r = DISCOUNT_REDUCERS.find((x) => availableSkills.includes(x.idx) && curMagic(s) >= calculateCost(s, costsOf(s)[x.cost], false, false, x.cost) + 2 + 4);
