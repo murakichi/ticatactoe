@@ -11,7 +11,7 @@ module.exports = {
         "poisoner": 5,
         "electrician": 6,
         "cryomancer": 5,
-        "pyromancer": 5,
+        "pyromancer": 6,
         "default": 5
     },
     "lifeStd": 3,
@@ -62,7 +62,7 @@ module.exports = {
         "doubleFrostTokenCost": 6,
         "shatterCost": 4,
         "frostfallCost": 3,
-        "infernoCost": 9
+        "infernoCost": 7
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
     "proliferate": {
