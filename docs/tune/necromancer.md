@@ -1,8 +1,9 @@
 # tune-top: necromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: (未到達。取り込み済み master=edf73fb)
+- 最後に検証したmaster: (未到達。取り込み済み master=4dad41d)
 - 現在の推奨設定: 既定(推奨ギア/デッキそのまま)
 - 基準線: 環境勝率 42.6% / 9位 / 1位 tactician 67.8%  (--rank, seed 1, games 60, 2026-10-20)
+- 最新master(4dad41d)での順位: 7位 40.9% / 1位 electrician 66.8% (--rank seed1 games60, 2026-10-21)。42.6%(9位)から順位は上がったが、他キャラの変動(poisoner/you/pyromancerの低下)による相対的なもの
 - 連続不採用回数: 6 (種類: gear, deck, synergy, strategy, meta, joint=6種類を各1回測定済み)
 - 状態: blocked(issue #92)  # ユーザー指示で探索続行→AIノブ3件(necroReserveAll/necroMin/necroFeed)も不採用で再停止
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
