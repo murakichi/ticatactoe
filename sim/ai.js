@@ -38,6 +38,7 @@ const AI_DEFAULTS = {
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
     discountPlan: 1, // 軽減札(特売・活力特売・大特価)を、撃てるスキルが増えるときに先に撃つ。2なら手札に無いとき1コストで引き直して探す（A/B）
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
+    cryoPoison: 1, // 毒使いが霜降り・氷結トークン系を使う(自陣の毒マスを凍らせて毒ダメージから守る)。デッキに45/46/48を入れる前提(tune-top poisoner: 環境勝率 seed5/150 +7.7pt, seed6/200 +4.5pt)
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -469,30 +470,6 @@ function discountPlan(s, me, availableSkills) {
             E.shuffleHand(s);
             if (chooseSkills(s, s.skills.filter((x) => x !== r.idx)).length > 0) return;
         }
-    }
-}
-// 毒使い: 猛毒化(毒を倍)で次の減衰までに壊れる敵コマ数 − 自陣コマ数。自陣は毒が付くとライフ1.5倍なので bind*1.5 で見る
-function intensifyNet(board, me) {
-    let foe = 0, own = 0;
-    for (const sq of board) {
-        if (!sq.player || thermal.isDormant(sq)) continue;
-        const p = sq.effects.filter((e) => e.effect === '☠').length;
-        if (p === 0) continue;
-        const mine = sq.player === me;
-        const b = mine ? Math.round(sq.bind * 1.5) : sq.bind;
-        if (p < b && 2 * p >= b) { if (mine) own++; else foe++; }
-    }
-    return foe - own;
-}
-// F.poisonSearch: 盤面に猛毒化で効く毒があるのに手札に猛毒化(18)が無いとき、魔力に余裕があれば1コストで引き直して探す
-function poisonSearch(s, me, availableSkills) {
-    if (!F.poisonSearch || curChar(s) !== 'poisoner' || s.silenced[s.turn]) return;
-    if (availableSkills.includes(18) || intensifyNet(s.board, me) < (F.intensify || 1)) return;
-    const ic = calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify');
-    for (let i = 0; i < F.poisonSearch; i++) {
-        if (curMagic(s) < ic + costsOf(s).onClickShuffle) return;
-        E.shuffleHand(s);
-        if (s.skills.includes(18)) return;
     }
 }
 // 鍛冶師が手札に固定する軽量スキル: 軽減札（特売・付与割引・トークン割引・活力特売・返し特売）。毎ターン手札に残して連携に使う
@@ -978,11 +955,6 @@ function chooseSkills(s, availableSkills) {
         if (doomed >= 1) spend(serumCost, 'serum');
     }
 
-    // --- 猛毒化(idx18): 敵の壊れるコマが自陣より F.intensify 個以上多いなら撃つ (0で無効) ---
-    if (F.intensify && character === 'poisoner' && availableSkills.includes(18) && intensifyNet(board, me) >= F.intensify) {
-        spend(calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify'), 'intensify');
-    }
-
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
@@ -1242,7 +1214,6 @@ function faithfulMakeMoveInner(s) {
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
-    if (F.poisonSearch) { poisonSearch(s, me, availableSkills); availableSkills = s.skills.slice(); }
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
