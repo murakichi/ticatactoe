@@ -1017,6 +1017,9 @@ function placeMove(s, i) {
     // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
     fireCharges(s, i, cur);
 
+    // 巨人のオーラ: コマを置くと周囲1マスの空きマスが次の1手番ロックされ、周囲の敵コマに1ダメージ
+    if (curChar(s) === 'giant' && board[i].player === cur) giantAura(s, surroundRange(s, i), cur);
+
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
         let absorbed = 0;
@@ -1042,6 +1045,20 @@ function placeMove(s, i) {
     advanceTurn(s);
     settleWinner(s);
     return true;
+}
+
+// 巨人のパッシブ（src/components/game/giantAura.ts と同じ規則）。空きマスはライフ1のロック（次の減衰で外れる）、敵コマは1ダメージ
+function giantAura(s, range, me) {
+    for (const j of range) {
+        const sq = s.board[j];
+        if (!sq.player) {
+            if (thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            s.board[j] = { ...sq, bind: Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        } else if (sq.player !== me) {
+            if (isGuarded(s, sq)) continue;
+            s.board[j] = thermal.applyDamage(sq, 1, 'skill').sq;
+        }
+    }
 }
 
 // ---- Skills (turn-ending vs not, faithful to Game.tsx) --------------------

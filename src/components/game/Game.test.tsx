@@ -107,25 +107,26 @@ describe('多人数', () => {
     });
 
     it('2人戦で巨人は2ターンに1回しか動かない（休みの間は相手が連続手番）', () => {
+        // 巨人(⭕)の置いたマスの周囲は1手番ロックされるので、巨人から離れたマスを打つ
         const { container } = render(<Game players={cfg('you', 'giant')} />);
         fireEvent.click(cells(container)[0]); // 💙 → 巨人
         expect(turnPlayer(container)).toBe('⭕');
-        fireEvent.click(cells(container)[1]); // ⭕(巨人) → 💙
+        fireEvent.click(cells(container)[15]); // ⭕(巨人) → 💙
         expect(turnPlayer(container)).toBe('💙');
-        fireEvent.click(cells(container)[2]); // 💙 → 巨人は休みで💙のまま
+        fireEvent.click(cells(container)[1]); // 💙 → 巨人は休みで💙のまま
         expect(turnPlayer(container)).toBe('💙');
-        fireEvent.click(cells(container)[3]); // 💙 → 巨人
+        fireEvent.click(cells(container)[2]); // 💙 → 巨人
         expect(turnPlayer(container)).toBe('⭕');
     });
 
     it('3人戦で巨人の席は2周に1回しか回ってこない', () => {
-        // 席: 0=あなた, 1=巨人, 2=あなた。並びは 0,1,2,0,2 の繰り返し
+        // 席: 0=あなた, 1=巨人, 2=あなた。並びは 0,1,2,0,2 の繰り返し。巨人は右下隅(24)を打つ
         const { container } = render(<Game players={cfg('you', 'giant', 'you')} />);
         const seq: string[] = [];
-        for (let k = 0; k < 5; k++) {
+        [0, 24, 1, 2, 3].forEach((cell) => {
             seq.push(turnPlayer(container) ?? '');
-            fireEvent.click(cells(container)[k]);
-        }
+            fireEvent.click(cells(container)[cell]);
+        });
         expect(seq).toEqual(['💙', '⭕', '🟩', '💙', '🟩']);
     });
 });

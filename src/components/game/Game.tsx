@@ -15,6 +15,7 @@ import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
+import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
@@ -1028,6 +1029,15 @@ export const Game = (props: GameProps) => {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
+        }
+
+        // 巨人のオーラ: 周囲1マスの空きマスを次の1手番ロックし、周囲の敵コマに1ダメージ
+        if (currentCharacter === 'giant' && nextBoard[i].player === currentTurnPlayer) {
+            const aura = giantAura(nextBoard, geo.surroundRange(i), currentTurnPlayer, characters);
+            if (aura.locked.length > 0 || aura.hit.length > 0) {
+                addLog(`巨人のオーラ: ${aura.locked.length}マスをロック${aura.hit.length > 0 ? `、${aura.hit.length}コマにダメージ` : ''}`);
+                flashCells(aura.hit);
+            }
         }
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
