@@ -43,7 +43,7 @@ const AI_DEFAULTS = {
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     igniteSig: 1, // 鍛冶師が固有スキルの火遁を毎手番撃つ。1=敵コマ(ライフが残る)を燃やす / 2=敵の列を作りかけの空きマスにも🔥を仕込む（tune-top 鍛冶師: 環境勝率 seed22/150 +6.8pt, seed24/200 +8.6pt。2は1と同じ結果）
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
-    igniteBud: 0, // 火遁で🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える)。魔法使いの🌱は魔力+3なので3倍
+    igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
@@ -183,7 +183,7 @@ function bestIgniteTarget(s, me, mode) {
             if (sq.bind <= 0) continue;
             val = sq.bind + build * 2;
             const buds = sq.effects.filter((e) => e.effect === '🌱').length;
-            if (buds && F.igniteBud) val += F.igniteBud * buds * (s.chars[E.seatOf ? E.seatOf(sq.player) : 0] === 'magician' ? 3 : 1);
+            if (buds && F.igniteBud && s.chars[E.seatOf(sq.player)] === 'magician') val += F.igniteBud * buds * 3;
         }
         else { if (mode < 2 || sq.effects.some((e) => e.effect === '🔑') || build === 0) continue; val = build * 2; }
         if (val > bestVal) { bestVal = val; best = i; }

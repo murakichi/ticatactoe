@@ -47,6 +47,8 @@ export const MAGICIAN_MAX_LOCKS = 3;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (sim/ai.js の EL_MAX / EL_MIN_VALUE / EL_DENY) */
 export const EMPTY_LOCK_MAX = 2;
 const EMPTY_LOCK_MIN_VALUE = 10;
+/** 火遁で魔法使いの🌱を優先して燃やす重み（sim/ai.js の igniteBud） */
+const IGNITE_BUD_WEIGHT = 6;
 const EMPTY_LOCK_DENY = 2;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
@@ -178,7 +180,9 @@ class AIPlayer {
                 const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
                 if (mine === 0 && foes >= 2) build += foes;
             }
-            const val = sq.bind + build * 2;
+            let val = sq.bind + build * 2;
+            // 魔法使いの🌱は🔥で燃えて消える（🌱1つで魔力+3の稼ぎ頭）。優先して燃やす（sim/ai.js の igniteBud=6）
+            if (this.characterOf(sq.player) === 'magician') val += IGNITE_BUD_WEIGHT * sq.effects.filter((e) => e.effect === '🌱').length * 3;
             if (val > bestVal) {
                 bestVal = val;
                 best = i;

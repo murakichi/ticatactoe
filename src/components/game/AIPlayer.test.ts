@@ -675,3 +675,26 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の i
         expect(click?.target).toBe(6);
     });
 });
+
+describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    it('ライフが同じ敵コマが2つあるとき、魔法使いなら🌱のあるほうを狙う', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[10] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'magician']);
+        const click = ai.makeMove(b, 6, skillCosts, 2, 5, [], false).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(10);
+    });
+    it('魔法使い以外の相手なら🌱の有無は考えない（ライフが同じなら先に見つかったマス）', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[10] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const click = ai.makeMove(b, 6, skillCosts, 2, 5, [], false).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(5);
+    });
+});
