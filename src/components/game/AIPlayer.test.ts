@@ -608,8 +608,18 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         ai.rerollsLeft = 0;
         expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
-    it('魔法使い以外は引き直さない', () => {
-        expect(run(mk('giant'), 12, [53]).reroll).toBeUndefined();
+    it('魔法使い以外は、魔力が有り余っていなければ引き直さない', () => {
+        expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使い以外も、魔力が有り余っていて撃てるスキルが無ければ、軽減札を使わずシャッフルだけ行う', () => {
+        const r = run(mk('giant'), 12, [53]);
+        expect(r.reroll).toEqual({});
+        expect(r.skills).toEqual([]);
+    });
+    it('魔法使い以外が有り余っていても、引き直しの回数が残っていなければ引き直さない', () => {
+        const ai = mk('giant');
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
     it('引き直しの途中（軽減済み）は、魔力に余裕があればシャッフルだけ行う', () => {
         const ai = mk();
