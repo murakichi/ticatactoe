@@ -11,12 +11,13 @@
 
 const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
 const discountMod = require('./discount');
 const { lineCells } = require('./geometry');
+const { hasGear } = require('./gear');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -143,7 +144,50 @@ function miasmaScore(s, me) {
 
 const MIST_MIN_ENEMIES = Number(process.env.MIST_MIN_ENEMIES) || 4; // 毒霧を撃つ敵コマ数の下限
 const MIST_MIN_LEAD = Number(process.env.MIST_MIN_LEAD) || 2;       // 敵コマが自コマより何個多いか
+const BLOOM_AI = process.env.BLOOM_AI !== '0'; // 毒使い×毒花の専用行動（A/B用に無効化できる）
+const BLOOM_MAX_OWN_POISON = Number(process.env.BLOOM_MAX_OWN_POISON) || 3; // 自陣の毒スタックの上限
+const BLOOM_MIN_BIND = Number(process.env.BLOOM_MIN_BIND) || 4;            // 毒を盛る自コマのライフの下限（毒の数を足した値）
+// ギア向けの戦略を使うか: そのギアを装備している席、または検証用に forceAi で指定された席。GEAR_AI=0 で全て無効化(A/B用)
+const gearAi = (s, id) => process.env.GEAR_AI !== '0' && (hasGear(s.gears[s.turn], id) || s.forceAi[s.turn].includes(id));
+const TK_AI = process.env.TK_AI !== '0'; // トークン系スキルを残すロック（A/B用に無効化できる）
+const TK_CHARS = (process.env.TK_CHARS || 'poisoner').split(','); // 対象のキャラ
+const EL_AI = process.env.EL_AI !== '0'; // 空蔵の専用行動（A/B用に無効化できる）
+const EL_MAX = Number(process.env.EL_MAX) || 2;             // 同時にかけておく空きマスロックの上限
+const EL_MIN_VALUE = Number(process.env.EL_MIN_VALUE) || 10; // ロックする空きマスの価値の下限（自分の2つ並びを3つにする程度）
+const EL_DENY = process.env.EL_DENY != null ? Number(process.env.EL_DENY) : 2; // 敵の列を止める価値の重み
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
+
+// 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数
+function myEmptyLocks(s) {
+    return s.board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === s.turn + 1)).length;
+}
+// 空蔵: 空きマスのうち、自分のコマが置けた場合の列の伸びと、敵に置かれたら困る列の伸び(EL_DENY倍)の合計が最大のマス
+function bestEmptyLockTarget(board, me, opps) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = EL_MIN_VALUE - 1e-9;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (sq.player || sq.effects.some((e) => e.effect === '🔑') || shield.has(i)) continue;
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let mine = 0, foreign = 0;
+            const oc = new Map();
+            for (const idx of line) {
+                const p = board[idx].player;
+                if (p === me) mine++;
+                else if (p) { foreign++; oc.set(p, (oc.get(p) || 0) + 1); }
+            }
+            if (foreign === 0) val += LINE_SCORES[Math.min(mine + 1, 4)] - LINE_SCORES[Math.min(mine, 4)];
+            else if (mine === 0 && oc.size === 1) {
+                const c = [...oc.values()][0];
+                val += EL_DENY * (LINE_SCORES[Math.min(c + 1, 4)] - LINE_SCORES[Math.min(c, 4)]);
+            }
+        }
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestIdx;
+}
 
 // 対ネクロ: 蘇生中は bind0 の鍵無しコマが丸ごと吸収される。自コマのうち低 bind で、通っている自ラインの価値が高いものを選ぶ
 function bestAntiNecroLockTarget(board, me) {
@@ -1004,8 +1048,12 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
-    // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化
-    if (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster') return [];
+    // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
+    // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
+    // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
+    const tokenLockAi = TK_AI && TK_CHARS.includes(character0);
+    // A/B検証: 固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが不利だったため無効化（魔法使いはトークンを残すため例外）
+    if (!tokenLockAi && (character0 === 'giant' || character0 === 'magician' || character0 === 'yinYangMaster')) return [];
     const me = curPlayer(s);
     const character = curChar(s);
     const board = s.board;
@@ -1017,7 +1065,9 @@ function chooseLocks(s, availableSkills) {
     for (const sq of board) { if (sq.player === me) myPieces++; else if (sq.player) { if (!thermal.isFrozen(sq)) oppPieces++; } else if (!thermal.isFrozen(sq)) empties++; }
     const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !thermal.isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
-    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx));
+    const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
+    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
+        || (tokenLockAi && gearTokenIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
@@ -1279,6 +1329,44 @@ function faithfulMakeMoveInner(s) {
             if (sq.player !== me || shield.has(i)) return;
             const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
             if (n > bestN) { bestN = n; best = i; }
+        });
+        if (best !== null) {
+            SKILLS.injection(s);
+            placeMove(s, best);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
+        }
+    }
+
+    // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
+    // ロック中は敵も置けないので、敵の列を止める効果もある。ロックは6ターンで切れ、そのとき自分のコマになる。
+    // EL_AI=0 で無効化(A/B用)
+    if (EL_AI && (hasGear(s.gears[s.turn], 'emptyLock') || s.forceAi[s.turn].includes('emptyLock')) && countReaches(s.board, me) === 0
+        && magic >= calculateCost(s, costsOf(s).onClickUseLock)
+        && myEmptyLocks(s) < EL_MAX) {
+        const target = bestEmptyLockTarget(s.board, me, opps);
+        if (target !== null) {
+            SKILLS.lock(s);
+            placeMove(s, target);
+            return { move: getEnhancedBestMove(s), turnEnded: false };
+        }
+    }
+
+    // 毒使い×毒花: 毒を自陣のコマに盛るとバッズ(魔力の元)が付き、ミアズマでその毒を敵に送れる。
+    // インジェクションが手札にあるとき、敵に隣接する自コマ(毒で消えない程度のライフ)に積極的に毒を盛る。
+    // 自陣の毒マスが多すぎると自コマが毒で消えるので上限を設ける。BLOOM_AI=0 で無効化(A/B用)
+    if (ch0 === 'poisoner' && BLOOM_AI && hasGear(s.gears[s.turn], 'toxicBloom') && availableSkills.includes(15)
+        && magic >= calculateCost(s, costsOf(s).onClickInjection, false, true) && countReaches(s.board, me) === 0
+        && poisonCountFor(s.board, me) < BLOOM_MAX_OWN_POISON) {
+        const geo = geometryForCells(s.board.length);
+        let best = null, bestScore = -1;
+        s.board.forEach((sq, i) => {
+            if (sq.player !== me || shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) return;
+            const own = sq.effects.filter((e) => e.effect === '☠').length;
+            if (sq.bind < BLOOM_MIN_BIND + own) return; // 毒で次々に削れるので、ライフに余裕があるコマだけ
+            const n = geo.surroundRange(i).filter((j) => isEnemy(s.board[j].player, me) && !s.board[j].effects.some((e) => e.effect === '🔑')).length;
+            const score = n * 10 + sq.bind - own * 5; // 敵に近いコマ優先。同じコマに毒を重ねない
+            if (score > bestScore) { bestScore = score; best = i; }
         });
         if (best !== null) {
             SKILLS.injection(s);

@@ -27,6 +27,9 @@ import {
     gearLockBind,
     gearTokenBindDelta,
     adjustCostByGear,
+    countVarietySquares,
+    countAilmentKinds,
+    lostCells,
     CostContext,
     rollPriceOffsets,
     applyPriceOffsets,
@@ -136,13 +139,30 @@ export const Game = (props: GameProps) => {
         processedTurn: 1,
     });
     // 手番でない席のコスト表示は「その席の次の手番の頭」の状態で出す
-    const gearCtxFor = (seat: number): CostContext =>
-        seat === turnSeat
-            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat] }
-            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat] };
+    // 廃墟の底力: active=割引が有効（自陣が破壊された後の、自分の次の手番の終わりまで）/ pending=次の自分の手番から有効
+    // snap=手番開始時の各マスの持ち主 / lastMove=その手番の通常の着手マス（攻撃で壊れた自コマは「スキル・エフェクトによる破壊」に数えない）
+    const ruinState = useRef({
+        active: Array<boolean>(seatCount).fill(false),
+        pending: Array<boolean>(seatCount).fill(false),
+        snap: null as (Player | undefined)[] | null,
+        lastMove: null as number | null,
+    });
+    // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
+    const lastStandUsed = useRef<boolean[]>(Array<boolean>(seatCount).fill(false));
+    const [lastStandSaves, setLastStandSaves] = useState<number>(0);
+    const lastStandActiveAgainst = (seat: number): boolean => lastStandUsed.current.some((used, holder) => used && holder !== seat);
+    // 勝者 w に対して発動できる土壇場の防壁の持ち主（未使用・w 以外）。いなければ -1
+    const lastStandHolderFor = (w: Player): number =>
+        gearsBySeat.findIndex((g, seat) => hasGear(g, 'lastStand') && !lastStandUsed.current[seat] && symbols[seat] !== w);
+    const gearCtxFor = (seat: number): CostContext => {
+        const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
+        return seat === turnSeat
+            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat] }
+            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat] };
+    };
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
-        const adjusted = adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken);
+        const adjusted = adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey);
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         return seat === turnSeat ? applyDiscount(adjusted, discountAmount(gearTurn.current.discount[seat], skillKey, isToken)) : adjusted;
@@ -202,7 +222,7 @@ export const Game = (props: GameProps) => {
 
     const aiBySeat = props.players.map((p, seat) =>
         p.isAI
-            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken, skillKey) => gearCost(cost, seat, isToken, skillKey))
+            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken, skillKey) => gearCost(cost, seat, isToken, skillKey), hasGear(gearsBySeat[seat], 'toxicBloom'))
             : null
     );
     const currentAI = aiBySeat[turnSeat];
@@ -249,6 +269,7 @@ export const Game = (props: GameProps) => {
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
             case 'onClickInjection': onClickInjection(); break;
+            case 'onClickMiasma': onClickMiasma(); break;
             case 'onClickChargeToken': onClickChargeToken(); break;
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
@@ -416,7 +437,7 @@ export const Game = (props: GameProps) => {
 
         return () => clearTimeout(timer);
         // currentTurn も依存に含める: 巨人のスキップで turnSeat が変わらず同じ席が連続手番になる場合でも再発火させる
-    }, [turnSeat, currentTurn, restartCount, autoPlay]);
+    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves]);
 
     // 「次の手番」ボタン押下でAI同士の対戦を1ターン進める
     useEffect(() => {
@@ -522,6 +543,25 @@ export const Game = (props: GameProps) => {
         if (n > 0) setGlacierChargeAll((prev) => prev.map((c) => c + n));
     };
 
+    // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
+    // 手番の効果(下の [currentTurn])より先に宣言して、同じ描画で手番が進んでも相手ボーナスに間に合わせる
+    useEffect(() => {
+        const w = calculateWinner(currentBoard.map((x) => x.player));
+        if (!w) return;
+        const holder = lastStandHolderFor(w);
+        if (holder < 0) return;
+        lastStandUsed.current[holder] = true;
+        const board = currentBoard.slice();
+        for (const line of geo.winLines) {
+            if (line.every((idx) => board[idx].player === w)) for (const idx of line) board[idx] = { player: undefined, bind: 0, effects: [] };
+        }
+        // 代償: 持ち主の自陣のコマもすべて消滅する
+        for (let idx = 0; idx < board.length; idx++) if (board[idx].player === symbols[holder]) board[idx] = { player: undefined, bind: 0, effects: [] };
+        addLog(`${symbols[holder]}の土壇場の防壁: ${w}の揃った列が消滅（以降、${symbols[holder]}以外は魔力+${GEAR_PARAMS.lastStandMagic}・ライフ+${GEAR_PARAMS.lastStandLife}）`);
+        setCurrentBoard(board);
+        setLastStandSaves((c) => c + 1);
+    }, [currentBoard]);
+
     useEffect(() => {
         if (currentTurn === 1) {
             return;
@@ -532,6 +572,19 @@ export const Game = (props: GameProps) => {
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
         if (gearTurn.current.processedTurn !== currentTurn) {
             gearTurn.current.processedTurn = currentTurn;
+            // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
+            const ruin = ruinState.current;
+            if (ruin.snap) {
+                const after = currentBoard.map((sq) => sq.player);
+                symbols.forEach((sym, seat) => {
+                    if (hasGear(gearsBySeat[seat], 'ruinSurge') && lostCells(ruin.snap!, after, sym, ruin.lastMove).length > 0) ruin.pending[seat] = true;
+                });
+            }
+            ruin.active[turnSeat] = false;
+            ruin.active[nextSeat] = ruin.pending[nextSeat];
+            ruin.pending[nextSeat] = false;
+            ruin.snap = currentBoard.map((sq) => sq.player);
+            ruin.lastMove = null;
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.kinds[nextSeat] = new Set();
             gearTurn.current.discount[nextSeat] = emptyDiscount();
@@ -576,6 +629,11 @@ export const Game = (props: GameProps) => {
             nextMagic += activeBudsCount(nextSymbol) * 2;
         }
 
+        // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
+        if (hasGear(gearsBySeat[nextSeat], 'colorGarden')) nextMagic += countVarietySquares(currentBoard, nextSymbol) * GEAR_PARAMS.varietyMagic;
+        const standBonus = lastStandActiveAgainst(nextSeat);
+        if (standBonus) nextMagic += GEAR_PARAMS.lastStandMagic;
+
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
         if (proliferate[nextSeat]) {
             const upkeep = proliferateUpkeep(proliferateCount[nextSeat]);
@@ -594,7 +652,8 @@ export const Game = (props: GameProps) => {
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
-                gearLifeBonus(nextGears),
+                gearLifeBonus(nextGears) +
+                (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );
         // サイレンスは「封じられた側の手番が終わるたび」に解除
@@ -734,7 +793,7 @@ export const Game = (props: GameProps) => {
 
         if (useInjection > 0) {
             nextBoard[i] = poisonStrike({ ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '☠' }] });
-            toxicBloom(nextBoard, i);
+            toxicBloom(nextBoard, [i]);
             harvestMagic(1);
             addLog(`${posName(i)}に毒を注入`);
             setUseInjection(useInjection - 1);
@@ -787,6 +846,7 @@ export const Game = (props: GameProps) => {
         const spreadOrigins: number[] = [];
         let poisonVanished = 0;
         // 3人以上は手番が1周するごとに1回だけ減衰させる (issue #30)
+        ruinState.current.lastMove = i;
         const decayNow = shouldDecay(placements, seatCount);
         const burnCells: number[] = [];
         setPlacements(placements + 1);
@@ -1018,17 +1078,15 @@ export const Game = (props: GameProps) => {
         const lock: Effect = owner ? { effect: '🔑', value: owner } : { effect: '🔑' };
         board[idx] = { ...sq, effects: [...sq.effects, lock], bind: sq.bind < lockBind ? lockBind : sq.bind };
     };
-    // 毒花: 毒を付与するスキルを使ったとき、自陣のコマ1つにバッズも付く。target が自陣のコマならそこ、なければランダムな自陣のコマ
-    const toxicBloom = (board: SquareInfo[], target: number | null) => {
-        if (!hasGear(turnGears, 'toxicBloom')) return;
-        let idx = target;
-        if (idx === null || board[idx].player !== currentTurnPlayer) {
-            const mine = board.map((_, k) => k).filter((k) => board[k].player === currentTurnPlayer && !isGuarded(board[k], characters));
-            if (mine.length === 0) return;
-            idx = randomPick(mine);
+    // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
+    // 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
+    const toxicBloom = (board: SquareInfo[], cells: number[]) => {
+        for (const k of cells) {
+            const owner = board[k].player;
+            if (!owner || !hasGear(gearsBySeat[seatOf(owner)], 'toxicBloom')) continue;
+            board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+            addLog(`毒花: ${posName(k)}にバッズ`);
         }
-        board[idx] = { ...board[idx], effects: [...board[idx].effects, { effect: '🌱' }] };
-        addLog(`毒花: ${posName(idx)}にバッズ`);
     };
     // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
@@ -1064,6 +1122,7 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return;
         const t = randomPick(targets);
         board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
+        toxicBloom(board, [t]);
     };
     const [useInjection, setUseInjection] = useState<number>(0);
     const [usePandemic, setUsePandemic] = useState<boolean>(false);
@@ -1326,7 +1385,10 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return null;
         const index = randomPick(targets);
         board[index] = { ...board[index], effects: [...board[index].effects, item] };
-        if (isPoisoner) board[index] = poisonStrike(board[index]);
+        if (isPoisoner) {
+            board[index] = poisonStrike(board[index]);
+            toxicBloom(board, [index]);
+        }
         return `${posName(index)}に${item.effect}を追加`;
     };
 
@@ -1597,7 +1659,7 @@ export const Game = (props: GameProps) => {
             }
         });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`ミアズマ（敵${targets.length}マスに毒、自陣の毒はすべて消えた）`);
         flashCells(targets);
         playEffect('poison');
@@ -1623,7 +1685,7 @@ export const Game = (props: GameProps) => {
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
         playEffect('token', index, [index], 'ポイズントークン');
         harvestMagic(afterTokenPlaced(board, index, '☠'));
-        toxicBloom(board, index);
+        toxicBloom(board, [index]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickPoisonToken, true, true, currentTurnPlayer, 'onClickPoisonToken'), true, true, 'onClickPoisonToken');
         setUseToken(true);
@@ -1656,7 +1718,7 @@ export const Game = (props: GameProps) => {
             }
         });
         harvestMagic(added);
-        if (added > 0) toxicBloom(board, null);
+        toxicBloom(board, affected);
         flashCells(affected);
         playEffect('poison');
         setCurrentBoard(board);
@@ -1674,7 +1736,7 @@ export const Game = (props: GameProps) => {
         const targets = geo.stompRange(i).filter((j) => board[j].player && !isGuarded(board[j], characters));
         for (const t of targets) board[t] = poisonStrike({ ...board[t], effects: [...board[t].effects, { effect: '☠' }] });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison', i);
@@ -1688,7 +1750,7 @@ export const Game = (props: GameProps) => {
         const targets = board.map((_, k) => k).filter((k) => board[k].player && !isGuarded(board[k], characters));
         for (const k of targets) board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, { effect: '☠' }] });
         harvestMagic(targets.length);
-        if (targets.length > 0) toxicBloom(board, null);
+        toxicBloom(board, targets);
         addLog(`「毒霧」を使用（${targets.length}マスに毒）`);
         flashCells(targets);
         playEffect('poison');
@@ -2332,7 +2394,9 @@ export const Game = (props: GameProps) => {
         return cost;
     };
 
-    const winner = calculateWinner(currentBoard.map((x) => x.player));
+    // 土壇場の防壁が発動する勝利は、列が消えるまで勝ちとして扱わない
+    const rawWinner = calculateWinner(currentBoard.map((x) => x.player));
+    const winner = rawWinner && lastStandHolderFor(rawWinner) < 0 ? rawWinner : undefined;
     const currentNecroCost = necroCost[turnSeat];
     const currentNecroRemain = remainNecro[turnSeat];
 
@@ -2549,6 +2613,9 @@ export const Game = (props: GameProps) => {
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
             processedTurn: 1,
         };
+        ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, lastMove: null };
+        lastStandUsed.current = Array<boolean>(seatCount).fill(false);
+        setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };
 

@@ -206,6 +206,79 @@ describe('サイレンス (先回りの封印)', () => {
     });
 });
 
+describe('毒使いのミアズマと毒花 (sim/ai.js と同じ動き)', () => {
+    const costs = { onClickInjection: 2, onClickMiasma: 6, onClickToken: 4 } as never;
+    const poisonedPiece = (bind: number, poison = 1): SquareInfo => ({
+        player: '💙',
+        bind,
+        effects: Array.from({ length: poison }, () => ({ effect: '☠' as const })),
+    });
+
+    it('自陣の毒マスの周囲に敵が2マス以上いれば、ミアズマを撃つ', () => {
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        put(b, 9, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [], false);
+        expect(r.skills).toContain('onClickMiasma');
+    });
+
+    it('敵が周囲に1マスだけ(リーチ列でもない)ならミアズマは撃たない', () => {
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        expect(ai.makeMove(b, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+    });
+
+    it('毒花を装備した毒使いは、インジェクションが手札にあれば敵に隣接する自コマへ毒を盛る', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], [], undefined, true);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [15], false);
+        expect(r.skills).toEqual(['onClickInjection']);
+        expect(r.stompTarget).toBe(5);
+    });
+
+    it('毒花が無ければ、同じ盤面でも自コマへ毒は盛らない', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [15], false);
+        expect(r.stompTarget).not.toBe(5);
+    });
+
+    it('毒花: 自陣の毒が多すぎる/ライフが低い自コマには盛らない', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], [], undefined, true);
+        const many = emptyBoard();
+        many[5] = poisonedPiece(9, 3);
+        put(many, 6, '⭕', 3);
+        expect(ai.makeMove(many, 10, costs, 2, 5, [15], false).stompTarget).not.toBe(5);
+        const weak = emptyBoard();
+        put(weak, 5, '💙', 3);
+        put(weak, 6, '⭕', 3);
+        expect(ai.makeMove(weak, 10, costs, 2, 5, [15], false).stompTarget).not.toBe(5);
+    });
+});
+
+describe('毒使いはトークン系スキルを手札でロックして残す (sim/ai.js と同じ)', () => {
+    it('ポイズントークン(16)・トークン(3)を優先してロックする。両トークン(4)は対象外', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const locks = ai.chooseLocks(emptyBoard(), 2, 5, [4, 16, 3, 7]);
+        expect(locks).toEqual(expect.arrayContaining([16, 3]));
+        expect(locks).not.toContain(4);
+        expect(locks.length).toBeLessThanOrEqual(2);
+    });
+
+    it('他のキャラ(あなた)はこのロックを優先しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.chooseLocks(emptyBoard(), 2, 5, [16])).not.toContain(16);
+    });
+});
+
 describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
     const FRZ = { effect: '❄' as const };
     const ai = new AIPlayer('💙', 'giant', ['⭕']);
