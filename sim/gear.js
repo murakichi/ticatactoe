@@ -104,7 +104,7 @@ const RECOMMENDED_GEARS = {
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
-    poisoner: ['titanCost', 'sturdy'],
+    poisoner: ['toxicBloom', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'sturdy'],
     pyromancer: ['sturdy', 'harvest'],
