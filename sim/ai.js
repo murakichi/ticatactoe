@@ -829,6 +829,18 @@ function getEnhancedBestMove(s) {
         }
     }
 
+    // 防壁の発動後(F.spam): 自駒は全部消えて相手の魔力+4・ライフ+2。守りに回っても追いつけないので、相手の即勝ちだけ止めて自分のライン作りに専念する
+    if (F.spam && hasGear(s.gears[s.turn], 'lastStand') && s.lastStandUsed[s.turn]) {
+        let bi = allMoves[0], bs = -Infinity;
+        for (const i of allMoves) {
+            const sim = simulatePlace(board, i, me, life);
+            let sc = ownOffense(sim, me);
+            const reaches = countReaches(sim, me);
+            if (reaches >= 2) sc += 200; else if (reaches === 1) sc += 40;
+            if (sc > bs) { bs = sc; bi = i; }
+        }
+        return bi;
+    }
     // minimax + fork bonus
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
@@ -892,6 +904,8 @@ function chooseSkills(s, availableSkills) {
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        // 防壁を持つ席は発動前に魔力を温存し(F.hoard)、発動後に一気に使う（相手の魔力+4が積み上がる前に盤面を作り直す）
+        if (F.hoard && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn] && remaining - c < F.hoard) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
     }
