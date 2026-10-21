@@ -2,8 +2,8 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db(新ギア colorGarden/ailmentPact/ruinSurge/lastStand 追加後)(魔法使いの推奨デッキ更新が入った。sim エンジン・AI は不変)
 - 現在の推奨設定: gears=[lastStand, priceWreck](sturdy→lastStand に変更, 試行#11) deck=推奨のまま AIフラグ=なし
-- 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
-- 連続不採用回数: 0
+- 基準線: 環境勝率 61.3% / 3位 / 1位 magician 66.0% / 2位 poisoner 63.3%   (seed 3, games 100, 基本条件, lastStand+lsAggro 採用後。4条件の完了判定は未実施)
+- 連続不採用回数: 1(#13)
 - 状態: running(ギア4種追加を受けて再開, master 3bc89db)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
@@ -23,6 +23,11 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 13 | strategy(lastStand 2段階) | ユーザー案『防壁が未発動の間は魔力を貯め(ロック/バッズ系は使う)、発動後にトークン連打で勝つ』。未発動中は token/doubleToken/totalAssault を魔力が N 残る範囲でしか撃たない `F.lsHoard`。seed2/200: 基準 60.1% → N=4 で 50.7%、N=8 で 45.6% | 大幅悪化(-9〜-15pt)。トークンが軍師の手数(テンポ)の源で、貯めている間に盤面を取られる。ノブ削除 | 不採用 |
+| 12 | strategy(lastStand) | ユーザー案『防壁が未発動のうちは相手の1回目の勝ちを止めに行かず攻める』。強制ブロックを防壁未発動時はスキップ(AI_DEFAULTS.lsAggro)。seed2/200: 57.6→60.1(+2.5)、seed4/200: 58.9→61.8(+2.9)。合算400で +2.7pt(CI±2.2)。対magician・対cryomancer が改善、悪化なし | **採用**(sim/ai.js + 本番 AIPlayer.lastStandReady + Game.tsx、回帰テスト2件。基本順位 seed3/100: 軍師 61.3%・3位) |
+| 11 | gear | slot0 sturdy→lastStand(土壇場の防壁)。seed2/200: 54.8→57.6、seed4/200: 54.8→58.9。合算400で +3.5pt(CI±2.2)。対巨人 51→72/50→77 が主因、対cryomancer/electrician は -2〜-6 | **採用**(RECOMMENDED_GEARS を sim/src 両方更新) |
+| 10 | gear+strategy(彩りの庭) | 現デッキ/AIでは2種類マスが0%。氷結/帯電付与/ロックで重ねる AI(F.garden)を試作。現状58.3% / 彩りの庭のみ52.3% / +重ねAI 50.3% / +デッキに22,30追加 50.1%(seed1/100) | 2種類マスは4.7%の手番止まり。1試合≈6手番で回収前に終わり、重ねる支出が総攻撃・トークンを圧迫して悪化。ノブ削除 | 不採用 |
+| 9 | gear(新4種を含む再スキャン) | `--scan gears`(seed1/60, 全相手)。base 60.0%、最良 slot0→lastStand 62.6%(+2.6pt, 候補30でz閾値3.0に届かず) | 保留→#11で追試し採用 | 保留 |
 | 8 | strategy(対magician) | probe-usage で対魔法使い38%: buds 勝率4%・lock 勝率0%(負け筋の併発)。バッズトークン/ダブルロックを使わせない `ban`(probe-ai vs, seed1, 150試合) | ban=9: 47勝(基準53)、ban=12: 53勝(基準53, 差なし)、ban=9|12: 47勝 → 悪化または無差 | 不採用 |
 | 7 | gear(新master) | 対 magician+giant の1枠差し替え全近傍(seed1, 80試合) | 最良 +3.8pt(z≈0.7)=誤差 | 不採用 |
 | 6 | joint | gears=vengeance,priceWreck × デッキ1枚差し替え10近傍(varied, seed1, 60試合): 最良 69.3 vs base 69.1 | 差なし(+0.2pt) | 不採用 |
