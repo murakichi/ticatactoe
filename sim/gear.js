@@ -111,7 +111,15 @@ const RECOMMENDED_GEARS = {
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 
+/** 主案と同等に強い別案。src/components/game/gear.ts の ALT_RECOMMENDED_GEARS の複製。sim の環境測定は主案(recommendedGears)で行う */
+const ALT_RECOMMENDED_GEARS = {};
+/** AI席が使うギア。主案と別案を同じ確率で選ぶ */
+const pickRecommendedGears = (character, rng = Math.random) => {
+    const patterns = [recommendedGears(character), ...(ALT_RECOMMENDED_GEARS[character] || []).map((g) => g.slice(0, gearSlotsFor(character)))];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
+
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears,
+    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
 };

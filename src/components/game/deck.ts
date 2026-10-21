@@ -112,6 +112,20 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
 /** キャラの推奨デッキ（コピー） */
 export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMMENDED_DECKS[character] ?? RECOMMENDED_DECKS.you)];
 
+/**
+ * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
+ * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
+ */
+export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {};
+
+/** AI席のベースにするデッキ。主案と別案を同じ確率で選ぶ（別案が無ければ主案で、乱数は使わない） */
+export const pickRecommendedDeck = (character: CharacterId, rng: () => number = Math.random): number[] => {
+    const alts = ALT_RECOMMENDED_DECKS[character] ?? [];
+    if (alts.length === 0) return recommendedDeck(character);
+    const patterns = [recommendedDeck(character), ...alts.map((d) => [...d])];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
+
 /** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
 export const isValidDeck = (deck: readonly number[] | undefined): boolean =>
     !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && i >= 0 && i < CATALOG_SIZE);
@@ -132,11 +146,11 @@ export const randomDeck = (rng: () => number = Math.random): number[] => {
 export const AI_DECK_SWAPS = 3;
 
 /**
- * AIのデッキ: キャラの推奨デッキをベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
+ * AIのデッキ: キャラの推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
  * 入れ替えで常に有効なデッキ（12枚・重複なし）になる
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {
-    const deck = recommendedDeck(character);
+    const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
     for (let k = 0; k < swaps && outside.length > 0; k++) {
         const at = Math.floor(rng() * deck.length);
