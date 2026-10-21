@@ -1187,6 +1187,9 @@ function faithfulMakeMoveInner(s) {
     // A/B検証用: F.ban='33|36' のように指定したスキルidxは手札にあっても使わない（スキル単体の寄与を測る）
     if (F.ban !== undefined) { const ban = String(F.ban).split('|'); availableSkills = availableSkills.filter((i) => !ban.includes(String(i))); }
 
+    // F.lsAllow='12|13|2': 土壇場の防壁が未発動のあいだは、列挙したスキルidxだけを使う（延命と魔力補充に専念。発動後は通常どおり）
+    if (F.lsAllow !== undefined && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn]) { const al = String(F.lsAllow).split('|'); availableSkills = availableSkills.filter((i) => al.includes(String(i))); }
+
     // 検証用: 指定スキルを強制的に1回撃つ
     if (F.force !== undefined && forceUse(s, me, availableSkills)) availableSkills = availableSkills.filter(() => true);
 
