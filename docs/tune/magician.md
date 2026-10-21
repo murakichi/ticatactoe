@@ -1,6 +1,6 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 837a29b(再検証OK: 基本65.3%/envDeck varied(400) 63.5% で1位。none/random は省略)
+- 最後に検証したmaster: f21a834(再検証OK: 基本67.6/envDeck varied(400) 64.1 で1位。none/random は省略。引き直しを本番AIに移植済み)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
 - 連続不採用回数: 6(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | 19 | joint(ギア2枠) | ギア2枠同時入替（seed2/200, 基準70.5）: vengeance+luckyPurse 65.0(-5.5)・luckyPurse+bindingLock 62.3(-8.2)・gambler+luckyPurse 64.5(-6.0) | 不採用（現ギア [sturdy, ironLock] が最適） |
 | 18 | synergy(3枚) | 新デッキで `--scan deck --swap 3 --neighbors 40 --games 60 --seed 5`（カテゴリ無制限）。基準69.6、最良 71.3（+1.7）、他は+1.1以下 | 不採用（閾値+3に届かず再測定せず） |
-| 17 | strategy(AI) | 既存ノブ discountPlan: 0(無効) 60.8(-9.7、特売系の先撃ちは必須)。2(手札に軽減で撃てる札が無いとき、軽減札を撃ってから1コストで引き直して探す) は seed2/200 +1.7・seed3/400 +1.7(71.0→72.7)・seed4/400 +1.8(70.1→71.9)。3回とも同じ向き、悪化なし(対tactician +4〜5, electrician +3) | **保留（移植コスト大）**: sim上は合算で約2.5σの有効。ただし本番AIにはターン中のシャッフル→再計画の経路が無く(AIPlayer.ts に shuffle なし。Game.tsx の onClickShuffle は人間用)、ミラーには AI ターンのループ改修が要る。本番に入らない限り意味が無いので採用せず issue 化 |
+| 17 | strategy(AI) | 既存ノブ discountPlan: 0(無効) 60.8(-9.7、特売系の先撃ちは必須)。2(手札に軽減で撃てる札が無いとき、軽減札を撃ってから1コストで引き直して探す) は seed2/200 +1.7・seed3/400 +1.7(71.0→72.7)・seed4/400 +1.8(70.1→71.9)。3回とも同じ向き、悪化なし(対tactician +4〜5, electrician +3) | **移植済み（PR #107）**。当初は保留（移植コスト大）だった:: sim上は合算で約2.5σの有効。ただし本番AIにはターン中のシャッフル→再計画の経路が無く(AIPlayer.ts に shuffle なし。Game.tsx の onClickShuffle は人間用)、ミラーには AI ターンのループ改修が要る。本番に入らない限り意味が無いので採用せず issue 化 |
 | 16 | strategy(AI) | 審判の日を撃つ前にコスト+N の魔力を残す judgeBuf（seed2/200, 基準70.5）。N=1 68.6(-1.9)・N=2 67.5(-3.0) | 不採用（待たずに撃つのが最適。ノブは削除） |
 | 15 | strategy(AI) | 審判を撃たない手番のバッズ駒ロックを無効化(magLock=0, seed2/200, 基準70.5): 69.2(-1.3)。ロックは僅かに効いている | 不採用（既定のまま。ノブは削除） |
 | 14 | strategy(AI) | 審判の日の撃つ最低純増 judgeMin（既定2）を 1/3 に（seed2/200, 基準70.5）。judgeMin=1 61.7（-8.8、対electrician 72→55, cryomancer 85→66）、judgeMin=3 65.4（-5.1、対giant 59→46） | 不採用（既定2が鋭い最適。ノブは削除） |
@@ -45,4 +45,5 @@
 - master ae193e7（cryomancer のギア・AI調整 #86）取り込み後、4条件(seed3/200)すべて1位で維持。基本 67.3%(2位 cryomancer 62.5, 差4.7)／envDeck varied 63.9%(2位 cryomancer 61.8, 差2.2)／oppGears none 79.6%(2位 cryomancer 54.1)／random 75.9%(2位 tactician 53.8)。cryomancer が2位に上がり差が縮小(基本 8.8→4.7、envDeck varied 約11→2.2)
 - master 8f8e484（electrician のデッキ変更 #95 を含む）で再々検証。4条件(seed3/200)すべて1位: 基本 66.2%(2位 cryomancer 62.2, 差4.0)／envDeck varied 63.7%(2位 electrician 61.9, 差1.8＝誤差の範囲の接戦)／oppGears none 78.9%(2位 electrician 56.9)／random 75.2%(2位 electrician 56.1)
 - master 837a29b（pyromancer のデッキ変更 #100）で再検証。変更が波及しにくいので2条件に絞った: 基本(seed3/200) 65.3%・1位(2位 cryomancer 62.1, 差3.2)／envDeck varied(seed3/400) 63.5%・1位(2位 cryomancer 60.1, 3位 electrician 59.9, 差3.4)。oppGears none/random は前回の差が19pt以上のため省略
+- master f21a834（魔法使いの引き直しを本番AIに移植 #107 後、tactician 等のデッキ調整を含む）で再検証。2条件に絞った: 基本(seed3/200) 67.6%・1位(2位 electrician 62.0, 差5.6)／envDeck varied(seed3/400) 64.1%・1位(2位 electrician 61.9, 差2.2)。引き直し移植後の基本は 65.3→67.6 と上がった(別master。参考値)。本番AIでの実測は #88、ブラウザ実機での動作確認は未了
 

@@ -1,23 +1,28 @@
 # tune-top: pyromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 993d291(未達のため参考。done になったら更新)
+- 最後に検証したmaster: 837a29b(PR #100 マージ後。トップ未達)
 - 現在の推奨設定: gears=[sturdy, harvest] deck=[0,3,5,8,11,12,28,31,53,56,58,61]  (旧: 32浄化→11ダブルトークン) AIフラグ=なし
-- 基準線(採用#5後): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
+- 基準線(最新 master 837a29b, seed3, 100試合, `--rank`): 環境勝率 39.2% / 8位 / 1位 magician 64.7%(他キャラの調整で環境が強くなり相対的に低下)
+- 基準線(採用#5後・旧 master): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
-- 連続不採用回数: 1(採用#5のあと strategy)
+- 連続不採用回数: 4(採用#5のあと strategy / gear再走査 / 業火コスト / 対魔法使いメタ)
 - 状態: blocked(issue #99)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
-| (計測中) | gear | `--scan gears --games 60 --seed 1` で1枠差し替え近傍を全測定 | — | — |
+| 9 | メタ(対魔法使い専用) | `--opp magician --scan deck --swap 2` 50近傍(seed9,150試合,±6.9) | 最良 24.7%(血清+猛毒化など)。対魔法使いは基準17〜33%付近から 50% に程遠く、デッキでは埋まらない | 不採用 |
+| 8 | 数値(ユーザー許可) | 業火基礎コスト 9/7/5 を sim で比較(seed8,200試合,最新master 837a29b) | 41.7 / 42.2 / 44.2%。コスト5でも +2.5pt で1位(魔法使い64.7%)に遠く、対魔法使い17%は不変。#99 にコメント | 不採用(数値変更せず。config は9のまま) |
+| 7 | gear再走査 | 新デッキでギア32近傍(seed7,60試合,±4.1) | base 45.2%、最良 afterglow 45.9%(+0.7) ノイズ内 | 不採用 |
+| 6 | strategy | AIノブ A/B(採用デッキ,seed5,150試合): pyroChain=2 / discountPlan=2 / pyroLock=1。pyroLock=1 は seed6/300試合で再測定 | 42.6 / 45.6 / 47.9%(基準45.6)。pyroLock=1 再測定は 46.7 vs 基準 46.8%(差なし) | 全て不採用(pyroChain=2 は -3pt) |
+| 5 | joint→deck | joint探索(gear ironLock固定,30近傍,seed1,60試合)で上位が全て「+11ダブルトークン」。現行ギアで再測定: 基準 seed2/200試合 42.5%・seed4/300試合 43.4% → `-32(浄化) +11` 45.1%・45.6%。プール差 +2.3pt(z≈2.3)。最大悪化 yinYang -7pt | +2.3pt | **採用**(PR #100。本番AIでは未計測) |
+| 4 | メタ(deck) | 弱い3相手(tactician,electrician,magician)に絞った1枚差替40近傍(seed1,100試合,±5.5) | 最良 40.3%(-5スラッシュ+11ダブルトークン)。閾値未満 | 不採用 |
+| 3 | synergy | 🔥札3枚同時入替(`--swap 3 --cat fire`,30近傍,seed1,60試合) | base 45.9%、最良 46.5%(+0.6)。ノイズ内 | 不採用 |
+| 2 | gear | 1枠差し替え32近傍(seed1,60試合,±4.1) | base 45.9%、最良 ironLock 47.2%(+1.3)。多重比較閾値に遠い | 不採用 |
+| 1 | 基準線 | `--rank --games 60 --seed 1` | 38.9% / 10位 | — |
 
 ## 次に試す候補
-- 採用後の基準線を `--rank --games 200 --seed 3` で取り直す(順位は未確認)。次: 新デッキでの gear 再走査、strategy(業火の使用率8%)
-(軸の順 gear → deck → synergy → strategy → メタ → joint)
-- (済)gear: sturdy,harvest は近傍でほぼ最適。変更しても±ノイズ内
-- (済)synergy fire: 🔥札の追加では動かない(+0.6pt)。残りは strategy(使用率監査)/メタ/joint
-- 注意: `--target` 単体の base は 45.9%、`--rank` の 38.9% と差(seed/対戦構成の違い)。比較は同じ計測内の base 対候補で行う
-- deck: 🔥付与札+軽減札のシナジー(`--swap 3 --cat fire`)
-- メタ: tactician / electrician / magician に -10pt 以下 → `--opp` で絞って対策
+- 数値変更なしで残る手は strategy の新仮説のみ。業火の使用率(対軍師8%/試合)、対魔法使い17%の原因(魔法使いの固有スキルに🔥が刺さらない?)を `auto` 観戦で調べる。
+- 1位到達には対魔法使い・雷霆の巫・軍師に刺さる仕様変更が要る(#99 のコメント参照)。balance-loop の範疇。
+- 注意: `--target` 単体の base と `--rank` の同キャラ勝率は一致しない。比較は同じ計測内の base 対候補で行う。

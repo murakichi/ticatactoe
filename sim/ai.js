@@ -460,7 +460,7 @@ function discountPlan(s, me, availableSkills) {
     }
     if (best) { SKILLS[best.r.key](s); return; }
     // 手札では撃てるスキルが増えない: 魔力に余裕があれば、軽減してから引き直して探す
-    if (F.discountPlan >= 2 && base.length === 0) {
+    if ((F.discountPlan >= 2 || curChar(s) === 'magician') && base.length === 0) { // 魔法使いは引き直しが有効（A/B: 環境勝率 +1.7pt）。本番AIは AIPlayer.planReroll
         const r = DISCOUNT_REDUCERS.find((x) => availableSkills.includes(x.idx) && curMagic(s) >= calculateCost(s, costsOf(s)[x.cost], false, false, x.cost) + 2 + 4);
         if (!r) return;
         SKILLS[r.key](s);
