@@ -49,6 +49,7 @@ const AI_DEFAULTS = {
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
+    lastStandAggro: 0, // 土壇場の防壁を装備していて未発動の間は、相手の勝ちを避けず(ブロックしない)攻め・資源に専念する（tune-top検証中。1で有効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -775,10 +776,11 @@ function getMovesFor(board, player, life) {
     return moves;
 }
 
+let lossIgnored = false; // 土壇場の防壁で守られている間は、相手の勝ちを負けとみなさない（lastStandAggro）
 function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     const winner = calculateWinner(board.map(sq => sq.player));
     if (winner === me) return 1000 + depth;
-    if (winner) return -1000 - depth;
+    if (winner) return lossIgnored ? 0 : -1000 - depth;
     const currentPlayer = isMax ? me : opp;
     const moves = getMovesFor(board, currentPlayer, life);
     if (depth === 0 || moves.length === 0) return evaluateBoard(board, me);
@@ -807,6 +809,11 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 // ---- enhanced best move (minimax + fork detection) ----
 
 function getEnhancedBestMove(s) {
+    const aggro = !!F.lastStandAggro && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
+    lossIgnored = aggro;
+    try { return getEnhancedBestMoveCore(s, aggro); } finally { lossIgnored = false; }
+}
+function getEnhancedBestMoveCore(s, aggro) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const opp = opps[0];
@@ -827,8 +834,8 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
-    // block opponent win (including captures)
-    for (const o of opps) {
+    // block opponent win (including captures)。土壇場の防壁で守られている間(aggro)はブロックしない
+    if (!aggro) for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
