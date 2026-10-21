@@ -75,7 +75,7 @@ export const GEAR_PARAMS = {
     ruinDiscount: 1,
     /** 土壇場の防壁: 発動後、相手の手番開始時の魔力とライフ平均への加算 */
     lastStandMagic: 4,
-    lastStandLife: 1,
+    lastStandLife: 2,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
