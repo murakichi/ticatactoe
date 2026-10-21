@@ -251,5 +251,19 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
 export const recommendedGears = (character: CharacterId): GearId[] =>
     (RECOMMENDED_GEARS[character] ?? ['sturdy']).slice(0, gearSlotsFor(character));
 
+/**
+ * 主案(RECOMMENDED_GEARS)と同等に強い別案。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedGears）。
+ * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
+ */
+export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
+    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+};
+
+/** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
+export const pickRecommendedGears = (character: CharacterId, rng: () => number = Math.random): GearId[] => {
+    const patterns = [recommendedGears(character), ...(ALT_RECOMMENDED_GEARS[character] ?? []).map((g) => g.slice(0, gearSlotsFor(character)))];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
+
 /** トークン系スキルが付けるエフェクト（伝播・収穫の対象） */
 export type TokenEffect = '🌱' | '☠' | '⚡';

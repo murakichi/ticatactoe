@@ -13,6 +13,8 @@ import {
     randomGears,
     recommendedGears,
     RECOMMENDED_GEARS,
+    ALT_RECOMMENDED_GEARS,
+    pickRecommendedGears,
     rollPriceOffsets,
     PRICEABLE_KEYS,
     EXCLUSIVE_SKILL_KEYS,
@@ -268,5 +270,25 @@ describe('AIが選ぶギア', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const simGear = require('../../../sim/gear');
         expect(simGear.RECOMMENDED_GEARS).toEqual(RECOMMENDED_GEARS);
+        expect(simGear.ALT_RECOMMENDED_GEARS).toEqual(ALT_RECOMMENDED_GEARS);
+    });
+
+    it('別案は枠数以内・重複なし・存在するギアだけ、pickは主案か別案のどれか', () => {
+        for (const c of Object.keys(ALT_RECOMMENDED_GEARS) as (keyof typeof ALT_RECOMMENDED_GEARS)[]) {
+            const patterns = [recommendedGears(c), ...(ALT_RECOMMENDED_GEARS[c] ?? [])];
+            for (const gears of patterns) {
+                expect(gears.length).toBeLessThanOrEqual(gearSlotsFor(c));
+                expect(new Set(gears).size).toBe(gears.length);
+                for (const g of gears) expect(GEAR_IDS).toContain(g);
+            }
+            for (let i = 0; i < patterns.length; i++) {
+                const picked = pickRecommendedGears(c, () => (i + 0.5) / patterns.length);
+                expect(picked).toEqual(patterns[i].slice(0, gearSlotsFor(c)));
+            }
+        }
+    });
+
+    it('別案が無いキャラは主案を返す', () => {
+        expect(pickRecommendedGears('tactician', () => 0.99)).toEqual(recommendedGears('tactician'));
     });
 });

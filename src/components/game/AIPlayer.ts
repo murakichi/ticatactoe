@@ -5,8 +5,8 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
-import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
+import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable } from './thermal';
+import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 export const SKILL_POOL_SIZE = 62;
@@ -42,6 +42,8 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
     { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
     { idx: 53, key: 'onClickMarkdown', cut: 3 },
 ];
+/** 魔法使いが1手番にロックするバッズ駒の最大数。sim/ai.js の AI_DEFAULTS.magLockN と同じ */
+export const MAGICIAN_MAX_LOCKS = 3;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
 
@@ -1513,15 +1515,22 @@ class AIPlayer {
                 }
             }
             // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-            if (this.character === 'magician' && magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
-                const budCell = board.findIndex(
-                    (sq) =>
-                        sq.player === this.playerSymbol &&
-                        sq.effects.some((e) => e.effect === '🌱') &&
-                        !sq.effects.some((e) => e.effect === '🔑')
-                );
-                if (budCell !== -1) {
-                    return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [budCell] };
+            // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 MAGICIAN_MAX_LOCKS 個。sim/ai.js の magLockN。
+            // A/B: 環境勝率 +2.9pt(seed2/200)・+3.0pt(seed3/400)・+3.5pt(seed4/400)）
+            if (this.character === 'magician') {
+                const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+                const afford = lockCost > 0 ? Math.floor(magic / lockCost) : MAGICIAN_MAX_LOCKS;
+                const budCells: number[] = [];
+                for (let i = 0; i < board.length && budCells.length < Math.min(MAGICIAN_MAX_LOCKS, afford); i++) {
+                    const sq = board[i];
+                    if (sq.player === this.playerSymbol && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && lockable(sq)) budCells.push(i);
+                }
+                if (budCells.length === 1) {
+                    return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: budCells };
+                }
+                if (budCells.length > 1) {
+                    // 「スキル→対象クリック」を1回ずつ順に行う（chargeClicks）
+                    return { move: this.getBestMove(board, life), skills: [], chargeClicks: budCells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
                 }
             }
         }
