@@ -332,6 +332,8 @@ export const Game = (props: GameProps) => {
         // 敵が複数いるときは最も魔力の多い相手を基準にする（2人戦なら従来どおり相手の魔力）
         const oppMagic = Math.max(...otherSeats(turnSeat).map((i) => magic[i]));
         const currentSkills = skills;
+        ai.placements = placements;
+        ai.seatCount = seatCount;
 
         const aiNecroRemain = remainNecro[turnSeat];
         const aiNecroCost = necroCost[turnSeat];
