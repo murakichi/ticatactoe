@@ -13,12 +13,18 @@ import {
     randomGears,
     recommendedGears,
     RECOMMENDED_GEARS,
+    ALT_RECOMMENDED_GEARS,
+    pickRecommendedGears,
     rollPriceOffsets,
     PRICEABLE_KEYS,
+    EXCLUSIVE_SKILL_KEYS,
+    countVarietySquares,
+    countAilmentKinds,
+    lostCells,
 } from './gear';
 import { skillCosts } from './skillCosts';
 
-const ctx = (skillsThisTurn = 0, echoReady = false) => ({ skillsThisTurn, echoReady });
+const ctx = (skillsThisTurn = 0, echoReady = false, ailments = 0, ruin = false) => ({ skillsThisTurn, echoReady, ailments, ruin });
 
 describe('ギアの定義', () => {
     it('IDは重複せず、全ギアに名前・アイコン・説明がある', () => {
@@ -57,10 +63,10 @@ describe('ライフ・ロック・トークンの補正', () => {
         expect(gearLockBind([])).toBe(6);
     });
 
-    it('トークンのライフ: 増援+1 / 軽量トークン-1 / 両方で相殺', () => {
-        expect(gearTokenBindDelta(['reinforce'])).toBe(1);
+    it('トークンのライフ: 増援+2 / 軽量トークン-1 / 両方で+1', () => {
+        expect(gearTokenBindDelta(['reinforce'])).toBe(2);
         expect(gearTokenBindDelta(['lightToken'])).toBe(-1);
-        expect(gearTokenBindDelta(['reinforce', 'lightToken'])).toBe(0);
+        expect(gearTokenBindDelta(['reinforce', 'lightToken'])).toBe(1);
     });
 });
 
@@ -103,6 +109,35 @@ describe('adjustCostByGear', () => {
         // +3 -4 = -1 → 下げる方向なので、元の4を超えず1以上
         expect(adjustCostByGear(4, ['titanCost', 'chainDiscount'], ctx(4))).toBe(3);
         expect(adjustCostByGear(2, ['chainDiscount', 'afterglow'], ctx(0, true))).toBe(1);
+    });
+});
+
+describe('新ギア（彩りの庭・病炎の契り・廃墟の底力・土壇場の防壁）', () => {
+    const sq = (player: string | undefined, ...effects: string[]) => ({ player, effects: effects.map((effect) => ({ effect })) });
+
+    it('彩りの庭: 自陣のエフェクト2種類以上のマスだけ数える', () => {
+        const board = [sq('💙', '☠', '🌱'), sq('💙', '☠', '☠'), sq('⭕', '☠', '🔥'), sq('💙', '🌱', '🔥', '⚡')];
+        expect(countVarietySquares(board, '💙')).toBe(2);
+    });
+
+    it('病炎の契り: 毒・火炎の種類数ぶん、固有以外のスキルを-1（下限1）', () => {
+        const board = [sq('💙', '☠'), sq('💙', '☠', '🔥'), sq('⭕', '🔥')];
+        expect(countAilmentKinds(board, '💙')).toBe(2);
+        expect(countAilmentKinds(board, '⭕')).toBe(1);
+        expect(adjustCostByGear(5, ['ailmentPact'], ctx(0, false, 2), false, 'onClickShuffle')).toBe(3);
+        expect(adjustCostByGear(5, ['ailmentPact'], ctx(0, false, 2), false, EXCLUSIVE_SKILL_KEYS[0])).toBe(5);
+        expect(adjustCostByGear(1, ['ailmentPact'], ctx(0, false, 2), false, 'onClickShuffle')).toBe(1);
+    });
+
+    it('廃墟の底力: 有効な間は全スキル-1（下限1）', () => {
+        expect(adjustCostByGear(4, ['ruinSurge'], ctx(0, false, 0, true))).toBe(3);
+        expect(adjustCostByGear(4, ['ruinSurge'], ctx())).toBe(4);
+        expect(adjustCostByGear(1, ['ruinSurge'], ctx(0, false, 0, true))).toBe(1);
+    });
+
+    it('lostCells: 持ち主でなくなったマスだけ（着手マスは除く）', () => {
+        expect(lostCells(['💙', '💙', '⭕'], ['💙', undefined, '⭕'], '💙', null)).toEqual([1]);
+        expect(lostCells(['💙', '💙', '⭕'], ['⭕', undefined, '⭕'], '💙', 0)).toEqual([1]);
     });
 });
 
@@ -165,6 +200,24 @@ describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
         expect(simGear.GEAR_PARAMS).toEqual(GEAR_PARAMS);
     });
 
+    it('新ギアの補助関数が同じ結果を返す', () => {
+        const sq = (player: string | undefined, ...effects: string[]) => ({ player, bind: 0, effects: effects.map((effect) => ({ effect })) });
+        const board = [sq('💙', '☠', '🌱'), sq('💙', '🔥'), sq('⭕', '☠', '🔥'), sq(undefined)];
+        for (const p of ['💙', '⭕']) {
+            expect(simGear.countVarietySquares(board, p)).toBe(countVarietySquares(board, p));
+            expect(simGear.countAilmentKinds(board, p)).toBe(countAilmentKinds(board, p));
+        }
+        expect(simGear.lostCells(['💙', '⭕'], [undefined, '⭕'], '💙', null)).toEqual(lostCells(['💙', '⭕'], [undefined, '⭕'], '💙', null));
+        expect(simGear.EXCLUSIVE_SKILL_KEYS).toEqual(EXCLUSIVE_SKILL_KEYS);
+        for (const g of [['ailmentPact'], ['ruinSurge'], ['ailmentPact', 'ruinSurge']]) {
+            for (const key of ['onClickShuffle', 'onClickStomp', undefined]) {
+                for (const base of [1, 3, 6]) {
+                    expect(simGear.adjustCostByGear(base, g, ctx(0, false, 2, true), false, key)).toBe(adjustCostByGear(base, g as never[], ctx(0, false, 2, true), false, key));
+                }
+            }
+        }
+    });
+
     it('枠数・補正関数が同じ結果を返す', () => {
         for (const c of ['you', 'giant', 'poisoner']) expect(simGear.gearSlotsFor(c)).toBe(gearSlotsFor(c as never));
         const sets = [[], ['sturdy'], ['titanCost'], ['gambler', 'ironLock'], ['reinforce', 'lightToken'], ['afterglow', 'chainDiscount', 'quadMastery']];
@@ -217,5 +270,25 @@ describe('AIが選ぶギア', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const simGear = require('../../../sim/gear');
         expect(simGear.RECOMMENDED_GEARS).toEqual(RECOMMENDED_GEARS);
+        expect(simGear.ALT_RECOMMENDED_GEARS).toEqual(ALT_RECOMMENDED_GEARS);
+    });
+
+    it('別案は枠数以内・重複なし・存在するギアだけ、pickは主案か別案のどれか', () => {
+        for (const c of Object.keys(ALT_RECOMMENDED_GEARS) as (keyof typeof ALT_RECOMMENDED_GEARS)[]) {
+            const patterns = [recommendedGears(c), ...(ALT_RECOMMENDED_GEARS[c] ?? [])];
+            for (const gears of patterns) {
+                expect(gears.length).toBeLessThanOrEqual(gearSlotsFor(c));
+                expect(new Set(gears).size).toBe(gears.length);
+                for (const g of gears) expect(GEAR_IDS).toContain(g);
+            }
+            for (let i = 0; i < patterns.length; i++) {
+                const picked = pickRecommendedGears(c, () => (i + 0.5) / patterns.length);
+                expect(picked).toEqual(patterns[i].slice(0, gearSlotsFor(c)));
+            }
+        }
+    });
+
+    it('別案が無いキャラは主案を返す', () => {
+        expect(pickRecommendedGears('tactician', () => 0.99)).toEqual(recommendedGears('tactician'));
     });
 });

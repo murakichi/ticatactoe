@@ -86,8 +86,8 @@ const RECOMMENDED_DECKS = {
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 14, 27, 28, 32],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
-    poisoner: [0, 3, 8, 12, 15, 16, 17, 18, 19, 28, 29, 32],
-    electrician: [12, 21, 22, 23, 24, 26, 28, 49, 50, 51, 53, 58],
+    poisoner: [0, 3, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48],
+    electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
@@ -96,6 +96,16 @@ const RECOMMENDED_DECKS = {
 
 /** キャラの推奨デッキ（コピー） */
 const recommendedDeck = (character) => [...(RECOMMENDED_DECKS[character] || RECOMMENDED_DECKS.you)];
+
+/** 主案と同等に強い別案のデッキ。deck.ts の ALT_RECOMMENDED_DECKS の複製。sim の環境測定は主案(recommendedDeck)で行う */
+const ALT_RECOMMENDED_DECKS = {};
+/** AI席のベースにするデッキ。主案と別案を同じ確率で選ぶ（別案が無ければ主案で、乱数は使わない） */
+const pickRecommendedDeck = (character, rng = Math.random) => {
+    const alts = ALT_RECOMMENDED_DECKS[character] || [];
+    if (alts.length === 0) return recommendedDeck(character);
+    const patterns = [recommendedDeck(character), ...alts.map((d) => [...d])];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
 
 /** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
 const isValidDeck = (deck) =>
@@ -117,7 +127,7 @@ const AI_DECK_SWAPS = 3;
 
 /** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
-    const deck = recommendedDeck(character);
+    const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
     for (let k = 0; k < swaps && outside.length > 0; k++) {
         const at = Math.floor(rng() * deck.length);
@@ -128,4 +138,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };

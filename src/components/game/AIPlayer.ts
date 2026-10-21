@@ -3,10 +3,10 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
-import { SkillCosts } from './skillCosts';
+import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
-import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
+import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable } from './thermal';
+import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 export const SKILL_POOL_SIZE = 62;
@@ -42,6 +42,8 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
     { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
     { idx: 53, key: 'onClickMarkdown', cut: 3 },
 ];
+/** 魔法使いが1手番にロックするバッズ駒の最大数。sim/ai.js の AI_DEFAULTS.magLockN と同じ */
+export const MAGICIAN_MAX_LOCKS = 3;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
 
@@ -49,6 +51,11 @@ export const MAX_REROLLS = 2;
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
     giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9,
 };
+
+// 毒使い×毒花・ミアズマの調整値 (sim/ai.js の BLOOM_* / MIASMA_MIN_SCORE と同値)
+const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
+const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
+const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 class AIPlayer {
     playerSymbol: Player;
@@ -80,19 +87,23 @@ class AIPlayer {
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
+    /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
+    hasToxicBloom: boolean = false;
 
     constructor(
         playerSymbol: Player,
         character: CharacterId,
         opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
         characters: readonly CharacterId[] = [],
-        gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number
+        gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
+        hasToxicBloom: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
         this.opponents = opponents;
         this.characters = characters;
         this.gearCostFn = gearCostFn;
+        this.hasToxicBloom = hasToxicBloom;
     }
 
     private characterOf(player: Player): CharacterId | undefined {
@@ -215,6 +226,55 @@ class AIPlayer {
             if (score > bestScore) { bestScore = score; bestIdx = i; }
         }
         return bestScore >= CHARGE_AREA_MIN_SCORE ? bestIdx : null;
+    }
+
+    /** 自陣の毒スタック数 */
+    private ownPoisonCount(board: SquareInfo[]): number {
+        let n = 0;
+        for (const sq of board) if (sq.player === this.playerSymbol) n += sq.effects.filter((e) => e.effect === '☠').length;
+        return n;
+    }
+
+    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数 (sim/engine.js miasmaPlan と同一) */
+    private miasmaPlan(board: SquareInfo[]): Map<number, number> {
+        const geo = geometryForCells(board.length);
+        const plan = new Map<number, number>();
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || !sq.effects.some((e) => e.effect === '☠')) return;
+            for (const j of geo.surroundRange(i)) {
+                const t = board[j];
+                if (t.player && t.player !== this.playerSymbol && !isGuarded(t, this.characters)) plan.set(j, (plan.get(j) ?? 0) + 1);
+            }
+        });
+        return plan;
+    }
+
+    /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (sim/ai.js miasmaScore と同一) */
+    private miasmaScore(board: SquareInfo[]): number {
+        const plan = this.miasmaPlan(board);
+        let critical = 0;
+        plan.forEach((_, j) => { if (this.inOppReachLine(board, j)) critical++; });
+        return plan.size + critical * 2;
+    }
+
+    /**
+     * 毒花を活かす: 自陣のコマ(敵に隣接・ライフに余裕あり)にインジェクションを打つ対象 (sim/ai.js と同一)。なければ null。
+     * 毒を盛るとバッズが付き、毒はミアズマで敵に送れる。自陣の毒が多すぎると自コマが消えるので上限を設ける
+     */
+    private findOwnBloomTarget(board: SquareInfo[]): number | null {
+        if (this.ownPoisonCount(board) >= BLOOM_MAX_OWN_POISON) return null;
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestScore = -1;
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) return;
+            const own = sq.effects.filter((e) => e.effect === '☠').length;
+            if (sq.bind < BLOOM_MIN_BIND + own) return;
+            const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player) && !board[j].effects.some((e) => e.effect === '🔑')).length;
+            const score = n * 10 + sq.bind - own * 5;
+            if (score > bestScore) { bestScore = score; best = i; }
+        });
+        return best;
     }
 
     /** 敵駒 i が「どかさないと負ける列」(持ち主が3つ揃い・他のコマなし・残り1マスが空き) に含まれるか (sim/ai.js inOppReachLine) */
@@ -592,9 +652,12 @@ class AIPlayer {
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
         const tokenIdx = [3, 4, 9, 11];
         const budsIdx = [2, 10];
+        // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
+        const poisonerTokenIdx = [3, 9, 11, 16];
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            (this.character === 'magician' && budsIdx.includes(idx));
+            (this.character === 'magician' && budsIdx.includes(idx)) ||
+            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
@@ -853,12 +916,14 @@ class AIPlayer {
         // --- トークン系 ---
         // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
         const freeCells = findEmptyIndexes(board).length;
-        const cryo = this.character === 'cryomancer';
+        const cryo = this.character === 'cryomancer' || this.character === 'poisoner'; // 毒使いも氷結札を使う(自陣の毒マスを凍らせる。sim F.cryoPoison)
         if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
             spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
         }
         if (!tokenUsed) {
-            if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
+            if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
+                spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
+            } else if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
             } else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
                 spend(this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken'), 'onClickFrostToken');
@@ -1208,6 +1273,28 @@ class AIPlayer {
             }
         }
 
+        // 毒使い ミアズマ: 自陣の毒マスの周囲の敵に毒を撒く（対象選択なし。手番は進まないので通常着手へ続ける）(sim/ai.js と同一)
+        if (this.character === 'poisoner') {
+            const miasmaCost = Math.max(MIASMA_MIN_COST, this.calculateAICost(costs.onClickMiasma - this.ownPoisonCount(board), false, true));
+            if (magic >= miasmaCost && this.miasmaScore(board) >= MIASMA_MIN_SCORE) {
+                return { move: this.getBestMove(board, life), skills: ['onClickMiasma'] };
+            }
+        }
+
+        // 毒使い×毒花: インジェクションが手札にあるとき、敵に隣接する自コマに積極的に毒を盛る（バッズが付き、後でミアズマで敵に送る）
+        if (
+            this.character === 'poisoner' &&
+            this.hasToxicBloom &&
+            availableSkills.includes(15) &&
+            magic >= this.calculateAICost(costs.onClickInjection, false, true) &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const target = this.findOwnBloomTarget(board);
+            if (target !== null) {
+                return { move: this.getBestMove(board, life), skills: ['onClickInjection'], stompTarget: target };
+            }
+        }
+
         // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
         // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
@@ -1430,15 +1517,22 @@ class AIPlayer {
                 }
             }
             // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-            if (this.character === 'magician' && magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
-                const budCell = board.findIndex(
-                    (sq) =>
-                        sq.player === this.playerSymbol &&
-                        sq.effects.some((e) => e.effect === '🌱') &&
-                        !sq.effects.some((e) => e.effect === '🔑')
-                );
-                if (budCell !== -1) {
-                    return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [budCell] };
+            // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 MAGICIAN_MAX_LOCKS 個。sim/ai.js の magLockN。
+            // A/B: 環境勝率 +2.9pt(seed2/200)・+3.0pt(seed3/400)・+3.5pt(seed4/400)）
+            if (this.character === 'magician') {
+                const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+                const afford = lockCost > 0 ? Math.floor(magic / lockCost) : MAGICIAN_MAX_LOCKS;
+                const budCells: number[] = [];
+                for (let i = 0; i < board.length && budCells.length < Math.min(MAGICIAN_MAX_LOCKS, afford); i++) {
+                    const sq = board[i];
+                    if (sq.player === this.playerSymbol && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && lockable(sq)) budCells.push(i);
+                }
+                if (budCells.length === 1) {
+                    return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: budCells };
+                }
+                if (budCells.length > 1) {
+                    // 「スキル→対象クリック」を1回ずつ順に行う（chargeClicks）
+                    return { move: this.getBestMove(board, life), skills: [], chargeClicks: budCells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
                 }
             }
         }

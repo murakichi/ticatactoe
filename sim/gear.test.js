@@ -183,11 +183,11 @@ test('道連れの鍵: 外れたらロックは付かない', () => {
     assert.ok(!sq.effects.some((x) => x.effect === '🔑'));
 });
 
-test('増援 / 軽量トークン: トークンのライフが+1 / -1（コストは軽量トークンだけ-1）', () => {
+test('増援 / 軽量トークン: トークンのライフが+2 / -1（コストは軽量トークンだけ-1）', () => {
     const a = game([['reinforce'], []]);
     a.magic[0] = 99;
     e.SKILLS.token(a);
-    assert.strictEqual(a.board.find((x) => x.player === H).bind, 5);
+    assert.strictEqual(a.board.find((x) => x.player === H).bind, 6);
     const b = game([['lightToken'], []]);
     b.magic[0] = 99;
     assert.strictEqual(e.calculateCost(b, 4, true), 3);
@@ -220,7 +220,7 @@ test('収穫: ロックを1つかけるごとに魔力+1', () => {
     assert.strictEqual(s.magic[0], afterSkill + 1);
 });
 
-test('毒花: 敵に毒を注入すると、自陣のコマ1つにバッズが付く', () => {
+test('毒花: 敵のコマに毒を注入しても、毒花を持たない側のコマ・自分のコマにはバッズが付かない', () => {
     const s = game([['toxicBloom'], []]);
     s.board[0] = { player: H, bind: 3, effects: [] };
     s.board[5] = { player: C, bind: 3, effects: [] };
@@ -228,8 +228,7 @@ test('毒花: 敵に毒を注入すると、自陣のコマ1つにバッズが�
     e.SKILLS.injection(s);
     e.placeMove(s, 5);
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
-    assert.ok(s.board[0].effects.some((x) => x.effect === '🌱'));
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🌱'), '敵のコマにはバッズを付けない');
+    assert.ok(!s.board.some((sq) => sq.effects.some((x) => x.effect === '🌱')));
 });
 
 test('毒花: 自陣のコマに毒を打てば、そのコマにバッズが付く', () => {
@@ -241,13 +240,27 @@ test('毒花: 自陣のコマに毒を打てば、そのコマにバッズが付
     assert.deepStrictEqual(s.board[0].effects.map((x) => x.effect).sort(), ['☠', '🌱']);
 });
 
-test('毒花: 自陣のコマがなければ何も起きない', () => {
-    const s = game([['toxicBloom'], []]);
+test('毒花: 相手から毒を付けられた自陣のコマにも発動する（毒を付ける側の装備は関係ない）', () => {
+    const s = game([[], ['toxicBloom']]);
+    s.board[0] = { player: H, bind: 3, effects: [] };
     s.board[5] = { player: C, bind: 3, effects: [] };
     s.magic[0] = 20;
-    e.SKILLS.injection(s);
+    e.SKILLS.injection(s); // 💙（毒花なし）が⭕のコマに毒
     e.placeMove(s, 5);
-    assert.ok(!s.board.some((x) => x.effects.some((y) => y.effect === '🌱')));
+    assert.deepStrictEqual(s.board[5].effects.map((x) => x.effect).sort(), ['☠', '🌱'], '⭕のコマにバッズ');
+    assert.ok(!s.board[0].effects.some((x) => x.effect === '🌱'), '毒を付けた側には付かない');
+});
+
+test('毒花: 毒霧（全コマに毒）では、毒花を持つ側のコマ全部にバッズが付く', () => {
+    const s = game([['toxicBloom'], []]);
+    s.board[0] = { player: H, bind: 3, effects: [] };
+    s.board[1] = { player: H, bind: 3, effects: [] };
+    s.board[5] = { player: C, bind: 3, effects: [] };
+    s.magic[0] = 30;
+    e.SKILLS.poisonMist(s);
+    assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '🌱').length, 1);
+    assert.strictEqual(s.board[1].effects.filter((x) => x.effect === '🌱').length, 1);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🌱').length, 0);
 });
 
 test('伝播: バッズトークンを置くと、周囲の自陣のコマにバッズが広がる', () => {
@@ -314,6 +327,99 @@ test('復讐の刃: 破壊（ちょうど0）や強化では発動しない', ()
     e.placeMove(s, 3); // 💙が自分のコマを強化
     assert.strictEqual(s.board[3].player, H);
     assert.strictEqual(s.magic[0] - before, 0, '強化では魔力は動かない');
+});
+
+test('彩りの庭: エフェクトが2種類以上あるマス1つにつき、手番開始時の魔力+1', () => {
+    const turnGain = (gears) => {
+        const s = game(gears);
+        s.board[0] = { player: H, bind: 30, effects: [{ effect: '☠' }, { effect: '🌱' }] };
+        s.board[1] = { player: H, bind: 30, effects: [{ effect: '🌱' }, { effect: '☠' }] };
+        s.board[2] = { player: H, bind: 30, effects: [{ effect: '🌱' }] };
+        e.placeMove(s, 5);
+        const before = s.magic[0];
+        e.placeMove(s, 10);
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(turnGain([['colorGarden'], []]) - turnGain([[], []]), 2);
+});
+
+test('病炎の契り: 自陣に毒・火炎があるとき、1種類につき固有以外のスキルのコスト-1（固有は対象外・下限1）', () => {
+    const s = game([['ailmentPact'], []]);
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4);
+    s.board[0] = { player: H, bind: 5, effects: [{ effect: '☠' }] };
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 3, '毒1種');
+    s.board[1] = { player: H, bind: 5, effects: [{ effect: '🔥' }] };
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '毒+火炎');
+    assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickStomp'), 4, '固有スキルは対象外');
+    s.board[2] = { player: C, bind: 5, effects: [{ effect: '☠' }, { effect: '🔥' }] };
+    assert.strictEqual(e.gearCost(s, 4, false, 1, 'onClickShuffle'), 4, '相手の装備ではない / 他人のエフェクトは数えない');
+});
+
+test('廃墟の底力: スキル・エフェクトで自陣が壊れると、次の自分の手番の終わりまでコスト-1', () => {
+    const s = game([[], ['ruinSurge']]);
+    s.board[7] = { player: C, bind: 5, effects: [] };
+    e.placeMove(s, 0); // 💙 → ⭕の手番（盤面を記録）
+    e.placeMove(s, 1); // ⭕ → 💙の手番
+    s.board[7] = { player: undefined, bind: 0, effects: [] }; // 💙のスキルで⭕のコマが壊れた
+    e.placeMove(s, 2); // 💙の手番終了 → ⭕の手番
+    assert.strictEqual(e.gearCost(s, 4, false, 1, 'onClickShuffle'), 3, '手番中は-1');
+    e.placeMove(s, 3); // ⭕の手番終了
+    assert.strictEqual(e.gearCost(s, 4, false, 1, 'onClickShuffle'), 4, '終わると元に戻る');
+});
+
+test('廃墟の底力: 通常の着手で自陣を奪われても発動しない（スキル・エフェクトによる破壊だけ）', () => {
+    const s = game([[], ['ruinSurge']]);
+    s.board[7] = { player: C, bind: 0, effects: [] };
+    e.placeMove(s, 0);
+    e.placeMove(s, 1);
+    s.life = 5;
+    e.placeMove(s, 7); // 💙が通常の着手で⭕のコマ(ライフ0)を奪う
+    assert.strictEqual(s.board[7].player, H);
+    assert.strictEqual(e.gearCost(s, 4, false, 1, 'onClickShuffle'), 4);
+});
+
+test('土壇場の防壁: 初めて相手が列を揃えると、かわりにその列と自陣のコマが消滅（ロックも貫通）。以降は相手の魔力+2・ライフ+1', () => {
+    const s = game([[], ['lastStand']]);
+    s.board[12] = { player: C, bind: 5, effects: [] };
+    s.board[0] = { player: H, bind: 5, effects: [] };
+    s.board[1] = { player: H, bind: 9, effects: [{ effect: '🔑' }] };
+    s.board[2] = { player: H, bind: 5, effects: [] };
+    assert.ok(e.placeMove(s, 3));
+    assert.strictEqual(s.winner, undefined);
+    for (const i of [0, 1, 2, 3]) assert.strictEqual(s.board[i].player, undefined, `マス${i}は消滅`);
+    assert.deepStrictEqual(s.board[1].effects, []);
+    assert.strictEqual(s.lastStandUsed[1], true);
+    assert.strictEqual(s.board.filter((sq) => sq.player === C).length, 0, '持ち主の自陣も消滅');
+});
+
+test('土壇場の防壁: 発動は1度だけ。2度目の完成は通常どおり勝ち / 持ち主自身の勝利は止めない', () => {
+    const s = game([[], ['lastStand']]);
+    const line = (p) => [8, 9, 10].forEach((i) => { s.board[i] = { player: p, bind: 5, effects: [] }; });
+    line(H);
+    e.placeMove(s, 11);
+    assert.strictEqual(s.winner, undefined);
+    e.placeMove(s, 0); // ⭕
+    line(H);
+    e.placeMove(s, 11);
+    assert.strictEqual(s.winner, H, '2度目は勝ち');
+    const t = game([[], ['lastStand']]);
+    e.placeMove(t, 0);
+    [4, 5, 6].forEach((i) => { t.board[i] = { player: C, bind: 5, effects: [] }; });
+    e.placeMove(t, 7);
+    assert.strictEqual(t.winner, C, '持ち主が揃えたら勝ち');
+});
+
+test('土壇場の防壁: 発動後は、相手の手番開始時の魔力+2', () => {
+    const run = (gears) => {
+        const s = game(gears);
+        [0, 1, 2].forEach((i) => { s.board[i] = { player: H, bind: 5, effects: [] }; });
+        e.placeMove(s, 3); // 💙が揃える
+        const m = s.magic[0];
+        e.placeMove(s, 8); // ⭕の手番終了 → 💙の手番開始
+        return s.magic[0] - m;
+    };
+    assert.strictEqual(run([[], ['lastStand']]), 1 + 4);
 });
 
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {

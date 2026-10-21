@@ -3,12 +3,13 @@
 - 最後に検証したmaster: f21a834(再検証OK: 基本67.6/envDeck varied(400) 64.1 で1位。none/random は省略。引き直しを本番AIに移植済み)
 - 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
-- 連続不採用回数: 6(再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
+- 連続不採用回数: 0(試行20の複数ロックで採用。再開前は 6。再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
 - 状態: done(再開後の洗練も飽和: 試行14〜19 の6件が連続不採用。discountPlan=2 は sim で +1.7pt だが本番AIに移植経路が無く issue #93)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 20 | strategy(AI) | **複数バッズ駒ロック**（ユーザー指摘: ロックは1手番に何個でもよいのにAIは1個だった）。1手番に魔力が許す限り最大N個ロック。seed2/200: base 66.3 → N=2 68.9・N=3 69.2・N=9 69.2・N=9+魔力3温存 69.1。再測定: seed3/400 67.4→70.4(+3.0)、seed4/400 66.1→69.6(+3.5)。3以上で頭打ち | **採用**（N=3）。sim/ai.js 既定 magLockN=3、本番 AIPlayer.ts は MAGICIAN_MAX_LOCKS=3（chargeClicks で順にロック。氷結中のマスは除く）。回帰テスト4件。ブラウザ実機での複数ロックの動きは未確認 |
 | 19 | joint(ギア2枠) | ギア2枠同時入替（seed2/200, 基準70.5）: vengeance+luckyPurse 65.0(-5.5)・luckyPurse+bindingLock 62.3(-8.2)・gambler+luckyPurse 64.5(-6.0) | 不採用（現ギア [sturdy, ironLock] が最適） |
 | 18 | synergy(3枚) | 新デッキで `--scan deck --swap 3 --neighbors 40 --games 60 --seed 5`（カテゴリ無制限）。基準69.6、最良 71.3（+1.7）、他は+1.1以下 | 不採用（閾値+3に届かず再測定せず） |
 | 17 | strategy(AI) | 既存ノブ discountPlan: 0(無効) 60.8(-9.7、特売系の先撃ちは必須)。2(手札に軽減で撃てる札が無いとき、軽減札を撃ってから1コストで引き直して探す) は seed2/200 +1.7・seed3/400 +1.7(71.0→72.7)・seed4/400 +1.8(70.1→71.9)。3回とも同じ向き、悪化なし(対tactician +4〜5, electrician +3) | **移植済み（PR #107）**。当初は保留（移植コスト大）だった:: sim上は合算で約2.5σの有効。ただし本番AIにはターン中のシャッフル→再計画の経路が無く(AIPlayer.ts に shuffle なし。Game.tsx の onClickShuffle は人間用)、ミラーには AI ターンのループ改修が要る。本番に入らない限り意味が無いので採用せず issue 化 |

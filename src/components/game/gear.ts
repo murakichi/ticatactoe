@@ -23,7 +23,11 @@ export type GearId =
     | 'propagate'
     | 'lightToken'
     | 'gambler'
-    | 'vengeance';
+    | 'vengeance'
+    | 'colorGarden'
+    | 'ailmentPact'
+    | 'ruinSurge'
+    | 'lastStand';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -46,7 +50,7 @@ export const GEAR_PARAMS = {
     titanLife: 3,
     titanCost: 3,
     /** 増援 / 軽量トークン: トークンスキルで置くコマのライフの変化 */
-    reinforceTokenLife: 1,
+    reinforceTokenLife: 2,
     lightTokenLife: -1,
     /** 軽量トークン: トークン系スキルのコスト変化 */
     lightTokenCost: -1,
@@ -62,6 +66,16 @@ export const GEAR_PARAMS = {
     vengeanceGain: 2,
     vengeancePenalty: 1,
     vengeanceCap: 4,
+    /** 彩りの庭: 1つのマスにこの種類数以上のエフェクトがある自陣のマス1つにつき、ターン開始時の魔力が増える量 */
+    varietyKinds: 2,
+    varietyMagic: 1,
+    /** 病炎の契り: 自陣に毒・火炎がある種類1つにつき、固有以外のスキルのコストが下がる量 */
+    ailmentDiscount: 1,
+    /** 廃墟の底力: 自陣がスキルかエフェクトで破壊されたあと、次の自分の手番の終わりまでスキルのコストが下がる量 */
+    ruinDiscount: 1,
+    /** 土壇場の防壁: 発動後、相手の手番開始時の魔力とライフ平均への加算 */
+    lastStandMagic: 4,
+    lastStandLife: 2,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -79,13 +93,17 @@ export const GEARS: GearDef[] = [
     { id: 'titanCost', name: '剛腕の代償', icon: '🏋️', desc: `ライフ平均+${P.titanLife}。全スキルのコスト+${P.titanCost}` },
     { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンスキルで置くコマのライフ+${P.reinforceTokenLife}` },
     { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクト(🌱🔑☠⚡)を付与するスキルを使うと、付与した数だけ魔力+1（1回につき最大${P.harvestCap}）` },
-    { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '毒を付与するスキルを使うと、自陣のコマ1つにバッズも付く（付与先が自陣ならそのコマ。敵ならランダムな自陣のコマ）' },
+    { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: '自陣のコマに毒が付くと、そのコマにバッズも付く（自分で付けた毒でも、相手から付けられた毒でも）' },
     { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがそれぞれランダムに-${P.priceRange}〜+${P.priceRange}される（下限${P.priceFloor}。試合中は固定）` },
     { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: 'スキルを使うたび、そのターンの間は全スキルのコスト-1（重複する。下限1）' },
     { id: 'propagate', name: '伝播', icon: '🌊', desc: 'エフェクト付きトークンを置くと、周囲8マスのランダムなコマに同じエフェクトが広がる' },
     { id: 'lightToken', name: '軽量トークン', icon: '🪶', desc: `トークン系スキルのコスト${P.lightTokenCost}、ただし置くコマのライフ${P.lightTokenLife}` },
     { id: 'gambler', name: '賭博師の骰子', icon: '🎲', desc: `ライフ値のばらつきが大きくなる（標準偏差を${P.gamblerStd}に。平均は変わらない）` },
     { id: 'vengeance', name: '復讐の刃', icon: '🗡️', desc: `自分のコマを奪われると魔力+${P.vengeanceGain}（1手で最大+${P.vengeanceCap}）。自分が敵のコマを奪取すると魔力-${P.vengeancePenalty}` },
+    { id: 'colorGarden', name: '彩りの庭', icon: '🎨', desc: `自陣に、1つのマスにエフェクトが${P.varietyKinds}種類以上あるマスがあると、1マスにつきターン開始時の魔力+${P.varietyMagic}` },
+    { id: 'ailmentPact', name: '病炎の契り', icon: '🩸', desc: `自陣に毒・火炎(🔥)があると、1種類につき固有以外のスキルのコスト-${P.ailmentDiscount}（下限1）` },
+    { id: 'ruinSurge', name: '廃墟の底力', icon: '🏚️', desc: `自陣がスキルかエフェクトで破壊されたとき、次の自分の手番の終わりまでスキルのコスト-${P.ruinDiscount}（下限1）` },
+    { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
 export const GEAR_IDS: GearId[] = GEARS.map((g) => g.id);
@@ -117,13 +135,48 @@ export type CostContext = {
     skillsThisTurn: number;
     /** 余韻の割引が有効か（前の手番にスキルを使った）。その手番の1つ目のスキルまで */
     echoReady: boolean;
+    /** 病炎の契り: 自陣にある毒・火炎の種類数(0〜2) */
+    ailments?: number;
+    /** 廃墟の底力: 割引が有効か（自陣が破壊されたあとの、自分の次の手番の終わりまで） */
+    ruin?: boolean;
 };
+
+/** キャラ固有のスキル（病炎の契りの対象外）。skillCosts のキー */
+export const EXCLUSIVE_SKILL_KEYS: readonly string[] = [
+    'onClickTotalAssault',
+    'onClickStomp',
+    'onClickJudgeDay',
+    'onClickToggleYingYang',
+    'onClickYingYangSkill',
+    'onClickNecromancy',
+    'onClickMiasma',
+    'onClickChargeSpread',
+    'onClickGlacier',
+    'onClickInferno',
+];
+
+/** マスの最小限の形（盤の SquareInfo と sim の盤の両方に合う） */
+type SquareLike = { player?: string; effects: readonly { effect: string }[] };
+
+/** 彩りの庭: player の自陣のマスのうち、エフェクトが varietyKinds 種類以上あるマスの数 */
+export const countVarietySquares = (squares: readonly SquareLike[], player: string): number =>
+    squares.filter((sq) => sq.player === player && new Set(sq.effects.map((e) => e.effect)).size >= P.varietyKinds).length;
+
+/** 病炎の契り: player の自陣にある毒・火炎の種類数(0〜2) */
+export const countAilmentKinds = (squares: readonly SquareLike[], player: string): number => {
+    const own = squares.filter((sq) => sq.player === player);
+    return (own.some((sq) => sq.effects.some((e) => e.effect === '☠')) ? 1 : 0) + (own.some((sq) => sq.effects.some((e) => e.effect === '🔥')) ? 1 : 0);
+};
+
+/** 廃墟の底力: before(手番開始時の持ち主)に対し、player のコマが盤から無くなった(または持ち主が変わった)マス。除外マスは通常の攻撃の着手マス */
+export const lostCells = (before: readonly (string | undefined)[], after: readonly (string | undefined)[], player: string, exclude: number | null): number[] =>
+    before.map((p, i) => (p === player && after[i] !== player && i !== exclude ? i : -1)).filter((i) => i >= 0);
 
 /**
  * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。
  * 下げる方向の補正は下限1（もともと0のコストは0のまま）。四連の極意の無料だけは0にする。
  */
-export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, isToken: boolean = false): number => {
+export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, isToken: boolean = false, skillKey?: string): number => {
     if (!gears || gears.length === 0) return cost;
     if (hasGear(gears, 'quadMastery') && ctx.skillsThisTurn === P.quadCount) return 0;
     let delta = 0;
@@ -131,6 +184,9 @@ export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, i
     if (hasGear(gears, 'afterglow') && ctx.echoReady && ctx.skillsThisTurn === 0) delta += P.afterglowDelta;
     if (hasGear(gears, 'chainDiscount')) delta -= ctx.skillsThisTurn;
     if (hasGear(gears, 'lightToken') && isToken) delta += P.lightTokenCost;
+    // 病炎の契り: 固有スキルは対象外。廃墟の底力: すべてのスキル
+    if (hasGear(gears, 'ailmentPact') && !(skillKey && EXCLUSIVE_SKILL_KEYS.includes(skillKey))) delta -= P.ailmentDiscount * (ctx.ailments ?? 0);
+    if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 };
@@ -185,7 +241,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
-    poisoner: ['titanCost', 'sturdy'],
+    poisoner: ['toxicBloom', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['afterglow', 'sturdy'],
@@ -194,6 +250,20 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
     (RECOMMENDED_GEARS[character] ?? ['sturdy']).slice(0, gearSlotsFor(character));
+
+/**
+ * 主案(RECOMMENDED_GEARS)と同等に強い別案。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedGears）。
+ * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
+ */
+export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
+    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+};
+
+/** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
+export const pickRecommendedGears = (character: CharacterId, rng: () => number = Math.random): GearId[] => {
+    const patterns = [recommendedGears(character), ...(ALT_RECOMMENDED_GEARS[character] ?? []).map((g) => g.slice(0, gearSlotsFor(character)))];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
 
 /** トークン系スキルが付けるエフェクト（伝播・収穫の対象） */
 export type TokenEffect = '🌱' | '☠' | '⚡';

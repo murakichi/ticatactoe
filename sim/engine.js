@@ -280,6 +280,7 @@ function spreadPoisonAround(board, idx, rng, s) {
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
     poisonStrike(s, board[t]);
+    toxicBloom(s, [t]);
 }
 
 // ---- 帯電（雷霆の巫） ------------------------------------------------------
@@ -382,19 +383,15 @@ function applyLock(s, idx) {
     const bind = gear.gearLockBind(g);
     if (sq.bind < bind) sq.bind = bind;
 }
-// 毒花: 毒を付与するスキルを使ったとき、自陣のコマ1つにバッズも付く。target が自陣のコマならそこ、なければランダムな自陣のコマ
-function toxicBloom(s, target) {
-    if (!hasGear(s.gears[s.turn], 'toxicBloom')) return;
-    const me = curPlayer(s);
-    let idx = target;
-    if (idx == null || s.board[idx].player !== me) {
-        const mine = [];
-        s.board.forEach((sq, k) => { if (sq.player === me && !isGuarded(s, sq)) mine.push(k); });
-        if (!mine.length) return;
-        idx = randomPick(mine, s.rng);
+// 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
+// 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
+function toxicBloom(s, cells) {
+    for (const k of cells) {
+        const sq = s.board[k];
+        if (!sq.player || !hasGear(s.gears[seatOf(sq.player)], 'toxicBloom')) continue;
+        sq.effects.push({ effect: '🌱' });
+        bumpStat(s, 'toxicBloom');
     }
-    s.board[idx].effects.push({ effect: '🌱' });
-    bumpStat(s, 'toxicBloom');
 }
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
@@ -519,6 +516,8 @@ function newGame(opts = {}) {
         useChargeSpread: false,
         // ギア。gearSkills=この手番に使ったスキル数 / echoReady=余韻の割引が有効 / echoNext=次の手番に余韻が付く
         gears,
+        // 検証用: ギアを持たない席にも、そのギア向けのAI戦略だけを使わせる（opts.forceAi[seat] = ギアIDの配列）。通常は空
+        forceAi: chars.map((_, i) => ((opts.forceAi && opts.forceAi[i]) || []).slice()),
         gearSkills: fill(0),
         skillKinds: Array.from({ length: n }, () => new Set()), // 手番内に使ったスキルの種類（業火の無料権の数え方）
         infernoReady: fill(false), // 業火の無料権。手番を跨いで持ち越し、業火を撃つと消える
@@ -527,6 +526,14 @@ function newGame(opts = {}) {
         oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
         echoReady: fill(false),
         echoNext: fill(false),
+        // 廃墟の底力: ruinActive=割引が有効（自陣が破壊された後の、自分の次の手番の終わりまで）/ ruinPending=次の自分の手番から有効
+        // snapOwners=手番開始時の各マスの持ち主 / lastMoveCell=その手番の通常の着手マス（攻撃による破壊は「スキル・エフェクトによる破壊」から除く）
+        ruinActive: fill(false),
+        ruinPending: fill(false),
+        snapOwners: null,
+        lastMoveCell: null,
+        // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
+        lastStandUsed: fill(false),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(skillCosts, rng)) : null)),
         useChargeArea: false,
@@ -582,11 +589,16 @@ function costsOf(s, seat = s.turn) {
     return s.priceTables[seat] || skillCosts;
 }
 function gearCtx(s, seat) {
-    return { skillsThisTurn: s.gearSkills[seat], echoReady: s.echoReady[seat] };
+    return {
+        skillsThisTurn: s.gearSkills[seat],
+        echoReady: s.echoReady[seat],
+        ailments: hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0,
+        ruin: s.ruinActive[seat],
+    };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
-    const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken);
+    const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key);
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
     return seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
@@ -680,6 +692,41 @@ function judgeNextIsHeart(s) {
     return judgeNextSeat(s) === 0;
 }
 
+// 廃墟の底力: 手番中にスキルかエフェクトで自陣のコマが盤から無くなった（持ち主が変わった）席を記録する
+function ruinDetect(s) {
+    if (!s.snapOwners) return;
+    const after = s.board.map((sq) => sq.player);
+    s.gears.forEach((g, seat) => {
+        if (!hasGear(g, 'ruinSurge')) return;
+        if (gear.lostCells(s.snapOwners, after, SYMBOLS[seat], s.lastMoveCell).length > 0) {
+            s.ruinPending[seat] = true;
+            bumpStat(s, 'ruinTriggered');
+        }
+    });
+}
+// 土壇場の防壁: seat 以外の誰かが使用済みなら有効（seat は「発動した側の相手」）
+function lastStandActiveAgainst(s, seat) {
+    return s.lastStandUsed.some((used, holder) => used && holder !== seat);
+}
+// 勝者の確定。初めて相手が列を揃えたとき、土壇場の防壁を持つ席がいれば、かわりにその列のマスを消滅させる（ロック・氷結を貫通）
+function settleWinner(s) {
+    let w = calculateWinner(symbolsOf(s.board));
+    if (w) {
+        const holder = s.gears.findIndex((g, seat) => hasGear(g, 'lastStand') && !s.lastStandUsed[seat] && SYMBOLS[seat] !== w);
+        if (holder >= 0) {
+            for (const line of geometryForCells(s.board.length).winLines) {
+                if (line.every((idx) => s.board[idx].player === w)) for (const idx of line) s.board[idx] = newSquare();
+            }
+            // 代償: 持ち主の自陣のコマもすべて消滅する
+            for (let idx = 0; idx < s.board.length; idx++) if (s.board[idx].player === SYMBOLS[holder]) s.board[idx] = newSquare();
+            s.lastStandUsed[holder] = true;
+            bumpStat(s, 'lastStand');
+            w = undefined;
+        }
+    }
+    s.winner = w;
+}
+
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
@@ -690,12 +737,20 @@ function advanceTurn(s) {
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
     const magicCharacter = ['magician'];
+    // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
+    ruinDetect(s);
+    s.ruinActive[s.turn] = false;
+    s.ruinActive[next] = s.ruinPending[next];
+    s.ruinPending[next] = false;
     // Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
     let nextMagic = s.magic[next] + 1 + lateMagicBonus(s.currentTurn, seatCount(s)) + budsCount(s.board, sym, s.budGuard[next]);
     if (magicCharacter.includes(ch)) nextMagic++;
     if (ch === 'yinYangMaster' && s.yy[next] === 'ying') nextMagic++;
     // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
     if (ch === 'magician') nextMagic += budsCount(s.board, sym, s.budGuard[next]) * 2;
+    // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
+    if (hasGear(s.gears[next], 'colorGarden')) nextMagic += gear.countVarietySquares(s.board, sym) * GP.varietyMagic;
+    if (lastStandActiveAgainst(s, next)) nextMagic += GP.lastStandMagic;
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
         const upkeep = proliferateUpkeep(s.proliferateCount[next]);
@@ -712,7 +767,7 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]), gear.gearLifeStd(s.gears[next], config.lifeStd));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], config.lifeStd));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
@@ -723,6 +778,8 @@ function advanceTurn(s) {
     s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
+    s.snapOwners = s.board.map((sq) => sq.player);
+    s.lastMoveCell = null;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
     s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
@@ -821,7 +878,7 @@ function placeMove(s, i) {
         board[i].effects.push({ effect: '☠' });
         poisonStrike(s, board[i]);
         harvestMagic(s, 1);
-        toxicBloom(s, i);
+        toxicBloom(s, [i]);
         s.useInjection -= 1;
         return true;
     }
@@ -849,6 +906,7 @@ function placeMove(s, i) {
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
     if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i])) return false;
 
+    s.lastMoveCell = i; // 廃墟の底力: 通常の着手マス（攻撃で壊れた自コマは「スキル・エフェクトによる破壊」に数えない）
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
     const decayNow = shouldDecay(s.placements, seatCount(s));
     s.placements += 1;
@@ -975,16 +1033,18 @@ function placeMove(s, i) {
     }
 
     s.currentTurn += 1;
+    settleWinner(s); // 土壇場の防壁は、次の手番のボーナスに間に合うよう手番を進める前にも判定する
     advanceTurn(s);
-    s.winner = calculateWinner(symbolsOf(board));
+    settleWinner(s);
     return true;
 }
 
 // ---- Skills (turn-ending vs not, faithful to Game.tsx) --------------------
 function endTurn(s) {
     s.currentTurn += 1;
+    settleWinner(s);
     advanceTurn(s);
-    s.winner = calculateWinner(symbolsOf(s.board));
+    settleWinner(s);
 }
 
 function onClickCharge(s) {
@@ -1267,9 +1327,10 @@ function applyProliferate(s, step) {
         if (isPoisoner ? sq.player && sq.player !== me : sq.player === me) targets.push(i);
     }
     if (!targets.length) return false;
-    const pick = s.board[randomPick(targets, s.rng)];
+    const pickIdx = randomPick(targets, s.rng);
+    const pick = s.board[pickIdx];
     pick.effects.push({ effect: isPoisoner ? '☠' : '🌱' });
-    if (isPoisoner) poisonStrike(s, pick);
+    if (isPoisoner) { poisonStrike(s, pick); toxicBloom(s, [pickIdx]); }
     return true;
 }
 function onClickProliferate(s) {
@@ -1333,7 +1394,7 @@ function exeMiasma(s) {
     }
     for (const sq of s.board) if (sq.player === me && !thermal.isFrozen(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
     harvestMagic(s, plan.size);
-    if (plan.size) toxicBloom(s, null);
+    toxicBloom(s, Array.from(plan.keys()));
 }
 function onClickMiasma(s) {
     spendMagic(s, miasmaCost(s), 'onClickMiasma');
@@ -1351,7 +1412,7 @@ function onClickPoisonToken(s) {
         const idx = randomPick(empties, s.rng);
         s.board[idx] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
         granted = afterTokenPlaced(s, idx, '☠');
-        toxicBloom(s, idx);
+        toxicBloom(s, [idx]);
     }
     harvestMagic(s, granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
@@ -1367,14 +1428,15 @@ function onClickSerum(s) {
 }
 function onClickIntensify(s) {
     let added = 0;
-    for (const sq of s.board) {
+    const poisoned = [];
+    s.board.forEach((sq, idx) => {
         const p = sq.effects.filter((e) => e.effect === '☠').length; // 氷結中の毒も倍にできる（付与は従来どおり）
         for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
-        if (p > 0) poisonStrike(s, sq);
+        if (p > 0) { poisonStrike(s, sq); poisoned.push(idx); }
         added += p;
-    }
+    });
     harvestMagic(s, added);
-    if (added) toxicBloom(s, null);
+    toxicBloom(s, poisoned);
     spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify'), 'onClickIntensify');
     bumpMagicCount(s);
 }
@@ -1387,7 +1449,7 @@ function exePandemic(s, i) {
     const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
     for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
     harvestMagic(s, targets.length);
-    if (targets.length) toxicBloom(s, null);
+    toxicBloom(s, targets);
     s.usePandemic = false;
 }
 
@@ -1396,14 +1458,16 @@ function onClickPoisonMist(s) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true, 'onClickPoisonMist'), 'onClickPoisonMist');
     bumpMagicCount(s);
     let n = 0;
-    for (const sq of s.board) {
-        if (!sq.player || isGuarded(s, sq)) continue;
+    const poisoned = [];
+    s.board.forEach((sq, idx) => {
+        if (!sq.player || isGuarded(s, sq)) return;
         sq.effects.push({ effect: '☠' });
         poisonStrike(s, sq);
+        poisoned.push(idx);
         n++;
-    }
+    });
     harvestMagic(s, n);
-    if (n) toxicBloom(s, null);
+    toxicBloom(s, poisoned);
 }
 
 // ---- 雷霆の巫 スキル ----
@@ -1946,7 +2010,7 @@ module.exports = {
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
-    miasmaCost, miasmaPlan, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
+    miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
     POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

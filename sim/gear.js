@@ -17,7 +17,7 @@ const GEAR_PARAMS = {
     sturdyLife: 1,
     titanLife: 3,
     titanCost: 3,
-    reinforceTokenLife: 1,
+    reinforceTokenLife: 2,
     lightTokenLife: -1,
     lightTokenCost: -1,
     harvestCap: 5,
@@ -27,12 +27,19 @@ const GEAR_PARAMS = {
     vengeanceGain: 2,
     vengeancePenalty: 1,
     vengeanceCap: 4,
+    varietyKinds: 2,
+    varietyMagic: 1,
+    ailmentDiscount: 1,
+    ruinDiscount: 1,
+    lastStandMagic: 4,
+    lastStandLife: 2,
 };
 const P = GEAR_PARAMS;
 
 const GEAR_IDS = [
     'emptyLock', 'ironLock', 'bindingLock', 'quadMastery', 'afterglow', 'luckyPurse', 'sturdy', 'titanCost', 'reinforce',
     'harvest', 'toxicBloom', 'priceWreck', 'chainDiscount', 'propagate', 'lightToken', 'gambler', 'vengeance',
+    'colorGarden', 'ailmentPact', 'ruinSurge', 'lastStand',
 ];
 
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
@@ -46,7 +53,29 @@ const gearLockBind = (gears) => (hasGear(gears, 'ironLock') ? P.ironLockBind : P
 const gearTokenBindDelta = (gears) => (hasGear(gears, 'reinforce') ? P.reinforceTokenLife : 0) + (hasGear(gears, 'lightToken') ? P.lightTokenLife : 0);
 
 /** キャラ補正済みのコストにギアのコスト補正を掛ける。下げる補正は下限1（もともと0なら0のまま）。四連の極意の無料だけ0 */
-function adjustCostByGear(cost, gears, ctx, isToken = false) {
+/** キャラ固有のスキル（病炎の契りの対象外）。skillCosts のキー */
+const EXCLUSIVE_SKILL_KEYS = [
+    'onClickTotalAssault', 'onClickStomp', 'onClickJudgeDay', 'onClickToggleYingYang', 'onClickYingYangSkill',
+    'onClickNecromancy', 'onClickMiasma', 'onClickChargeSpread', 'onClickGlacier', 'onClickInferno',
+];
+
+/** 彩りの庭: player の自陣のマスのうち、エフェクトが varietyKinds 種類以上あるマスの数 */
+function countVarietySquares(squares, player) {
+    return squares.filter((sq) => sq.player === player && new Set(sq.effects.map((e) => e.effect)).size >= P.varietyKinds).length;
+}
+
+/** 病炎の契り: player の自陣にある毒・火炎の種類数(0〜2) */
+function countAilmentKinds(squares, player) {
+    const own = squares.filter((sq) => sq.player === player);
+    return (own.some((sq) => sq.effects.some((e) => e.effect === '☠')) ? 1 : 0) + (own.some((sq) => sq.effects.some((e) => e.effect === '🔥')) ? 1 : 0);
+}
+
+/** 廃墟の底力: before(手番開始時の持ち主)に対し、player のコマが無くなった(または持ち主が変わった)マス。exclude は通常の攻撃の着手マス */
+function lostCells(before, after, player, exclude) {
+    return before.map((p, i) => (p === player && after[i] !== player && i !== exclude ? i : -1)).filter((i) => i >= 0);
+}
+
+function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (!gears || gears.length === 0) return cost;
     if (hasGear(gears, 'quadMastery') && ctx.skillsThisTurn === P.quadCount) return 0;
     let delta = 0;
@@ -54,6 +83,8 @@ function adjustCostByGear(cost, gears, ctx, isToken = false) {
     if (hasGear(gears, 'afterglow') && ctx.echoReady && ctx.skillsThisTurn === 0) delta += P.afterglowDelta;
     if (hasGear(gears, 'chainDiscount')) delta -= ctx.skillsThisTurn;
     if (hasGear(gears, 'lightToken') && isToken) delta += P.lightTokenCost;
+    if (hasGear(gears, 'ailmentPact') && !(skillKey && EXCLUSIVE_SKILL_KEYS.includes(skillKey))) delta -= P.ailmentDiscount * (ctx.ailments || 0);
+    if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 }
@@ -104,14 +135,24 @@ const RECOMMENDED_GEARS = {
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
-    poisoner: ['titanCost', 'sturdy'],
+    poisoner: ['toxicBloom', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'sturdy'],
     pyromancer: ['sturdy', 'harvest'],
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 
+/** 主案と同等に強い別案。src/components/game/gear.ts の ALT_RECOMMENDED_GEARS の複製。sim の環境測定は主案(recommendedGears)で行う */
+const ALT_RECOMMENDED_GEARS = {
+    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+};
+/** AI席が使うギア。主案と別案を同じ確率で選ぶ */
+const pickRecommendedGears = (character, rng = Math.random) => {
+    const patterns = [recommendedGears(character), ...(ALT_RECOMMENDED_GEARS[character] || []).map((g) => g.slice(0, gearSlotsFor(character)))];
+    return patterns[Math.floor(rng() * patterns.length)];
+};
+
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears,
+    adjustCostByGear, EXCLUSIVE_SKILL_KEYS, countVarietySquares, countAilmentKinds, lostCells, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
 };
