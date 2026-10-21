@@ -1031,7 +1031,7 @@ export const Game = (props: GameProps) => {
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
         }
 
-        // 巨人のオーラ: 周囲1マスの敵コマを破壊し、空きマスを次の1手番ロックする
+        // 巨人のオーラ: 周囲8マスの敵コマを破壊し、周囲8マス全部をロックする
         if (currentCharacter === 'giant' && nextBoard[i].player === currentTurnPlayer) {
             const aura = giantAura(nextBoard, geo.surroundRange(i), currentTurnPlayer, characters);
             if (aura.destroyed.length > 0) addCorpses(aura.destroyed.length);

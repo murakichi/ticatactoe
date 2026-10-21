@@ -1017,7 +1017,7 @@ function placeMove(s, i) {
     // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
     fireCharges(s, i, cur);
 
-    // 巨人のオーラ: コマを置くと周囲1マスの敵コマが破壊され、空きマスが次の1手番ロックされる
+    // 巨人のオーラ: コマを置くと周囲8マスの敵コマが破壊され、周囲8マス全部がロックされる
     if (curChar(s) === 'giant' && board[i].player === cur) giantAura(s, surroundRange(s, i), cur);
 
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
@@ -1047,7 +1047,7 @@ function placeMove(s, i) {
     return true;
 }
 
-// 巨人のパッシブ（src/components/game/giantAura.ts と同じ規則）。周囲の敵コマを破壊し（氷結は身代わり）、空きマスをライフ1のロックにする
+// 巨人のパッシブ（src/components/game/giantAura.ts と同じ規則）。周囲8マスの敵コマを破壊し（氷結は身代わり）、そのあと周囲8マス全部をロックする（空きマスはライフ1）
 function giantAura(s, range, me) {
     let destroyed = 0;
     for (const j of range) {
@@ -1061,8 +1061,8 @@ function giantAura(s, range, me) {
     if (destroyed > 0) addCorpses(s, destroyed);
     for (const j of range) {
         const sq = s.board[j];
-        if (sq.player || thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
-        s.board[j] = { ...sq, bind: Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        if (thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        s.board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
     }
 }
 

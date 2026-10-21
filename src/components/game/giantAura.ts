@@ -1,6 +1,7 @@
-// 巨人のパッシブ: コマを置くと、周囲1マスの敵コマが破壊され、周囲の空きマスが「次の1手番」ロックされる。
-// 氷結中の敵コマは❄1つが身代わりになって壊れない。ロック中・無敵の敵コマは対象外。自陣は触らない。
-// sim/engine.js の giantAura と同じ規則（ロックの長さはライフ=1。次の減衰で外れる）。
+// 巨人のパッシブ: コマを置くと、周囲8マスの敵コマが破壊され、そのあと周囲8マス全部にロックが掛かる。
+// 氷結中の敵コマは❄1つが身代わりになって壊れない（氷結中のマスにはロックも掛からない）。ロック中・無敵の敵コマは対象外。自陣は壊れない。
+// ロックの長さはマスのライフ次第（空きマスはライフ1＝次の減衰で外れる。コマが乗っているマスはそのコマのライフが尽きるまで）。
+// sim/engine.js の giantAura と同じ規則。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { PlayerCharacters, isGuarded } from './charge';
@@ -11,7 +12,7 @@ export interface GiantAuraResult {
     destroyed: number[];
     /** 氷結が身代わりになって壊れなかった敵コマ */
     blocked: number[];
-    /** ロックした空きマス（破壊して空いたマスを含む） */
+    /** ロックしたマス（破壊して空いたマス・自陣のコマのマスを含む） */
     locked: number[];
 }
 
@@ -34,8 +35,8 @@ export const giantAura = (board: SquareInfo[], range: number[], me: Player, char
     }
     for (const j of range) {
         const sq = board[j];
-        if (sq.player || !lockable(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
-        board[j] = { ...sq, bind: Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        if (!lockable(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
         locked.push(j);
     }
     return { destroyed, blocked, locked };
