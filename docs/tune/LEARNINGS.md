@@ -93,3 +93,4 @@
 - 2026-10-20 electrician: **`--rank` は `--target <char>` を付けないと、`--oppGears none|random`/`--envDeck varied` が全員(対象含む)に掛かる**(`sim/probe-top.js` の `aCand: a === target`)。完了判定の4条件は必ず `--rank --target <char> ...` で測る。付け忘れると、ギア寄与の大きいキャラ(雷霆の巫: ギアを外すと-30pt)が『自分もギアなし』で測られて不当に落ちる。(PR #95 時点の4条件確認も --target なしで測っていたので、再測定が必要。)
 
 - 2026-10-21 poisoner: 推奨ギア titanCost は毒使いに合わず、slot0 を toxicBloom/luckyPurse/reinforce 等に替えるだけで +8pt(seed2/200: 39.4→47.8)。最下位キャラは gear スキャンが最初から効く。slot1(sturdy)は替えると全て悪化。
+- 2026-10-21 poisoner: deck近傍で『-8(オピウム)』を含む案が上位4つ全てで、追加札(43/44/46)の結果が小数まで一致=追加札は未使用で、効果は死に札(オピウム)を抜くこと。+3.4pt(seed2/200, 境界)。
