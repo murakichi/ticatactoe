@@ -1,15 +1,16 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: f494bb9(新ギア採用後の4条件: 基本69.2/envDeck varied(400) 68.3/oppGears none 80.7/random 76.9 すべて1位)
+- 最後に検証したmaster: 4f58cf0(基本: 1位 poisoner 75.6 / 2位 cryomancer 62.1 / 3位 magician 61.2。陥落)
 - 現在の推奨設定: gears=[lastStand, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
 - 関連 issue: #116 新ギア4種の勝率計測（魔法使いでの結果をコメント済み予定）
 - 連続不採用回数: 0(試行20の複数ロックで採用。再開前は 6。再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
-- 状態: refining(新ギア4種を含む再チューニング中。ギアを土壇場の防壁に変更。関連 issue #116)
+- 状態: running(master 4f58cf0 で3位に陥落。1位 poisoner 75.6%。ギア/デッキのメタ探索で対毒使い(23%)を詰められず、issue #124 に追記して待機)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 23 | メタ(対poisoner/cryomancer) | master 4f58cf0 で陥落（毒使いが lastStand+sturdy で 77.8→75.6%、氷室が魔法使いの🌱凍結対策で対魔法使い 25→68%）。対毒使い 23%・対氷室 32%（seed1/60）。対毒使い絞りの deck scan（40近傍）・gears scan（全入替）は基準(24%)から 有意に動く候補なし（最大 gear 25%、deck は両トークンを抜くだけの無効変更が33%）。対氷室絞りの deck scan も基準28%から最大35%（-2バッズ+6スラッシュ。バッズを抜く案でnoisy・再測定未） | 不採用（ギア・デッキでは詰められない）。毒使いの lastStand 依存を issue #124 に追記（魔法使いのデータ） |
 | 22 | gear(新ギア) | 新ギア4種を含む `--scan gears`（seed1/60, 基準 [sturdy,ironLock] 67.4）で slot0→lastStand [lastStand,ironLock] が 72.0(+4.6)。再測定 seed3/400: 68.0→71.2(+3.2)、seed4/400: 66.3→69.1(+2.8)。対giant 60→87、対poisoner 38〜42→45〜46、一方 対陰陽師 -4/-12・対ネクロ -4/-5（-15超なし）。4条件すべて1位（基本69.2・envDeck varied 68.3・none 80.7・random 76.9） | **採用** gears=[lastStand, ironLock]（sim/gear.js・gear.ts）。[sturdy,lastStand] は +1.9/+2.1 で劣る |
 | 21 | gear(新ギア) | 彩りの庭(colorGarden)は『ロック済みバッズ駒=🌱+🔑の2種でターン開始時魔力+1』と見立てたが、`[colorGarden,ironLock]` は 64.1（基準 67.4、-3.3、seed1/60）。ruinSurge 63.9・ailmentPact 63.7 も基準以下 | 不採用（機構の仮説は反証。sturdy を失う損のほうが大きい／AIのロックは複数でも彩りの庭の数え方に乗らない可能性） |
 | 20 | strategy(AI) | **複数バッズ駒ロック**（ユーザー指摘: ロックは1手番に何個でもよいのにAIは1個だった）。1手番に魔力が許す限り最大N個ロック。seed2/200: base 66.3 → N=2 68.9・N=3 69.2・N=9 69.2・N=9+魔力3温存 69.1。再測定: seed3/400 67.4→70.4(+3.0)、seed4/400 66.1→69.6(+3.5)。3以上で頭打ち | **採用**（N=3）。sim/ai.js 既定 magLockN=3、本番 AIPlayer.ts は MAGICIAN_MAX_LOCKS=3（chargeClicks で順にロック。氷結中のマスは除く）。回帰テスト4件。ブラウザ実機での複数ロックの動きは未確認 |
@@ -50,4 +51,8 @@
 - master 8f8e484（electrician のデッキ変更 #95 を含む）で再々検証。4条件(seed3/200)すべて1位: 基本 66.2%(2位 cryomancer 62.2, 差4.0)／envDeck varied 63.7%(2位 electrician 61.9, 差1.8＝誤差の範囲の接戦)／oppGears none 78.9%(2位 electrician 56.9)／random 75.2%(2位 electrician 56.1)
 - master 837a29b（pyromancer のデッキ変更 #100）で再検証。変更が波及しにくいので2条件に絞った: 基本(seed3/200) 65.3%・1位(2位 cryomancer 62.1, 差3.2)／envDeck varied(seed3/400) 63.5%・1位(2位 cryomancer 60.1, 3位 electrician 59.9, 差3.4)。oppGears none/random は前回の差が19pt以上のため省略
 - master f21a834（魔法使いの引き直しを本番AIに移植 #107 後、tactician 等のデッキ調整を含む）で再検証。2条件に絞った: 基本(seed3/200) 67.6%・1位(2位 electrician 62.0, 差5.6)／envDeck varied(seed3/400) 64.1%・1位(2位 electrician 61.9, 差2.2)。引き直し移植後の基本は 65.3→67.6 と上がった(別master。参考値)。本番AIでの実測は #88、ブラウザ実機での動作確認は未了
+
+## 陥落の記録 (2026-10-21)
+- PR #126（推奨ギア→lastStand）のマージ前に4条件1位を確認したが、確認後に master（毒使い #123・氷室 #125/#127）を取り込んだ状態で再測定していなかった。取り込み後は 3位（61.2%）。マージ後の再確認が漏れていた
+- 毒使いが突出（75.6%）。#124 に魔法使いのデータを追記した。毒使いの調整が入るまで魔法使いは待機。master が動いたら手順8で再検証
 
