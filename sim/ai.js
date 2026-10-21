@@ -804,11 +804,6 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     }
 }
 
-// F.lsAggro: 土壇場の防壁を持ち未発動の席は、最初に相手が列を揃えても負けない(代わりに列と自陣が消えるだけ)ので、相手のリーチを無視して攻め・スキルを優先する
-function lsFree(s) {
-    return !!F.lsAggro && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn];
-}
-
 // ---- enhanced best move (minimax + fork detection) ----
 
 function getEnhancedBestMove(s) {
@@ -833,7 +828,7 @@ function getEnhancedBestMove(s) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
     // block opponent win (including captures)
-    if (!lsFree(s)) for (const o of opps) {
+    for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
@@ -877,7 +872,7 @@ function chooseSkills(s, availableSkills) {
     const tokenUsed = s.usedTokenThisTurn;
     const geo = geometryForCells(board.length);
 
-    const oppReaches = lsFree(s) ? 0 : opps.reduce((n, o) => n + countReaches(board, o), 0);
+    const oppReaches = opps.reduce((n, o) => n + countReaches(board, o), 0);
     let myPieces = 0, oppPieces = 0, oppHit = 0;
     const piecesOf = new Map(), hitOf = new Map();
     for (const sq of board) {
@@ -1179,29 +1174,14 @@ function faithfulMakeMoveInner(s) {
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
-    // F.lsSave=N: 土壇場の防壁が未発動のあいだは、魔力がN未満ならスキルを撃たずに貯める（発動で消えるのは盤上のコマだけで、魔力は残る）
-    if (F.lsSave && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn] && magic < F.lsSave) return { move: getEnhancedBestMove(s), turnEnded: false };
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
     // A/B検証用: F.ban='33|36' のように指定したスキルidxは手札にあっても使わない（スキル単体の寄与を測る）
     if (F.ban !== undefined) { const ban = String(F.ban).split('|'); availableSkills = availableSkills.filter((i) => !ban.includes(String(i))); }
 
-    // F.lsAllow='12|13|2': 土壇場の防壁が未発動のあいだは、列挙したスキルidxだけを使う（延命と魔力補充に専念。発動後は通常どおり）
-    if (F.lsAllow !== undefined && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn]) { const al = String(F.lsAllow).split('|'); availableSkills = availableSkills.filter((i) => al.includes(String(i))); }
-
     // 検証用: 指定スキルを強制的に1回撃つ
     if (F.force !== undefined && forceUse(s, me, availableSkills)) availableSkills = availableSkills.filter(() => true);
-
-    // F.richShuffle=N: 相手の土壇場の防壁が発動済みならこちらは手番開始時の魔力が増えて余る。撃てるスキルが手札に無く魔力に余裕があれば、1コストで引き直して探す（最大N回）
-    if (F.richShuffle && s.lastStandUsed.some((used, holder) => used && holder !== s.turn)) {
-        for (let k = 0; k < F.richShuffle; k++) {
-            if (curMagic(s) < (F.richMin || 8) + costsOf(s).onClickShuffle) break;
-            if (chooseSkills(s, availableSkills).length > 0) break;
-            E.shuffleHand(s);
-            availableSkills = s.skills.slice();
-        }
-    }
 
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
@@ -1516,7 +1496,7 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 巨人ストンプ / 魔法使い審判の日: 範囲破壊スキル (相手リーチが無いときに狙う)
-    const oppReaches = lsFree(s) ? 0 : opps.reduce((n, o) => n + countReaches(s.board, o), 0);
+    const oppReaches = opps.reduce((n, o) => n + countReaches(s.board, o), 0);
     if (oppReaches === 0) {
         const ch = curChar(s);
         if (ch === 'giant' && magic >= calculateCost(s, costsOf(s).onClickStomp, false, false, 'onClickStomp')) {
