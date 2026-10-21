@@ -768,6 +768,10 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 // ---- enhanced best move (minimax + fork detection) ----
 
+// 土壇場の防壁を装備していて、まだ発動していない席か
+function lastStandUnused(s, seat) {
+    return hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat];
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -861,6 +865,10 @@ function chooseSkills(s, availableSkills) {
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
+        // 土壇場の防壁が未発動のうちは、魔力収入を増やす🌱系・延命のロック/ライフ以外(攻撃・トークン・封じ)は撃たず魔力を貯める。
+        // 発動後(自陣が全消滅し、相手に魔力+4/ライフ+2)は従来どおり撃つ
+        if (character === 'necromancer' && F.lsPhase && name !== 'necromancy' && lastStandUnused(s, s.turn)
+            && !['buds', 'budsToken', 'windborne', 'addLife', 'lock', 'doubleLock', 'tripleLock', 'solstice', 'harvestEve'].includes(name)) return false;
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
