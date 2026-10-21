@@ -41,6 +41,7 @@ const AI_DEFAULTS = {
     pyroChain: 1, // 煉獄の鍛冶師が軽いスキルを連打して業火を無料で撃つ（ユーザー指定。0で無効にして A/B 比較できる）
     cryoPoison: 1, // 毒使いが霜降り・氷結トークン系を使う(自陣の毒マスを凍らせて毒ダメージから守る)。デッキに45/46/48を入れる前提(tune-top poisoner: 環境勝率 seed5/150 +7.7pt, seed6/200 +4.5pt)
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
+    elecGarden: 0, // 雷霆の巫がワルプルギスの夜(idx14)を撃つ: ⚡があり🌱が無い自陣コマがこの数以上のとき（彩りの庭用。0で撃たない=従来。tune-top検証中）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -973,6 +974,10 @@ function chooseSkills(s, availableSkills) {
     if (skills.some(sk => TURN_ENDING.includes(sk))) { skills.spent = curMagic(s) - remaining; return skills; }
 
     // --- 準備スキル ---
+    if (F.elecGarden && character === 'electrician' && availableSkills.includes(14)) {
+        const bare = board.filter((sq) => sq.player === me && sq.effects.some((e) => e.effect === '⚡') && !sq.effects.some((e) => e.effect === '🌱' || e.effect === '🔑')).length;
+        if (bare >= F.elecGarden) spend(cost(costsOf(s).onClickWalpurgisNight, false, 'onClickWalpurgisNight'), 'walpurgis');
+    }
     if (s.life <= 2 && availableSkills.includes(0)) {
         spend(cost(costsOf(s).onClickAddLife, false, 'onClickAddLife'), 'addLife');
     }
