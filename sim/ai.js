@@ -31,6 +31,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // 採用済みの設定は AI_DEFAULTS に書く。検証中は s.aiFlags[seat] = { 名前: 値 } で席ごとに上書きできる
 // （probe-ai.js が同一シードで改修前後を paired 比較する）。採用が決まったら AI_DEFAULTS へ移し、不採用なら分岐ごと消す。
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
+const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
@@ -1117,6 +1118,16 @@ function chooseSkills(s, availableSkills) {
     if (character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
         const rc = calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom');
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
+    }
+
+    // 魔力が有り余っているとき（土壇場の防壁の発動後は+4/手番など）: 通常は見送る条件を緩めて使い切る (AIPlayer.ts と同一)
+    if (remaining >= SURPLUS_MAGIC && oppReaches === 0) {
+        if (availableSkills.includes(0) && !skills.includes('addLife')) {
+            spend(cost(costsOf(s).onClickAddLife, false, 'onClickAddLife'), 'addLife');
+        }
+        if (availableSkills.includes(2) && !skills.includes('buds') && freeCells >= 3) {
+            spend(cost(costsOf(s).onClickBuds, false, 'onClickBuds'), 'buds');
+        }
     }
 
     { skills.spent = curMagic(s) - remaining; return skills; }

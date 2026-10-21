@@ -19,6 +19,8 @@ const CHARGE_AREA_MIN_SCORE = 2;
 const JAMMER_MIN_DMG = 2;
 // ランダム帯電を撃つときに残しておく魔力の余裕 (sim/ai.js の CHG_RAND_MARGIN)
 const CHARGE_RANDOM_MARGIN = 1;
+/** この魔力以上残っていたら「有り余り」として、バッズ/ライフの発動条件を緩める */
+const SURPLUS_MAGIC = 12;
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -1037,6 +1039,16 @@ class AIPlayer {
         if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
             const rc = this.calculateAICost(costs.onClickChargeRandom, false, false, 'onClickChargeRandom');
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
+        }
+
+        // 魔力が有り余っているとき（土壇場の防壁の発動後は+4/手番など）: 通常は見送る条件を緩めて使い切る (sim/ai.js と同一)
+        if (remaining >= SURPLUS_MAGIC && oppReaches === 0) {
+            if (availableSkills.includes(0) && !skills.includes('onClickAddLife')) {
+                spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
+            }
+            if (availableSkills.includes(2) && !skills.includes('onClickBuds') && freeCells >= 3) {
+                spend(this.calculateAICost(costs.onClickBuds, false, false, 'onClickBuds'), 'onClickBuds');
+            }
         }
 
         return skills;
