@@ -386,6 +386,55 @@ describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2
     });
 });
 
+describe('氷室の番人: 魔法使いの🌱付きコマを凍らせる (sim/ai.js F.freezeBuds と同一)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const budBoard = (budEffects: SquareInfo['effects'] = [{ effect: '🌱' }]) => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 10, '⭕', 3);
+        b[10] = { ...b[10], effects: budEffects };
+        return b;
+    };
+    it('魔法使いの🌱付きでロックされていないコマを氷結する', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'magician']);
+        const r = ai.makeMove(budBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([10]);
+    });
+    it('ロックされている・魔法使い以外・魔力不足なら凍らせない', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'magician']);
+        expect(ai.makeMove(budBoard([{ effect: '🌱' }, { effect: '🔑' }]), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(budBoard(), 1, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        const vsPoisoner = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'poisoner']);
+        expect(vsPoisoner.makeMove(budBoard(), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+    });
+});
+
+describe('氷室の番人: 毒で倒れそうな自陣コマを先に凍らせる (sim/ai.js F.antiPoison と同一)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const poisonBoard = (poison: number, life = 3) => {
+        const b = emptyBoard();
+        put(b, 5, '💙', life);
+        b[5] = { ...b[5], effects: Array.from({ length: poison }, () => ({ effect: '☠' as const })) };
+        put(b, 10, '⭕', 6);
+        return b;
+    };
+    it('毒≥ライフ-2 の自陣コマを氷結する', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'giant']);
+        const r = ai.makeMove(poisonBoard(1), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([5]);
+    });
+    it('毒が無い・ライフに余裕がある・魔力不足・氷室の番人でないときは凍らせない', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'giant']);
+        expect(ai.makeMove(poisonBoard(0), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(poisonBoard(1, 6), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(poisonBoard(1), 1, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(plain.makeMove(poisonBoard(1), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+    });
+});
+
 describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () => {
     const FRZ = { effect: '❄' as const };
     const FLM = { effect: '🔥' as const };
