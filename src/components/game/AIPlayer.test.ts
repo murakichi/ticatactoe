@@ -496,3 +496,37 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         expect(run(ai, 2, [53]).reroll).toBeUndefined();
     });
 });
+
+describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/ai.js の magLockN=3）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const budBoard = (cells: number[]) => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        cells.forEach((i) => (b[i] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] }));
+        return b;
+    };
+    const run = (cells: number[], magic: number) => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'you']);
+        return ai.makeMove(budBoard(cells), magic, skillCosts, 2, 5, [], false);
+    };
+    it('バッズ駒が複数あり魔力が足りれば、最大3つまで順にロックする', () => {
+        const r = run([0, 1, 2, 3], 9);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickUseLock', 'onClickUseLock', 'onClickUseLock']);
+        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 1, 2]);
+    });
+    it('魔力で払える数までに減らす', () => {
+        const r = run([0, 1, 2], skillCosts.onClickUseLock * 2);
+        expect(r.chargeClicks?.length).toBe(2);
+    });
+    it('1つだけなら従来どおり lockTargets で返す', () => {
+        const r = run([5], 9);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([5]);
+        expect(r.chargeClicks).toBeUndefined();
+    });
+    it('魔法使い以外は複数ロックしない', () => {
+        const ai = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
+        const r = ai.makeMove(budBoard([0, 1, 2]), 9, skillCosts, 2, 5, [], false);
+        expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
+    });
+});
