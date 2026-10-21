@@ -978,6 +978,11 @@ function chooseSkills(s, availableSkills) {
         const bare = board.filter((sq) => sq.player === me && sq.effects.some((e) => e.effect === '⚡') && !sq.effects.some((e) => e.effect === '🌱' || e.effect === '🔑')).length;
         if (bare >= F.elecGarden) spend(cost(costsOf(s).onClickWalpurgisNight, false, 'onClickWalpurgisNight'), 'walpurgis');
     }
+    if (F.elecGarden && character === 'electrician' && availableSkills.includes(36) && !skills.includes('walpurgis')) {
+        // 風の落とし子（コスト3）: ランダムに🌱を3つ。⚡があり🌱が無い自陣コマが多いほど、彩りの庭の2種類マスが増える
+        const bare = board.filter((sq) => sq.player === me && sq.effects.some((e) => e.effect === '⚡') && !sq.effects.some((e) => e.effect === '🌱' || e.effect === '🔑')).length;
+        if (bare >= F.elecGarden) spend(calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'windborne');
+    }
     if (s.life <= 2 && availableSkills.includes(0)) {
         spend(cost(costsOf(s).onClickAddLife, false, 'onClickAddLife'), 'addLife');
     }
