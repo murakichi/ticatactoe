@@ -56,8 +56,6 @@ const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
 // 毒使い×毒花・ミアズマの調整値 (sim/ai.js の BLOOM_* / MIASMA_MIN_SCORE と同値)
 const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
-// 重ね置きで補強する候補にする自コマのライフの上限 (sim/ai.js の REINFORCE_MAX_BIND)
-const REINFORCE_MAX_BIND = 2;
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 class AIPlayer {
@@ -535,17 +533,20 @@ class AIPlayer {
     }
 
     /**
-     * 自コマを重ね置きで補強する候補。ライフが少ない(REINFORCE_MAX_BIND 以下)自コマだけ。
-     * 着手後の減衰で0になると相手に奪われる(4つ目を取られて負ける)ので、守りの手として探索に含める (sim/ai.js reinforceMoves と同じ)
+     * 自コマを重ね置きで補強する候補。補強しないと、着手後の減衰で自コマのライフが0になり、
+     * 相手がそこを取って4つ揃える(負ける)コマだけを返す (sim/ai.js reinforceMoves と同じ)
      */
-    reinforceMoves(board: SquareInfo[]): number[] {
+    reinforceMoves(board: SquareInfo[], life: number): number[] {
+        const decayed = shouldDecay(this.placements, this.seatCount) ? this.decayBoard(board, -1) : board;
         const moves: number[] = [];
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
-            if (sq.player !== this.playerSymbol || sq.bind > REINFORCE_MAX_BIND) continue;
+            if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0) continue;
             if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) continue;
             if (overwriteBlocked(sq)) continue;
-            moves.push(i);
+            const lost = this.opponents.some((o) =>
+                calculateWinner(this.simulatePlace(decayed, i, o, life).map((x) => x.player)) === o);
+            if (lost) moves.push(i);
         }
         return moves;
     }
@@ -609,7 +610,7 @@ class AIPlayer {
     getBestMove(board: SquareInfo[], life: number): number | null {
         const empty = findEmptyIndexes(board);
         const validMoves = this.getValidMoves(board, life);
-        const allMoves = Array.from(new Set([...empty, ...validMoves, ...this.reinforceMoves(board)]));
+        const allMoves = Array.from(new Set([...empty, ...validMoves, ...this.reinforceMoves(board, life)]));
 
         if (allMoves.length === 0) return null;
 

@@ -746,17 +746,17 @@ function getValidMoves(board, me, character) {
     return moves;
 }
 
-// 重ね置きで補強する候補にする自コマのライフの上限 (AIPlayer.ts の REINFORCE_MAX_BIND)
-const REINFORCE_MAX_BIND = 2;
-// 自コマを重ね置きで補強する候補 (AIPlayer.ts reinforceMoves と同じ)。着手後の減衰で0になると奪われて負けることがある
-function reinforceMoves(board, me) {
+// 自コマを重ね置きで補強する候補 (AIPlayer.ts reinforceMoves と同じ)。補強しないと、着手後の減衰で自コマが0になり、
+// 相手がそこを取って4つ揃える(負ける)コマだけ
+function reinforceMoves(board, me, opps, life) {
+    const decayed = decayCtx && E.shouldDecay(decayCtx.placements, decayCtx.n) ? decayBoard(board, -1) : board;
     const moves = [];
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
-        if (sq.player !== me || sq.bind > REINFORCE_MAX_BIND) continue;
+        if (sq.player !== me || decayed[i].player !== sq.player || decayed[i].bind > 0) continue;
         if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) continue;
         if (thermal.overwriteBlocked(sq)) continue;
-        moves.push(i);
+        if (opps.some((o) => calculateWinner(simulatePlace(decayed, i, o, life).map((x) => x.player)) === o)) moves.push(i);
     }
     return moves;
 }
@@ -823,7 +823,7 @@ function getEnhancedBestMove(s) {
     const allMoves = [];
     for (const m of empty) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
     for (const m of valid) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
-    for (const m of reinforceMoves(board, me)) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
+    for (const m of reinforceMoves(board, me, opps, life)) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
 
     if (allMoves.length === 0) return null;
 

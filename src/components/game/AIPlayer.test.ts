@@ -625,3 +625,20 @@ describe('AIPlayer: 着手後の減衰で奪われる自コマ', () => {
         expect(ai.simulatePlace(b, 5, '💙', 3, 0)[0].bind).toBe(0);
     });
 });
+
+describe('AIPlayer: 補強は必要なときだけ', () => {
+    it('奪われても負けないライフ1の自コマは補強の候補にしない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [5, 6].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.reinforceMoves(b, 3)).toEqual([]);
+    });
+    it('奪われると相手が4つ揃うライフ1の自コマは補強の候補にする', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [1, 2, 3].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.reinforceMoves(b, 3)).toEqual([0]);
+    });
+});
