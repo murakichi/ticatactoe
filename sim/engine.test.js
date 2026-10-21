@@ -301,15 +301,17 @@ test('手番は席順に回る（3人）', () => {
     assert.deepStrictEqual(seen, [0, 1, 2, 0]);
 });
 
-test('巨人の休み: 次の巨人の席だけが飛ばされる（3人）。2人の同キャラは休みなし', () => {
+test('巨人の休み: 巨人は2ラウンドに1回しか動かない（3人）。2人の同キャラは休みなし', () => {
     const s = gameN('you', 'giant', 'you');
-    s.turn = 0; s.currentTurn = 14; // 14 % 5 === 4
-    assert.strictEqual(e.judgeNextSeat(s), 2);
-    s.currentTurn = 13;
-    assert.strictEqual(e.judgeNextSeat(s), 1);
+    const seq = [];
+    let prev = 0; seq.push(0);
+    for (let ct = 2; ct <= 10; ct++) { s.currentTurn = ct; s.turn = prev; prev = e.judgeNextSeat(s); seq.push(prev); }
+    assert.deepStrictEqual(seq, [0, 1, 2, 0, 2, 0, 1, 2, 0, 2]);
     const mirror = gameN('giant', 'giant');
-    mirror.turn = 0; mirror.currentTurn = 14;
-    assert.strictEqual(e.judgeNextSeat(mirror), 1);
+    const m = [];
+    let mp = 0; m.push(0);
+    for (let ct = 2; ct <= 4; ct++) { mirror.currentTurn = ct; mirror.turn = mp; mp = e.judgeNextSeat(mirror); m.push(mp); }
+    assert.deepStrictEqual(m, [0, 1, 0, 1]);
 });
 
 test('減衰(#30): 3人以上は着手3回につき1回だけ全コマ-1。2人は従来どおり着手ごと', () => {

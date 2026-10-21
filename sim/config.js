@@ -15,7 +15,8 @@ module.exports = {
         "default": 5
     },
     "lifeStd": 3,
-    "giantSkipModulo": 5,
+    // 巨人が何ラウンドに1回行動するか。src/components/game/giantTurn.ts の GIANT_ACT_EVERY と同じ値に。1にすると休みなし（A/B検証用）
+    "giantActEvery": 2,
     // 汎用スキルプールの大きさ。21 -> 23 (#39) -> 27 (#40) -> 29 (ヘイルメアリー・サイレンス) -> 30 (毒霧) -> 32 (氷結・火炎付与)
     "poolSize": 49,
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。

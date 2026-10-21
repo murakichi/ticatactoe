@@ -106,27 +106,27 @@ describe('多人数', () => {
         expect(container.querySelector('.winner')?.textContent).toContain('💙');
     });
 
-    it('2人戦で巨人は5ターンに1回休む（従来どおり。休みの間は相手が連続手番）', () => {
+    it('2人戦で巨人は2ターンに1回しか動かない（休みの間は相手が連続手番）', () => {
         const { container } = render(<Game players={cfg('you', 'giant')} />);
         fireEvent.click(cells(container)[0]); // 💙 → 巨人
         expect(turnPlayer(container)).toBe('⭕');
         fireEvent.click(cells(container)[1]); // ⭕(巨人) → 💙
         expect(turnPlayer(container)).toBe('💙');
-        fireEvent.click(cells(container)[2]); // 💙 → 本来は巨人だが休みで💙のまま
+        fireEvent.click(cells(container)[2]); // 💙 → 巨人は休みで💙のまま
         expect(turnPlayer(container)).toBe('💙');
+        fireEvent.click(cells(container)[3]); // 💙 → 巨人
+        expect(turnPlayer(container)).toBe('⭕');
     });
 
-    it('3人戦で巨人の席だけが飛ばされる', () => {
-        // 席: 0=あなた, 1=巨人, 2=あなた。巨人が次に来るのは着手後のターン数が2,5,8,11,14のとき。14で 14%5=4 になり巨人が休む
+    it('3人戦で巨人の席は2周に1回しか回ってこない', () => {
+        // 席: 0=あなた, 1=巨人, 2=あなた。並びは 0,1,2,0,2 の繰り返し
         const { container } = render(<Game players={cfg('you', 'giant', 'you')} />);
         const seq: string[] = [];
-        for (let k = 0; k < 13; k++) {
+        for (let k = 0; k < 5; k++) {
             seq.push(turnPlayer(container) ?? '');
             fireEvent.click(cells(container)[k]);
         }
-        // 13手目(💙)の次は巨人(⭕)が飛ばされて🟩の手番
-        expect(seq[12]).toBe('💙');
-        expect(turnPlayer(container)).toBe('🟩');
+        expect(seq).toEqual(['💙', '⭕', '🟩', '💙', '🟩']);
     });
 });
 

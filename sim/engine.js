@@ -675,17 +675,23 @@ function budsCount(board, player, guarded = false) {
         .filter((e) => e.effect === '🌱').length;
 }
 
-// 次の手番の席 (Game.tsx judgeNextSeat。post-increment な currentTurn・直前に動いた席の s.turn で呼ぶ)
-// 基本は席順。次が巨人のときだけ giantSkipModulo ターンに1回その席を飛ばす。
-// 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
+// 次の手番の席 (Game.tsx judgeNextSeat = src/components/game/giantTurn.ts seatForTurn と同じ並び)
+// 巨人は giantActEvery ラウンドに1回しか動かない: 「全員1周 → 巨人を除いて (giantActEvery-1) 周」の繰り返し。
+// 並びは currentTurn と直前の席で決まる。2人戦で同キャラ(巨人ミラー含む)は休みなしで交互に回す
 function judgeNextSeat(s) {
-    if (s.currentTurn === 1) return 0;
     const n = seatCount(s);
-    let next = (s.turn + 1) % n;
+    if (s.currentTurn <= 1) return 0;
+    const base = (s.turn + 1) % n; // 並びとずれているとき（途中から始めた盤など）も席順どおり次の席
+    const actEvery = config.giantActEvery || 1;
     const mirror = n === 2 && s.chars[0] === s.chars[1];
-    const mod = config.giantSkipModulo || 0;
-    if (!mirror && mod && s.chars[next] === 'giant' && s.currentTurn % mod >= mod - 1) next = (next + 1) % n;
-    return next;
+    const others = [];
+    for (let seat = 0; seat < n; seat++) if (s.chars[seat] !== 'giant') others.push(seat);
+    if (mirror || actEvery <= 1 || others.length === n || others.length === 0) return base;
+    const cycle = [];
+    for (let seat = 0; seat < n; seat++) cycle.push(seat);
+    for (let k = 1; k < actEvery; k++) cycle.push(...others);
+    if (cycle[(s.currentTurn - 2) % cycle.length] !== s.turn) return base;
+    return cycle[(s.currentTurn - 1) % cycle.length];
 }
 // 2人戦互換: 次が席0(heart)か
 function judgeNextIsHeart(s) {
