@@ -16,6 +16,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 20 | strategy(sim に慈雨を実装) | sim エンジンに慈雨(49)を実装し、雷霆の巫AIが『ライフ1以下の自陣コマ ≥N』で撃つ(F.elecBoost=2/3)。上位3相手 seed24/400 | 基準 58.8 → N=2: 57.8(-1.0) / N=3: 58.3(-0.5)。効果なし | 不採用(実装・ノブとも削除)。#109 の死に札案のうち慈雨は不要と判明。縮地/写し身は未検証 |
 | 19 | deck+gear(別案) | 追い剥ぎ52を入れ(sim では撃てない札=帯電札比率が上がる)、ダブルロック12を抜く(案X)。ギア別案 afterglow,harvest / luckyPurse,harvest を測定 | 上位3相手 envDeck varied seed22/400: 59.1→63.9。rank envDeck varied seed23/400(--target): 旧デッキ 58.9(3位)→案X 66.7(1位, +7.8)。seed4/300: 基本 案X 64.0(2位, 旧64.8と同等)、envDeck varied 案X 65.7(1位)。ギア別案 afterglow: 基本 62.7 / env 65.0(主案と同等)、luckyPurse: 基本 59.3(弱い) | 採用: デッキ案X、ギア別案 afterglow,harvest(主案と50%ずつ)。本番AIでは未計測 |
 | 18 | gear/strategy | envDeck varied 向けギア近傍(seed20/120)、サイレンス早撃ち F.silenceEarly=2 (上位3相手 envDeck varied seed21/400) | ギア: 現行が最上位級(57.1 vs afterglow 59.2、誤差内)。silenceEarly: 55.9→56.3(+0.4) | 不採用(ノブ削除) |
 | 17 | deck(envDeck varied向け) | `--envDeck varied --opp magician,cryomancer` 2枚swap 40候補(seed19/100) | 最良 74.5%±6.0 vs base 65.0%(z≈1、閾値未達)。envDeck variedの順位は seed5/400でも 2位 60.3 vs magician 62.3(-2.0)で再現 | 不採用 |
