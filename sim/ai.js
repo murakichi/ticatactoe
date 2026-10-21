@@ -1163,6 +1163,18 @@ function faithfulMakeMoveInner(s) {
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    // 彩りの庭(F.garden): 氷室の番人が🌱のある自陣コマを氷結して「2種類以上のエフェクトのマス」を作り、ターン開始の魔力を稼ぐ。
+    // 氷結中のコマには🌱を足せないので、🌱が先・氷結が後。敵の脅威が無く魔力に余裕(F.gardenReserve)があるときだけ
+    if (F.garden && curChar(s) === 'cryomancer' && gearAi(s, 'colorGarden') && threats.length === 0 && !s.silenced[s.turn]) {
+        for (let k = 0; k < (F.gardenMax || 2); k++) {
+            const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+            if (curMagic(s) < fz + (F.gardenReserve === undefined ? 3 : F.gardenReserve)) break;
+            const cell = s.board.findIndex((sq, i) => sq.player === me && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            if (cell === -1) break;
+            SKILLS.lock(s);
+            if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+        }
+    }
     // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
     // （A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上。非氷室は手札に氷結が来ないと撃てず差なしなので対象外）
     if (F.frzBlock && curChar(s) === 'cryomancer' && threats.length === 1 && !s.silenced[s.turn] && thermal.canFreeze(s.board[threats[0]])
