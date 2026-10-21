@@ -1,14 +1,17 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: f21a834(再検証OK: 基本67.6/envDeck varied(400) 64.1 で1位。none/random は省略。引き直しを本番AIに移植済み)
-- 現在の推奨設定: gears=[sturdy, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
+- 最後に検証したmaster: f494bb9(新ギア採用後の4条件: 基本69.2/envDeck varied(400) 68.3/oppGears none 80.7/random 76.9 すべて1位)
+- 現在の推奨設定: gears=[lastStand, ironLock] deck=[2,3,4,9,10,11,12,13,35,53,56,60](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
+- 関連 issue: #116 新ギア4種の勝率計測（魔法使いでの結果をコメント済み予定）
 - 連続不採用回数: 0(試行20の複数ロックで採用。再開前は 6。再開前は 6。洗練中。W3採用後: gear再スキャン / deck1枚近傍 / strategy再監査 / メタ(対tactician) / synergy swap2 / 寄与監査(audit) がいずれも不採用)
-- 状態: done(再開後の洗練も飽和: 試行14〜19 の6件が連続不採用。discountPlan=2 は sim で +1.7pt だが本番AIに移植経路が無く issue #93)
+- 状態: refining(新ギア4種を含む再チューニング中。ギアを土壇場の防壁に変更。関連 issue #116)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 22 | gear(新ギア) | 新ギア4種を含む `--scan gears`（seed1/60, 基準 [sturdy,ironLock] 67.4）で slot0→lastStand [lastStand,ironLock] が 72.0(+4.6)。再測定 seed3/400: 68.0→71.2(+3.2)、seed4/400: 66.3→69.1(+2.8)。対giant 60→87、対poisoner 38〜42→45〜46、一方 対陰陽師 -4/-12・対ネクロ -4/-5（-15超なし）。4条件すべて1位（基本69.2・envDeck varied 68.3・none 80.7・random 76.9） | **採用** gears=[lastStand, ironLock]（sim/gear.js・gear.ts）。[sturdy,lastStand] は +1.9/+2.1 で劣る |
+| 21 | gear(新ギア) | 彩りの庭(colorGarden)は『ロック済みバッズ駒=🌱+🔑の2種でターン開始時魔力+1』と見立てたが、`[colorGarden,ironLock]` は 64.1（基準 67.4、-3.3、seed1/60）。ruinSurge 63.9・ailmentPact 63.7 も基準以下 | 不採用（機構の仮説は反証。sturdy を失う損のほうが大きい／AIのロックは複数でも彩りの庭の数え方に乗らない可能性） |
 | 20 | strategy(AI) | **複数バッズ駒ロック**（ユーザー指摘: ロックは1手番に何個でもよいのにAIは1個だった）。1手番に魔力が許す限り最大N個ロック。seed2/200: base 66.3 → N=2 68.9・N=3 69.2・N=9 69.2・N=9+魔力3温存 69.1。再測定: seed3/400 67.4→70.4(+3.0)、seed4/400 66.1→69.6(+3.5)。3以上で頭打ち | **採用**（N=3）。sim/ai.js 既定 magLockN=3、本番 AIPlayer.ts は MAGICIAN_MAX_LOCKS=3（chargeClicks で順にロック。氷結中のマスは除く）。回帰テスト4件。ブラウザ実機での複数ロックの動きは未確認 |
 | 19 | joint(ギア2枠) | ギア2枠同時入替（seed2/200, 基準70.5）: vengeance+luckyPurse 65.0(-5.5)・luckyPurse+bindingLock 62.3(-8.2)・gambler+luckyPurse 64.5(-6.0) | 不採用（現ギア [sturdy, ironLock] が最適） |
 | 18 | synergy(3枚) | 新デッキで `--scan deck --swap 3 --neighbors 40 --games 60 --seed 5`（カテゴリ無制限）。基準69.6、最良 71.3（+1.7）、他は+1.1以下 | 不採用（閾値+3に届かず再測定せず） |
