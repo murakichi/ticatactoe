@@ -51,9 +51,8 @@ const AI_DEFAULTS = {
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
-    stompMin: 2, // 巨人ストンプを撃つ最低の敵駒数（検証用）
-    stompOwnW: 0, // 範囲内の自陣コマ1つにつき、敵駒数から引く重み（検証用。ストンプは自陣に-5ダメージ）
-    stompDef: 0, // 1なら相手のリーチがあっても、ストンプで脅威を減らせるなら撃つ（検証用）
+    stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
+    stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -67,24 +66,20 @@ const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
-function bestStompTarget(board, me, minEnemies = 2, ownW = 0) {
+function bestStompTarget(board, me, minEnemies = 2) {
     const geo = geometryForCells(board.length);
-    let bestIdx = null, bestScore = -Infinity, bestEnemies = 0, bestEmptyCenter = false;
+    let bestIdx = null, bestEnemies = 0, bestEmptyCenter = false;
     for (let i = 0; i < board.length; i++) {
         if (shield.has(i)) continue;
-        let enemies = 0, own = 0;
+        let enemies = 0;
         // 氷結中の敵コマはスキルダメージを❄1つ肩代わりするだけで壊れないので数えない
-        for (const idx of geo.stompRange(i)) {
-            if (isEnemy(board[idx].player, me) && !thermal.isFrozen(board[idx])) enemies++;
-            else if (board[idx].player === me && idx !== i) own++;
-        }
+        for (const idx of geo.stompRange(i)) if (isEnemy(board[idx].player, me) && !thermal.isFrozen(board[idx])) enemies++;
         const emptyCenter = !board[i].player; // 中心が空なら巨人のコマを配置できる
-        const score = enemies - ownW * own;
-        if (score > bestScore || (score === bestScore && emptyCenter && !bestEmptyCenter)) {
-            bestScore = score; bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
+        if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
+            bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
         }
     }
-    return bestEnemies >= minEnemies && bestScore >= minEnemies ? bestIdx : null;
+    return bestEnemies >= minEnemies ? bestIdx : null;
 }
 
 // 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) が最大の中心を選ぶ (純増2以上で価値あり)
@@ -1572,7 +1567,7 @@ function faithfulMakeMoveInner(s) {
     if (oppReaches === 0) {
         const ch = curChar(s);
         if (ch === 'giant' && magic >= calculateCost(s, costsOf(s).onClickStomp, false, false, 'onClickStomp')) {
-            const target = bestStompTarget(s.board, me, F.stompMin, F.stompOwnW);
+            const target = bestStompTarget(s.board, me, F.stompMin);
             if (target !== null) {
                 SKILLS.stomp(s);        // useStomp=true (手番は進まない)
                 placeMove(s, target);   // exeStomp: 範囲破壊+中心配置

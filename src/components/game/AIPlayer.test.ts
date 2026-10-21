@@ -65,7 +65,7 @@ describe('AIPlayer pure logic', () => {
 });
 
 describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () => {
-    it('giant findStompTarget needs >=2 enemies in range', () => {
+    it('giant findStompTarget fires with >=1 enemy in range (stomp costs 2)', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const two = emptyBoard();
         put(two, 0, '⭕');
@@ -74,7 +74,19 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
 
         const one = emptyBoard();
         put(one, 0, '⭕');
-        expect(giant.findStompTarget(one)).toBeNull();
+        expect(giant.findStompTarget(one)).not.toBeNull();
+
+        expect(giant.findStompTarget(emptyBoard())).toBeNull();
+    });
+
+    it('giant stomps to cut an opponent reach before locking (stompDef)', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕']);
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 3)); // ⭕が3つ並び、4つ目の3が脅威
+        const stompCosts = { onClickStomp: 2, onClickUseLock: 2 } as never;
+        const r = giant.makeMove(b, 5, stompCosts, 2, 5, [], false);
+        expect(r.skills).toEqual(['onClickStomp']);
+        expect(r.stompTarget).not.toBeNull();
     });
 
     it('magician findJudgeTarget fires when net enemy destruction >=2', () => {
@@ -314,11 +326,9 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull();
+        expect(ai.findStompTarget(b)).toBeNull(); // 氷結中の敵だけでは撃たない
         put(b, 9, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull(); // 効く敵は1体だけ
-        put(b, 10, '⭕');
-        expect(ai.findStompTarget(b)).not.toBeNull();
+        expect(ai.findStompTarget(b)).not.toBeNull(); // 効く敵が1体いれば撃つ（コスト2）
     });
 
     it('simulateStomp: 氷結中の敵は壊れず❄が1つ減るだけ。自陣の氷結コマも守られる', () => {

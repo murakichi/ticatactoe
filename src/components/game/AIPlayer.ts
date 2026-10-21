@@ -1104,7 +1104,10 @@ class AIPlayer {
         return best;
     }
 
-    /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
+    /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
+    private lastRescueThreats = 0;
+
+    /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵1体以上で価値あり。コスト2なので積極的に撃つ)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestEnemies = 0, bestEmptyCenter = false;
@@ -1118,7 +1121,7 @@ class AIPlayer {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
             }
         }
-        return bestEnemies >= 2 ? bestIdx : null;
+        return bestEnemies >= 1 ? bestIdx : null;
     }
 
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
@@ -1178,6 +1181,7 @@ class AIPlayer {
             const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;
             if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
         }
+        this.lastRescueThreats = bestThreats;
         return bestIdx;
     }
 
@@ -1261,6 +1265,16 @@ class AIPlayer {
 
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
         const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
+        // 巨人: 相手にリーチがあるとき、ストンプ(コスト2・着手も兼ねる)で脅威が減るならロックより先に撃つ
+        // （sim/ai.js の stompDef=1 と同一。A/B: 環境勝率 12.4→19.8% seed1/100、stompMin=1 と併せて 14.6→26.2% seed2/200）
+        if (this.character === 'giant' && threatSquares.length >= 1 && magic >= this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp')) {
+            const rescue = this.findRescueCenter(board, 'stomp');
+            if (rescue !== null && this.lastRescueThreats < threatSquares.length) {
+                const postBoard = this.simulateStomp(board, rescue, this.playerSymbol, life);
+                const followup = this.getBestMove(postBoard, life);
+                return { move: followup, skills: ['onClickStomp'], stompTarget: rescue };
+            }
+        }
 
         // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
         // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
