@@ -1,14 +1,16 @@
 # tune-top: necromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: (未到達。取り込み済み master=4dad41d)
-- 現在の推奨設定: 既定(推奨ギア/デッキそのまま)
+- 現在の推奨設定: gears=[vengeance,lastStand] deck=既定 AIフラグ=なし
 - 基準線: 環境勝率 42.6% / 9位 / 1位 tactician 67.8%  (--rank, seed 1, games 60, 2026-10-20)
 - 最新master(4dad41d)での順位: 7位 40.9% / 1位 electrician 66.8% (--rank seed1 games60, 2026-10-21)。42.6%(9位)から順位は上がったが、他キャラの変動(poisoner/you/pyromancerの低下)による相対的なもの
-- 連続不採用回数: 6 (種類: gear, deck, synergy, strategy, meta, joint=6種類を各1回測定済み)
-- 状態: blocked(issue #92)  # ユーザー指示で探索続行→AIノブ3件(necroReserveAll/necroMin/necroFeed)も不採用で再停止
+- 基準線(採用後, master 3bc89db): 基本 3位 58.0%(1位 magician 64.3%) / envDeck varied 2位 59.9% / oppGears none 1位 72.3% / oppGears random 2位 66.4%  (--rank seed3 games200)
+- 連続不採用回数: 0 (採用で戻した)
+- 状態: running  # 新ギア lastStand 採用で 7位→3位。トップ(4条件1位)は未達。#92 は降霊コスト案として残る
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 11 | gear | 新ギア4種(master 3bc89db)を含む1枠差し替え近傍(seed1 games60)→再測定(seed2 games200) | 基準37.8%に対し vengeance+lastStand 57.0%(+19.2pt, ±2.1)、lastStand+sturdy 53.8%。他の新ギア(ruinSurge/colorGarden/ailmentPact)は基準以下。悪化-15pt超なし(poisoner 26→23%)。推測: 自陣全消滅で死体が一気に貯まり降霊が回る(未検証) | **採用** gears=[vengeance,lastStand] |
 | 10 | strategy(AI) | necroFeed: 負けていなくてもスラッシュ系を撃って死体を増やす(seed1 games150) | 43.0→42.9%(±2.6)。対キャラ別も不変。分岐削除 | 不採用 |
 | 9 | strategy(AI) | necroMin: 降霊の最低死体数 1/2/3/4 (seed1 games150) | 43.0 / 41.2 / 37.1 / 35.5%(±2.6)。待つほど悪化=即発動が最適。分岐削除 | 不採用 |
 | 8 | joint | ギアを vengeance+afterglow に変えてデッキ1枚30近傍(seed1 games60) | 最良44.1%±4.1。ギア単独(#1)で-6ptだったafterglowをデッキで補えず、現推奨(45.5%)を超えない | 不採用 |
