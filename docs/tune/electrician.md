@@ -1,17 +1,18 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: cc22236
+- 最後に検証したmaster: 926debf
 - 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,49,50,51,52,53,58] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
 - 連続不採用回数: 0
-- 状態: running(トップ未達: envDeck varied は新デッキで1位に届いたが基本が僅差の2位。issue #109 は継続)
+- 状態: blocked(issue #109。magician と基本・envDeck varied で互角〜-2pt、ギアなし/ランダムは1位)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
 - 陥落: master 837a29b(seed3/200試合)で 4位 59.2% / 1位 magician 65.3%(差6.1pt)・cryomancer 62.1%・tactician 59.2%。envDeck varied でも 2位 62.1% vs magician 63.7%。原因は magician(デッキ調整 #98)と cryomancer の調整。
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
+- 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
