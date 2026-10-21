@@ -10,6 +10,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 12 | strategy(AI) | 防壁未発動の間の立ち回り lsPlan=1(相手の勝ち手を塞がない)/2(+降霊以外の支払いを全停止)/3(+自陣投資系のみ停止) (seed1 games200) | 基準56.7%±2.1に対し 57.3 / 57.8 / 57.4%(+0.6〜+1.1pt, 誤差内)。防壁は塞ぐ/塞がないに関わらず63〜84%の試合で発動済みで、勝敗は発動後(poisoner 0%, tactician 20%, magician 44%, giant 85%)。分岐削除 | 不採用 |
 | 11 | gear | 新ギア4種(master 3bc89db)を含む1枠差し替え近傍(seed1 games60)→再測定(seed2 games200) | 基準37.8%に対し vengeance+lastStand 57.0%(+19.2pt, ±2.1)、lastStand+sturdy 53.8%。他の新ギア(ruinSurge/colorGarden/ailmentPact)は基準以下。悪化-15pt超なし(poisoner 26→23%)。推測: 自陣全消滅で死体が一気に貯まり降霊が回る(未検証) | **採用** gears=[vengeance,lastStand] |
 | 10 | strategy(AI) | necroFeed: 負けていなくてもスラッシュ系を撃って死体を増やす(seed1 games150) | 43.0→42.9%(±2.6)。対キャラ別も不変。分岐削除 | 不採用 |
 | 9 | strategy(AI) | necroMin: 降霊の最低死体数 1/2/3/4 (seed1 games150) | 43.0 / 41.2 / 37.1 / 35.5%(±2.6)。待つほど悪化=即発動が最適。分岐削除 | 不採用 |
@@ -23,3 +24,8 @@
 | 1 | gear | 1枠差し替え近傍スキャン(vengeance,sturdy から30通り, seed1 games60) | 基準45.5%に対し最良 afterglow/sturdy 39.5%(-6.0pt)。全近傍が基準以下 | 不採用 |
 ## 次に試す候補(軸の順 gear → deck → strategy を巡回)
 - (gear,deck1枚,synergy 済) (6種類測定済み。行き詰まり判定へ)(ギア×デッキ) → strategy(降霊の撃ち所を増やすAIノブ、sim/ai.js necromancer節)。(--swap 3) → strategy(probe-usage) → メタ(対tactician 23%, 対yinYang 27%, 対giant 33%) → joint
+
+## 診断メモ(2026-10-21, gears=[vengeance,lastStand])
+- 防壁の発動率: vs tactician 75% / poisoner 84% / giant 63% / magician 69%(150試合, 平均発動は8〜15手目)。発動前に決着した試合は全勝。
+- 発動後の勝率: poisoner 0% / tactician 20% / magician 44% / giant 85%。相手の魔力+4・ライフ+2の下で、自陣ゼロから立て直せるかが勝敗。
+- 次の焦点: 発動後の立ち回り(特に対 poisoner 23%・tactician 47%)。降霊を発動直後に撃てているか、発動後の死体数と降霊の効果を測る。

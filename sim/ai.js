@@ -768,10 +768,6 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 // ---- enhanced best move (minimax + fork detection) ----
 
-// 土壇場の防壁を装備していて、まだ発動していない席か
-function lastStandUnused(s, seat) {
-    return hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat];
-}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -793,10 +789,8 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
-    // 土壇場の防壁が未発動なら、相手の勝ち手をあえて塞がない(防壁が発動して列と自陣が消える。ここまでは攻めに専念する)
-    const lsLetWin = F.lsPlan && lastStandUnused(s, s.turn);
     // block opponent win (including captures)
-    for (const o of lsLetWin ? [] : opps) {
+    for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
@@ -867,10 +861,6 @@ function chooseSkills(s, availableSkills) {
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        // 土壇場の防壁が未発動のうちは、どうせ消える自陣への投資(バッズ/トークン/ライフ…)をやめて魔力を貯める
-        // lsPlan>=2: 降霊以外のすべて / 3: 自陣に投資するスキル(RESERVE_SKIP)だけ
-        if (character === 'necromancer' && F.lsPlan >= 2 && name !== 'necromancer' && name !== 'necromancy' && lastStandUnused(s, s.turn)
-            && (F.lsPlan === 2 || RESERVE_SKIP.includes(name))) return false;
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
