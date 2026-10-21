@@ -804,6 +804,11 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     }
 }
 
+// F.lsAggro: 土壇場の防壁を持ち未発動の席は、最初に相手が列を揃えても負けない(代わりに列と自陣が消えるだけ)ので、相手のリーチを無視して攻め・スキルを優先する
+function lsFree(s) {
+    return !!F.lsAggro && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn];
+}
+
 // ---- enhanced best move (minimax + fork detection) ----
 
 function getEnhancedBestMove(s) {
@@ -828,7 +833,7 @@ function getEnhancedBestMove(s) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
     // block opponent win (including captures)
-    for (const o of opps) {
+    if (!lsFree(s)) for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
@@ -872,7 +877,7 @@ function chooseSkills(s, availableSkills) {
     const tokenUsed = s.usedTokenThisTurn;
     const geo = geometryForCells(board.length);
 
-    const oppReaches = opps.reduce((n, o) => n + countReaches(board, o), 0);
+    const oppReaches = lsFree(s) ? 0 : opps.reduce((n, o) => n + countReaches(board, o), 0);
     let myPieces = 0, oppPieces = 0, oppHit = 0;
     const piecesOf = new Map(), hitOf = new Map();
     for (const sq of board) {
@@ -1496,7 +1501,7 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 巨人ストンプ / 魔法使い審判の日: 範囲破壊スキル (相手リーチが無いときに狙う)
-    const oppReaches = opps.reduce((n, o) => n + countReaches(s.board, o), 0);
+    const oppReaches = lsFree(s) ? 0 : opps.reduce((n, o) => n + countReaches(s.board, o), 0);
     if (oppReaches === 0) {
         const ch = curChar(s);
         if (ch === 'giant' && magic >= calculateCost(s, costsOf(s).onClickStomp, false, false, 'onClickStomp')) {
