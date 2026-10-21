@@ -2,12 +2,13 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db
 - 現在の推奨設定: gears=[titanCost, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=なし
-- 基準線: 環境勝率 56.5% / 3位 / 1位 tactician 67.8%, 2位 electrician 60.2%   (--rank seed=1 games=60, 旧master 4b849ea)
-- 連続不採用回数: 0
+- 基準線: 環境勝率 52.4% / 6位 / 1位 magician 65.7%, 2位 poisoner 63.4%   (--rank seed=1 games=60, master 3bc89db。旧master 4b849ea: 56.5% 3位)
+- 連続不採用回数: 1
 - 状態: running(トップ未達。ギア4種追加を受けて再開)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 7 | gear(再) | ギア4種追加(colorGarden/ailmentPact/ruinSurge/lastStand)後の1枠差し替え全近傍(seed1,60) | base 51.1%。最良 priceWreck+sturdy 50.6%, emptyLock 50.6%。新ギア4種は全て基準以下(42.6〜46.5%) | 不採用 |
 | 6 | joint | `--gears priceWreck,sturdy` × デッキ30近傍(seed1,60)→最良 -バッズ+特売 60.0%(基準57.2%)。seed2,200で再測定 | priceWreck単独 53.0% / +特売 55.1% / titanCostのまま+特売 55.3% (基準55.3%) → 全て基準以下 | 不採用 |
 | 5 | メタ(対cryomancer) | `--opp cryomancer` でデッキ1枚40近傍(seed1,200試合)→最良 -バイバイン+火遁 47% vs 基準38%。seed2,200試合の環境全体で再測定 | 環境55.8% vs 基準55.3% (+0.5)。対cryomancer 37→44%だが他は横ばい。勝者の呪い込みで+1.5pt未満 | 不採用(保留: cryomancer特化なら有効) |
 | 4 | strategy | ストンプの最低敵数 2→1 (`stompMin`ノブ) | probe-usage で stomp 0.42→0.43回/試合、環境勝率57.0%で同一(seed1,100)。発動条件ではなく魔力が律速 | 不採用(ノブ削除) |
