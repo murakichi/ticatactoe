@@ -4,7 +4,7 @@
 - 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,3,12,15,16,17,18,19,29,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 79.2% / 順位 1位 / 2位 magician 64.3%   (seed3, games100, rank --target poisoner, master 3bc89db)
 - 連続不採用回数: 0
-- 状態: running(ギア4種追加の master 3bc89db で再開。#117 は継続)
+- 状態: refining(トップ到達。4条件すべて1位: 基本78.3/envDeck varied 67.9(2位magician 64.4)/oppGears none 88.7/random 85.0, seed3/200)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
