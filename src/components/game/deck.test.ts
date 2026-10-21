@@ -4,6 +4,8 @@ import {
     SKILL_CATALOG,
     CATEGORY_ORDER,
     RECOMMENDED_DECKS,
+    ALT_RECOMMENDED_DECKS,
+    pickRecommendedDeck,
     MAX_SAVED_DECKS,
     SAVED_DECKS_KEY,
     recommendedDeck,
@@ -58,6 +60,22 @@ describe('デッキ', () => {
         expect(resolveDeck(d, 'you')).toEqual([...d].sort((a, b) => a - b));
         expect(resolveDeck([1, 2], 'poisoner')).toEqual(recommendedDeck('poisoner'));
         expect(resolveDeck(undefined, 'poisoner')).toEqual(recommendedDeck('poisoner'));
+    });
+
+    it('別案のデッキは有効で、pick は主案か別案のどれか。別案が無ければ乱数を使わない', () => {
+        for (const c of Object.keys(ALT_RECOMMENDED_DECKS) as CharacterId[]) {
+            const patterns = [recommendedDeck(c), ...(ALT_RECOMMENDED_DECKS[c] ?? [])];
+            patterns.forEach((d) => expect(isValidDeck(d)).toBe(true));
+            patterns.forEach((d, i) => expect(pickRecommendedDeck(c, () => (i + 0.5) / patterns.length)).toEqual(d));
+        }
+        const rng = jest.fn(() => 0.9);
+        expect(pickRecommendedDeck('you', rng)).toEqual(recommendedDeck('you'));
+        expect(rng).not.toHaveBeenCalled();
+    });
+
+    it('sim/deck.js の別案の複製と一致する', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        expect(require('../../../sim/deck').ALT_RECOMMENDED_DECKS).toEqual(ALT_RECOMMENDED_DECKS);
     });
 
     it('randomDeck は常に有効なデッキ', () => {
