@@ -3,11 +3,12 @@
 - 最後に検証したmaster: 249e5c1
 - 現在の推奨設定: gears=[toxicBloom,sturdy] deck=[0,3,12,15,16,17,18,19,29,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 54.5% / 順位 5位 / 1位 magician 66.3%   (seed3, games100, rank --target poisoner)
-- 連続不採用回数: 4
-- 状態: running(トップ未達)
+- 連続不採用回数: 6
+- 状態: blocked(issue #117)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 12 | deck | 氷結デッキで swap3 ランダム40近傍(seed12/60) 最良59.4 vs base53.3 → 再測定(seed13/200) 現状54.2 vs 候補52.5 | 勝者の呪いで消えた | 不採用 |
 | 11 | joint | ギア2枠同時 vengeance,harvest / propagate,vengeance / harvest,propagate (seed11/200) | 基準56.3に対し 54.3 / 53.1 / 52.1 すべて下 | 不採用 |
 | 10 | synergy | 氷結デッキで swap3 cat=ice 30近傍(seed10/60) | 最良 +3.2pt(z≈0.8)誤差内 | 不採用 |
 | 9 | メタ | --opp cryomancer,magician 絞り swap2 40近傍(seed9/100) | 最良 +4.6(SE±7)ノイズ内 | 不採用 |
