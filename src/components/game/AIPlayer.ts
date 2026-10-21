@@ -85,6 +85,9 @@ class AIPlayer {
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
 
+    /** 土壇場の防壁を装備していて未発動か(Game が手番ごとに設定する)。陰陽師はこの間、相手の即勝ちを塞がず攻める（sim/ai.js lsNoBlock と同一） */
+    lastStandOpen: boolean = false;
+
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
@@ -582,8 +585,9 @@ class AIPlayer {
             if (calculateWinner(sim.map(sq => sq.player)) === this.playerSymbol) return i;
         }
 
-        // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)
-        for (const opp of this.opponents) {
+        // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。陰陽師は防壁が未発動の間は守りを捨てる
+        const skipBlock = this.character === 'yinYangMaster' && this.lastStandOpen;
+        if (!skipBlock) for (const opp of this.opponents) {
             const oppMoves = this.getMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);

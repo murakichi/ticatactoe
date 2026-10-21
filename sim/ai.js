@@ -43,7 +43,7 @@ const AI_DEFAULTS = {
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.yyMode = 0; AI_DEFAULTS.yyEarly = 6; AI_DEFAULTS.yyKeep = 0;
+AI_DEFAULTS.lsNoBlock = 1; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.yyMode = 0; AI_DEFAULTS.yyEarly = 6; AI_DEFAULTS.yyKeep = 0;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -790,8 +790,9 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
-    // block opponent win (including captures)
-    for (const o of opps) {
+    // block opponent win (including captures)。土壇場の防壁が未使用なら F.lsNoBlock で守りを捨てて攻める
+    const lsOpen = F.lsNoBlock && character === 'yinYangMaster' && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
+    if (!lsOpen) for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {

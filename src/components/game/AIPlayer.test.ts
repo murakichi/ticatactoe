@@ -603,3 +603,27 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
     });
 });
+
+describe('土壇場の防壁 × 陰陽師', () => {
+    const reachBoard = (): SquareInfo[] => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        return b;
+    };
+    it('防壁が未発動の間は相手の即勝ちを塞がない', () => {
+        const ai = new AIPlayer('💙', 'yinYangMaster', ['⭕']);
+        ai.lastStandOpen = true;
+        // 即ブロックの探索(相手の着手列挙)に入らない。Minimax 側の評価は従来どおり
+        const spy = jest.spyOn(ai as any, 'getMovesFor');
+        const board = reachBoard();
+        ai.getBestMove(board, 5);
+        expect(spy.mock.calls.some((c) => c[0] === board)).toBe(false);
+    });
+    it('防壁が無い(または発動済み)なら塞ぐ', () => {
+        const ai = new AIPlayer('💙', 'yinYangMaster', ['⭕']);
+        const spy = jest.spyOn(ai as any, 'getMovesFor');
+        const board = reachBoard();
+        expect(ai.getBestMove(board, 5)).toBe(3);
+        expect(spy.mock.calls.some((c) => c[0] === board)).toBe(true);
+    });
+});

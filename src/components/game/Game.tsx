@@ -337,6 +337,7 @@ export const Game = (props: GameProps) => {
         const aiNecroCost = necroCost[turnSeat];
         const aiProliferate = proliferate[turnSeat];
 
+        ai.lastStandOpen = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
         // サイレンス中はスキルを使えない: 通常の着手だけ行う
         if (silenced[turnSeat]) {
             ai.updateShield(currentBoard);
