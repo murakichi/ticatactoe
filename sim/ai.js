@@ -772,6 +772,17 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 function lastStandUnused(s, seat) {
     return hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat];
 }
+function lsRedrawHand(s, me) {
+    if (curChar(s) !== 'necromancer' || !hasGear(s.gears[s.turn], 'lastStand') || !s.lastStandUsed[s.turn] || s.silenced[s.turn]) return false;
+    let drew = false;
+    for (let i = 0; i < 3; i++) {
+        if (chooseSkills(s, s.skills.slice()).length > 0) break;
+        if (curMagic(s) < costsOf(s).onClickShuffle + F.lsRedraw + 3) break; // 引き直したあとに撃てるだけの魔力を残す
+        E.shuffleHand(s);
+        drew = true;
+    }
+    return drew;
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -1276,6 +1287,8 @@ function faithfulMakeMoveInner(s) {
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
+    // 土壇場の防壁の発動後(自陣ゼロ)は、貯めた魔力を使えるスキルが手札に出るまで1コストで引き直す
+    if (F.lsRedraw && lsRedrawHand(s, me)) availableSkills = s.skills.slice();
 
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= infernoCost(s)
