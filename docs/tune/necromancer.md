@@ -10,6 +10,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 13 | strategy(AI) | ユーザー案の二段構え: lsPhase(防壁発動まで🌱系/ロック/ライフだけ撃って魔力を貯める)、lsRedraw(発動後に撃てる札が出るまで1コストで引き直し)(seed1 games200) | 基準56.7%±2.1に対し lsPhase 57.3%(+0.6) / lsRedraw 55.1%(-1.6) / 両方 55.8%(-0.9)。対poisoner 17〜18%は不変。発動後の敗因は札の不足でなく、対poisoner=魔力2.4しか無い/対tactician=手番2.3回で決着、のどちらか。分岐削除 | 不採用 |
 | 12 | strategy(AI) | 防壁未発動の間の立ち回り lsPlan=1(相手の勝ち手を塞がない)/2(+降霊以外の支払いを全停止)/3(+自陣投資系のみ停止) (seed1 games200) | 基準56.7%±2.1に対し 57.3 / 57.8 / 57.4%(+0.6〜+1.1pt, 誤差内)。防壁は塞ぐ/塞がないに関わらず63〜84%の試合で発動済みで、勝敗は発動後(poisoner 0%, tactician 20%, magician 44%, giant 85%)。分岐削除 | 不採用 |
 | 11 | gear | 新ギア4種(master 3bc89db)を含む1枠差し替え近傍(seed1 games60)→再測定(seed2 games200) | 基準37.8%に対し vengeance+lastStand 57.0%(+19.2pt, ±2.1)、lastStand+sturdy 53.8%。他の新ギア(ruinSurge/colorGarden/ailmentPact)は基準以下。悪化-15pt超なし(poisoner 26→23%)。推測: 自陣全消滅で死体が一気に貯まり降霊が回る(未検証) | **採用** gears=[vengeance,lastStand] |
 | 10 | strategy(AI) | necroFeed: 負けていなくてもスラッシュ系を撃って死体を増やす(seed1 games150) | 43.0→42.9%(±2.6)。対キャラ別も不変。分岐削除 | 不採用 |
@@ -28,4 +29,5 @@
 ## 診断メモ(2026-10-21, gears=[vengeance,lastStand])
 - 防壁の発動率: vs tactician 75% / poisoner 84% / giant 63% / magician 69%(150試合, 平均発動は8〜15手目)。発動前に決着した試合は全勝。
 - 発動後の勝率: poisoner 0% / tactician 20% / magician 44% / giant 85%。相手の魔力+4・ライフ+2の下で、自陣ゼロから立て直せるかが勝敗。
+- 発動後に負けた試合(vs poisoner 62/80): 発動直後の自魔力2.4・生き残る自手番4.7回。vs tactician(45/80): 発動直後10.0→敗北時7.0(使い残し)・自手番2.3回。
 - 次の焦点: 発動後の立ち回り(特に対 poisoner 23%・tactician 47%)。降霊を発動直後に撃てているか、発動後の死体数と降霊の効果を測る。
