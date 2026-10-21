@@ -386,6 +386,55 @@ describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2
     });
 });
 
+describe('氷室の番人: 魔法使いの🌱付きコマを凍らせる (sim/ai.js F.freezeBuds と同一)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const budBoard = (budEffects: SquareInfo['effects'] = [{ effect: '🌱' }]) => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 10, '⭕', 3);
+        b[10] = { ...b[10], effects: budEffects };
+        return b;
+    };
+    it('魔法使いの🌱付きでロックされていないコマを氷結する', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'magician']);
+        const r = ai.makeMove(budBoard(), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([10]);
+    });
+    it('ロックされている・魔法使い以外・魔力不足なら凍らせない', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'magician']);
+        expect(ai.makeMove(budBoard([{ effect: '🌱' }, { effect: '🔑' }]), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(budBoard(), 1, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        const vsPoisoner = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'poisoner']);
+        expect(vsPoisoner.makeMove(budBoard(), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+    });
+});
+
+describe('氷室の番人: 毒で倒れそうな自陣コマを先に凍らせる (sim/ai.js F.antiPoison と同一)', () => {
+    const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const poisonBoard = (poison: number, life = 3) => {
+        const b = emptyBoard();
+        put(b, 5, '💙', life);
+        b[5] = { ...b[5], effects: Array.from({ length: poison }, () => ({ effect: '☠' as const })) };
+        put(b, 10, '⭕', 6);
+        return b;
+    };
+    it('毒≥ライフ-2 の自陣コマを氷結する', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'giant']);
+        const r = ai.makeMove(poisonBoard(1), 10, costs, 0, 4, [0, 1, 2], false);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([5]);
+    });
+    it('毒が無い・ライフに余裕がある・魔力不足・氷室の番人でないときは凍らせない', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'giant']);
+        expect(ai.makeMove(poisonBoard(0), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(poisonBoard(1, 6), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        expect(ai.makeMove(poisonBoard(1), 1, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+        const plain = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(plain.makeMove(poisonBoard(1), 10, costs, 0, 4, [0, 1, 2], false).lockTargets).toBeUndefined();
+    });
+});
+
 describe('休眠マス（氷結・火炎中）の見積もり (AI追随)', () => {
     const FRZ = { effect: '❄' as const };
     const FLM = { effect: '🔥' as const };
@@ -470,13 +519,15 @@ describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
         expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickInferno']);
     });
     it('軽減札が手札にない・魔力が足りなければ業火は撃たない', () => {
-        expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
-        expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
+        // 火遁(固有)は撃つが、業火は撃たない
+        expect(setup(6, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite']);
+        expect(setup(3, [58, 0, 3]).chargeClicks?.map((c) => c.skill)).not.toContain('onClickInferno');
     });
     it('業火のあと、敵のコマが自陣より2つ以上多く壊れるならバーンアウトを撃つ（🔥合計4以上でタダ）', () => {
         const r = setup(9, [61, 0, 3]);
-        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
-        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
+        // 火遁(固有)→業火→バーンアウトの順。火遁で魔力を使っても業火が撃てるときだけ火遁を撃つ
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite', 'onClickInferno', 'onClickBurnout']);
+        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite', 'onClickInferno']);
     });
     it('鍛冶師は軽減札を固定しない（固定すると勝ち数が下がった）', () => {
         const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
@@ -557,8 +608,18 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         ai.rerollsLeft = 0;
         expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
-    it('魔法使い以外は引き直さない', () => {
-        expect(run(mk('giant'), 12, [53]).reroll).toBeUndefined();
+    it('魔法使い以外は、魔力が有り余っていなければ引き直さない', () => {
+        expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使い以外も、魔力が有り余っていて撃てるスキルが無ければ、軽減札を使わずシャッフルだけ行う', () => {
+        const r = run(mk('giant'), 12, [53]);
+        expect(r.reroll).toEqual({});
+        expect(r.skills).toEqual([]);
+    });
+    it('魔法使い以外が有り余っていても、引き直しの回数が残っていなければ引き直さない', () => {
+        const ai = mk('giant');
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
     it('引き直しの途中（軽減済み）は、魔力に余裕があればシャッフルだけ行う', () => {
         const ai = mk();
@@ -601,5 +662,119 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         const ai = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
         const r = ai.makeMove(budBoard([0, 1, 2]), 9, skillCosts, 2, 5, [], false);
         expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
+    });
+});
+
+describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先にロックする（sim/ai.js の EL_AI）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 行0に💙が2つ(0,1)あり、2が空き(3つ並びの要)。相手のリーチは無い
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[1] = { player: '💙', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (hasEmptyLock: boolean, magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you'], undefined, false, hasEmptyLock);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('空蔵を装備していれば、空きマスをロックする（lockTargets に空きマスが入る）', () => {
+        const r = run(true, 6);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toHaveLength(1);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+    });
+    it('空蔵を装備していなければロックしない', () => {
+        expect(run(false, 6).lockTargets).toBeUndefined();
+    });
+    it('魔力がロックのコストに足りなければロックしない', () => {
+        expect(run(true, 1).lockTargets).toBeUndefined();
+    });
+    it('自分がかけた空きマスロックが上限(2)に達していればかけない', () => {
+        const b = board();
+        b[2] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        b[3] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        expect(run(true, 6, b).lockTargets).toBeUndefined();
+    });
+});
+
+describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の igniteSig=1 / igniteSkip=1）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[6] = { player: '⭕', bind: 2, effects: [] };
+        return b;
+    };
+    const run = (foe: 'you' | 'necromancer', magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('魔力が足りれば、ライフが残る敵コマに火遁を撃つ（ライフの高いほう）', () => {
+        const r = run('you', 6);
+        const click = r.chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click).toBeDefined();
+        expect(click?.target).toBe(5);
+    });
+    it('魔力が火遁のコストに足りなければ撃たない', () => {
+        expect(run('you', 0).chargeClicks?.some((c) => c.skill === 'onClickIgnite') ?? false).toBe(false);
+    });
+    it('ネクロマンサーが相手のときは撃たない（墓地が増えて蘇生の資源になる）', () => {
+        expect(run('necromancer', 6).chargeClicks?.some((c) => c.skill === 'onClickIgnite') ?? false).toBe(false);
+    });
+    it('すでに🔥が付いた敵コマは狙わない（残りの敵コマを狙う）', () => {
+        const b = board();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '🔥' }] };
+        const click = run('you', 6, b).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(6);
+    });
+});
+
+describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    it('ライフが同じ敵コマが2つあるとき、魔法使いなら🌱のあるほうを狙う', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[10] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'magician']);
+        const click = ai.makeMove(b, 6, skillCosts, 2, 5, [], false).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(10);
+    });
+    it('魔法使い以外の相手なら🌱の有無は考えない（ライフが同じなら先に見つかったマス）', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[10] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const click = ai.makeMove(b, 6, skillCosts, 2, 5, [], false).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(5);
+    });
+});
+
+describe('AIPlayer 土壇場の防壁 (lastStandReady)', () => {
+    // ⭕が3と7の二箇所で勝ち筋を持つ(片方しか塞げない)。💙は8,9で並べている
+    const setup = () => {
+        const b = emptyBoard();
+        [0, 1, 2, 4, 5, 6].forEach((i) => put(b, i, '⭕'));
+        [8, 9].forEach((i) => put(b, i, '💙'));
+        return b;
+    };
+
+    it('防壁なしなら相手の即勝ちマス(3か7)を塞ぐ', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        expect([3, 7]).toContain(ai.getBestMove(setup(), 3));
+    });
+
+    it('防壁が未発動なら塞ぎ手を強制せず、自分の列(10)を伸ばす', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        ai.lastStandReady = true;
+        expect([3, 7]).not.toContain(ai.getBestMove(setup(), 3));
     });
 });
