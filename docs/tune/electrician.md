@@ -1,11 +1,11 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: cc22236
-- 現在の推奨設定: gears=[lightToken,harvest] deck=[12,21,22,23,24,26,28,49,50,51,53,58] AIフラグ=なし
+- 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,49,50,51,52,53,58] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 6
-- 状態: blocked(issue #109)
+- 連続不採用回数: 0
+- 状態: running(トップ未達: envDeck varied は新デッキで1位に届いたが基本が僅差の2位。issue #109 は継続)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
@@ -15,6 +15,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 19 | deck+gear(別案) | 追い剥ぎ52を入れ(sim では撃てない札=帯電札比率が上がる)、ダブルロック12を抜く(案X)。ギア別案 afterglow,harvest / luckyPurse,harvest を測定 | 上位3相手 envDeck varied seed22/400: 59.1→63.9。rank envDeck varied seed23/400(--target): 旧デッキ 58.9(3位)→案X 66.7(1位, +7.8)。seed4/300: 基本 案X 64.0(2位, 旧64.8と同等)、envDeck varied 案X 65.7(1位)。ギア別案 afterglow: 基本 62.7 / env 65.0(主案と同等)、luckyPurse: 基本 59.3(弱い) | 採用: デッキ案X、ギア別案 afterglow,harvest(主案と50%ずつ)。本番AIでは未計測 |
 | 18 | gear/strategy | envDeck varied 向けギア近傍(seed20/120)、サイレンス早撃ち F.silenceEarly=2 (上位3相手 envDeck varied seed21/400) | ギア: 現行が最上位級(57.1 vs afterglow 59.2、誤差内)。silenceEarly: 55.9→56.3(+0.4) | 不採用(ノブ削除) |
 | 17 | deck(envDeck varied向け) | `--envDeck varied --opp magician,cryomancer` 2枚swap 40候補(seed19/100) | 最良 74.5%±6.0 vs base 65.0%(z≈1、閾値未達)。envDeck variedの順位は seed5/400でも 2位 60.3 vs magician 62.3(-2.0)で再現 | 不採用 |
 | 16 | meta(対ギアなしmagician) | `--opp magician --oppGears none` 3枚swap 40候補(seed18/100試合) | 最良 72.0%±8.8 vs base 68.0%、誤差内。なお `--rank --oppGears none` の失敗は『ギアなしの雷霆の巫自身』が弱いため(lightToken -16.7/harvest -14.3pt の寄与)で、対magician単体(68%)は問題なし | 不採用 |
