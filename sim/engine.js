@@ -862,7 +862,6 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useIgnite) {
-        if (!board[i].player) return false;
         thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
         s.useIgnite = false;
         return true;
@@ -972,7 +971,7 @@ function placeMove(s, i) {
     } else {
         newPlayer = cur;
         newBind = life;
-        newEffects = [];
+        newEffects = board[i].effects.filter((e) => e.effect === '🔥'); // 空きマスに置かれた🔥は、そこに置かれたコマ(誰のコマでも)に引き継がれる
     }
 
     if (newPlayer === cur && s.useBuds[0]) {

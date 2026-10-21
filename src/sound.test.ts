@@ -64,6 +64,8 @@ const ALL: Sfx[] = [
     'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'proliferate', 'zap', 'overload', 'silence', 'freeze', 'flame', 'glacier', 'glacierBurst', 'inferno', 'cleanse', 'harvestEve', 'solstice', 'sprout', 'windborne', 'iceBreak', 'thaw', 'burn',
     'place', 'charge', 'win', 'lock',
     'heal', 'double', 'bloom', 'discount', 'chargeUp', 'shuffle', 'token',
+    'rain', 'dash', 'clone', 'plunder', 'bulwark',
+    'gear', 'gearKey', 'gearBloom', 'gearSpread', 'gearEmpty',
 ];
 
 test.each(ALL)('%s は音源を予約し、2秒以内に鳴り終わる', (sfx) => {

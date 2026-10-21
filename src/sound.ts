@@ -1,9 +1,9 @@
 // 効果音: 音声ファイルは使わず Web Audio API で合成する(アセット不要・軽量)。
 // 合成ロジック(scheduleSfx)は BaseAudioContext を受け取るので、実機の AudioContext でも
 // OfflineAudioContext(テスト・波形確認)でも同じコードが動く。
-import type { SkillEffectType } from './components/game/BoardEffects';
+import type { BurstType, SkillEffectType } from './components/game/BoardEffects';
 
-export type Sfx = SkillEffectType | 'place' | 'charge' | 'win' | 'lock';
+export type Sfx = SkillEffectType | BurstType | 'place' | 'charge' | 'win' | 'lock' | 'gear';
 
 type ToneOpts = {
     type?: OscillatorType;
@@ -379,6 +379,79 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             tone(ctx, d, { f0: 880, f1: 1760, t: T(0.06), dur: 0.15, gain: 0.3 });
             sparkle(ctx, d, T(0.1), [G5, C6, E6], 0.05, 0.16);
             return 0.4;
+        }
+        case 'gear': {
+            // ギアの発動: 「ピコン↗」と上がる2音に、小さなきらめき
+            tone(ctx, d, { f0: 880, f1: 1100, t: T(0), dur: 0.1, gain: 0.5 });
+            tone(ctx, d, { f0: 1318, f1: 1650, t: T(0.08), dur: 0.22, gain: 0.5 });
+            tone(ctx, d, { type: 'triangle', f0: 2637, t: T(0.16), dur: 0.25, gain: 0.18 });
+            return 0.45;
+        }
+        case 'gearKey': {
+            // 道連れの鍵: カチッと鍵が掛かり、金属音が階段状に上がる
+            tone(ctx, d, { f0: 90, f1: 220, t: T(0), dur: 0.12, gain: 0.5 });
+            noise(ctx, d, { t: T(0.03), dur: 0.03, gain: 0.2, filter: 'highpass', f0: 3000 });
+            ([[1180, 0.04], [1770, 0.08], [2650, 0.12]] as const).forEach(([f, st]) => tone(ctx, d, { type: 'square', f0: f, t: T(st), dur: 0.18, gain: 0.3, lowpass: 6000 }));
+            return 0.3;
+        }
+        case 'gearBloom': {
+            // 毒花: ぽん、と花が開く
+            tone(ctx, d, { f0: 500, f1: 1000, t: T(0), dur: 0.1, gain: 0.6 });
+            tone(ctx, d, { f0: 750, f1: 1500, t: T(0.07), dur: 0.14, gain: 0.5 });
+            return 0.3;
+        }
+        case 'gearSpread': {
+            // 伝播: 波が広がる風切り音と、小さな泡が上がる
+            noise(ctx, d, { t: T(0), dur: 0.3, gain: 0.7, filter: 'bandpass', f0: 400, f1: 3000, q: 0.8 });
+            for (let i = 0; i < 3; i++) tone(ctx, d, { f0: 700 + i * 250, f1: 1100 + i * 300, t: T(0.12 + i * 0.06), dur: 0.08, gain: 0.4 });
+            return 0.4;
+        }
+        case 'gearEmpty': {
+            // 空蔵: 空っぽのマスからコマが生まれる、ふわっと上がる音
+            tone(ctx, d, { type: 'triangle', f0: 300, f1: 900, t: T(0), dur: 0.25, gain: 0.5 });
+            tone(ctx, d, { f0: 600, f1: 1500, t: T(0.1), dur: 0.2, gain: 0.45 });
+            return 0.35;
+        }
+        case 'bulwark': {
+            // 土壇場の防壁: 低音が駆け上がる衝撃 → 衝撃波の掃引 → 防衛の和音が上がって決まる
+            boom(ctx, d, T(0), 0.95);
+            noise(ctx, d, { t: T(0), dur: 0.8, gain: 1.6, filter: 'bandpass', f0: 200, f1: 6000, q: 0.8 });
+            [C5, G5, C6].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(0.25 + i * 0.12), dur: 0.7, gain: 0.5 }));
+            sparkle(ctx, d, T(0.6), [E6, G5 * 2, C6 * 2], 0.08, 0.26);
+            return 1.3;
+        }
+        case 'rain': {
+            // 慈雨: 雨粒がぽつぽつと落ち、音が少しずつ上がって潤っていく
+            noise(ctx, d, { t: T(0), dur: 0.7, gain: 0.1, filter: 'highpass', f0: 4000 });
+            for (let i = 0; i < 7; i++) tone(ctx, d, { f0: 900 + i * 160, f1: 1200 + i * 200, t: T(i * 0.08), dur: 0.08, gain: 0.4 });
+            tone(ctx, d, { type: 'triangle', f0: 300, f1: 900, t: T(0), dur: 0.7, gain: 0.3 });
+            return 0.8;
+        }
+        case 'dash': {
+            // 縮地: 風を切って駆け抜け、着地でポンと決まる
+            noise(ctx, d, { t: T(0), dur: 0.25, gain: 0.6, filter: 'bandpass', f0: 500, f1: 6000, q: 1.0 });
+            tone(ctx, d, { type: 'sawtooth', f0: 300, f1: 2400, t: T(0), dur: 0.22, gain: 0.2, lowpass: 5000 });
+            tone(ctx, d, { type: 'triangle', f0: 520, f1: 880, t: T(0.22), dur: 0.1, gain: 0.5 });
+            sparkle(ctx, d, T(0.26), [G5, C6, E6], 0.05, 0.14);
+            return 0.5;
+        }
+        case 'clone': {
+            // 写し身: ピュン、と分身が生まれ、もう一段高い音でそっくり返す
+            tone(ctx, d, { f0: 500, f1: 1000, t: T(0), dur: 0.12, gain: 0.35 });
+            tone(ctx, d, { f0: 750, f1: 1500, t: T(0.14), dur: 0.14, gain: 0.35 });
+            tone(ctx, d, { type: 'triangle', f0: 1500, f1: 3000, t: T(0.14), dur: 0.14, gain: 0.12 });
+            sparkle(ctx, d, T(0.3), [C6, E6, G5 * 2], 0.05, 0.14);
+            return 0.5;
+        }
+        case 'plunder': {
+            // 追い剥ぎ: 剣が風を切り(上がる)、奪った硬貨がチャリンと上がっていく
+            noise(ctx, d, { t: T(0), dur: 0.15, gain: 0.4, filter: 'bandpass', f0: 2000, f1: 9000, q: 1.2 });
+            tone(ctx, d, { type: 'sawtooth', f0: 800, f1: 2400, t: T(0), dur: 0.12, gain: 0.3, lowpass: 5000 });
+            for (let i = 0; i < 4; i++) {
+                tone(ctx, d, { type: 'square', f0: 1568 + i * 220, t: T(0.14 + i * 0.07), dur: 0.05, gain: 0.3, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2093 + i * 293, t: T(0.18 + i * 0.07), dur: 0.12, gain: 0.3, lowpass: 5000 });
+            }
+            return 0.6;
         }
         case 'place': {
             // 駒を置く「ポン」
