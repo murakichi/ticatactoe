@@ -47,6 +47,7 @@ const AI_DEFAULTS = {
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     igniteSig: 1, // 鍛冶師が固有スキルの火遁を毎手番撃つ。1=敵コマ(ライフが残る)を燃やす / 2=敵の列を作りかけの空きマスにも🔥を仕込む（tune-top 鍛冶師: 環境勝率 seed22/150 +6.8pt, seed24/200 +8.6pt。2は1と同じ結果）
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
+    stand: 0, // 土壇場の防壁を装備した席は、発動するまで(=最初に負けるまで)守らず攻めと魔力の貯蓄に専念する。1=スキルを撃たず貯める+相手の勝ちを塞がない / 2=貯めるだけ(着手は通常)
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
@@ -806,6 +807,29 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 // ---- enhanced best move (minimax + fork detection) ----
 
+// 土壇場の防壁: 装備していて、まだ発動していない席（発動前は負けても防壁が守るので、守りを捨てて攻めと貯蓄に専念できる）
+function standOn(s) {
+    return F.stand > 0 && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
+}
+// 防御を考えない攻めの着手: 自分だけの列の価値(LINE_SCORES)の増分が最大のマス。自分の勝ちは必ず取る
+function attackMove(s, allMoves, me, life) {
+    const board = s.board;
+    const geo = geometryForCells(board.length);
+    let best = allMoves[0], bestVal = -Infinity;
+    for (const i of allMoves) {
+        const sim = simulatePlace(board, i, me, life);
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let mine = 0, foreign = 0;
+            for (const idx of line) { if (sim[idx].player === me) mine++; else if (sim[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(mine, 4)];
+        }
+        if (val > bestVal) { bestVal = val; best = i; }
+    }
+    return best;
+}
+
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -827,6 +851,7 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
+    if (F.stand === 1 && standOn(s)) return attackMove(s, allMoves, me, life); // 守らない（防壁が発動するまで）
     // block opponent win (including captures)
     for (const o of opps) {
         const oppMoves = getMovesFor(board, o, life);
@@ -1174,6 +1199,8 @@ function faithfulMakeMoveInner(s) {
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
+    // 土壇場の防壁を持つ席は、発動するまでスキルを撃たず魔力を貯める（発動後は通常どおり）
+    if (standOn(s)) return { move: getEnhancedBestMove(s), turnEnded: false };
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
