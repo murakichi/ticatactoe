@@ -50,6 +50,7 @@ const AI_DEFAULTS = {
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
     lastStandAggro: 0, // 土壇場の防壁を装備していて未発動の間は、相手の勝ちを避けず(ブロックしない)攻め・資源に専念する（tune-top検証中。1で有効）
+    lastStandHoard: 0, // 土壇場の防壁が未発動の間は、魔力を生む札(バッズ系)・ロック・ライフ以外にスキルを使わず魔力を貯める。発動後は通常（tune-top検証中。1で有効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -905,7 +906,10 @@ function chooseSkills(s, availableSkills) {
         if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
+    const HOARD_OK = ['buds', 'doubleBuds', 'budsToken', 'windborne', 'walpurgis', 'harvestEve', 'lock', 'doubleLock', 'tripleLock', 'addLife'];
+    const hoarding = !!F.lastStandHoard && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
     function spend(c, name) {
+        if (hoarding && !HOARD_OK.includes(name)) return false;
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
