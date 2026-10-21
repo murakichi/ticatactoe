@@ -2002,12 +2002,12 @@ test('AI(discountPlan): 鍛冶師は軽減札で業火が撃てるようにな�
         s.aiFlags = [flags, flags];
         return s;
     };
-    const on = mk({ pyroChain: 0, discountPlan: 1, discountInferno: 1 });
+    const on = mk({ pyroChain: 0, discountPlan: 1, discountInferno: 1, igniteSig: 0 }); // 火遁(igniteSig)は別の機構なので切って、軽減札→業火だけを見る
     assert.strictEqual(e.infernoCost(on), 7);
     ai.makeMove(on, 'faithful');
     assert.ok(on.stats && on.stats.inferno >= 1, '業火が撃たれる');
     assert.ok(on.heartMagic < 6, '軽減札と業火の分、魔力が減る');
-    const off = mk({ pyroChain: 0, discountPlan: 0 });
+    const off = mk({ pyroChain: 0, discountPlan: 0, igniteSig: 0 });
     ai.makeMove(off, 'faithful');
     assert.ok(!(off.stats && off.stats.inferno), '軽減札を使わなければ魔力6では業火は撃てない');
 });
