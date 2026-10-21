@@ -236,7 +236,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
  */
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
-    tactician: ['sturdy', 'priceWreck'],
+    tactician: ['lastStand', 'priceWreck'],
     magician: ['sturdy', 'ironLock'],
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],

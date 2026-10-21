@@ -1,9 +1,9 @@
 # tune-top: tactician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db(新ギア colorGarden/ailmentPact/ruinSurge/lastStand 追加後)(魔法使いの推奨デッキ更新が入った。sim エンジン・AI は不変)
-- 現在の推奨設定: 変更なし(推奨ギア・推奨デッキのまま) AIフラグ=なし
+- 現在の推奨設定: gears=[lastStand, priceWreck](sturdy→lastStand に変更, 試行#11) deck=推奨のまま AIフラグ=なし
 - 基準線: 環境勝率 67.8% / 1位 / 2位 electrician 60.2%   (seed 1, games 60, 基本条件のみ。200試合・4条件の完了判定は未実施)
-- 連続不採用回数: 2(新ギア再開後)
+- 連続不採用回数: 0
 - 状態: running(ギア4種追加を受けて再開, master 3bc89db)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
@@ -36,8 +36,11 @@
 - 差なし(AIが使っていない): 16,21,23,37,45,46,12,28 の8枚。デッキ12枚中8枚が未使用=入れ替え余地が大きい。
 - 注意: 60試合×2相手はノイズが大きい(SE≈±5pt)。priceWreck除去は有望な仮説だが未再測定(seed2,200試合で要確認)。
 
+## 採用後の順位(master 3bc89db + lastStand, seed3/100, 基本条件)
+1位 magician 65.8% / 2位 poisoner 63.5% / **3位 tactician 58.8%** / 4位 electrician 58.8%。トップ未達(魔法使い・毒使いに届かない)。
+
 ## 次に試す候補
-- 保留: gear slot0→lastStand(+2.6pt, seed1/60)。`--gears lastStand,priceWreck --games 200 --seed 2` で追試し、+1.5pt以上かつ+1.96SE以上なら採用候補(対magician/poisonerの悪化も確認)
+- 新ギアでの deck 再探索(lastStand は被弾前提のため、守りの札・ロックとの joint): `node sim/probe-top.js --target tactician --gears lastStand,priceWreck --scan deck --neighbors 15 --games 60 --cache .tune-cache`
 - **次(具体コマンド)**: strategy 軸(対巨人47%): `node sim/probe-usage.js --chars tactician,giant --games 200` で札の使用を見て、auto で負け筋を観戦 → `sim/ai.js` に F.xxx ノブ。joint 軸: `--gears a,b --scan deck --envDeck varied`。完了判定の弱点は『電気使い・巨人が varied で上がる』ことで、軍師側の-9pt(基本→varied)は主因が軍師の推奨デッキの頑健性か相手の上振れかを `--target electrician --envDeck varied` と比較して切り分ける
 - 仮説: 軍師の推奨デッキは固有スキル(総攻撃)に偏った札に依存し、varied だと相手の対策札が増えて崩れる? 相手側の変動がなぜ軍師に不利かを per-opponent で確認
 - ~~gear の priceWreck 差し替え~~(試行#2で却下)。**次**: 未使用8枚を有効な札に替える deck 探索(`--scan deck --swap 2`)
