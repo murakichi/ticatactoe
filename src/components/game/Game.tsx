@@ -437,6 +437,9 @@ export const Game = (props: GameProps) => {
                 onCellClick(pendingClicks[0]);
                 if (pendingClicks.length > 1) setPendingAIMove(pendingClicks.slice(1));
             }
+        } else if (result.skills.length === 0) {
+            // 置ける場所もスキルもなければチャージで手番を終える（何もしないと進行不能になる）
+            onClickCharge();
         }
     };
 
