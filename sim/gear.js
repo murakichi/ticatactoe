@@ -131,14 +131,14 @@ function randomGears(slots, rng = Math.random) {
 const RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['sturdy', 'ironLock'],
+    magician: ['lastStand', 'ironLock'],
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
-    poisoner: ['toxicBloom', 'sturdy'],
+    poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'sturdy'],
-    pyromancer: ['sturdy', 'harvest'],
+    pyromancer: ['emptyLock', 'harvest'],
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 
