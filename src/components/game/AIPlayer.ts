@@ -5,7 +5,7 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -1175,6 +1175,20 @@ class AIPlayer {
 
         // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
         // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
+        // 氷室の番人: 脅威が無いとき、魔法使いの🌱付きでロックされていないコマを凍らせる。氷結中の🌱は休眠して魔力を生まず、魔法使いの魔力エンジンが止まる
+        // （sim/ai.js F.freezeBuds と同一。A/B: 対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt。魔法使い以外のコマは凍らせない: 毒使い相手では 64→31% に悪化）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const cell = board.findIndex((sq, i) => !!sq.player && this.isEnemy(sq.player) && this.characterOf(sq.player) === 'magician'
+                && !this.shield.has(i) && budStacks(sq) > 0 && !isFrozen(sq) && canFreeze(sq));
+            if (cell !== -1) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                freeze(post, [cell]);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                this.updateShield(board);
+            }
+        }
         if (this.character === 'cryomancer' && threatSquares.length === 1 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             freeze(post, [threatSquares[0]]);

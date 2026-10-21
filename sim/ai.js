@@ -33,6 +33,8 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
+    freezeBudsReserve: 0,
     cryoCards: 1, // 氷室の番人が霜降り・氷結トークン・氷結ダブルトークンを使う（tune-top: 環境勝率 seed2/200 で +9.1pt）
     pyroLock: 0, // 鍛冶師が軽減札を手札に固定する。A/Bで勝ち数が下がった(あなた-8/巨人-8)ので無効（1で有効）
     burnoutAfter: 1, // 鍛冶師が業火のあと（🔥のマスで敵が自陣より2つ以上多く壊れるなら）バーンアウトを撃つ（A/B）
@@ -1163,6 +1165,37 @@ function faithfulMakeMoveInner(s) {
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
+    // 氷結中のコマは❄1つが身代わりになって壊れない。魔法使いAIは範囲内の氷結中コマを数えず、net<2 になれば撃たない（bestJudgeTarget）
+    if (F.antiJudge && curChar(s) === 'cryomancer' && !s.silenced[s.turn]) {
+        const geo = geometryForCells(s.board.length);
+        for (const seat of otherSeats(s)) {
+            if (s.chars[seat] !== 'magician') continue;
+            const jBase = Math.max(0, costsOf(s).onClickJudgeDay - s.useMagicCount[seat]);
+            if (s.magic[seat] + 1 < jBase) continue;
+            for (let k = 0; k < (F.antiJudgeMax || 3); k++) {
+                const target = bestJudgeTarget(s.board, SYMBOLS[seat]);
+                if (target === null) break;
+                const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+                if (curMagic(s) < fz + (F.antiJudgeReserve || 0)) break;
+                const cell = geo.judgeRange(target).find((i) => s.board[i].player === me && !shield.has(i) && !thermal.isFrozen(s.board[i]) && thermal.canFreeze(s.board[i]));
+                if (cell === undefined) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+            }
+        }
+    }
+    // 対バッズ(F.freezeBuds): 氷結中の🌱は休眠して魔力を生まない。敵の🌱付きでロックされていないコマを、脅威が無く魔力に余裕があるとき凍らせる
+    if (F.freezeBuds && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
+        for (let k = 0; k < (F.freezeBudsMax || 2); k++) {
+            const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+            if (curMagic(s) < fz + (F.freezeBudsReserve === undefined ? 3 : F.freezeBudsReserve)) break;
+            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && s.chars[SYMBOLS.indexOf(sq.player)] === (F.freezeBudsVs || 'magician') && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            if (cell === -1) break;
+            SKILLS.lock(s);
+            if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+        }
+    }
     // 彩りの庭(F.garden): 氷室の番人が🌱のある自陣コマを氷結して「2種類以上のエフェクトのマス」を作り、ターン開始の魔力を稼ぐ。
     // 氷結中のコマには🌱を足せないので、🌱が先・氷結が後。敵の脅威が無く魔力に余裕(F.gardenReserve)があるときだけ
     if (F.garden && curChar(s) === 'cryomancer' && gearAi(s, 'colorGarden') && threats.length === 0 && !s.silenced[s.turn]) {
