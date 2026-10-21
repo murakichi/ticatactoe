@@ -103,7 +103,7 @@ export const GEARS: GearDef[] = [
     { id: 'colorGarden', name: '彩りの庭', icon: '🎨', desc: `自陣に、1つのマスにエフェクトが${P.varietyKinds}種類以上あるマスがあると、1マスにつきターン開始時の魔力+${P.varietyMagic}` },
     { id: 'ailmentPact', name: '病炎の契り', icon: '🩸', desc: `自陣に毒・火炎(🔥)があると、1種類につき固有以外のスキルのコスト-${P.ailmentDiscount}（下限1）` },
     { id: 'ruinSurge', name: '廃墟の底力', icon: '🏚️', desc: `自陣がスキルかエフェクトで破壊されたとき、次の自分の手番の終わりまでスキルのコスト-${P.ruinDiscount}（下限1）` },
-    { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスが消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
+    { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
 export const GEAR_IDS: GearId[] = GEARS.map((g) => g.id);

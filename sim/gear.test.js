@@ -379,8 +379,9 @@ test('廃墟の底力: 通常の着手で自陣を奪われても発動しない
     assert.strictEqual(e.gearCost(s, 4, false, 1, 'onClickShuffle'), 4);
 });
 
-test('土壇場の防壁: 初めて相手が列を揃えると、かわりにその列が消滅（ロックも貫通）。以降は相手の魔力+2・ライフ+1', () => {
+test('土壇場の防壁: 初めて相手が列を揃えると、かわりにその列と自陣のコマが消滅（ロックも貫通）。以降は相手の魔力+2・ライフ+1', () => {
     const s = game([[], ['lastStand']]);
+    s.board[12] = { player: C, bind: 5, effects: [] };
     s.board[0] = { player: H, bind: 5, effects: [] };
     s.board[1] = { player: H, bind: 9, effects: [{ effect: '🔑' }] };
     s.board[2] = { player: H, bind: 5, effects: [] };
@@ -389,6 +390,7 @@ test('土壇場の防壁: 初めて相手が列を揃えると、かわりにそ
     for (const i of [0, 1, 2, 3]) assert.strictEqual(s.board[i].player, undefined, `マス${i}は消滅`);
     assert.deepStrictEqual(s.board[1].effects, []);
     assert.strictEqual(s.lastStandUsed[1], true);
+    assert.strictEqual(s.board.filter((sq) => sq.player === C).length, 0, '持ち主の自陣も消滅');
 });
 
 test('土壇場の防壁: 発動は1度だけ。2度目の完成は通常どおり勝ち / 持ち主自身の勝利は止めない', () => {

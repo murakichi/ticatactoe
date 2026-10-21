@@ -717,6 +717,8 @@ function settleWinner(s) {
             for (const line of geometryForCells(s.board.length).winLines) {
                 if (line.every((idx) => s.board[idx].player === w)) for (const idx of line) s.board[idx] = newSquare();
             }
+            // 代償: 持ち主の自陣のコマもすべて消滅する
+            for (let idx = 0; idx < s.board.length; idx++) if (s.board[idx].player === SYMBOLS[holder]) s.board[idx] = newSquare();
             s.lastStandUsed[holder] = true;
             bumpStat(s, 'lastStand');
             w = undefined;

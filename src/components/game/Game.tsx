@@ -554,6 +554,8 @@ export const Game = (props: GameProps) => {
         for (const line of geo.winLines) {
             if (line.every((idx) => board[idx].player === w)) for (const idx of line) board[idx] = { player: undefined, bind: 0, effects: [] };
         }
+        // 代償: 持ち主の自陣のコマもすべて消滅する
+        for (let idx = 0; idx < board.length; idx++) if (board[idx].player === symbols[holder]) board[idx] = { player: undefined, bind: 0, effects: [] };
         addLog(`${symbols[holder]}の土壇場の防壁: ${w}の揃った列が消滅（以降、${symbols[holder]}以外は魔力+${GEAR_PARAMS.lastStandMagic}・ライフ+${GEAR_PARAMS.lastStandLife}）`);
         setCurrentBoard(board);
         setLastStandSaves((c) => c + 1);
