@@ -1,33 +1,42 @@
-// 巨人のパッシブ: コマを置くと、周囲1マスの空きマスが「次の1手番」ロックされ、周囲の敵コマに1ダメージ。
+// 巨人のパッシブ: コマを置くと、周囲1マスの敵コマが破壊され、周囲の空きマスが「次の1手番」ロックされる。
+// 氷結中の敵コマは❄1つが身代わりになって壊れない。ロック中・無敵の敵コマは対象外。自陣は触らない。
 // sim/engine.js の giantAura と同じ規則（ロックの長さはライフ=1。次の減衰で外れる）。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { PlayerCharacters, isGuarded } from './charge';
-import { applyDamage, lockable } from './thermal';
+import { absorbDestroy, lockable } from './thermal';
 
 export interface GiantAuraResult {
-    /** ロックした空きマス */
+    /** 破壊した敵コマ */
+    destroyed: number[];
+    /** 氷結が身代わりになって壊れなかった敵コマ */
+    blocked: number[];
+    /** ロックした空きマス（破壊して空いたマスを含む） */
     locked: number[];
-    /** ダメージを与えた（氷結を解いた）敵コマ */
-    hit: number[];
 }
 
 /** board を直接書き換える（fireCharges と同じ）。me は巨人の持ち主、range は着手マスの周囲 */
 export const giantAura = (board: SquareInfo[], range: number[], me: Player, chars: PlayerCharacters): GiantAuraResult => {
+    const destroyed: number[] = [];
+    const blocked: number[] = [];
     const locked: number[] = [];
-    const hit: number[] = [];
     for (const j of range) {
         const sq = board[j];
-        if (!sq.player) {
-            if (!lockable(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
-            board[j] = { ...sq, bind: Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
-            locked.push(j);
-        } else if (sq.player !== me) {
-            if (isGuarded(sq, chars)) continue; // ロック中・無敵の敵コマには当たらない
-            const res = applyDamage(sq, 1, 'skill');
-            board[j] = res.sq;
-            if (res.dealt > 0 || res.blocked) hit.push(j);
+        if (!sq.player || sq.player === me || isGuarded(sq, chars)) continue;
+        const guard = absorbDestroy(sq);
+        if (guard.blocked) {
+            board[j] = guard.sq;
+            blocked.push(j);
+        } else {
+            board[j] = { player: undefined, bind: 0, effects: [] };
+            destroyed.push(j);
         }
     }
-    return { locked, hit };
+    for (const j of range) {
+        const sq = board[j];
+        if (sq.player || !lockable(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        board[j] = { ...sq, bind: Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        locked.push(j);
+    }
+    return { destroyed, blocked, locked };
 };

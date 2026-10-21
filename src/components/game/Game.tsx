@@ -1031,12 +1031,13 @@ export const Game = (props: GameProps) => {
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
         }
 
-        // 巨人のオーラ: 周囲1マスの空きマスを次の1手番ロックし、周囲の敵コマに1ダメージ
+        // 巨人のオーラ: 周囲1マスの敵コマを破壊し、空きマスを次の1手番ロックする
         if (currentCharacter === 'giant' && nextBoard[i].player === currentTurnPlayer) {
             const aura = giantAura(nextBoard, geo.surroundRange(i), currentTurnPlayer, characters);
-            if (aura.locked.length > 0 || aura.hit.length > 0) {
-                addLog(`巨人のオーラ: ${aura.locked.length}マスをロック${aura.hit.length > 0 ? `、${aura.hit.length}コマにダメージ` : ''}`);
-                flashCells(aura.hit);
+            if (aura.destroyed.length > 0) addCorpses(aura.destroyed.length);
+            if (aura.destroyed.length > 0 || aura.locked.length > 0) {
+                addLog(`巨人のオーラ: ${aura.destroyed.length}コマを破壊、${aura.locked.length}マスをロック`);
+                flashCells(aura.destroyed);
             }
         }
 

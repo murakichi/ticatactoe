@@ -293,7 +293,7 @@ test('盤面サイズは人数と無関係に指定できる（4〜10、範囲�
     assert.strictEqual(auto.size, 5);
 });
 
-test('巨人のオーラ: 着手マスの周囲の空きマスが次の1手番ロックされ、敵コマに1ダメージ。自陣は触らない', () => {
+test('巨人のオーラ: 着手マスの周囲の敵コマが壊れ、空きマス（壊れたマス含む）が次の1手番ロックされる。自陣は触らない', () => {
     const s = gameN('giant', 'you');
     s.life = 5;
     const geo = require('./geometry.js').geometryOf(s.size);
@@ -303,14 +303,16 @@ test('巨人のオーラ: 着手マスの周囲の空きマスが次の1手番�
     s.board[enemy] = { player: '⭕', bind: 3, effects: [] };
     s.board[mine] = { player: '💙', bind: 3, effects: [] };
     e.placeMove(s, center);
-    assert.strictEqual(s.board[enemy].bind, 1); // 敵コマ: 着手の減衰-1 のあとさらに1ダメージ
-    assert.strictEqual(s.board[mine].bind, 2); // 自陣: 減衰のみ
-    for (const j of around.slice(2)) {
+    assert.strictEqual(s.board[enemy].player, undefined); // 敵コマ: 破壊
+    assert.ok(s.board[enemy].effects.some((x) => x.effect === '🔑')); // 壊れたマスもロック
+    assert.strictEqual(s.board[mine].player, '💙'); // 自陣: そのまま
+    assert.ok(!s.board[mine].effects.some((x) => x.effect === '🔑'));
+    for (const j of around.filter((k) => k !== mine)) {
         assert.ok(s.board[j].effects.some((x) => x.effect === '🔑'), `空きマス${j}がロックされる`);
         assert.strictEqual(s.board[j].bind, 1);
     }
-    // 相手の手番: ロック中の空きマスには置けない。置いたあとの減衰でロックは外れる
-    assert.strictEqual(e.placeMove(s, around[2]), false);
+    // 相手の手番: ロック中のマスには置けない
+    assert.strictEqual(e.placeMove(s, enemy), false);
 });
 
 test('巨人以外はオーラを持たない', () => {
