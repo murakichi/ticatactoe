@@ -74,7 +74,7 @@ export const GEAR_PARAMS = {
     /** 廃墟の底力: 自陣がスキルかエフェクトで破壊されたあと、次の自分の手番の終わりまでスキルのコストが下がる量 */
     ruinDiscount: 1,
     /** 土壇場の防壁: 発動後、相手の手番開始時の魔力とライフ平均への加算 */
-    lastStandMagic: 2,
+    lastStandMagic: 4,
     lastStandLife: 1,
 } as const;
 

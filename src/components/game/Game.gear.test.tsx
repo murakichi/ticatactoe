@@ -174,13 +174,13 @@ describe('ギア（ブラウザ版）', () => {
         expect(screen.getAllByText(/土壇場の防壁/).length).toBeGreaterThan(0);
     });
 
-    it('土壇場の防壁: 発動後は相手(💙)の手番開始時に魔力+2', () => {
+    it('土壇場の防壁: 発動後は相手(💙)の手番開始時に魔力+4', () => {
         const { container } = render(<Game players={players([], ['lastStand'])} />);
         for (const i of [0, 4, 1, 5, 2, 6]) fireEvent.click(cells(container)[i]);
         fireEvent.click(cells(container)[3]); // 防壁が発動 → ⭕の手番
         const before = magicChips(container)[0];
-        fireEvent.click(cells(container)[8]); // ⭕の手番終了 → 💙: 通常+1 と 防壁+2
-        expect(magicChips(container)[0] - before).toBe(3);
+        fireEvent.click(cells(container)[8]); // ⭕の手番終了 → 💙: 通常+1 と 防壁+4
+        expect(magicChips(container)[0] - before).toBe(5);
     });
 
 });

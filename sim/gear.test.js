@@ -417,7 +417,7 @@ test('土壇場の防壁: 発動後は、相手の手番開始時の魔力+2', (
         e.placeMove(s, 8); // ⭕の手番終了 → 💙の手番開始
         return s.magic[0] - m;
     };
-    assert.strictEqual(run([[], ['lastStand']]), 1 + 2);
+    assert.strictEqual(run([[], ['lastStand']]), 1 + 4);
 });
 
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {

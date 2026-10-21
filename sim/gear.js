@@ -31,7 +31,7 @@ const GEAR_PARAMS = {
     varietyMagic: 1,
     ailmentDiscount: 1,
     ruinDiscount: 1,
-    lastStandMagic: 2,
+    lastStandMagic: 4,
     lastStandLife: 1,
 };
 const P = GEAR_PARAMS;
