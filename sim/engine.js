@@ -139,7 +139,7 @@ const skillCosts = {
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
     onClickYingYangSkill: 5,
-    onClickStomp: 4,
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
