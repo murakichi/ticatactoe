@@ -2520,11 +2520,21 @@ export const Game = (props: GameProps) => {
                 </div>
                 {gearsBySeat[seat].length > 0 && (
                     <div className={styles.gears}>
-                        {gearsBySeat[seat].map((id) => (
-                            <span key={id} className={styles.gear} title={`${gearDefOf(id).name}: ${gearDefOf(id).desc}`}>
-                                {gearDefOf(id).icon} {gearDefOf(id).name}
-                            </span>
-                        ))}
+                        {gearsBySeat[seat].map((id) => {
+                            // 土壇場の防壁は1試合に1回きり。発動済みの席は非活性(灰色・取り消し線)で表示する
+                            const spent = id === 'lastStand' && lastStandUsed.current[seat];
+                            return (
+                                <span
+                                    key={id}
+                                    className={`${styles.gear}${spent ? ` ${styles.gearSpent}` : ''}`}
+                                    aria-disabled={spent || undefined}
+                                    title={`${gearDefOf(id).name}: ${gearDefOf(id).desc}${spent ? '（発動済み）' : ''}`}
+                                >
+                                    {gearDefOf(id).icon} {gearDefOf(id).name}
+                                    {spent && <span className={styles.gearSpentLabel}>発動済み</span>}
+                                </span>
+                            );
+                        })}
                     </div>
                 )}
                 <div className={styles.stats}>
