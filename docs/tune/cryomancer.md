@@ -2,7 +2,7 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db
 - 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1(既定)
-- 基準線: 環境勝率 62.5% / 2位 / 1位 magician 67.3%  (seed=3, games=200, master 80d796c)
+- 基準線: 環境勝率 55.8% / 4位 / 1位 magician 66.8%, 2位 poisoner 63.8%  (seed=3, games=200, master 3bc89db)
 - 連続不採用回数: 8
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
 - 状態: running(ギア新4種を含む master 3bc89db で再開)
