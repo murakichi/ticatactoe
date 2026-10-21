@@ -845,3 +845,88 @@
         animation-duration: 1ms;
     }
 }
+
+/* =========================================================
+   縮地・写し身: 元のマスから移動先へ飛ぶ演出
+   ========================================================= */
+.flyer {
+    position: absolute;
+    margin: -18px 0 0 -18px;
+    font-size: 34px;
+    opacity: 0;
+    animation: flyTo 460ms var(--ease) forwards;
+}
+
+@keyframes flyTo {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(0.8);
+    }
+    80% {
+        opacity: 1;
+        transform: translate(var(--dx), var(--dy)) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--dx), var(--dy)) scale(1);
+    }
+}
+
+/* 元のマスに残る残像は、すぐ薄れる */
+.afterImage {
+    animation: afterImage 600ms var(--ease) forwards;
+}
+
+@keyframes afterImage {
+    0% {
+        opacity: 0.9;
+        transform: scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+}
+
+/* 着地は、飛来のあとに跳ねて出る */
+.landing {
+    animation-delay: 320ms;
+}
+
+/* ギアの発動でマスに出る小演出 */
+.burst_gearKey,
+.burst_gearBloom,
+.burst_gearSpread,
+.burst_gearEmpty {
+    font-size: 40px;
+    animation: gearPop 900ms var(--ease) forwards;
+}
+
+@keyframes gearPop {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.4);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-6px) scale(1.4);
+    }
+    60% {
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-14px) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flyer,
+    .afterImage,
+    .burst_gearKey,
+    .burst_gearBloom,
+    .burst_gearSpread,
+    .burst_gearEmpty {
+        animation-duration: 1ms;
+    }
+}
