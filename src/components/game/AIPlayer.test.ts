@@ -83,8 +83,8 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const b = emptyBoard();
         [0, 1, 2].forEach((i) => put(b, i, '⭕', 3)); // ⭕が3つ並び、4つ目の3が脅威
-        const stompCosts = { onClickStomp: 2, onClickUseLock: 2 } as never;
-        const r = giant.makeMove(b, 5, stompCosts, 2, 5, [], false);
+        const stompCosts = { onClickStomp: 4, onClickUseLock: 2 } as never;
+        const r = giant.makeMove(b, 6, stompCosts, 2, 5, [], false);
         expect(r.skills).toEqual(['onClickStomp']);
         expect(r.stompTarget).not.toBeNull();
     });
