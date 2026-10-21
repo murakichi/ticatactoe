@@ -1177,6 +1177,23 @@ class AIPlayer {
         // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
         // 氷室の番人: 脅威が無いとき、魔法使いの🌱付きでロックされていないコマを凍らせる。氷結中の🌱は休眠して魔力を生まず、魔法使いの魔力エンジンが止まる
         // （sim/ai.js F.freezeBuds と同一。A/B: 対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt。魔法使い以外のコマは凍らせない: 毒使い相手では 64→31% に悪化）
+        // 氷室の番人: 毒で倒れそうな（毒≥ライフ-2）自陣コマを先に凍らせる。氷結中のマスの毒は継続ダメージを与えない
+        // （sim/ai.js F.antiPoison=1, antiPoisonMargin=2 と同一。A/B: 対毒使い 勝ち86→112/200試合、環境勝率 seed2/200 で +1.5pt）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const poisoned = board.findIndex((sq, i) => {
+                if (sq.player !== this.playerSymbol || this.shield.has(i) || isFrozen(sq) || !canFreeze(sq)) return false;
+                const p = sq.effects.filter((e) => e.effect === '☠').length;
+                return p > 0 && p >= sq.bind - 2;
+            });
+            if (poisoned !== -1) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                freeze(post, [poisoned]);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [poisoned] };
+                this.updateShield(board);
+            }
+        }
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const cell = board.findIndex((sq, i) => !!sq.player && this.isEnemy(sq.player) && this.characterOf(sq.player) === 'magician'
                 && !this.shield.has(i) && budStacks(sq) > 0 && !isFrozen(sq) && canFreeze(sq));
