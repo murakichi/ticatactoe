@@ -1165,6 +1165,17 @@ function faithfulMakeMoveInner(s) {
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    // 対雷霆の巫(F.freezeCharge): 氷結中の⚡は休眠する（無敵・発火が働かない）。敵の⚡付きでロックされていないコマを、脅威が無く魔力に余裕があるとき凍らせる
+    if (F.freezeCharge && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
+        for (let k = 0; k < (F.freezeChargeMax || 2); k++) {
+            const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+            if (curMagic(s) < fz + (F.freezeChargeReserve || 0)) break;
+            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && s.chars[SYMBOLS.indexOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            if (cell === -1) break;
+            SKILLS.lock(s);
+            if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+        }
+    }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
     // 氷結中のコマは❄1つが身代わりになって壊れない。魔法使いAIは範囲内の氷結中コマを数えず、net<2 になれば撃たない（bestJudgeTarget）
     if (F.antiJudge && curChar(s) === 'cryomancer' && !s.silenced[s.turn]) {
