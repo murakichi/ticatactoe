@@ -35,6 +35,8 @@ const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
     freezeBudsReserve: 0,
+    antiPoison: 1, // 氷室の番人が、毒で倒れそうな（毒≥ライフ-2）自陣コマを先に凍らせる。氷結中の毒は継続ダメージなし（対毒使い 49→60%、環境勝率 +1.5pt）
+    antiPoisonMargin: 2,
     cryoCards: 1, // 氷室の番人が霜降り・氷結トークン・氷結ダブルトークンを使う（tune-top: 環境勝率 seed2/200 で +9.1pt）
     pyroLock: 0, // 鍛冶師が軽減札を手札に固定する。A/Bで勝ち数が下がった(あなた-8/巨人-8)ので無効（1で有効）
     burnoutAfter: 1, // 鍛冶師が業火のあと（🔥のマスで敵が自陣より2つ以上多く壊れるなら）バーンアウトを撃つ（A/B）
@@ -1171,6 +1173,21 @@ function faithfulMakeMoveInner(s) {
             const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
             if (curMagic(s) < fz + (F.freezeChargeReserve || 0)) break;
             const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && s.chars[SYMBOLS.indexOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            if (cell === -1) break;
+            SKILLS.lock(s);
+            if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+        }
+    }
+    // 対毒使い(F.antiPoison): 氷結中のマスの毒は継続ダメージを与えない。毒で倒れる（毒≥ライフ）自陣のコマを、魔力に余裕があるとき先に凍らせる
+    if (F.antiPoison && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
+        for (let k = 0; k < (F.antiPoisonMax || 2); k++) {
+            const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+            if (curMagic(s) < fz + (F.antiPoisonReserve || 0)) break;
+            const cell = s.board.findIndex((sq, i) => {
+                if (sq.player !== me || shield.has(i) || thermal.isFrozen(sq) || !thermal.canFreeze(sq)) return false;
+                const p = sq.effects.filter((e) => e.effect === '☠').length;
+                return p > 0 && p >= sq.bind - (F.antiPoisonMargin || 0);
+            });
             if (cell === -1) break;
             SKILLS.lock(s);
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
