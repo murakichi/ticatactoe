@@ -603,3 +603,38 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
     });
 });
+
+describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先にロックする（sim/ai.js の EL_AI）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 行0に💙が2つ(0,1)あり、2が空き(3つ並びの要)。相手のリーチは無い
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[1] = { player: '💙', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (hasEmptyLock: boolean, magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you'], undefined, false, hasEmptyLock);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('空蔵を装備していれば、空きマスをロックする（lockTargets に空きマスが入る）', () => {
+        const r = run(true, 6);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toHaveLength(1);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+    });
+    it('空蔵を装備していなければロックしない', () => {
+        expect(run(false, 6).lockTargets).toBeUndefined();
+    });
+    it('魔力がロックのコストに足りなければロックしない', () => {
+        expect(run(true, 1).lockTargets).toBeUndefined();
+    });
+    it('自分がかけた空きマスロックが上限(2)に達していればかけない', () => {
+        const b = board();
+        b[2] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        b[3] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        expect(run(true, 6, b).lockTargets).toBeUndefined();
+    });
+});
