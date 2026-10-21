@@ -470,13 +470,15 @@ describe('鍛冶師AI: 軽減札で業火を安く撃つ', () => {
         expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickInferno']);
     });
     it('軽減札が手札にない・魔力が足りなければ業火は撃たない', () => {
-        expect(setup(6, [0, 3, 5]).chargeClicks).toBeUndefined();
-        expect(setup(3, [58, 0, 3]).chargeClicks).toBeUndefined();
+        // 火遁(固有)は撃つが、業火は撃たない
+        expect(setup(6, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite']);
+        expect(setup(3, [58, 0, 3]).chargeClicks?.map((c) => c.skill)).not.toContain('onClickInferno');
     });
     it('業火のあと、敵のコマが自陣より2つ以上多く壊れるならバーンアウトを撃つ（🔥合計4以上でタダ）', () => {
         const r = setup(9, [61, 0, 3]);
-        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno', 'onClickBurnout']);
-        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickInferno']);
+        // 火遁(固有)→業火→バーンアウトの順。火遁で魔力を使っても業火が撃てるときだけ火遁を撃つ
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite', 'onClickInferno', 'onClickBurnout']);
+        expect(setup(9, [0, 3, 5]).chargeClicks?.map((c) => c.skill)).toEqual(['onClickIgnite', 'onClickInferno']);
     });
     it('鍛冶師は軽減札を固定しない（固定すると勝ち数が下がった）', () => {
         const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
@@ -636,5 +638,40 @@ describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先に
         b[2] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
         b[3] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
         expect(run(true, 6, b).lockTargets).toBeUndefined();
+    });
+});
+
+describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の igniteSig=1 / igniteSkip=1）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[6] = { player: '⭕', bind: 2, effects: [] };
+        return b;
+    };
+    const run = (foe: 'you' | 'necromancer', magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('魔力が足りれば、ライフが残る敵コマに火遁を撃つ（ライフの高いほう）', () => {
+        const r = run('you', 6);
+        const click = r.chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click).toBeDefined();
+        expect(click?.target).toBe(5);
+    });
+    it('魔力が火遁のコストに足りなければ撃たない', () => {
+        expect(run('you', 0).chargeClicks?.some((c) => c.skill === 'onClickIgnite') ?? false).toBe(false);
+    });
+    it('ネクロマンサーが相手のときは撃たない（墓地が増えて蘇生の資源になる）', () => {
+        expect(run('necromancer', 6).chargeClicks?.some((c) => c.skill === 'onClickIgnite') ?? false).toBe(false);
+    });
+    it('すでに🔥が付いた敵コマは狙わない（残りの敵コマを狙う）', () => {
+        const b = board();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '🔥' }] };
+        const click = run('you', 6, b).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
+        expect(click?.target).toBe(6);
     });
 });

@@ -161,6 +161,32 @@ class AIPlayer {
         return bestIdx;
     }
 
+    /** 火遁(鍛冶師の固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上・自コマなし)とライフが高いものを優先。
+     * なければ null (sim/ai.js bestIgniteTarget の mode 1 と同一) */
+    private bestIgniteTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!sq.player || sq.player === this.playerSymbol || sq.bind <= 0) continue;
+            if (this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2) build += foes;
+            }
+            const val = sq.bind + build * 2;
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     /** 無敵マス(雷霆の巫の⚡付き自陣)の集合を更新する (sim/ai.js updateShield) */
     updateShield(board: SquareInfo[]): void {
         this.shield = new Set();
@@ -1523,6 +1549,22 @@ class AIPlayer {
                     chargeClicks.push({ skill: pick.r.key });
                     magic -= pick.rc;
                     plannedCut += pick.r.cut;
+                }
+            }
+            // 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる。
+            // ネクロマンサーが相手のときは撃たない（コマが壊れるたび墓地が増え、蘇生の資源になる）。sim/ai.js の igniteSig=1 / igniteSkip=1
+            const igniteCost = this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite');
+            const necroFoe = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'necromancer');
+            // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
+            const blocksInferno = worth && magic >= infernoNow() && magic - igniteCost < infernoNow();
+            if (!necroFoe && !blocksInferno && !this.skillKinds.has('onClickIgnite') && !chargeClicks.some((c) => c.skill === 'onClickIgnite') && magic >= igniteCost) {
+                const t = this.bestIgniteTarget(board);
+                if (t !== null) {
+                    chargeClicks.push({ skill: 'onClickIgnite', target: t });
+                    board = board.slice();
+                    ignite(board, [t], this.sizeOf(board), 1);
+                    this.updateShield(board);
+                    magic -= igniteCost;
                 }
             }
             const cost = infernoNow();
