@@ -131,7 +131,7 @@ function randomGears(slots, rng = Math.random) {
 const RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['sturdy', 'priceWreck'],
-    magician: ['sturdy', 'ironLock'],
+    magician: ['lastStand', 'ironLock'],
     giant: ['titanCost', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
