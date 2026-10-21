@@ -206,6 +206,79 @@ describe('サイレンス (先回りの封印)', () => {
     });
 });
 
+describe('毒使いのミアズマと毒花 (sim/ai.js と同じ動き)', () => {
+    const costs = { onClickInjection: 2, onClickMiasma: 6, onClickToken: 4 } as never;
+    const poisonedPiece = (bind: number, poison = 1): SquareInfo => ({
+        player: '💙',
+        bind,
+        effects: Array.from({ length: poison }, () => ({ effect: '☠' as const })),
+    });
+
+    it('自陣の毒マスの周囲に敵が2マス以上いれば、ミアズマを撃つ', () => {
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        put(b, 9, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [], false);
+        expect(r.skills).toContain('onClickMiasma');
+    });
+
+    it('敵が周囲に1マスだけ(リーチ列でもない)ならミアズマは撃たない', () => {
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        expect(ai.makeMove(b, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+    });
+
+    it('毒花を装備した毒使いは、インジェクションが手札にあれば敵に隣接する自コマへ毒を盛る', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], [], undefined, true);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [15], false);
+        expect(r.skills).toEqual(['onClickInjection']);
+        expect(r.stompTarget).toBe(5);
+    });
+
+    it('毒花が無ければ、同じ盤面でも自コマへ毒は盛らない', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 6);
+        put(b, 6, '⭕', 3);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const r = ai.makeMove(b, 10, costs, 2, 5, [15], false);
+        expect(r.stompTarget).not.toBe(5);
+    });
+
+    it('毒花: 自陣の毒が多すぎる/ライフが低い自コマには盛らない', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕'], [], undefined, true);
+        const many = emptyBoard();
+        many[5] = poisonedPiece(9, 3);
+        put(many, 6, '⭕', 3);
+        expect(ai.makeMove(many, 10, costs, 2, 5, [15], false).stompTarget).not.toBe(5);
+        const weak = emptyBoard();
+        put(weak, 5, '💙', 3);
+        put(weak, 6, '⭕', 3);
+        expect(ai.makeMove(weak, 10, costs, 2, 5, [15], false).stompTarget).not.toBe(5);
+    });
+});
+
+describe('毒使いはトークン系スキルを手札でロックして残す (sim/ai.js と同じ)', () => {
+    it('ポイズントークン(16)・トークン(3)を優先してロックする。両トークン(4)は対象外', () => {
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        const locks = ai.chooseLocks(emptyBoard(), 2, 5, [4, 16, 3, 7]);
+        expect(locks).toEqual(expect.arrayContaining([16, 3]));
+        expect(locks).not.toContain(4);
+        expect(locks.length).toBeLessThanOrEqual(2);
+    });
+
+    it('他のキャラ(あなた)はこのロックを優先しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.chooseLocks(emptyBoard(), 2, 5, [16])).not.toContain(16);
+    });
+});
+
 describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
     const FRZ = { effect: '❄' as const };
     const ai = new AIPlayer('💙', 'giant', ['⭕']);
@@ -494,5 +567,39 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         const r = run(ai, 12, [53]);
         expect(r.reroll).toEqual({});
         expect(run(ai, 2, [53]).reroll).toBeUndefined();
+    });
+});
+
+describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/ai.js の magLockN=3）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const budBoard = (cells: number[]) => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        cells.forEach((i) => (b[i] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] }));
+        return b;
+    };
+    const run = (cells: number[], magic: number) => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'you']);
+        return ai.makeMove(budBoard(cells), magic, skillCosts, 2, 5, [], false);
+    };
+    it('バッズ駒が複数あり魔力が足りれば、最大3つまで順にロックする', () => {
+        const r = run([0, 1, 2, 3], 9);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickUseLock', 'onClickUseLock', 'onClickUseLock']);
+        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 1, 2]);
+    });
+    it('魔力で払える数までに減らす', () => {
+        const r = run([0, 1, 2], skillCosts.onClickUseLock * 2);
+        expect(r.chargeClicks?.length).toBe(2);
+    });
+    it('1つだけなら従来どおり lockTargets で返す', () => {
+        const r = run([5], 9);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([5]);
+        expect(r.chargeClicks).toBeUndefined();
+    });
+    it('魔法使い以外は複数ロックしない', () => {
+        const ai = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
+        const r = ai.makeMove(budBoard([0, 1, 2]), 9, skillCosts, 2, 5, [], false);
+        expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
     });
 });
