@@ -808,7 +808,7 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
-    if (rushActive(s)) {
+    if (rushActive(s) && F.rush !== 2) { // rush=2: 着手は通常のまま、スキルによる守りだけ捨てる
         let bi = allMoves[0], bs = -Infinity;
         for (const i of allMoves) {
             const sim = simulatePlace(board, i, me, life);
