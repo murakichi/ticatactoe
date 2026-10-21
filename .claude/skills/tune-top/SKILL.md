@@ -188,9 +188,18 @@ AI は汎用なので、札やギアを替えても **AI がそれを活かす�
 |---|---|---|
 | 推奨ギア | `sim/gear.js` `RECOMMENDED_GEARS` | `src/components/game/gear.ts` `RECOMMENDED_GEARS` |
 | 推奨デッキ | `sim/deck.js` `RECOMMENDED_DECKS` | `src/components/game/deck.ts` `RECOMMENDED_DECKS` |
+| 同等に強い別案(ギア) | `sim/gear.js` `ALT_RECOMMENDED_GEARS` | `src/components/game/gear.ts` `ALT_RECOMMENDED_GEARS` |
+| 同等に強い別案(デッキ) | `sim/deck.js` `ALT_RECOMMENDED_DECKS` | `src/components/game/deck.ts` `ALT_RECOMMENDED_DECKS` |
 | AIの立ち回り | `sim/ai.js` | `src/components/game/AIPlayer.ts`(`AIPlayer.test.ts` に回帰テスト) |
 
 その後 `node sim/gear.test.js`、`CI=true npx jest --watchAll=false src/components/game/{gear,deck,AIPlayer}.test.ts`(一致テスト含む)を通す。推奨設定を文章で説明している箇所(`docs/characters.md` など)があれば直す。
+
+## ギア・デッキは強いものなら複数パターン推奨してよい(ランダム採用)
+
+主案(`RECOMMENDED_*`)と**同等に強い別案**があれば、`ALT_RECOMMENDED_GEARS` / `ALT_RECOMMENDED_DECKS` に足してよい。AI席は主案と別案からランダムに選ぶ(`pickRecommendedGears` / `pickRecommendedDeck`)ので、毎試合の顔ぶれがばらつき、一つの最適解に偏らない。
+- **別案にする条件**: 主案と同じ条件(基本・`--envDeck varied` など)で測り、主案との差が誤差の範囲(おおむね ±1.5pt 以内)かつ、トップを崩さない。弱い案(主案より明確に低い)は入れない。測った数値は `docs/tune/<char>.md` に残す。
+- **sim の環境測定は主案だけ**で行う(再現性のため)。別案は `--gears` / `--deck` で個別に測る。
+- 別案を足したら sim と src の両方を更新し、一致テスト(`gear.test.ts` / `deck.test.ts`)を通す。
 
 ## やってはいけないこと(このスキルの範囲)
 
