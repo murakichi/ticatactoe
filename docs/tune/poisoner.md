@@ -1,10 +1,10 @@
 # tune-top: poisoner
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 249e5c1
+- 最後に検証したmaster: 3bc89db
 - 現在の推奨設定: gears=[toxicBloom,sturdy] deck=[0,3,12,15,16,17,18,19,29,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 54.5% / 順位 5位 / 1位 magician 66.3%   (seed3, games100, rank --target poisoner)
-- 連続不採用回数: 6
-- 状態: blocked(issue #117)
+- 連続不採用回数: 0
+- 状態: running(ギア4種追加の master 3bc89db で再開。#117 は継続)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
