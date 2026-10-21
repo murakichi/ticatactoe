@@ -1179,6 +1179,8 @@ function faithfulMakeMoveInner(s) {
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
+    // F.lsSave=N: 土壇場の防壁が未発動のあいだは、魔力がN未満ならスキルを撃たずに貯める（発動で消えるのは盤上のコマだけで、魔力は残る）
+    if (F.lsSave && gearAi(s, 'lastStand') && !s.lastStandUsed[s.turn] && magic < F.lsSave) return { move: getEnhancedBestMove(s), turnEnded: false };
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
