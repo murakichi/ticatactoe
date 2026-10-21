@@ -196,6 +196,9 @@ async function main() {
     if (args.flags) cand.flags = parseFlags(args.flags);
 
     if (args.rank) {
+        if (!target && ((args.oppGears && args.oppGears !== 'recommended') || args.envDeck)) {
+            console.error('警告: --rank に --target が無いため、--oppGears/--envDeck が全員（各キャラ自身も）に掛かります。特定キャラの頑健性確認は --target <char> を付けてください。');
+        }
         // 全キャラ総当たり。target があればその設定（cand）を環境に反映する
         const tasks = [];
         for (let i = 0; i < CHARS.length; i++) for (let j = i + 1; j < CHARS.length; j++) {
