@@ -5,7 +5,7 @@ module.exports = {
         "you": 5,
         "magician": 4,
         "tactician": 5,
-        "giant": 8,
+        "giant": 10,
         "yinYangMaster_yang": 7,
         "yinYangMaster_ying": 4,
         "poisoner": 5,
