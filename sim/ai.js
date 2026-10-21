@@ -904,6 +904,10 @@ function chooseSkills(s, availableSkills) {
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        // F.silGlacier=3: サイレンス+絶対零度のコンボ分(両方のコスト)を貯めるまで、他のスキルに魔力を使わない
+        if (F.silGlacier === 3 && character === 'cryomancer' && !s.glacierPending[s.turn] && availableSkills.includes(28) && name !== 'silence'
+            && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
+            && remaining - c < glacierCost(s) + calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence')) return false;
         // 防壁を持つ席は発動前に魔力を温存し(F.hoard)、発動後に一気に使う（相手の魔力+4が積み上がる前に盤面を作り直す）
         if (F.hoard && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn] && remaining - c < F.hoard) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
@@ -1407,9 +1411,15 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
-    if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
+    // F.silGlacier: サイレンス(idx28)を先に撃って、凍結中の相手がスキルで解凍・反撃できないようにしてから撃つ。
+    // =2: 手札にサイレンスがあれば、両方の魔力が貯まるまで絶対零度を待つ
+    if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
-        SKILLS.glacier(s);
+        const gc = glacierCost(s);
+        const sc = calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence');
+        const hasSil = F.silGlacier && availableSkills.includes(28) && otherSeats(s).some((seat) => !s.silenced[seat]);
+        if (hasSil && curMagic(s) >= gc + sc) { SKILLS.silence(s); SKILLS.glacier(s); }
+        else if (curMagic(s) >= gc && !(hasSil && F.silGlacier === 2)) SKILLS.glacier(s);
     }
 
     // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
