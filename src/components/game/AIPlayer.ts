@@ -5,7 +5,7 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -31,7 +31,19 @@ export type AIResult = {
     chargeClicks?: { skill: string; target?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
+    /** 魔法使い: 撃てるスキルが無いので、軽減札(discount)を撃ってから1コストで手札を引き直す。Game 側が [軽減札, シャッフル, 再計画] を順に行う */
+    reroll?: { discount?: string };
 };
+
+// 魔法使いの引き直しに使う軽減札（撃つ優先順。sim/ai.js の DISCOUNT_REDUCERS と同順）。cut は次に打つスキルの軽減量
+const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickClearance' | 'onClickVitalMarkdown' | 'onClickMarkdown'; cut: number }[] = [
+    { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
+    { idx: 58, key: 'onClickClearance', cut: 7 },
+    { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
+    { idx: 53, key: 'onClickMarkdown', cut: 3 },
+];
+/** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
+export const MAX_REROLLS = 2;
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
@@ -64,6 +76,10 @@ class AIPlayer {
     /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
     hypoCut: number = 0;
     skillKinds: Set<string> = new Set();
+    /** 魔法使いの引き直し: この手番で残っている引き直し回数（Game が手番開始時に MAX_REROLLS にし、シャッフルのたび減らす） */
+    rerollsLeft: number = 0;
+    /** 軽減札が手番内で有効（引き直しの途中）。Game が毎回セットする */
+    discountActive: boolean = false;
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
 
@@ -679,6 +695,46 @@ class AIPlayer {
         return this.hypoCut > 0 && paid > 0 && !(skillKey && isDiscountSkill(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;
     }
 
+    /**
+     * 魔法使いの引き直し計画。撃てるスキルが無く（軽減札を撃っても増えない）、魔力に余裕があるときだけ返す。
+     * 軽減札が未使用なら [軽減札, シャッフル]、引き直しの途中（軽減済み）ならシャッフルだけ。
+     */
+    planReroll(
+        board: SquareInfo[],
+        magic: number,
+        costs: Record<keyof SkillCosts, number>,
+        opponentMagic: number,
+        life: number,
+        availableSkills: number[],
+        tokenUsed: boolean,
+        necroRemain: number,
+        necroCost: number,
+        assaultCost: number,
+        proliferateActive: boolean,
+        seatMagic: number[],
+        necroPay: number
+    ): { discount?: string } | null {
+        const plan = (m: number, avail: number[]) =>
+            this.chooseSkills(board, m, costs, opponentMagic, life, avail, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+        const base = [...plan(magic, availableSkills)];
+        if (base.length > 0) return null;
+        // 引き直しの途中: 軽減は既に掛かっている。魔力に余裕があればもう一度シャッフルする
+        if (this.discountActive) return magic >= costs.onClickShuffle + 2 ? {} : null;
+        // 軽減札を撃てば撃てるスキルが出るなら、引き直しではなく通常の軽減札プランに任せる
+        for (const r of REROLL_REDUCERS) {
+            if (!availableSkills.includes(r.idx)) continue;
+            const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+            if (magic < rc) continue;
+            this.hypoCut = r.cut;
+            const n = plan(magic - rc, availableSkills.filter((i) => i !== r.idx)).length;
+            this.hypoCut = 0;
+            if (n > 0) return null;
+        }
+        // 軽減札 + シャッフル(+2の余裕) + 引き直し後に撃つ分(+4) の魔力があるとき
+        const r = REROLL_REDUCERS.find((x) => availableSkills.includes(x.idx) && magic >= this.calculateAICost(costs[x.key], false, false, x.key) + 2 + 4);
+        return r ? { discount: r.key } : null;
+    }
+
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
     chooseSkills(
         board: SquareInfo[],
@@ -856,8 +912,18 @@ class AIPlayer {
         }
 
         // --- トークン系 ---
+        // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
+        const freeCells = findEmptyIndexes(board).length;
+        const cryo = this.character === 'cryomancer';
+        if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
+            spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
+        }
         if (!tokenUsed) {
-            if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
+            if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
+                spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
+            } else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
+                spend(this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken'), 'onClickFrostToken');
+            } else if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
             } else if (this.character === 'electrician' && availableSkills.includes(21) && remaining >= this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken')) {
                 spend(this.calculateAICost(costs.onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');
@@ -1077,6 +1143,13 @@ class AIPlayer {
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+
+        // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
+        // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
+        if (this.character === 'magician' && this.rerollsLeft > 0) {
+            const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+            if (rr) return { move: null, skills: [], reroll: rr };
+        }
 
         // 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火遁（onClickIgnite）で隣のコマを燃やして解凍し、同じ手番で完成させる
         // （sim/ai.js の unblock=2 と同一。A/B: 氷室の番人相手に全キャラ平均 +3.2pt、魔法使い +10.3±5.5(n=600)、氷室の番人でない相手では差 0.0）

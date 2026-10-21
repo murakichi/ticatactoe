@@ -4,7 +4,7 @@ import { Effect } from '../../types/Effect';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
-import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
+import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { SkillButton } from './SkillButton';
@@ -157,9 +157,9 @@ export const Game = (props: GameProps) => {
     const [previewCells, setPreviewCells] = useState<number[]>([]);
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
-    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[]) => {
+    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string) => {
         playSfx(type);
-        setBoardEffect((prev) => ({ type, index, indexes, nonce: (prev?.nonce ?? 0) + 1 }));
+        setBoardEffect((prev) => ({ type, index, indexes, label, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardEffect(null), 1400);
     };
     // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
@@ -216,6 +216,8 @@ export const Game = (props: GameProps) => {
     // ヘイルメアリーのルーレット演出 (intro=「ヘイルメアリー！」/ spin=抽選中 / reveal=当選)。非 null の間は入力とAIキューを止める
     const [hailMarySpin, setHailMarySpin] = useState<{ label: string; phase: 'intro' | 'spin' | 'reveal' } | null>(null);
 
+    // 魔法使いAIの引き直し（軽減札→シャッフル→再計画）の手番内の状態。手番開始時に初期化する
+    const aiReroll = useRef({ left: MAX_REROLLS, started: false });
     const executeSkillForAI = (skill: string) => {
         // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
         if (skill.startsWith('onClickHailMary:')) {
@@ -276,6 +278,8 @@ export const Game = (props: GameProps) => {
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
             case 'onClickBurnout': onClickBurnout(); break;
+            case 'onClickShuffle': onClickShuffle(); break;
+            case 'aiReplan': runAIMove(); break; // 引き直しのあと、新しい手札で計画し直す
             case 'onClickCounterMarkdown':
             case 'onClickMarkdown': case 'onClickEffectDiscount': case 'onClickTokenDiscount':
             case 'onClickVitalMarkdown': case 'onClickUniqueDiscount': case 'onClickClearance':
@@ -287,6 +291,12 @@ export const Game = (props: GameProps) => {
         if (pendingAIMove !== null && pendingAIMove.length > 0 && !hailMarySpin) {
             const timer = setTimeout(() => {
                 const [next, ...rest] = pendingAIMove;
+                // 再計画は新しいキューを積むので、先に今のキューを空にしてから呼ぶ（後から null で上書きしない）
+                if (next === 'aiReplan') {
+                    setPendingAIMove(rest.length > 0 ? rest : null);
+                    executeSkillForAI(next);
+                    return;
+                }
                 if (typeof next === 'string') executeSkillForAI(next);
                 else onCellClick(next);
                 setPendingAIMove(rest.length > 0 ? rest : null);
@@ -318,6 +328,8 @@ export const Game = (props: GameProps) => {
         ai.budGuard = budGuard[turnSeat];
         ai.infernoReady = gearTurn.current.infernoReady[turnSeat];
         ai.skillKinds = gearTurn.current.kinds[turnSeat];
+        ai.rerollsLeft = aiReroll.current.left;
+        ai.discountActive = aiReroll.current.started;
         const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
 
         // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
@@ -331,6 +343,16 @@ export const Game = (props: GameProps) => {
         // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
         const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
         setLockedSkillsAt(turnSeat, aiLocks);
+
+        // 魔法使い: 撃てるスキルが無いので、軽減札を撃ってから1コストで手札を引き直し、新しい手札で計画し直す
+        if (result.reroll) {
+            aiReroll.current = { left: aiReroll.current.left - 1, started: true };
+            const steps: string[] = [];
+            if (result.reroll.discount) steps.push(result.reroll.discount);
+            steps.push('onClickShuffle', 'aiReplan');
+            setPendingAIMove(steps);
+            return;
+        }
 
         // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選んでキューに積む
         if (result.hailMary) {
@@ -388,6 +410,7 @@ export const Game = (props: GameProps) => {
         if (isAllAI && !autoPlay) return;
 
         const timer = setTimeout(() => {
+            aiReroll.current = { left: MAX_REROLLS, started: false };
             runAIMove();
         }, 500);
 
@@ -400,6 +423,7 @@ export const Game = (props: GameProps) => {
         if (stepRequest === 0) return;
         if (!currentAI) return;
         if (calculateWinner(currentBoard.map(x => x.player))) return;
+        aiReroll.current = { left: MAX_REROLLS, started: false };
         runAIMove();
     }, [stepRequest]);
 
@@ -607,7 +631,7 @@ export const Game = (props: GameProps) => {
         if (useChargeOne) {
             nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '⚡' }] };
             addLog(`${posName(i)}に⚡を付与`);
-            playEffect('zap', i);
+            playEffect('zap', i, undefined, '帯電付与');
             harvestMagic(1);
             setUseChargeOne(false);
             setCurrentBoard(withOverload(nextBoard));
@@ -618,7 +642,7 @@ export const Game = (props: GameProps) => {
             const cells = geo.stompRange(i);
             addLog(`${posName(i)}を中心に範囲帯電（${cells.length}マスに⚡）`);
             flashCells(cells);
-            playEffect('zap', i);
+            playEffect('zap', i, undefined, '範囲帯電');
             setUseChargeArea(false);
             setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
@@ -630,7 +654,7 @@ export const Game = (props: GameProps) => {
             harvestMagic(cells.length);
             addLog(`${posName(i)}から帯電拡散（${cells.length}マスに⚡）`);
             flashCells(cells);
-            playEffect('zap');
+            playEffect('zap', undefined, undefined, '帯電拡散');
             setUseChargeSpread(false);
             setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
@@ -702,7 +726,7 @@ export const Game = (props: GameProps) => {
             applyLock(nextBoard, i);
             harvestMagic(1);
             addLog(`${posName(i)}をロック`);
-            playSfx('lock');
+            playEffect('lock', i);
             setUseLock(useLock - 1);
             setCurrentBoard(nextBoard);
             return;
@@ -904,7 +928,7 @@ export const Game = (props: GameProps) => {
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
-            playEffect('zap', fire.fired[0]);
+            playEffect('zap', fire.fired[0], undefined, '⚡発火');
         }
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
@@ -938,7 +962,7 @@ export const Game = (props: GameProps) => {
 
     const charge = 3;
     const onClickCharge = () => {
-        playSfx('charge');
+        playEffect('chargeUp', undefined, undefined, `チャージ+${charge}`);
         addLog(`「チャージ」を使用（ターン終了・マジック+${charge}）`);
         setMagicAt(turnSeat, (m) => m + charge);
         setCurrentTurn(currentTurn + 1);
@@ -946,12 +970,14 @@ export const Game = (props: GameProps) => {
 
     const onClickAddLife = () => {
         addLog('「ライフ3」を使用（ライフ+3）');
+        playEffect('heal');
         setLife(life + 3);
         spendMagic(calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife'), true, true, 'onClickAddLife');
     };
 
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
+        playEffect('shuffle');
         // 手札はデッキ（12枚）から引く
         setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills));
         spendMagic(seatCosts.onClickShuffle, true, false);
@@ -959,6 +985,7 @@ export const Game = (props: GameProps) => {
 
     const onClickBibine = () => {
         addLog('「バイバイン」を使用（ライフ2倍）');
+        playEffect('double');
         setLife(life * 2);
         spendMagic(calculateCost(seatCosts.onClickBibine, false, false, currentTurnPlayer, 'onClickBibine'), true, true, 'onClickBibine');
     };
@@ -1070,6 +1097,7 @@ export const Game = (props: GameProps) => {
 
     const onClickBuds = () => {
         addLog('「バッズ」を使用（次の一手でバッズを植える）');
+        playEffect('bloom', undefined, undefined, 'バッズ');
         harvestMagic(1);
         setUseBuds([true, useBuds[1] + 1]);
         spendMagic(calculateCost(seatCosts.onClickBuds, false, false, currentTurnPlayer, 'onClickBuds'), true, true, 'onClickBuds');
@@ -1077,6 +1105,7 @@ export const Game = (props: GameProps) => {
 
     const onClickDoubleBuds = () => {
         addLog('「ダブルバッズ」を使用（次の一手でバッズを2つ植える）');
+        playEffect('bloom', undefined, undefined, 'ダブルバッズ');
         harvestMagic(2);
         setUseBuds([true, useBuds[1] + 2]);
         spendMagic(calculateCost(seatCosts.onClickDoubleBuds, false, false, currentTurnPlayer, 'onClickDoubleBuds'), true, true, 'onClickDoubleBuds');
@@ -1185,6 +1214,7 @@ export const Game = (props: GameProps) => {
             if (seat === turnSeat) granted += afterTokenPlaced(board, idx);
         });
         harvestMagic(granted);
+        playEffect('token', undefined, picks, '両トークン');
         spendMagic(calculateCost(seatCosts.onClickBothToken, true, false, currentTurnPlayer, 'onClickBothToken'), true, true, 'onClickBothToken');
         setCurrentBoard(board);
         setUseToken(true);
@@ -1196,6 +1226,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         addLog(`「トークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'トークン');
         harvestMagic(afterTokenPlaced(board, index));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickToken, true, false, currentTurnPlayer, 'onClickToken'), true, true, 'onClickToken');
@@ -1209,6 +1240,7 @@ export const Game = (props: GameProps) => {
         board[emptyIndex1] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         board[emptyIndex2] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
         addLog(`「ダブルトークン」を使用（${posName(emptyIndex1)}・${posName(emptyIndex2)}に設置）`);
+        playEffect('token', undefined, [emptyIndex1, emptyIndex2], 'ダブルトークン');
         harvestMagic(afterTokenPlaced(board, emptyIndex1) + afterTokenPlaced(board, emptyIndex2));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleToken, true, false, currentTurnPlayer, 'onClickDoubleToken'), true, true, 'onClickDoubleToken');
@@ -1228,6 +1260,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '🌱' }] };
         addLog(`「バッズトークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'バッズトークン');
         harvestMagic(afterTokenPlaced(board, index, '🌱'));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBudsToken, true, false, currentTurnPlayer, 'onClickBudsToken'), true, true, 'onClickBudsToken');
@@ -1590,6 +1623,7 @@ export const Game = (props: GameProps) => {
         const index = randomPick(emptyIndexes);
         board[index] = poisonStrike({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] });
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
+        playEffect('token', index, [index], 'ポイズントークン');
         harvestMagic(afterTokenPlaced(board, index, '☠'));
         toxicBloom(board, [index]);
         setCurrentBoard(board);
@@ -1599,6 +1633,7 @@ export const Game = (props: GameProps) => {
 
     const onClickSerum = () => {
         addLog('「血清」を使用（自陣の毒をすべて除去）');
+        playEffect('cleanse', undefined, undefined, '血清');
         const board = currentBoard.slice();
         board.forEach((sq, idx) => {
             if (sq.player === currentTurnPlayer && sq.effects.some((e) => e.effect === '☠')) {
@@ -1682,7 +1717,7 @@ export const Game = (props: GameProps) => {
             board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
             addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
             harvestMagic(afterTokenPlaced(board, index, '⚡'));
-            playEffect('zap', index);
+            playEffect('zap', index, undefined, '帯電トークン');
             setCurrentBoard(withOverload(board));
         }
         spendMagic(calculateCost(seatCosts.onClickChargeToken, true, false, currentTurnPlayer, 'onClickChargeToken'), true, true, 'onClickChargeToken');
@@ -1708,7 +1743,7 @@ export const Game = (props: GameProps) => {
             board[idx] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
         }
         addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
-        if (picks.length > 0) playEffect('zap', picks[0]);
+        if (picks.length > 0) playEffect('zap', picks[0], undefined, '帯電ダブルトークン');
         setCurrentBoard(withOverload(board));
         spendMagic(calculateCost(seatCosts.onClickDoubleChargeToken, true, false, currentTurnPlayer, 'onClickDoubleChargeToken'), true, true, 'onClickDoubleChargeToken');
         setUseToken(true);
@@ -1727,7 +1762,7 @@ export const Game = (props: GameProps) => {
         addLog(`「ランダム帯電」を使用（${picks.map(posName).join('・')}に⚡）`);
         if (picks.length > 0) {
             flashCells(picks);
-            playEffect('zap', picks[0]);
+            playEffect('zap', picks[0], undefined, 'ランダム帯電');
         }
         setCurrentBoard(withOverload(withCharge(currentBoard, picks)));
         spendMagic(calculateCost(seatCosts.onClickChargeRandom, false, false, currentTurnPlayer, 'onClickChargeRandom'), true, true, 'onClickChargeRandom');
@@ -1743,7 +1778,7 @@ export const Game = (props: GameProps) => {
         const r = applyJammer(board, i, geo.size, currentTurnPlayer);
         addLog(`${posName(i)}のジャマー（${r.damaged.length}コマのライフを減少${r.zeroed.length > 0 ? `・${r.zeroed.length}コマがライフ0` : ''}）`);
         flashCells(r.damaged);
-        playEffect('zap', i);
+        playEffect('zap', i, undefined, 'ジャマー');
         setUseJammer(false);
         setCurrentBoard(board);
     };
@@ -1951,6 +1986,7 @@ export const Game = (props: GameProps) => {
         if ('token' in e) parts.push(`トークン付与スキル-${e.token}`);
         if ('unique' in e) parts.push(`固有スキル-${e.unique}`);
         addLog(`「${DISCOUNT_NAMES[key]}」を使用（${parts.join('・')}）`);
+        playEffect('discount', undefined, undefined, DISCOUNT_NAMES[key]);
         spendMagic(calculateCost(seatCosts[key], false, false, currentTurnPlayer, key), true, true, key);
         const delta = lifeDeltaOf(key);
         if (delta !== 0) setLife(life + delta);

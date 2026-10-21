@@ -186,9 +186,9 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
     poisoner: ['titanCost', 'sturdy'],
-    electrician: ['sturdy', 'harvest'],
+    electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
-    cryomancer: ['sturdy', 'harvest'],
+    cryomancer: ['afterglow', 'sturdy'],
     pyromancer: ['sturdy', 'harvest'],
 };
 

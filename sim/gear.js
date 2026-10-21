@@ -105,8 +105,8 @@ const RECOMMENDED_GEARS = {
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
     poisoner: ['titanCost', 'sturdy'],
-    electrician: ['sturdy', 'harvest'],
-    cryomancer: ['sturdy', 'harvest'],
+    electrician: ['lightToken', 'harvest'],
+    cryomancer: ['afterglow', 'sturdy'],
     pyromancer: ['sturdy', 'harvest'],
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));

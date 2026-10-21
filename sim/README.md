@@ -111,3 +111,13 @@ node sim/gear.test.js                                   # ギアの単体テス�
 - `node sim/probe-ai.js --mode vs|h2h --chars A,B --games N --seed S --flagsA k=v [--modB ai.old.js]  # ai.old.js は git show <旧コミット>:sim/ai.js > sim/ai.old.js で作る` — 同一シード・席入れ替えで AI 設定を比較（結果は `RESULT {json}` 行。`| node sim/probe-sum.js` で勝率と 95%CI に集計）
 - `node sim/probe-usage.js --chars A,B --games N [--size N] [--flags k=v]` — スキルの使用回数/試合と、使った試合の勝率
 - `sim/ai.js` の `AI_DEFAULTS`（採用済み）と `F.xxx`（検証用ノブ。`s.aiFlags[seat]` で席ごとに上書き）
+
+## 環境トップのチューニング（tune-top）
+```bash
+node sim/probe-top.js --rank --games 60 --seed 1                       # 全キャラ総当たりの環境順位
+node sim/probe-top.js --target pyromancer --scan gears --games 60      # ギア近傍の探索（--scan deck も可）
+```
+対象キャラにだけ候補のデッキ/ギア/AIフラグを与え、他キャラは推奨設定のまま「環境勝率」を測る。詳細は `.claude/skills/tune-top/SKILL.md`（`/loop` から回す）。
+デッキのシナジー探索: `node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40`（`--swap` で同時に入れ替える枚数、`--cat` で入れる札のカテゴリを限る）。
+`--oppGears none|random` で相手のギアを無し/ランダムにして頑健性を測れる（tune-top の完了判定で使う）。
+札・ギアの寄与と未使用の確認: `node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant`、使用回数は `node sim/probe-usage.js --chars X,you --deck ... --gears ...`。

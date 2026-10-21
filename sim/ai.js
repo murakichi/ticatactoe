@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const AI_DEFAULTS = {
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
+    cryoCards: 1, // 氷室の番人が霜降り・氷結トークン・氷結ダブルトークンを使う（tune-top: 環境勝率 seed2/200 で +9.1pt）
     pyroLock: 0, // 鍛冶師が軽減札を手札に固定する。A/Bで勝ち数が下がった(あなた-8/巨人-8)ので無効（1で有効）
     burnoutAfter: 1, // 鍛冶師が業火のあと（🔥のマスで敵が自陣より2つ以上多く壊れるなら）バーンアウトを撃つ（A/B）
     discountInferno: 1, // 固有スキル(業火)が撃てる状況なら、軽減札で無料でなくても安く撃てる/撃てるようになるとき軽減札を先に撃つ（A/B）
@@ -503,7 +504,7 @@ function discountPlan(s, me, availableSkills) {
     }
     if (best) { SKILLS[best.r.key](s); return; }
     // 手札では撃てるスキルが増えない: 魔力に余裕があれば、軽減してから引き直して探す
-    if (F.discountPlan >= 2 && base.length === 0) {
+    if ((F.discountPlan >= 2 || curChar(s) === 'magician') && base.length === 0) { // 魔法使いは引き直しが有効（A/B: 環境勝率 +1.7pt）。本番AIは AIPlayer.planReroll
         const r = DISCOUNT_REDUCERS.find((x) => availableSkills.includes(x.idx) && curMagic(s) >= calculateCost(s, costsOf(s)[x.cost], false, false, x.cost) + 2 + 4);
         if (!r) return;
         SKILLS[r.key](s);
@@ -592,6 +593,12 @@ function forceUse(s, me, availableSkills) {
             target = t.pick ? t.pick() : null;
             if (target === null || target === undefined) target = t.apply ? pickByEval(s, me, cands, t.apply) : cands[0];
             if (target === null || target === undefined) continue;
+            // 評価の改善幅が F.forceGain 未満なら撃たない（選んで撃つ: 無条件の強制使用は魔力を浪費して悪化したため）
+            if (F.forceGain && t.apply) {
+                const b = copyBoard(s.board);
+                t.apply(b, target);
+                if (forceEval(b, me) - forceEval(s.board, me) < F.forceGain) continue;
+            }
         }
         SKILLS[t.key](s);
         if (t.cands) placeMove(s, t.place ? t.place(target) : target);
@@ -993,8 +1000,9 @@ function chooseSkills(s, availableSkills) {
 
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
-    // 暫定(F.useNew): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
-    if (F.useNew && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
+    const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer');
+    // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
+    if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
     if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
@@ -1004,9 +1012,9 @@ function chooseSkills(s, availableSkills) {
             spend(calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'doubleChargeToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
             spend(chargeTokenCost, 'chargeToken');
-        } else if (F.useNew && freeCells >= 4 && availableSkills.includes(46) && remaining >= cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken')) {
+        } else if (frostUse && freeCells >= 4 && availableSkills.includes(46) && remaining >= cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken')) {
             spend(cost(costsOf(s).onClickDoubleFrostToken, true, 'onClickDoubleFrostToken'), 'doubleFrostToken');
-        } else if (F.useNew && freeCells >= 3 && availableSkills.includes(45) && remaining >= cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken')) {
+        } else if (frostUse && freeCells >= 3 && availableSkills.includes(45) && remaining >= cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken')) {
             spend(cost(costsOf(s).onClickFrostToken, true, 'onClickFrostToken'), 'frostToken');
         } else if (F.useNew && freeCells >= 4 && availableSkills.includes(38) && remaining >= cost(costsOf(s).onClickDoubleFlameToken, true, 'onClickDoubleFlameToken')) {
             spend(cost(costsOf(s).onClickDoubleFlameToken, true, 'onClickDoubleFlameToken'), 'doubleFlameToken');
@@ -1284,7 +1292,7 @@ function faithfulMakeMoveInner(s) {
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
     if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3) {
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
         SKILLS.glacier(s);
     }
 
