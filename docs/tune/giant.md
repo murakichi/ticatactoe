@@ -1,13 +1,16 @@
 # tune-top: giant
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db
-- 現在の推奨設定: gears=[titanCost, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=なし
-- 基準線: 環境勝率 52.4% / 6位 / 1位 magician 65.7%, 2位 poisoner 63.4%   (--rank seed=1 games=60, master 3bc89db。旧master 4b849ea: 56.5% 3位)
-- 連続不採用回数: 2
-- 状態: blocked(issue #97。新ギア後の再測定でも同結論)
+- 現在の推奨設定: gears=[afterglow, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=stompMin=1,stompDef=1(既定)
+- 基準線: 環境勝率 80.9% / 1位 / 2位 poisoner 72.0%   (--rank seed=3 games=100, master 3bc89db + 巨人の仕様変更)
+- 連続不採用回数: 0
+- 状態: refining(トップ到達。ただし勝率が高すぎる=下記。ユーザー確認待ち)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 11 | gear | 推奨ギア titanCost+sturdy → afterglow+sturdy(剛腕の代償は全スキルコスト+3でストンプ(コスト2)を5に戻していた) | 26.5→80.9%(--rank seed3/100)。4条件(基本/envDeck varied/oppGears none/random)すべて1位(80.9/83.0/92.2/91.3%) | 採用 |
+| 10 | strategy | ストンプのAI: stompMin=1 + stompDef=1(相手リーチ時もストンプで脅威を減らす) | 14.6→26.2%(seed2/200, +11.6pt)。stompOwnW=0.5は悪化→削除 | 採用 |
+| 9 | 仕様変更(ユーザー指定) | 2ターンに1回行動・ライフ平均10・オーラ(周囲8マスの敵コマ破壊+8マスロック)・ストンプのコスト2 | 環境勝率 52%→0.9→6.3→12.4% | - |
 | 8 | deck(再) | 新環境でデッキ1枚30近傍(seed1,60) | 最良 -バイバイン+火遁 53.3% vs 基準51.1% (+2.2, z<1)。旧環境と同じ顔ぶれ | 不採用 |
 | 7 | gear(再) | ギア4種追加(colorGarden/ailmentPact/ruinSurge/lastStand)後の1枠差し替え全近傍(seed1,60) | base 51.1%。最良 priceWreck+sturdy 50.6%, emptyLock 50.6%。新ギア4種は全て基準以下(42.6〜46.5%) | 不採用 |
 | 6 | joint | `--gears priceWreck,sturdy` × デッキ30近傍(seed1,60)→最良 -バッズ+特売 60.0%(基準57.2%)。seed2,200で再測定 | priceWreck単独 53.0% / +特売 55.1% / titanCostのまま+特売 55.3% (基準55.3%) → 全て基準以下 | 不採用 |
