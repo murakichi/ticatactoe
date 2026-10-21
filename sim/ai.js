@@ -772,6 +772,21 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 // ---- enhanced best move (minimax + fork detection) ----
 
+/** 土壇場の防壁を持ち、まだ発動していない手番（F.rush）。発動するまでは自駒が全部消えても構わないので守りを捨てて攻める */
+function rushActive(s) {
+    return !!F.rush && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
+}
+/** 攻めだけの評価: 敵コマが混ざらないラインの自コマ数（敵の脅威は見ない） */
+function ownOffense(board, me) {
+    let sc = 0;
+    for (const line of geometryForCells(board.length).winLines) {
+        if (line.some((idx) => thermal.emptyBlocked(board[idx]))) continue;
+        let my = 0, enemy = 0, bind = 0;
+        for (const idx of line) { const sq = board[idx]; if (sq.player === me) { my++; bind += sq.bind; } else if (sq.player) enemy++; }
+        if (enemy === 0) sc += LINE_SCORES[my] + bind * 0.3;
+    }
+    return sc;
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -792,6 +807,17 @@ function getEnhancedBestMove(s) {
     // immediate win
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
+    }
+    if (rushActive(s)) {
+        let bi = allMoves[0], bs = -Infinity;
+        for (const i of allMoves) {
+            const sim = simulatePlace(board, i, me, life);
+            let sc = ownOffense(sim, me);
+            const reaches = countReaches(sim, me);
+            if (reaches >= 2) sc += 200; else if (reaches === 1) sc += 40;
+            if (sc > bs) { bs = sc; bi = i; }
+        }
+        return bi;
     }
     // block opponent win (including captures)
     for (const o of opps) {
@@ -1166,7 +1192,8 @@ function faithfulMakeMoveInner(s) {
     }
 
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
-    const threats = Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    const rush = rushActive(s); // 土壇場の防壁(F.rush): 発動までは守らず攻める。相手のリーチを無視する
+    const threats = rush ? [] : Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
     // 対雷霆の巫(F.freezeCharge): 氷結中の⚡は休眠する（無敵・発火が働かない）。敵の⚡付きでロックされていないコマを、脅威が無く魔力に余裕があるとき凍らせる
     if (F.freezeCharge && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
         for (let k = 0; k < (F.freezeChargeMax || 2); k++) {
@@ -1302,7 +1329,7 @@ function faithfulMakeMoveInner(s) {
     // A/B(自キャラ側の勝率): 対ネクロ 0.448/0.455/0.456 → 0.631/0.613/0.625 (seed3-5)、対陰陽師 +4.5〜+13pt (seed3-5)、
     // 対毒使い +3.4/+4.4/+12.2/-0.8pt (seed3-6)。対照: 敵が「あなた」なら変化なし、敵が巨人なら悪化(0.493→0.403)で効果は敵の特性に由来
     // 対象外: 軍師と毒使いはロックに+2/+1コストが乗り運用と競合して悪化。ネクロ同士は未検証。雷霆の巫は変化なし(+0.6pt)
-    if (curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
+    if (!rush && curChar(s) !== 'tactician' && curChar(s) !== 'poisoner'
         && otherSeats(s).some((seat) => ANTI_LOCK_VS.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
         && magic >= calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock')) {
         const target = bestAntiNecroLockTarget(s.board, me);
