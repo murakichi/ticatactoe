@@ -79,7 +79,7 @@ function bestStompTarget(board, me) {
 }
 
 // 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) が最大の中心を選ぶ (純増2以上で価値あり)
-function bestJudgeTarget(board, me) {
+function bestJudgeTarget(board, me, minNet = 2) {
     const geo = geometryForCells(board.length);
     let bestIdx = null, bestNet = 0;
     for (let i = 0; i < board.length; i++) {
@@ -97,7 +97,7 @@ function bestJudgeTarget(board, me) {
         const net = enemy - mine;
         if (net > bestNet) { bestNet = net; bestIdx = i; }
     }
-    return bestNet >= 2 ? bestIdx : null;
+    return bestNet >= minNet ? bestIdx : null;
 }
 
 // 敵駒 i が「どかさないと負ける列」(その持ち主が3つ揃い・自駒なし・他の敵駒なし・残り1マスが空き) に含まれるか
@@ -1509,7 +1509,8 @@ function faithfulMakeMoveInner(s) {
             }
         }
         if (ch === 'magician' && magic >= judgeDayCost(s)) {
-            const target = bestJudgeTarget(s.board, me);
+            // 魔力が有り余っているとき(判定コストのF.surplusJudge倍以上)は net>=1 でも撃つ
+            const target = bestJudgeTarget(s.board, me, F.surplusJudge && magic >= F.surplusJudge * judgeDayCost(s) ? 1 : 2);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
