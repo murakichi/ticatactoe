@@ -867,6 +867,10 @@ function chooseSkills(s, availableSkills) {
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
+        // 土壇場の防壁が未発動のうちは、どうせ消える自陣への投資(バッズ/トークン/ライフ…)をやめて魔力を貯める
+        // lsPlan>=2: 降霊以外のすべて / 3: 自陣に投資するスキル(RESERVE_SKIP)だけ
+        if (character === 'necromancer' && F.lsPlan >= 2 && name !== 'necromancer' && name !== 'necromancy' && lastStandUnused(s, s.turn)
+            && (F.lsPlan === 2 || RESERVE_SKIP.includes(name))) return false;
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
         return false;
