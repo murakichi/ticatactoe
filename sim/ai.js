@@ -1193,6 +1193,16 @@ function faithfulMakeMoveInner(s) {
     // 検証用: 指定スキルを強制的に1回撃つ
     if (F.force !== undefined && forceUse(s, me, availableSkills)) availableSkills = availableSkills.filter(() => true);
 
+    // F.richShuffle=N: 相手の土壇場の防壁が発動済みならこちらは手番開始時の魔力が増えて余る。撃てるスキルが手札に無く魔力に余裕があれば、1コストで引き直して探す（最大N回）
+    if (F.richShuffle && s.lastStandUsed.some((used, holder) => used && holder !== s.turn)) {
+        for (let k = 0; k < F.richShuffle; k++) {
+            if (curMagic(s) < (F.richMin || 8) + costsOf(s).onClickShuffle) break;
+            if (chooseSkills(s, availableSkills).length > 0) break;
+            E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
+    }
+
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
     s.lockedSkills[s.turn] = locks;
