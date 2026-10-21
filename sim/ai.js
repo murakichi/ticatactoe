@@ -79,6 +79,10 @@ function bestStompTarget(board, me) {
 }
 
 // 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) が最大の中心を選ぶ (純増2以上で価値あり)
+// 魔法使いの魔力が F.budSurplus 以上あるとき（土壇場の防壁の発動後など）は、バッズを全コマに広げてロックし、審判の日の巻き添えを無くす
+function budSurplus(s) { return !!F.budSurplus && curChar(s) === 'magician' && curMagic(s) >= F.budSurplus; }
+const BUD_CARDS = [2, 10, 35, 36];
+
 function bestJudgeTarget(board, me, minNet = 2) {
     const geo = geometryForCells(board.length);
     let bestIdx = null, bestNet = 0;
@@ -963,7 +967,7 @@ function chooseSkills(s, availableSkills) {
     const dormantBuds = board.reduce((n, sq) => (sq.player === me && thermal.isDormant(sq) ? n + thermal.budStacks(sq) : n), 0);
     if (availableSkills.includes(34) && dormantBuds >= 2 && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice, false, false, 'onClickSolstice'), 'solstice');
     // 風の落とし子: 自陣のコマ(🌱を持てる)が3個以上あり🌱が3個未満なら撒く
-    if (availableSkills.includes(36) && myBuds < 3 && thermal.sowCandidates(board, me).length >= 3) spend(calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'windborne');
+    if (availableSkills.includes(36) && (myBuds < 3 || budSurplus(s)) && thermal.sowCandidates(board, me).length >= 3) spend(calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'windborne');
 
     // 浄化: 自陣のライフが残るコマの状態異常が合計3スタック以上で撃つ（雷霆の巫の自陣⚡無敵コマの⚡は数えない。雷霆の巫AIは⚡を剥がすので撃たない）
     if (character !== 'electrician' && availableSkills.includes(32) && hasAilment(board, me)) {
@@ -1021,7 +1025,7 @@ function chooseSkills(s, availableSkills) {
             if (!sq.player) emptyCount++;
             if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
         }
-        if (emptyCount >= 6 && myBuds < 3) {
+        if (emptyCount >= 6 && (myBuds < 3 || budSurplus(s))) {
             spend(cost(costsOf(s).onClickBuds, false, 'onClickBuds'), 'buds');
         }
     }
@@ -1373,6 +1377,13 @@ function faithfulMakeMoveInner(s) {
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
+    if (budSurplus(s) && !availableSkills.some((i) => BUD_CARDS.includes(i))) { // バッズを広げる札が無ければ1コストで引き直して探す
+        for (let i = 0; i < (F.budShuffle || 4) && curMagic(s) > costsOf(s).onClickShuffle + 2; i++) {
+            E.shuffleHand(s);
+            if (s.skills.some((x) => BUD_CARDS.includes(x))) break;
+        }
+        availableSkills = s.skills.slice();
+    }
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 
@@ -1405,7 +1416,7 @@ function faithfulMakeMoveInner(s) {
     // ひこばえ: 🌱を持つ自陣コマの隣に受け取れる自陣コマが2つ以上あれば撃つ（対象クリックが要る2段階スキル。手番は進まない）
     if (availableSkills.includes(35) && curMagic(s) >= calculateCost(s, costsOf(s).onClickSucker, false, false, 'onClickSucker')) {
         const target = bestSuckerTarget(s);
-        if (target !== null && thermal.budReceivers(s.board, target, me, sizeOf(s.board)).length >= 2) {
+        if (target !== null && thermal.budReceivers(s.board, target, me, sizeOf(s.board)).length >= (budSurplus(s) ? 1 : 2)) {
             SKILLS.sucker(s);
             placeMove(s, target);
         }
@@ -1508,7 +1519,16 @@ function faithfulMakeMoveInner(s) {
                 return { move, turnEnded: false };
             }
         }
-        if (ch === 'magician' && magic >= judgeDayCost(s)) {
+        if (ch === 'magician' && budSurplus(s)) { // 先に全バッズ駒をロックする（審判の巻き添えを防ぎ、安いスキルの回数でコストも下がる）
+            for (let n = 0; n < 12; n++) {
+                const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+                const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
+                if (!(curMagic(s) >= lockCost && budCell !== -1)) break;
+                SKILLS.lock(s);
+                placeMove(s, budCell);
+            }
+        }
+        if (ch === 'magician' && curMagic(s) >= judgeDayCost(s)) {
             // 魔力が有り余っているとき(判定コストのF.surplusJudge倍以上)は net>=1 でも撃つ
             const target = bestJudgeTarget(s.board, me, F.surplusJudge && magic >= F.surplusJudge * judgeDayCost(s) ? 1 : 2);
             if (target !== null) {
