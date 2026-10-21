@@ -545,6 +545,15 @@ function discountPlan(s, me, availableSkills) {
         }
     }
     if (best) { SKILLS[best.r.key](s); return; }
+    // 魔力が有り余っていて撃てるスキルが手札に無い（防壁発動後の+4など）: 魔法使い以外も引き直して探す (AIPlayer.makeMove と同じ)
+    if (curChar(s) !== 'magician' && base.length === 0 && curMagic(s) >= SURPLUS_MAGIC) {
+        for (let i = 0; i < 2; i++) {
+            if (curMagic(s) < SURPLUS_MAGIC) return;
+            E.shuffleHand(s);
+            if (chooseSkills(s, s.skills).length > 0) return;
+        }
+        return;
+    }
     // 手札では撃てるスキルが増えない: 魔力に余裕があれば、軽減してから引き直して探す
     if ((F.discountPlan >= 2 || curChar(s) === 'magician') && base.length === 0) { // 魔法使いは引き直しが有効（A/B: 環境勝率 +1.7pt）。本番AIは AIPlayer.planReroll
         const r = DISCOUNT_REDUCERS.find((x) => availableSkills.includes(x.idx) && curMagic(s) >= calculateCost(s, costsOf(s)[x.cost], false, false, x.cost) + 2 + 4);
@@ -1118,16 +1127,6 @@ function chooseSkills(s, availableSkills) {
     if (character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
         const rc = calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom');
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
-    }
-
-    // 魔力が有り余っているとき（土壇場の防壁の発動後は+4/手番など）: 通常は見送る条件を緩めて使い切る (AIPlayer.ts と同一)
-    if (remaining >= SURPLUS_MAGIC && oppReaches === 0) {
-        if (availableSkills.includes(0) && !skills.includes('addLife')) {
-            spend(cost(costsOf(s).onClickAddLife, false, 'onClickAddLife'), 'addLife');
-        }
-        if (availableSkills.includes(2) && !skills.includes('buds') && freeCells >= 3) {
-            spend(cost(costsOf(s).onClickBuds, false, 'onClickBuds'), 'buds');
-        }
     }
 
     { skills.spent = curMagic(s) - remaining; return skills; }
