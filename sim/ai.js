@@ -768,6 +768,10 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
 
 // ---- enhanced best move (minimax + fork detection) ----
 
+// 土壇場の防壁を装備していて、まだ発動していない席か
+function lastStandUnused(s, seat) {
+    return hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat];
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -789,8 +793,10 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
     }
+    // 土壇場の防壁が未発動なら、相手の勝ち手をあえて塞がない(防壁が発動して列と自陣が消える。ここまでは攻めに専念する)
+    const lsLetWin = F.lsPlan && lastStandUnused(s, s.turn);
     // block opponent win (including captures)
-    for (const o of opps) {
+    for (const o of lsLetWin ? [] : opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
