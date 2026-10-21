@@ -3,7 +3,7 @@
 - 最後に検証したmaster: 3bc89db(新ギア colorGarden/ailmentPact/ruinSurge/lastStand 追加後)(魔法使いの推奨デッキ更新が入った。sim エンジン・AI は不変)
 - 現在の推奨設定: gears=[lastStand, priceWreck](sturdy→lastStand に変更, 試行#11) deck=推奨のまま AIフラグ=なし
 - 基準線: 環境勝率 61.3% / 3位 / 1位 magician 66.0% / 2位 poisoner 63.3%   (seed 3, games 100, 基本条件, lastStand+lsAggro 採用後。4条件の完了判定は未実施)
-- 連続不採用回数: 1(#13)
+- 連続不採用回数: 2(#13, #14)
 - 状態: running(ギア4種追加を受けて再開, master 3bc89db)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
@@ -23,6 +23,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 14 | strategy(相手の防壁発動後の魔力余り) | ユーザー指摘『相手の防壁が発動するとこちらの魔力が+4/手番で有り余る』。`probe-top --oppGears lastStand`(相手全員が防壁装備)を追加して測定。軍師の基準 55.9%(seed2/100)。余り魔力で手札を引き直して撃てるものを探す `F.rich`(3,6)は 55.8% / 56.3% で差なし | sim(軍師 vs 巨人防壁, 100試合)で防壁発動後の軍師の手番開始魔力は中央値7・p90 11、スキル使用後の余りは中央値2・p90 6。AIは既にほぼ使い切っており、構造上の余剰は小さい。ノブ削除 | 不採用 |
 | 13 | strategy(lastStand 2段階) | ユーザー案『防壁が未発動の間は魔力を貯め(ロック/バッズ系は使う)、発動後にトークン連打で勝つ』。未発動中は token/doubleToken/totalAssault を魔力が N 残る範囲でしか撃たない `F.lsHoard`。seed2/200: 基準 60.1% → N=4 で 50.7%、N=8 で 45.6% | 大幅悪化(-9〜-15pt)。トークンが軍師の手数(テンポ)の源で、貯めている間に盤面を取られる。ノブ削除 | 不採用 |
 | 12 | strategy(lastStand) | ユーザー案『防壁が未発動のうちは相手の1回目の勝ちを止めに行かず攻める』。強制ブロックを防壁未発動時はスキップ(AI_DEFAULTS.lsAggro)。seed2/200: 57.6→60.1(+2.5)、seed4/200: 58.9→61.8(+2.9)。合算400で +2.7pt(CI±2.2)。対magician・対cryomancer が改善、悪化なし | **採用**(sim/ai.js + 本番 AIPlayer.lastStandReady + Game.tsx、回帰テスト2件。基本順位 seed3/100: 軍師 61.3%・3位) |
 | 11 | gear | slot0 sturdy→lastStand(土壇場の防壁)。seed2/200: 54.8→57.6、seed4/200: 54.8→58.9。合算400で +3.5pt(CI±2.2)。対巨人 51→72/50→77 が主因、対cryomancer/electrician は -2〜-6 | **採用**(RECOMMENDED_GEARS を sim/src 両方更新) |
