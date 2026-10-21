@@ -60,7 +60,7 @@ test('プレイヤーパネルにキャラ固有スキルの現在コストが�
     );
     const panels = () => Array.from(container.querySelectorAll('[class*="panel"]'));
     const [heartPanel, circlePanel] = panels().filter((el) => /panel(?!Current)/.test(el.className) || el.className.includes('panelCurrent'));
-    expect(heartPanel).toHaveTextContent('ストンプ⚡ 6');
+    expect(heartPanel).toHaveTextContent('ストンプ⚡ 2');
     expect(circlePanel).toHaveTextContent('審判の日⚡ 11');
 
     // 💙が着手(使用回数は変わらない)しても非手番側の表示は維持される
@@ -176,10 +176,9 @@ test('スキルカードにコストバッジ・種類タグ・使えない理�
             ]}
         />
     );
-    // 初期マジック2: ストンプ(コスト6)は使えず、不足分が出る。固有タグも付く
-    const stomp = screen.getByRole('button', { name: 'ストンプ-6' });
-    expect(stomp).toBeDisabled();
-    expect(stomp).toHaveTextContent('あと⚡4');
+    // 初期マジック2: ストンプ(コスト2)は使える。固有タグも付く
+    const stomp = screen.getByRole('button', { name: 'ストンプ-2' });
+    expect(stomp).toBeEnabled();
     expect(stomp).toHaveTextContent('固有');
     // ロック(コスト2)は使える。コストバッジが出て、不足表示はない
     const lock = screen.getByRole('button', { name: 'ロック-2' });
