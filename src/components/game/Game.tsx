@@ -437,6 +437,9 @@ export const Game = (props: GameProps) => {
                 onCellClick(pendingClicks[0]);
                 if (pendingClicks.length > 1) setPendingAIMove(pendingClicks.slice(1));
             }
+        } else if (result.skills.length === 0) {
+            // 置ける場所もスキルもなければチャージで手番を終える（何もしないと進行不能になる）
+            onClickCharge();
         }
     };
 
@@ -2450,6 +2453,26 @@ export const Game = (props: GameProps) => {
             playSfx('win');
         }
     }, [winner]);
+
+    // サイレンス中に置けるマスが無い（絶対零度の氷結で全マスが塞がれた等）と進行不能になるので、自動でパスする
+    const canPlaceAt = (i: number): boolean => {
+        const sq = currentBoard[i];
+        if (isShielded(sq, characters)) return false;
+        if (sq.player && sq.player !== currentTurnPlayer && sq.bind > 0 && currentCharacter !== 'giant') return false;
+        if (sq.effects.some((x) => x.effect === '🔑') && sq.bind > 0) return false;
+        if (emptyBlocked(sq)) return false;
+        if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
+        return true;
+    };
+    const mustPass = !winner && !rawWinner && silenced[turnSeat] && !currentBoard.some((_, i) => canPlaceAt(i));
+    useEffect(() => {
+        if (!mustPass || hailMarySpin) return;
+        const timer = setTimeout(() => {
+            addLog('サイレンス中で置ける場所がないため自動でパス');
+            setCurrentTurn(currentTurn + 1);
+        }, 600);
+        return () => clearTimeout(timer);
+    }, [mustPass, currentTurn, hailMarySpin]);
 
     // 継続中スキルの残りターン数を返す
     const continuousEffects = (seat: number): string[] => {
