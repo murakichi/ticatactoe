@@ -245,7 +245,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['afterglow', 'sturdy'],
-    pyromancer: ['sturdy', 'harvest'],
+    pyromancer: ['emptyLock', 'harvest'],
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
