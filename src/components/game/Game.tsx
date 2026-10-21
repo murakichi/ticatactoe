@@ -291,6 +291,7 @@ export const Game = (props: GameProps) => {
             case 'onClickSacrifice': onClickSacrifice(); break;
             case 'onClickBoost': onClickBoost(); break;
             case 'onClickRandomFreeze': onClickRandomFreeze(); break;
+            case 'onClickPoisonToken': onClickPoisonToken(); break;
             case 'onClickFrostToken': onClickFrostToken(); break;
             case 'onClickDoubleFrostToken': onClickDoubleFrostToken(); break;
             case 'onClickFrostfall': onClickFrostfall(); break;
