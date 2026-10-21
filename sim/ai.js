@@ -43,6 +43,7 @@ const AI_DEFAULTS = {
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.yyMode = 0; AI_DEFAULTS.yyEarly = 6; AI_DEFAULTS.yyKeep = 0;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -849,7 +850,9 @@ function chooseSkills(s, availableSkills) {
     hitOf.forEach((n) => { oppHit = Math.max(oppHit, n); });
     const isLosing = oppPieces > myPieces + 2 || oppReaches > 0;
 
-    function cost(base, isToken, key) { return calculateCost(s, base, isToken || false, false, key); }
+    // 陰陽師: 手番頭に陰陽転化を撃つ計画のとき、以降のスキルは転化後のモードのコストで数える(陽は+1)
+    let yyShift = 0;
+    function cost(base, isToken, key) { return calculateCost(s, base, isToken || false, false, key) + yyShift; }
 
     const skills = [];
     // 固有スキル用の魔力温存: ネクロは蘇生のコスト分を下回る汎用スキル(バッズ/トークン/ライフ)の支払いを控える。
@@ -866,6 +869,16 @@ function chooseSkills(s, availableSkills) {
         return false;
     }
 
+    // 陰陽師の陰陽転化(F.yyMode): 1=常に陽 2=序盤(F.yyEarly手番まで)だけ陽
+    if (character === 'yinYangMaster' && F.yyMode) {
+        const curMode = s.yy[s.turn];
+        const want = F.yyMode === 1 ? 'yang' : (s.currentTurn <= F.yyEarly ? 'yang' : 'ying');
+        const tcost = cost(costsOf(s).onClickToggleYingYang, false, 'onClickToggleYingYang');
+        if (curMode !== want && remaining >= tcost + F.yyKeep) {
+            spend(tcost, 'toggleYY');
+            yyShift = want === 'yang' ? 1 : -1;
+        }
+    }
     // --- 固有スキル (相手リーチがなければ積極的に使う) ---
     if (oppReaches === 0) {
         if (character === 'necromancer') {
@@ -1398,10 +1411,10 @@ function faithfulMakeMoveInner(s) {
             }
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-        if (ch === 'magician') {
+        if (ch === 'magician' || (ch === 'yinYangMaster' && F.yyBudLock)) {
             // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 magLockN 個）。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS
             let locked = 0;
-            while (locked < F.magLockN) {
+            while (locked < (ch === 'magician' ? F.magLockN : F.yyBudLock)) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
                 const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
                 if (!(curMagic(s) >= lockCost && budCell !== -1)) break;
