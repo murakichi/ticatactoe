@@ -9,7 +9,7 @@
  * 'random'    -> pure random (strength benchmark baseline).
  */
 
-const { SYMBOLS, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
+const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
@@ -56,6 +56,7 @@ const AI_DEFAULTS = {
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -631,7 +632,7 @@ function forceUse(s, me, availableSkills) {
     const table = forceTable(s, me);
     // 勝ち手があるなら先に着手する
     const moves = new Set([...findEmptyIndexes(s.board), ...getValidMoves(s.board, me, curChar(s))]);
-    for (const m of moves) if (calculateWinner(simulatePlace(s.board, m, me, s.life).map((q) => q.player)) === me) return false;
+    for (const m of moves) if (calculateWinner(lineSyms(simulatePlace(s.board, m, me, s.life))) === me) return false;
     for (const idx of list) {
         if (!(F.forceAny || availableSkills.includes(idx))) continue;
         const t = table[idx];
@@ -663,8 +664,11 @@ function forceUse(s, me, availableSkills) {
 
 // ---- helpers ----
 
+// 式神(📜)は列の並びに数えない: 列判定ではコマ無し扱い、リーチ/脅威の判定ではその列自体を無効にする
+const lineSyms = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
+const hasShikigami = (board, line) => line.some((idx) => isShikigami(board[idx]));
 function symbolsWith(board, i, symbol) {
-    const syms = board.map((x) => x.player);
+    const syms = lineSyms(board);
     syms[i] = symbol;
     return syms;
 }
@@ -672,8 +676,8 @@ function symbolsWith(board, i, symbol) {
 function evaluateBoard(board, me) {
     let score = 0;
     for (const line of geometryForCells(board.length).winLines) {
-        // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない
-        if (line.some((idx) => thermal.emptyBlocked(board[idx]))) continue;
+        // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
+        if (line.some((idx) => thermal.emptyBlocked(board[idx])) || hasShikigami(board, line)) continue;
         let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
         // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
         const enemiesInLine = new Set();
@@ -706,6 +710,7 @@ function evaluateBoard(board, me) {
 function countReaches(board, player) {
     let reaches = 0;
     for (const line of geometryForCells(board.length).winLines) {
+        if (hasShikigami(board, line)) continue;
         let my = 0, op = 0, blocked = false;
         for (const idx of line) {
             const sq = board[idx];
@@ -722,6 +727,7 @@ function countReaches(board, player) {
 function findThreatSquares(board, player) {
     const threats = [];
     for (const line of geometryForCells(board.length).winLines) {
+        if (hasShikigami(board, line)) continue;
         let pCount = 0, oCount = 0, emptyIdx = -1;
         for (const idx of line) {
             const sq = board[idx];
@@ -739,7 +745,9 @@ function findThreatSquares(board, player) {
 function simulatePlace(board, index, player, life) {
     const nb = board.map(sq => ({ player: sq.player, bind: sq.bind, effects: sq.effects.slice() }));
     const sq = nb[index];
-    if (!sq.player) {
+    if (isShikigami(sq) && sq.player !== player && sq.bind <= 0) {
+        nb[index] = { player: undefined, bind: 0, effects: [] }; // 式神は乗っ取られると空きマスになる
+    } else if (!sq.player) {
         nb[index] = { player, bind: life, effects: [] };
     } else if (sq.player !== player) {
         if (sq.bind <= 0) {
@@ -752,6 +760,7 @@ function simulatePlace(board, index, player, life) {
         }
     } else {
         nb[index] = { player: sq.player, bind: sq.bind + life + 1, effects: sq.effects.slice() };
+        if (isShikigami(sq)) nb[index].effects = nb[index].effects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]); // 補強で🌱付きの通常コマ
     }
     return nb;
 }
@@ -808,7 +817,7 @@ function getMovesFor(board, player, life) {
 }
 
 function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
-    const winner = calculateWinner(board.map(sq => sq.player));
+    const winner = calculateWinner(lineSyms(board));
     if (winner === me) return 1000 + depth;
     if (winner) return -1000 - depth;
     const currentPlayer = isMax ? me : opp;
@@ -872,7 +881,7 @@ function getEnhancedBestMove(s) {
 
     // immediate win
     for (const i of allMoves) {
-        if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
+        if (calculateWinner(lineSyms(simulatePlace(board, i, me, life))) === me) return i;
     }
     // 土壇場の防壁が未発動なら、相手の1回目の勝ちは防壁が受けてくれる(相手の列と自陣が消えるだけ)ので止めに行かず、攻めを続ける(AI_DEFAULTS.lsAggro)
     const lsFree = F.lsAggro && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
@@ -891,7 +900,7 @@ function getEnhancedBestMove(s) {
     for (const o of lsFree ? [] : opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
-            if (calculateWinner(simulatePlace(board, i, o, life).map(sq => sq.player)) === o) {
+            if (calculateWinner(lineSyms(simulatePlace(board, i, o, life))) === o) {
                 if (seen[i]) return i;
             }
         }
@@ -973,6 +982,10 @@ function chooseSkills(s, availableSkills) {
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        // F.silGlacier=3: サイレンス+絶対零度のコンボ分(両方のコスト)を貯めるまで、他のスキルに魔力を使わない
+        if (F.silGlacier === 3 && character === 'cryomancer' && !s.glacierPending[s.turn] && availableSkills.includes(28) && name !== 'silence'
+            && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
+            && remaining - c < glacierCost(s) + calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence')) return false;
         // 防壁を持つ席は発動前に魔力を温存し(F.hoard)、発動後に一気に使う（相手の魔力+4が積み上がる前に盤面を作り直す）
         if (F.hoard && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn] && remaining - c < F.hoard) return false;
         if (remaining >= c) { remaining -= c; skills.push(name); return true; }
@@ -995,12 +1008,6 @@ function chooseSkills(s, availableSkills) {
                 // (A/B: 条件を corpses>=3||吸収候補2 から変えると他キャラの勝率が -3〜-4.6pt、seed 6-8)
                 if (corpses >= 1 || absorbable >= 2) spend(npay, 'necromancy');
             }
-        }
-
-        // 凶荒の舞(相手-2)
-        if (character === 'yinYangMaster') {
-            const yyCost = cost(costsOf(s).onClickYingYangSkill, false, 'onClickYingYangSkill');
-            if (remaining >= yyCost && (oppHit > myPieces || myPieces >= 3)) spend(yyCost, 'yyDance');
         }
 
         if (character === 'tactician') {
@@ -1157,6 +1164,9 @@ function chooseSkills(s, availableSkills) {
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
             spend(poisonTokenCost, 'poisonToken');
+        } else if (character === 'yinYangMaster' && availableSkills.includes(72) && ownShikigami(s, me).length < F.shMax
+            && remaining >= cost(costsOf(s).onClickShikigamiRandom, true, 'onClickShikigamiRandom') + F.shReserve) {
+            spend(cost(costsOf(s).onClickShikigamiRandom, true, 'onClickShikigamiRandom'), 'shikigamiRandom');
         } else if (character === 'electrician' && availableSkills.includes(23) && remaining >= calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
             spend(calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'doubleChargeToken');
         } else if (character === 'electrician' && availableSkills.includes(21) && remaining >= chargeTokenCost) {
@@ -1195,6 +1205,8 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
+    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
     // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
@@ -1264,10 +1276,116 @@ function bestRescueCenter(board, me, opps, kind) {
     return bestIdx;
 }
 
+
+// ---- 陰陽師の式神 ----
+// 爆破の価値: 周囲8マスの敵陣(4ダメージで壊れるコマは3、それ以外は1)と、式神になる空きマス(0.5)
+function blastValue(s, i, me) {
+    const geo = geometryForCells(s.board.length);
+    let v = 0;
+    for (const j of geo.surroundRange(i)) {
+        const sq = s.board[j];
+        if (!sq.player) { if (!thermal.emptyBlocked(sq)) v += 0.5; continue; }
+        if (sq.player === me || isGuarded(s, sq)) continue;
+        if (thermal.isFrozen(sq)) { v += 0.2; continue; }
+        v += sq.bind <= SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
+    }
+    return v;
+}
+const ownShikigami = (s, me) => s.board.map((sq, i) => (sq.player === me && isShikigami(sq) ? i : -1)).filter((i) => i >= 0);
+// 式神を置く先: 爆破したときの価値が最も高い空きマス
+function bestShikigamiCell(s, me) {
+    let best = null, bestV = -1;
+    s.board.forEach((sq, i) => {
+        if (sq.player || thermal.emptyBlocked(sq) || shield.has(i)) return;
+        const v = blastValue(s, i, me);
+        if (v > bestV) { bestV = v; best = i; }
+    });
+    return best;
+}
+// 陰陽師の1手番の式神運用。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。何か撃ったら true
+function shikigamiTurn(s, me) {
+    let acted = false;
+    const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
+    // 百鬼夜行(73)+式神一括(71): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+    if (s.skills.includes(73) && s.skills.includes(71)) {
+        const need = costOf('onClickShikigamiFlood') + costOf('onClickShikigamiAll');
+        if (curMagic(s) >= need) {
+            const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+                : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+            if (calculateWinner(lineSyms(nb)) === me) {
+                SKILLS.shikigamiFlood(s);
+                SKILLS.shikigamiAll(s);
+                settleWinner(s);
+                return true;
+            }
+        }
+    }
+    // 式神一括(idx 71)コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら、
+    // 空きマスに式神を置いて一括で通常のコマに戻し、その手番に列を完成させる(式神は列に数えないので相手は警戒しない)
+    if (s.skills.includes(71) && !s.useShikigamiPlace) {
+        const placeCost = costOf('onClickShikigamiPlace');
+        const allCost = costOf('onClickShikigamiAll');
+        const toggleCost = costOf('onClickToggleYingYang');
+        const mode = s.yy[s.turn];
+        let bestLine = null;
+        for (const line of geometryForCells(s.board.length).winLines) {
+            let real = 0, shiki = 0; const empties = []; let bad = false;
+            for (const idx of line) {
+                const sq = s.board[idx];
+                if (sq.player === me) { if (isShikigami(sq)) shiki++; else real++; }
+                else if (sq.player) bad = true;
+                else if (thermal.emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) || shield.has(idx)) bad = true;
+                else empties.push(idx);
+            }
+            if (bad || real < F.shComboReal || shiki + empties.length === 0) continue;
+            const total = empties.length * placeCost + allCost + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+            if (curMagic(s) < total) continue;
+            if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
+        }
+        if (bestLine) {
+            if (bestLine.empties.length > 0 && s.yy[s.turn] === 'yang') SKILLS.toggleYY(s);
+            for (const cell of bestLine.empties) { SKILLS.shikigamiPlace(s); placeMove(s, cell); }
+            SKILLS.shikigamiAll(s);
+            settleWinner(s);
+            return true;
+        }
+    }
+    for (let guard = 0; guard < 3; guard++) {
+        const mine = ownShikigami(s, me);
+        const mode = s.yy[s.turn];
+        const best = mine.map((i) => ({ i, v: blastValue(s, i, me) })).sort((a, b) => b.v - a.v)[0];
+        const worth = best && best.v >= F.shBlastMin;
+        const blastCost = costOf('onClickShikigamiBlast') + (mode === 'ying' ? 1 : 0); // 陰からは転化(1)+陽のコスト+1が掛かる
+        const toggleCost = costOf('onClickToggleYingYang');
+        if (worth && curMagic(s) >= blastCost + toggleCost * (mode === 'ying' ? 1 : 0)) {
+            if (mode === 'ying') SKILLS.toggleYY(s);
+            SKILLS.shikigamiBlast(s);
+            placeMove(s, best.i);
+            acted = true;
+            continue;
+        }
+        if (mode === 'yang' && !worth && mine.length === 0) {
+            if (curMagic(s) >= toggleCost) { SKILLS.toggleYY(s); acted = true; } // 爆破する式神が無いので陰に戻って貯める
+            break;
+        }
+        if (worth) break; // 爆破できる式神があるなら、魔力を貯めて爆破に備える
+        if (mode === 'ying' && mine.length < F.shMax && curMagic(s) >= costOf('onClickShikigamiPlace') + F.shReserve) {
+            const cell = bestShikigamiCell(s, me);
+            if (cell === null) break;
+            SKILLS.shikigamiPlace(s);
+            placeMove(s, cell);
+            acted = true;
+            continue;
+        }
+        break;
+    }
+    return acted;
+}
+
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
@@ -1533,9 +1651,15 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
-    if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && curMagic(s) >= glacierCost(s)
+    // F.silGlacier: サイレンス(idx28)を先に撃って、凍結中の相手がスキルで解凍・反撃できないようにしてから撃つ。
+    // =2: 手札にサイレンスがあれば、両方の魔力が貯まるまで絶対零度を待つ
+    if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
-        SKILLS.glacier(s);
+        const gc = glacierCost(s);
+        const sc = calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence');
+        const hasSil = F.silGlacier && availableSkills.includes(28) && otherSeats(s).some((seat) => !s.silenced[seat]);
+        if (hasSil && curMagic(s) >= gc + sc) { SKILLS.silence(s); SKILLS.glacier(s); }
+        else if (curMagic(s) >= gc && !(hasSil && F.silGlacier === 2)) SKILLS.glacier(s);
     }
 
     // 毒使い インジェクション: 敵の要のコマを毒で消す (相手リーチ中でも有効。自分の勝ち手があるときは温存)
@@ -1616,6 +1740,18 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
+    // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
+    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
+        && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
+        && curMagic(s) < calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll');
+    // 陰陽師: 式神の設置・転化・爆破
+    if (curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && (holdFlood ? false : shikigamiTurn(s, me))) {
+        if (s.winner) return { move: null, turnEnded: true };
+        updateShield(s);
+        const move = getEnhancedBestMove(s);
+        return { move, turnEnded: false };
+    }
+
     // 巨人ストンプ / 魔法使い審判の日: 範囲破壊スキル (相手リーチが無いときに狙う)
     const oppReaches = opps.reduce((n, o) => n + countReaches(s.board, o), 0);
     if (oppReaches === 0) {
@@ -1638,10 +1774,10 @@ function faithfulMakeMoveInner(s) {
             }
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
-        if (ch === 'magician') {
+        if (ch === 'magician' || (ch === 'yinYangMaster' && F.yyBudLock)) {
             // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 magLockN 個）。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS
             let locked = 0;
-            while (locked < F.magLockN) {
+            while (locked < (ch === 'magician' ? F.magLockN : F.yyBudLock)) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
                 const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
                 if (!(curMagic(s) >= lockCost && budCell !== -1)) break;
@@ -1656,7 +1792,7 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
-    const skills = chooseSkills(s, availableSkills);
+    const skills = holdFlood && oppReaches === 0 ? [] : chooseSkills(s, availableSkills);
     for (const sk of skills) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };

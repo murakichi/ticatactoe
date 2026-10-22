@@ -32,6 +32,8 @@ export type SkillEffectType =
     | 'sprout'
     | 'windborne'
     | 'autumn'
+    | 'shikigami'
+    | 'shikigamiBlast'
     | 'iceBreak'
     | 'thaw'
     | 'burn'
@@ -135,6 +137,8 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
     autumn: { label: '落ち葉', bg: '#e8a24a', fg: '#3a1d00' },
+    shikigami: { label: '式神', bg: '#f1e4c3', fg: '#3a2a10' },
+    shikigamiBlast: { label: '式神爆破！', bg: '#ffb347', fg: '#3a1a00' },
     zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
     heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
     double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
@@ -440,6 +444,23 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     <>
                         {sweepParticles('🍃')}
                         {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
+            case 'shikigami':
+                // 式神: 紙の分身がひらりと現れる
+                return (
+                    <>
+                        {cellPops(effect.indexes, '📜')}
+                        {riseParticles('📜')}
+                    </>
+                );
+            case 'shikigamiBlast':
+                // 式神爆破: 紙が弾けて炎の輪が広がる
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraRed}`} />
+                        {cellPops(effect.indexes, '💥')}
+                        {riseParticles('📜')}
                     </>
                 );
             case 'autumn':
