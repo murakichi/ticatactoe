@@ -1231,6 +1231,8 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 風の落とし子+刈り入れ前夜の周回(issue #160): 2枚を手札に固定して毎手番回せるようにする
+    if (F.harvestLoop && F.harvestLoop >= 1 && hasGear(s.gears[s.turn], 'chainDiscount')) { const pair = availableSkills.filter((i) => i === 36 || i === 33); if (pair.length) return pair; }
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
