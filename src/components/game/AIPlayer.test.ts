@@ -826,3 +826,23 @@ describe('🍂落ち葉スキルのAI使用', () => {
         expect(ai.makeMove(one, 10, costs, 0, 5, [66, 0, 1], false).chargeClicks?.map((c) => c.skill) ?? []).not.toContain('onClickBonfire');
     });
 });
+
+describe('霜枯れのAI使用', () => {
+    const costs = { onClickLeafFrost: 3 } as any;
+    const leafy = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙'); put(b, 1, '💙'); put(b, 15, '⭕');
+        b[0] = { ...b[0], effects: [{ effect: '🍂' }] };
+        b[1] = { ...b[1], effects: [{ effect: '🍂' }] };
+        return b;
+    };
+    it('煉獄の鍛冶師が敵にいて、自陣の🍂マスが2つ以上あるときだけ撃つ', () => {
+        const withPyro = new AIPlayer('💙', 'you', ['⭕'], ['you', 'pyromancer']);
+        expect(withPyro.makeMove(leafy(), 10, costs, 0, 5, [69, 0, 1], false).skills).toContain('onClickLeafFrost');
+        const noPyro = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(noPyro.makeMove(leafy(), 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
+        const one = leafy();
+        one[1] = { ...one[1], effects: [] };
+        expect(withPyro.makeMove(one, 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
+    });
+});

@@ -5,11 +5,11 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..68)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 69;
+// 汎用スキルプールの大きさ (idx 0..70)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 71;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1004,6 +1004,14 @@ class AIPlayer {
         const cryo = this.character === 'cryomancer' || this.character === 'poisoner'; // 毒使いも氷結札を使う(自陣の毒マスを凍らせる。sim F.cryoPoison)
         if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
             spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
+        }
+        // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。sim/ai.js と同一）
+        if (
+            availableSkills.includes(69) &&
+            this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'pyromancer') &&
+            leafFrostTargets(board, this.playerSymbol).filter((i) => !this.shield.has(i)).length >= 2
+        ) {
+            spend(this.calculateAICost(costs.onClickLeafFrost, false, false, 'onClickLeafFrost'), 'onClickLeafFrost');
         }
         // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
         const leafToken = !tokenUsed && !cryo && this.character !== 'electrician' ? this.pickLeafToken(availableSkills, freeCells, remaining, costs) : null;

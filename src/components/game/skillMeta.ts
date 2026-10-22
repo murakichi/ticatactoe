@@ -60,6 +60,8 @@ const SKILL_META: Record<string, Meta> = {
     焚き火の唄: { icon: '🔥', category: 'control' },
     腐葉土の目覚め: { icon: '🌱', category: 'support' },
     一葉知秋: { icon: '🍂', category: 'support' },
+    霜枯れ: { icon: '🥶', category: 'control' },
+    春一番: { icon: '🌬️', category: 'support' },
     氷結: { icon: '❄', category: 'control' },
     火遁: { icon: '🔥', category: 'support' },
     火炎トークン: { icon: '🪙', category: 'token' },

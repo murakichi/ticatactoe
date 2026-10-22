@@ -469,6 +469,25 @@ export const placeFrostToken = (board: SquareInfo[], idx: number, player: Square
 export const frostfallTargets = (board: SquareInfo[], player: SquareInfo['player'], maxLife: number = FROSTFALL_MAX_LIFE): number[] =>
     board.map((sq, i) => (sq.player === player && sq.bind <= maxLife && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
+/** 春一番の対象: player のコマで❄を持つマス（昇順。🔑ロック中でも解ける） */
+export const thawTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === player && isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 春一番: player のコマの❄を全スタック解除し、解除した❄の数とマスを返す。board を直接書き換える */
+export const thawAll = (board: SquareInfo[], player: SquareInfo['player']): { stacks: number; cells: number[] } => {
+    const cells = thawTargets(board, player);
+    let stacks = 0;
+    for (const k of cells) {
+        stacks += frozenStacks(board[k]);
+        board[k] = thaw(board[k]);
+    }
+    return { stacks, cells };
+};
+
+/** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマス（昇順）。氷結中は🍂が休眠する点に注意 */
+export const leafFrostTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === player && leafStacks(sq) > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
 /** 霜降りの対象になるライフの上限 */
 export const FROSTFALL_MAX_LIFE = 2;
 

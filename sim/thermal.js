@@ -252,6 +252,19 @@ function shatter(board, cell) {
 const frostfallTargets = (board, player) =>
     board.map((sq, i) => (sq.player === player && sq.bind <= 2 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
+/** 春一番の対象: player のコマで❄を持つマスの昇順 */
+const thawTargets = (board, player) => board.map((sq, i) => (sq.player === player && isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+/** player のコマの❄を全スタック解除し、解除した❄の数とマスを返す。board を直接書き換える */
+function thawAll(board, player) {
+    const cells = thawTargets(board, player);
+    let stacks = 0;
+    for (const k of cells) { stacks += frozenStacks(board[k]); board[k] = thaw(board[k]); }
+    return { stacks, cells };
+}
+/** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマスの昇順 */
+const leafFrostTargets = (board, player) =>
+    board.map((sq, i) => (sq.player === player && leafStacks(sq) > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
 // ---- 焼畑 / 火炎トークン / 殉火 ----
 /** 焼畑: cell の🌱を全て除去し、除去した数と同じ数だけ ignite する（氷結中なら最初のスタックで氷結が全解除、残りが🔥）。🌱が無ければ n=0。board を直接書き換える */
 function swidden(board, cell, size) {
@@ -310,5 +323,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,
-    leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

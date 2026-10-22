@@ -18,7 +18,7 @@ import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -325,6 +325,7 @@ export const Game = (props: GameProps) => {
             case 'onClickBonfire': onClickBonfire(); break;
             case 'onClickMulch': onClickMulch(); break;
             case 'onClickAutumn': onClickAutumn(); break;
+            case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickShuffle': onClickShuffle(); break;
             case 'aiReplan': runAIMove(); break; // 引き直しのあと、新しい手札で計画し直す
             case 'onClickCounterMarkdown':
@@ -2197,6 +2198,7 @@ export const Game = (props: GameProps) => {
         if (d.effect > 0) parts.push(`エフェクト付与-${d.effect}`);
         if (d.token > 0) parts.push(`トークン付与-${d.token}`);
         if (d.unique > 0) parts.push(`固有スキル-${d.unique}`);
+        if (d.turn > 0) parts.push(`このターンのスキル-${d.turn}`);
         return parts.length > 0 ? `コスト軽減中: ${parts.join('・')}` : null;
     };
     const onClickBoost = () => {
@@ -2388,6 +2390,29 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return;
         freezeCells(targets, '「霜降り」を使用', undefined, '霜降り');
         spendMagic(calculateCost(seatCosts.onClickFrostfall, false, false, currentTurnPlayer, 'onClickFrostfall'), true, true, 'onClickFrostfall');
+    };
+
+    // 春一番: 自陣の❄を全て解除し、解除した❄の数だけ、このターンに打つ全スキルを軽減する（軽減札。自分自身は軽減されない）
+    const onClickSpringWind = () => {
+        const board = currentBoard.slice();
+        const { stacks, cells } = thawAll(board, currentTurnPlayer);
+        if (stacks === 0) return;
+        addLog(`「春一番」を使用（自陣の❄${stacks}個を解除・このターンのスキル-${stacks}）`);
+        flashCells(cells);
+        playEffect('discount', undefined, cells, '春一番');
+        playBurst('thaw', cells);
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickSpringWind, false, false, currentTurnPlayer, 'onClickSpringWind'), true, true, 'onClickSpringWind');
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + stacks };
+    };
+
+    // 霜枯れ: 自陣の🍂を持つコマすべてに❄（氷結中は🍂が休眠してコスト上乗せが止まる代わりに、🔥や上書きから守れる）
+    const onClickLeafFrost = () => {
+        const targets = notShielded(leafFrostTargets(currentBoard, currentTurnPlayer));
+        if (targets.length === 0) return;
+        freezeCells(targets, '「霜枯れ」を使用', undefined, '霜枯れ');
+        spendMagic(calculateCost(seatCosts.onClickLeafFrost, false, false, currentTurnPlayer, 'onClickLeafFrost'), true, true, 'onClickLeafFrost');
     };
 
     // 殉火（仮名）: 自陣のコマを1つ選んでライフをゼロにし、そのライフ以下の敵のコマ全てに🔥を付ける。手番は続く
@@ -2942,6 +2967,8 @@ export const Game = (props: GameProps) => {
         { idx: 66, onClick: onClickBonfire, buttonText: `焚き火の唄-${calculateCost(seatCosts.onClickBonfire, false, false, currentTurnPlayer, 'onClickBonfire')}`, paragraph: `敵陣の🍂をすべて取り除きます（🔑ロックと❄氷結のマスは対象外）`, disabled: checkSkillDisable(seatCosts.onClickBonfire) || bonfireTargets(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 67, onClick: onClickMulch, buttonText: `腐葉土の目覚め-${calculateCost(seatCosts.onClickMulch, false, false, currentTurnPlayer, 'onClickMulch')}`, paragraph: `自陣のランダムな🍂を1枚、🌱に変えます`, disabled: checkSkillDisable(seatCosts.onClickMulch) || mulchCandidates(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 68, onClick: onClickAutumn, buttonText: `一葉知秋-${calculateCost(seatCosts.onClickAutumn, false, false, currentTurnPlayer, 'onClickAutumn')}`, paragraph: `盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）`, disabled: checkSkillDisable(seatCosts.onClickAutumn) || autumnTargets(currentBoard).length === 0 },
+        { idx: 69, onClick: onClickLeafFrost, buttonText: `霜枯れ-${calculateCost(seatCosts.onClickLeafFrost, false, false, currentTurnPlayer, 'onClickLeafFrost')}`, paragraph: `自陣の🍂を持つコマすべてに❄を付けます（🔥や上書きから守れますが、氷結中は🍂が休眠してコスト上乗せが止まります）`, disabled: checkSkillDisable(seatCosts.onClickLeafFrost) || notShielded(leafFrostTargets(currentBoard, currentTurnPlayer)).length === 0 },
+        { idx: 70, onClick: onClickSpringWind, buttonText: `春一番-${calculateCost(seatCosts.onClickSpringWind, false, false, currentTurnPlayer, 'onClickSpringWind')}`, paragraph: `自陣の❄をすべて解除し、解除した❄の数だけ、このターンに打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickSpringWind) || thawTargets(currentBoard, currentTurnPlayer).length === 0 },
     ];
 
     return (

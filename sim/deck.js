@@ -79,6 +79,8 @@ const SKILL_CATALOG = [
     { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds' },
     { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds' },
     { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds' },
+    { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice' },
+    { idx: 70, name: '春一番', icon: '🌬️', category: 'ice' },
 ];
 
 
