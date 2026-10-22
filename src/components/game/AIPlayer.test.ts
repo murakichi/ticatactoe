@@ -665,25 +665,25 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
     it('式神一括: 自コマ1+式神置き3で列を完成できる魔力があればコンボを組む', () => {
         const b = emptyBoard();
         put(b, 0, '💙', 3);
-        const plan = mk().planShikigami(b, 15, costs, [62, 0]);
+        const plan = mk().planShikigami(b, 15, costs, [71, 0]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 14, costs, [62, 0])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 14, costs, [71, 0])?.win ?? false).toBe(false);
     });
 
     it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
         const flood = { ...costs, onClickShikigamiFlood: 7 };
         const b = emptyBoard();
         put(b, 0, '⭕', 3);
-        const plan = mk().planShikigami(b, 13, flood, [64, 62]);
+        const plan = mk().planShikigami(b, 13, flood, [73, 71]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 12, flood, [64, 62])?.win ?? false).toBe(false); // 魔力が足りない
+        expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
     });
 
-    it('コンボ札(62/64)だけを手札に固定する', () => {
+    it('コンボ札(71/73)だけを手札に固定する', () => {
         const ai = mk();
-        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 62, 3, 64])).toEqual([62, 64]);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 71, 3, 73])).toEqual([71, 73]);
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 2, 3])).toEqual([]);
     });
 
@@ -691,7 +691,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const hold = { ...costs, onClickShikigamiFlood: 7, onClickBuds: 2, onClickAddLife: 3 };
         const b = emptyBoard();
         put(b, 0, '⭕', 3);
-        const r = mk().makeMove(b, 8, hold, 3, 2, [62, 2, 0], false);
+        const r = mk().makeMove(b, 8, hold, 3, 2, [71, 2, 0], false);
         expect(r.skills).toEqual([]);
         expect(r.chargeClicks).toBeUndefined();
         // 札が無いときは従来どおり撃つ

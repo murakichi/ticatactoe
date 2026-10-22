@@ -72,9 +72,9 @@ const SKILL_CATALOG = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
-    { idx: 62, name: '式神一括', icon: '📜', category: 'shikigami' },
-    { idx: 63, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
-    { idx: 64, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
 ];
 
 
@@ -87,7 +87,7 @@ const RECOMMENDED_DECKS = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 62, 63, 64, 32],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 32],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
     poisoner: [0, 3, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],

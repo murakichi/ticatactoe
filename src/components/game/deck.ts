@@ -83,9 +83,9 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support', costKey: 'onClickRandomCast', desc: '自分のデッキ（12枚）の中から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します（手札に出ていないスキルも対象）' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support', costKey: 'onClickCounterMarkdown', desc: '次に打つスキルのコストを3軽減し、次の一手のライフを+1します。直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire', costKey: 'onClickBurnout', desc: '🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）。盤面に🔥が4つ以上あればコスト0で使えます' },
-    { idx: 62, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）' },
-    { idx: 63, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
-    { idx: 64, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -102,7 +102,7 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 62, 63, 64, 32],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 32],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
     poisoner: [0, 3, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],

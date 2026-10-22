@@ -1014,7 +1014,7 @@ function chooseSkills(s, availableSkills) {
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
             spend(poisonTokenCost, 'poisonToken');
-        } else if (character === 'yinYangMaster' && availableSkills.includes(63) && ownShikigami(s, me).length < F.shMax
+        } else if (character === 'yinYangMaster' && availableSkills.includes(72) && ownShikigami(s, me).length < F.shMax
             && remaining >= cost(costsOf(s).onClickShikigamiRandom, true, 'onClickShikigamiRandom') + F.shReserve) {
             spend(cost(costsOf(s).onClickShikigamiRandom, true, 'onClickShikigamiRandom'), 'shikigamiRandom');
         } else if (character === 'electrician' && availableSkills.includes(23) && remaining >= calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
@@ -1056,7 +1056,7 @@ function chooseLocks(s, availableSkills) {
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
-    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 62 || i === 64);
+    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
     // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
@@ -1155,8 +1155,8 @@ function bestShikigamiCell(s, me) {
 function shikigamiTurn(s, me) {
     let acted = false;
     const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
-    // 百鬼夜行(64)+式神一括(62): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
-    if (s.skills.includes(64) && s.skills.includes(62)) {
+    // 百鬼夜行(73)+式神一括(71): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+    if (s.skills.includes(73) && s.skills.includes(71)) {
         const need = costOf('onClickShikigamiFlood') + costOf('onClickShikigamiAll');
         if (curMagic(s) >= need) {
             const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
@@ -1169,9 +1169,9 @@ function shikigamiTurn(s, me) {
             }
         }
     }
-    // 式神一括(idx 62)コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら、
+    // 式神一括(idx 71)コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら、
     // 空きマスに式神を置いて一括で通常のコマに戻し、その手番に列を完成させる(式神は列に数えないので相手は警戒しない)
-    if (s.skills.includes(62) && !s.useShikigamiPlace) {
+    if (s.skills.includes(71) && !s.useShikigamiPlace) {
         const placeCost = costOf('onClickShikigamiPlace');
         const allCost = costOf('onClickShikigamiAll');
         const toggleCost = costOf('onClickToggleYingYang');
@@ -1493,7 +1493,7 @@ function faithfulMakeMoveInner(s) {
 
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
     const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
-        && (F.floodHold >= 2 ? (s.skills.includes(62) || s.skills.includes(64)) : (s.skills.includes(62) && s.skills.includes(64)))
+        && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll');
     // 陰陽師: 式神の設置・転化・爆破
     if (curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && (holdFlood ? false : shikigamiTurn(s, me))) {

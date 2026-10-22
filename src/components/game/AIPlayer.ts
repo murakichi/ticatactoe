@@ -9,7 +9,7 @@ import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canB
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 65;
+export const SKILL_POOL_SIZE = 74;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -655,8 +655,8 @@ class AIPlayer {
     ): number[] {
         // A/B検証の結果、固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが柔軟性を削いで不利だったため無効化。
         // 有益だったキャラ(軍師=トークン固定 / あなた / ネクロ=中立)のみロックする。
-        // 陰陽師は百鬼夜行(64)+式神一括(62)のコンボ札だけを手札に固定して、揃うまで持ち続ける（sim/ai.js の floodLock=1）
-        if (this.character === 'yinYangMaster') return availableSkills.filter((i) => i === 62 || i === 64);
+        // 陰陽師は百鬼夜行(73)+式神一括(71)のコンボ札だけを手札に固定して、揃うまで持ち続ける（sim/ai.js の floodLock=1）
+        if (this.character === 'yinYangMaster') return availableSkills.filter((i) => i === 71 || i === 73);
         if (this.character === 'giant' || this.character === 'magician') {
             return [];
         }
@@ -938,7 +938,7 @@ class AIPlayer {
         if (!tokenUsed) {
             if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
                 spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
-            } else if (this.character === 'yinYangMaster' && availableSkills.includes(63)
+            } else if (this.character === 'yinYangMaster' && availableSkills.includes(72)
                 && board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length < SH_MAX
                 && remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + SH_RESERVE) {
                 spend(this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
@@ -1188,7 +1188,7 @@ class AIPlayer {
 
     /**
      * 陰陽師の1手番の式神運用 (sim/ai.js shikigamiTurn と同一)。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。
-     * 式神一括（手札に idx 62）は、通常のコマに戻して列が完成するようにコンボで組む。スキル→対象クリックの列と、それを反映した盤面を返す。何もしないなら null
+     * 式神一括（手札に idx 71）は、通常のコマに戻して列が完成するようにコンボで組む。スキル→対象クリックの列と、それを反映した盤面を返す。何もしないなら null
      */
     planShikigami(board: SquareInfo[], magic: number, costs: Record<keyof SkillCosts, number>, availableSkills: number[]): { clicks: { skill: string; target?: number }[]; board: SquareInfo[]; win: boolean } | null {
         const me = this.playerSymbol;
@@ -1203,8 +1203,8 @@ class AIPlayer {
         };
         const mine = (): number[] => b.map((sq, i) => (sq.player === me && isShikigami(sq) ? i : -1)).filter((i) => i >= 0);
         try {
-            // 百鬼夜行(64)+式神一括(62): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
-            if (availableSkills.includes(64) && availableSkills.includes(62)) {
+            // 百鬼夜行(73)+式神一括(71): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+            if (availableSkills.includes(73) && availableSkills.includes(71)) {
                 this.yinYangMode = mode;
                 const need = this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + this.calculateAICost(costs.onClickShikigamiAll, false, false, 'onClickShikigamiAll');
                 if (m >= need) {
@@ -1217,7 +1217,7 @@ class AIPlayer {
                 }
             }
             // 式神一括コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら一手番で完成させる
-            if (availableSkills.includes(62)) {
+            if (availableSkills.includes(71)) {
                 const placeCost = costOf('onClickShikigamiPlace');
                 const allCost = costOf('onClickShikigamiAll');
                 const toggleCost = costOf('onClickToggleYingYang');
@@ -1322,8 +1322,8 @@ class AIPlayer {
             }
         }
 
-        // 陰陽師: コンボ札（62/64）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
-        const holdFlood = this.character === 'yinYangMaster' && (availableSkills.includes(62) || availableSkills.includes(64))
+        // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
+        const holdFlood = this.character === 'yinYangMaster' && (availableSkills.includes(71) || availableSkills.includes(73))
             && magic < this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + this.calculateAICost(costs.onClickShikigamiAll, false, false, 'onClickShikigamiAll');
         // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
         if (this.character === 'yinYangMaster' && !holdFlood) {
