@@ -82,3 +82,8 @@
 1 poisoner 73.9 / **2 magician 58.2** / 3 tactician 56.7 / 4 necromancer 55.8 / 5 cryomancer 53.6 / 6 pyromancer 52.4。差 15.7pt。
 ネクロマンサーが lastStand 採用で4位に浮上。魔法使いは2位維持だが 61.2→58.2。1位 poisoner（lastStand+sturdy）は gear/deck/AI の範囲では崩せない
 （対 poisoner 25〜28%。メタ探索・surplusJudge・budSurplus・judgeMin・magLock など不採用）。#124（poisoner の調整案）待ちで **blocked**。master で poisoner が調整されたら step 8 から再開。
+
+## 試行: 対 poisoner のデッキ 2〜3枚同時入れ替え探索 — 不採用（winner's curse）
+swap3 80近傍・swap2 80近傍（対 poisoner seed2/100）。最良は swap3 の 37.0%（基準26〜28）、swap2 は 32.0%。
+上位2デッキを seed6/300 で再測定: 現デッキ 29.1 / swap3 1位 28.8 / swap3 2位 26.0 → 差なし（100試合の+10ptは80近傍の最大値のノイズ）。
+紅葉狩り(64)など新カードを入れても対 poisoner は動かない。gear・deck・AI の範囲で poisoner（lastStand+sturdy）は崩せない結論を維持。blocked（#124）。
