@@ -1007,3 +1007,33 @@ describe('霜枯れのAI使用', () => {
         expect(withPyro.makeMove(one, 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
     });
 });
+
+describe('ネクロマンサー: 割引札のロックと対陰陽師の列カバー', () => {
+    // seat0=💙 ネクロ / seat1=⭕ 陰陽師
+    const mk = (oppChar: 'yinYangMaster' | 'giant') => new AIPlayer('💙', 'necromancer', ['⭕'], ['necromancer', oppChar]);
+
+    it('割引札(特売53・固有割引57・大特価58)を手札に固定する(降霊のコストを圧縮するため)', () => {
+        const locks = mk('giant').chooseLocks(emptyBoard(), 0, 5, [3, 57, 53, 58]);
+        expect(locks).toHaveLength(2); // 最大2つ
+        locks.forEach((i) => expect([53, 57, 58]).toContain(i));
+    });
+
+    it('割引札以外はこれまでどおり(盤面で価値が低ければ固定しない)', () => {
+        expect(mk('giant').chooseLocks(emptyBoard(), 0, 5, [27, 28])).toEqual([]);
+    });
+
+    it('相手に陰陽師がいるかを見分ける', () => {
+        expect((mk('yinYangMaster') as any).facingYinYang()).toBe(true);
+        expect((mk('giant') as any).facingYinYang()).toBe(false);
+    });
+
+    it('自コマが入っている勝ち筋の列の数を数える(百鬼夜行→式神一括は自コマが入った列には効かない)', () => {
+        const ai = mk('yinYangMaster') as any;
+        expect(ai.coveredLines(emptyBoard())).toBe(0);
+        const b = emptyBoard();
+        put(b, 5, '💙'); // 4x4: 行1・列1・主対角の3本
+        expect(ai.coveredLines(b)).toBe(3);
+        put(b, 6, '💙'); // 行1は既に数え済み。列2と反対角が増える
+        expect(ai.coveredLines(b)).toBe(5);
+    });
+});
