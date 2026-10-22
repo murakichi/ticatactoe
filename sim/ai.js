@@ -835,7 +835,8 @@ function ownOffense(board, me) {
     return sc;
 }
 function budLoop(s, me, availableSkills) {
-    if (!availableSkills.includes(33) || !availableSkills.includes(36)) return;
+    // F.budForce=1: 手札に無くても撃てるものとして、ループの上限値(2枚が常に手札にある場合)を測る
+    if (!F.budForce && (!availableSkills.includes(33) || !availableSkills.includes(36))) return;
     for (let i = 0; i < F.budLoop; i++) {
         const before = curMagic(s);
         const sow = calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
