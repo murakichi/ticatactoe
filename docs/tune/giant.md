@@ -2,9 +2,9 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 81ad8ce
 - 現在の推奨設定: gears=[lastStand, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=stompMin=1,stompDef=1,auraSim=1(既定)
-- 基準線: 環境勝率 56.6% / 4位 / 1位 poisoner 71.5%, 2位 magician 58.9%   (--rank seed=3 games=100, master 81ad8ce)
+- 基準線: 環境勝率 50.9% / 6位 / 1位 poisoner 70.7%, 2位 magician 56.4%   (--rank seed=3 games=100, master 取り込み後)
 - 連続不採用回数: 1
-- 状態: running(master 取り込みを受けて再開。トップ未達)
+- 状態: running(トップ未達。1位poisonerが突出)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
