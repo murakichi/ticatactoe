@@ -2,6 +2,7 @@ import AIPlayer from './AIPlayer';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Player } from '../../types/Player';
 import { calculateWinner } from '../../util';
+import { geometryForCells } from './boardGeometry';
 
 const emptyBoard = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
 const put = (b: SquareInfo[], i: number, player: Player, bind = 5): void => {
@@ -1005,5 +1006,38 @@ describe('霜枯れのAI使用', () => {
         const one = leafy();
         one[1] = { ...one[1], effects: [] };
         expect(withPyro.makeMove(one, 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
+    });
+});
+
+describe('雷霆の巫の対陰陽師(百鬼夜行→式神一括)対策', () => {
+    // 自陣のコマが1つも無い勝ち筋の線の数
+    const uncoveredLines = (b: SquareInfo[], me: Player): number =>
+        geometryForCells(b.length).winLines.filter((line) => !line.some((k) => b[k].player === me)).length;
+
+    // 💙が1,6 / ⭕が8,12 の盤面。線カバー無しだと自コマの無い線が残る手を選ぶ位置（探索で見つけた）
+    const setup = () => {
+        const b = emptyBoard();
+        [1, 6].forEach((i) => put(b, i, '💙'));
+        [8, 12].forEach((i) => put(b, i, '⭕'));
+        return b;
+    };
+    const mk = (opponents: string[]) => new AIPlayer('💙', 'electrician', ['⭕'], opponents as any);
+    const afterUncovered = (b: SquareInfo[], i: number) => { const c = b.map((sq) => ({ ...sq })); c[i] = { player: '💙', bind: 4, effects: [] }; return uncoveredLines(c, '💙'); };
+
+    it('相手に陰陽師がいると、自コマの無い線が最も少なくなる手を選ぶ（重み0だと選ばない）', () => {
+        const b = setup();
+        const best = Math.min(...b.map((sq, i) => (sq.player ? Infinity : afterUncovered(b, i))));
+        const off = mk(['electrician', 'yinYangMaster']);
+        off.floodCoverWeight = 0;
+        expect(afterUncovered(b, off.getBestMove(b, 4) as number)).toBeGreaterThan(best);
+        const on = mk(['electrician', 'yinYangMaster']);
+        expect(afterUncovered(b, on.getBestMove(b, 4) as number)).toBe(best);
+    });
+
+    it('相手に陰陽師がいなければ線カバーは効かない（重みの有無で同じ手）', () => {
+        const b = setup();
+        const off = mk(['electrician', 'tactician']);
+        off.floodCoverWeight = 0;
+        expect(mk(['electrician', 'tactician']).getBestMove(b, 4)).toBe(off.getBestMove(b, 4));
     });
 });
