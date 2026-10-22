@@ -1349,8 +1349,10 @@ function comboPlan(s, assumeMd = false) {
         }
         return { m: bm, total: bt };
     };
+    // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
+    const nAfterFlood = ownShikigami(s, curPlayer(s)).length + s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length;
     const f = best(cost('onClickShikigamiFlood'));
-    const a = best(cost('onClickShikigamiAll'));
+    const a = best(calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
     return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
 }
 // 相手が次の一手で2つ以上のリーチ（フォーク）か即勝ちを作れるか。チャージで駒を置かない手番の安全確認
@@ -1392,7 +1394,8 @@ function shikigamiTurn(s, me) {
     // 空きマスに式神を置いて一括で通常のコマに戻し、その手番に列を完成させる(式神は列に数えないので相手は警戒しない)
     if (s.skills.includes(71) && !s.useShikigamiPlace) {
         const placeCost = costOf('onClickShikigamiPlace');
-        const allCost = costOf('onClickShikigamiAll');
+        const ownShiki = ownShikigami(s, me).length;
+        const allCostFor = (n) => calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, n), false, false, 'onClickShikigamiAll'); // 式神1体あたり
         const toggleCost = costOf('onClickToggleYingYang');
         const mode = s.yy[s.turn];
         let bestLine = null;
@@ -1406,7 +1409,7 @@ function shikigamiTurn(s, me) {
                 else empties.push(idx);
             }
             if (bad || real < F.shComboReal || shiki + empties.length === 0) continue;
-            const total = empties.length * placeCost + allCost + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+            const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
             if (curMagic(s) < total) continue;
             if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
         }
