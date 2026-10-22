@@ -5,6 +5,7 @@ import * as path from 'path';
 import { render } from '@testing-library/react';
 import { BoardEffects, SkillEffectType } from './BoardEffects';
 import { SKILL_CATALOG } from './deck';
+import { UNIQUE_EFFECT_TYPES } from './UniqueEffects';
 
 // 「全スキルにアニメーションがある」ことを守る登録表。
 // スキルごとに、発動時に Game.tsx の playEffect で出す演出の種類を書く。
@@ -104,8 +105,8 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
     式神設置: 'shikigami',
     式神爆破: 'shikigamiBlast',
     蘇生: 'necromancy',
-    ミアズマ: 'poison',
-    帯電拡散: 'zap',
+    ミアズマ: 'miasma',
+    帯電拡散: 'chainZap',
     業火: 'inferno',
     絶対零度: 'glacier',
 };
@@ -191,5 +192,26 @@ describe('全スキルに演出がある', () => {
     it('バナーの文言は playEffect の label で上書きできる(同じ演出を共有するスキルの名前出し分け)', () => {
         const { container } = render(<BoardEffects effect={{ type: 'token', indexes: [1], label: 'ダブルトークン', nonce: 1 }} size={4} />);
         expect(container.querySelector('[class*="banner"]')?.textContent).toBe('ダブルトークン');
+    });
+
+    // 固有スキルは「予兆 → 本体 → 余波」の多段演出。汎用の「オーラ+パーティクル」より要素が多いこと
+    it.each(UNIQUE_EFFECT_TYPES.filter((t) => t !== 'yinyang'))('固有スキル %s の演出は多段(要素が十分ある)で、時間差(animation-delay)も付く', (type) => {
+        const { container } = render(<BoardEffects effect={{ type, index: 5, indexes: [0, 5, 10], sources: [1, 2], nonce: 1 }} size={4} />);
+        expect(container.querySelectorAll('div,span').length).toBeGreaterThanOrEqual(10);
+        const delayed = Array.from(container.querySelectorAll<HTMLElement>('[style]')).filter((el) => parseFloat(el.style.animationDelay || '0') > 0);
+        expect(delayed.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('陰陽転化は variant の文字(陰/陽)を太極図に出す', () => {
+        const { container } = render(<BoardEffects effect={{ type: 'yinyang', variant: '陽', nonce: 1 }} size={4} />);
+        expect(container.textContent).toContain('陽');
+    });
+
+    it.each([4, 5, 7, 10])('固有スキルの演出は盤面サイズ %i でも描画できる', (size) => {
+        for (const type of UNIQUE_EFFECT_TYPES) {
+            const { container, unmount } = render(<BoardEffects effect={{ type, index: size + 1, indexes: [0, size + 1, size * size - 1], sources: [1], nonce: 1 }} size={size} />);
+            expect(container.querySelectorAll('div,span').length).toBeGreaterThan(5);
+            unmount();
+        }
     });
 });
