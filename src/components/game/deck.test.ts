@@ -96,6 +96,17 @@ describe('デッキ', () => {
         expect(variedAIDeck('you', lcg(1), 0)).toEqual(recommendedDeck('you')); // 入れ替え0なら推奨そのまま
     });
 
+    it('variedAIDeck: 核のカード(CORE_CARDS)は入れ替えない（陰陽師は 特売/式神一括/百鬼夜行 が常に残る）。sim/deck.js と同じ結果', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const simDeck = require('../../../sim/deck');
+        for (let seed = 1; seed <= 60; seed++) {
+            const d = variedAIDeck('yinYangMaster', lcg(seed));
+            expect(isValidDeck(d)).toBe(true);
+            [53, 71, 73].forEach((c) => expect(d).toContain(c));
+            expect(simDeck.variedAIDeck('yinYangMaster', lcg(seed))).toEqual(d);
+        }
+    });
+
     it('すべての汎用スキルにコストが定義されている（デッキに入れて撃てる）', () => {
         expect(Object.keys(skillCosts).length).toBeGreaterThan(CATALOG_SIZE);
     });
