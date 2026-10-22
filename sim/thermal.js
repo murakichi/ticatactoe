@@ -79,8 +79,9 @@ function ignite(board, cells, size, n = 1, keepBuds) {
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くと🌱は燃えて消える（keepBuds が真=冬至の種子のガード中は消えない）
-            board[k] = { ...board[k], effects: [...(keepBuds && keepBuds(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥が付くと🌱と🍂は燃えて消える（keepBuds が真=冬至の種子のガード中は🌱だけ消えない）
+            const guarded = !!(keepBuds && keepBuds(board[k]));
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
@@ -145,6 +146,51 @@ const sowCandidates = (board, player) =>
 /** picks の各添字（重複可）に🌱を1つずつ足す。board を直接書き換える */
 function sow(board, picks) {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+}
+
+// ---- 🍂落ち葉（🌱バッズの対）。自陣にあると、相手全員のスキルコストが落ち葉の数だけ増える。src/components/game/thermal.ts と同じ ----
+const leafStacks = (sq) => sq.effects.filter((e) => e.effect === '🍂').length;
+/** 効力を発揮している🍂の数。氷結中のマスの🍂は消えないが休眠する */
+const activeLeaves = (sq) => (isDormant(sq) ? 0 : leafStacks(sq));
+/** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数 */
+const leafSurcharge = (board, player) => board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+/** idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
+function placeLeafToken(board, idx, player, bind, n = 1) {
+    board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' })) };
+}
+/** 焚き火の唄の対象: player 以外のコマのうち、🍂を持ち、🔑ロックも❄氷結もないマス */
+const bonfireTargets = (board, player) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !hasLock(sq) && !isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+/** 対象マスの🍂を全て除去。除去枚数とマスを返す。board を直接書き換える */
+function bonfire(board, player) {
+    const cells = bonfireTargets(board, player);
+    let n = 0;
+    for (const k of cells) { n += leafStacks(board[k]); board[k] = without(board[k], '🍂'); }
+    return { n, cells };
+}
+/** 腐葉土の目覚めの候補: player のコマの🍂を1枚ずつ数えた添字の列 */
+const mulchCandidates = (board, player) =>
+    board.flatMap((sq, i) => (sq.player === player ? Array(leafStacks(sq)).fill(i) : []));
+/** cell の🍂を1枚だけ🌱に変える。🍂が無ければ false */
+function mulch(board, cell) {
+    const at = board[cell].effects.findIndex((e) => e.effect === '🍂');
+    if (at < 0) return false;
+    const effects = board[cell].effects.slice();
+    effects[at] = { effect: '🌱' };
+    board[cell] = { ...board[cell], effects };
+    return true;
+}
+/** 一葉知秋の対象: 🌱を持ち、🔥が付いていないマス */
+const autumnTargets = (board) => board.map((sq, i) => (budStacks(sq) > 0 && flameStacks(sq) === 0 ? i : -1)).filter((i) => i !== -1);
+/** 盤面の🌱をすべて🍂に変える（敵味方問わず）。変えた枚数とマスを返す。board を直接書き換える */
+function autumn(board) {
+    const cells = autumnTargets(board);
+    let n = 0;
+    for (const k of cells) {
+        n += budStacks(board[k]);
+        board[k] = { ...board[k], effects: board[k].effects.map((e) => (e.effect === '🌱' ? { effect: '🍂' } : e)) };
+    }
+    return { n, cells };
 }
 
 /** 浄化で除去する状態異常 */
@@ -264,4 +310,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,
+    leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

@@ -72,6 +72,13 @@ const SKILL_CATALOG = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
+    { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds' },
+    { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds' },
+    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds' },
+    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds' },
+    { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds' },
+    { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds' },
+    { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds' },
 ];
 
 
