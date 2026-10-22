@@ -21,6 +21,7 @@
 const readline = require('readline');
 const engine = require('./engine');
 const ai = require('./ai');
+const inflationMod = require('./inflation');
 const { HEART, CIRCLE, CHARACTERS, SKILLS, SYMBOLS, MAX_PLAYERS } = engine;
 
 function parseArgs(argv) {
@@ -38,13 +39,16 @@ function parseArgs(argv) {
 
 // ---------- batch simulation (balance analysis) ----------
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
-function runGame(chars, rng, modes, size) {
+function runGame(chars, rng, modes, size, tracker) {
     const modeOf = (seat) => (Array.isArray(modes) ? modes[seat] : modes);
     const s = engine.newGame({ chars, rng, size });
+    const trk = tracker ? tracker(s) : null;
+    let seenTurn = -1;
     // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
     const limit = Math.max(400, 200 * chars.length);
     let guard = 0;
     while (!s.winner && guard++ < limit) {
+        if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
         const result = ai.makeMove(s, modeOf(s.turn));
         if (result.turnEnded) continue;
         if (result.move === null) break;
@@ -52,6 +56,7 @@ function runGame(chars, rng, modes, size) {
         engine.placeMove(s, result.move);
         if (s.currentTurn === before) break;
     }
+    if (trk) trk.onTurnChange(s);
     return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn };
 }
 
@@ -115,6 +120,34 @@ function multiSim(args) {
     if (!m.chars || !Array.isArray(m.chars)) {
         console.log('## キャラ別の勝率 (出場1回あたり。均等なら ' + (100 / players).toFixed(1) + '%)');
         for (const c of CHARACTERS) console.log(`  ${pad(c, 14)} ${m.charWinRate[c] == null ? 'n/a' : (m.charWinRate[c] * 100).toFixed(1) + '%'}`);
+    }
+}
+
+// ---------- 魔力インフレ指標 (sim/inflation.js) ----------
+function inflation(args) {
+    const players = parseInt(args.players || '2', 10);
+    const games = parseInt(args.games || '200', 10);
+    const mode = args.mode || 'faithful';
+    const baseSeed = parseInt(args.seed || '1', 10);
+    const size = args.size ? parseInt(args.size, 10) : undefined;
+    const fixed = args.chars ? args.chars.split(',') : null;
+    const pickRng = engine.makeRng(baseSeed * 2654435 + players);
+    const all = [];
+    for (let g = 0; g < games; g++) {
+        const chars = pickChars(players, fixed, pickRng);
+        const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
+        let t;
+        runGame(chars, rng, mode, size, (s) => (t = inflationMod.createTracker(s)));
+        all.push(t.rows);
+    }
+    const out = { players, boardSize: size != null ? size : engine.boardSizeFor(players), mode, games, seed: baseSeed, chars: fixed || 'random', ...inflationMod.summarize(all, inflationMod.referenceCost(engine.skillCosts), args.bucket ? parseInt(args.bucket, 10) : undefined) };
+    if (args.json) return console.log(JSON.stringify(out, null, 2));
+    const f = (x, d = 2) => (x == null ? 'n/a' : x.toFixed(d));
+    console.log(`# 魔力インフレ  ${players}人 ${out.boardSize}x${out.boardSize}  games=${games}  AI=${mode}  seed=${baseSeed}  基準コスト=${f(out.referenceCost, 1)}`);
+    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)\n`);
+    console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
+    for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
+        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
     }
 }
 
@@ -365,6 +398,7 @@ const sub = args._[0] || 'help';
 if (sub === 'sim') sim(args);
 else if (sub === 'auto') auto(args);
 else if (sub === 'play') play(args);
+else if (sub === 'inflation') inflation(args);
 else if (sub === 'metrics') metrics(args);
 else if (sub === 'bench') bench(args);
 else {
@@ -372,6 +406,7 @@ else {
   node sim/cli.js play    [--me 💙|⭕] [--mychar C] [--aichar C] [--mode capture] [--seed N]
   node sim/cli.js sim     [--games 500] [--mode faithful|capture|random] [--seed N] [--pair h,c]
   node sim/cli.js auto    [--hchar C] [--cchar C] [--mode faithful] [--seed N]
+  node sim/cli.js inflation [--players N] [--games 200] [--size N] [--chars ..] [--bucket 50] [--json]   # 魔力インフレ指標
   node sim/cli.js metrics [--games 800] [--mode faithful] [--seed N]   # balance snapshot as JSON
   node sim/cli.js bench   [--games 1500] [--char you] [--seed N]       # AI strength vs random / head-to-head
   node sim/cli.js sim     --players N [--games 300] [--chars a,b,..]   # 多人数(2〜8人)の席別・キャラ別勝率
