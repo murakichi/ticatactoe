@@ -5,17 +5,18 @@ module.exports = {
         "you": 5,
         "magician": 4,
         "tactician": 5,
-        "giant": 8,
+        "giant": 10,
         "yinYangMaster_yang": 7,
         "yinYangMaster_ying": 4,
         "poisoner": 5,
         "electrician": 6,
         "cryomancer": 5,
-        "pyromancer": 5,
+        "pyromancer": 6,
         "default": 5
     },
     "lifeStd": 3,
-    "giantSkipModulo": 5,
+    // 巨人が何ラウンドに1回行動するか。src/components/game/giantTurn.ts の GIANT_ACT_EVERY と同じ値に。1にすると休みなし（A/B検証用）
+    "giantActEvery": 2,
     // 汎用スキルプールの大きさ。21 -> 23 (#39) -> 27 (#40) -> 29 (ヘイルメアリー・サイレンス) -> 30 (毒霧) -> 32 (氷結・火炎付与)
     "poolSize": 49,
     // ライフ減衰を「手番1周ごとに1回」にする最小人数 (issue #30)。src/components/game/decay.ts の DECAY_PER_ROUND_MIN_PLAYERS と同じ値に。
@@ -62,7 +63,7 @@ module.exports = {
         "doubleFrostTokenCost": 6,
         "shatterCost": 4,
         "frostfallCost": 3,
-        "infernoCost": 9
+        "infernoCost": 7
     },
     // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
     "proliferate": {

@@ -237,16 +237,16 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
  */
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
-    tactician: ['sturdy', 'priceWreck'],
-    magician: ['sturdy', 'ironLock'],
-    giant: ['titanCost', 'sturdy'],
+    tactician: ['lastStand', 'priceWreck'],
+    magician: ['lastStand', 'ironLock'],
+    giant: ['afterglow', 'sturdy'],
     yinYangMaster: ['lastStand', 'sturdy'],
-    necromancer: ['vengeance', 'sturdy'],
-    poisoner: ['toxicBloom', 'sturdy'],
+    necromancer: ['vengeance', 'lastStand'],
+    poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['afterglow', 'sturdy'],
-    pyromancer: ['sturdy', 'harvest'],
+    pyromancer: ['emptyLock', 'harvest'],
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>

@@ -1,13 +1,22 @@
 # tune-top: necromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: (未到達。取り込み済み master=edf73fb)
-- 現在の推奨設定: 既定(推奨ギア/デッキそのまま)
+- 最後に検証したmaster: (未到達。取り込み済み master=4dad41d)
+- 現在の推奨設定: gears=[vengeance,lastStand] deck=既定 AIフラグ=なし
 - 基準線: 環境勝率 42.6% / 9位 / 1位 tactician 67.8%  (--rank, seed 1, games 60, 2026-10-20)
-- 連続不採用回数: 6 (種類: gear, deck, synergy, strategy, meta, joint=6種類を各1回測定済み)
-- 状態: blocked(issue #92)  # ユーザー指示で探索続行→AIノブ3件(necroReserveAll/necroMin/necroFeed)も不採用で再停止
+- 最新master(4dad41d)での順位: 7位 40.9% / 1位 electrician 66.8% (--rank seed1 games60, 2026-10-21)。42.6%(9位)から順位は上がったが、他キャラの変動(poisoner/you/pyromancerの低下)による相対的なもの
+- 基準線(採用後, master 3bc89db): 基本 3位 58.0%(1位 magician 64.3%) / envDeck varied 2位 59.9% / oppGears none 1位 72.3% / oppGears random 2位 66.4%  (--rank seed3 games200)
+- 最新環境(master 349cb36, --rank seed1 games100): 1 poisoner 76.3% / 2 magician 61.9% / 3 necromancer 55.1% / 4 tactician 54.9%。対キャラ別(seed2 games200): poisoner 18% が唯一の大敗、他は46〜89%
+- 連続不採用回数: 0 (採用で戻した)
+- 状態: blocked(issue #124, #92)  # master 349cb36 で 3位 55.1%、1位 poisoner 76.3%(防壁採用で突出)。対poisoner 14〜18%は構造的な天敵
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 16 | メタ(対poisoner) | 2枚同時入替40近傍(opp=poisoner, seed1 games100) | 基準14〜18%に対し最良19.0%±7.7。誤差内 | 不採用 |
+| 15 | メタ(対poisoner) | 血清(17)を死に札と入替3案(opp=poisoner, seed3 games150) | 基準14.0%に対し14.0/14.7/14.0%。血清は撃たれず無効 | 不採用 |
+| 14 | メタ(対poisoner) | ギア1枠差し替え30近傍(opp=poisoner, seed1 games120) | 基準18.3%±6.9に対し最良 ironLock/lastStand 25.2%±7.8(z≈1.3)。誤差内 | 不採用 |
+| 13 | strategy(AI) | ユーザー案の二段構え: lsPhase(防壁発動まで🌱系/ロック/ライフだけ撃って魔力を貯める)、lsRedraw(発動後に撃てる札が出るまで1コストで引き直し)(seed1 games200) | 基準56.7%±2.1に対し lsPhase 57.3%(+0.6) / lsRedraw 55.1%(-1.6) / 両方 55.8%(-0.9)。対poisoner 17〜18%は不変。発動後の敗因は札の不足でなく、対poisoner=魔力2.4しか無い/対tactician=手番2.3回で決着、のどちらか。分岐削除 | 不採用 |
+| 12 | strategy(AI) | 防壁未発動の間の立ち回り lsPlan=1(相手の勝ち手を塞がない)/2(+降霊以外の支払いを全停止)/3(+自陣投資系のみ停止) (seed1 games200) | 基準56.7%±2.1に対し 57.3 / 57.8 / 57.4%(+0.6〜+1.1pt, 誤差内)。防壁は塞ぐ/塞がないに関わらず63〜84%の試合で発動済みで、勝敗は発動後(poisoner 0%, tactician 20%, magician 44%, giant 85%)。分岐削除 | 不採用 |
+| 11 | gear | 新ギア4種(master 3bc89db)を含む1枠差し替え近傍(seed1 games60)→再測定(seed2 games200) | 基準37.8%に対し vengeance+lastStand 57.0%(+19.2pt, ±2.1)、lastStand+sturdy 53.8%。他の新ギア(ruinSurge/colorGarden/ailmentPact)は基準以下。悪化-15pt超なし(poisoner 26→23%)。推測: 自陣全消滅で死体が一気に貯まり降霊が回る(未検証) | **採用** gears=[vengeance,lastStand] |
 | 10 | strategy(AI) | necroFeed: 負けていなくてもスラッシュ系を撃って死体を増やす(seed1 games150) | 43.0→42.9%(±2.6)。対キャラ別も不変。分岐削除 | 不採用 |
 | 9 | strategy(AI) | necroMin: 降霊の最低死体数 1/2/3/4 (seed1 games150) | 43.0 / 41.2 / 37.1 / 35.5%(±2.6)。待つほど悪化=即発動が最適。分岐削除 | 不採用 |
 | 8 | joint | ギアを vengeance+afterglow に変えてデッキ1枚30近傍(seed1 games60) | 最良44.1%±4.1。ギア単独(#1)で-6ptだったafterglowをデッキで補えず、現推奨(45.5%)を超えない | 不採用 |
@@ -20,3 +29,14 @@
 | 1 | gear | 1枠差し替え近傍スキャン(vengeance,sturdy から30通り, seed1 games60) | 基準45.5%に対し最良 afterglow/sturdy 39.5%(-6.0pt)。全近傍が基準以下 | 不採用 |
 ## 次に試す候補(軸の順 gear → deck → strategy を巡回)
 - (gear,deck1枚,synergy 済) (6種類測定済み。行き詰まり判定へ)(ギア×デッキ) → strategy(降霊の撃ち所を増やすAIノブ、sim/ai.js necromancer節)。(--swap 3) → strategy(probe-usage) → メタ(対tactician 23%, 対yinYang 27%, 対giant 33%) → joint
+
+## 診断メモ(2026-10-21, gears=[vengeance,lastStand])
+- 防壁の発動率: vs tactician 75% / poisoner 84% / giant 63% / magician 69%(150試合, 平均発動は8〜15手目)。発動前に決着した試合は全勝。
+- 発動後の勝率: poisoner 0% / tactician 20% / magician 44% / giant 85%。相手の魔力+4・ライフ+2の下で、自陣ゼロから立て直せるかが勝敗。
+- 発動後に負けた試合(vs poisoner 62/80): 発動直後の自魔力2.4・生き残る自手番4.7回。vs tactician(45/80): 発動直後10.0→敗北時7.0(使い残し)・自手番2.3回。
+- 次の焦点: 発動後の立ち回り(特に対 poisoner 23%・tactician 47%)。降霊を発動直後に撃てているか、発動後の死体数と降霊の効果を測る。
+
+## 診断メモ2(2026-10-22, 対poisoner)
+- 対poisoner 150試合: 79%が「ネクロ防壁発動・poisoner防壁なし→ネクロ負け」平均24手。poisoner が先に列を揃えて防壁を発動させ、そのまま押し切る。
+- 防壁を受ける側の決着時魔力: poisoner約52 / magician約41 / cryomancer約19 / electrician約15 (受ける側AIが魔力+4を使い切れていない)。
+- 一強(poisoner)を覆せない状況なので、調整案は issue #124 に追記済み。

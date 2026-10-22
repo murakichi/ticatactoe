@@ -145,7 +145,7 @@ const skillCosts = {
     onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
-    onClickStomp: 6,
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
@@ -225,6 +225,16 @@ const skillCosts = {
     onClickRandomCast: 2, // 福引き(idx 59)
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
+    // 🍂落ち葉系の汎用スキル(idx 62-68)。src/components/game/skillCosts.ts と同値
+    onClickLeafToken: 3,
+    onClickTwinLeafToken: 5,
+    onClickDoubleLeafToken: 6,
+    onClickBothLeafToken: 4,
+    onClickBonfire: 3,
+    onClickMulch: 2,
+    onClickAutumn: 4,
+    onClickLeafFrost: 3, // 霜枯れ(idx 69)
+    onClickSpringWind: 2, // 春一番(idx 70)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -612,7 +622,9 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key);
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
-    return seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
+    const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
+    // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
+    return discounted + thermal.leafSurcharge(s.board, SYMBOLS[seat]);
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
 function noteSkillUsed(s) {
@@ -686,17 +698,23 @@ function budsCount(board, player, guarded = false) {
         .filter((e) => e.effect === '🌱').length;
 }
 
-// 次の手番の席 (Game.tsx judgeNextSeat。post-increment な currentTurn・直前に動いた席の s.turn で呼ぶ)
-// 基本は席順。次が巨人のときだけ giantSkipModulo ターンに1回その席を飛ばす。
-// 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
+// 次の手番の席 (Game.tsx judgeNextSeat = src/components/game/giantTurn.ts seatForTurn と同じ並び)
+// 巨人は giantActEvery ラウンドに1回しか動かない: 「全員1周 → 巨人を除いて (giantActEvery-1) 周」の繰り返し。
+// 並びは currentTurn と直前の席で決まる。2人戦で同キャラ(巨人ミラー含む)は休みなしで交互に回す
 function judgeNextSeat(s) {
-    if (s.currentTurn === 1) return 0;
     const n = seatCount(s);
-    let next = (s.turn + 1) % n;
+    if (s.currentTurn <= 1) return 0;
+    const base = (s.turn + 1) % n; // 並びとずれているとき（途中から始めた盤など）も席順どおり次の席
+    const actEvery = config.giantActEvery || 1;
     const mirror = n === 2 && s.chars[0] === s.chars[1];
-    const mod = config.giantSkipModulo || 0;
-    if (!mirror && mod && s.chars[next] === 'giant' && s.currentTurn % mod >= mod - 1) next = (next + 1) % n;
-    return next;
+    const others = [];
+    for (let seat = 0; seat < n; seat++) if (s.chars[seat] !== 'giant') others.push(seat);
+    if (mirror || actEvery <= 1 || others.length === n || others.length === 0) return base;
+    const cycle = [];
+    for (let seat = 0; seat < n; seat++) cycle.push(seat);
+    for (let k = 1; k < actEvery; k++) cycle.push(...others);
+    if (cycle[(s.currentTurn - 2) % cycle.length] !== s.turn) return base;
+    return cycle[(s.currentTurn - 1) % cycle.length];
 }
 // 2人戦互換: 次が席0(heart)か
 function judgeNextIsHeart(s) {
@@ -873,7 +891,6 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useIgnite) {
-        if (!board[i].player) return false;
         thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
         s.useIgnite = false;
         return true;
@@ -1000,7 +1017,7 @@ function placeMove(s, i) {
     } else {
         newPlayer = cur;
         newBind = life;
-        newEffects = [];
+        newEffects = board[i].effects.filter((e) => e.effect === '🔥'); // 空きマスに置かれた🔥は、そこに置かれたコマ(誰のコマでも)に引き継がれる
     }
 
     if (newPlayer === cur && s.useBuds[0]) {
@@ -1040,6 +1057,9 @@ function placeMove(s, i) {
     // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
     fireCharges(s, i, cur);
 
+    // 巨人のオーラ: コマを置くと周囲8マスの敵コマが破壊され、周囲8マス全部がロックされる
+    if (curChar(s) === 'giant' && board[i].player === cur) giantAura(s, surroundRange(s, i), cur);
+
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
         let absorbed = 0;
@@ -1065,6 +1085,25 @@ function placeMove(s, i) {
     advanceTurn(s);
     settleWinner(s);
     return true;
+}
+
+// 巨人のパッシブ（src/components/game/giantAura.ts と同じ規則）。周囲8マスの敵コマを破壊し（氷結は身代わり）、そのあと周囲8マス全部をロックする（空きマスはライフ1）
+function giantAura(s, range, me) {
+    let destroyed = 0;
+    for (const j of range) {
+        const sq = s.board[j];
+        if (!sq.player || sq.player === me || isGuarded(s, sq)) continue;
+        const guard = thermal.absorbDestroy(sq);
+        if (guard.blocked) { s.board[j] = guard.sq; continue; }
+        s.board[j] = { player: undefined, bind: 0, effects: [] };
+        destroyed++;
+    }
+    if (destroyed > 0) addCorpses(s, destroyed);
+    for (const j of range) {
+        const sq = s.board[j];
+        if (thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        s.board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+    }
 }
 
 // ---- Skills (turn-ending vs not, faithful to Game.tsx) --------------------
@@ -1865,6 +1904,93 @@ function onClickFrostfall(s) {
     bumpStat(s, 'frostfall');
 }
 
+// ---- 🍂落ち葉系の汎用スキル (idx 62〜68) ----
+// 🍂付きのトークンはトークンのエフェクトを持たない扱い（収穫/伝播ギアとは連動しない。火炎トークンと同じ）
+function placeLeafTokens(s, count, leaves) {
+    const empties = findEmptyIndexes(s.board);
+    for (const idx of randomAnyPick(empties, Math.min(count, empties.length), s.rng)) {
+        if (idx == null) continue;
+        thermal.placeLeafToken(s.board, idx, curPlayer(s), calculateTokenBind(s), leaves);
+        harvestMagic(s, afterTokenPlaced(s, idx));
+    }
+}
+function finishLeafToken(s, key, stat) {
+    spendMagic(s, calculateCost(s, costsOf(s)[key], true, false, key), key);
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, stat);
+}
+// 木枯らしの使い (idx62): 🍂付きトークン
+function onClickLeafToken(s) { placeLeafTokens(s, 1, 1); finishLeafToken(s, 'onClickLeafToken', 'leafToken'); }
+// 落葉松の双子 (idx63): 🍂が2枚付いたトークン
+function onClickTwinLeafToken(s) { placeLeafTokens(s, 1, 2); finishLeafToken(s, 'onClickTwinLeafToken', 'twinLeafToken'); }
+// 紅葉狩り (idx64): 🍂付きのダブルトークン
+function onClickDoubleLeafToken(s) { placeLeafTokens(s, 2, 1); finishLeafToken(s, 'onClickDoubleLeafToken', 'doubleLeafToken'); }
+// 枯野の相席 (idx65): 両トークン。🍂が付くのは自分のコマだけ（敵のコマに付けると自分のコストが上がるため）
+function onClickBothLeafToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
+    let granted = 0;
+    picks.forEach((idx, seat) => {
+        if (seat === s.turn) thermal.placeLeafToken(s.board, idx, SYMBOLS[seat], calculateTokenBind(s), 1);
+        else s.board[idx] = { player: SYMBOLS[seat], bind: 4, effects: [] };
+        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
+    });
+    harvestMagic(s, granted);
+    finishLeafToken(s, 'onClickBothLeafToken', 'bothLeafToken');
+}
+// 焚き火の唄 (idx66): 敵陣の🍂を全て除去（🔑ロック・❄氷結のマスは対象外）。対象が無ければ使えない
+function bonfireLegal(s) { return thermal.bonfireTargets(s.board, curPlayer(s)).length > 0; }
+function onClickBonfire(s) {
+    const pay = calculateCost(s, costsOf(s).onClickBonfire, false, false, 'onClickBonfire'); // 払うコストは除去する前の盤面で決まる（画面の表示と同じ）
+    thermal.bonfire(s.board, curPlayer(s));
+    spendMagic(s, pay, 'onClickBonfire');
+    bumpMagicCount(s);
+    bumpStat(s, 'bonfire');
+}
+// 腐葉土の目覚め (idx67): 自陣のランダムな🍂1枚を🌱に変える。自陣に🍂が無ければ使えない
+function mulchLegal(s) { return thermal.mulchCandidates(s.board, curPlayer(s)).length > 0; }
+function onClickMulch(s) {
+    const cands = thermal.mulchCandidates(s.board, curPlayer(s));
+    const pay = calculateCost(s, costsOf(s).onClickMulch, false, false, 'onClickMulch');
+    if (cands.length) thermal.mulch(s.board, randomPick(cands, s.rng));
+    spendMagic(s, pay, 'onClickMulch');
+    bumpMagicCount(s);
+    bumpStat(s, 'mulch');
+}
+// 一葉知秋 (idx68): 盤面の🌱をすべて🍂に変える（敵味方問わず）。盤上に🌱が無ければ使えない
+function autumnLegal(s) { return thermal.autumnTargets(s.board).length > 0; }
+function onClickAutumn(s) {
+    const pay = calculateCost(s, costsOf(s).onClickAutumn, false, false, 'onClickAutumn');
+    thermal.autumn(s.board);
+    spendMagic(s, pay, 'onClickAutumn');
+    bumpMagicCount(s);
+    bumpStat(s, 'autumn');
+}
+
+// 霜枯れ (idx69): 自陣の🍂を持つマス（氷結を付けられるもの）すべてに❄+1。氷結中は🍂が休眠する。クリック不要。対象が無ければ使えない
+function leafFrostLegal(s) { return thermal.leafFrostTargets(s.board, curPlayer(s)).filter((i) => !isShielded(s, s.board[i])).length > 0; }
+function onClickLeafFrost(s) {
+    const targets = thermal.leafFrostTargets(s.board, curPlayer(s)).filter((i) => !isShielded(s, s.board[i]));
+    if (targets.length === 0) return;
+    freezeCells(s, targets);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLeafFrost, false, false, 'onClickLeafFrost'), 'onClickLeafFrost');
+    bumpMagicCount(s);
+    bumpStat(s, 'leafFrost');
+}
+
+// 春一番 (idx70): 自陣の❄を全て解除し、解除した❄の数だけ、このターンに打つ全スキルを軽減する（軽減札。自分自身は軽減されない）。クリック不要。自陣に❄が無ければ使えない
+function springWindLegal(s) { return thermal.thawTargets(s.board, curPlayer(s)).length > 0; }
+function onClickSpringWind(s) {
+    const { stacks } = thermal.thawAll(s.board, curPlayer(s));
+    if (stacks === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSpringWind, false, false, 'onClickSpringWind'), 'onClickSpringWind');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + stacks });
+    bumpMagicCount(s);
+    bumpStat(s, 'springWind');
+}
+
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
@@ -2034,6 +2160,15 @@ const SKILLS = {
     cleanse: onClickCleanse,
     harvestEve: onClickHarvestEve,
     flameToken: onClickFlameToken,
+    leafToken: onClickLeafToken,
+    twinLeafToken: onClickTwinLeafToken,
+    doubleLeafToken: onClickDoubleLeafToken,
+    bothLeafToken: onClickBothLeafToken,
+    bonfire: onClickBonfire,
+    mulch: onClickMulch,
+    autumn: onClickAutumn,
+    leafFrost: onClickLeafFrost,
+    springWind: onClickSpringWind,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2077,6 +2212,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

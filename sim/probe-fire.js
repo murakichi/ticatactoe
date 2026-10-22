@@ -51,7 +51,7 @@ for (const opp of opps) {
         let t = 0, myTurn = 0;
         while (!s.winner && t++ < 600) {
             if (s.turn === me) { myTurn++; magicAt[myTurn] = s.magic[me]; }
-            cur = { seat: s.turn, t, log };
+            cur = s.turn === me ? { seat: s.turn, t, log } : null; // 鍛冶師の席のスキルだけを数える
             const r = ai.makeMove(s, 'faithful');
             if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move);
             else if (!r.turnEnded) engine.SKILLS.charge(s);
