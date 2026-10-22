@@ -98,7 +98,7 @@ const RECOMMENDED_DECKS = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 32],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
@@ -140,11 +140,16 @@ function randomDeck(rng = Math.random) {
 const AI_DECK_SWAPS = 3;
 
 /** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
+const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
+
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
-    for (let k = 0; k < swaps && outside.length > 0; k++) {
-        const at = Math.floor(rng() * deck.length);
+    const core = CORE_CARDS[character] || [];
+    const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
+    for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
+        const at = swappable[Math.floor(rng() * swappable.length)];
         const incoming = outside.splice(Math.floor(rng() * outside.length), 1)[0];
         outside.push(deck[at]);
         deck[at] = incoming;
@@ -152,4 +157,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
