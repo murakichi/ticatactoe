@@ -39,6 +39,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     const dormant = frozen; // 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠（火炎中は休眠しない）
     if (props.shielded) classes.push(styles.shielded);
     else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
+    if (info.effects.some((e) => e.effect === '📜')) classes.push(styles.shikigami);
     if (frozen) classes.push(styles.frozen);
     if (burning) classes.push(styles.burning);
 

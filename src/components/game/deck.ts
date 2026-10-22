@@ -6,7 +6,7 @@ import { skillCosts, SkillCosts } from './skillCosts';
 /** デッキの枚数（同じスキルは1枚まで） */
 export const DECK_SIZE = 12;
 
-export type SkillCategory = 'basic' | 'token' | 'attack' | 'support' | 'control' | 'poison' | 'buds' | 'charge' | 'ice' | 'fire';
+export type SkillCategory = 'basic' | 'token' | 'attack' | 'support' | 'control' | 'poison' | 'buds' | 'charge' | 'ice' | 'fire' | 'shikigami';
 
 export type CatalogEntry = {
     idx: number;
@@ -92,6 +92,11 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds', costKey: 'onClickAutumn', desc: '盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）' },
     { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice', costKey: 'onClickLeafFrost', desc: '自陣の🍂を持つコマすべてに❄を付けます（氷結中は🍂が休眠します）' },
     { idx: 70, name: '春一番', icon: '🌬️', category: 'ice', costKey: 'onClickSpringWind', desc: '自陣の❄をすべて解除し、解除した数だけこのターンに打つスキルのコストを軽減します（軽減後は最低1）' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付け、その後手札をシャッフルします。このターン敵か自陣に🔥を付与していればコスト0（使うとリセット）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -108,7 +113,7 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 14, 27, 28, 32],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
@@ -155,14 +160,24 @@ export const randomDeck = (rng: () => number = Math.random): number[] => {
 export const AI_DECK_SWAPS = 3;
 
 /**
+ * キャラの勝ち筋になる「核のカード」。AIの入れ替えデッキ（variedAIDeck）でも入れ替えない。
+ * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
+ */
+export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
+    yinYangMaster: [53, 71, 73],
+};
+
+/**
  * AIのデッキ: キャラの推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
- * 入れ替えで常に有効なデッキ（12枚・重複なし）になる
+ * 入れ替えで常に有効なデッキ（12枚・重複なし）になる。CORE_CARDS のカードは入れ替えない
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {
     const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
-    for (let k = 0; k < swaps && outside.length > 0; k++) {
-        const at = Math.floor(rng() * deck.length);
+    const core = CORE_CARDS[character] ?? [];
+    const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
+    for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
+        const at = swappable[Math.floor(rng() * swappable.length)];
         const incoming = outside.splice(Math.floor(rng() * outside.length), 1)[0];
         outside.push(deck[at]);
         deck[at] = incoming;
@@ -181,6 +196,7 @@ export const CATEGORY_ORDER: { id: SkillCategory; label: string }[] = [
     { id: 'charge', label: '帯電' },
     { id: 'ice', label: '氷結' },
     { id: 'fire', label: '火炎' },
+    { id: 'shikigami', label: '式神' },
     { id: 'basic', label: '基本' },
 ];
 

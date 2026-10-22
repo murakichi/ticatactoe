@@ -22,7 +22,7 @@ const EFFECT_SKILL_KEYS = new Set([
 ]);
 const UNIQUE_SKILL_KEYS = new Set([
     'onClickStomp', 'onClickJudgeDay', 'onClickTotalAssault', 'onClickMiasma', 'onClickChargeSpread',
-    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickYingYangSkill',
+    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickShikigamiPlace', 'onClickShikigamiBlast',
 ]);
 function discountAmount(d, key, isToken) {
     if (key && isReducerSkill(key)) return 0;
