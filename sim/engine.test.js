@@ -352,14 +352,91 @@ test('両トークン: 参加者全員のコマが1つずつ置かれる', () =>
     assert.deepStrictEqual(placed, e.SYMBOLS.slice(0, 5).slice().sort());
 });
 
-test('凶荒の舞: 自分以外の全員のコマのライフを-2する', () => {
+test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト3。埋まったマスは選び直せる', () => {
     const s = gameN('yinYangMaster', 'you', 'you');
-    s.board[0] = { player: '⭕', bind: 5, effects: [] };
-    s.board[1] = { player: '🟩', bind: 5, effects: [] };
-    s.board[2] = { player: '💙', bind: 5, effects: [] };
-    s.magic[0] = 20;
-    e.SKILLS.yyDance(s);
-    assert.deepStrictEqual([s.board[0].bind, s.board[1].bind, s.board[2].bind], [3, 3, 5]);
+    s.board[1] = { player: '⭕', bind: 5, effects: [] };
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiPlace(s);
+    assert.strictEqual(s.magic[0], 7);
+    assert.strictEqual(e.placeMove(s, 1), false); // 埋まっている
+    assert.strictEqual(s.useShikigamiPlace, true);
+    assert.strictEqual(e.placeMove(s, 6), true);
+    assert.deepStrictEqual(s.board[6], { player: '💙', bind: 2, effects: [{ effect: '📜' }] });
+    assert.strictEqual(s.turn, 0); // 手番は続く
+    assert.strictEqual(s.useShikigamiPlace, false);
+});
+
+test('式神: 列の並びに数えない（4つ並んでも勝ちにならない）', () => {
+    const s = game('yinYangMaster', 'you');
+    for (const i of [0, 1, 2]) s.board[i] = { player: '💙', bind: 3, effects: [] };
+    s.board[3] = e.newShikigami('💙');
+    e.settleWinner(s);
+    assert.strictEqual(s.winner, undefined);
+    s.board[3] = { player: '💙', bind: 3, effects: [] };
+    e.settleWinner(s);
+    assert.strictEqual(s.winner, '💙');
+});
+
+test('式神: 自分で補強すると式神ではなく🌱付きの自陣コマになる', () => {
+    const s = game('yinYangMaster', 'you');
+    s.board[5] = e.newShikigami('💙');
+    s.life = 3;
+    e.placeMove(s, 5);
+    assert.strictEqual(s.board[5].player, '💙');
+    assert.strictEqual(s.board[5].bind, 1 + 3 + 1); // 着手前の減衰で式神のライフは2→1
+    assert.deepStrictEqual(s.board[5].effects.map((x) => x.effect), ['🌱']);
+});
+
+test('式神: 相手が乗っ取る（ライフ0）と空きマスになり、コマは置かれない', () => {
+    const s = game('yinYangMaster', 'you');
+    s.board[5] = { player: '💙', bind: 0, effects: [{ effect: '📜' }] };
+    s.turn = 1; s.life = 3;
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.deepStrictEqual(s.board[5], { player: undefined, bind: 0, effects: [] });
+});
+
+test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4ダメージ・0で破壊、空きマスは式神になる。自陣は無傷', () => {
+    const s = gameN('yinYangMaster', 'you');
+    s.size = 4;
+    s.board[5] = e.newShikigami('💙');
+    s.board[0] = { player: '⭕', bind: 3, effects: [] }; // 破壊
+    s.board[1] = { player: '⭕', bind: 6, effects: [] }; // 残る(2)
+    s.board[2] = { player: '💙', bind: 3, effects: [] }; // 自陣は無傷
+    s.board[15] = { player: '⭕', bind: 3, effects: [] }; // 範囲外
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiBlast(s);
+    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(e.placeMove(s, 2), false); // 式神でないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.deepStrictEqual(s.board[5], { player: undefined, bind: 0, effects: [] });
+    assert.strictEqual(s.board[0].player, undefined);
+    assert.strictEqual(s.board[1].bind, 2);
+    assert.strictEqual(s.board[2].bind, 3);
+    assert.strictEqual(s.board[15].bind, 3);
+    for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
+});
+
+test('式神一括(コスト6): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま', () => {
+    const s = game('yinYangMaster', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('💙');
+    s.board[2] = e.newShikigami('⭕');
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiAll(s);
+    assert.strictEqual(s.magic[0], 4 + (e.calculateCost(s, 6, false, false, 'onClickShikigamiAll') - 6));
+    assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
+    assert.strictEqual(e.isShikigami(s.board[2]), true);
+});
+
+test('式神ランダム設置(コスト2・トークン扱い): ランダムな空きマスに式神を置き、手番にトークンを使ったことになる', () => {
+    const s = game('you', 'you');
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiRandom(s);
+    const shiki = s.board.filter((sq) => e.isShikigami(sq));
+    assert.strictEqual(shiki.length, 1);
+    assert.strictEqual(shiki[0].player, '💙');
+    assert.strictEqual(s.usedTokenThisTurn, true);
+    assert.ok(s.magic[0] < 10);
 });
 
 test('スラッシュ/審判の日は盤サイズに合わせる（5x5: 対角は5マス、中央の審判は行+列+両対角）', () => {
@@ -759,7 +836,7 @@ test('氷結: オピウムは氷結が身代わりになる（ライフはその
     assert.strictEqual(s.board[6].bind, 2);
 });
 
-test('氷結: スラッシュ・ストンプ・審判の日・凶荒の舞も氷結が身代わりになる', () => {
+test('氷結: スラッシュ・ストンプ・審判の日・式神の爆破も氷結が身代わりになる', () => {
     const anti = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(1) });
     const idx = require('./geometry').geometryOf(anti.size).antiDiagonal[1];
     anti.heartTurn = true; anti.heartMagic = 20;
@@ -787,13 +864,15 @@ test('氷結: スラッシュ・ストンプ・審判の日・凶荒の舞も氷
     assert.strictEqual(m.board[5].effects.length, 0);
 
     const y = game('yinYangMaster', 'you');
-    y.heartTurn = true; y.heartMagic = 30; y.yy[0] = 'ying';
-    y.board[5] = { player: '⭕', bind: 2, effects: [FRZ] };
-    y.board[6] = { player: '⭕', bind: 2, effects: [] };
-    e.SKILLS.yyDance(y);
-    assert.strictEqual(y.board[5].player, '⭕');
-    assert.strictEqual(y.board[5].bind, 2);
-    assert.strictEqual(y.board[6].player, undefined); // 氷結なしは破壊
+    y.heartTurn = true; y.heartMagic = 30; y.yy[0] = 'yang';
+    y.board[0] = e.newShikigami('💙');
+    y.board[1] = { player: '⭕', bind: 2, effects: [FRZ] };
+    y.board[4] = { player: '⭕', bind: 2, effects: [] };
+    e.SKILLS.shikigamiBlast(y);
+    e.placeMove(y, 0);
+    assert.strictEqual(y.board[1].player, '⭕');
+    assert.strictEqual(y.board[1].bind, 2);
+    assert.strictEqual(y.board[4].player, undefined); // 氷結なしは破壊
 });
 
 test('氷結: 自陣の氷結コマには重ねて強化できない。氷室の番人でも同じ。敵が奪う/破壊すれば氷結は消える', () => {

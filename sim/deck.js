@@ -72,6 +72,8 @@ const SKILL_CATALOG = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
+    { idx: 62, name: '式神一括', icon: '📜', category: 'shikigami' },
+    { idx: 63, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
 ];
 
 
