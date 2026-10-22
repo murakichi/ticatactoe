@@ -65,7 +65,7 @@ describe('AIPlayer pure logic', () => {
 });
 
 describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () => {
-    it('giant findStompTarget needs >=2 enemies in range', () => {
+    it('giant findStompTarget fires with >=1 enemy in range (stomp costs 2)', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const two = emptyBoard();
         put(two, 0, '⭕');
@@ -74,7 +74,19 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
 
         const one = emptyBoard();
         put(one, 0, '⭕');
-        expect(giant.findStompTarget(one)).toBeNull();
+        expect(giant.findStompTarget(one)).not.toBeNull();
+
+        expect(giant.findStompTarget(emptyBoard())).toBeNull();
+    });
+
+    it('giant stomps to cut an opponent reach before locking (stompDef)', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕']);
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 3)); // ⭕が3つ並び、4つ目の3が脅威
+        const stompCosts = { onClickStomp: 3, onClickUseLock: 2 } as never;
+        const r = giant.makeMove(b, 6, stompCosts, 2, 5, [], false);
+        expect(r.skills).toEqual(['onClickStomp']);
+        expect(r.stompTarget).not.toBeNull();
     });
 
     it('magician findJudgeTarget fires when net enemy destruction >=2', () => {
@@ -314,11 +326,9 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull();
+        expect(ai.findStompTarget(b)).toBeNull(); // 氷結中の敵だけでは撃たない
         put(b, 9, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull(); // 効く敵は1体だけ
-        put(b, 10, '⭕');
-        expect(ai.findStompTarget(b)).not.toBeNull();
+        expect(ai.findStompTarget(b)).not.toBeNull(); // 効く敵が1体いれば撃つ（コスト2）
     });
 
     it('simulateStomp: 氷結中の敵は壊れず❄が1つ減るだけ。自陣の氷結コマも守られる', () => {
@@ -608,8 +618,18 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         ai.rerollsLeft = 0;
         expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
-    it('魔法使い以外は引き直さない', () => {
-        expect(run(mk('giant'), 12, [53]).reroll).toBeUndefined();
+    it('魔法使い以外は、魔力が有り余っていなければ引き直さない', () => {
+        expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使い以外も、魔力が有り余っていて撃てるスキルが無ければ、軽減札を使わずシャッフルだけ行う', () => {
+        const r = run(mk('giant'), 12, [53]);
+        expect(r.reroll).toEqual({});
+        expect(r.skills).toEqual([]);
+    });
+    it('魔法使い以外が有り余っていても、引き直しの回数が残っていなければ引き直さない', () => {
+        const ai = mk('giant');
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
     it('引き直しの途中（軽減済み）は、魔力に余裕があればシャッフルだけ行う', () => {
         const ai = mk();
@@ -745,5 +765,26 @@ describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃や�
         const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
         const click = ai.makeMove(b, 6, skillCosts, 2, 5, [], false).chargeClicks?.find((c) => c.skill === 'onClickIgnite');
         expect(click?.target).toBe(5);
+    });
+});
+
+describe('AIPlayer 土壇場の防壁 (lastStandReady)', () => {
+    // ⭕が3と7の二箇所で勝ち筋を持つ(片方しか塞げない)。💙は8,9で並べている
+    const setup = () => {
+        const b = emptyBoard();
+        [0, 1, 2, 4, 5, 6].forEach((i) => put(b, i, '⭕'));
+        [8, 9].forEach((i) => put(b, i, '💙'));
+        return b;
+    };
+
+    it('防壁なしなら相手の即勝ちマス(3か7)を塞ぐ', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        expect([3, 7]).toContain(ai.getBestMove(setup(), 3));
+    });
+
+    it('防壁が未発動なら塞ぎ手を強制せず、自分の列(10)を伸ばす', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕']);
+        ai.lastStandReady = true;
+        expect([3, 7]).not.toContain(ai.getBestMove(setup(), 3));
     });
 });

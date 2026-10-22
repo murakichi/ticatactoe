@@ -293,6 +293,36 @@ test('盤面サイズは人数と無関係に指定できる（4〜10、範囲�
     assert.strictEqual(auto.size, 5);
 });
 
+test('巨人のオーラ: 周囲8マスの敵コマが壊れ、周囲8マス全部（壊れたマス・自陣のコマ含む）がロックされる', () => {
+    const s = gameN('giant', 'you');
+    s.life = 5;
+    const geo = require('./geometry.js').geometryOf(s.size);
+    const center = 5; // 4x4 の (1,1)
+    const around = geo.surroundRange(center);
+    const enemy = around[0], mine = around[1];
+    s.board[enemy] = { player: '⭕', bind: 3, effects: [] };
+    s.board[mine] = { player: '💙', bind: 3, effects: [] };
+    e.placeMove(s, center);
+    assert.strictEqual(s.board[enemy].player, undefined); // 敵コマ: 破壊
+    assert.ok(s.board[enemy].effects.some((x) => x.effect === '🔑')); // 壊れたマスもロック
+    assert.strictEqual(s.board[mine].player, '💙'); // 自陣: 壊れないがロックされる（ライフは減衰の-1のみ）
+    assert.strictEqual(s.board[mine].bind, 2);
+    for (const j of around) {
+        assert.ok(s.board[j].effects.some((x) => x.effect === '🔑'), `マス${j}がロックされる`);
+        if (j !== mine) assert.strictEqual(s.board[j].bind, 1);
+    }
+    // 相手の手番: ロック中のマスには置けない
+    assert.strictEqual(e.placeMove(s, enemy), false);
+});
+
+test('巨人以外はオーラを持たない', () => {
+    const s = gameN('you', 'giant');
+    s.life = 5;
+    e.placeMove(s, 5);
+    const geo = require('./geometry.js').geometryOf(s.size);
+    assert.ok(geo.surroundRange(5).every((j) => !s.board[j].effects.some((x) => x.effect === '🔑')));
+});
+
 test('手番は席順に回る（3人）', () => {
     const s = gameN('you', 'you', 'you');
     s.life = 5;
@@ -301,15 +331,17 @@ test('手番は席順に回る（3人）', () => {
     assert.deepStrictEqual(seen, [0, 1, 2, 0]);
 });
 
-test('巨人の休み: 次の巨人の席だけが飛ばされる（3人）。2人の同キャラは休みなし', () => {
+test('巨人の休み: 巨人は2ラウンドに1回しか動かない（3人）。2人の同キャラは休みなし', () => {
     const s = gameN('you', 'giant', 'you');
-    s.turn = 0; s.currentTurn = 14; // 14 % 5 === 4
-    assert.strictEqual(e.judgeNextSeat(s), 2);
-    s.currentTurn = 13;
-    assert.strictEqual(e.judgeNextSeat(s), 1);
+    const seq = [];
+    let prev = 0; seq.push(0);
+    for (let ct = 2; ct <= 10; ct++) { s.currentTurn = ct; s.turn = prev; prev = e.judgeNextSeat(s); seq.push(prev); }
+    assert.deepStrictEqual(seq, [0, 1, 2, 0, 2, 0, 1, 2, 0, 2]);
     const mirror = gameN('giant', 'giant');
-    mirror.turn = 0; mirror.currentTurn = 14;
-    assert.strictEqual(e.judgeNextSeat(mirror), 1);
+    const m = [];
+    let mp = 0; m.push(0);
+    for (let ct = 2; ct <= 4; ct++) { mirror.currentTurn = ct; mirror.turn = mp; mp = e.judgeNextSeat(mirror); m.push(mp); }
+    assert.deepStrictEqual(m, [0, 1, 0, 1]);
 });
 
 test('減衰(#30): 3人以上は着手3回につき1回だけ全コマ-1。2人は従来どおり着手ごと', () => {
