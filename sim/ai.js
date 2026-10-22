@@ -1207,7 +1207,8 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx));
+        || (tokenLockAi && gearTokenIdx.includes(idx))
+        || (F.budLock && character === 'necromancer' && (idx === 33 || idx === 36)); // #160 ループの2枚を手札に固定する
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
