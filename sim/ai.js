@@ -49,9 +49,6 @@ const AI_DEFAULTS = {
     lsAggro: 1,  // 土壇場の防壁が未発動なら相手の1回目の勝ちは止めに行かず攻める(防壁が受ける)。軍師 seed2/4×200 で +2.7pt(合算400試合, CI±2.2)（A/B採用）
     igniteSig: 1, // 鍛冶師が固有スキルの火遁を毎手番撃つ。1=敵コマ(ライフが残る)を燃やす / 2=敵の列を作りかけの空きマスにも🔥を仕込む（tune-top 鍛冶師: 環境勝率 seed22/150 +6.8pt, seed24/200 +8.6pt。2は1と同じ結果）
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
-    igniteHold: 0, // 魔力温存: 割引札が手札にあり敵コマがこの数以上あるあいだ、火遁で魔力を使い切らず貯める（陰陽師の floodHold と同じ発想）
-    holdMagic: 3, // 温存する魔力の目標(特売2回+業火=3)
-    discountStack: 0, // 鍛冶師が軽減札を重ね撃ちして業火を安くする（特売2回で7→1。陰陽師の comboDiscount と同じ発想）
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
@@ -525,42 +522,13 @@ const DISCOUNT_REDUCERS = [
     { idx: 53, key: 'markdown', cost: 'onClickMarkdown' },
 ];
 const DISCOUNT_ALL = DISCOUNT_REDUCERS.concat([{ idx: 57, key: 'uniqueDiscount', cost: 'onClickUniqueDiscount' }]);
-// 業火を最も安く撃てる軽減札の並び(同じ札の重ね撃ちを含む、最大3枚)を探す。合計(軽減札の支払い+その後の業火)が手持ち魔力以内で、今の業火コストより安いものだけ
-function bestDiscountSeq(s, seat, avail) {
-    const cands = DISCOUNT_ALL.filter((r) => avail.includes(r.idx));
-    const start = s.discount[seat];
-    let best = null;
-    const rec = (seq, spent) => {
-        const ic = infernoCost(s);
-        const total = spent + ic;
-        if (seq.length > 0 && total <= curMagic(s) && (!best || total < best.total)) best = { seq: seq.slice(), total };
-        if (seq.length >= 3 || ic === 0) return;
-        for (const r of cands) {
-            if (!discountMod.canUseDiscountSkill(s.discount[seat], r.cost, s.life)) continue;
-            const rc = calculateCost(s, costsOf(s)[r.cost], false, false, r.cost);
-            if (spent + rc > curMagic(s)) continue;
-            const prev = s.discount[seat];
-            s.discount[seat] = discountMod.afterSkill(prev, r.cost);
-            seq.push(r); rec(seq, spent + rc); seq.pop();
-            s.discount[seat] = prev;
-        }
-    };
-    rec([], 0);
-    s.discount[seat] = start;
-    return best;
-}
 function discountPlan(s, me, availableSkills) {
     if (!F.discountPlan || s.silenced[s.turn]) return;
     const seat = s.turn;
     // 業火: 撃てる状況(ライフが残る敵コマ3個以上)なら、軽減札で業火が安くなる/撃てるようになるとき、合計コストが最小の軽減札を先に撃つ
     if (F.discountInferno && curChar(s) === 'pyromancer' && !s.infernoReady[seat]
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0) {
-        if (F.discountStack) {
-            const cur0 = infernoCost(s);
-            const plan = cur0 > 0 ? bestDiscountSeq(s, seat, availableSkills) : null;
-            if (plan && plan.total < cur0) for (const r of plan.seq) SKILLS[r.key](s);
-        }
-        for (let i = 0; i < (F.discountStack ? 0 : 3); i++) {
+        for (let i = 0; i < 3; i++) {
             const cur = infernoCost(s);
             if (cur === 0) break;
             let pick = null;
@@ -1699,10 +1667,6 @@ function faithfulMakeMoveInner(s) {
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
     if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
         && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
-        // 魔力温存: 割引札が手札にあり、敵コマ(ライフが残る)が F.igniteHold 個以上あるあいだは、火遁で魔力を使い切らず、重ね撃ち+業火に必要な魔力(F.holdMagic)まで貯める
-        && !(F.igniteHold && s.skills.some((x) => DISCOUNT_ALL.some((r) => r.idx === x))
-            && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= F.igniteHold
-            && curMagic(s) - calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') < F.holdMagic)
         && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') + F.igniteReserve
         // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
         && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
