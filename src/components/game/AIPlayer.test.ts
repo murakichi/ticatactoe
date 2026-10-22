@@ -740,6 +740,24 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
     });
 
+    it('特売(53)が手札にあれば重ね撃ちしてコンボを6魔力に圧縮する（特売×2→百鬼夜行→特売×2→式神一括）', () => {
+        const withMd = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 6, withMd, [73, 71, 53]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual([
+            'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
+        ]);
+        // 5魔力では足りない。特売が無ければ13必要
+        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 12, withMd, [73, 71])?.win ?? false).toBe(false);
+    });
+
+    it('コンボ札(71/73)と特売(53)を手札に固定する', () => {
+        expect(mk().chooseLocks(emptyBoard(), 0, 5, [53, 71, 3, 73])).toEqual([53, 71, 73]);
+    });
+
     it('コンボ札(71/73)だけを手札に固定する', () => {
         const ai = mk();
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 71, 3, 73])).toEqual([71, 73]);
