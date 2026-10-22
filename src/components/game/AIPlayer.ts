@@ -1513,6 +1513,12 @@ class AIPlayer {
                 return { move: null, skills: [], reroll: {} };
             }
         }
+        // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
+        // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
+        if (this.character === 'yinYangMaster' && this.opponents.every((o) => this.countReaches(board, o) === 0)
+            && this.floodComboWins(board) && magic < this.comboPlan(costs, availableSkills, true).total + costs.onClickShuffle) {
+            return { move: null, skills: ['onClickCharge'] };
+        }
         if (this.rerollsLeft > 0 && this.character !== 'magician' && magic >= SURPLUS_MAGIC) {
             const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
             if (plan.length === 0) return { move: null, skills: [], reroll: {} };

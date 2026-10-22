@@ -767,6 +767,21 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
     });
 
+    it('チャージ待ち: 勝てる盤面で相手のリーチが無く、探索に足りない魔力なら、駒を置かずチャージする', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 4, dig, 3, 2, [2, 0, 3], false);
+        expect(r.skills).toEqual(['onClickCharge']);
+        expect(r.move).toBeNull();
+        // 魔力が足りれば（探索に回る）チャージしない
+        expect(mk().makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+        // 相手のリーチがあるときは防御を優先する
+        const threat = emptyBoard();
+        [4, 5, 6].forEach((i) => put(threat, i, '⭕'));
+        expect(mk().makeMove(threat, 4, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+    });
+
     it('コンボ札(71/73)と特売(53)を手札に固定する', () => {
         expect(mk().chooseLocks(emptyBoard(), 0, 5, [53, 71, 3, 73])).toEqual([53, 71, 73]);
     });
