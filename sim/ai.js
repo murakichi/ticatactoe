@@ -941,6 +941,11 @@ function getEnhancedBestMove(s) {
         }
         return bi;
     }
+    // 陰陽師の百鬼夜行→式神一括（敵コマの入っていない列があれば一手番で勝つ）への対策(F.antiFlood): 魔力が足りうる陰陽師が相手のとき、
+    // 自分のコマで全ての列を塞げる(コンボが成立しない)着手を優先する
+    const floodFoes = F.antiFlood ? opps.filter((o) => s.chars[SYMBOLS.indexOf(o)] === 'yinYangMaster' && s.magic[SYMBOLS.indexOf(o)] >= (F.antiFloodMagic || 8)) : [];
+    const floodWinsOn = (bd, foe) => calculateWinner(lineSyms(bd.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: foe, bind: 0, effects: [] }
+        : (sq.player === foe && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))))) === foe;
     // minimax + fork bonus
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
@@ -956,6 +961,7 @@ function getEnhancedBestMove(s) {
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
+        if (floodFoes.length && floodFoes.every((foe) => !floodWinsOn(sim, foe))) score += F.antiFlood;
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
