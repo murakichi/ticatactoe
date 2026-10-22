@@ -64,10 +64,19 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSolstice: 'solstice',
     onClickSucker: 'sprout',
     onClickWindborne: 'windborne',
-    onClickBoost: 'harvest',
-    onClickRelocate: 'windborne',
-    onClickClone: 'sprout',
-    onClickPlunder: 'famine',
+    onClickLeafToken: 'token',
+    onClickTwinLeafToken: 'token',
+    onClickDoubleLeafToken: 'token',
+    onClickBothLeafToken: 'token',
+    onClickBonfire: 'autumn',
+    onClickMulch: 'autumn',
+    onClickAutumn: 'autumn',
+    onClickLeafFrost: 'freeze',
+    onClickSpringWind: 'discount',
+    onClickBoost: 'rain',
+    onClickRelocate: 'dash',
+    onClickClone: 'clone',
+    onClickPlunder: 'plunder',
     onClickMarkdown: 'discount',
     onClickEffectDiscount: 'discount',
     onClickTokenDiscount: 'discount',
@@ -86,8 +95,9 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
     ストンプ: 'stomp',
     審判の日: 'judge',
     陰陽転化: 'yinyang',
-    豊穣の舞: 'harvest',
-    凶荒の舞: 'famine',
+    // 陰陽転化後のモードで出し分ける(playEffect(mode === 'yang' ? 'harvest' : 'famine'))
+    豊穣の舞: { own: "mode === 'yang' ? 'harvest' : 'famine'" },
+    凶荒の舞: { own: "mode === 'yang' ? 'harvest' : 'famine'" },
     蘇生: 'necromancy',
     ミアズマ: 'poison',
     帯電拡散: 'zap',
@@ -96,6 +106,47 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
 };
 
 const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
+
+// 他のスキルと演出(の種類)を共有するスキルは、バナーに自分の名前が出ること(別スキルの名前が出ないこと)を守る。
+// 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
+const OWN_BANNER_LABELS: Record<string, string> = {
+    onClickLeafFrost: '霜枯れ',
+    onClickSpringWind: '春一番',
+    onClickBonfire: '焚き火の唄',
+    onClickMulch: '腐葉土の目覚め',
+    onClickAutumn: '一葉知秋',
+    onClickBuds: 'バッズ',
+    onClickDoubleBuds: 'ダブルバッズ',
+    onClickToken: 'トークン',
+    onClickBothToken: '両トークン',
+    onClickDoubleToken: 'ダブルトークン',
+    onClickBudsToken: 'バッズトークン',
+    onClickPoisonToken: 'ポイズントークン',
+    onClickSerum: '血清',
+    onClickInjection: 'インジェクション',
+    onClickIntensify: '猛毒化',
+    onClickPandemic: 'パンデミック',
+    onClickPoisonMist: '毒霧',
+    onClickFrostArea: '範囲氷結',
+    onClickIcicle: '氷柱',
+    onClickRandomFreeze: 'ランダム氷結',
+    onClickFreezeSpread: '氷結拡散',
+    onClickFrostfall: '霜降り',
+    onClickFrostToken: '氷結トークン',
+    onClickDoubleFrostToken: '氷結ダブルトークン',
+    onClickShatter: '砕氷',
+    onClickIgnite: '火遁',
+    onClickFlameToken: '火炎トークン',
+    onClickDoubleFlameToken: '火炎ダブルトークン',
+    onClickSwidden: '焼畑',
+    onClickSacrifice: '殉火',
+    onClickChargeOne: '帯電付与',
+    onClickChargeArea: '範囲帯電',
+    onClickChargeToken: '帯電トークン',
+    onClickDoubleChargeToken: '帯電ダブルトークン',
+    onClickChargeRandom: 'ランダム帯電',
+    onClickJammer: 'ジャマー',
+};
 
 describe('全スキルに演出がある', () => {
     it('SKILL_CATALOG の全スキルが登録表にある(新スキルの演出の付け忘れ防止)', () => {
@@ -122,6 +173,12 @@ describe('全スキルに演出がある', () => {
         expect(container.querySelector('[class*="banner"]')?.textContent?.length).toBeGreaterThan(0);
         // バナー以外の演出要素(オーラ・パーティクル・マスの絵文字など)が1つ以上ある
         expect(container.querySelectorAll('div,span').length).toBeGreaterThan(2);
+    });
+
+    it.each(Object.entries(OWN_BANNER_LABELS))('%s は演出のバナーに自分の名前「%s」を出す', (_key, label) => {
+        // `playEffect('type', …, 'ラベル')` か `freezeCells(…, 'ラベル')` の形で、スキル名が渡されている
+        const pattern = new RegExp(`(playEffect|freezeCells)\\([^;\\n]*'${label}'`);
+        expect(gameSource).toMatch(pattern);
     });
 
     it('バナーの文言は playEffect の label で上書きできる(同じ演出を共有するスキルの名前出し分け)', () => {

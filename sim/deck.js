@@ -72,6 +72,15 @@ const SKILL_CATALOG = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
+    { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds' },
+    { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds' },
+    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds' },
+    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds' },
+    { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds' },
+    { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds' },
+    { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds' },
+    { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice' },
+    { idx: 70, name: '春一番', icon: '🌬️', category: 'ice' },
 ];
 
 
@@ -86,7 +95,7 @@ const RECOMMENDED_DECKS = {
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 14, 27, 28, 32],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
-    poisoner: [0, 3, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48],
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],

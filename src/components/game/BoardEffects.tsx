@@ -31,6 +31,7 @@ export type SkillEffectType =
     | 'solstice'
     | 'sprout'
     | 'windborne'
+    | 'autumn'
     | 'iceBreak'
     | 'thaw'
     | 'burn'
@@ -41,10 +42,15 @@ export type SkillEffectType =
     | 'chargeUp'
     | 'shuffle'
     | 'token'
-    | 'lock';
+    | 'lock'
+    | 'rain'
+    | 'dash'
+    | 'clone'
+    | 'plunder'
+    | 'bulwark';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
-export type BurstType = 'iceBreak' | 'thaw' | 'burn';
+export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
 
 export type BurstEffect = {
     type: BurstType;
@@ -128,6 +134,7 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     solstice: { label: '冬至の種子', bg: '#1d2a5a', fg: '#cfe0ff' },
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
+    autumn: { label: '落ち葉', bg: '#e8a24a', fg: '#3a1d00' },
     zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
     heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
     double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
@@ -137,12 +144,26 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     shuffle: { label: 'シャッフル', bg: '#ffffff', fg: '#10131c' },
     token: { label: 'トークン', bg: '#46a6ff', fg: '#06182e' },
     lock: { label: 'ロック', bg: '#ffc24a', fg: '#2a1d00' },
+    rain: { label: '慈雨', bg: '#9fe3c8', fg: '#06322a' },
+    dash: { label: '縮地', bg: '#ffffff', fg: '#10131c' },
+    clone: { label: '写し身', bg: '#c7d0ff', fg: '#10173d' },
+    plunder: { label: '追い剥ぎ', bg: '#ff4d79', fg: '#fff' },
+    bulwark: { label: '土壇場の防壁', bg: '#ffd966', fg: '#3a2a00' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
 const RING_DELAYS = [0, 130, 260];
 
-const BURST_EMOJI: Record<BurstType, string> = { iceBreak: '💠', thaw: '💧', burn: '🔥' };
+const BURST_EMOJI: Record<BurstType, string> = {
+    iceBreak: '💠',
+    thaw: '💧',
+    burn: '🔥',
+    // ギアの発動で、対象のマスに出る小演出
+    gearKey: '🗝️',
+    gearBloom: '🌺',
+    gearSpread: '🌊',
+    gearEmpty: '🕳️',
+};
 
 export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
     if (!effect && !burst) return null;
@@ -421,6 +442,15 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {cellPops(effect.indexes, '🌱')}
                     </>
                 );
+            case 'autumn':
+                // 🍂落ち葉系: 枯れ葉が舞い落ち、対象のマスにも一枚ずつ散る
+                return (
+                    <>
+                        {fallParticles('🍂')}
+                        {sweepParticles('🍂')}
+                        {cellPops(effect.indexes, '🍂')}
+                    </>
+                );
             case 'silence':
                 // サイレンス: 周囲が暗く沈み、輪が内側へ吸い込まれて静寂の紋章が残る
                 return (
@@ -490,6 +520,74 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         <div className={styles.flashQuick} />
                         {sweepParticles('🃏')}
                         <div className={`${styles.sigil} ${styles.sigilSpin}`}>🔀</div>
+                    </>
+                );
+            case 'rain':
+                // 慈雨: やわらかな緑のオーラに雨粒が降り注ぎ、潤ったコマに水滴と若葉が出る
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {fallParticles('💧')}
+                        {fallParticles('💧')}
+                        {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
+            case 'dash':
+            case 'clone': {
+                // 縮地: 元のマスに残像を残して移動先へ駆ける。写し身: 元のコマの分身が隣のマスへ飛ぶ
+                const [from, to] = [effect.indexes?.[0], effect.indexes?.[1] ?? effect.index];
+                if (from === undefined || to === undefined) return null;
+                const a = cellCenter(from, size);
+                const b = cellCenter(to, size);
+                const isDash = effect.type === 'dash';
+                return (
+                    <>
+                        {/* 元のマス: 残像(縮地)/ 光(写し身) */}
+                        <span className={`${styles.cellPop} ${styles.afterImage}`} style={{ left: a.left, top: a.top }}>
+                            {isDash ? '💨' : '✨'}
+                        </span>
+                        {/* 元のマスから移動先へ飛ぶ本体 */}
+                        <span
+                            className={styles.flyer}
+                            style={{ left: a.left, top: a.top, ['--dx' as string]: `${b.left - a.left}px`, ['--dy' as string]: `${b.top - a.top}px` }}
+                        >
+                            {isDash ? '💨' : '👤'}
+                        </span>
+                        {/* 移動先: 着地の輪と絵文字 */}
+                        <div className={styles.impact} style={{ left: b.left, top: b.top, animationDelay: '320ms' }} />
+                        <span className={`${styles.cellPop} ${styles.landing}`} style={{ left: b.left, top: b.top }}>
+                            {isDash ? '⚡' : '👥'}
+                        </span>
+                    </>
+                );
+            }
+            case 'plunder': {
+                // 追い剥ぎ: 奪うマスに斬撃が走り、硬貨が舞い上がる
+                const idxs = effect.indexes ?? (effect.index !== undefined ? [effect.index] : []);
+                return (
+                    <>
+                        <div className={styles.flashQuick} />
+                        {idxs.slice(0, 49).map((idx, i) => {
+                            const pos = cellCenter(idx, size);
+                            return <div key={`r-${idx}-${i}`} className={styles.impact} style={{ left: pos.left, top: pos.top, borderColor: '#ff4d79' }} />;
+                        })}
+                        {cellPops(idxs, '🗡️')}
+                        {riseParticles('🪙')}
+                    </>
+                );
+            }
+            case 'bulwark':
+                // 土壇場の防壁: 閃光と衝撃波が広がり、揃った列が消し飛ぶ。中央に城が現れ、瓦礫が降る
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGold}`} />
+                        <div className={styles.flash} />
+                        {RING_DELAYS.map((d) => (
+                            <div key={d} className={styles.shockwave} style={{ left: '50%', top: '50%', animationDelay: `${d}ms`, borderColor: '#ffd966' }} />
+                        ))}
+                        {fallParticles('🧱')}
+                        {riseParticles('✨')}
+                        <div className={styles.sigil}>🏰</div>
                     </>
                 );
             case 'token':
