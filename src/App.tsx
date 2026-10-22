@@ -117,7 +117,7 @@ export const App = () => {
         <div className='App'>
             {isGameStarted ? (
                 <div className='App-game'>
-                    <Game players={startedPlayers} boardSize={boardSize} />
+                    <Game players={startedPlayers} boardSize={boardSize} onBackToSetup={() => setIsGameStarted(false)} />
                 </div>
             ) : (
                 <div className={styles.prep}>
