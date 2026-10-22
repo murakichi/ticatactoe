@@ -62,6 +62,13 @@ import {
     leafFrostTargets,
     thawTargets,
     thawAll,
+    KIMON_LOCK_TURNS,
+    fireStacksTotal,
+    kimonTargets,
+    kimon,
+    fireWheelTargets,
+    FIRE_WHEEL_COUNT,
+    fireWheel,
 } from './thermal';
 import { lineCells } from './boardGeometry';
 import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
@@ -998,5 +1005,54 @@ describe('🍂落ち葉（🌱バッズの対）', () => {
         expect(b[3].effects.map((e) => e.effect)).toEqual(['❄']);
         expect(b[4].effects.map((e) => e.effect)).toEqual(['❄']);
         expect(thawAll(b, '💙').stacks).toBe(0);
+    });
+});
+
+describe('鬼門封じ / 火の車', () => {
+    const board = (): SquareInfo[] => Array.from({ length: 16 }, () => sq(undefined, 0));
+    const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+
+    it('鬼門封じ: 対象は敵のコマのうち守られていないもの（氷結中は選べる）', () => {
+        const b = board();
+        b[0] = sq('⭕', 3);
+        b[1] = sq('⭕', 3, '🔑'); // ロック中は選べない
+        b[2] = sq('⭕', 3, '❄');
+        b[3] = sq('💙', 3); // 自陣は選べない
+        expect(kimonTargets(b, '💙', guard)).toEqual([0, 2]);
+    });
+
+    it('鬼門封じ: 氷結していなければ破壊して3ターンロック。氷結中は❄が1つ減るだけでコマは残りロックしない', () => {
+        const b = board();
+        b[0] = sq('⭕', 5, '☠', '🌱');
+        expect(kimon(b, 0)).toEqual({ destroyed: true, thawed: false, locked: true });
+        expect(b[0]).toEqual({ player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] });
+        expect(KIMON_LOCK_TURNS).toBe(3);
+        const f = board();
+        f[2] = sq('⭕', 5, '❄', '❄');
+        expect(kimon(f, 2)).toEqual({ destroyed: false, thawed: true, locked: false });
+        expect(f[2].player).toBe('⭕');
+        expect(f[2].effects.map((e) => e.effect)).toEqual(['❄']);
+    });
+
+    it('火の車: 対象は鬼門封じと同じ（敵のコマで守られていないもの）。🔥を1つずつ付け、氷結中なら解けるだけ', () => {
+        const b = board();
+        b[0] = sq('⭕', 3);
+        b[10] = sq('⭕', 3, '❄'); // 隣り合わないマス（🔥は縦横隣の氷結も解くため）
+        b[2] = sq('💙', 3);
+        expect(fireWheelTargets(b, '💙', guard)).toEqual([0, 10]);
+        expect(FIRE_WHEEL_COUNT).toBe(2);
+        const thawed = fireWheel(b, [0, 10], 4);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🔥']);
+        expect(b[10].effects.map((e) => e.effect)).toEqual([]); // 氷結中は🔥が付かず❄が解けるだけ
+        expect(thawed).toContain(10);
+    });
+
+    it('fireStacksTotal: 敵味方・空きマスを問わず盤面全体の🔥を数える（火の車の無料条件に使う）', () => {
+        const b = board();
+        expect(fireStacksTotal(b)).toBe(0);
+        b[0] = sq('⭕', 3, '🔥');
+        b[1] = sq('💙', 3, '🔥', '🔥');
+        b[2] = sq(undefined, 0, '🔥');
+        expect(fireStacksTotal(b)).toBe(4);
     });
 });

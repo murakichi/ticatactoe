@@ -5,11 +5,11 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 74;
+export const SKILL_POOL_SIZE = 76;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1090,6 +1090,14 @@ class AIPlayer {
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
         }
 
+        // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。sim/ai.js と同一）
+        if (
+            availableSkills.includes(75) &&
+            fireWheelTargets(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2
+        ) {
+            spend(this.calculateAICost(costs.onClickFireWheel, false, false, 'onClickFireWheel'), 'onClickFireWheel');
+        }
+
         return skills;
     }
 
@@ -1106,6 +1114,33 @@ class AIPlayer {
             if (remaining >= cost) return { skill: o.skill, cost };
         }
         return null;
+    }
+
+    /**
+     * 鬼門封じ: 敵のコマを破壊して3ターンロックする対象。氷結中・🔑ロック・無敵のコマは選ばない。
+     * 破壊されたコマの持ち主のラインの価値（そのコマを含む、他の敵の駒が混ざらないライン）が大きいものを選び、minValue 未満なら null (sim/ai.js bestKimonTarget と同一)
+     */
+    findKimonTarget(board: SquareInfo[], minValue: number): number | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player) || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player) oc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(oc, 4)];
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        }
+        return bestVal >= minValue ? best : null;
     }
 
     /**
@@ -1616,6 +1651,19 @@ class AIPlayer {
                 const postBoard = board.map((sq, i) => (inj.kills && i === inj.index ? { ...sq, player: undefined, bind: 0, effects: [] } : sq));
                 const followup = this.getBestMove(postBoard, life);
                 return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
+            }
+        }
+
+        // 鬼門封じ: 敵のラインの要（3つ揃いなど）のコマを破壊して、その空きマスを3ターンロックする。自分に勝ち手があるときは温存 (sim/ai.js と同一)
+        if (
+            availableSkills.includes(74) &&
+            magic >= this.calculateAICost(costs.onClickKimon, false, false, 'onClickKimon') &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const target = this.findKimonTarget(board, 50);
+            if (target !== null) {
+                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 3, effects: [{ effect: '🔑' as const }] } : sq));
+                return { move: this.getBestMove(postBoard, life), skills: ['onClickKimon'], stompTarget: target };
             }
         }
 
