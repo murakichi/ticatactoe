@@ -132,7 +132,7 @@ const RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
-    giant: ['afterglow', 'sturdy'],
+    giant: ['vengeance', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
     poisoner: ['lastStand', 'sturdy'],
