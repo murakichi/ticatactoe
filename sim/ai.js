@@ -589,19 +589,6 @@ function discountPlan(s, me, availableSkills) {
         }
     }
 }
-// 毒使い: 猛毒化(毒を倍)で次の減衰までに壊れる敵コマ数 − 自陣コマ数。自陣は毒が付くとライフ1.5倍なので bind*1.5 で見る
-function intensifyNet(board, me) {
-    let foe = 0, own = 0;
-    for (const sq of board) {
-        if (!sq.player || thermal.isDormant(sq)) continue;
-        const p = sq.effects.filter((e) => e.effect === '☠').length;
-        if (p === 0) continue;
-        const mine = sq.player === me;
-        const b = mine ? Math.round(sq.bind * 1.5) : sq.bind;
-        if (p < b && 2 * p >= b) { if (mine) own++; else foe++; }
-    }
-    return foe - own;
-}
 // 鍛冶師が手札に固定する軽量スキル: 軽減札（特売・付与割引・トークン割引・活力特売・返し特売）。毎ターン手札に残して連携に使う
 const PYRO_LOCK = [60, 53, 54, 55, 56];
 const PYRO_FILLERS = [53, 54, 55, 56, 36, 0, 1, 34, 32, 33];
@@ -1169,11 +1156,6 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
-    // --- 猛毒化(idx18): 敵の壊れるコマが自陣より F.intensify 個以上多いなら撃つ (0で無効) ---
-    if (F.intensify && character === 'poisoner' && availableSkills.includes(18) && intensifyNet(board, me) >= F.intensify) {
-        spend(calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify'), 'intensify');
-    }
-
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
@@ -1274,7 +1256,7 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx)) || (F.poisonLock && character === 'poisoner' && idx === 18);
+        || (tokenLockAi && gearTokenIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
