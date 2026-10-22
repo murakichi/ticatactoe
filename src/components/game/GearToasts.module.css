@@ -1,0 +1,72 @@
+/* 盤面の上端に、発動したギアのチップを積む。盤面の演出(オーバーレイ z-index:5)より手前 */
+.stack {
+    position: absolute;
+    top: 10px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    z-index: 8;
+}
+
+.toast {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: #3b2a8f;
+    border: 2px solid #b9a6ff;
+    color: #fff;
+    font-weight: 800;
+    font-size: 14px;
+    white-space: nowrap;
+    animation: gearToastIn 2200ms var(--ease) forwards;
+}
+
+.icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.text {
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    background: #ffd966;
+    color: #3a2a00;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+/* 上から跳ねて入り、少し留まって上へ抜ける */
+@keyframes gearToastIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-24px) scale(0.6);
+    }
+    12% {
+        opacity: 1;
+        transform: translateY(0) scale(1.12);
+    }
+    20% {
+        transform: translateY(0) scale(1);
+    }
+    80% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-16px) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast {
+        animation-duration: 1ms;
+        animation-fill-mode: none;
+    }
+}

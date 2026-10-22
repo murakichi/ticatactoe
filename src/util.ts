@@ -11,12 +11,12 @@ import { geometryForCells } from './components/game/boardGeometry';
 export const LIFE_MEANS = {
     magician: 4,
     tactician: 5,
-    giant: 8,
+    giant: 10,
     yinYangMaster_yang: 7,
     yinYangMaster_ying: 4,
     electrician: 6,
     cryomancer: 5,
-    pyromancer: 5,
+    pyromancer: 6,
     default: 5,
 } as const;
 

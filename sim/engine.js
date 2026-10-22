@@ -139,7 +139,7 @@ const skillCosts = {
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
     onClickYingYangSkill: 5,
-    onClickStomp: 6,
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
@@ -675,17 +675,23 @@ function budsCount(board, player, guarded = false) {
         .filter((e) => e.effect === '🌱').length;
 }
 
-// 次の手番の席 (Game.tsx judgeNextSeat。post-increment な currentTurn・直前に動いた席の s.turn で呼ぶ)
-// 基本は席順。次が巨人のときだけ giantSkipModulo ターンに1回その席を飛ばす。
-// 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
+// 次の手番の席 (Game.tsx judgeNextSeat = src/components/game/giantTurn.ts seatForTurn と同じ並び)
+// 巨人は giantActEvery ラウンドに1回しか動かない: 「全員1周 → 巨人を除いて (giantActEvery-1) 周」の繰り返し。
+// 並びは currentTurn と直前の席で決まる。2人戦で同キャラ(巨人ミラー含む)は休みなしで交互に回す
 function judgeNextSeat(s) {
-    if (s.currentTurn === 1) return 0;
     const n = seatCount(s);
-    let next = (s.turn + 1) % n;
+    if (s.currentTurn <= 1) return 0;
+    const base = (s.turn + 1) % n; // 並びとずれているとき（途中から始めた盤など）も席順どおり次の席
+    const actEvery = config.giantActEvery || 1;
     const mirror = n === 2 && s.chars[0] === s.chars[1];
-    const mod = config.giantSkipModulo || 0;
-    if (!mirror && mod && s.chars[next] === 'giant' && s.currentTurn % mod >= mod - 1) next = (next + 1) % n;
-    return next;
+    const others = [];
+    for (let seat = 0; seat < n; seat++) if (s.chars[seat] !== 'giant') others.push(seat);
+    if (mirror || actEvery <= 1 || others.length === n || others.length === 0) return base;
+    const cycle = [];
+    for (let seat = 0; seat < n; seat++) cycle.push(seat);
+    for (let k = 1; k < actEvery; k++) cycle.push(...others);
+    if (cycle[(s.currentTurn - 2) % cycle.length] !== s.turn) return base;
+    return cycle[(s.currentTurn - 1) % cycle.length];
 }
 // 2人戦互換: 次が席0(heart)か
 function judgeNextIsHeart(s) {
@@ -862,7 +868,6 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useIgnite) {
-        if (!board[i].player) return false;
         thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
         s.useIgnite = false;
         return true;
@@ -972,7 +977,7 @@ function placeMove(s, i) {
     } else {
         newPlayer = cur;
         newBind = life;
-        newEffects = [];
+        newEffects = board[i].effects.filter((e) => e.effect === '🔥'); // 空きマスに置かれた🔥は、そこに置かれたコマ(誰のコマでも)に引き継がれる
     }
 
     if (newPlayer === cur && s.useBuds[0]) {
@@ -1012,6 +1017,9 @@ function placeMove(s, i) {
     // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
     fireCharges(s, i, cur);
 
+    // 巨人のオーラ: コマを置くと周囲8マスの敵コマが破壊され、周囲8マス全部がロックされる
+    if (curChar(s) === 'giant' && board[i].player === cur) giantAura(s, surroundRange(s, i), cur);
+
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
         let absorbed = 0;
@@ -1037,6 +1045,25 @@ function placeMove(s, i) {
     advanceTurn(s);
     settleWinner(s);
     return true;
+}
+
+// 巨人のパッシブ（src/components/game/giantAura.ts と同じ規則）。周囲8マスの敵コマを破壊し（氷結は身代わり）、そのあと周囲8マス全部をロックする（空きマスはライフ1）
+function giantAura(s, range, me) {
+    let destroyed = 0;
+    for (const j of range) {
+        const sq = s.board[j];
+        if (!sq.player || sq.player === me || isGuarded(s, sq)) continue;
+        const guard = thermal.absorbDestroy(sq);
+        if (guard.blocked) { s.board[j] = guard.sq; continue; }
+        s.board[j] = { player: undefined, bind: 0, effects: [] };
+        destroyed++;
+    }
+    if (destroyed > 0) addCorpses(s, destroyed);
+    for (const j of range) {
+        const sq = s.board[j];
+        if (thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        s.board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+    }
 }
 
 // ---- Skills (turn-ending vs not, faithful to Game.tsx) --------------------

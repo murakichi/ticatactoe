@@ -232,7 +232,7 @@ export const detonate = (board: SquareInfo[], me: SquareInfo['player']): Detonat
 };
 
 /** 業火の基礎コスト。sim/config.js の thermal.infernoCost と同値 */
-export const INFERNO_COST = 9;
+export const INFERNO_COST = 7;
 /** 業火が敵コマ1つに足す🔥のスタック数 */
 export const INFERNO_STACKS = 2;
 

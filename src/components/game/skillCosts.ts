@@ -3,7 +3,7 @@ export const skillCosts = {
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
     onClickYingYangSkill: 5,
-    onClickStomp: 6,
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
@@ -53,7 +53,7 @@ export const skillCosts = {
     onClickCryoFreeze: 2,
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
     onClickCleanse: 5,
-    onClickInferno: 9,
+    onClickInferno: 7,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,

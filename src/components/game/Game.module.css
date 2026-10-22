@@ -179,6 +179,23 @@
     cursor: help;
 }
 
+/* 発動済みで使えなくなったギア(土壇場の防壁): 灰色にして取り消し線 */
+.gearSpent {
+    background: rgba(140, 150, 170, 0.1);
+    border-color: rgba(140, 150, 170, 0.35);
+    color: var(--color-text-muted, #8a93a6);
+    text-decoration: line-through;
+    cursor: default;
+}
+
+.gearSpentLabel {
+    margin-left: 4px;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+}
+
 .effectBadge {
     font-size: 11px;
     padding: 2px 8px;
