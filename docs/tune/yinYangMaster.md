@@ -1,4 +1,9 @@
 # tune-top: yinYangMaster
+> **2026-10-22 トップ到達(式神リワーク後)**: 4条件すべてで1位(rank seed3/200 --target yinYangMaster)。基本 66.3%(2位 poisoner 65.2%)/ envDeck varied 68.3%(2位 poisoner 59.4%)/ oppGears none 74.2%(2位 magician 66.1%)/ oppGears random 71.3%(2位 magician 64.2%)。
+> 最終設定: gears=[lastStand, afterglow]、deck=[0,2,3,5,6,8,10,12,71,72,73,53]、AI=コンボ札(71/73/53)をロック固定+魔力温存(floodLock=1/floodHold=2)+特売の重ね撃ちでコンボ6魔力(comboDiscount=1)。
+> 効いた順: 特売の重ね撃ちでコンボを13→6魔力に(+15pt) > コンボ札の固定と魔力温存(31→60%) > ギア afterglow(+6〜7pt)。効かなかった: 周回(issue #160)・シャッフル探索(shuffleDig +2pt)・単独の札/群での相手デッキ妨害(ツナミ・サイレンス・🍂系・氷結等はいずれも誤差内)。
+> 落とし穴: `--envDeck varied` は**自分のAI席のデッキも**3枚入れ替える。核のカード(特売/式神一括/百鬼夜行)が抜けると 49%まで落ちる → deck の CORE_CARDS で入れ替え対象から外した(sim/deck.js と deck.ts)。
+> 状態: refining(次はデッキ最適化。ユーザー見立て: 勝率90%近くまで伸びる余地)。強さの一部は相手AIが式神入りの列を脅威と見ない点に依存(人間相手は未確認)。
 > **2026-10-22 再開(式神リワーク後の tune-top)**: 基準線 rank seed11/100: 6位 50.2%(1位 poisoner 69.5%)。
 > 試行: ①ギア afterglow(余韻) — lastStand+sturdy 48.7/50.2% → lastStand+afterglow 55.7(seed2/200)・56.4%(seed5/250)。対毒使い 26→59%、悪化相手なし → **採用**(推奨ギアを [lastStand, afterglow] に)。harvest 52.1 / luckyPurse 49.9 / priceWreck 44.1(不採用)。
 > ②issue #160 の周回(風の落とし子→刈り入れ前夜、連鎖割引): 発動した試合は魔力31まで伸びるが発動が稀(40試合中8)で勝率は基準以下(46.6 vs 53.7%、seed3/100) → 現状は不採用。③シャッフルでコンボ札を探す shuffleDig=6: 50.3→52.3%(誤差内)。固定・温存を外すと24.4%。
@@ -13,7 +18,7 @@
 - 基準線: 環境勝率 38.5% / 7位 / 1位 magician 65.7%  (rank, seed1, games60)。--target単体は41.8%(seed1/100)・36.8%(seed2/100)
 - 連続不採用回数: 0(試行9で採用)
 - 関連 issue: #12(⭕側バグ。closed・修正済み)、#44(長期戦の弱さの言及)。調整予定の数値変更なし(2026-10-21検索)
-- 状態: running(トップ未達。採用後 rank seed5/100: 7位43.2%、1位 magician 66.2%)
+- 状態: refining(トップ到達。上記)
 ## 診断
 - 勝ち筋: 陰(魔力+2/ライフ4)で貯めて凶荒の舞(相手全コマ-2)、陽(ライフ7/コスト+1/魔力+1)は豊穣の舞(自コマbind+2)。
 - ファネル(vs magician, 100試合): yyDance 1.74回/試合(使用試合90%)。buds0.5/token0.49/addLife0.21。**sim AIは陰陽転化(toggleYY)を一度も撃たない**=常に初期モード(陰)。
