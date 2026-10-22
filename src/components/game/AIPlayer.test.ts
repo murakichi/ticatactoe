@@ -1007,3 +1007,23 @@ describe('霜枯れのAI使用', () => {
         expect(withPyro.makeMove(one, 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
     });
 });
+
+describe('陰陽師の百鬼夜行→式神一括への対策 (sim/ai.js antiFlood と同じ)', () => {
+    // 💙 のコマが 0,1,6,11。敵コマ(⭕)が無く、💙 のコマが入っていない列は最下段(12〜15)だけ
+    const board = () => {
+        const b = emptyBoard();
+        [0, 1, 6, 11].forEach((i) => put(b, i, '💙'));
+        return b;
+    };
+
+    it('相手が陰陽師なら、コンボで勝てる最後の列を自コマで埋める', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'yinYangMaster']);
+        expect([12, 13, 14, 15]).toContain(ai.getBestMove(board(), 5));
+    });
+
+    it('相手が陰陽師でなければ、この着手を強制しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'tactician']);
+        const move = ai.getBestMove(board(), 5);
+        expect(move).not.toBeNull();
+    });
+});

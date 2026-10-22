@@ -64,6 +64,9 @@ const EMPTY_LOCK_DENY = 2;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
 /** 1手番に引き直せる回数の上限。陰陽師はコンボ札(71/73/53)を探すので多め（sim/ai.js の shuffleDig=8） */
+/** 陰陽師の百鬼夜行→式神一括への対策の重み (sim/ai.js antiFlood / antiFloodLines)。敵コマの入っていない列を全部塞げる着手の加点と、減らせた列1本あたりの加点 */
+const FLOOD_BLOCK_BONUS = 300;
+const FLOOD_LINE_WEIGHT = 100;
 export const rerollBudget = (character: CharacterId): number => (character === 'yinYangMaster' ? 8 : MAX_REROLLS);
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
@@ -718,6 +721,13 @@ class AIPlayer {
             }
         }
 
+        // 陰陽師の百鬼夜行→式神一括は『敵コマの入っていない列』が1本でもあれば一手番で勝つ。陰陽師が相手のときは、
+        // その列を自コマで埋めて減らす着手を優先する（全部塞げるなら大きく加点。sim/ai.js の antiFlood=300 / antiFloodLines=100）
+        const floodFoes = this.opponents.filter((o) => this.characters[seatOf(o)] === 'yinYangMaster');
+        const geo = geometryForCells(board.length);
+        const floodFreeLines = (bd: SquareInfo[], foe: Player) =>
+            geo.winLines.filter((line) => line.every((k) => (!bd[k].player && !emptyBlocked(bd[k])) || bd[k].player === foe)).length;
+
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
         let bestMove = allMoves[0];
@@ -739,6 +749,12 @@ class AIPlayer {
 
             // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
             score += this.fireGain(board, i);
+
+            if (floodFoes.length > 0) {
+                const left = Math.max(...floodFoes.map((foe) => floodFreeLines(simBoard, foe)));
+                if (left === 0) score += FLOOD_BLOCK_BONUS;
+                else score += FLOOD_LINE_WEIGHT * Math.max(...floodFoes.map((foe) => floodFreeLines(board, foe) - floodFreeLines(simBoard, foe)));
+            }
 
             if (score > bestScore) {
                 bestScore = score;
