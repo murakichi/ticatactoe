@@ -3,7 +3,7 @@
 'use strict';
 /*
  * AI の推奨ギアの「別案」を選ぶための計測。キャラごとに主案(RECOMMENDED_GEARS)と候補の組を、同じシード・同じ相手(推奨ギア)で
- * probe-top.js の環境勝率で比べ、主案より著しく低くない（既定: -2.0pt 以内）ものを別案として出す。
+ * probe-top.js の環境勝率で比べ、主案より著しく低くない（既定: -1.5pt 以内）ものを別案として出す。
  *
  *   node sim/probe-altgear.js <char> [games=150] [seed=31] [--cand a,b;c,d;...] [--margin 0.02]
  *   候補を省略すると、docs/tune の知見から選んだ既定の候補（下の DEFAULT_CANDIDATES）を測る。
@@ -19,7 +19,7 @@ const pos = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].
 const char = pos[0];
 const games = pos[1] || '150';
 const seed = pos[2] || '31';
-const margin = parseFloat(flag('margin', '0.02'));
+const margin = parseFloat(flag('margin', '0.015'));
 
 // docs/tune の走査で主案と誤差内だった組、または直前まで主案だった組
 const DEFAULT_CANDIDATES = {
