@@ -7,6 +7,7 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
+import { isUniqueEffect } from './UniqueEffects';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
@@ -43,7 +44,7 @@ import styles from './Game.module.css';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
 // 盤面を揺らすスキル演出
-const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno', 'bulwark'];
+const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno', 'bulwark', 'glacier', 'shikigamiBlast', 'miasma'];
 
 export type PlayerConfig = {
     character: CharacterId;
@@ -181,10 +182,11 @@ export const Game = (props: GameProps) => {
     const [previewCells, setPreviewCells] = useState<number[]>([]);
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
-    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string) => {
+    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string, extra?: { variant?: string; sources?: number[] }) => {
         playSfx(type);
-        setBoardEffect((prev) => ({ type, index, indexes, label, nonce: (prev?.nonce ?? 0) + 1 }));
-        setTimeout(() => setBoardEffect(null), 1400);
+        setBoardEffect((prev) => ({ type, index, indexes, label, ...extra, nonce: (prev?.nonce ?? 0) + 1 }));
+        // 固有スキルは予兆→本体→余波の多段演出なので長めに出す
+        setTimeout(() => setBoardEffect(null), isUniqueEffect(type) ? 2100 : 1400);
     };
     // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
     const [boardBurst, setBoardBurst] = useState<BurstEffect | null>(null);
@@ -767,7 +769,7 @@ export const Game = (props: GameProps) => {
             harvestMagic(cells.length);
             addLog(`${posName(i)}から帯電拡散（${cells.length}マスに⚡）`);
             flashCells(cells);
-            playEffect('zap', undefined, undefined, '帯電拡散');
+            playEffect('chainZap', i, cells);
             setUseChargeSpread(false);
             setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
             return;
@@ -1584,7 +1586,7 @@ export const Game = (props: GameProps) => {
         if (!centerSurvived) board[i] = { player: currentTurnPlayer, bind: 2, effects: [{ effect: '🌱' }] };
         addLog(`${posName(i)}を中心に審判の日を実行`);
         flashCells(judgeIndexes);
-        playEffect('judge');
+        playEffect('judge', i);
         playBurst('iceBreak', broken);
         setCurrentBoard(board);
         setUseJudgeDay(false);
@@ -1593,8 +1595,8 @@ export const Game = (props: GameProps) => {
 
     const onClickToggleYingYang = () => {
         addLog('「陰陽転化」を使用（陰陽モードを切替）');
-        playEffect('yinyang');
         // 自分のモードを見て反転する (issue #12: 以前は💙のモードを見ていて⭕が永久に陽へ切り替えられなかった)
+        playEffect('yinyang', undefined, undefined, undefined, { variant: currentYinYangMode === 'yang' ? '陰' : '陽' });
         setYinYangModeAt(turnSeat, (m) => (m === 'yang' ? 'ying' : 'yang'));
         spendMagic(gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang'), false, true, 'onClickToggleYingYang');
     };
@@ -1732,7 +1734,7 @@ export const Game = (props: GameProps) => {
             board[idx] = { player: currentTurnPlayer, bind: necromancyReviveLife, effects: [] };
         }
         setCurrentBoard(board);
-        playEffect('necromancy');
+        playEffect('necromancy', undefined, summonTargets);
         addLog(`「蘇生」を使用（墓地から${summonCount}体召喚 / ${necromancyDuration}ターン吸収）`);
     };
 
@@ -1798,6 +1800,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const plan = miasmaPlan(board, currentTurnPlayer);
         const targets = Array.from(plan.keys());
+        const sources = board.map((_, k) => k).filter((k) => board[k].player === currentTurnPlayer && board[k].effects.some((e) => e.effect === '☠'));
         plan.forEach((n, j) => {
             board[j] = poisonStrike({ ...board[j], effects: [...board[j].effects, ...Array<Effect>(n).fill({ effect: '☠' })] });
         });
@@ -1810,7 +1813,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, targets);
         addLog(`ミアズマ（敵${targets.length}マスに毒、自陣の毒はすべて消えた）`);
         flashCells(targets);
-        playEffect('poison', undefined, undefined, 'ミアズマ');
+        playEffect('miasma', undefined, targets, undefined, { sources });
         setCurrentBoard(board);
     };
     const onClickMiasma = () => {
