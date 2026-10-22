@@ -35,8 +35,7 @@ const GEAR_PARAMS = {
     lastStandLife: 2,
     scorchMagic: 2,
     scorchCap: 6,
-    ashMagic: 1,
-    ashCap: 2,
+    ashDiscount: 1,
     rootMagic: 1,
 };
 const P = GEAR_PARAMS;
@@ -87,7 +86,12 @@ function burnedBudCount(owners, buds, squares, holder) {
     return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - budCount(sq)) : n), 0);
 }
 const scorchGain = (burned) => Math.min(P.scorchCap, burned * P.scorchMagic);
-const ashGain = (burnedOut) => Math.min(P.ashCap, burnedOut) * P.ashMagic;
+const flameCount = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
+/** 灰の供物: 手番開始時の記録に対し、holder 以外のコマで🔥が増えたマスの数 */
+function ignitedCount(owners, flames, squares, holder) {
+    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && flameCount(sq) > flames[i] ? n + 1 : n), 0);
+}
+const flameCounts = (squares) => squares.map(flameCount);
 const frozenBudCount = (squares) => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
 const rootGain = (frozenBuds) => frozenBuds * P.rootMagic;
 const budCounts = (squares) => squares.map(budCount);
@@ -102,6 +106,7 @@ function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (hasGear(gears, 'lightToken') && isToken) delta += P.lightTokenCost;
     if (hasGear(gears, 'ailmentPact') && !(skillKey && EXCLUSIVE_SKILL_KEYS.includes(skillKey))) delta -= P.ailmentDiscount * (ctx.ailments || 0);
     if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
+    if (hasGear(gears, 'ashOffering')) delta -= P.ashDiscount * (ctx.ash || 0);
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 }
@@ -171,5 +176,5 @@ const pickRecommendedGears = (character, rng = Math.random) => {
 
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, EXCLUSIVE_SKILL_KEYS, countVarietySquares, countAilmentKinds, lostCells, burnedBudCount, scorchGain, ashGain, frozenBudCount, rootGain, budCounts, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
+    adjustCostByGear, EXCLUSIVE_SKILL_KEYS, countVarietySquares, countAilmentKinds, lostCells, burnedBudCount, scorchGain, ignitedCount, flameCounts, frozenBudCount, rootGain, budCounts, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
 };

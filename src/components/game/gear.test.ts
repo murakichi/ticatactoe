@@ -23,7 +23,8 @@ import {
     lostCells,
     burnedBudCount,
     scorchGain,
-    ashGain,
+    ignitedCount,
+    flameCounts,
     frozenBudCount,
     rootGain,
     budCounts,
@@ -157,8 +158,13 @@ describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根�
         expect(scorchGain(10)).toBe(6);
     });
 
-    it('灰の供物: 燃え尽きた数×1、上限2', () => {
-        expect([ashGain(0), ashGain(1), ashGain(5)]).toEqual([0, 1, 2]);
+    it('灰の供物: 敵のマスで🔥が増えた数だけ、全スキルのコストを下げる(重複・下限1)', () => {
+        const board = [sq('⭕', '🔥'), sq('💙', '🔥'), sq('⭕', '🔥', '🔥'), sq('⭕')];
+        expect(ignitedCount(['⭕', '💙', '⭕', '⭕'], [0, 0, 1, 0], board, '💙')).toBe(2);
+        expect(flameCounts(board)).toEqual([1, 1, 2, 0]);
+        expect(adjustCostByGear(5, ['ashOffering'], ctx(), false, undefined)).toBe(5);
+        expect(adjustCostByGear(5, ['ashOffering'], { skillsThisTurn: 0, echoReady: false, ash: 3 })).toBe(2);
+        expect(adjustCostByGear(2, ['ashOffering'], { skillsThisTurn: 0, echoReady: false, ash: 3 })).toBe(1);
     });
 
     it('凍てつく根: 氷結中のマスの🌱を敵味方問わず数え、魔力は上限なし', () => {
@@ -235,9 +241,10 @@ describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
         expect(simGear.budCounts(board)).toEqual(budCounts(board));
         expect(simGear.burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙')).toBe(burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙'));
         expect(simGear.frozenBudCount(board)).toBe(frozenBudCount(board));
+        expect(simGear.flameCounts(board)).toEqual(flameCounts(board));
+        expect(simGear.ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙')).toBe(ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙'));
         for (const n of [0, 1, 2, 3, 5, 10]) {
             expect(simGear.scorchGain(n)).toBe(scorchGain(n));
-            expect(simGear.ashGain(n)).toBe(ashGain(n));
             expect(simGear.rootGain(n)).toBe(rootGain(n));
         }
     });

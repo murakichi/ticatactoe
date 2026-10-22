@@ -442,20 +442,25 @@ test('焦土: 自分の🌱が燃えても、🔥のない🌱の消失(収穫�
     assert.strictEqual(gear.scorchGain(10), 6, '上限6');
 });
 
-test('灰の供物: 🔥付きの敵コマがライフ0になると魔力+1(減衰ごとに最大2)', () => {
-    const run = (gears) => {
-        const s = game(gears);
-        [5, 6, 7].forEach((k) => { s.board[k] = { player: C, bind: 1, effects: [{ effect: '🔥' }] }; });
-        const before = s.magic[0];
-        e.placeMove(s, 0); // 減衰で🔥のコマのライフが0になる
-        return s.magic[0] - before;
-    };
-    assert.strictEqual(run([['ashOffering'], []]) - run([[], []]), 2, '3体でも上限2');
-    const own = game([[], ['ashOffering']]);
-    own.board[5] = { player: C, bind: 1, effects: [{ effect: '🔥' }] };
-    const m = own.magic[1];
-    e.placeMove(own, 0);
-    assert.strictEqual(own.magic[1], m + 1, '自分のコマには発動しない(手番開始の+1だけ)');
+test('灰の供物: 敵のマスに🔥を付与すると、付与したマス1つにつき次の自分の手番の終わりまでコスト-1(重複・下限1)', () => {
+    const s = game([['ashOffering'], []]);
+    s.board[5] = { player: C, bind: 30, effects: [] };
+    s.board[6] = { player: C, bind: 30, effects: [] };
+    s.board[7] = { player: C, bind: 30, effects: [] };
+    e.placeMove(s, 0); // 💙の手番終了 → ⭕
+    e.placeMove(s, 1); // ⭕の手番終了 → 💙の手番(記録)
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4);
+    s.board[5].effects.push({ effect: '🔥' }); // 💙のスキルで敵の2マスに🔥
+    s.board[6].effects.push({ effect: '🔥' });
+    s.board[8] = { player: H, bind: 30, effects: [{ effect: '🔥' }] }; // 自分のマスの🔥は数えない
+    e.placeMove(s, 2); // 💙の手番終了 → ⭕の手番
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '相手の手番中は⭕の側のコストを見る(💙の次の手番まで保留)');
+    e.placeMove(s, 3); // ⭕の手番終了 → 💙の手番
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '2マスぶん重複して-2');
+    assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');
+    e.placeMove(s, 9); // 💙の手番終了
+    e.placeMove(s, 10);
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '次の手番の終わりで切れる');
 });
 
 test('凍てつく根: 氷結で休眠した🌱1つにつき手番開始時の魔力+1(敵味方問わず、上限なし)', () => {

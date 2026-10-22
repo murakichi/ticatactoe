@@ -33,7 +33,8 @@ import {
     countVarietySquares,
     burnedBudCount,
     scorchGain,
-    ashGain,
+    ignitedCount,
+    flameCounts,
     frozenBudCount,
     rootGain,
     budCounts,
@@ -152,6 +153,9 @@ export const Game = (props: GameProps) => {
         pending: Array<boolean>(seatCount).fill(false),
         snap: null as (Player | undefined)[] | null,
         snapBuds: null as number[] | null, // 焦土: 手番開始時の各マスの🌱の数
+        snapFlames: null as number[] | null, // 灰の供物: 手番開始時の各マスの🔥の数
+        ashActive: Array<number>(seatCount).fill(0), // 灰の供物: 有効な割引の重ね数
+        ashPending: Array<number>(seatCount).fill(0), // 次の自分の手番から有効になる重ね数
         lastMove: null as number | null,
     });
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
@@ -164,8 +168,8 @@ export const Game = (props: GameProps) => {
     const gearCtxFor = (seat: number): CostContext => {
         const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
         return seat === turnSeat
-            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat] }
-            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat] };
+            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat], ash: ruinState.current.ashActive[seat] }
+            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat], ash: ruinState.current.ashPending[seat] };
     };
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
@@ -637,6 +641,15 @@ export const Game = (props: GameProps) => {
             }
             // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
             const ruin = ruinState.current;
+            // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引（重複する）
+            if (ruin.snap && ruin.snapFlames && hasGear(gearsBySeat[turnSeat], 'ashOffering')) {
+                const n = ignitedCount(ruin.snap, ruin.snapFlames, currentBoard, symbols[turnSeat]);
+                if (n > 0) ruin.ashPending[turnSeat] += n;
+            }
+            ruin.ashActive[turnSeat] = 0;
+            ruin.ashActive[nextSeat] = ruin.ashPending[nextSeat];
+            if (ruin.ashActive[nextSeat] > 0 && hasGear(gearsBySeat[nextSeat], 'ashOffering')) gearTrigger('ashOffering', `スキルのコスト-${ruin.ashActive[nextSeat] * GEAR_PARAMS.ashDiscount}`);
+            ruin.ashPending[nextSeat] = 0;
             if (ruin.snap) {
                 const after = currentBoard.map((sq) => sq.player);
                 symbols.forEach((sym, seat) => {
@@ -649,6 +662,7 @@ export const Game = (props: GameProps) => {
             ruin.pending[nextSeat] = false;
             ruin.snap = currentBoard.map((sq) => sq.player);
             ruin.snapBuds = budCounts(currentBoard);
+            ruin.snapFlames = flameCounts(currentBoard);
             ruin.lastMove = null;
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.kinds[nextSeat] = new Set();
@@ -936,16 +950,13 @@ export const Game = (props: GameProps) => {
         ruinState.current.lastMove = i;
         const decayNow = shouldDecay(placements, seatCount);
         const burnCells: number[] = [];
-        const burnedOut: (Player | undefined)[] = []; // 灰の供物: 🔥の継続ダメージでライフ0になったコマの持ち主
         setPlacements(placements + 1);
         for (let s = 0; decayNow && s < nextBoard.length; s++) {
             if (burnDamageOf(nextBoard[s], characters) > 0) burnCells.push(s);
-            const before = nextBoard[s];
             // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
             // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
             const square = decayTick(nextBoard[s], characters);
             nextBoard[s] = square;
-            if (before.player && before.bind > 0 && square.bind === 0 && square.effects.some((x) => x.effect === '🔥')) burnedOut.push(before.player);
             const poison = square.effects.filter((x) => x.effect === '☠').length;
             // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
             const expiredLock = square.bind === 0 ? square.effects.find((x) => x.effect === '🔑') : undefined;
@@ -969,14 +980,6 @@ export const Game = (props: GameProps) => {
         }
         // 🔥の継続ダメージを受けたマスに炎の小演出
         playBurst('burn', burnCells);
-        // 灰の供物: 🔥付きの敵コマがライフ0になったぶん魔力
-        symbols.forEach((sym, seat) => {
-            if (!hasGear(gearsBySeat[seat], 'ashOffering')) return;
-            const gain = ashGain(burnedOut.filter((o) => o !== sym).length);
-            if (gain <= 0) return;
-            setMagicAt(seat, (m) => m + gain);
-            gearTrigger('ashOffering', `魔力+${gain}`);
-        });
         // 毒使い側は、毒で空いたマス1つにつき魔力+1
         if (poisonVanished > 0) {
             characters.forEach((c, seat) => {
@@ -2910,7 +2913,16 @@ export const Game = (props: GameProps) => {
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
             processedTurn: 1,
         };
-        ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, snapBuds: null, lastMove: null };
+        ruinState.current = {
+            active: Array<boolean>(seatCount).fill(false),
+            pending: Array<boolean>(seatCount).fill(false),
+            snap: null,
+            snapBuds: null,
+            snapFlames: null,
+            ashActive: Array<number>(seatCount).fill(0),
+            ashPending: Array<number>(seatCount).fill(0),
+            lastMove: null,
+        };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());

@@ -548,6 +548,9 @@ function newGame(opts = {}) {
         ruinPending: fill(false),
         snapOwners: null,
         snapBuds: null,
+        snapFlames: null,
+        ashActive: fill(0), // 灰の供物: 有効な割引の重ね数 / 次の自分の手番から有効になる重ね数
+        ashPending: fill(0),
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
@@ -616,6 +619,7 @@ function gearCtx(s, seat) {
         echoReady: s.echoReady[seat],
         ailments: hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0,
         ruin: s.ruinActive[seat],
+        ash: hasGear(s.gears[seat], 'ashOffering') ? s.ashActive[seat] : 0,
     };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
@@ -781,6 +785,14 @@ function advanceTurn(s) {
             bumpStat(s, 'scorchedEarth', gain);
         });
     }
+    // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引。終わる席の割引はここで切れる
+    if (s.snapOwners && s.snapFlames && hasGear(s.gears[s.turn], 'ashOffering')) {
+        const n = gear.ignitedCount(s.snapOwners, s.snapFlames, s.board, SYMBOLS[s.turn]);
+        if (n > 0) { s.ashPending[s.turn] += n; bumpStat(s, 'ashOffering', n); }
+    }
+    s.ashActive[s.turn] = 0;
+    s.ashActive[next] = s.ashPending[next];
+    s.ashPending[next] = 0;
     s.ruinActive[s.turn] = false;
     s.ruinActive[next] = s.ruinPending[next];
     s.ruinPending[next] = false;
@@ -829,6 +841,7 @@ function advanceTurn(s) {
     s.echoNext[next] = false;
     s.snapOwners = s.board.map((sq) => sq.player);
     s.snapBuds = gear.budCounts(s.board);
+    s.snapFlames = gear.flameCounts(s.board);
     s.lastMoveCell = null;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
@@ -972,16 +985,13 @@ function placeMove(s, i) {
     const decayNow = shouldDecay(s.placements, seatCount(s));
     s.placements += 1;
     const spreadOrigins = [];
-    const burnedOut = []; // 灰の供物: 🔥の継続ダメージでライフ0になったコマの持ち主
     for (let k = 0; decayNow && k < board.length; k++) {
         const sq = board[k];
-        const prevBind = sq.bind;
         // ❄氷結中のマスはターン進行でライフが減らない（自然減衰・🔥の継続ダメージとも）
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !thermal.isFrozen(sq)) sq.bind--;
         // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
         const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
         if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
-        if (sq.player && prevBind > 0 && sq.bind === 0 && sq.effects.some((x) => x.effect === '🔥')) burnedOut.push(sq.player);
         const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
             // ダメージが通れば🔥は消える
@@ -1005,14 +1015,6 @@ function placeMove(s, i) {
             s.chars.forEach((c, seat) => { if (c === 'poisoner') s.magic[seat] += 1; });
         }
     }
-    // 灰の供物: 🔥付きの敵コマがライフ0になったぶん魔力
-    s.gears.forEach((g, seat) => {
-        if (!hasGear(g, 'ashOffering')) return;
-        const gain = gear.ashGain(burnedOut.filter((o) => o !== SYMBOLS[seat]).length);
-        if (gain <= 0) return;
-        s.magic[seat] += gain;
-        bumpStat(s, 'ashOffering', gain);
-    });
     const hadPoisonAtTarget = poisonStacks(board[i]) > 0;
 
     const cur = curPlayer(s);
