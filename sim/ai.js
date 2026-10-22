@@ -523,13 +523,42 @@ const DISCOUNT_REDUCERS = [
     { idx: 53, key: 'markdown', cost: 'onClickMarkdown' },
 ];
 const DISCOUNT_ALL = DISCOUNT_REDUCERS.concat([{ idx: 57, key: 'uniqueDiscount', cost: 'onClickUniqueDiscount' }]);
+// 業火を最も安く撃てる軽減札の並び(同じ札の重ね撃ちを含む、最大3枚)を探す。合計(軽減札の支払い+その後の業火)が手持ち魔力以内で、今の業火コストより安いものだけ
+function bestDiscountSeq(s, seat, avail) {
+    const cands = DISCOUNT_ALL.filter((r) => avail.includes(r.idx));
+    const start = s.discount[seat];
+    let best = null;
+    const rec = (seq, spent) => {
+        const ic = infernoCost(s);
+        const total = spent + ic;
+        if (seq.length > 0 && total <= curMagic(s) && (!best || total < best.total)) best = { seq: seq.slice(), total };
+        if (seq.length >= 3 || ic === 0) return;
+        for (const r of cands) {
+            if (!discountMod.canUseDiscountSkill(s.discount[seat], r.cost, s.life)) continue;
+            const rc = calculateCost(s, costsOf(s)[r.cost], false, false, r.cost);
+            if (spent + rc > curMagic(s)) continue;
+            const prev = s.discount[seat];
+            s.discount[seat] = discountMod.afterSkill(prev, r.cost);
+            seq.push(r); rec(seq, spent + rc); seq.pop();
+            s.discount[seat] = prev;
+        }
+    };
+    rec([], 0);
+    s.discount[seat] = start;
+    return best;
+}
 function discountPlan(s, me, availableSkills) {
     if (!F.discountPlan || s.silenced[s.turn]) return;
     const seat = s.turn;
     // 業火: 撃てる状況(ライフが残る敵コマ3個以上)なら、軽減札で業火が安くなる/撃てるようになるとき、合計コストが最小の軽減札を先に撃つ
     if (F.discountInferno && curChar(s) === 'pyromancer' && !s.infernoReady[seat]
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0) {
-        for (let i = 0; i < (F.discountStack ? 4 : 3); i++) {
+        if (F.discountStack) {
+            const cur0 = infernoCost(s);
+            const plan = cur0 > 0 ? bestDiscountSeq(s, seat, availableSkills) : null;
+            if (plan && plan.total < cur0) for (const r of plan.seq) SKILLS[r.key](s);
+        }
+        for (let i = 0; i < (F.discountStack ? 0 : 3); i++) {
             const cur = infernoCost(s);
             if (cur === 0) break;
             let pick = null;
@@ -546,7 +575,7 @@ function discountPlan(s, me, availableSkills) {
             }
             if (!pick) break;
             SKILLS[pick.r.key](s);
-            if (!F.discountStack) availableSkills = availableSkills.filter((x) => x !== pick.r.idx); // 重ね撃ち: 使った軽減札を手札に残して同じ札を続けて撃つ（軽減は積み上がる）
+            availableSkills = availableSkills.filter((x) => x !== pick.r.idx);
         }
     }
     if (s.discount[seat].next > 0) return;
