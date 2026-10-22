@@ -24,7 +24,7 @@ run('AI同士の実戦（本番TS版）', () => {
                 const r = orig.apply(this, args);
                 if (this.character === 'yinYangMaster') {
                     const empties = args[0].filter((q) => !q.player).length;
-                    trace.push(`magic=${args[1]} hand=[${args[5]}] empties=${empties} -> ${r.reroll ? 'REROLL' : ''}${r.skills.join('+')}${r.chargeClicks ? ' clicks:' + r.chargeClicks.map((c) => c.skill.replace('onClick', '')).join(',') : ''}${r.move !== null ? ' move=' + r.move : ''}`);
+                    trace.push(`magic=${args[1]} hand=[${args[5]}] empties=${empties} win=${this.floodComboWins(args[0]) ? 1 : 0} -> ${r.reroll ? 'REROLL' : ''}${r.skills.join('+')}${r.chargeClicks ? ' clicks:' + r.chargeClicks.map((c) => c.skill.replace('onClick', '')).join(',') : ''}${r.move !== null ? ' move=' + r.move : ''}`);
                 }
                 return r;
             }) : null;
