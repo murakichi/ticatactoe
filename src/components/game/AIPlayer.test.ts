@@ -681,6 +681,24 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(mk().planShikigami(b, 12, flood, [64, 62])?.win ?? false).toBe(false); // 魔力が足りない
     });
 
+    it('コンボ札(62/64)だけを手札に固定する', () => {
+        const ai = mk();
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 62, 3, 64])).toEqual([62, 64]);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 2, 3])).toEqual([]);
+    });
+
+    it('コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める。相手のリーチがあるときは防御する', () => {
+        const hold = { ...costs, onClickShikigamiFlood: 7, onClickBuds: 2, onClickAddLife: 3 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 8, hold, 3, 2, [62, 2, 0], false);
+        expect(r.skills).toEqual([]);
+        expect(r.chargeClicks).toBeUndefined();
+        // 札が無いときは従来どおり撃つ
+        const free = mk().makeMove(b, 8, hold, 3, 2, [2, 0, 3], false);
+        expect(free.skills.length + (free.chargeClicks?.length ?? 0)).toBeGreaterThan(0);
+    });
+
     it('式神は列に数えない: 式神を含む列はリーチ扱いにならず、式神は脅威にも数えない', () => {
         const ai = mk();
         const b = emptyBoard();

@@ -43,7 +43,7 @@ const AI_DEFAULTS = {
     magLockN: 3, // 魔法使いが1手番にロックするバッズ駒の最大数（A/B: 環境勝率 +2.9/+3.0/+3.5pt。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.lsNoBlock = 1; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.lsNoBlock = 1; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1055,6 +1055,8 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
+    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 62 || i === 64);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
     // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
@@ -1489,8 +1491,12 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
+    // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
+    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
+        && (F.floodHold >= 2 ? (s.skills.includes(62) || s.skills.includes(64)) : (s.skills.includes(62) && s.skills.includes(64)))
+        && curMagic(s) < calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll');
     // 陰陽師: 式神の設置・転化・爆破
-    if (curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && shikigamiTurn(s, me)) {
+    if (curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && (holdFlood ? false : shikigamiTurn(s, me))) {
         if (s.winner) return { move: null, turnEnded: true };
         updateShield(s);
         const move = getEnhancedBestMove(s);
@@ -1537,7 +1543,7 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
-    const skills = chooseSkills(s, availableSkills);
+    const skills = holdFlood && oppReaches === 0 ? [] : chooseSkills(s, availableSkills);
     for (const sk of skills) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };

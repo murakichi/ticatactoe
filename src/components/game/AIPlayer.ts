@@ -655,7 +655,9 @@ class AIPlayer {
     ): number[] {
         // A/B検証の結果、固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが柔軟性を削いで不利だったため無効化。
         // 有益だったキャラ(軍師=トークン固定 / あなた / ネクロ=中立)のみロックする。
-        if (this.character === 'giant' || this.character === 'magician' || this.character === 'yinYangMaster') {
+        // 陰陽師は百鬼夜行(64)+式神一括(62)のコンボ札だけを手札に固定して、揃うまで持ち続ける（sim/ai.js の floodLock=1）
+        if (this.character === 'yinYangMaster') return availableSkills.filter((i) => i === 62 || i === 64);
+        if (this.character === 'giant' || this.character === 'magician') {
             return [];
         }
         let myPieces = 0, oppPieces = 0, empties = 0;
@@ -1320,8 +1322,11 @@ class AIPlayer {
             }
         }
 
+        // 陰陽師: コンボ札（62/64）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
+        const holdFlood = this.character === 'yinYangMaster' && (availableSkills.includes(62) || availableSkills.includes(64))
+            && magic < this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + this.calculateAICost(costs.onClickShikigamiAll, false, false, 'onClickShikigamiAll');
         // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
-        if (this.character === 'yinYangMaster') {
+        if (this.character === 'yinYangMaster' && !holdFlood) {
             const plan = this.planShikigami(board, magic, costs, availableSkills);
             if (plan) {
                 if (plan.win) return { move: null, skills: [], chargeClicks: plan.clicks };
@@ -1702,7 +1707,8 @@ class AIPlayer {
         // 軽減札を先に撃つと、この手番に撃てるスキルが増える/魔力が余るなら撃つ（sim/ai.js の discountPlan と同方針。
         // chooseSkills を「次のスキルを軽減した状態」で選び直して比べる）。クリック不要の計画（chargeClicks）に軽減札以外があると
         // 「次に打つ」の軽減をそちらが消費してしまうので、そのときは行わない
-        let planned = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+        const holdNoSpend = holdFlood && this.opponents.every((o) => this.countReaches(board, o) === 0); // 相手のリーチがあるときは防御のため通常どおり
+        let planned = holdNoSpend ? [] : [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
         if (chargeClicks.every((c) => isDiscountSkill(c.skill)) && !planned.some((s) => TURN_ENDING_SKILLS.includes(s))) {
             const baseLeft = magic - this.lastSpent;
             const reducers: { idx: number; key: keyof typeof costs; cut: number }[] = [
