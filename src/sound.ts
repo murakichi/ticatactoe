@@ -281,6 +281,13 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             for (let i = 0; i < 3; i++) tone(ctx, d, { f0: 880 + i * 220, f1: 1400 + i * 200, t: T(0.35 + i * 0.07), dur: 0.08, gain: 0.25 });
             return 0.7;
         }
+        case 'autumn': {
+            // 🍂落ち葉系: 乾いた葉が擦れ合う音と、ひと呼吸の木枯らし
+            noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.35, filter: 'bandpass', f0: 900, f1: 2200, q: 1.1 });
+            for (let i = 0; i < 4; i++) noise(ctx, d, { t: T(0.05 + i * 0.09), dur: 0.06, gain: 0.22, filter: 'highpass', f0: 4000 });
+            tone(ctx, d, { type: 'triangle', f0: 262, f1: 392, t: T(0.1), dur: 0.35, gain: 0.2 });
+            return 0.55;
+        }
         case 'iceBreak': {
             // 氷結が砕けて身代わりになる: パリン
             noise(ctx, d, { t: T(0), dur: 0.1, gain: 0.6, filter: 'highpass', f0: 4500 });

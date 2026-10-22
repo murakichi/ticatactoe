@@ -1,4 +1,4 @@
 export type Effect = {
-    effect: '🌱' | '🔑' | '☠' | '⚡' | '❄' | '🔥';
+    effect: '🌱' | '🔑' | '☠' | '⚡' | '❄' | '🔥' | '🍂';
     value?: number;
 };
