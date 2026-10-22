@@ -687,6 +687,87 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
     });
 });
 
+describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
+    const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 6, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any;
+    const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
+    const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
+
+    it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 14, costs, [0]);
+        expect(plan?.clicks[0].skill).toBe('onClickShikigamiPlace');
+        expect([4, 5, 6, 2].includes(plan!.clicks[0].target!)).toBe(true);
+    });
+
+    it('式神を置いたあとに魔力が残らない（貯めたい）ときは置かない', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        expect(mk().planShikigami(b, 8, costs, [0])).toBeNull();
+    });
+
+    it('爆破の価値がある式神があれば、陰からは転化して爆破する', () => {
+        const b = emptyBoard();
+        shiki(b, 5);
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 12, costs, [0]);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickToggleYingYang', 'onClickShikigamiBlast']);
+        expect(plan?.clicks[1].target).toBe(5);
+        // 爆破後: 式神は消え、敵の0・1は壊れ、周囲の空きマスは式神になる
+        expect(plan!.board[5].player).toBeUndefined();
+        expect(plan!.board[0].player).toBeUndefined();
+        expect(plan!.board[4].effects.some((e) => e.effect === '📜')).toBe(true);
+    });
+
+    it('式神一括: 自コマ1+式神置き3で列を完成できる魔力があればコンボを組む', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 3);
+        const plan = mk().planShikigami(b, 15, costs, [71, 0]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 14, costs, [71, 0])?.win ?? false).toBe(false);
+    });
+
+    it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
+        const flood = { ...costs, onClickShikigamiFlood: 7 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 13, flood, [73, 71]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
+    });
+
+    it('コンボ札(71/73)だけを手札に固定する', () => {
+        const ai = mk();
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 71, 3, 73])).toEqual([71, 73]);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 2, 3])).toEqual([]);
+    });
+
+    it('コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める。相手のリーチがあるときは防御する', () => {
+        const hold = { ...costs, onClickShikigamiFlood: 7, onClickBuds: 2, onClickAddLife: 3 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 8, hold, 3, 2, [71, 2, 0], false);
+        expect(r.skills).toEqual([]);
+        expect(r.chargeClicks).toBeUndefined();
+        // 札が無いときは従来どおり撃つ
+        const free = mk().makeMove(b, 8, hold, 3, 2, [2, 0, 3], false);
+        expect(free.skills.length + (free.chargeClicks?.length ?? 0)).toBeGreaterThan(0);
+    });
+
+    it('式神は列に数えない: 式神を含む列はリーチ扱いにならず、式神は脅威にも数えない', () => {
+        const ai = mk();
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        shiki(b, 3, '⭕');
+        expect(ai.countReaches(b, '⭕')).toBe(0);
+        expect(ai.findThreatSquares(b, '⭕')).not.toContain(3);
+    });
+});
+
 describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先にロックする（sim/ai.js の EL_AI）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');

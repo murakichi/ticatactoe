@@ -175,6 +175,13 @@
     box-shadow: 0 0 0 3px #bfe9ff inset, 0 0 10px rgba(125, 211, 252, 0.8);
 }
 
+/* 📜式神のマス（紙の分身。プレイヤーの色は保ち、点線の縁と薄い見た目で本物のコマと区別する） */
+.shikigami {
+    outline: 2px dashed #8a6d3b;
+    outline-offset: -4px;
+    opacity: 0.8;
+}
+
 /* 🔥火炎のマス（橙の縁。氷結と重なったときは氷の縁を上に重ねる） */
 .burning {
     box-shadow: 0 0 0 2px #fb923c inset, 0 0 10px rgba(249, 115, 22, 0.7);
