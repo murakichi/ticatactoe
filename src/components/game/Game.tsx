@@ -2088,7 +2088,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts[key], true, false, currentTurnPlayer, key), true, true, key);
         setUseToken(true);
     };
-    const useLeafTokens = (key: LeafTokenKey, label: string, count: number, leaves: number) => {
+    const placeLeafTokens = (key: LeafTokenKey, label: string, count: number, leaves: number) => {
         const board = currentBoard.slice();
         const picks = randomAnyPick(findEmptyIndexes(board), count).filter((idx) => idx !== undefined);
         let granted = 0;
@@ -2100,9 +2100,9 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         finishLeafToken(key, label, picks, granted);
     };
-    const onClickLeafToken = () => useLeafTokens('onClickLeafToken', '木枯らしの使い', 1, 1);
-    const onClickTwinLeafToken = () => useLeafTokens('onClickTwinLeafToken', '落葉松の双子', 1, 2);
-    const onClickDoubleLeafToken = () => useLeafTokens('onClickDoubleLeafToken', '紅葉狩り', 2, 1);
+    const onClickLeafToken = () => placeLeafTokens('onClickLeafToken', '木枯らしの使い', 1, 1);
+    const onClickTwinLeafToken = () => placeLeafTokens('onClickTwinLeafToken', '落葉松の双子', 1, 2);
+    const onClickDoubleLeafToken = () => placeLeafTokens('onClickDoubleLeafToken', '紅葉狩り', 2, 1);
     // 枯野の相席: 両トークン。🍂が付くのは自分のコマだけ（敵のコマに付けると自分のコストが上がるため）
     const onClickBothLeafToken = () => {
         const board = currentBoard.slice();
