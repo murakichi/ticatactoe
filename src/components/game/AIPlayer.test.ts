@@ -79,6 +79,18 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
         expect(giant.findStompTarget(emptyBoard())).toBeNull();
     });
 
+    it('giant applyAuraSim: 周囲の敵コマを壊し、周囲8マスをロックする', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        put(b, 2, '💙', 3);
+        const sim = giant.applyAuraSim(b.map((sq) => ({ ...sq, effects: [...sq.effects] })), 1);
+        expect(sim[0].player).toBeUndefined();
+        expect(sim[0].effects.some((e) => e.effect === '🔑')).toBe(true);
+        expect(sim[2].player).toBe('💙');
+        expect(sim[2].effects.some((e) => e.effect === '🔑')).toBe(true);
+    });
+
     it('giant stomps to cut an opponent reach before locking (stompDef)', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const b = emptyBoard();

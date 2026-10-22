@@ -51,6 +51,7 @@ const AI_DEFAULTS = {
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
+    auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
@@ -755,6 +756,24 @@ function simulatePlace(board, index, player, life) {
     return nb;
 }
 
+// 巨人のオーラを着手後の盤面に反映する（engine.js giantAura と同じ規則）。着手マスの周囲の敵コマを壊し、周囲を全部ロックする
+function applyAuraSim(sim, index, me) {
+    const geo = geometryForCells(sim.length);
+    const range = geo.surroundRange(index);
+    for (const j of range) {
+        const sq = sim[j];
+        if (!sq.player || sq.player === me || sq.effects.some((e) => e.effect === '🔑') || shield.has(j)) continue;
+        const guard = thermal.absorbDestroy(sq);
+        sim[j] = guard.blocked ? guard.sq : { player: undefined, bind: 0, effects: [] };
+    }
+    for (const j of range) {
+        const sq = sim[j];
+        if (thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+        sim[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+    }
+    return sim;
+}
+
 function getValidMoves(board, me, character) {
     const moves = [];
     for (let i = 0; i < board.length; i++) {
@@ -895,6 +914,7 @@ function getEnhancedBestMove(s) {
     let bestMove = allMoves[0];
     for (const i of allMoves) {
         const sim = simulatePlace(board, i, me, life);
+        if (F.auraSim && character === 'giant' && sim[i].player === me) applyAuraSim(sim, i, me);
         let score = minimax(sim, searchDepth(board), false, -Infinity, Infinity, me, opp, life);
         // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
         const reaches = countReaches(sim, me);
