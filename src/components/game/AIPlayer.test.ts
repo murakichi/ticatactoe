@@ -782,6 +782,28 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(mk().makeMove(threat, 4, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
     });
 
+    it('引き直しのたびに固定し直すと、見つけたコンボ札は次のシャッフルで失われず、やがて3枚揃う（Game.tsx の reshuffledSkills と同じ規則）', () => {
+        // Game.tsx reshuffledSkills: 固定(最大3)を残し、残り枠をデッキから埋める
+        let seed = 12345;
+        const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+        const deck = [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53];
+        const reshuffle = (locks: number[]): number[] => {
+            const keep = locks.slice(0, 3);
+            const pool = deck.filter((i) => !keep.includes(i)).sort(() => rnd() - 0.5);
+            return [...keep, ...pool.slice(0, 3 - keep.length)];
+        };
+        const ai = mk();
+        let hand = reshuffle([]);
+        let prevFound: number[] = [];
+        for (let step = 0; step < 60 && !(hand.includes(71) && hand.includes(73) && hand.includes(53)); step++) {
+            const locks = ai.chooseLocks(emptyBoard(), 0, 5, hand); // 引き直しのたび（再計画のたび）に走る
+            hand = reshuffle(locks);
+            prevFound.forEach((c) => expect(hand).toContain(c)); // 見つけた札は残る
+            prevFound = locks;
+        }
+        expect([71, 73, 53].every((c) => hand.includes(c))).toBe(true);
+    });
+
     it('コンボ札(71/73)と特売(53)を手札に固定する', () => {
         expect(mk().chooseLocks(emptyBoard(), 0, 5, [53, 71, 3, 73])).toEqual([53, 71, 73]);
     });
