@@ -18,7 +18,7 @@ import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -136,6 +136,7 @@ export const Game = (props: GameProps) => {
         freeCast: false, // 福引きで発動するスキルの支払いを0にする（次の spendMagic で消える）
         oppSkilled: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がスキルを使った（返し特売の0コスト条件の元）
         oppSkillPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での oppSkilled
+        fireBase: Array<number>(seatCount).fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件。増えていれば、この手番に敵か自陣へ🔥を付与した）
         processedTurn: 1,
     });
     // 手番でない席のコスト表示は「その席の次の手番の頭」の状態で出す
@@ -165,6 +166,7 @@ export const Game = (props: GameProps) => {
         const adjusted = adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey);
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+        if (skillKey === 'onClickFireWheel' && seat === turnSeat && fireStacksTotal(currentBoard) > gearTurn.current.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
         const discounted = seat === turnSeat ? applyDiscount(adjusted, discountAmount(gearTurn.current.discount[seat], skillKey, isToken)) : adjusted;
         // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
         return discounted + leafSurcharge(currentBoard, symbols[seat]);
@@ -331,6 +333,8 @@ export const Game = (props: GameProps) => {
             case 'onClickMulch': onClickMulch(); break;
             case 'onClickAutumn': onClickAutumn(); break;
             case 'onClickLeafFrost': onClickLeafFrost(); break;
+            case 'onClickKimon': onClickKimon(); break;
+            case 'onClickFireWheel': onClickFireWheel(); break;
             case 'onClickShuffle': onClickShuffle(); break;
             case 'aiReplan': runAIMove(); break; // 引き直しのあと、新しい手札で計画し直す
             case 'onClickCounterMarkdown':
@@ -635,6 +639,7 @@ export const Game = (props: GameProps) => {
             gearTurn.current.discount[nextSeat] = emptyDiscount();
             gearTurn.current.oppSkillPrev[nextSeat] = gearTurn.current.oppSkilled[nextSeat];
             gearTurn.current.oppSkilled[nextSeat] = false;
+            gearTurn.current.fireBase[nextSeat] = fireStacksTotal(currentBoard);
             gearTurn.current.freeCast = false;
             gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
             if (gearTurn.current.echoReady[nextSeat] && hasGear(gearsBySeat[nextSeat], 'afterglow')) gearTrigger('afterglow', '1つ目のスキルが安い');
@@ -796,6 +801,11 @@ export const Game = (props: GameProps) => {
 
         if (useSacrifice) {
             exeSacrifice(i);
+            return;
+        }
+
+        if (useKimon) {
+            exeKimon(i);
             return;
         }
 
@@ -2517,6 +2527,49 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
+    // 鬼門封じ: 敵のコマを1つ選んで破壊する（氷結中は❄-1だけ）。破壊して空きマスになったら3ターンロックする。🔑ロック・⚡無敵のコマは選べない
+    const [useKimon, setUseKimon] = useState<boolean>(false);
+    const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    const onClickKimon = () => {
+        addLog('「鬼門封じ」を使用（敵のコマを選択）');
+        setUseKimon(true);
+        spendMagic(calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon'), true, true, 'onClickKimon');
+    };
+    const exeKimon = (i: number) => {
+        if (!kimonCandidates().includes(i)) return; // 敵のコマ以外・守られているコマは選び直せる
+        const board = currentBoard.slice();
+        const r = kimon(board, i);
+        if (r.destroyed) {
+            addCorpses(1);
+            addLog(`${posName(i)}の敵コマを破壊し、3ターンロック`);
+        } else {
+            addLog(`${posName(i)}の氷結を1つ砕いた`);
+        }
+        flashCells([i]);
+        playEffect('lock', i, [i], '鬼門封じ');
+        playBurst('iceBreak', r.thawed ? [i] : []);
+        setUseKimon(false);
+        setCurrentBoard(board);
+    };
+    // 火の車: ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルする（無料）。このターン敵か自陣に🔥を付与していれば0コスト（撃つとリセット）。クリック不要・手番は続く
+    const fireWheelGuard = (sq: SquareInfo) => isGuarded(sq, characters);
+    const onClickFireWheel = () => {
+        const cands = fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard);
+        if (cands.length === 0) return;
+        const picks = randomAnyPick(cands, Math.min(FIRE_WHEEL_COUNT, cands.length));
+        const board = currentBoard.slice();
+        const thawed = fireWheel(board, picks, geo.size, keepBuds);
+        addLog(`「火の車」を使用（${picks.map(posName).join('・')}に🔥・手札をシャッフル）`);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        flashCells(picks);
+        playEffect('flame', undefined, picks, '火の車');
+        playBurst('thaw', thawed);
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel'), true, true, 'onClickFireWheel');
+        gearTurn.current.fireBase[turnSeat] = fireStacksTotal(board); // 条件のリセット（この札自身が付けた🔥は数えない）
+        setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills)); // 手札のシャッフル（無料。スキル扱いではない）
+    };
+
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。クリック不要・手番は続く
     const ownAilmentCells = (): number[] =>
         currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && ailmentStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
@@ -2870,6 +2923,7 @@ export const Game = (props: GameProps) => {
             freeCast: false,
             oppSkilled: Array<boolean>(seatCount).fill(false),
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
+            fireBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,
         };
         ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, lastMove: null };
@@ -2906,6 +2960,7 @@ export const Game = (props: GameProps) => {
         else if (useIcicle) setPreviewCells([i]);
         else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useShatter) setPreviewCells(currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []);
+        else if (useKimon) setPreviewCells(kimonCandidates().includes(i) ? [i] : []);
         else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
         else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useShikigamiPlace) setPreviewCells(!currentBoard[i].player && !emptyBlocked(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
@@ -2916,7 +2971,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -2948,6 +3003,8 @@ export const Game = (props: GameProps) => {
         ? '砕氷'
         : useSacrifice
         ? '殉火'
+        : useKimon
+        ? '鬼門封じ'
         : useSwidden
         ? '焼畑'
         : useShikigamiPlace
@@ -3057,6 +3114,8 @@ export const Game = (props: GameProps) => {
         { idx: 71, onClick: onClickShikigamiAll, buttonText: `式神一括-${calculateCost(seatCosts.onClickShikigamiAll, false, false, currentTurnPlayer, 'onClickShikigamiAll')}`, paragraph: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）', disabled: checkSkillDisable(seatCosts.onClickShikigamiAll) || ownShikigami().length === 0 },
         { idx: 72, onClick: onClickShikigamiRandom, buttonText: `式神ランダム設置-${calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom')}`, paragraph: `ランダムな空きマスにライフ${Math.max(1, SHIKIGAMI_LIFE + gearTokenBindDelta(turnGears))}の式神を置きます 式神は列の並びに数えません\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickShikigamiRandom, true) },
         { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, paragraph: '着手できる全ての空きマスに、ライフ0の式神を置きます', disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
+        { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
+        { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
     ];
 
     return (

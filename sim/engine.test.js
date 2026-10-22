@@ -2020,7 +2020,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2348,6 +2348,60 @@ test('春一番: 自陣の❄を全て解除し、解除した数だけこのタ
     // 軽減はこの手番だけ（次の手番の開始で空に戻る）
     s.heartTurn = false; e.advanceTurn(s);
     assert.strictEqual(s.discount[0].turn, 0);
+});
+
+test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は❄-1だけ）。守られた敵・自陣は選べない。コスト5', () => {
+    const s = game(); s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.kimonCandidates(s).length, 0);
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };
+    s.board[1] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [FRZ, FRZ] };
+    s.board[3] = { player: '💙', bind: 3, effects: [] };
+    assert.deepStrictEqual(e.kimonCandidates(s), [0, 2]);
+    const cost = e.calculateCost(s, e.skillCosts.onClickKimon, false, false, 'onClickKimon');
+    assert.strictEqual(cost, 5);
+    e.SKILLS.kimon(s);
+    assert.strictEqual(s.heartMagic, 30 - 5);
+    assert.strictEqual(e.placeMove(s, 3), false); // 自陣は選べない（待ちが続く）
+    assert.strictEqual(e.placeMove(s, 2), true); // 氷結中: ❄が1つ減るだけ
+    assert.strictEqual(s.board[2].player, '⭕');
+    assert.strictEqual(s.board[2].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.useKimon, false);
+    s.heartTurn = true; s.turn = 0; s.heartMagic = 30;
+    e.SKILLS.kimon(s);
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(s.board[0].player, undefined);
+    assert.strictEqual(s.board[0].bind, 3);
+    assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '🔑').length, 1);
+});
+
+test('火の車: ランダムな敵2マスに🔥、手札をシャッフル。このターン敵か自陣に🔥を付与していれば0コスト、撃つとリセット', () => {
+    const s = game(); s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };
+    s.board[1] = { player: '⭕', bind: 3, effects: [] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [] };
+    s.board[3] = { player: '💙', bind: 3, effects: [] };
+    assert.strictEqual(e.fireWheelLegal(s), true);
+    const flames = () => s.board.reduce((n, q) => n + q.effects.filter((x) => x.effect === '🔥').length, 0);
+    const price = () => e.calculateCost(s, e.skillCosts.onClickFireWheel, false, false, 'onClickFireWheel');
+    assert.strictEqual(price(), 5);
+    s.skills = [-1, -1, -1];
+    e.SKILLS.fireWheel(s);
+    assert.strictEqual(s.heartMagic, 30 - 5);
+    assert.strictEqual(flames(), 2); // 敵2マスだけ
+    assert.strictEqual(s.board[3].effects.length, 0); // 自陣には付かない
+    assert.ok(s.skills.every((i) => i >= 0)); // 手札が引き直された
+    assert.strictEqual(price(), 5); // 自分が付けた🔥はカウントされず、リセットされている
+    // 自陣に🔥が付くと（他のスキルなどで）0コストになる
+    s.board[3] = { player: '💙', bind: 3, effects: [FLM] };
+    assert.strictEqual(price(), 0);
+    const before = s.heartMagic;
+    e.SKILLS.fireWheel(s);
+    assert.strictEqual(s.heartMagic, before); // 無料
+    assert.strictEqual(price(), 5); // 撃つとリセット
+    // 次の手番の頭で基準が取り直される
+    e.advanceTurn(s);
+    assert.strictEqual(s.fireBase[s.turn], flames());
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

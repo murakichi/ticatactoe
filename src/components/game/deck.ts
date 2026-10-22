@@ -95,6 +95,8 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）' },
     { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付け、その後手札をシャッフルします。このターン敵か自陣に🔥を付与していればコスト0（使うとリセット）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

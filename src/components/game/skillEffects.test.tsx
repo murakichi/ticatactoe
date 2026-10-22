@@ -73,6 +73,8 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickAutumn: 'autumn',
     onClickLeafFrost: 'freeze',
     onClickSpringWind: 'discount',
+    onClickKimon: 'lock',
+    onClickFireWheel: 'flame',
     onClickBoost: 'rain',
     onClickRelocate: 'dash',
     onClickClone: 'clone',
@@ -115,6 +117,8 @@ const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
 const OWN_BANNER_LABELS: Record<string, string> = {
     onClickLeafFrost: '霜枯れ',
     onClickSpringWind: '春一番',
+    onClickKimon: '鬼門封じ',
+    onClickFireWheel: '火の車',
     onClickBonfire: '焚き火の唄',
     onClickMulch: '腐葉土の目覚め',
     onClickAutumn: '一葉知秋',
