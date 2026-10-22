@@ -261,6 +261,28 @@ function thawAll(board, player) {
     for (const k of cells) { stacks += frozenStacks(board[k]); board[k] = thaw(board[k]); }
     return { stacks, cells };
 }
+// ---- 鬼門封じ / 火の車（src/components/game/thermal.ts と同じ）----
+const KIMON_LOCK_TURNS = 3;
+/** 盤面全体の🔥の総数（火の車の「このターンに🔥を付与したか」の判定用） */
+const fireStacksTotal = (board) => board.reduce((n, sq) => n + flameStacks(sq), 0);
+/** 鬼門封じの対象: player 以外のコマのうち guarded でないマス */
+const kimonTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 氷結中なら❄を1つ減らすだけ。そうでなければ破壊して KIMON_LOCK_TURNS ターンのロックを掛ける。board を直接書き換える */
+function kimon(board, cell) {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { destroyed: false, thawed: true, locked: false };
+    }
+    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    return { destroyed: true, thawed: false, locked: true };
+}
+/** 火の車の対象: player 以外のコマのうち guarded でないマス */
+const fireWheelTargets = (board, player, guarded) => kimonTargets(board, player, guarded);
+const FIRE_WHEEL_COUNT = 2;
+/** picks に🔥を1つずつ（ignite の規則どおり）。解けたマスを返す。board を直接書き換える */
+function fireWheel(board, picks, size, keepBuds) {
+    return ignite(board, picks, size, 1, keepBuds).thawed;
+}
 /** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマスの昇順 */
 const leafFrostTargets = (board, player) =>
     board.map((sq, i) => (sq.player === player && leafStacks(sq) > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
@@ -295,7 +317,7 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     return { threshold, targets, thawed };
 }
 
-const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 
 // バーンアウト（thermal.ts と同じ）
 const BURNOUT_FREE_FLAMES = 4;
@@ -323,5 +345,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
     lockable,
-    thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

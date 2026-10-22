@@ -79,6 +79,18 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
         expect(giant.findStompTarget(emptyBoard())).toBeNull();
     });
 
+    it('giant applyAuraSim: 周囲の敵コマを壊し、周囲8マスをロックする', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        put(b, 2, '💙', 3);
+        const sim = giant.applyAuraSim(b.map((sq) => ({ ...sq, effects: [...sq.effects] })), 1);
+        expect(sim[0].player).toBeUndefined();
+        expect(sim[0].effects.some((e) => e.effect === '🔑')).toBe(true);
+        expect(sim[2].player).toBe('💙');
+        expect(sim[2].effects.some((e) => e.effect === '🔑')).toBe(true);
+    });
+
     it('giant stomps to cut an opponent reach before locking (stompDef)', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const b = emptyBoard();
@@ -672,6 +684,155 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         const ai = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
         const r = ai.makeMove(budBoard([0, 1, 2]), 9, skillCosts, 2, 5, [], false);
         expect(r.chargeClicks?.filter((c) => c.skill === 'onClickUseLock').length ?? 0).toBe(0);
+    });
+});
+
+describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
+    const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 6, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any;
+    const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
+    const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
+
+    it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 14, costs, [0]);
+        expect(plan?.clicks[0].skill).toBe('onClickShikigamiPlace');
+        expect([4, 5, 6, 2].includes(plan!.clicks[0].target!)).toBe(true);
+    });
+
+    it('式神を置いたあとに魔力が残らない（貯めたい）ときは置かない', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        expect(mk().planShikigami(b, 8, costs, [0])).toBeNull();
+    });
+
+    it('爆破の価値がある式神があれば、陰からは転化して爆破する', () => {
+        const b = emptyBoard();
+        shiki(b, 5);
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 12, costs, [0]);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickToggleYingYang', 'onClickShikigamiBlast']);
+        expect(plan?.clicks[1].target).toBe(5);
+        // 爆破後: 式神は消え、敵の0・1は壊れ、周囲の空きマスは式神になる
+        expect(plan!.board[5].player).toBeUndefined();
+        expect(plan!.board[0].player).toBeUndefined();
+        expect(plan!.board[4].effects.some((e) => e.effect === '📜')).toBe(true);
+    });
+
+    it('式神一括: 自コマ1+式神置き3で列を完成できる魔力があればコンボを組む', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 3);
+        const plan = mk().planShikigami(b, 15, costs, [71, 0]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 14, costs, [71, 0])?.win ?? false).toBe(false);
+    });
+
+    it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
+        const flood = { ...costs, onClickShikigamiFlood: 7 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 13, flood, [73, 71]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
+    });
+
+    it('特売(53)が手札にあれば重ね撃ちしてコンボを6魔力に圧縮する（特売×2→百鬼夜行→特売×2→式神一括）', () => {
+        const withMd = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 6, withMd, [73, 71, 53]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual([
+            'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
+        ]);
+        // 5魔力では足りない。特売が無ければ13必要
+        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 12, withMd, [73, 71])?.win ?? false).toBe(false);
+    });
+
+    it('シャッフル探索: 勝てる盤面でコンボ札が揃わず、魔力が足りるなら引き直す。揃っているか魔力が足りなければ引き直さない', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const ai = mk();
+        ai.rerollsLeft = 8;
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、6+1 以上ある
+        expect(ai.makeMove(b, 6, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
+        expect(ai.makeMove(b, 8, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
+    });
+
+    it('チャージ待ち: 勝てる盤面で相手のリーチが無く、探索に足りない魔力なら、駒を置かずチャージする', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 4, dig, 3, 2, [2, 0, 3], false);
+        expect(r.skills).toEqual(['onClickCharge']);
+        expect(r.move).toBeNull();
+        // 魔力が足りれば（探索に回る）チャージしない
+        expect(mk().makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+        // 相手のリーチがあるときは防御を優先する
+        const threat = emptyBoard();
+        [4, 5, 6].forEach((i) => put(threat, i, '⭕'));
+        expect(mk().makeMove(threat, 4, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+    });
+
+    it('引き直しのたびに固定し直すと、見つけたコンボ札は次のシャッフルで失われず、やがて3枚揃う（Game.tsx の reshuffledSkills と同じ規則）', () => {
+        // Game.tsx reshuffledSkills: 固定(最大3)を残し、残り枠をデッキから埋める
+        let seed = 12345;
+        const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+        const deck = [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53];
+        const reshuffle = (locks: number[]): number[] => {
+            const keep = locks.slice(0, 3);
+            const pool = deck.filter((i) => !keep.includes(i)).sort(() => rnd() - 0.5);
+            return [...keep, ...pool.slice(0, 3 - keep.length)];
+        };
+        const ai = mk();
+        let hand = reshuffle([]);
+        let prevFound: number[] = [];
+        for (let step = 0; step < 60 && !(hand.includes(71) && hand.includes(73) && hand.includes(53)); step++) {
+            const locks = ai.chooseLocks(emptyBoard(), 0, 5, hand); // 引き直しのたび（再計画のたび）に走る
+            hand = reshuffle(locks);
+            prevFound.forEach((c) => expect(hand).toContain(c)); // 見つけた札は残る
+            prevFound = locks;
+        }
+        expect([71, 73, 53].every((c) => hand.includes(c))).toBe(true);
+    });
+
+    it('コンボ札(71/73)と特売(53)を手札に固定する', () => {
+        expect(mk().chooseLocks(emptyBoard(), 0, 5, [53, 71, 3, 73])).toEqual([53, 71, 73]);
+    });
+
+    it('コンボ札(71/73)だけを手札に固定する', () => {
+        const ai = mk();
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 71, 3, 73])).toEqual([71, 73]);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 2, 3])).toEqual([]);
+    });
+
+    it('コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める。相手のリーチがあるときは防御する', () => {
+        const hold = { ...costs, onClickShikigamiFlood: 7, onClickBuds: 2, onClickAddLife: 3 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 8, hold, 3, 2, [71, 2, 0], false);
+        expect(r.skills).toEqual([]);
+        expect(r.chargeClicks).toBeUndefined();
+        // 札が無いときは従来どおり撃つ
+        const free = mk().makeMove(b, 8, hold, 3, 2, [2, 0, 3], false);
+        expect(free.skills.length + (free.chargeClicks?.length ?? 0)).toBeGreaterThan(0);
+    });
+
+    it('式神は列に数えない: 式神を含む列はリーチ扱いにならず、式神は脅威にも数えない', () => {
+        const ai = mk();
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        shiki(b, 3, '⭕');
+        expect(ai.countReaches(b, '⭕')).toBe(0);
+        expect(ai.findThreatSquares(b, '⭕')).not.toContain(3);
     });
 });
 
