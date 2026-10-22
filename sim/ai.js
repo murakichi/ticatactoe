@@ -49,7 +49,6 @@ const AI_DEFAULTS = {
     lsAggro: 1,  // 土壇場の防壁が未発動なら相手の1回目の勝ちは止めに行かず攻める(防壁が受ける)。軍師 seed2/4×200 で +2.7pt(合算400試合, CI±2.2)（A/B採用）
     igniteSig: 1, // 鍛冶師が固有スキルの火遁を毎手番撃つ。1=敵コマ(ライフが残る)を燃やす / 2=敵の列を作りかけの空きマスにも🔥を仕込む（tune-top 鍛冶師: 環境勝率 seed22/150 +6.8pt, seed24/200 +8.6pt。2は1と同じ結果）
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
-    igniteFirst: 0, // 余韻を装備した鍛冶師が、火遁を他のスキルより先に撃って1つ目の割引を火遁に使う（tune-top 鍛冶師）
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
@@ -198,21 +197,6 @@ function bestIgniteTarget(s, me, mode) {
         if (val > bestVal) { bestVal = val; best = i; }
     }
     return best;
-}
-
-// 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる。撃ったら true
-function tryIgnite(s, me) {
-    const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
-    if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
-        && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
-        && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') + F.igniteReserve
-        // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
-        && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
-            && curMagic(s) - calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') < infernoCost(s))) {
-        const t = bestIgniteTarget(s, me, F.igniteSig);
-        if (t !== null) { SKILLS.ignite(s); placeMove(s, t); updateShield(s); return true; }
-    }
-    return false;
 }
 
 // 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数
@@ -1246,8 +1230,6 @@ function faithfulMakeMoveInner(s) {
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
-    // 余韻(スキルを使った次の手番の1つ目のスキルが-1)を装備していれば、他より先に火遁を撃って1つ目の割引を火遁に使う
-    if (F.igniteFirst && hasGear(s.gears[s.turn], 'afterglow') && s.echoReady[s.turn] && s.gearSkills[s.turn] === 0) tryIgnite(s, me);
 
     // 永続スキルプール(ロックで固定される)を使用
     let availableSkills = s.skills.slice();
@@ -1461,7 +1443,17 @@ function faithfulMakeMoveInner(s) {
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 
-    tryIgnite(s, me);
+    // 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる
+    const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
+    if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
+        && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') + F.igniteReserve
+        // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
+        && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
+            && curMagic(s) - calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') < infernoCost(s))) {
+        const t = bestIgniteTarget(s, me, F.igniteSig);
+        if (t !== null) { SKILLS.ignite(s); placeMove(s, t); updateShield(s); }
+    }
 
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= infernoCost(s)
