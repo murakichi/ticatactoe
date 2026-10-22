@@ -946,6 +946,8 @@ function getEnhancedBestMove(s) {
     const floodFoes = F.antiFlood ? opps.filter((o) => s.chars[SYMBOLS.indexOf(o)] === 'yinYangMaster' && s.magic[SYMBOLS.indexOf(o)] >= (F.antiFloodMagic || 8)) : [];
     const floodWinsOn = (bd, foe) => calculateWinner(lineSyms(bd.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: foe, bind: 0, effects: [] }
         : (sq.player === foe && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))))) === foe;
+    // 陰陽師 foe が(百鬼夜行→式神一括で)完成させられる、敵コマ(= foe 以外)の入っていない列の数
+    const freeLinesFor = (bd, foe) => { let n = 0; for (const line of geometryForCells(bd.length).winLines) if (line.every((k) => (!bd[k].player && !thermal.emptyBlocked(bd[k])) || bd[k].player === foe)) n++; return n; };
     // minimax + fork bonus
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
@@ -961,7 +963,10 @@ function getEnhancedBestMove(s) {
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
-        if (floodFoes.length && floodFoes.every((foe) => !floodWinsOn(sim, foe))) score += F.antiFlood;
+        if (floodFoes.length) {
+            if (floodFoes.every((foe) => !floodWinsOn(sim, foe))) score += F.antiFlood;
+            else if (F.antiFloodLines) score += F.antiFloodLines * Math.max(...floodFoes.map((foe) => freeLinesFor(board, foe) - freeLinesFor(sim, foe)));
+        }
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
