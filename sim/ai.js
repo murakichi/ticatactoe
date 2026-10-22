@@ -56,7 +56,7 @@ const AI_DEFAULTS = {
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.comboDiscount = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1231,7 +1231,7 @@ function chooseLocks(s, availableSkills) {
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
-    if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return availableSkills.filter((i) => i === 33 || i === 36);
+    if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53));
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
@@ -1814,6 +1814,11 @@ function faithfulMakeMoveInner(s) {
     // 陰陽師(検証用 F.bloomLoop): 風の落とし子→刈り入れ前夜の周回で魔力を稼ぐ(issue #160。連鎖割引・病炎の契りで1周のコストが獲得を下回るとき)
     if (F.bloomLoop && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
         const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        // 魔力が F.loopMin 以上なら、2枚（風の落とし子・刈り入れ前夜）が揃うまで1コストで手札を引き直して探す
+        if (F.loopDig) {
+            for (let k = 0; k < F.loopDig && curMagic(s) >= F.loopMin && !(s.skills.includes(33) && s.skills.includes(36)); k++) E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
         for (let k = 0; k < F.bloomLoop && s.skills.includes(33) && s.skills.includes(36); k++) {
             if (curMagic(s) < cost('onClickWindborne') + cost('onClickHarvestEve') || thermal.sowCandidates(s.board, me).length === 0) break;
             const before = curMagic(s);
