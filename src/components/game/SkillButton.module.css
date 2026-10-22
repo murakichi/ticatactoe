@@ -38,7 +38,7 @@
 }
 
 .support {
-    --cat: var(--color-buds);
+    --cat: #2dd4bf;
 }
 
 .token {
@@ -50,11 +50,36 @@
 }
 
 .control {
-    --cat: var(--color-accent);
+    --cat: #ffa94d;
 }
 
 .basic {
     --cat: var(--color-text-muted);
+}
+
+/* バッズ(🌱🍂): 若葉の緑 */
+.buds {
+    --cat: var(--color-buds);
+}
+
+/* 帯電(⚡): 電気の黄 */
+.charge {
+    --cat: #fde047;
+}
+
+/* 氷結(❄): 氷の青 */
+.ice {
+    --cat: #7dd3fc;
+}
+
+/* 火炎(🔥): 炎の赤橙 */
+.fire {
+    --cat: #ff5a1f;
+}
+
+/* 式神(📜): 紙の茶色(盤面の式神マスの縁と同じ系統) */
+.shikigami {
+    --cat: #c9a66b;
 }
 
 .card:hover:not(:disabled) {
