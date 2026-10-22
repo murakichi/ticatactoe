@@ -943,7 +943,7 @@ function getEnhancedBestMove(s) {
     }
     // 陰陽師の百鬼夜行→式神一括（敵コマの入っていない列があれば一手番で勝つ）への対策(F.antiFlood): 魔力が足りうる陰陽師が相手のとき、
     // 自分のコマで全ての列を塞げる(コンボが成立しない)着手を優先する
-    const floodFoes = F.antiFlood ? opps.filter((o) => s.chars[SYMBOLS.indexOf(o)] === 'yinYangMaster' && s.magic[SYMBOLS.indexOf(o)] >= (F.antiFloodMagic || 8)) : [];
+    const floodFoes = F.antiFlood ? opps.filter((o) => s.chars[SYMBOLS.indexOf(o)] === 'yinYangMaster' && s.magic[SYMBOLS.indexOf(o)] >= (F.antiFloodMagic ?? 8)) : [];
     const floodWinsOn = (bd, foe) => calculateWinner(lineSyms(bd.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: foe, bind: 0, effects: [] }
         : (sq.player === foe && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))))) === foe;
     // 陰陽師 foe が(百鬼夜行→式神一括で)完成させられる、敵コマ(= foe 以外)の入っていない列の数
