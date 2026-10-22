@@ -1004,6 +1004,12 @@ function placeMove(s, i) {
         // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
         const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
         if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
+        // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
+        if (sq.player && sq.bind === 0 && thermal.flameStacks(sq) > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑')) {
+            board[k] = { player: undefined, bind: 0, effects: [] };
+            bumpStat(s, 'flameKill');
+            continue;
+        }
         const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
             // ダメージが通れば🔥は消える
