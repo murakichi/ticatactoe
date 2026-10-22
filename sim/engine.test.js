@@ -466,13 +466,13 @@ test('式神一括は式神の数に比例して高くなる（盤面を埋め�
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
     s.magic[0] = 80;
-    e.SKILLS.shikigamiFlood(s); // 16マス全て式神
+    for (let i = 0; i < 16; i++) s.board[i] = e.newShikigami('💙', 2); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
     assert.strictEqual(before - s.magic[0], 4 * 16);
 });
 
-test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
+test('百鬼夜行(コスト7): ランダムな空きマス3つにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = { player: '⭕', bind: 3, effects: [] };
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -484,14 +484,15 @@ test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ
     assert.deepStrictEqual(s.board[0], { player: '⭕', bind: 3, effects: [] });
     assert.deepStrictEqual(s.board[2], { player: undefined, bind: 0, effects: [frz] });
     const placed = s.board.filter((sq) => e.isShikigami(sq));
-    assert.strictEqual(placed.length, 13);
+    assert.strictEqual(placed.length, 3);
     assert.ok(placed.every((sq) => sq.player === '💙' && sq.bind === 0));
 });
 
-test('百鬼夜行→式神一括: 空きマスが全て自コマになり、敵の入っていない列が完成して勝つ', () => {
+test('百鬼夜行→式神一括: 空きが3マスなら全て自コマになり、敵の入っていない列が完成して勝つ', () => {
     const s = game('yinYangMaster', 'you');
-    for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
-    s.board[0] = { player: '⭕', bind: 3, effects: [] };
+    for (let i = 0; i < 16; i++) s.board[i] = { player: (2 * Math.floor(i / 4) + (i % 4)) % 4 < 2 ? '⭕' : '🟩', bind: 3, effects: [] };
+    for (const i of [4, 5, 6]) s.board[i] = { player: undefined, bind: 0, effects: [] };
+    s.board[7] = { player: '💙', bind: 3, effects: [] };
     s.magic[0] = 20;
     e.SKILLS.shikigamiFlood(s);
     e.settleWinner(s);
