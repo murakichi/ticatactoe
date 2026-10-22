@@ -55,7 +55,7 @@ const gearTokenBindDelta = (gears) => (hasGear(gears, 'reinforce') ? P.reinforce
 /** キャラ補正済みのコストにギアのコスト補正を掛ける。下げる補正は下限1（もともと0なら0のまま）。四連の極意の無料だけ0 */
 /** キャラ固有のスキル（病炎の契りの対象外）。skillCosts のキー */
 const EXCLUSIVE_SKILL_KEYS = [
-    'onClickTotalAssault', 'onClickStomp', 'onClickJudgeDay', 'onClickToggleYingYang', 'onClickYingYangSkill',
+    'onClickTotalAssault', 'onClickStomp', 'onClickJudgeDay', 'onClickToggleYingYang', 'onClickShikigamiPlace', 'onClickShikigamiBlast',
     'onClickNecromancy', 'onClickMiasma', 'onClickChargeSpread', 'onClickGlacier', 'onClickInferno',
 ];
 
@@ -132,8 +132,8 @@ const RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
-    giant: ['afterglow', 'sturdy'],
-    yinYangMaster: ['sturdy', 'ironLock'],
+    giant: ['vengeance', 'sturdy'],
+    yinYangMaster: ['lastStand', 'sturdy'],
     necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
