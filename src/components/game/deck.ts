@@ -160,14 +160,24 @@ export const randomDeck = (rng: () => number = Math.random): number[] => {
 export const AI_DECK_SWAPS = 3;
 
 /**
+ * キャラの勝ち筋になる「核のカード」。AIの入れ替えデッキ（variedAIDeck）でも入れ替えない。
+ * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
+ */
+export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
+    yinYangMaster: [53, 71, 73],
+};
+
+/**
  * AIのデッキ: キャラの推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
- * 入れ替えで常に有効なデッキ（12枚・重複なし）になる
+ * 入れ替えで常に有効なデッキ（12枚・重複なし）になる。CORE_CARDS のカードは入れ替えない
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {
     const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
-    for (let k = 0; k < swaps && outside.length > 0; k++) {
-        const at = Math.floor(rng() * deck.length);
+    const core = CORE_CARDS[character] ?? [];
+    const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
+    for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
+        const at = swappable[Math.floor(rng() * swappable.length)];
         const incoming = outside.splice(Math.floor(rng() * outside.length), 1)[0];
         outside.push(deck[at]);
         deck[at] = incoming;

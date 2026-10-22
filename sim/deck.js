@@ -140,11 +140,16 @@ function randomDeck(rng = Math.random) {
 const AI_DECK_SWAPS = 3;
 
 /** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
+const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
+
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
-    for (let k = 0; k < swaps && outside.length > 0; k++) {
-        const at = Math.floor(rng() * deck.length);
+    const core = CORE_CARDS[character] || [];
+    const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
+    for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
+        const at = swappable[Math.floor(rng() * swappable.length)];
         const incoming = outside.splice(Math.floor(rng() * outside.length), 1)[0];
         outside.push(deck[at]);
         deck[at] = incoming;
@@ -152,4 +157,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
