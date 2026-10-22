@@ -526,6 +526,29 @@ const DISCOUNT_REDUCERS = [
     { idx: 53, key: 'markdown', cost: 'onClickMarkdown' },
 ];
 const DISCOUNT_ALL = DISCOUNT_REDUCERS.concat([{ idx: 57, key: 'uniqueDiscount', cost: 'onClickUniqueDiscount' }]);
+// 魔法使い + 連鎖割引ギア: 風の落とし子(3)→刈り入れ前夜(2)を、1周ごとに魔力が増える間だけ回す（検証用 F.budLoop=最大周回数）。最後は🌱を撒き直して終える
+function budLoop(s, me) {
+    if (curChar(s) !== 'magician' || !hasGear(s.gears[s.turn], 'chainDiscount')) return false;
+    const costW = () => calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
+    const costH = () => calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve');
+    for (let i = 0; i < 4 && !(s.skills.includes(33) && s.skills.includes(36)); i++) {
+        if (curMagic(s) < costsOf(s).onClickShuffle + 6) return false;
+        E.shuffleHand(s);
+    }
+    if (!(s.skills.includes(33) && s.skills.includes(36))) return false;
+    let did = false;
+    for (let n = 0; n < F.budLoop; n++) {
+        if (!thermal.sowCandidates(s.board, me).length || curMagic(s) < costW() + 1) break;
+        const before = curMagic(s);
+        SKILLS.windborne(s);
+        if (ownBuds(s) < 1 || curMagic(s) < costH()) break;
+        SKILLS.harvestEve(s);
+        did = true;
+        if (curMagic(s) <= before) break;
+    }
+    if (did && thermal.sowCandidates(s.board, me).length && curMagic(s) >= costW()) SKILLS.windborne(s);
+    return did;
+}
 function discountPlan(s, me, availableSkills) {
     if (!F.discountPlan || s.silenced[s.turn]) return;
     const seat = s.turn;
@@ -1640,6 +1663,7 @@ function faithfulMakeMoveInner(s) {
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
+    if (F.budLoop && budLoop(s, me)) availableSkills = s.skills.slice(); // #160: 風の落とし子→刈り入れ前夜の連鎖（連鎖割引ギア）で魔力を増やす
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     if (budSurplus(s) && !availableSkills.some((i) => BUD_CARDS.includes(i))) { // バッズを広げる札が無ければ1コストで引き直して探す
         for (let i = 0; i < (F.budShuffle || 4) && curMagic(s) > costsOf(s).onClickShuffle + 2; i++) {
