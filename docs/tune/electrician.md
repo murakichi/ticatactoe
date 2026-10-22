@@ -1,11 +1,11 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 84f73f6
+- 最後に検証したmaster: 81ad8ce
 - 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,49,50,51,52,53,58] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
 - 連続不採用回数: 0
-- 状態: running(master 84f73f6 で新ギア4種(彩りの庭・病炎の契り・廃墟の底力・土壇場の防壁)を追加。再チューニング中)
+- 状態: running(master 81ad8ce で再開。基本4位・envDeck varied 7位。1位 poisoner)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
@@ -13,6 +13,9 @@
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
 - 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
+## 診断(master 81ad8ce, seed50/300, --target)
+- 基本: 4位 54.1%(1位 poisoner 75.0 / magician 59.7 / necromancer 54.9)、envDeck varied: 7位 50.6%(1位 poisoner 66.3)。1位 poisoner との差は 21pt/16pt と大きい。
+- 律速は **対毒使い 21%(envDeck varied 25%)**。他は対 necromancer 39%、対 magician 43% が弱い。ほか(対あなた78・対巨人65・対氷室65)は強い。→ 次は対毒使いの原因を調べる(毒でライフが削られる中、⚡の盾が働くか・毒札が多い試合の手数)。
 ## 診断(新ギア追加後)
 - 勝ち筋: 帯電トークンで⚡を重ねた自陣は無敵+弱点。帯電トークン6回/試合が主力(サマリ: 寄与 帯電トークン+14pt、ギア lightToken/harvest +15pt前後)。AIは既定でギアを見ない(hasGear参照なし)ので、ギアは効果の付与・コストなどパッシブで効く。
 - 新ギアの機構: 彩りの庭=1マスにエフェクト複数種類(雷霆の巫は⚡中心で成立しにくい) / 病炎の契り=自陣の毒・火炎(雷霆の巫は無縁) / 廃墟の底力=自陣が破壊されたときコスト-(相手の破壊が少なければ稀) / 土壇場の防壁=初めて負ける列をコマごと消して延命(+相手に魔力+4・ライフ+2)。→ 土壇場の防壁だけ有望と仮説。
