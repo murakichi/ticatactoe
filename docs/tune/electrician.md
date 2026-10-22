@@ -5,7 +5,7 @@
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
 - 連続不採用回数: 0
-- 状態: running(master 81ad8ce で再開。基本4位・envDeck varied 7位。1位 poisoner)
+- 状態: blocked(issue #109 / #124。1位 poisoner が突出。対毒使い21%)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
@@ -24,6 +24,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 23 | gear(対poisoner) | 対毒使いのみのギア近傍(seed51/150): 基準 lightToken,harvest 18.7、最良 ironLock,harvest 36.0(多くの差し替えが基準超え=lightTokenのトークンライフ-1が毒に弱い)。全キャラ順位表で ironLock,harvest を測定(seed50/300) | 基本 54.1→49.0 / envDeck varied 50.6→47.6、対magician 43→26。全体で悪化 | 不採用 |
 | 22 | gear+deck+strategy(彩りの庭) | ユーザー指摘: 彩りの庭は『2種類エフェクトのマス』で魔力+1/マス。🌱を重ねる札(風の落とし子36・ワルプルギス14・ひこばえ35・バッズトークン9)入りデッキ+gear colorGarden,harvest。AIは14/36を既定で撃たないため F.elecGarden で撃つ条件を足した(⚡があり🌱が無い自陣コマ≥N)。上位3相手 seed31/300 | 現行 58.8 → 構成のみ 44.2 → +ワルプルギス(N=2/3) 44.1 → +風の落とし子(N=1/2) 44.6/44.2。ノブがほぼ効かない(ワルプルギスはコスト9で撃てない、風の落とし子は撃っても伸びない)。さらに colorGarden は主力の lightToken(寄与+15pt)か harvest(+14pt)を押し出すため、魔力+1/マスでそれを補えない | 不採用(ノブ削除)。新ギア4種を現行構成に1枠差し替えのみで測ると(seed30/100) lastStand 41.3 / ruinSurge 40.3 / colorGarden 39.3 / ailmentPact 39.3 で現行 47.7 を下回る |
 | 21 | strategy(sim に写し身を実装) | sim エンジンに写し身(51)を実装(本番 Game.tsx と同じ: 1クリック・置き先ランダム・手番継続)、雷霆の巫AIが『どの置き先でも自陣リーチが平均+0.5以上増えるコマ』で撃つ(F.elecClone=1)。上位3相手 seed25/400 | 58.4 → 59.2(+0.8、誤差内)。使用は0.05回/試合と稀(魔力が帯電トークンに回り、手札に51が来て条件を満たす場面が少ない) | 不採用(実装・ノブとも削除)。死に札の活用で伸ばす案(#109)は慈雨・写し身とも効果なし |
 | 20 | strategy(sim に慈雨を実装) | sim エンジンに慈雨(49)を実装し、雷霆の巫AIが『ライフ1以下の自陣コマ ≥N』で撃つ(F.elecBoost=2/3)。上位3相手 seed24/400 | 基準 58.8 → N=2: 57.8(-1.0) / N=3: 58.3(-0.5)。効果なし | 不採用(実装・ノブとも削除)。#109 の死に札案のうち慈雨は不要と判明。縮地/写し身は未検証 |
