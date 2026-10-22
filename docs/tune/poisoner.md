@@ -3,12 +3,13 @@
 - 最後に検証したmaster: 81ad8ce
 - 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,12,15,16,17,18,19,29,39,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 79.2% / 順位 1位 / 2位 magician 64.3%   (seed3, games100, rank --target poisoner, master 3bc89db)
-- 連続不採用回数: 2
+- 連続不採用回数: 3
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索
 - 状態: refining(master 81ad8ce で再検証OK。4条件すべて1位: 基本73.9(2位magician 59.1)/envDeck varied 68.1(59.1)/oppGears none 88.4(67.8)/random 83.4(64.4), seed3/200)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 25 | strategy | 毒札を撃つ閾値: miasmaMin=1/3、injMin=7/14、mistMin=3/5(seed51/200) | 基準74.6に対し 74.9/73.2/74.6/74.5/74.8/74.6 すべて ±1.4 以内 | 不採用(ノブ撤回、既定が局所最適) |
 | 24 | 再検証 | master 81ad8ce を取り込み(落ち葉・霜枯れ・春一番などスキル追加) | 4条件すべて1位(基本73.9/envDeck 68.1/none 88.4/random 83.4) | 再検証OK |
 | 23 | gear | 新デッキでギア1枠差し替え32近傍(seed43/60) | 基準74.3に対し最良 lastStand,propagate/reinforce 76.1 (+1.8) 誤差内 | 不採用 |
 | 22 | synergy | 軽減札: 焼畑(39)を53/56/57/58/60に替え(各seed41/200)、53+58同時、discountPlan=2併用、swap2 support 30近傍(seed42/60) | 基準74.8に対し +0.1〜+2.1(60が最良77.0)、discountPlan=2は変化なし/最良+1.9、swap2最良+1.3 すべて誤差内 | 不採用 |
