@@ -56,7 +56,7 @@ const AI_DEFAULTS = {
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1329,9 +1329,9 @@ function bestShikigamiCell(s, me) {
     return best;
 }
 // 百鬼夜行→式神一括の実コストの計画。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする（特売は1魔力で次のスキルを-3、何回でも撃てる）
-function comboPlan(s) {
+function comboPlan(s, assumeMd = false) {
     const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
-    const md = s.skills.includes(53) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
+    const md = (assumeMd || s.skills.includes(53)) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
     const best = (base) => {
         let bm = 0, bt = base;
         for (let m = 1; m <= 4 && md !== Infinity; m++) {
@@ -1799,12 +1799,12 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
-    // 陰陽師(F.shuffleDig): 魔力が「コンボ分+引き直し分」あり、百鬼夜行→式神一括で勝てる盤面なら、1コストで手札を引き直してコンボ札を探す
-    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && !(s.skills.includes(71) && s.skills.includes(73))) {
-        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
-        const need = comboPlan(s).total;
-        if (floodComboWins(s, me)) {
-            for (let k = 0; k < F.shuffleDig && curMagic(s) >= need + costsOf(s).onClickShuffle && !(s.skills.includes(71) && s.skills.includes(73)); k++) {
+    // 陰陽師(F.shuffleDig): 勝てる盤面で、魔力が「コンボ分(特売が引ける前提)+引き直し分」あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
+    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
+        const shufCost = costsOf(s).onClickShuffle;
+        const complete = () => s.skills.includes(71) && s.skills.includes(73) && (s.skills.includes(53) || !F.comboDiscount || curMagic(s) >= comboPlan(s).total);
+        if (!complete() && floodComboWins(s, me)) {
+            for (let k = 0; k < F.shuffleDig && !complete() && curMagic(s) >= comboPlan(s, true).total + shufCost + F.digSpare; k++) {
                 E.shuffleHand(s);
                 s.digShuffles = (s.digShuffles || 0) + 1;
             }
