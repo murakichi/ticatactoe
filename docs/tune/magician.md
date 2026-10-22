@@ -77,3 +77,8 @@
 1 poisoner 74.9 / **2 magician 61.2** / 3 tactician 57.1 / 4 pyromancer 56.3 / 5 cryomancer 55.0 / 6 electrician 54.8。差 13.7pt。
 氷室・鍛冶師が下がり魔法使いは2位に復帰。1位 poisoner（lastStand+sturdy）との差は変わらず、#124 待ち。設定は変更なし。
 防壁発動後の対 poisoner（seed1/100 の54試合, 勝率44%）: 負け試合は決着まで平均37手番かかり終局時の自駒3.5・敵駒7.3、勝ち試合は25手番で自6.4・敵4.3 — 長引くと駒数で押し負ける。
+
+## master fbe6d4e 取り込み後の順位（seed3/200）
+1 poisoner 73.9 / **2 magician 58.2** / 3 tactician 56.7 / 4 necromancer 55.8 / 5 cryomancer 53.6 / 6 pyromancer 52.4。差 15.7pt。
+ネクロマンサーが lastStand 採用で4位に浮上。魔法使いは2位維持だが 61.2→58.2。1位 poisoner（lastStand+sturdy）は gear/deck/AI の範囲では崩せない
+（対 poisoner 25〜28%。メタ探索・surplusJudge・budSurplus・judgeMin・magLock など不採用）。#124（poisoner の調整案）待ちで **blocked**。master で poisoner が調整されたら step 8 から再開。
