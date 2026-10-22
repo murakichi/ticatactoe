@@ -1858,6 +1858,12 @@ function faithfulMakeMoveInner(s) {
             if (curMagic(s) >= 16) break;
         }
     }
+    // 魔法使い(F.magCharge): 序盤(全体手番が magCharge 以下)で相手のリーチが無く魔力が F.magChargeMax 未満なら、駒を置かずチャージして魔力を貯める
+    // （陰陽師の chargeWait の応用。魔法使いは序盤の魔力が律速で、序盤に+3を与えると +8pt 上がる）
+    if (F.magCharge && curChar(s) === 'magician' && s.currentTurn <= F.magCharge && oppReachesNow(s, opps) === 0 && curMagic(s) < (F.magChargeMax || 6)) {
+        SKILLS.charge(s);
+        return { move: null, turnEnded: true };
+    }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
     if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
