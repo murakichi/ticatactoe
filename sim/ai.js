@@ -937,6 +937,22 @@ function getEnhancedBestMove(s) {
         }
         return bi;
     }
+    // F.antiFlood: 相手に陰陽師がいると、百鬼夜行→式神一括で「自分のコマが1つも入っていない列」を一手番で完成される。
+    // 全ての列に自分のコマを1つずつ入れてコンボの成立する列を無くす(コンボ札が揃う前の布石)。自分のリーチ作りや防御より後、通常の探索より前に置く。
+    if (F.antiFlood && opps.some((o) => s.chars[SYMBOLS.indexOf(o)] === 'yinYangMaster')) {
+        const wl = geometryForCells(board.length).winLines;
+        const floodLines = (b) => wl.filter((line) => line.every((idx) => b[idx].player !== me && !thermal.emptyBlocked(b[idx]) && !(b[idx].effects.some((e) => e.effect === '🔑') && b[idx].bind > 0))).length;
+        const before = floodLines(board);
+        if (before > 0) {
+            let bi = -1, bd = 0;
+            for (const i of allMoves) {
+                const after = floodLines(simulatePlace(board, i, me, life));
+                if (before - after > bd) { bd = before - after; bi = i; }
+            }
+            if (bi !== -1 && bd >= F.antiFlood) return bi;
+        }
+    }
+
     // minimax + fork bonus
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
