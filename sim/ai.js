@@ -55,6 +55,7 @@ const AI_DEFAULTS = {
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     antiFlood: 0, // 相手の陰陽師の魔力がこの値以上のとき、自分の着手で『百鬼夜行→式神一括』の一撃(空きが全部相手のコマになって列が完成)が成立する盤面にしない（陰陽師対策。0で無効。tune-top 雷霆の巫で検証中）
+    floodCover: 0, // 相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
@@ -939,6 +940,9 @@ function getEnhancedBestMove(s) {
         return bi;
     }
     // minimax + fork bonus
+    const yyPresent = otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster');
+    const floodCover = F.floodCover || 0;
+    const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
     const floodThreats = F.antiFlood ? otherSeats(s).filter((seat) => s.chars[seat] === 'yinYangMaster' && s.magic[seat] >= F.antiFlood).map((seat) => SYMBOLS[seat]) : [];
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
@@ -955,6 +959,7 @@ function getEnhancedBestMove(s) {
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
         if (floodThreats.length && floodThreats.some((o) => floodWinsBoard(sim, o))) score -= 3000; // 陰陽師の一撃が成立する盤面にしない
+        if (floodCover && yyPresent) { let unc = 0; for (const line of floodLines) if (!line.some((k) => sim[k].player === me)) unc++; score -= unc * floodCover; }
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
