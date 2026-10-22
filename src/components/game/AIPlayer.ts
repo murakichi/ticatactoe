@@ -556,6 +556,26 @@ class AIPlayer {
     }
 
     /** 盤面上にコマを置いたシミュレーション (bind=0の乗っ取り対応) */
+    /**
+     * 巨人のオーラを着手後の盤面に反映する（Game.tsx / giantAura.ts と同じ規則。sim/ai.js の auraSim=1 と同一）。
+     * 着手マスの周囲の敵コマを壊し、周囲を全部ロックする。A/B: 環境勝率 53.1→60.2%（seed2/200）
+     */
+    applyAuraSim(sim: SquareInfo[], index: number): SquareInfo[] {
+        const range = geometryForCells(sim.length).surroundRange(index);
+        for (const j of range) {
+            const sq = sim[j];
+            if (!sq.player || sq.player === this.playerSymbol || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(j)) continue;
+            const guard = absorbDestroy(sq);
+            sim[j] = guard.blocked ? guard.sq : { player: undefined, bind: 0, effects: [] };
+        }
+        for (const j of range) {
+            const sq = sim[j];
+            if (isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            sim[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        }
+        return sim;
+    }
+
     simulatePlace(board: SquareInfo[], index: number, player: Player, life: number): SquareInfo[] {
         const newBoard = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
         const sq = newBoard[index];
@@ -701,6 +721,7 @@ class AIPlayer {
 
         for (const i of allMoves) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life);
+            if (this.character === 'giant' && simBoard[i].player === this.playerSymbol) this.applyAuraSim(simBoard, i);
             let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
 
             // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
