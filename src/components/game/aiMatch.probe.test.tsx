@@ -4,6 +4,8 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Game, PlayerConfig } from './Game';
 import AIPlayer from './AIPlayer';
+import { pickRecommendedGears } from './gear';
+import { variedAIDeck } from './deck';
 
 const run = process.env.AI_MATCH ? describe : describe.skip;
 
@@ -15,9 +17,11 @@ run('AI同士の実戦（本番TS版）', () => {
         let wins = 0, done = 0;
         for (let g = 0; g < games; g++) {
             const yinFirst = g % 2 === 0;
+            // App.tsx と同じ条件: AI席は推奨ギア（主案/別案）と、推奨から3枚入れ替えたデッキ（核のカードは外さない）
+            const seat = (character: string): PlayerConfig => ({ character: character as never, isAI: true, gears: pickRecommendedGears(character as never), deck: variedAIDeck(character as never) });
             const players: PlayerConfig[] = yinFirst
-                ? [{ character: 'yinYangMaster', isAI: true }, { character: opp, isAI: true }]
-                : [{ character: opp, isAI: true }, { character: 'yinYangMaster', isAI: true }];
+                ? [seat('yinYangMaster'), seat(opp as string)]
+                : [seat(opp as string), seat('yinYangMaster')];
             const trace: string[] = [];
             const orig = AIPlayer.prototype.makeMove;
             const spy = process.env.AI_MATCH_TRACE ? jest.spyOn(AIPlayer.prototype, 'makeMove').mockImplementation(function (this: AIPlayer, ...args: Parameters<AIPlayer['makeMove']>) {
