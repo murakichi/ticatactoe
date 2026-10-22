@@ -115,3 +115,7 @@ swap3 80近傍・swap2 80近傍（対 poisoner seed2/100）。最良は swap3 �
 ### 追記: antiFlood は master の yyCover と同じ発想のため取り下げ
 電気技師セッションが同じ対策（陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする: yyCover=150、AIPlayer.ts にもミラー）を先に master へ入れていたので、マージ時に重複する antiFlood（sim/本番/テスト）を取り下げ、master 側を採用した。測定結果（対陰陽師 魔法使い 6→21%、毒使い 15→21%、軍師は微増）は yyCover でも同様に効く見込み。
 その後 master で式神ナーフ（式神一括を1体4コスト、百鬼夜行をランダム3マス）が入ったため、順位は取り込み後に測り直す。
+
+## master 取り込み後（式神ナーフ・yyCover 入り）の順位（seed3/200）
+1 poisoner 70.4 / 2 necromancer 62.5 / **3 magician 58.8** / 4 tactician 53.9 / 5 electrician 53.4。1位との差 11.6pt（前回 52.4% 時の 14.1pt → 縮小）。陰陽師は 10位 20.7% に落ちた（ナーフ+各キャラの線カバー）。
+魔法使いの設定は変更なし。1位 poisoner（lastStand+sturdy）は gear/deck/AI では崩せず #124 待ちで blocked 維持。
