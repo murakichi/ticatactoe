@@ -2,7 +2,11 @@ export const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickYingYangSkill: 5,
+    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiAll: 6, // 汎用(idx 62): 自分の式神を全て通常の自陣コマにする
+    onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
+    onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -99,6 +103,8 @@ export const skillCosts = {
     onClickAutumn: 4, //          一葉知秋(idx 68): 盤面の🌱をすべて🍂に変える
     onClickLeafFrost: 3, //       霜枯れ(idx 69): 自陣の🍂マスに❄を付ける（氷結中は🍂が休眠する）
     onClickSpringWind: 2, //      春一番(idx 70): 自陣の❄を全て解除し、解除した数だけこのターンに打つスキルを軽減する
+    onClickKimon: 5, //           鬼門封じ(idx 74): 敵コマを1つ破壊（氷結中は❄-1）し、空きマスになれば3ターンロック
+    onClickFireWheel: 5, //       火の車(idx 75): ランダムな敵マス2つに🔥、その後手札をシャッフル。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
 };
 
 export type SkillCosts = typeof skillCosts;

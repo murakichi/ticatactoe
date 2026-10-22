@@ -422,6 +422,61 @@ test('土壇場の防壁: 発動後は、相手の手番開始時の魔力+2', (
     assert.strictEqual(run([[], ['lastStand']]), 1 + 4);
 });
 
+test('焦土: 敵の🌱が🔥で消えると魔力+2(1手番に最大6)', () => {
+    const run = (gears) => {
+        const s = game(gears);
+        s.board[7] = { player: C, bind: 30, effects: [{ effect: '🌱' }] };
+        e.placeMove(s, 0); // 💙の手番終了 → ⭕の手番(記録)
+        s.board[7] = { player: C, bind: 30, effects: [{ effect: '🔥' }, { effect: '🔥' }] }; // ⭕のコマの🌱が燃えた(⭕自身の手番中)
+        const before = s.magic[0];
+        e.placeMove(s, 1); // ⭕の手番終了 → 💙
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(run([['scorchedEarth'], []]) - run([[], []]), 2);
+});
+
+test('焦土: 自分の🌱が燃えても、🔥のない🌱の消失(収穫など)でも発動しない', () => {
+    const squares = [{ player: C, effects: [{ effect: '🔥' }] }, { player: H, effects: [{ effect: '🔥' }] }, { player: C, effects: [] }];
+    assert.strictEqual(gear.burnedBudCount([C, H, C], [2, 2, 2], squares, H), 2, '⭕の🌱2つだけ');
+    assert.strictEqual(gear.scorchGain(2), 4);
+    assert.strictEqual(gear.scorchGain(10), 6, '上限6');
+});
+
+test('灰の供物: 敵のマスに🔥を付与すると、付与したマス1つにつき次の自分の手番の終わりまでコスト-1(重複・下限1)', () => {
+    const s = game([['ashOffering'], []]);
+    s.board[5] = { player: C, bind: 30, effects: [] };
+    s.board[6] = { player: C, bind: 30, effects: [] };
+    s.board[7] = { player: C, bind: 30, effects: [] };
+    e.placeMove(s, 0); // 💙の手番終了 → ⭕
+    e.placeMove(s, 1); // ⭕の手番終了 → 💙の手番(記録)
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4);
+    s.board[5].effects.push({ effect: '🔥' }); // 💙のスキルで敵の2マスに🔥
+    s.board[6].effects.push({ effect: '🔥' });
+    s.board[8] = { player: H, bind: 30, effects: [{ effect: '🔥' }] }; // 自分のマスの🔥は数えない
+    e.placeMove(s, 2); // 💙の手番終了 → ⭕の手番
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '相手の手番中は⭕の側のコストを見る(💙の次の手番まで保留)');
+    e.placeMove(s, 3); // ⭕の手番終了 → 💙の手番
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '2マスぶん重複して-2');
+    assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');
+    e.placeMove(s, 9); // 💙の手番終了
+    e.placeMove(s, 10);
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '次の手番の終わりで切れる');
+});
+
+test('凍てつく根: 氷結で休眠した🌱1つにつき手番開始時の魔力+1(敵味方問わず、上限なし)', () => {
+    const run = (gears) => {
+        const s = game(gears);
+        s.board[5] = { player: H, bind: 30, effects: [{ effect: '🌱' }, { effect: '❄' }] };
+        s.board[6] = { player: C, bind: 30, effects: [{ effect: '🌱' }, { effect: '🌱' }, { effect: '❄' }] };
+        s.board[7] = { player: C, bind: 30, effects: [{ effect: '🌱' }, { effect: '❄' }] };
+        e.placeMove(s, 0);
+        const before = s.magic[0];
+        e.placeMove(s, 1);
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(run([['frostRoot'], []]) - run([[], []]), 4, '休眠した🌱4つぶん');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

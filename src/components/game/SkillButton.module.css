@@ -1,8 +1,11 @@
 .wrap {
     width: 180px;
     max-width: 100%;
+    /* 横一列のスクロール行の中で縮まない */
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    gap: 4px;
 }
 
 .row {
@@ -38,7 +41,7 @@
 }
 
 .support {
-    --cat: var(--color-buds);
+    --cat: #2dd4bf;
 }
 
 .token {
@@ -50,11 +53,36 @@
 }
 
 .control {
-    --cat: var(--color-accent);
+    --cat: #ffa94d;
 }
 
 .basic {
     --cat: var(--color-text-muted);
+}
+
+/* バッズ(🌱🍂): 若葉の緑 */
+.buds {
+    --cat: var(--color-buds);
+}
+
+/* 帯電(⚡): 電気の黄 */
+.charge {
+    --cat: #fde047;
+}
+
+/* 氷結(❄): 氷の青 */
+.ice {
+    --cat: #7dd3fc;
+}
+
+/* 火炎(🔥): 炎の赤橙 */
+.fire {
+    --cat: #ff5a1f;
+}
+
+/* 式神(📜): 紙の茶色(盤面の式神マスの縁と同じ系統) */
+.shikigami {
+    --cat: #c9a66b;
 }
 
 .card:hover:not(:disabled) {
@@ -188,4 +216,31 @@
 .lockOn {
     background: rgba(255, 194, 74, 0.2);
     border-color: var(--color-accent);
+}
+
+/* 説明を開いたら全文を出す(省略を外す) */
+.descOpen {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+
+/* 説明の開閉ボタン(アコーディオン見出し) */
+.descToggle {
+    align-self: stretch;
+    padding: 2px 6px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.descToggle:hover,
+.descToggle:focus-visible {
+    background: var(--color-surface-2);
+    color: var(--color-text);
 }

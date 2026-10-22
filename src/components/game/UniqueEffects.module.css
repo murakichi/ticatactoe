@@ -1,0 +1,716 @@
+/* 固有スキルの凝った演出(UniqueEffects.tsx)。フラット: 単色・拡大・回転・移動で見せる。
+   位置は盤面に対する%。要素は animation-delay で段階(予兆 → 本体 → 余波)をずらす */
+
+/* ---------- 共通部品 ---------- */
+
+/* 2点を結ぶ線が伸びる(始点から) */
+.beam {
+    position: absolute;
+    height: var(--th, 6px);
+    margin-top: calc(var(--th, 6px) / -2);
+    border-radius: 999px;
+    transform-origin: 0 50%;
+    transform: rotate(var(--ang)) scaleX(0);
+    opacity: 0;
+    animation: beamGrow 450ms var(--ease) forwards;
+}
+
+@keyframes beamGrow {
+    0% {
+        opacity: 1;
+        transform: rotate(var(--ang)) scaleX(0);
+    }
+    60% {
+        opacity: 1;
+        transform: rotate(var(--ang)) scaleX(1);
+    }
+    100% {
+        opacity: 0;
+        transform: rotate(var(--ang)) scaleX(1);
+    }
+}
+
+/* 中心から両方向へ伸びる線 */
+.beamC {
+    position: absolute;
+    height: var(--th, 8px);
+    border-radius: 999px;
+    transform: translate(-50%, -50%) rotate(var(--ang)) scaleX(0);
+    opacity: 0;
+    animation: beamCGrow 750ms var(--ease) forwards;
+}
+
+@keyframes beamCGrow {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotate(var(--ang)) scaleX(0);
+    }
+    45% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotate(var(--ang)) scaleX(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(var(--ang)) scaleX(1);
+    }
+}
+
+/* 絵文字がぽんと弾ける */
+.pop {
+    position: absolute;
+    font-size: 34px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: uPop 800ms var(--ease) forwards;
+}
+
+@keyframes uPop {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.3);
+    }
+    25% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.4);
+    }
+    60% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.bigPop {
+    font-size: 84px;
+}
+
+/* 広がる輪 */
+.ring {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    margin: -30px 0 0 -30px;
+    border: 5px solid #fff;
+    border-radius: 50%;
+    opacity: 0;
+    animation: uRing 650ms var(--ease) forwards;
+}
+
+@keyframes uRing {
+    0% {
+        opacity: 0.95;
+        transform: scale(0.2);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(var(--max, 4.6));
+    }
+}
+
+/* from → to へ飛ぶ絵文字(left/top を動かす) */
+.fly {
+    position: absolute;
+    font-size: 30px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: flyPct 700ms var(--ease) forwards;
+}
+
+@keyframes flyPct {
+    0% {
+        opacity: 1;
+        left: var(--x0);
+        top: var(--y0);
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        left: var(--x1);
+        top: var(--y1);
+    }
+}
+
+/* 回転しながら飛ぶ(紙の人形・紙片) */
+.spin {
+    animation-name: flyPctSpin;
+}
+
+@keyframes flyPctSpin {
+    0% {
+        opacity: 1;
+        left: var(--x0);
+        top: var(--y0);
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        left: var(--x1);
+        top: var(--y1);
+        transform: translate(-50%, -50%) rotate(540deg);
+    }
+}
+
+/* 瓦礫は大きめにゆっくり */
+.arc {
+    font-size: 40px;
+    animation-name: flyPctSpin;
+}
+
+/* 瘴気は大きくたなびく */
+.drift {
+    font-size: 46px;
+    animation-duration: 800ms;
+}
+
+/* 盤面全体を一瞬染める */
+.flashAt {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.85);
+    opacity: 0;
+    animation: flashAtK 280ms linear forwards;
+}
+
+@keyframes flashAtK {
+    0% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+/* 盤面を暗くする幕 */
+.veil {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    animation: veilK 1800ms linear forwards;
+}
+
+@keyframes veilK {
+    0% {
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+/* ---------- 全軍突撃: 騎馬隊が3列で駆け抜ける ---------- */
+.rider {
+    position: absolute;
+    left: -15%;
+    font-size: 46px;
+    opacity: 0;
+    transform: translateY(-50%) scaleX(-1);
+    animation: rideAcross 900ms linear forwards;
+}
+
+.flagRider {
+    position: absolute;
+    left: -15%;
+    font-size: 34px;
+    opacity: 0;
+    transform: translateY(-50%);
+    animation: rideAcross 900ms linear forwards;
+}
+
+.dustTrail {
+    position: absolute;
+    left: -15%;
+    font-size: 30px;
+    opacity: 0;
+    transform: translateY(-50%);
+    animation: rideAcross 900ms linear forwards;
+}
+
+@keyframes rideAcross {
+    0% {
+        opacity: 1;
+        left: -15%;
+    }
+    100% {
+        opacity: 1;
+        left: 112%;
+    }
+}
+
+/* ---------- ストンプ: 影が広がり、足が落ち、地が割れる ---------- */
+.stompShadow {
+    position: absolute;
+    width: 96px;
+    height: 96px;
+    margin: -48px 0 0 -48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    animation: shadowGrow 1200ms linear forwards;
+}
+
+@keyframes shadowGrow {
+    0% {
+        opacity: 0;
+        transform: scale(0.2);
+    }
+    30% {
+        opacity: 0.75;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.3);
+    }
+}
+
+.foot {
+    position: absolute;
+    font-size: 84px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: footDrop 1100ms var(--ease) forwards;
+}
+
+@keyframes footDrop {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateY(-260px) scale(2.6);
+    }
+    6% {
+        opacity: 1;
+    }
+    34% {
+        opacity: 1;
+        transform: translate(-50%, -50%) translateY(0) scale(1.1);
+    }
+    40% {
+        transform: translate(-50%, -50%) translateY(8px) scale(1.25, 0.8);
+    }
+    75% {
+        opacity: 1;
+        transform: translate(-50%, -50%) translateY(0) scale(1.1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translateY(0) scale(1.1);
+    }
+}
+
+/* ---------- 審判の日: 天秤が降りて裁きが下る ---------- */
+.scale {
+    position: absolute;
+    font-size: 112px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: scaleDrop 1300ms var(--ease) 200ms forwards;
+}
+
+@keyframes scaleDrop {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(3);
+    }
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    42% {
+        transform: translate(-50%, -50%) rotate(-12deg) scale(1);
+    }
+    54% {
+        transform: translate(-50%, -50%) rotate(10deg) scale(1);
+    }
+    66% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+}
+
+/* ---------- 陰陽転化: 墨で暗転 → 白に反転し、太極図が回る ---------- */
+.inkDark {
+    position: absolute;
+    inset: 0;
+    background: #05070d;
+    opacity: 0;
+    animation: inkK 380ms linear forwards;
+}
+
+.inkLight {
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    opacity: 0;
+    animation: inkK 380ms linear 320ms forwards;
+}
+
+@keyframes inkK {
+    0% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.taiji {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 170px;
+    height: 170px;
+    margin: -85px 0 0 -85px;
+    border: 6px solid #ffffff;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #ffffff 50%, #10131c 50%);
+    opacity: 0;
+    animation: taijiSpin 1500ms var(--ease) forwards;
+}
+
+.taijiYang {
+    background: linear-gradient(90deg, #10131c 50%, #ffffff 50%);
+}
+
+@keyframes taijiSpin {
+    0% {
+        opacity: 0;
+        transform: rotate(0deg) scale(0.1);
+    }
+    25% {
+        opacity: 1;
+        transform: rotate(240deg) scale(1);
+    }
+    70% {
+        opacity: 1;
+        transform: rotate(720deg) scale(1.1);
+    }
+    100% {
+        opacity: 0;
+        transform: rotate(900deg) scale(1.6);
+    }
+}
+
+.kanji {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    font-size: 96px;
+    font-weight: 900;
+    color: #ffc24a;
+    -webkit-text-stroke: 4px #10131c;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: kanjiIn 1500ms var(--ease) 250ms forwards;
+}
+
+@keyframes kanjiIn {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(2.4);
+    }
+    25% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    75% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+/* ---------- 蘇生: 魔法陣、せり上がる墓石、立ち昇る魂 ---------- */
+.runeRing {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 74%;
+    aspect-ratio: 1;
+    border: 4px dashed #c98bff;
+    border-radius: 50%;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+    animation: runeSpin 1800ms var(--ease) forwards;
+}
+
+.runeRingInner {
+    width: 46%;
+    border-style: solid;
+    border-color: #8a4fd6;
+    animation-name: runeSpinRev;
+}
+
+@keyframes runeSpin {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(0deg) scale(0.2);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotate(60deg) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(220deg) scale(1);
+    }
+}
+
+@keyframes runeSpinRev {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(0deg) scale(0.2);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotate(-60deg) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(-220deg) scale(1);
+    }
+}
+
+.rune {
+    font-size: 30px;
+}
+
+.tomb {
+    font-size: 40px;
+    animation-name: tombRise;
+    animation-duration: 900ms;
+}
+
+@keyframes tombRise {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 10%) scale(0.4);
+    }
+    35% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.ghost {
+    font-size: 38px;
+    animation-name: ghostUp;
+    animation-duration: 1000ms;
+}
+
+@keyframes ghostUp {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5);
+    }
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -80%) scale(1.1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -190%) scale(1);
+    }
+}
+
+/* ---------- 式神爆破: 導火線の火花 ---------- */
+.fuse {
+    font-size: 40px;
+    animation-duration: 350ms;
+}
+
+/* ---------- ミアズマ: 毒マスから瘴気が散る ---------- */
+.cloudOut {
+    font-size: 44px;
+    animation-name: cloudOutK;
+    animation-duration: 700ms;
+}
+
+@keyframes cloudOutK {
+    0% {
+        opacity: 0.9;
+        transform: translate(-50%, -50%) scale(0.6);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(2);
+    }
+}
+
+/* ---------- 絶対零度: 霜が閉じ込み、雪の結晶が回る ---------- */
+.frostFrame {
+    position: absolute;
+    inset: 0;
+    border: 0 solid rgba(186, 230, 253, 0.9);
+    border-radius: var(--radius-lg);
+    animation: frameClose 1700ms var(--ease) forwards;
+}
+
+@keyframes frameClose {
+    0% {
+        border-width: 0;
+        opacity: 1;
+    }
+    30% {
+        border-width: 24px;
+        opacity: 1;
+    }
+    75% {
+        border-width: 24px;
+        opacity: 1;
+    }
+    100% {
+        border-width: 24px;
+        opacity: 0;
+    }
+}
+
+.snowflake {
+    position: absolute;
+    font-size: 170px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: snowSpin 1700ms var(--ease) forwards;
+}
+
+@keyframes snowSpin {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(-180deg) scale(0.2);
+    }
+    30% {
+        opacity: 0.9;
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) rotate(180deg) scale(1.4);
+    }
+}
+
+/* ---------- 業火: 熱で染まり、火柱が立つ ---------- */
+.heat {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 90, 31, 0.35);
+    opacity: 0;
+    animation: heatPulse 1800ms linear forwards;
+}
+
+@keyframes heatPulse {
+    0% {
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.9;
+    }
+    40% {
+        opacity: 0.45;
+    }
+    60% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.fireFrame {
+    position: absolute;
+    inset: 0;
+    border: 0 solid #ff5a1f;
+    border-radius: var(--radius-lg);
+    animation: frameCloseFire 1700ms var(--ease) forwards;
+}
+
+@keyframes frameCloseFire {
+    0% {
+        border-width: 0;
+        opacity: 1;
+    }
+    30% {
+        border-width: 18px;
+        opacity: 1;
+    }
+    75% {
+        border-width: 18px;
+        opacity: 1;
+    }
+    100% {
+        border-width: 18px;
+        opacity: 0;
+    }
+}
+
+.pillar {
+    position: absolute;
+    font-size: 58px;
+    opacity: 0;
+    transform-origin: 50% 100%;
+    transform: translate(-50%, -85%) scale(0.2);
+    animation: pillarUp 1300ms var(--ease) forwards;
+}
+
+@keyframes pillarUp {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -85%) scale(0.2);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -85%) scale(1, 0.6);
+    }
+    45% {
+        opacity: 1;
+        transform: translate(-50%, -85%) scale(1.15, 2.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -85%) scale(1, 3);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .beam,
+    .beamC,
+    .fly,
+    .foot,
+    .stompShadow,
+    .rider,
+    .flagRider,
+    .dustTrail,
+    .taiji,
+    .kanji,
+    .runeRing,
+    .snowflake,
+    .pillar,
+    .scale {
+        animation-duration: 1ms;
+    }
+}
