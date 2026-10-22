@@ -32,6 +32,9 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     colorGarden: 'trigger', // ターン開始の魔力
     ailmentPact: 'passive', // コスト表示に反映される
     ruinSurge: 'trigger', // 廃墟で割引開始
+    scorchedEarth: 'trigger', // 敵の🌱が燃えて魔力
+    ashOffering: 'trigger', // 敵のコマが燃え尽きて魔力
+    frostRoot: 'trigger', // 休眠した🌱で魔力
     lastStand: 'trigger', // 防壁の発動
 };
 

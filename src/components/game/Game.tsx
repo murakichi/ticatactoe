@@ -31,6 +31,12 @@ import {
     gearTokenBindDelta,
     adjustCostByGear,
     countVarietySquares,
+    burnedBudCount,
+    scorchGain,
+    ashGain,
+    frozenBudCount,
+    rootGain,
+    budCounts,
     countAilmentKinds,
     lostCells,
     CostContext,
@@ -145,6 +151,7 @@ export const Game = (props: GameProps) => {
         active: Array<boolean>(seatCount).fill(false),
         pending: Array<boolean>(seatCount).fill(false),
         snap: null as (Player | undefined)[] | null,
+        snapBuds: null as number[] | null, // 焦土: 手番開始時の各マスの🌱の数
         lastMove: null as number | null,
     });
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
@@ -614,8 +621,20 @@ export const Game = (props: GameProps) => {
         const nextCharacter = characters[nextSeat];
         const nextSymbol = symbols[nextSeat];
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
+        let scorchForNext = 0;
         if (gearTurn.current.processedTurn !== currentTurn) {
             gearTurn.current.processedTurn = currentTurn;
+            // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力（次の手番の席なら下で足す）
+            if (ruinState.current.snap && ruinState.current.snapBuds) {
+                symbols.forEach((sym, seat) => {
+                    if (!hasGear(gearsBySeat[seat], 'scorchedEarth')) return;
+                    const gain = scorchGain(burnedBudCount(ruinState.current.snap!, ruinState.current.snapBuds!, currentBoard, sym));
+                    if (gain <= 0) return;
+                    if (seat === nextSeat) scorchForNext = gain;
+                    else setMagicAt(seat, (m) => m + gain);
+                    gearTrigger('scorchedEarth', `魔力+${gain}`);
+                });
+            }
             // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
             const ruin = ruinState.current;
             if (ruin.snap) {
@@ -629,6 +648,7 @@ export const Game = (props: GameProps) => {
             if (ruin.active[nextSeat]) gearTrigger('ruinSurge', `スキルのコスト-${GEAR_PARAMS.ruinDiscount}`);
             ruin.pending[nextSeat] = false;
             ruin.snap = currentBoard.map((sq) => sq.player);
+            ruin.snapBuds = budCounts(currentBoard);
             ruin.lastMove = null;
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.kinds[nextSeat] = new Set();
@@ -683,6 +703,13 @@ export const Game = (props: GameProps) => {
         }
         const standBonus = lastStandActiveAgainst(nextSeat);
         if (standBonus) nextMagic += GEAR_PARAMS.lastStandMagic;
+        // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+        nextMagic += scorchForNext;
+        if (hasGear(gearsBySeat[nextSeat], 'frostRoot')) {
+            const root = rootGain(frozenBudCount(currentBoard));
+            nextMagic += root;
+            if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
+        }
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
         if (proliferate[nextSeat]) {
@@ -909,13 +936,16 @@ export const Game = (props: GameProps) => {
         ruinState.current.lastMove = i;
         const decayNow = shouldDecay(placements, seatCount);
         const burnCells: number[] = [];
+        const burnedOut: (Player | undefined)[] = []; // 灰の供物: 🔥の継続ダメージでライフ0になったコマの持ち主
         setPlacements(placements + 1);
         for (let s = 0; decayNow && s < nextBoard.length; s++) {
             if (burnDamageOf(nextBoard[s], characters) > 0) burnCells.push(s);
+            const before = nextBoard[s];
             // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
             // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
             const square = decayTick(nextBoard[s], characters);
             nextBoard[s] = square;
+            if (before.player && before.bind > 0 && square.bind === 0 && square.effects.some((x) => x.effect === '🔥')) burnedOut.push(before.player);
             const poison = square.effects.filter((x) => x.effect === '☠').length;
             // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
             const expiredLock = square.bind === 0 ? square.effects.find((x) => x.effect === '🔑') : undefined;
@@ -939,6 +969,14 @@ export const Game = (props: GameProps) => {
         }
         // 🔥の継続ダメージを受けたマスに炎の小演出
         playBurst('burn', burnCells);
+        // 灰の供物: 🔥付きの敵コマがライフ0になったぶん魔力
+        symbols.forEach((sym, seat) => {
+            if (!hasGear(gearsBySeat[seat], 'ashOffering')) return;
+            const gain = ashGain(burnedOut.filter((o) => o !== sym).length);
+            if (gain <= 0) return;
+            setMagicAt(seat, (m) => m + gain);
+            gearTrigger('ashOffering', `魔力+${gain}`);
+        });
         // 毒使い側は、毒で空いたマス1つにつき魔力+1
         if (poisonVanished > 0) {
             characters.forEach((c, seat) => {
@@ -2872,7 +2910,7 @@ export const Game = (props: GameProps) => {
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
             processedTurn: 1,
         };
-        ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, lastMove: null };
+        ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, snapBuds: null, lastMove: null };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());

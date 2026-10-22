@@ -27,7 +27,10 @@ export type GearId =
     | 'colorGarden'
     | 'ailmentPact'
     | 'ruinSurge'
-    | 'lastStand';
+    | 'lastStand'
+    | 'scorchedEarth'
+    | 'ashOffering'
+    | 'frostRoot';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -76,6 +79,14 @@ export const GEAR_PARAMS = {
     /** 土壇場の防壁: 発動後、相手の手番開始時の魔力とライフ平均への加算 */
     lastStandMagic: 4,
     lastStandLife: 2,
+    /** 焦土: 🔥で敵の🌱が消えるたびの魔力と、1回の確認(1手番)あたりの上限 */
+    scorchMagic: 2,
+    scorchCap: 6,
+    /** 灰の供物: 🔥の継続ダメージで敵のコマのライフが0になるたびの魔力と、1回の減衰あたりの上限 */
+    ashMagic: 1,
+    ashCap: 2,
+    /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
+    rootMagic: 1,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -103,6 +114,9 @@ export const GEARS: GearDef[] = [
     { id: 'colorGarden', name: '彩りの庭', icon: '🎨', desc: `自陣に、1つのマスにエフェクトが${P.varietyKinds}種類以上あるマスがあると、1マスにつきターン開始時の魔力+${P.varietyMagic}` },
     { id: 'ailmentPact', name: '病炎の契り', icon: '🩸', desc: `自陣に毒・火炎(🔥)があると、1種類につき固有以外のスキルのコスト-${P.ailmentDiscount}（下限1）` },
     { id: 'ruinSurge', name: '廃墟の底力', icon: '🏚️', desc: `自陣がスキルかエフェクトで破壊されたとき、次の自分の手番の終わりまでスキルのコスト-${P.ruinDiscount}（下限1）` },
+    { id: 'scorchedEarth', name: '焦土', icon: '🌋', desc: `敵の🌱が🔥で消えるたびに魔力+${P.scorchMagic}（1手番に最大${P.scorchCap}）` },
+    { id: 'ashOffering', name: '灰の供物', icon: '⚱️', desc: `🔥が付いた敵のコマが継続ダメージでライフ0になるたびに魔力+${P.ashMagic}（1回の減衰につき最大${P.ashCap}）` },
+    { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠している🌱（敵味方問わず）1つにつき魔力+${P.rootMagic}` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
@@ -172,6 +186,21 @@ export const countAilmentKinds = (squares: readonly SquareLike[], player: string
 /** 廃墟の底力: before(手番開始時の持ち主)に対し、player のコマが盤から無くなった(または持ち主が変わった)マス。除外マスは通常の攻撃の着手マス */
 export const lostCells = (before: readonly (string | undefined)[], after: readonly (string | undefined)[], player: string, exclude: number | null): number[] =>
     before.map((p, i) => (p === player && after[i] !== player && i !== exclude ? i : -1)).filter((i) => i >= 0);
+
+const budCount = (sq: SquareLike): number => sq.effects.filter((e) => e.effect === '🌱').length;
+const hasEffect = (sq: SquareLike, effect: string): boolean => sq.effects.some((e) => e.effect === effect);
+
+/** 焦土: 手番開始時の記録(owners/buds)に対し、holder 以外のコマの🌱が🔥で消えた数（同じ持ち主のまま🔥があり、🌱が減ったマス） */
+export const burnedBudCount = (owners: readonly (string | undefined)[], buds: readonly number[], squares: readonly SquareLike[], holder: string): number =>
+    squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - budCount(sq)) : n), 0);
+export const scorchGain = (burned: number): number => Math.min(P.scorchCap, burned * P.scorchMagic);
+/** 灰の供物: 1回の減衰で、🔥付きの敵コマがライフ0になった数→魔力 */
+export const ashGain = (burnedOut: number): number => Math.min(P.ashCap, burnedOut) * P.ashMagic;
+/** 凍てつく根: 氷結中のマスにある🌱の数（敵味方問わず）→魔力 */
+export const frozenBudCount = (squares: readonly SquareLike[]): number => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
+export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic;
+/** 手番開始時の🌱の数の記録 */
+export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(budCount);
 
 /**
  * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。
