@@ -22,12 +22,12 @@
 > **戦略の練り直し(百鬼夜行の後)**: ファネル(sim/probe 経由)で、両コンボ札(62+64)が手札にある手番は4.5%・魔力13以上は約1%が律速と判明(両札が揃えば85%は勝てる盤面)。コンボ札のロック固定(floodLock=1)+魔力を貯める(floodHold=2)で 31.0→60.4%(seed3/150)、57.3%(seed9/200)、rank seed7/60 で 10位27.0%→**4位56.9%**(1位 magician 68.2%)。本番AIにもミラー済み(本番AIの勝率は未計測)。
 > 式神AIのノブ: shMax=3 / shBlastMin=3 / shReserve=9 / shComboReal=1(sim/ai.js AI_DEFAULTS、本番は AIPlayer.ts の SH_* 定数)。次は式神前提の診断(爆破・コンボ・一括の発動ファネル)から。
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 3bc89db
-- 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,2,3,5,6,8,10,12,14,27,28,32] AIフラグ=既定(lsNoBlock=1=防壁が未発動の間は相手の即勝ちを塞がない / yyMode=0, yyBudLock=0)
-- 基準線: 環境勝率 38.5% / 7位 / 1位 magician 65.7%  (rank, seed1, games60)。--target単体は41.8%(seed1/100)・36.8%(seed2/100)
-- 連続不採用回数: 0(試行9で採用)
-- 関連 issue: #12(⭕側バグ。closed・修正済み)、#44(長期戦の弱さの言及)。調整予定の数値変更なし(2026-10-21検索)
-- 状態: refining(トップ到達。上記)
+- 最後に検証したmaster: 2fd21bb8d2acd10ee045a5c85b054d181397d51e
+- 現在の推奨設定: gears=[lastStand,afterglow] deck=[0,2,3,5,6,8,10,12,71,72,73,53](核 53/71/73 は AI の入れ替えデッキでも外さない) AI=コンボ札の固定+魔力温存(floodLock/floodHold)+特売の重ね撃ち(comboDiscount)+シャッフル探索(shuffleDig=8, digRelock)+チャージ待ち(chargeWait=1)+53探しの往復をやめる(noDig53=8)
+- 基準線: 環境勝率 90.6% / 1位 / 2位 poisoner 64.6%(rank seed3/100、基本)。4条件すべて1位(varied 90.7 / ギアなし 92.2 / ギアランダム 91.1)。本番AI実測 84.6%(456/539)
+- 連続不採用回数: 6以上(chargeSafe, digSpare, shuffleDig回数, lock53Late, デッキ1枚近傍, ほか)。6種類(gear/deck/synergy/strategy/メタ/joint)は各1回以上測定済み
+- 関連 issue: #12(closed)、#44、#120(舞時代の調整案。式神リワークで前提が変わった)、#143(式神リワーク)、#160(周回。不採用)、#168(本番と sim の差・コンボの強さ)
+- 状態: done(洗練が飽和。master 2fd21bb8d2acd10ee045a5c85b054d181397d51e で再検証OK)
 ## 診断
 - 勝ち筋: 陰(魔力+2/ライフ4)で貯めて凶荒の舞(相手全コマ-2)、陽(ライフ7/コスト+1/魔力+1)は豊穣の舞(自コマbind+2)。
 - ファネル(vs magician, 100試合): yyDance 1.74回/試合(使用試合90%)。buds0.5/token0.49/addLife0.21。**sim AIは陰陽転化(toggleYY)を一度も撃たない**=常に初期モード(陰)。
