@@ -49,6 +49,8 @@ const AI_DEFAULTS = {
     lsAggro: 1,  // 土壇場の防壁が未発動なら相手の1回目の勝ちは止めに行かず攻める(防壁が受ける)。軍師 seed2/4×200 で +2.7pt(合算400試合, CI±2.2)（A/B採用）
     igniteSig: 1, // 鍛冶師が固有スキルの火遁を毎手番撃つ。1=敵コマ(ライフが残る)を燃やす / 2=敵の列を作りかけの空きマスにも🔥を仕込む（tune-top 鍛冶師: 環境勝率 seed22/150 +6.8pt, seed24/200 +8.6pt。2は1と同じ結果）
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
+    igniteHold: 0, // 魔力温存: 割引札が手札にあり敵コマがこの数以上あるあいだ、火遁で魔力を使い切らず貯める（陰陽師の floodHold と同じ発想）
+    holdMagic: 3, // 温存する魔力の目標(特売2回+業火=3)
     discountStack: 0, // 鍛冶師が軽減札を重ね撃ちして業火を安くする（特売2回で7→1。陰陽師の comboDiscount と同じ発想）
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
@@ -1697,6 +1699,10 @@ function faithfulMakeMoveInner(s) {
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
     if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
         && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
+        // 魔力温存: 割引札が手札にあり、敵コマ(ライフが残る)が F.igniteHold 個以上あるあいだは、火遁で魔力を使い切らず、重ね撃ち+業火に必要な魔力(F.holdMagic)まで貯める
+        && !(F.igniteHold && s.skills.some((x) => DISCOUNT_ALL.some((r) => r.idx === x))
+            && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= F.igniteHold
+            && curMagic(s) - calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') < F.holdMagic)
         && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite') + F.igniteReserve
         // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
         && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
