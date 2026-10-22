@@ -58,6 +58,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -882,6 +883,13 @@ function ownOffense(board, me) {
     }
     return sc;
 }
+function facingYinYang(s) { return otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster'); }
+// 自分のコマが1つ以上入っている勝ち筋の列の数
+function coveredLines(board, me, cells) {
+    let n = 0;
+    for (const line of geometryForCells(cells).winLines) if (line.some((idx) => board[idx].player === me)) n++;
+    return n;
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -952,6 +960,8 @@ function getEnhancedBestMove(s) {
         const reaches = countReaches(sim, me);
         if (reaches >= 2) score += 200;        // フォーク
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
+        // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
+        if (F.yyCover && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
@@ -1261,7 +1271,8 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx));
+        || (tokenLockAi && gearTokenIdx.includes(idx))
+        || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;

@@ -25,6 +25,8 @@ const SURPLUS_MAGIC = 12;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
 const SHIKIGAMI_LIFE = 2;
 const SHIKIGAMI_BLAST_DAMAGE = 4;
+/** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
+const YY_COVER_WEIGHT = 150;
 const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(Game.tsx と同じ)
 const SH_MAX = 3; // 同時に持つ式神の数
 const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
@@ -137,6 +139,20 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+    }
+
+    /** 相手に陰陽師がいるか */
+    private facingYinYang(): boolean {
+        return this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster');
+    }
+
+    /** 自分のコマが1つ以上入っている勝ち筋の列の数 (sim/ai.js coveredLines と同一) */
+    private coveredLines(board: SquareInfo[]): number {
+        let n = 0;
+        for (const line of geometryForCells(board.length).winLines) {
+            if (line.some((idx) => board[idx].player === this.playerSymbol)) n++;
+        }
+        return n;
     }
 
     private characterOf(player: Player): CharacterId | undefined {
@@ -742,6 +758,12 @@ class AIPlayer {
             if (reaches >= 2) score += 200;        // フォーク
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
 
+            // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
+            // (sim/ai.js yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%)
+            if (this.character === 'necromancer' && this.facingYinYang()) {
+                score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
+            }
+
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
             if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
                 score += 30;
@@ -801,7 +823,9 @@ class AIPlayer {
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             (this.character === 'magician' && budsIdx.includes(idx)) ||
-            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx));
+            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
+            // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (sim/ai.js necroLock=1)
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
