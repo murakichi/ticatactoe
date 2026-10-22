@@ -531,8 +531,8 @@ function budLoop(s, me) {
     if (curChar(s) !== 'magician' || !hasGear(s.gears[s.turn], 'chainDiscount')) return false;
     const costW = () => calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
     const costH = () => calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve');
-    for (let i = 0; i < (F.budLoopShuffle || 4) && !(s.skills.includes(33) && s.skills.includes(36)); i++) {
-        if (curMagic(s) < costsOf(s).onClickShuffle + (F.budLoopReserve || 6)) return false;
+    for (let i = 0; i < 4 && !(s.skills.includes(33) && s.skills.includes(36)); i++) {
+        if (curMagic(s) < costsOf(s).onClickShuffle + 6) return false;
         E.shuffleHand(s);
     }
     if (!(s.skills.includes(33) && s.skills.includes(36))) return false;
