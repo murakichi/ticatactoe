@@ -76,4 +76,10 @@ describe('ゲーム画面のスキル欄', () => {
         const wrap = fs.readFileSync(path.join(__dirname, 'SkillButton.module.css'), 'utf8');
         expect(/\.wrap \{([^}]*)\}/.exec(wrap)?.[1]).toMatch(/flex:\s*0 0 auto/);
     });
+
+    it('狭い画面では折り返して全カードを見せる（横スクロールだと右側の手札が画面外に隠れる）', () => {
+        const css = fs.readFileSync(path.join(__dirname, 'Game.module.css'), 'utf8');
+        const media = /@media \(max-width: 720px\) \{\s*\.skillGrid \{([^}]*)\}/.exec(css)?.[1] ?? '';
+        expect(media).toMatch(/flex-wrap:\s*wrap/);
+    });
 });
