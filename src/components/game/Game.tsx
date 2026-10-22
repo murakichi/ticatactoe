@@ -4,7 +4,7 @@ import { Effect } from '../../types/Effect';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
-import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS } from './AIPlayer';
+import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { isUniqueEffect } from './UniqueEffects';
@@ -495,7 +495,7 @@ export const Game = (props: GameProps) => {
         if (isAllAI && !autoPlay) return;
 
         const timer = setTimeout(() => {
-            aiReroll.current = { left: MAX_REROLLS, started: false };
+            aiReroll.current = { left: rerollBudget(currentCharacter), started: false };
             runAIMove();
         }, 500);
 

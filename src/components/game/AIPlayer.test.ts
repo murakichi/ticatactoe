@@ -740,6 +740,74 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
     });
 
+    it('特売(53)が手札にあれば重ね撃ちしてコンボを6魔力に圧縮する（特売×2→百鬼夜行→特売×2→式神一括）', () => {
+        const withMd = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 6, withMd, [73, 71, 53]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual([
+            'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
+        ]);
+        // 5魔力では足りない。特売が無ければ13必要
+        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 12, withMd, [73, 71])?.win ?? false).toBe(false);
+    });
+
+    it('シャッフル探索: 勝てる盤面でコンボ札が揃わず、魔力が足りるなら引き直す。揃っているか魔力が足りなければ引き直さない', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const ai = mk();
+        ai.rerollsLeft = 8;
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、6+1 以上ある
+        expect(ai.makeMove(b, 6, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
+        expect(ai.makeMove(b, 8, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
+    });
+
+    it('チャージ待ち: 勝てる盤面で相手のリーチが無く、探索に足りない魔力なら、駒を置かずチャージする', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const r = mk().makeMove(b, 4, dig, 3, 2, [2, 0, 3], false);
+        expect(r.skills).toEqual(['onClickCharge']);
+        expect(r.move).toBeNull();
+        // 魔力が足りれば（探索に回る）チャージしない
+        expect(mk().makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+        // 相手のリーチがあるときは防御を優先する
+        const threat = emptyBoard();
+        [4, 5, 6].forEach((i) => put(threat, i, '⭕'));
+        expect(mk().makeMove(threat, 4, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+    });
+
+    it('引き直しのたびに固定し直すと、見つけたコンボ札は次のシャッフルで失われず、やがて3枚揃う（Game.tsx の reshuffledSkills と同じ規則）', () => {
+        // Game.tsx reshuffledSkills: 固定(最大3)を残し、残り枠をデッキから埋める
+        let seed = 12345;
+        const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+        const deck = [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53];
+        const reshuffle = (locks: number[]): number[] => {
+            const keep = locks.slice(0, 3);
+            const pool = deck.filter((i) => !keep.includes(i)).sort(() => rnd() - 0.5);
+            return [...keep, ...pool.slice(0, 3 - keep.length)];
+        };
+        const ai = mk();
+        let hand = reshuffle([]);
+        let prevFound: number[] = [];
+        for (let step = 0; step < 60 && !(hand.includes(71) && hand.includes(73) && hand.includes(53)); step++) {
+            const locks = ai.chooseLocks(emptyBoard(), 0, 5, hand); // 引き直しのたび（再計画のたび）に走る
+            hand = reshuffle(locks);
+            prevFound.forEach((c) => expect(hand).toContain(c)); // 見つけた札は残る
+            prevFound = locks;
+        }
+        expect([71, 73, 53].every((c) => hand.includes(c))).toBe(true);
+    });
+
+    it('コンボ札(71/73)と特売(53)を手札に固定する', () => {
+        expect(mk().chooseLocks(emptyBoard(), 0, 5, [53, 71, 3, 73])).toEqual([53, 71, 73]);
+    });
+
     it('コンボ札(71/73)だけを手札に固定する', () => {
         const ai = mk();
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 71, 3, 73])).toEqual([71, 73]);
