@@ -627,3 +627,56 @@ describe('土壇場の防壁 × 陰陽師', () => {
         expect(spy.mock.calls.some((c) => c[0] === board)).toBe(true);
     });
 });
+
+describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
+    const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 6, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any;
+    const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
+    const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
+
+    it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 14, costs, [0]);
+        expect(plan?.clicks[0].skill).toBe('onClickShikigamiPlace');
+        expect([4, 5, 6, 2].includes(plan!.clicks[0].target!)).toBe(true);
+    });
+
+    it('式神を置いたあとに魔力が残らない（貯めたい）ときは置かない', () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        expect(mk().planShikigami(b, 8, costs, [0])).toBeNull();
+    });
+
+    it('爆破の価値がある式神があれば、陰からは転化して爆破する', () => {
+        const b = emptyBoard();
+        shiki(b, 5);
+        put(b, 0, '⭕', 3);
+        put(b, 1, '⭕', 3);
+        const plan = mk().planShikigami(b, 12, costs, [0]);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickToggleYingYang', 'onClickShikigamiBlast']);
+        expect(plan?.clicks[1].target).toBe(5);
+        // 爆破後: 式神は消え、敵の0・1は壊れ、周囲の空きマスは式神になる
+        expect(plan!.board[5].player).toBeUndefined();
+        expect(plan!.board[0].player).toBeUndefined();
+        expect(plan!.board[4].effects.some((e) => e.effect === '📜')).toBe(true);
+    });
+
+    it('式神一括: 自コマ1+式神置き3で列を完成できる魔力があればコンボを組む', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 3);
+        const plan = mk().planShikigami(b, 15, costs, [62, 0]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 14, costs, [62, 0])?.win ?? false).toBe(false);
+    });
+
+    it('式神は列に数えない: 式神を含む列はリーチ扱いにならず、式神は脅威にも数えない', () => {
+        const ai = mk();
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕'));
+        shiki(b, 3, '⭕');
+        expect(ai.countReaches(b, '⭕')).toBe(0);
+        expect(ai.findThreatSquares(b, '⭕')).not.toContain(3);
+    });
+});

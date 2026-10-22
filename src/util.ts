@@ -35,6 +35,11 @@ const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode 
     return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std));
 };
 
+/** 式神(📜)は列の並びに数えない */
+const isShikigami = (sq: { effects: readonly { effect: string }[] }): boolean => sq.effects.some((e) => e.effect === '📜');
+/** 列判定用のシンボル配列（式神はコマ無し扱い） */
+const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isShikigami(x) ? undefined : x.player));
+
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
     for (const line of geometryForCells(squares.length).winLines) {
         const first = squares[line[0]];
@@ -77,4 +82,4 @@ const range = (start: number, count: number): number[] => Array.from({ length: c
 const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) =>
     ary.map((x, i) => (x?.player === undefined && x?.effects.filter((effect) => effect.effect === '🔑' || effect.effect === '❄').length === 0 ? i : -1)).filter((x) => x !== -1);
 
-export {calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };
+export {isShikigami, lineSymbols, calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };

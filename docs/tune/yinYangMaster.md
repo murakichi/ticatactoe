@@ -1,4 +1,7 @@
 # tune-top: yinYangMaster
+> **2026-10-22 リワーク**: 固有スキルを 豊穣/凶荒の舞 から **式神**(陰=設置コスト3 / 陽=爆破コスト5、汎用に 式神一括6・式神ランダム設置2)に置き換えた。
+> 以下の試行ログ・診断・順位は**舞の時代のもの(無効)**。リワーク後の基準線: rank seed7/60 で **10位 27.0%**(1位 magician 73.2%)。推奨デッキに 62/63 を追加、ギアは lastStand+sturdy のまま。
+> 式神AIのノブ: shMax=3 / shBlastMin=3 / shReserve=9 / shComboReal=1(sim/ai.js AI_DEFAULTS、本番は AIPlayer.ts の SH_* 定数)。次は式神前提の診断(爆破・コンボ・一括の発動ファネル)から。
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3bc89db
 - 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,2,3,5,6,8,10,12,14,27,28,32] AIフラグ=既定(lsNoBlock=1=防壁が未発動の間は相手の即勝ちを塞がない / yyMode=0, yyBudLock=0)

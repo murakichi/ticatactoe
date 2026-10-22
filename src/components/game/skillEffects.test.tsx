@@ -64,6 +64,8 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSolstice: 'solstice',
     onClickSucker: 'sprout',
     onClickWindborne: 'windborne',
+    onClickShikigamiAll: 'shikigami',
+    onClickShikigamiRandom: 'shikigami',
     onClickBoost: 'harvest',
     onClickRelocate: 'windborne',
     onClickClone: 'sprout',

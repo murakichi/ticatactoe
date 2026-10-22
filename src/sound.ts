@@ -275,6 +275,18 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             [C5, E5, G5].forEach((f, i) => tone(ctx, d, { f0: f, f1: f * 1.6, t: T(i * 0.08), dur: 0.12, gain: 0.35 }));
             return 0.45;
         }
+        case 'shikigami': {
+            // 式神: 紙をはらりと置く小さな音
+            noise(ctx, d, { t: T(0), dur: 0.12, gain: 0.3, filter: 'bandpass', f0: 2000, f1: 4000, q: 0.8 });
+            tone(ctx, d, { f0: 660, f1: 990, t: T(0.08), dur: 0.1, gain: 0.3 });
+            return 0.3;
+        }
+        case 'shikigamiBlast': {
+            // 式神爆破: ぱん、と弾ける
+            noise(ctx, d, { t: T(0), dur: 0.25, gain: 0.55, filter: 'lowpass', f0: 300, f1: 3000 });
+            tone(ctx, d, { f0: 80, f1: 300, t: T(0), dur: 0.25, gain: 0.5 });
+            return 0.35;
+        }
         case 'windborne': {
             // 風の落とし子: 風が吹き抜け、種がぱらぱら落ちる
             noise(ctx, d, { t: T(0), dur: 0.6, gain: 0.4, filter: 'bandpass', f0: 600, f1: 3000, q: 0.8 });

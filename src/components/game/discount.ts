@@ -35,7 +35,7 @@ export const EFFECT_SKILL_KEYS: ReadonlySet<string> = new Set([
 /** 各キャラの固有スキル（コストキー） */
 export const UNIQUE_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickStomp', 'onClickJudgeDay', 'onClickTotalAssault', 'onClickMiasma', 'onClickChargeSpread',
-    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickYingYangSkill',
+    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickShikigamiPlace', 'onClickShikigamiBlast',
 ]);
 
 /** key のスキルにかかる軽減量。軽減札どうしには効かない */

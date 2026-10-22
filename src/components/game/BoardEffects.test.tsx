@@ -14,6 +14,8 @@ const NEW_EFFECTS: [SkillEffectType, string | null][] = [
     ['solstice', '冬至の種子'],
     ['sprout', 'ひこばえ'],
     ['windborne', '風の落とし子'],
+    ['shikigami', '式神'],
+    ['shikigamiBlast', '式神爆破！'],
 ];
 
 describe('追加した演出', () => {

@@ -30,8 +30,9 @@ test('⭕側の陰陽師でも陰陽転化でモードが切り替わり、陽�
     expect(screen.getByText(/現在のモード:陽/)).toBeInTheDocument();
     // 陽なので全スキル+1 (修正前は⭕がこの割増を免れていた)
     expect(screen.getByRole('button', { name: 'ロック-3' })).toBeInTheDocument();
-    // 陽のモード限定スキルに切り替わる
-    expect(screen.getByRole('button', { name: /豊穣の舞/ })).toBeInTheDocument();
+    // 陽のモード限定スキルに切り替わる（陰の式神設置は隠れ、陽の式神爆破が出る）
+    expect(screen.getByRole('button', { name: /式神爆破/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /式神設置/ })).not.toBeInTheDocument();
 });
 
 test('相手が陽でも自分が陰ならコストは増えない', () => {
@@ -270,4 +271,48 @@ test('ミアズマ: 魔力が足りていても、自陣に毒が乗ったマス
     const miasma = screen.getByRole('button', { name: 'ミアズマ-5' }) as HTMLButtonElement;
     expect(miasma.textContent).not.toContain('あと⚡');
     expect(miasma.disabled).toBe(true);
+});
+
+describe('式神', () => {
+    const charge = () => fireEvent.click(screen.getByRole('button', { name: /チャージ\+/ }));
+    // 両者がチャージして魔力を貯め、💙の手番に戻す
+    const rich = (container: HTMLElement) => {
+        for (let i = 0; i < 3; i++) { charge(); charge(); }
+        return container;
+    };
+    const squareText = (container: HTMLElement, i: number) => cells(container)[i].textContent ?? '';
+
+    it('陰の式神設置: 任意の空きマスに📜付きで置ける。手番は続き、そのまま通常の着手もできる', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        expect(squareText(container, 5)).toContain('📜');
+        expect(squareText(container, 5)).toContain('2'); // ライフ2
+        // 手番は続くので、通常の着手ができる
+        fireEvent.click(cells(container)[0]);
+        expect(squareText(container, 0)).not.toContain('📜');
+    });
+
+    it('式神を自分で補強すると📜が消えて🌱付きの通常コマになる（列にも数えられる）', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        fireEvent.click(cells(container)[5]); // 補強
+        expect(squareText(container, 5)).not.toContain('📜');
+        expect(squareText(container, 5)).toContain('🌱');
+    });
+
+    it('陽の式神爆破: 自分の式神が消え、周囲8マスの空きマスが式神になる', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        fireEvent.click(screen.getByRole('button', { name: /陰陽転化/ }));
+        fireEvent.click(screen.getByRole('button', { name: /式神爆破/ }));
+        fireEvent.click(cells(container)[5]);
+        expect(squareText(container, 5)).not.toContain('📜');
+        for (const j of [0, 1, 2, 4, 6, 8, 9, 10]) expect(squareText(container, j)).toContain('📜');
+    });
 });
