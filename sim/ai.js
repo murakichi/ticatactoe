@@ -1093,12 +1093,46 @@ function chooseSkills(s, availableSkills) {
         if (doomed >= 1) spend(serumCost, 'serum');
     }
 
+    // --- 🍂落ち葉（AIPlayer.ts と同一）---
+    // 敵陣の🍂が2枚以上でコストが重いなら焚き火の唄で払う。自陣の🍂が3枚以上たまったら1枚を腐葉土で🌱に。
+    // 一葉知秋は、自陣の🌱が多く敵に🌱が無く、相手がスキルに頼っている（魔力が多い）ときだけ（盤面の🌱が全部🍂になる）
+    {
+        const leafCost = (key) => cost(costsOf(s)[key], false, key);
+        if (availableSkills.includes(66) && thermal.leafSurcharge(board, me) >= 2 && thermal.bonfireTargets(board, me).length > 0 && remaining >= leafCost('onClickBonfire')) {
+            spend(leafCost('onClickBonfire'), 'bonfire');
+        }
+        if (availableSkills.includes(67) && thermal.mulchCandidates(board, me).length >= 3 && remaining >= leafCost('onClickMulch')) {
+            spend(leafCost('onClickMulch'), 'mulch');
+        }
+        if (availableSkills.includes(68) && oppMagic >= 6 && myBuds >= 4 && remaining >= leafCost('onClickAutumn')) {
+            const enemyBuds = board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.budStacks(sq) : n), 0);
+            if (enemyBuds === 0) spend(leafCost('onClickAutumn'), 'autumn');
+        }
+    }
+
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
     // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
     if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
-    if (!tokenUsed) {
+    // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。AIPlayer.ts と同一）
+    if (availableSkills.includes(69) && otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer')
+        && thermal.leafFrostTargets(board, me).filter((i) => !shield.has(i)).length >= 2 && remaining >= cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost')) {
+        spend(cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost'), 'leafFrost');
+    }
+    // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
+    const leafToken = !tokenUsed && !(character === 'poisoner' || character === 'cryomancer' || character === 'electrician') ? pickLeafToken() : null;
+    function pickLeafToken() {
+        for (const o of [{ idx: 64, key: 'doubleLeafToken', cost: 'onClickDoubleLeafToken', minFree: 4 }, { idx: 63, key: 'twinLeafToken', cost: 'onClickTwinLeafToken', minFree: 3 }, { idx: 62, key: 'leafToken', cost: 'onClickLeafToken', minFree: 3 }]) {
+            if (!availableSkills.includes(o.idx) || freeCells < o.minFree) continue;
+            const c = cost(costsOf(s)[o.cost], true, o.cost);
+            if (remaining >= c) return { key: o.key, cost: c };
+        }
+        return null;
+    }
+    if (leafToken && spend(leafToken.cost, leafToken.key)) {
+        // 🍂付きのトークンを撃った（トークンはターンに1回）
+    } else if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
@@ -1177,7 +1211,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 62)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 71)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
