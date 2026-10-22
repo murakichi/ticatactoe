@@ -238,9 +238,9 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
-    giant: ['titanCost', 'sturdy'],
+    giant: ['afterglow', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
-    necromancer: ['vengeance', 'sturdy'],
+    necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ

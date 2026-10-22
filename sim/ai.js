@@ -51,6 +51,8 @@ const AI_DEFAULTS = {
     igniteReserve: 0, // 火遁を撃つとき残しておく魔力
     igniteBud: 6, // 火遁で魔法使いの🌱のある敵コマを優先して燃やす重み(🌱は🔥で燃えて消える。魔法使いの🌱は魔力+3なので3倍)。tune-top 鍛冶師: 対魔法使い 23→31%(seed28/29/30 で +7〜8pt)
     igniteSkip: 1, // 火遁を撃たない相手。1=ネクロマンサー(コマが壊れるたび墓地が増え蘇生の資源になる) / 2=ネクロマンサーと毒使い
+    stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
+    stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 let F = AI_DEFAULTS;
@@ -64,7 +66,7 @@ const ANTI_LOCK_VS = ['necromancer', 'poisoner', 'yinYangMaster'];
 const LINE_SCORES = [0, 1, 10, 50, 1000];
 
 // 巨人ストンプ: 破壊範囲に敵が最も多い中心を選ぶ (敵2体以上で価値あり)。なければ null
-function bestStompTarget(board, me) {
+function bestStompTarget(board, me, minEnemies = 2) {
     const geo = geometryForCells(board.length);
     let bestIdx = null, bestEnemies = 0, bestEmptyCenter = false;
     for (let i = 0; i < board.length; i++) {
@@ -77,7 +79,7 @@ function bestStompTarget(board, me) {
             bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
         }
     }
-    return bestEnemies >= 2 ? bestIdx : null;
+    return bestEnemies >= minEnemies ? bestIdx : null;
 }
 
 // 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) が最大の中心を選ぶ (純増2以上で価値あり)
@@ -1095,12 +1097,46 @@ function chooseSkills(s, availableSkills) {
         if (doomed >= 1) spend(serumCost, 'serum');
     }
 
+    // --- 🍂落ち葉（AIPlayer.ts と同一）---
+    // 敵陣の🍂が2枚以上でコストが重いなら焚き火の唄で払う。自陣の🍂が3枚以上たまったら1枚を腐葉土で🌱に。
+    // 一葉知秋は、自陣の🌱が多く敵に🌱が無く、相手がスキルに頼っている（魔力が多い）ときだけ（盤面の🌱が全部🍂になる）
+    {
+        const leafCost = (key) => cost(costsOf(s)[key], false, key);
+        if (availableSkills.includes(66) && thermal.leafSurcharge(board, me) >= 2 && thermal.bonfireTargets(board, me).length > 0 && remaining >= leafCost('onClickBonfire')) {
+            spend(leafCost('onClickBonfire'), 'bonfire');
+        }
+        if (availableSkills.includes(67) && thermal.mulchCandidates(board, me).length >= 3 && remaining >= leafCost('onClickMulch')) {
+            spend(leafCost('onClickMulch'), 'mulch');
+        }
+        if (availableSkills.includes(68) && oppMagic >= 6 && myBuds >= 4 && remaining >= leafCost('onClickAutumn')) {
+            const enemyBuds = board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.budStacks(sq) : n), 0);
+            if (enemyBuds === 0) spend(leafCost('onClickAutumn'), 'autumn');
+        }
+    }
+
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
     // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
     if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
-    if (!tokenUsed) {
+    // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。AIPlayer.ts と同一）
+    if (availableSkills.includes(69) && otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer')
+        && thermal.leafFrostTargets(board, me).filter((i) => !shield.has(i)).length >= 2 && remaining >= cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost')) {
+        spend(cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost'), 'leafFrost');
+    }
+    // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
+    const leafToken = !tokenUsed && !(character === 'poisoner' || character === 'cryomancer' || character === 'electrician') ? pickLeafToken() : null;
+    function pickLeafToken() {
+        for (const o of [{ idx: 64, key: 'doubleLeafToken', cost: 'onClickDoubleLeafToken', minFree: 4 }, { idx: 63, key: 'twinLeafToken', cost: 'onClickTwinLeafToken', minFree: 3 }, { idx: 62, key: 'leafToken', cost: 'onClickLeafToken', minFree: 3 }]) {
+            if (!availableSkills.includes(o.idx) || freeCells < o.minFree) continue;
+            const c = cost(costsOf(s)[o.cost], true, o.cost);
+            if (remaining >= c) return { key: o.key, cost: c };
+        }
+        return null;
+    }
+    if (leafToken && spend(leafToken.cost, leafToken.key)) {
+        // 🍂付きのトークンを撃った（トークンはターンに1回）
+    } else if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
         const chargeTokenCost = calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken');
         if (character === 'poisoner' && availableSkills.includes(16) && remaining >= poisonTokenCost) {
@@ -1179,7 +1215,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 62)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 71)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1208,6 +1244,7 @@ function bestRescueCenter(board, me, opps, kind) {
         const threats = new Set(opps.flatMap((o) => findThreatSquares(nb, o))).size;
         if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
     }
+    bestRescueCenter.lastThreats = bestThreats;
     return bestIdx;
 }
 
@@ -1259,6 +1296,16 @@ function faithfulMakeMoveInner(s) {
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const rush = rushActive(s); // 土壇場の防壁(F.rush): 発動までは守らず攻める。相手のリーチを無視する
     const threats = rush ? [] : Array.from(new Set(opps.flatMap((o) => findThreatSquares(s.board, o))));
+    // 巨人(F.stompDef): 相手にリーチがあるとき、ストンプ（コスト低・着手も兼ねる）で脅威を減らせるなら先に撃つ
+    if (F.stompDef && threats.length >= 1 && curChar(s) === 'giant' && curMagic(s) >= calculateCost(s, costsOf(s).onClickStomp, false, false, 'onClickStomp')) {
+        const t = bestRescueCenter(s.board, me, opps, 'stomp');
+        if (t !== null && bestRescueCenter.lastThreats < threats.length) {
+            SKILLS.stomp(s);
+            placeMove(s, t);
+            const mv = getEnhancedBestMove(s);
+            return { move: mv, turnEnded: false };
+        }
+    }
     // 対雷霆の巫(F.freezeCharge): 氷結中の⚡は休眠する（無敵・発火が働かない）。敵の⚡付きでロックされていないコマを、脅威が無く魔力に余裕があるとき凍らせる
     if (F.freezeCharge && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
         for (let k = 0; k < (F.freezeChargeMax || 2); k++) {
@@ -1564,7 +1611,7 @@ function faithfulMakeMoveInner(s) {
     if (oppReaches === 0) {
         const ch = curChar(s);
         if (ch === 'giant' && magic >= calculateCost(s, costsOf(s).onClickStomp, false, false, 'onClickStomp')) {
-            const target = bestStompTarget(s.board, me);
+            const target = bestStompTarget(s.board, me, F.stompMin);
             if (target !== null) {
                 SKILLS.stomp(s);        // useStomp=true (手番は進まない)
                 placeMove(s, target);   // exeStomp: 範囲破壊+中心配置

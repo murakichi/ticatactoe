@@ -65,7 +65,7 @@ describe('AIPlayer pure logic', () => {
 });
 
 describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () => {
-    it('giant findStompTarget needs >=2 enemies in range', () => {
+    it('giant findStompTarget fires with >=1 enemy in range (stomp costs 2)', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕']);
         const two = emptyBoard();
         put(two, 0, '⭕');
@@ -74,7 +74,19 @@ describe('AIPlayer signature-skill targeting (uses shared boardGeometry)', () =>
 
         const one = emptyBoard();
         put(one, 0, '⭕');
-        expect(giant.findStompTarget(one)).toBeNull();
+        expect(giant.findStompTarget(one)).not.toBeNull();
+
+        expect(giant.findStompTarget(emptyBoard())).toBeNull();
+    });
+
+    it('giant stomps to cut an opponent reach before locking (stompDef)', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕']);
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 3)); // ⭕が3つ並び、4つ目の3が脅威
+        const stompCosts = { onClickStomp: 3, onClickUseLock: 2 } as never;
+        const r = giant.makeMove(b, 6, stompCosts, 2, 5, [], false);
+        expect(r.skills).toEqual(['onClickStomp']);
+        expect(r.stompTarget).not.toBeNull();
     });
 
     it('magician findJudgeTarget fires when net enemy destruction >=2', () => {
@@ -314,11 +326,9 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull();
+        expect(ai.findStompTarget(b)).toBeNull(); // 氷結中の敵だけでは撃たない
         put(b, 9, '⭕');
-        expect(ai.findStompTarget(b)).toBeNull(); // 効く敵は1体だけ
-        put(b, 10, '⭕');
-        expect(ai.findStompTarget(b)).not.toBeNull();
+        expect(ai.findStompTarget(b)).not.toBeNull(); // 効く敵が1体いれば撃つ（コスト2）
     });
 
     it('simulateStomp: 氷結中の敵は壊れず❄が1つ減るだけ。自陣の氷結コマも守られる', () => {
@@ -776,5 +786,63 @@ describe('AIPlayer 土壇場の防壁 (lastStandReady)', () => {
         const ai = new AIPlayer('💙', 'tactician', ['⭕']);
         ai.lastStandReady = true;
         expect([3, 7]).not.toContain(ai.getBestMove(setup(), 3));
+    });
+});
+
+describe('🍂落ち葉スキルのAI使用', () => {
+    const costs = { onClickLeafToken: 3, onClickTwinLeafToken: 5, onClickDoubleLeafToken: 6, onClickBonfire: 3, onClickMulch: 2, onClickAutumn: 4 } as any;
+    const lone = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙');
+        put(b, 15, '⭕');
+        return b;
+    };
+
+    it('pickLeafToken: ダブル(空き4以上)→双子→1枚の順に、払える最初のものを選ぶ', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.pickLeafToken([62, 63, 64], 10, 10, costs)).toEqual({ skill: 'onClickDoubleLeafToken', cost: 6 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 5, costs)).toEqual({ skill: 'onClickTwinLeafToken', cost: 5 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 3, costs)).toEqual({ skill: 'onClickLeafToken', cost: 3 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 2, costs)).toBeNull();
+        expect(ai.pickLeafToken([0, 1], 10, 10, costs)).toBeNull();
+        expect(ai.pickLeafToken([64], 3, 10, costs)).toBeNull(); // 空きが足りない
+    });
+
+    it('トークンを撃てる手番では、🍂付きトークンを普通のトークンより先に撃つ（固有トークン持ち以外）', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const r = ai.makeMove(lone(), 10, { ...costs, onClickToken: 4 } as any, 0, 5, [62, 3, 0], false);
+        expect(r.skills).toContain('onClickLeafToken');
+        expect(r.skills).not.toContain('onClickToken');
+    });
+
+    it('焚き火の唄: 敵陣の🍂が2枚以上あるときだけ撃つ', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = lone();
+        b[15] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+        const r = ai.makeMove(b, 10, costs, 0, 5, [66, 0, 1], false);
+        expect(r.chargeClicks?.map((c) => c.skill)).toContain('onClickBonfire');
+        const one = lone();
+        one[15] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        expect(ai.makeMove(one, 10, costs, 0, 5, [66, 0, 1], false).chargeClicks?.map((c) => c.skill) ?? []).not.toContain('onClickBonfire');
+    });
+});
+
+describe('霜枯れのAI使用', () => {
+    const costs = { onClickLeafFrost: 3 } as any;
+    const leafy = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙'); put(b, 1, '💙'); put(b, 15, '⭕');
+        b[0] = { ...b[0], effects: [{ effect: '🍂' }] };
+        b[1] = { ...b[1], effects: [{ effect: '🍂' }] };
+        return b;
+    };
+    it('煉獄の鍛冶師が敵にいて、自陣の🍂マスが2つ以上あるときだけ撃つ', () => {
+        const withPyro = new AIPlayer('💙', 'you', ['⭕'], ['you', 'pyromancer']);
+        expect(withPyro.makeMove(leafy(), 10, costs, 0, 5, [69, 0, 1], false).skills).toContain('onClickLeafFrost');
+        const noPyro = new AIPlayer('💙', 'you', ['⭕'], ['you', 'giant']);
+        expect(noPyro.makeMove(leafy(), 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
+        const one = leafy();
+        one[1] = { ...one[1], effects: [] };
+        expect(withPyro.makeMove(one, 10, costs, 0, 5, [69, 0, 1], false).skills).not.toContain('onClickLeafFrost');
     });
 });
