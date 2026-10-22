@@ -61,7 +61,7 @@ const makeCtx = () => {
 
 const ALL: Sfx[] = [
     'slash', 'backslash', 'stomp', 'judge', 'opium', 'tsunami', 'assault', 'necromancy', 'yinyang',
-    'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'proliferate', 'zap', 'overload', 'silence', 'freeze', 'flame', 'glacier', 'glacierBurst', 'inferno', 'cleanse', 'harvestEve', 'solstice', 'sprout', 'windborne', 'autumn', 'iceBreak', 'thaw', 'burn',
+    'harvest', 'famine', 'auraGreen', 'auraRed', 'poison', 'miasma', 'chainZap', 'proliferate', 'zap', 'overload', 'silence', 'freeze', 'flame', 'glacier', 'glacierBurst', 'inferno', 'cleanse', 'harvestEve', 'solstice', 'sprout', 'windborne', 'shikigami', 'shikigamiBlast', 'autumn', 'iceBreak', 'thaw', 'burn',
     'place', 'charge', 'win', 'lock',
     'heal', 'double', 'bloom', 'discount', 'chargeUp', 'shuffle', 'token',
     'rain', 'dash', 'clone', 'plunder', 'bulwark',

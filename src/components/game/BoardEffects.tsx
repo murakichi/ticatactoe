@@ -1,6 +1,7 @@
 import React from 'react';
 import { cellPixelsFor } from './boardGeometry';
 import styles from './BoardEffects.module.css';
+import { isUniqueEffect, renderUniqueEffect } from './UniqueEffects';
 
 export type SkillEffectType =
     | 'slash'
@@ -32,6 +33,8 @@ export type SkillEffectType =
     | 'sprout'
     | 'windborne'
     | 'autumn'
+    | 'shikigami'
+    | 'shikigamiBlast'
     | 'iceBreak'
     | 'thaw'
     | 'burn'
@@ -47,7 +50,9 @@ export type SkillEffectType =
     | 'dash'
     | 'clone'
     | 'plunder'
-    | 'bulwark';
+    | 'bulwark'
+    | 'miasma'
+    | 'chainZap';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
 export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
@@ -65,6 +70,10 @@ export type SkillEffect = {
     indexes?: number[];
     /** バナーの文言を上書きする（バッズ/ダブルバッズ、トークン各種など、同じ演出を共有するスキルの名前出し分け用） */
     label?: string;
+    /** 陰陽転化: '陰'/'陽' など、演出の出し分け */
+    variant?: string;
+    /** ミアズマ: 毒が広がる元のマス */
+    sources?: number[];
     nonce: number;
 };
 
@@ -83,25 +92,6 @@ const cellCenter = (index: number, size: number) => {
     const row = Math.floor(index / size);
     return { left: 12 + cell / 2 + col * (cell + 8), top: 12 + cell / 2 + row * (cell + 8) };
 };
-
-// 全軍突撃: 盤面各所に着弾する衝撃 (軍師の総攻撃)。4x4 での位置を相対座標のまま他サイズへ写す
-const ASSAULT_IMPACTS_4X4 = [3, 6, 9, 1, 12, 14, 7];
-const assaultImpacts = (size: number): number[] =>
-    ASSAULT_IMPACTS_4X4.map((idx) => {
-        const row = Math.round(Math.floor(idx / 4) * ((size - 1) / 3));
-        const col = Math.round((idx % 4) * ((size - 1) / 3));
-        return row * size + col;
-    });
-
-// ストンプの飛び散る瓦礫の移動量(px)
-const DEBRIS: [number, number][] = [
-    [-90, -70],
-    [90, -80],
-    [-120, 10],
-    [120, 20],
-    [-60, 90],
-    [70, 100],
-];
 
 // 上昇/落下パーティクルの横位置(%)
 const PARTICLE_X = [6, 16, 26, 36, 46, 56, 66, 76, 86, 94];
@@ -135,6 +125,8 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
     autumn: { label: '落ち葉', bg: '#e8a24a', fg: '#3a1d00' },
+    shikigami: { label: '式神', bg: '#f1e4c3', fg: '#3a2a10' },
+    shikigamiBlast: { label: '式神爆破！', bg: '#ffb347', fg: '#3a1a00' },
     zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
     heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
     double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
@@ -149,6 +141,8 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     clone: { label: '写し身', bg: '#c7d0ff', fg: '#10173d' },
     plunder: { label: '追い剥ぎ', bg: '#ff4d79', fg: '#fff' },
     bulwark: { label: '土壇場の防壁', bg: '#ffd966', fg: '#3a2a00' },
+    miasma: { label: 'ミアズマ', bg: '#c98bff', fg: '#1d0b33' },
+    chainZap: { label: '帯電拡散', bg: '#fff44f', fg: '#2a2500' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
@@ -216,6 +210,8 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
         ));
 
     const render = () => {
+        // キャラ固有スキルは UniqueEffects で予兆→本体→余波の多段演出にする
+        if (isUniqueEffect(effect.type)) return renderUniqueEffect(effect, size);
         switch (effect.type) {
             case 'slash':
             case 'backslash': {
@@ -234,35 +230,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     </>
                 );
             }
-            case 'stomp': {
-                const pos = cellCenter(effect.index ?? size + 1, size);
-                return (
-                    <>
-                        {[0, 1, 2].map((i) => (
-                            <div key={i} className={styles.shockwave} style={{ left: pos.left, top: pos.top, animationDelay: `${i * 140}ms` }} />
-                        ))}
-                        {DEBRIS.map((d, i) => (
-                            <span
-                                key={i}
-                                className={styles.debris}
-                                style={{ left: pos.left, top: pos.top, ['--dx' as string]: `${d[0]}px`, ['--dy' as string]: `${d[1]}px` }}
-                            >
-                                🪨
-                            </span>
-                        ))}
-                    </>
-                );
-            }
-            case 'judge':
-                return (
-                    <>
-                        <div className={styles.flash} />
-                        <div className={`${styles.flash} ${styles.flashLate}`} />
-                        <div className={styles.bolt}>⚡</div>
-                        <div className={`${styles.bolt} ${styles.boltL}`}>⚡</div>
-                        <div className={`${styles.bolt} ${styles.boltR}`}>⚡</div>
-                    </>
-                );
             case 'opium':
                 return (
                     <>
@@ -277,41 +244,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                             <div key={i} className={styles.wave} style={{ animationDelay: `${i * 160}ms` }} />
                         ))}
                         {riseParticles('💦')}
-                    </>
-                );
-            case 'assault':
-                // 軍師「全軍突撃」: 各所に着弾する衝撃 + 旗
-                return (
-                    <>
-                        {assaultImpacts(size).map((idx, i) => {
-                            const pos = cellCenter(idx, size);
-                            return (
-                                <div
-                                    key={i}
-                                    className={styles.impact}
-                                    style={{ left: pos.left, top: pos.top, animationDelay: `${i * 60}ms` }}
-                                />
-                            );
-                        })}
-                        <div className={styles.bannerCharge}>🚩</div>
-                        {riseParticles('🔥')}
-                    </>
-                );
-            case 'necromancy':
-                // ネクロマンサー「蘇生」: 闇のオーラから魂が立ち昇る
-                return (
-                    <>
-                        <div className={styles.necroGlow} />
-                        {riseParticles('👻')}
-                        <div className={styles.necroSigil}>💀</div>
-                    </>
-                );
-            case 'yinyang':
-                // 陰陽師「陰陽転化」: 回転する太極図
-                return (
-                    <>
-                        <div className={`${styles.yinyangRing}`} />
-                        <div className={styles.yinyang}>☯️</div>
                     </>
                 );
             case 'harvest':
@@ -357,17 +289,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {riseParticles('🔥')}
                     </>
                 );
-            case 'glacier':
-                // 絶対零度: 盤面全体が凍りつく。青いオーラ、降りしきる雪、中央に冷気の紋章
-                return (
-                    <>
-                        <div className={`${styles.aura} ${styles.auraIce}`} />
-                        <div className={styles.haze} style={{ background: 'rgba(186, 230, 253, 0.55)' }} />
-                        {fallParticles('❄')}
-                        {fallParticles('🧊')}
-                        <div className={styles.sigil}>🥶</div>
-                    </>
-                );
             case 'glacierBurst': {
                 // 氷結崩壊: 凍った敵が砕け散る。白い閃光と中央からの衝撃波、ダメージを受けたマスに破片
                 const pos = cellCenter(effect.index ?? Math.floor((size * size) / 2), size);
@@ -383,17 +304,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     </>
                 );
             }
-            case 'inferno':
-                // 業火: 画面が炎に包まれる。赤橙のオーラと立ち昇る炎、敵コマの上に火柱
-                return (
-                    <>
-                        <div className={`${styles.aura} ${styles.auraFire}`} />
-                        {riseParticles('🔥')}
-                        {riseParticles('🔥')}
-                        {cellPops(effect.indexes, '🔥', styles.burst_burn)}
-                        <div className={styles.sigil}>🌋</div>
-                    </>
-                );
             case 'cleanse':
                 // 浄化: 白金の光が盤面を洗い、きらめきが舞い上がる
                 return (
