@@ -81,6 +81,11 @@ const SKILL_CATALOG = [
     { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds' },
     { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice' },
     { idx: 70, name: '春一番', icon: '🌬️', category: 'ice' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
 ];
 
 
@@ -93,7 +98,7 @@ const RECOMMENDED_DECKS = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 14, 27, 28, 32],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 32],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
