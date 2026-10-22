@@ -56,7 +56,7 @@ const AI_DEFAULTS = {
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.comboDiscount = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1232,7 +1232,7 @@ function chooseLocks(s, availableSkills) {
     const character0 = curChar(s);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return availableSkills.filter((i) => i === 33 || i === 36);
-    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
+    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53));
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
     // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
@@ -1328,6 +1328,22 @@ function bestShikigamiCell(s, me) {
     });
     return best;
 }
+// 百鬼夜行→式神一括の実コストの計画。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする（特売は1魔力で次のスキルを-3、何回でも撃てる）
+function comboPlan(s) {
+    const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+    const md = s.skills.includes(53) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
+    const best = (base) => {
+        let bm = 0, bt = base;
+        for (let m = 1; m <= 4 && md !== Infinity; m++) {
+            const t = m * md + Math.max(1, base - 3 * m);
+            if (t < bt) { bt = t; bm = m; }
+        }
+        return { m: bm, total: bt };
+    };
+    const f = best(cost('onClickShikigamiFlood'));
+    const a = best(cost('onClickShikigamiAll'));
+    return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
+}
 // 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か
 function floodComboWins(s, me) {
     const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
@@ -1340,12 +1356,12 @@ function shikigamiTurn(s, me) {
     const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
     // 百鬼夜行(73)+式神一括(71): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
     if (s.skills.includes(73) && s.skills.includes(71)) {
-        const need = costOf('onClickShikigamiFlood') + costOf('onClickShikigamiAll');
-        if (curMagic(s) >= need) {
-            const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
-                : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
-            if (calculateWinner(lineSyms(nb)) === me) {
+        const plan = comboPlan(s);
+        if (curMagic(s) >= plan.total) {
+            if (floodComboWins(s, me)) {
+                for (let k = 0; k < plan.floodCasts; k++) SKILLS.markdown(s);
                 SKILLS.shikigamiFlood(s);
+                for (let k = 0; k < plan.allCasts; k++) SKILLS.markdown(s);
                 SKILLS.shikigamiAll(s);
                 settleWinner(s);
                 return true;
@@ -1786,7 +1802,7 @@ function faithfulMakeMoveInner(s) {
     // 陰陽師(F.shuffleDig): 魔力が「コンボ分+引き直し分」あり、百鬼夜行→式神一括で勝てる盤面なら、1コストで手札を引き直してコンボ札を探す
     if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && !(s.skills.includes(71) && s.skills.includes(73))) {
         const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
-        const need = cost('onClickShikigamiFlood') + cost('onClickShikigamiAll');
+        const need = comboPlan(s).total;
         if (floodComboWins(s, me)) {
             for (let k = 0; k < F.shuffleDig && curMagic(s) >= need + costsOf(s).onClickShuffle && !(s.skills.includes(71) && s.skills.includes(73)); k++) {
                 E.shuffleHand(s);
@@ -1811,7 +1827,7 @@ function faithfulMakeMoveInner(s) {
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
     const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
-        && curMagic(s) < calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll');
+        && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 式神の設置・転化・爆破
     if (curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && (holdFlood ? false : shikigamiTurn(s, me))) {
         if (s.winner) return { move: null, turnEnded: true };
