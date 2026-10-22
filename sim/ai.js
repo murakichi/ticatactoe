@@ -1115,6 +1115,11 @@ function chooseSkills(s, availableSkills) {
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
     // 暫定(F.useNew)/氷室(F.cryoCards): 霜降り(idx48)。ライフ2以下の自陣コマが2つ以上あれば凍らせて減衰から守る
     if (frostUse && availableSkills.includes(48) && thermal.frostfallTargets(board, me).length >= 2 && remaining >= cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall')) spend(cost(costsOf(s).onClickFrostfall, false, 'onClickFrostfall'), 'frostfall');
+    // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。AIPlayer.ts と同一）
+    if (availableSkills.includes(69) && otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer')
+        && thermal.leafFrostTargets(board, me).filter((i) => !shield.has(i)).length >= 2 && remaining >= cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost')) {
+        spend(cost(costsOf(s).onClickLeafFrost, false, 'onClickLeafFrost'), 'leafFrost');
+    }
     // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
     const leafToken = !tokenUsed && !(character === 'poisoner' || character === 'cryomancer' || character === 'electrician') ? pickLeafToken() : null;
     function pickLeafToken() {
@@ -1206,7 +1211,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 69)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 71)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }

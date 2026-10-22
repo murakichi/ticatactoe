@@ -97,6 +97,8 @@ export const skillCosts = {
     onClickBonfire: 3, //         焚き火の唄(idx 66): 敵陣の🍂を全て除去（🔑・❄のマスは対象外）
     onClickMulch: 2, //           腐葉土の目覚め(idx 67): 自陣の🍂1枚を🌱に変える
     onClickAutumn: 4, //          一葉知秋(idx 68): 盤面の🌱をすべて🍂に変える
+    onClickLeafFrost: 3, //       霜枯れ(idx 69): 自陣の🍂マスに❄を付ける（氷結中は🍂が休眠する）
+    onClickSpringWind: 2, //      春一番(idx 70): 自陣の❄を全て解除し、解除した数だけこのターンに打つスキルを軽減する
 };
 
 export type SkillCosts = typeof skillCosts;

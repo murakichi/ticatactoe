@@ -71,6 +71,8 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickBonfire: 'autumn',
     onClickMulch: 'autumn',
     onClickAutumn: 'autumn',
+    onClickLeafFrost: 'freeze',
+    onClickSpringWind: 'discount',
     onClickBoost: 'rain',
     onClickRelocate: 'dash',
     onClickClone: 'clone',
@@ -108,6 +110,8 @@ const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
 // 他のスキルと演出(の種類)を共有するスキルは、バナーに自分の名前が出ること(別スキルの名前が出ないこと)を守る。
 // 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
 const OWN_BANNER_LABELS: Record<string, string> = {
+    onClickLeafFrost: '霜枯れ',
+    onClickSpringWind: '春一番',
     onClickBonfire: '焚き火の唄',
     onClickMulch: '腐葉土の目覚め',
     onClickAutumn: '一葉知秋',

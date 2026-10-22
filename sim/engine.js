@@ -227,6 +227,8 @@ const skillCosts = {
     onClickBonfire: 3,
     onClickMulch: 2,
     onClickAutumn: 4,
+    onClickLeafFrost: 3, // 霜枯れ(idx 69)
+    onClickSpringWind: 2, // 春一番(idx 70)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -1900,6 +1902,28 @@ function onClickAutumn(s) {
     bumpStat(s, 'autumn');
 }
 
+// 霜枯れ (idx69): 自陣の🍂を持つマス（氷結を付けられるもの）すべてに❄+1。氷結中は🍂が休眠する。クリック不要。対象が無ければ使えない
+function leafFrostLegal(s) { return thermal.leafFrostTargets(s.board, curPlayer(s)).filter((i) => !isShielded(s, s.board[i])).length > 0; }
+function onClickLeafFrost(s) {
+    const targets = thermal.leafFrostTargets(s.board, curPlayer(s)).filter((i) => !isShielded(s, s.board[i]));
+    if (targets.length === 0) return;
+    freezeCells(s, targets);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLeafFrost, false, false, 'onClickLeafFrost'), 'onClickLeafFrost');
+    bumpMagicCount(s);
+    bumpStat(s, 'leafFrost');
+}
+
+// 春一番 (idx70): 自陣の❄を全て解除し、解除した❄の数だけ、このターンに打つ全スキルを軽減する（軽減札。自分自身は軽減されない）。クリック不要。自陣に❄が無ければ使えない
+function springWindLegal(s) { return thermal.thawTargets(s.board, curPlayer(s)).length > 0; }
+function onClickSpringWind(s) {
+    const { stacks } = thermal.thawAll(s.board, curPlayer(s));
+    if (stacks === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickSpringWind, false, false, 'onClickSpringWind'), 'onClickSpringWind');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + stacks });
+    bumpMagicCount(s);
+    bumpStat(s, 'springWind');
+}
+
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
@@ -2072,6 +2096,8 @@ const SKILLS = {
     bonfire: onClickBonfire,
     mulch: onClickMulch,
     autumn: onClickAutumn,
+    leafFrost: onClickLeafFrost,
+    springWind: onClickSpringWind,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2115,7 +2141,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

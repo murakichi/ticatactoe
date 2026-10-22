@@ -59,6 +59,9 @@ import {
     mulch,
     autumnTargets,
     autumn,
+    leafFrostTargets,
+    thawTargets,
+    thawAll,
 } from './thermal';
 import { lineCells } from './boardGeometry';
 import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
@@ -966,5 +969,34 @@ describe('🍂落ち葉（🌱バッズの対）', () => {
         expect(b[1].effects.map((e) => e.effect)).toEqual(['🍂', '⚡']);
         expect(budStacks(b[2])).toBe(1);
         expect(autumn(b).n).toBe(0);
+    });
+
+    it('霜枯れ: 自陣の🍂を持ち氷結を付けられるマスだけが対象。付けると🍂は休眠してコスト上乗せが止まる', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂');
+        b[1] = sq('💙', 3, '🍂', '🔑'); // ロック中は凍らせられない
+        b[2] = sq('💙', 3, '🍂', '❄'); // 氷結中でも重ねられる
+        b[3] = sq('💙', 3, '🌱'); // 🍂が無い
+        b[4] = sq('⭕', 3, '🍂');
+        expect(leafFrostTargets(b, '💙')).toEqual([0, 2]);
+        expect(leafSurcharge(b, '⭕')).toBe(2); // 💙の🍂: b[0] と b[1]（b[2] は氷結中で休眠）
+        freeze(b, leafFrostTargets(b, '💙'));
+        expect(leafSurcharge(b, '⭕')).toBe(1); // b[1] はロック中で凍らせられず、🍂が働き続ける
+    });
+
+    it('春一番: 自陣のコマの❄を全スタック解除して、解除した❄の数を返す（敵のコマ・空きマスの❄は触らない）', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '❄', '❄', '🍂');
+        b[1] = sq('💙', 3, '❄', '🔑'); // ロック中でも解ける
+        b[2] = sq('💙', 3, '🌱');
+        b[3] = sq('⭕', 3, '❄');
+        b[4] = sq(undefined, 0, '❄');
+        expect(thawTargets(b, '💙')).toEqual([0, 1]);
+        expect(thawAll(b, '💙')).toEqual({ stacks: 3, cells: [0, 1] });
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🍂']);
+        expect(b[1].effects.map((e) => e.effect)).toEqual(['🔑']);
+        expect(b[3].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(b[4].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(thawAll(b, '💙').stacks).toBe(0);
     });
 });

@@ -1912,7 +1912,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2195,6 +2195,51 @@ test('🍂落ち葉: 🔥が付くと燃えて消える（sim/thermal ignite）'
     g[5] = { player: '💙', bind: 3, effects: [BUD, LEAF] };
     th.ignite(g, [5], 4, 1, () => true);
     assert.deepStrictEqual(g[5].effects.map((x) => x.effect), ['🌱', '🔥']);
+});
+
+test('霜枯れ: 自陣の🍂マスに❄を付ける（コスト3）。氷結中の🍂は休眠してコスト上乗せが止まる。対象が無ければ使えない', () => {
+    const s = game(); s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.leafFrostLegal(s), false);
+    s.board[0] = { player: '💙', bind: 3, effects: [LEAF] };
+    s.board[1] = { player: '💙', bind: 3, effects: [LEAF, { effect: '🔑' }] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [LEAF] };
+    assert.strictEqual(e.leafFrostLegal(s), true);
+    const seatCost = (seat) => e.gearCost(s, 3, false, seat, 'onClickAddLife');
+    const taxedFor1 = seatCost(1); // 💙の🍂2枚ぶん
+    const cost = e.calculateCost(s, e.skillCosts.onClickLeafFrost, false, false, 'onClickLeafFrost');
+    e.SKILLS.leafFrost(s);
+    assert.strictEqual(s.heartMagic, 30 - cost);
+    assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.board[1].effects.filter((x) => x.effect === '❄').length, 0); // ロック中は対象外
+    assert.strictEqual(s.board[2].effects.filter((x) => x.effect === '❄').length, 0); // 敵のコマは対象外
+    assert.strictEqual(seatCost(1), taxedFor1 - 1); // b[0] の🍂が休眠した
+    assert.strictEqual(e.skillCosts.onClickLeafFrost, 3);
+});
+
+test('春一番: 自陣の❄を全て解除し、解除した数だけこのターンに打つ全スキルを軽減（自分は軽減されない・最低1・ターンを跨がない）', () => {
+    const s = game(); s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.springWindLegal(s), false);
+    s.board[0] = { player: '💙', bind: 3, effects: [FRZ, FRZ] };
+    s.board[1] = { player: '💙', bind: 3, effects: [FRZ] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [FRZ] };
+    assert.strictEqual(e.springWindLegal(s), true);
+    const springCost = e.calculateCost(s, e.skillCosts.onClickSpringWind, false, false, 'onClickSpringWind');
+    assert.strictEqual(springCost, 2);
+    const before = e.calculateCost(s, 6, false, false, 'onClickSlash');
+    e.SKILLS.springWind(s);
+    assert.strictEqual(s.heartMagic, 30 - 2);
+    assert.strictEqual(s.board[0].effects.length + s.board[1].effects.length, 0); // 自陣の❄は全部解除
+    assert.strictEqual(s.board[2].effects.length, 1); // 敵の❄はそのまま
+    assert.strictEqual(s.discount[0].turn, 3);
+    assert.strictEqual(e.calculateCost(s, 6, false, false, 'onClickSlash'), before - 3); // このターンに打つスキルが-3
+    assert.strictEqual(e.calculateCost(s, 2, false, false, 'onClickAddLife'), 1); // 最低1
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickSpringWind, false, false, 'onClickSpringWind'), 2); // 自分自身は軽減されない
+    e.SKILLS.springWind(s); // 解除する❄が無ければ何も起きない
+    assert.strictEqual(s.heartMagic, 30 - 2);
+    assert.strictEqual(s.discount[0].turn, 3);
+    // 軽減はこの手番だけ（次の手番の開始で空に戻る）
+    s.heartTurn = false; e.advanceTurn(s);
+    assert.strictEqual(s.discount[0].turn, 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
