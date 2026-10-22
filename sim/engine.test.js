@@ -448,28 +448,28 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
 });
 
-test('式神一括(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
+test('式神一括(1体あたりコスト4): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');
     s.board[1] = e.newShikigami('💙');
     s.board[2] = e.newShikigami('⭕');
-    s.magic[0] = 10;
+    s.magic[0] = 20;
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(s.magic[0], 10 - 2 * 2); // 自分の式神2体 × 2
+    assert.strictEqual(s.magic[0], 20 - 4 * 2); // 自分の式神2体 × 4
     assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
     assert.strictEqual(e.isShikigami(s.board[2]), true);
     e.SKILLS.shikigamiAll(s); // 式神がもういない
-    assert.strictEqual(s.magic[0], 6);
+    assert.strictEqual(s.magic[0], 12);
 });
 
 test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
-    s.magic[0] = 40;
+    s.magic[0] = 80;
     e.SKILLS.shikigamiFlood(s); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(before - s.magic[0], 2 * 16);
+    assert.strictEqual(before - s.magic[0], 4 * 16);
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
