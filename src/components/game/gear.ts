@@ -238,7 +238,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
-    giant: ['titanCost', 'sturdy'],
+    giant: ['afterglow', 'sturdy'],
     yinYangMaster: ['sturdy', 'ironLock'],
     necromancer: ['vengeance', 'sturdy'],
     poisoner: ['lastStand', 'sturdy'],

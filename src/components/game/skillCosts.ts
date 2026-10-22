@@ -3,7 +3,7 @@ export const skillCosts = {
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
     onClickYingYangSkill: 5,
-    onClickStomp: 6,
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,

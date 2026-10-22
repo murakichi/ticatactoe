@@ -14,6 +14,8 @@ import { shouldDecay } from './decay';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
+import { seatForTurn } from './giantTurn';
+import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
@@ -92,9 +94,6 @@ const useSeatArray = <T,>(init: () => T[]): [T[], (seat: number, value: T | ((pr
         setValues((prev) => prev.map((x, i) => (i === seat ? (typeof value === 'function' ? (value as (p: T) => T)(x) : value) : x)));
     return [values, setAt, setValues];
 };
-
-// 巨人は5ターンに1回休み（currentTurn % 5 === 4 のとき、次に手番が来るはずの巨人が飛ばされる）
-const GIANT_SKIP_MODULO = 5;
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
@@ -1030,6 +1029,16 @@ export const Game = (props: GameProps) => {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
+        }
+
+        // 巨人のオーラ: 周囲8マスの敵コマを破壊し、周囲8マス全部をロックする
+        if (currentCharacter === 'giant' && nextBoard[i].player === currentTurnPlayer) {
+            const aura = giantAura(nextBoard, geo.surroundRange(i), currentTurnPlayer, characters);
+            if (aura.destroyed.length > 0) addCorpses(aura.destroyed.length);
+            if (aura.destroyed.length > 0 || aura.locked.length > 0) {
+                addLog(`巨人のオーラ: ${aura.destroyed.length}コマを破壊、${aura.locked.length}マスをロック`);
+                flashCells(aura.destroyed);
+            }
         }
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
@@ -2387,20 +2396,8 @@ export const Game = (props: GameProps) => {
         igniteCells(board, [i]);
     };
 
-    // 次の手番の席。基本は席順どおりで、次が巨人のときだけ5ターンに1回その席を飛ばす
-    const judgeNextSeat = (): number => {
-        if (currentTurn === 1) {
-            return 0;
-        }
-
-        let next = (turnSeat + 1) % seatCount;
-        // 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
-        const mirror = seatCount === 2 && characters[0] === characters[1];
-        if (!mirror && characters[next] === 'giant' && currentTurn % GIANT_SKIP_MODULO >= GIANT_SKIP_MODULO - 1) {
-            next = (next + 1) % seatCount;
-        }
-        return next;
-    };
+    // 次の手番の席。巨人は2ターンに1回しか動かない（並びは giantTurn.ts。currentTurn だけで決まる）
+    const judgeNextSeat = (): number => seatForTurn(currentTurn, characters, turnSeat);
 
     const checkSkillDisable = (cost: number, isToken: boolean = false, isPoison: boolean = false): boolean => {
         const calculatedCost: number = calculateCost(cost, isToken, isPoison);
