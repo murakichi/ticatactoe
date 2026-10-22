@@ -78,6 +78,8 @@ function lateMagicBonus(turn, n) {
 const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
+const SHIKIGAMI_LIFE = 2;
+const SHIKIGAMI_BLAST_DAMAGE = 4; // 式神のライフ
 const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts port ---------------------------------------------------------
@@ -138,7 +140,11 @@ const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickYingYangSkill: 5,
+    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
+    onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
+    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -550,6 +556,8 @@ function newGame(opts = {}) {
         useJammer: false,
         useFreeze: false,
         useSucker: false,
+        useShikigamiPlace: false,
+        useShikigamiBlast: false,
         useSwidden: false,
         useFrostArea: false,
         useIcicle: false,
@@ -583,7 +591,10 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     return [...keep, ...fill];
 }
 
-const symbolsOf = (board) => board.map((x) => x.player);
+// 式神(📜)は列の並びに数えない
+const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
+const newShikigami = (player, bind = SHIKIGAMI_LIFE) => ({ player, bind, effects: [{ effect: '📜' }] });
+const symbolsOf = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
@@ -903,6 +914,18 @@ function placeMove(s, i) {
         exePandemic(s, i);
         return true;
     }
+    if (s.useShikigamiPlace) {
+        // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中の空きマスは選び直せる
+        if (board[i].player || thermal.emptyBlocked(board[i])) return false;
+        board[i] = newShikigami(curPlayer(s));
+        s.useShikigamiPlace = false;
+        return true;
+    }
+    if (s.useShikigamiBlast) {
+        if (!exeShikigamiBlast(s, i)) return false; // 自分の式神でなければ選び直せる
+        s.useShikigamiBlast = false;
+        return true;
+    }
     if (s.useStomp) {
         exeStomp(s, i);
         return true;
@@ -964,10 +987,13 @@ function placeMove(s, i) {
     const life = s.life;
     let newBind, newEffects, newPlayer;
     let capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
+    const shikigamiHere = isShikigami(board[i]);
     if (board[i].player === cur) {
         newPlayer = board[i].player;
         newBind = board[i].bind + life + 1;
         newEffects = board[i].effects;
+        // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
+        if (shikigamiHere) newEffects = newEffects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]);
     } else if (board[i].player) {
         const calc = board[i].bind - life + (board[i].bind > 0 ? 1 : 0);
         if (calc < 0) {
@@ -984,6 +1010,8 @@ function placeMove(s, i) {
         // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
         if (calc <= 0 && hadPoisonAtTarget) spreadOrigins.push(i);
         newEffects = [];
+        // 式神は乗っ取られると空きマスになる（コマは置かれない）
+        if (shikigamiHere && calc < 0) { newPlayer = undefined; newBind = 0; capturedFrom = undefined; }
         // 敵味方問わずコマが奪われる/消えるたびに墓地+1
         if (calc <= 0) addCorpses(s, 1);
     } else {
@@ -1254,27 +1282,67 @@ function onClickToggleYingYang(s) {
     s.yy[s.turn] = s.yy[s.turn] === 'yang' ? 'ying' : 'yang';
     spendMagic(s, gearCost(s, costsOf(s).onClickToggleYingYang, false, s.turn, 'onClickToggleYingYang'), 'onClickToggleYingYang');
 }
-function onClickYingYangSkill(s) {
-    applyYingYangDance(s, curYY(s));
-    spendMagic(s, gearCost(s, costsOf(s).onClickYingYangSkill, false, s.turn, 'onClickYingYangSkill'), 'onClickYingYangSkill');
+function onClickShikigamiPlace(s) {
+    s.useShikigamiPlace = true;
+    spendMagic(s, gearCost(s, costsOf(s).onClickShikigamiPlace, false, s.turn, 'onClickShikigamiPlace'), 'onClickShikigamiPlace');
 }
-function applyYingYangDance(s, mode) {
+function onClickShikigamiBlast(s) {
+    s.useShikigamiBlast = true;
+    spendMagic(s, gearCost(s, costsOf(s).onClickShikigamiBlast, false, s.turn, 'onClickShikigamiBlast'), 'onClickShikigamiBlast');
+}
+// 自分の式神 i を爆破: 式神は消え、周囲8マスの敵陣に4ダメージ(0になったら破壊)、空きマスは式神になる
+function exeShikigamiBlast(s, i) {
     const cur = curPlayer(s);
+    if (s.board[i].player !== cur || !isShikigami(s.board[i])) return false;
+    s.board[i] = { player: undefined, bind: 0, effects: [] };
     let destroyed = 0;
-    if (mode === 'yang') {
-        for (const sq of s.board) if (sq.player === cur) sq.bind += 2;
-    } else {
-        // 凶荒の舞: 自分以外の全員のコマ
-        for (let k = 0; k < s.board.length; k++) {
-            const sq = s.board[k];
-            if (!sq.player || sq.player === cur) continue;
-            const hit = thermal.applyDamage(sq, 2, 'skill'); // 氷結なら解除だけ、🔥なら1.5倍
-            if (hit.blocked) { s.board[k] = hit.sq; continue; }
-            if (hit.sq.bind < 1) { s.board[k] = { player: undefined, bind: 0, effects: [] }; destroyed++; }
-            else s.board[k] = hit.sq;
+    for (const j of surroundRange(s, i)) {
+        const sq = s.board[j];
+        if (!sq.player) {
+            if (!thermal.emptyBlocked(sq)) s.board[j] = newShikigami(cur);
+            continue;
         }
+        if (sq.player === cur || isGuarded(s, sq)) continue;
+        const hit = thermal.applyDamage(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill'); // 氷結なら解除だけ、🔥なら1.5倍
+        if (hit.blocked) { s.board[j] = hit.sq; continue; }
+        if (hit.sq.bind < 1) { s.board[j] = { player: undefined, bind: 0, effects: [] }; destroyed++; }
+        else s.board[j] = hit.sq;
     }
     addCorpses(s, destroyed);
+    return true;
+}
+// 汎用(コスト6): 自分の式神を全て通常の自陣コマにする
+function onClickShikigamiAll(s) {
+    const cur = curPlayer(s);
+    for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
+    bumpMagicCount(s);
+}
+// 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
+function onClickShikigamiFlood(s) {
+    const cur = curPlayer(s);
+    for (let k = 0; k < s.board.length; k++) {
+        const sq = s.board[k];
+        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
+    }
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
+    bumpMagicCount(s);
+}
+// 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
+function onClickShikigamiRandom(s) {
+    const empties = findEmptyIndexes(s.board);
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        // トークン系ギア(補強・軽量)のライフ補正を受ける
+        s.board[idx] = newShikigami(curPlayer(s), Math.max(1, SHIKIGAMI_LIFE + gear.gearTokenBindDelta(s.gears[s.turn])));
+        granted = afterTokenPlaced(s, idx, undefined);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
 }
 
 // giant
@@ -1619,8 +1687,7 @@ function onClickHailMary(s) {
         () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
         () => { s.useStomp = true; },
         () => { s.useJudgeDay = true; },
-        () => applyYingYangDance(s, 'yang'),
-        () => applyYingYangDance(s, 'ying'),
+        () => { s.useShikigamiPlace = true; },
         () => {
             summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
             if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
@@ -2068,7 +2135,11 @@ const SKILLS = {
     tsunami: onClickTsunami,
     walpurgis: onClickWalpurgisNight,
     toggleYY: onClickToggleYingYang,
-    yyDance: onClickYingYangSkill,
+    shikigamiPlace: onClickShikigamiPlace,
+    shikigamiBlast: onClickShikigamiBlast,
+    shikigamiAll: onClickShikigamiAll,
+    shikigamiRandom: onClickShikigamiRandom,
+    shikigamiFlood: onClickShikigamiFlood,
     stomp: onClickStomp,
     judgeDay: onClickJudgeDay,
     totalAssault: onClickTotalAssault,
@@ -2143,7 +2214,7 @@ function renderBoard(s) {
 module.exports = {
     bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
-    makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
+    makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,

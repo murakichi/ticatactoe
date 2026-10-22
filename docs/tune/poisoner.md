@@ -3,12 +3,14 @@
 - 最後に検証したmaster: 81ad8ce
 - 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,12,15,16,17,18,19,29,39,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 79.2% / 順位 1位 / 2位 magician 64.3%   (seed3, games100, rank --target poisoner, master 3bc89db)
-- 連続不採用回数: 4
+- 連続不採用回数: 6
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索
-- 状態: refining(master 81ad8ce で再検証OK。4条件すべて1位: 基本73.9(2位magician 59.1)/envDeck varied 68.1(59.1)/oppGears none 88.4(67.8)/random 83.4(64.4), seed3/200)
+- 状態: done(洗練が飽和: 試行17の採用以降、synergy/gear/strategy/メタ/deck/joint の6種類で連続不採用6回。master 156a174 で4条件1位を確認)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 28 | joint | 新デッキ下でギア pair: lastStand,reinforce/propagate/toxicBloom(seed72/200) | 現状76.8に対し 76.5/76.5/69.4 すべて以下 | 不採用 |
+| 27 | deck | 全相手 1枚40近傍(seed71/60) | 基準77.1に対し最良 -19+6 80.2 (+3.1, z≈0.9)。他は +0.6以内 | 不採用 |
 | 26 | メタ | 対 cryomancer に絞った deck 1枚40近傍(seed62/100)・gear 1枠(seed63/100)。対 cryomancer 現状 46.8%(seed61/200)で互角 | deck最良 49.5(インジェクション抜き、追加札は同値=未使用、SE±9.8)、gear最良 +4.3(SE±10) すべてノイズ内 | 不採用 |
 | 25 | strategy | 毒札を撃つ閾値: miasmaMin=1/3、injMin=7/14、mistMin=3/5(seed51/200) | 基準74.6に対し 74.9/73.2/74.6/74.5/74.8/74.6 すべて ±1.4 以内 | 不採用(ノブ撤回、既定が局所最適) |
 | 24 | 再検証 | master 81ad8ce を取り込み(落ち葉・霜枯れ・春一番などスキル追加) | 4条件すべて1位(基本73.9/envDeck 68.1/none 88.4/random 83.4) | 再検証OK |
