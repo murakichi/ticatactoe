@@ -1332,6 +1332,19 @@ function faithfulMakeMoveInner(s) {
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
         }
     }
+    // #160 検証(F.windLoop): 連鎖割引で 風の落とし子(36)→刈り入れ前夜(33) が1周+1魔力になる。手札に両方があれば最大 F.windLoop 周回す
+    if (F.windLoop && hasGear(s.gears[s.turn], 'chainDiscount') && !s.silenced[s.turn] && availableSkills.includes(33) && availableSkills.includes(36)) {
+        for (let k = 0; k < F.windLoop; k++) {
+            const c36 = calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
+            if (curMagic(s) < c36 || thermal.sowCandidates(s.board, me).length === 0) break;
+            const before = curMagic(s);
+            SKILLS.windborne(s);
+            const c33 = calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve');
+            if (ownBuds(s) < 1 || curMagic(s) < c33) break;
+            SKILLS.harvestEve(s);
+            if (curMagic(s) <= before) break; // 増えない周は打ち切り
+        }
+    }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
     // 氷結中のコマは❄1つが身代わりになって壊れない。魔法使いAIは範囲内の氷結中コマを数えず、net<2 になれば撃たない（bestJudgeTarget）
     if (F.antiJudge && curChar(s) === 'cryomancer' && !s.silenced[s.turn]) {
