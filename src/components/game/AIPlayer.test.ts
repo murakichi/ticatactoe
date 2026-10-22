@@ -671,6 +671,16 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(mk().planShikigami(b, 14, costs, [62, 0])?.win ?? false).toBe(false);
     });
 
+    it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
+        const flood = { ...costs, onClickShikigamiFlood: 7 };
+        const b = emptyBoard();
+        put(b, 0, '⭕', 3);
+        const plan = mk().planShikigami(b, 13, flood, [64, 62]);
+        expect(plan?.win).toBe(true);
+        expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
+        expect(mk().planShikigami(b, 12, flood, [64, 62])?.win ?? false).toBe(false); // 魔力が足りない
+    });
+
     it('式神は列に数えない: 式神を含む列はリーチ扱いにならず、式神は脅威にも数えない', () => {
         const ai = mk();
         const b = emptyBoard();

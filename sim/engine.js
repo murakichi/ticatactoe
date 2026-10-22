@@ -144,6 +144,7 @@ const skillCosts = {
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
     onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
+    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 6,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -1278,6 +1279,16 @@ function onClickShikigamiAll(s) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
+// 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
+function onClickShikigamiFlood(s) {
+    const cur = curPlayer(s);
+    for (let k = 0; k < s.board.length; k++) {
+        const sq = s.board[k];
+        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
+    }
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
+    bumpMagicCount(s);
+}
 // 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
 function onClickShikigamiRandom(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2002,6 +2013,7 @@ const SKILLS = {
     shikigamiBlast: onClickShikigamiBlast,
     shikigamiAll: onClickShikigamiAll,
     shikigamiRandom: onClickShikigamiRandom,
+    shikigamiFlood: onClickShikigamiFlood,
     stomp: onClickStomp,
     judgeDay: onClickJudgeDay,
     totalAssault: onClickTotalAssault,

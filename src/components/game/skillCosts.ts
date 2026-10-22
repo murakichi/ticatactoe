@@ -6,6 +6,7 @@ export const skillCosts = {
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
     onClickShikigamiAll: 6, // 汎用(idx 62): 自分の式神を全て通常の自陣コマにする
     onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
+    onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 6,
     onClickJudgeDay: 11,
     onClickCharge: 3,

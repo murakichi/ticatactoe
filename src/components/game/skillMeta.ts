@@ -43,6 +43,7 @@ const SKILL_META: Record<string, Meta> = {
     式神爆破: { icon: '💥', category: 'attack' },
     式神一括: { icon: '📜', category: 'support' },
     式神ランダム設置: { icon: '📜', category: 'token' },
+    百鬼夜行: { icon: '📜', category: 'support' },
     蘇生: { icon: '💀', category: 'support' },
     ヘイルメアリー: { icon: '🎲', category: 'support' },
     サイレンス: { icon: '🤫', category: 'control' },

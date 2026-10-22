@@ -1153,6 +1153,20 @@ function bestShikigamiCell(s, me) {
 function shikigamiTurn(s, me) {
     let acted = false;
     const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
+    // 百鬼夜行(64)+式神一括(62): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+    if (s.skills.includes(64) && s.skills.includes(62)) {
+        const need = costOf('onClickShikigamiFlood') + costOf('onClickShikigamiAll');
+        if (curMagic(s) >= need) {
+            const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+                : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+            if (calculateWinner(lineSyms(nb)) === me) {
+                SKILLS.shikigamiFlood(s);
+                SKILLS.shikigamiAll(s);
+                settleWinner(s);
+                return true;
+            }
+        }
+    }
     // 式神一括(idx 62)コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら、
     // 空きマスに式神を置いて一括で通常のコマに戻し、その手番に列を完成させる(式神は列に数えないので相手は警戒しない)
     if (s.skills.includes(62) && !s.useShikigamiPlace) {

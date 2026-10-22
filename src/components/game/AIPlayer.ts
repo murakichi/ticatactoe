@@ -9,7 +9,7 @@ import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canB
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 64;
+export const SKILL_POOL_SIZE = 65;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1201,6 +1201,19 @@ class AIPlayer {
         };
         const mine = (): number[] => b.map((sq, i) => (sq.player === me && isShikigami(sq) ? i : -1)).filter((i) => i >= 0);
         try {
+            // 百鬼夜行(64)+式神一括(62): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+            if (availableSkills.includes(64) && availableSkills.includes(62)) {
+                this.yinYangMode = mode;
+                const need = this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood') + this.calculateAICost(costs.onClickShikigamiAll, false, false, 'onClickShikigamiAll');
+                if (m >= need) {
+                    const nb: SquareInfo[] = b.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+                        : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+                    if (calculateWinner(lineSymbols(nb)) === me) {
+                        clicks.push({ skill: 'onClickShikigamiFlood' }, { skill: 'onClickShikigamiAll' });
+                        return { clicks, board: nb, win: true };
+                    }
+                }
+            }
             // 式神一括コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら一手番で完成させる
             if (availableSkills.includes(62)) {
                 const placeCost = costOf('onClickShikigamiPlace');
