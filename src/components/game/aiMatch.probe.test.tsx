@@ -44,7 +44,7 @@ run('AI同士の実戦（本番TS版）', () => {
             const yinWon = !!m && ((m[1] === '💙') === yinFirst);
             if (process.env.AI_MATCH_DETAIL) {
                 const cnt = (re: RegExp) => (text.match(re) ?? []).length;
-                console.log(`detail ${yinWon ? 'WIN ' : 'LOSE'} flood=${cnt(/「百鬼夜行」を使用/g)} all=${cnt(/「式神一括」を使用/g)} shuffle=${cnt(/「シャッフル」を使用/g)} charge=${cnt(/「チャージ」を使用/g)} markdown=${cnt(/「特売」を使用/g)} turns=${cnt(/手番/g)}`);
+                console.log(`detail ${yinWon ? 'WIN ' : 'LOSE'} flood=${cnt(/「百鬼夜行」を使用/g)} all=${cnt(/「式神一括」を使用/g)} place=${cnt(/に式神を設置/g)} blast=${cnt(/の式神が爆破/g)} shuffle=${cnt(/「シャッフル」を使用/g)} charge=${cnt(/「チャージ」を使用/g)} markdown=${cnt(/「特売」を使用/g)} turns=${cnt(/手番/g)}`);
             }
             console.log(`game ${g}: ${m ? m[0] : 'no winner'} (yinFirst=${yinFirst})`);
             if (m) { done++; if ((m[1] === '💙') === yinFirst) wins++; }

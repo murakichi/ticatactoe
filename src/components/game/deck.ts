@@ -92,7 +92,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds', costKey: 'onClickAutumn', desc: '盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）' },
     { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice', costKey: 'onClickLeafFrost', desc: '自陣の🍂を持つコマすべてに❄を付けます（氷結中は🍂が休眠します）' },
     { idx: 70, name: '春一番', icon: '🌬️', category: 'ice', costKey: 'onClickSpringWind', desc: '自陣の❄をすべて解除し、解除した数だけこのターンに打つスキルのコストを軽減します（軽減後は最低1）' },
-    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）。コストは式神1体につき4です' },
     { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },

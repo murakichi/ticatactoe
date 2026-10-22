@@ -142,7 +142,7 @@ const skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
-    onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
+    onClickShikigamiAll: 4, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 3,
@@ -1356,11 +1356,14 @@ function exeShikigamiBlast(s, i) {
     addCorpses(s, destroyed);
     return true;
 }
-// 汎用(コスト6): 自分の式神を全て通常の自陣コマにする
+// 汎用(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。式神がいなければ何もしない
+const shikigamiAllBase = (s) => costsOf(s).onClickShikigamiAll * s.board.filter((sq) => sq.player === curPlayer(s) && isShikigami(sq)).length;
 function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
+    const base = shikigamiAllBase(s);
+    if (base === 0) return;
     for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
-    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
+    spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
 // 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
