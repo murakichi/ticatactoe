@@ -84,6 +84,8 @@ const SKILL_CATALOG = [
     { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami' },
     { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
 ];
 
 
