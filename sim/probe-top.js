@@ -16,7 +16,7 @@
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
 
- * 共通: --oppGears recommended|none|random（相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（相手は本番と同じ「推奨から3枚入れ替え」デッキ。既定は推奨のまま）, --workers N（既定=コア数）,
+ * 共通: --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（相手は本番と同じ「推奨から3枚入れ替え」デッキ。既定は推奨のまま）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
  * 出力の `field` が環境勝率（対象の対キャラ別勝率の単純平均）。`se` は標準誤差の概算。
  */
@@ -62,7 +62,7 @@ function play(chars, cfgs, seed) {
 
 /** 環境のキャラ c の標準設定。deckRng が渡れば本番どおり「推奨から3枚入れ替え」 */
 function envCfg(c, mods, rng, varied, oppGears) {
-    const gears = oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : gearMod.recommendedGears(c);
+    const gears = oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : oppGears === 'lastStand' ? ['lastStand', ...gearMod.recommendedGears(c).filter((g) => g !== 'lastStand').slice(0, gearMod.gearSlotsFor(c) - 1)] : gearMod.recommendedGears(c);
     return { deck: varied ? deckMod.variedAIDeck(c, rng) : deckMod.recommendedDeck(c), gears, flags: {}, mod: mods.base };
 }
 

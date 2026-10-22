@@ -7,12 +7,15 @@ import { randomAnyPick, range, calculateWinner, findEmptyIndexes, randomPick, ca
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS } from './AIPlayer';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
+import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
+import { seatForTurn } from './giantTurn';
+import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked } from './thermal';
@@ -40,7 +43,7 @@ import styles from './Game.module.css';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
 // 盤面を揺らすスキル演出
-const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno'];
+const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno', 'bulwark'];
 
 export type PlayerConfig = {
     character: CharacterId;
@@ -91,9 +94,6 @@ const useSeatArray = <T,>(init: () => T[]): [T[], (seat: number, value: T | ((pr
         setValues((prev) => prev.map((x, i) => (i === seat ? (typeof value === 'function' ? (value as (p: T) => T)(x) : value) : x)));
     return [values, setAt, setValues];
 };
-
-// 巨人は5ターンに1回休み（currentTurn % 5 === 4 のとき、次に手番が来るはずの巨人が飛ばされる）
-const GIANT_SKIP_MODULO = 5;
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
@@ -189,6 +189,23 @@ export const Game = (props: GameProps) => {
         playSfx(type);
         setBoardBurst((prev) => ({ type, cells, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardBurst(null), 1200);
+    };
+    // ギアの発動を知らせる(盤面上端のチップ + 効果音)。スキルの盤面演出とは別枠なので、同時に起きても上書きしない。
+    // 同じギア・同じ文言が短時間に続いたら1つにまとめる(StrictMode の二重実行や、同じ手の中の連続発動で、チップが並びすぎないように)
+    const [gearToasts, setGearToasts] = useState<GearToast[]>([]);
+    const gearToastSeq = useRef(0);
+    const lastGearToast = useRef<{ key: string; at: number } | null>(null);
+    const gearTrigger = (gearId: GearId, text?: string) => {
+        const def = gearDefOf(gearId);
+        const key = `${gearId}:${text ?? ''}`;
+        const now = Date.now();
+        if (lastGearToast.current && lastGearToast.current.key === key && now - lastGearToast.current.at < 400) return;
+        lastGearToast.current = { key, at: now };
+        playSfx('gear');
+        const id = ++gearToastSeq.current;
+        // 積み上がりすぎないよう、同時に出すのは最新の3つまで
+        setGearToasts((prev) => [...prev, { id, icon: def.icon, name: def.name, text }].slice(-3));
+        setTimeout(() => setGearToasts((prev) => prev.filter((t) => t.id !== id)), 2300);
     };
     // 効果音のオン/オフ(設定は localStorage に保存される)
     const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
@@ -337,6 +354,7 @@ export const Game = (props: GameProps) => {
         const aiNecroCost = necroCost[turnSeat];
         const aiProliferate = proliferate[turnSeat];
 
+        ai.lastStandReady = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
         // サイレンス中はスキルを使えない: 通常の着手だけ行う
         if (silenced[turnSeat]) {
             ai.updateShield(currentBoard);
@@ -418,6 +436,9 @@ export const Game = (props: GameProps) => {
                 onCellClick(pendingClicks[0]);
                 if (pendingClicks.length > 1) setPendingAIMove(pendingClicks.slice(1));
             }
+        } else if (result.skills.length === 0) {
+            // 置ける場所もスキルもなければチャージで手番を終える（何もしないと進行不能になる）
+            onClickCharge();
         }
     };
 
@@ -464,8 +485,11 @@ export const Game = (props: GameProps) => {
             if (pay > 0 && hasGear(turnGears, 'luckyPurse') && Math.random() < GEAR_PARAMS.luckyPurseChance) {
                 pay = 0;
                 addLog('幸運の財布でコストが0になった');
+                gearTrigger('luckyPurse', 'コスト0');
             }
             gearTurn.current.skills[turnSeat] += 1;
+            // 四連の極意: この回数に達したので、次のスキルは無料
+            if (hasGear(turnGears, 'quadMastery') && gearTurn.current.skills[turnSeat] === GEAR_PARAMS.quadCount) gearTrigger('quadMastery', '次のスキルが無料');
             if (skillId) {
                 gearTurn.current.discount[turnSeat] = afterDiscount(gearTurn.current.discount[turnSeat], skillId);
                 gearTurn.current.oppSkilled = gearTurn.current.oppSkilled.map((v, i) => (i === turnSeat ? v : true));
@@ -487,6 +511,7 @@ export const Game = (props: GameProps) => {
         const gain = Math.min(n, GEAR_PARAMS.harvestCap);
         setMagicAt(turnSeat, (m) => m + gain);
         addLog(`収穫で魔力+${gain}`);
+        gearTrigger('harvest', `魔力+${gain}`);
     };
 
     const [useToken, setUseToken] = useState<boolean>(false);
@@ -560,6 +585,9 @@ export const Game = (props: GameProps) => {
         addLog(`${symbols[holder]}の土壇場の防壁: ${w}の揃った列が消滅（以降、${symbols[holder]}以外は魔力+${GEAR_PARAMS.lastStandMagic}・ライフ+${GEAR_PARAMS.lastStandLife}）`);
         setCurrentBoard(board);
         setLastStandSaves((c) => c + 1);
+        // 防壁の発動は大事件なので、盤面の演出(土壇場の防壁)とギアのチップの両方で知らせる
+        playEffect('bulwark');
+        gearTrigger('lastStand', '列が消滅');
     }, [currentBoard]);
 
     useEffect(() => {
@@ -582,6 +610,7 @@ export const Game = (props: GameProps) => {
             }
             ruin.active[turnSeat] = false;
             ruin.active[nextSeat] = ruin.pending[nextSeat];
+            if (ruin.active[nextSeat]) gearTrigger('ruinSurge', `スキルのコスト-${GEAR_PARAMS.ruinDiscount}`);
             ruin.pending[nextSeat] = false;
             ruin.snap = currentBoard.map((sq) => sq.player);
             ruin.lastMove = null;
@@ -592,6 +621,7 @@ export const Game = (props: GameProps) => {
             gearTurn.current.oppSkilled[nextSeat] = false;
             gearTurn.current.freeCast = false;
             gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
+            if (gearTurn.current.echoReady[nextSeat] && hasGear(gearsBySeat[nextSeat], 'afterglow')) gearTrigger('afterglow', '1つ目のスキルが安い');
             gearTurn.current.echoNext[nextSeat] = false;
             if (budGuard[nextSeat]) setBudGuardAt(nextSeat, false);
             // 絶対零度: 使用者の手番開始時に、他の席の氷結マスへ❄×3のダメージを与えて氷結を解除する
@@ -630,7 +660,11 @@ export const Game = (props: GameProps) => {
         }
 
         // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
-        if (hasGear(gearsBySeat[nextSeat], 'colorGarden')) nextMagic += countVarietySquares(currentBoard, nextSymbol) * GEAR_PARAMS.varietyMagic;
+        if (hasGear(gearsBySeat[nextSeat], 'colorGarden')) {
+            const garden = countVarietySquares(currentBoard, nextSymbol) * GEAR_PARAMS.varietyMagic;
+            nextMagic += garden;
+            if (garden > 0) gearTrigger('colorGarden', `魔力+${garden}`);
+        }
         const standBonus = lastStandActiveAgainst(nextSeat);
         if (standBonus) nextMagic += GEAR_PARAMS.lastStandMagic;
 
@@ -797,7 +831,7 @@ export const Game = (props: GameProps) => {
             harvestMagic(1);
             addLog(`${posName(i)}に毒を注入`);
             setUseInjection(useInjection - 1);
-            playEffect('poison', i);
+            playEffect('poison', i, undefined, 'インジェクション');
             setCurrentBoard(nextBoard);
             return;
         }
@@ -865,6 +899,8 @@ export const Game = (props: GameProps) => {
             if (expiredLock?.value != null && !square.player) {
                 nextBoard[s] = { player: symbols[expiredLock.value - 1], bind: GEAR_PARAMS.emptyLockLife, effects: [] };
                 addLog(`空蔵: ${posName(s)}が${symbols[expiredLock.value - 1]}のコマになった`);
+                gearTrigger('emptyLock', `${posName(s)}にコマ`);
+                playBurst('gearEmpty', [s]);
                 continue;
             }
             // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。
@@ -941,10 +977,14 @@ export const Game = (props: GameProps) => {
             vengeanceGained[seat] = (vengeanceGained[seat] ?? 0) + add;
             setMagicAt(seat, (m) => m + add);
             addLog(`復讐の刃: ${symbols[seat]}の魔力+${add}`);
+            gearTrigger('vengeance', `魔力+${add}`);
         };
         if (capturedFrom) {
             vengeanceGain(seatOf(capturedFrom));
-            if (hasGear(turnGears, 'vengeance')) setMagicAt(turnSeat, (m) => Math.max(0, m - GEAR_PARAMS.vengeancePenalty));
+            if (hasGear(turnGears, 'vengeance')) {
+                setMagicAt(turnSeat, (m) => Math.max(0, m - GEAR_PARAMS.vengeancePenalty));
+                gearTrigger('vengeance', `魔力-${GEAR_PARAMS.vengeancePenalty}`);
+            }
         }
 
         if (!prevPlayer) {
@@ -989,6 +1029,16 @@ export const Game = (props: GameProps) => {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
+        }
+
+        // 巨人のオーラ: 周囲8マスの敵コマを破壊し、周囲8マス全部をロックする
+        if (currentCharacter === 'giant' && nextBoard[i].player === currentTurnPlayer) {
+            const aura = giantAura(nextBoard, geo.surroundRange(i), currentTurnPlayer, characters);
+            if (aura.destroyed.length > 0) addCorpses(aura.destroyed.length);
+            if (aura.destroyed.length > 0 || aura.locked.length > 0) {
+                addLog(`巨人のオーラ: ${aura.destroyed.length}コマを破壊、${aura.locked.length}マスをロック`);
+                flashCells(aura.destroyed);
+            }
         }
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
@@ -1086,6 +1136,8 @@ export const Game = (props: GameProps) => {
             if (!owner || !hasGear(gearsBySeat[seatOf(owner)], 'toxicBloom')) continue;
             board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
             addLog(`毒花: ${posName(k)}にバッズ`);
+            gearTrigger('toxicBloom', 'バッズ付与');
+            playBurst('gearBloom', [k]);
         }
     };
     // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
@@ -1096,6 +1148,8 @@ export const Game = (props: GameProps) => {
             applyLock(board, idx);
             granted += 1;
             addLog(`道連れの鍵: ${posName(idx)}にロックが付いた`);
+            gearTrigger('bindingLock', 'ロック付与');
+            playBurst('gearKey', [idx]);
         }
         if (effect && hasGear(turnGears, 'propagate')) {
             // 周囲8マスのコマのうち、ロックされておらず、エフェクトの種類に合うもの（バッズ=自陣 / 毒=敵 / ⚡=誰でも）
@@ -1112,6 +1166,8 @@ export const Game = (props: GameProps) => {
                 board[j] = effect === '☠' ? poisonStrike(spread) : spread;
                 granted += 1;
                 addLog(`伝播: ${posName(j)}に${effect}が広がった`);
+                gearTrigger('propagate', `${effect}が広がった`);
+                playBurst('gearSpread', [j]);
             }
         }
         return granted;
@@ -1662,7 +1718,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, targets);
         addLog(`ミアズマ（敵${targets.length}マスに毒、自陣の毒はすべて消えた）`);
         flashCells(targets);
-        playEffect('poison');
+        playEffect('poison', undefined, undefined, 'ミアズマ');
         setCurrentBoard(board);
     };
     const onClickMiasma = () => {
@@ -1720,7 +1776,7 @@ export const Game = (props: GameProps) => {
         harvestMagic(added);
         toxicBloom(board, affected);
         flashCells(affected);
-        playEffect('poison');
+        playEffect('poison', undefined, undefined, '猛毒化');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickIntensify, false, true, currentTurnPlayer, 'onClickIntensify'), true, true, 'onClickIntensify');
     };
@@ -1739,7 +1795,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, targets);
         addLog(`${posName(i)}を中心にパンデミック（${targets.length}マスに毒）`);
         flashCells(targets);
-        playEffect('poison', i);
+        playEffect('poison', i, undefined, 'パンデミック');
         setCurrentBoard(board);
         setUsePandemic(false);
     };
@@ -1753,7 +1809,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, targets);
         addLog(`「毒霧」を使用（${targets.length}マスに毒）`);
         flashCells(targets);
-        playEffect('poison');
+        playEffect('poison', undefined, undefined, '毒霧');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickPoisonMist, false, true, currentTurnPlayer, 'onClickPoisonMist'), true, true, 'onClickPoisonMist');
     };
@@ -1950,7 +2006,7 @@ export const Game = (props: GameProps) => {
             const thawed = placeFlame(board, index);
             addLog(`「火炎トークン」を使用（${posName(index)}に設置）`);
             if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
-            playEffect('flame', index);
+            playEffect('flame', index, undefined, '火炎トークン');
             playBurst('thaw', thawed);
             setCurrentBoard(board);
         }
@@ -1964,7 +2020,7 @@ export const Game = (props: GameProps) => {
         for (const idx of picks) placeFlame(board, idx).forEach((k) => thawed.add(k));
         addLog(`「火炎ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (thawed.size > 0) addLog(`氷結が溶けた（${Array.from(thawed).map(posName).join('・')}）`);
-        if (picks.length > 0) playEffect('flame', picks[0]);
+        if (picks.length > 0) playEffect('flame', picks[0], undefined, '火炎ダブルトークン');
         playBurst('thaw', Array.from(thawed));
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleFlameToken, true, false, currentTurnPlayer, 'onClickDoubleFlameToken'), true, true, 'onClickDoubleFlameToken');
@@ -1984,7 +2040,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}の🌱${n}個を焼畑で🔥に変えた`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells([i]);
-        playEffect('flame', i);
+        playEffect('flame', i, undefined, '焼畑');
         playBurst('thaw', thawed);
         setUseSwidden(false);
         setCurrentBoard(board);
@@ -2068,7 +2124,7 @@ export const Game = (props: GameProps) => {
         if (done.length === 0) return;
         addLog(`「慈雨」を使用（${done.length}コマのライフ+1）`);
         flashCells(done);
-        playEffect('harvest');
+        playEffect('rain', undefined, done);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost'), true, true, 'onClickBoost');
     };
@@ -2094,7 +2150,7 @@ export const Game = (props: GameProps) => {
         if (!relocate(board, relocateFrom, i, currentTurnPlayer)) return; // 置けないマスは選び直せる
         addLog(`${posName(relocateFrom)}のコマを${posName(i)}へ移動`);
         flashCells([i]);
-        playEffect('windborne', undefined, [i]);
+        playEffect('dash', i, [relocateFrom, i]);
         setUseRelocate(false);
         setRelocateFrom(null);
         setCurrentBoard(board);
@@ -2114,7 +2170,7 @@ export const Game = (props: GameProps) => {
         cloneInto(board, i, to, currentTurnPlayer);
         addLog(`${posName(i)}の写し身が${posName(to)}に現れた`);
         flashCells([to]);
-        playEffect('sprout', undefined, [to]);
+        playEffect('clone', to, [i, to]);
         setUseClone(false);
         setCurrentBoard(board);
     };
@@ -2131,7 +2187,7 @@ export const Game = (props: GameProps) => {
         addCorpses(1);
         addLog(`${posName(i)}のライフ0の敵コマを奪った`);
         flashCells([i]);
-        playEffect('famine');
+        playEffect('plunder', i, [i]);
         setUsePlunder(false);
         setCurrentBoard(board);
     };
@@ -2145,13 +2201,13 @@ export const Game = (props: GameProps) => {
     // cells のうち氷結を付けられるマスに❄を付け、数えて演出する。作れた数を返す
     // 雷霆の巫の⚡無敵のコマは、状態異常（氷結）の対象にならない（毒霧・パンデミックなどと同じ）
     const notShielded = (cells: number[]): number[] => cells.filter((k) => !isShielded(currentBoard[k], characters));
-    const freezeCells = (cells: number[], label: string, focus?: number): number => {
+    const freezeCells = (cells: number[], label: string, focus?: number, banner?: string): number => {
         const board = currentBoard.slice();
         const made = freeze(board, notShielded(cells));
         bumpGlacierCharge(made.length);
         addLog(`${label}（${made.length}マスが氷結）`);
         flashCells(made);
-        playEffect('freeze', focus, made);
+        playEffect('freeze', focus, made, banner);
         setCurrentBoard(board);
         return made.length;
     };
@@ -2163,7 +2219,7 @@ export const Game = (props: GameProps) => {
     };
     const exeFrostArea = (i: number) => {
         if (geo.stompRange(i).every((k) => !canFreeze(currentBoard[k]))) return; // 凍らせるマスが無い所は選び直せる
-        freezeCells(geo.stompRange(i), `${posName(i)}を中心に範囲氷結`, i);
+        freezeCells(geo.stompRange(i), `${posName(i)}を中心に範囲氷結`, i, '範囲氷結');
         setUseFrostArea(false);
     };
     // 氷柱: マスを選んで方向（横・縦・斜め）を選ぶと、盤の端から端までの線上に❄
@@ -2177,7 +2233,7 @@ export const Game = (props: GameProps) => {
         if (icicleCell === null) return;
         const cells = lineCells(geo.size, icicleCell, dir);
         if (cells.every((k) => !canFreeze(currentBoard[k]))) return;
-        freezeCells(cells, `${posName(icicleCell)}を通る氷柱`, icicleCell);
+        freezeCells(cells, `${posName(icicleCell)}を通る氷柱`, icicleCell, '氷柱');
         setUseIcicle(false);
         setIcicleCell(null);
     };
@@ -2186,7 +2242,7 @@ export const Game = (props: GameProps) => {
         const cands = notShielded(randomFreezeCandidates(currentBoard));
         if (cands.length === 0) return;
         const n = Math.min(cands.length, 1 + Math.floor(Math.random() * 4));
-        freezeCells(randomAnyPick([...cands], n), '「ランダム氷結」を使用');
+        freezeCells(randomAnyPick([...cands], n), '「ランダム氷結」を使用', undefined, 'ランダム氷結');
         spendMagic(calculateCost(seatCosts.onClickRandomFreeze, false, false, currentTurnPlayer, 'onClickRandomFreeze'), true, true, 'onClickRandomFreeze');
     };
     // 氷結拡散: コマを選ぶと、コマのあるマスだけを縦横に辿って届く全てのコマ（敵味方問わず）に❄
@@ -2198,7 +2254,7 @@ export const Game = (props: GameProps) => {
     const exeFreezeSpread = (i: number) => {
         const cells = connectedPieces(currentBoard, i, geo.size);
         if (cells.length === 0 || cells.every((k) => !canFreeze(currentBoard[k]))) return; // 空きマスは起点にできない
-        freezeCells(cells, `${posName(i)}から氷結拡散`, i);
+        freezeCells(cells, `${posName(i)}から氷結拡散`, i, '氷結拡散');
         setUseFreezeSpread(false);
     };
     // 氷結トークン: ❄付きの自陣コマをランダムな空きマスに置く
@@ -2209,7 +2265,7 @@ export const Game = (props: GameProps) => {
             const index = randomPick(emptyIndexes);
             bumpGlacierCharge(placeFrostToken(board, index, currentTurnPlayer, calculateTokenBind()));
             addLog(`「氷結トークン」を使用（${posName(index)}に設置）`);
-            playEffect('freeze', index, [index]);
+            playEffect('freeze', index, [index], '氷結トークン');
             setCurrentBoard(board);
         }
         spendMagic(calculateCost(seatCosts.onClickFrostToken, true, false, currentTurnPlayer, 'onClickFrostToken'), true, true, 'onClickFrostToken');
@@ -2222,7 +2278,7 @@ export const Game = (props: GameProps) => {
         for (const idx of picks) made += placeFrostToken(board, idx, currentTurnPlayer, calculateTokenBind());
         bumpGlacierCharge(made);
         addLog(`「氷結ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
-        if (picks.length > 0) playEffect('freeze', picks[0], picks);
+        if (picks.length > 0) playEffect('freeze', picks[0], picks, '氷結ダブルトークン');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleFrostToken, true, false, currentTurnPlayer, 'onClickDoubleFrostToken'), true, true, 'onClickDoubleFrostToken');
         setUseToken(true);
@@ -2241,7 +2297,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}の氷を砕いた（❄${r.stacks}個で${r.damage}ダメージ${r.destroyed ? '・破壊' : ''}）`);
         if (r.destroyed) addCorpses(1);
         flashCells([i]);
-        playEffect('glacierBurst', i, [i]);
+        playEffect('glacierBurst', i, [i], '砕氷');
         setUseShatter(false);
         setCurrentBoard(board);
     };
@@ -2249,7 +2305,7 @@ export const Game = (props: GameProps) => {
     const onClickFrostfall = () => {
         const targets = notShielded(frostfallTargets(currentBoard, currentTurnPlayer));
         if (targets.length === 0) return;
-        freezeCells(targets, '「霜降り」を使用');
+        freezeCells(targets, '「霜降り」を使用', undefined, '霜降り');
         spendMagic(calculateCost(seatCosts.onClickFrostfall, false, false, currentTurnPlayer, 'onClickFrostfall'), true, true, 'onClickFrostfall');
     };
 
@@ -2271,7 +2327,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}（ライフ${r.threshold}）を犠牲に、ライフ${r.threshold}以下の敵${r.targets.length}コマに🔥`);
         if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
         flashCells([i, ...r.targets]);
-        playEffect('flame', i, r.targets);
+        playEffect('flame', i, r.targets, '殉火');
         playBurst('thaw', r.thawed);
         setUseSacrifice(false);
         setCurrentBoard(board);
@@ -2329,7 +2385,7 @@ export const Game = (props: GameProps) => {
         const { thawed } = ignite(board, cells, geo.size, 1, keepBuds);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(cells);
-        playEffect('flame', cells[0]);
+        playEffect('flame', cells[0], undefined, '火遁');
         playBurst('thaw', thawed);
         setCurrentBoard(board);
     };
@@ -2340,20 +2396,8 @@ export const Game = (props: GameProps) => {
         igniteCells(board, [i]);
     };
 
-    // 次の手番の席。基本は席順どおりで、次が巨人のときだけ5ターンに1回その席を飛ばす
-    const judgeNextSeat = (): number => {
-        if (currentTurn === 1) {
-            return 0;
-        }
-
-        let next = (turnSeat + 1) % seatCount;
-        // 2人戦で同キャラ(巨人ミラー含む)のときは従来どおり休みなしで交互に回す
-        const mirror = seatCount === 2 && characters[0] === characters[1];
-        if (!mirror && characters[next] === 'giant' && currentTurn % GIANT_SKIP_MODULO >= GIANT_SKIP_MODULO - 1) {
-            next = (next + 1) % seatCount;
-        }
-        return next;
-    };
+    // 次の手番の席。巨人は2ターンに1回しか動かない（並びは giantTurn.ts。currentTurn だけで決まる）
+    const judgeNextSeat = (): number => seatForTurn(currentTurn, characters, turnSeat);
 
     const checkSkillDisable = (cost: number, isToken: boolean = false, isPoison: boolean = false): boolean => {
         const calculatedCost: number = calculateCost(cost, isToken, isPoison);
@@ -2406,6 +2450,26 @@ export const Game = (props: GameProps) => {
             playSfx('win');
         }
     }, [winner]);
+
+    // サイレンス中に置けるマスが無い（絶対零度の氷結で全マスが塞がれた等）と進行不能になるので、自動でパスする
+    const canPlaceAt = (i: number): boolean => {
+        const sq = currentBoard[i];
+        if (isShielded(sq, characters)) return false;
+        if (sq.player && sq.player !== currentTurnPlayer && sq.bind > 0 && currentCharacter !== 'giant') return false;
+        if (sq.effects.some((x) => x.effect === '🔑') && sq.bind > 0) return false;
+        if (emptyBlocked(sq)) return false;
+        if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
+        return true;
+    };
+    const mustPass = !winner && !rawWinner && silenced[turnSeat] && !currentBoard.some((_, i) => canPlaceAt(i));
+    useEffect(() => {
+        if (!mustPass || hailMarySpin) return;
+        const timer = setTimeout(() => {
+            addLog('サイレンス中で置ける場所がないため自動でパス');
+            setCurrentTurn(currentTurn + 1);
+        }, 600);
+        return () => clearTimeout(timer);
+    }, [mustPass, currentTurn, hailMarySpin]);
 
     // 継続中スキルの残りターン数を返す
     const continuousEffects = (seat: number): string[] => {
@@ -2476,11 +2540,21 @@ export const Game = (props: GameProps) => {
                 </div>
                 {gearsBySeat[seat].length > 0 && (
                     <div className={styles.gears}>
-                        {gearsBySeat[seat].map((id) => (
-                            <span key={id} className={styles.gear} title={`${gearDefOf(id).name}: ${gearDefOf(id).desc}`}>
-                                {gearDefOf(id).icon} {gearDefOf(id).name}
-                            </span>
-                        ))}
+                        {gearsBySeat[seat].map((id) => {
+                            // 土壇場の防壁は1試合に1回きり。発動済みの席は非活性(灰色・取り消し線)で表示する
+                            const spent = id === 'lastStand' && lastStandUsed.current[seat];
+                            return (
+                                <span
+                                    key={id}
+                                    className={`${styles.gear}${spent ? ` ${styles.gearSpent}` : ''}`}
+                                    aria-disabled={spent || undefined}
+                                    title={`${gearDefOf(id).name}: ${gearDefOf(id).desc}${spent ? '（発動済み）' : ''}`}
+                                >
+                                    {gearDefOf(id).icon} {gearDefOf(id).name}
+                                    {spent && <span className={styles.gearSpentLabel}>発動済み</span>}
+                                </span>
+                            );
+                        })}
                     </div>
                 )}
                 <div className={styles.stats}>
@@ -2811,6 +2885,7 @@ export const Game = (props: GameProps) => {
                             onCellLeave={onCellLeave}
                         />
                         <BoardEffects effect={boardEffect} burst={boardBurst} size={geo.size} />
+                        <GearToasts toasts={gearToasts} />
                         {hailMarySpin && (
                             <div className={styles.hmOverlay}>
                                 <div className={`${styles.hmBand} ${styles[`hm_${hailMarySpin.phase}`]}`}>{hailMarySpin.label}</div>

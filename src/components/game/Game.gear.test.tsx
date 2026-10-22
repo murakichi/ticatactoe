@@ -174,6 +174,30 @@ describe('ギア（ブラウザ版）', () => {
         expect(screen.getAllByText(/土壇場の防壁/).length).toBeGreaterThan(0);
     });
 
+    it('土壇場の防壁: 発動したらパネルのギア表示が非活性(発動済み)になる。持ち主でない席や、他のギアは変わらない', () => {
+        const { container } = render(<Game players={players(['sturdy'], ['lastStand', 'ironLock'])} />);
+        const chip = (name: string) => Array.from(container.querySelectorAll('[class*="gear"]')).find((el) => el.textContent?.includes(name) && el.getAttribute('title')?.startsWith(name));
+        // 発動前は活性
+        expect(chip('土壇場の防壁')?.getAttribute('aria-disabled')).toBeNull();
+        expect(chip('土壇場の防壁')?.textContent).not.toContain('発動済み');
+        for (const i of [0, 4, 1, 5, 2, 6]) fireEvent.click(cells(container)[i]);
+        fireEvent.click(cells(container)[3]); // 防壁が発動
+        expect(chip('土壇場の防壁')?.getAttribute('aria-disabled')).toBe('true');
+        expect(chip('土壇場の防壁')?.textContent).toContain('発動済み');
+        // 同じ席の別のギア・他の席のギアは活性のまま
+        expect(chip('堅牢の鍵')?.getAttribute('aria-disabled')).toBeNull();
+        expect(chip('頑健')?.getAttribute('aria-disabled')).toBeNull();
+    });
+
+    it('土壇場の防壁: リスタートすると発動済み表示が戻る', () => {
+        const { container } = render(<Game players={players([], ['lastStand'])} />);
+        for (const i of [0, 4, 1, 5, 2, 6]) fireEvent.click(cells(container)[i]);
+        fireEvent.click(cells(container)[3]);
+        expect(container.querySelector('[aria-disabled="true"]')).not.toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'リスタート' }));
+        expect(container.querySelector('[aria-disabled="true"]')).toBeNull();
+    });
+
     it('土壇場の防壁: 発動後は相手(💙)の手番開始時に魔力+4', () => {
         const { container } = render(<Game players={players([], ['lastStand'])} />);
         for (const i of [0, 4, 1, 5, 2, 6]) fireEvent.click(cells(container)[i]);
