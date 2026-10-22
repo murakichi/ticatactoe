@@ -54,6 +54,7 @@ const AI_DEFAULTS = {
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
+    spreadCharge: 0, // 雷霆の巫: 帯電拡散を撃てる盤面(対象あり・相手リーチ無し)で魔力が1チャージ(+3)で足りるなら、駒を置かずチャージして次手番に撃つ（陰陽師のコンボ待ちを参考。tune-top検証中。1で有効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
@@ -1652,6 +1653,11 @@ function faithfulMakeMoveInner(s) {
 
     // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
+    if (F.spreadCharge && curChar(s) === 'electrician' && !s.silenced[s.turn] && opps.every((o) => countReaches(s.board, o) === 0)
+        && curMagic(s) < chargeSpreadCost(s) && curMagic(s) + costsOf(s).onClickCharge >= chargeSpreadCost(s) && bestChargeSpreadTarget(s.board, me) !== null) {
+        SKILLS.charge(s);
+        return { move: null, turnEnded: true };
+    }
     if (curChar(s) === 'electrician' && opps.every((o) => countReaches(s.board, o) === 0)) {
         if (curMagic(s) >= chargeSpreadCost(s)) {
             const start = bestChargeSpreadTarget(s.board, me);
