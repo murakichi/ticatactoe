@@ -23,6 +23,7 @@
 - necromancer: 新ギアが入ったら最初に `--scan gears` を回す。lastStand(土壇場の防壁)は 37.8→57.0%(+19.2pt)で、デッキ/AI/ギア既存の探索が全部±3ptだったのと桁が違った。律速が資源(死体)の供給なら、資源を直接作る新ギアが最短(2026-10-21, seed2 games200)。
 - necromancer+lastStand: 防壁は塞ぐ/塞がないに関わらず63〜84%の試合で発動し、「未発動の間に攻める/魔力を貯める」案は+0.6〜+1.1pt(誤差内)。勝敗は発動後の立ち回りで決まる(vs poisoner 0%)。発動頻度を調べる使い捨てスクリプトは「ギアの発動率→発動時/未発動時の勝率」を出すだけで十分(2026-10-21, seed1 games200)。
 - necromancer+lastStand: 「発動まで貯める(🌱/ロックのみ許可)」+0.6pt、「発動後に1コストで引き直し」-1.6pt。魔力を貯めても対tacticianで使い残して負け、対poisonerは貯まらない。札の不足は敗因ではない(2026-10-21, seed1 games200)。
+- 防壁(lastStand)を受ける側のAIは+4/手番の魔力を使い切れず、決着時に魔力が大量に余る(poisoner約52, magician約41)。AI同士の計測は防壁の代償を過小評価している疑い(2026-10-22, necromancer vs 各キャラ100試合, issue #124 に追記)。
 - 注意: `npx jest` は ts を読めない。`npm ci` のあと `CI=true npm test -- --watchAll=false <files>` を使う(node_modules が無い新しいコンテナでは先に npm ci)。
 - `--target` の基準(45.5%)と `--rank` の同キャラ(42.6%)は同seedでも相手/試合の引きで3pt差が出る。比較は同じモードの基準と行う。
 - 2026-10-20 giant: `--scan gears`(約32近傍×60試合)は4コアで約17分。巨人は titanCost+sturdy が既に局所最適で、1枠差し替えは全て基準以下(最良 priceWreck +0.9pt は誤差)。gear軸はまず後回しにして deck/strategy を先に測ってよい(seed1, 60試合)。
