@@ -695,10 +695,31 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
         b[9] = sq('⭕', 3, '❄'); // 斜め
         const thawed = placeFlameToken(b, 6, '💙', 4, 4);
         expect(b[6].player).toBe('💙');
-        expect(b[6].bind).toBe(4);
+        expect(b[6].bind).toBe(3); // 🔥を付与した瞬間に1ダメージ（4→3）
         expect(flameStacks(b[6])).toBe(1);
         expect(thawed).toEqual([5]);
         expect(isFrozen(b[9])).toBe(true);
+    });
+
+    it('🔥を付与した瞬間に1ダメージ: スタックごとに1。🔑・氷結・ライフ0・空きマスには入らず、🔥は消えない', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 5);
+        b[1] = sq('⭕', 5, '🔑');
+        b[2] = sq('⭕', 0);
+        ignite(b, [0, 1, 2, 4], 4, 2); // 2スタック
+        expect(b[0].bind).toBe(3); // 5-2。🔥は2つ残る
+        expect(flameStacks(b[0])).toBe(2);
+        expect(b[1].bind).toBe(5); // 🔑ロック中は入らない
+        expect(b[2].bind).toBe(0); // ライフ0はそのまま
+        expect(b[4].player).toBeUndefined(); // 空きマスは🔥だけ
+        expect(flameStacks(b[4])).toBe(2);
+        // 氷結中のマスは、1回目の付与で❄が解けるだけ（🔥もダメージも入らない）。2回目で🔥1つとダメージ1
+        const f = emptyBoard();
+        f[15] = sq('⭕', 5, '❄');
+        ignite(f, [15], 4, 1);
+        expect(flameStacks(f[15])).toBe(0);
+        expect(isFrozen(f[15])).toBe(false);
+        expect(f[15].bind).toBe(5);
     });
 
     it('sim/thermal.js と一致', () => {

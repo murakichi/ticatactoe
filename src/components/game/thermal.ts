@@ -27,6 +27,8 @@ export const FLAME_BURN_DAMAGE = 2;
 export const PYROMANCER_EXTRA_BURN = 1;
 /** 火炎状態のマスがスキルでダメージを受けるときの倍率（切り上げ） */
 export const FLAME_SKILL_MULT = 1.5;
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき。sim/thermal.js と同値） */
+export const FLAME_INSTANT_DAMAGE = 1;
 
 export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
@@ -129,6 +131,8 @@ export const ignite = (
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = keepBuds?.(board[k]) ?? false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && board[k].bind > 0 && !hasLock(board[k])) board[k] = { ...board[k], bind: board[k].bind - FLAME_INSTANT_DAMAGE };
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
