@@ -549,6 +549,10 @@ function newGame(opts = {}) {
         ruinActive: fill(false),
         ruinPending: fill(false),
         snapOwners: null,
+        snapBuds: null,
+        snapFlames: null,
+        ashActive: fill(0), // 灰の供物: 有効な割引の重ね数 / 次の自分の手番から有効になる重ね数
+        ashPending: fill(0),
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
@@ -619,6 +623,7 @@ function gearCtx(s, seat) {
         echoReady: s.echoReady[seat],
         ailments: hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0,
         ruin: s.ruinActive[seat],
+        ash: hasGear(s.gears[seat], 'ashOffering') ? s.ashActive[seat] : 0,
     };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
@@ -773,6 +778,26 @@ function advanceTurn(s) {
     const magicCharacter = ['magician'];
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
+    // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
+    let scorchForNext = 0;
+    if (s.snapOwners && s.snapBuds) {
+        s.gears.forEach((g, seat) => {
+            if (!hasGear(g, 'scorchedEarth')) return;
+            const gain = gear.scorchGain(gear.burnedBudCount(s.snapOwners, s.snapBuds, s.board, SYMBOLS[seat]));
+            if (gain <= 0) return;
+            if (seat === next) scorchForNext = gain;
+            else s.magic[seat] += gain;
+            bumpStat(s, 'scorchedEarth', gain);
+        });
+    }
+    // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引。終わる席の割引はここで切れる
+    if (s.snapOwners && s.snapFlames && hasGear(s.gears[s.turn], 'ashOffering')) {
+        const n = gear.ignitedCount(s.snapOwners, s.snapFlames, s.board, SYMBOLS[s.turn]);
+        if (n > 0) { s.ashPending[s.turn] += n; bumpStat(s, 'ashOffering', n); }
+    }
+    s.ashActive[s.turn] = 0;
+    s.ashActive[next] = s.ashPending[next];
+    s.ashPending[next] = 0;
     s.ruinActive[s.turn] = false;
     s.ruinActive[next] = s.ruinPending[next];
     s.ruinPending[next] = false;
@@ -785,6 +810,13 @@ function advanceTurn(s) {
     // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
     if (hasGear(s.gears[next], 'colorGarden')) nextMagic += gear.countVarietySquares(s.board, sym) * GP.varietyMagic;
     if (lastStandActiveAgainst(s, next)) nextMagic += GP.lastStandMagic;
+    // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+    nextMagic += scorchForNext;
+    if (hasGear(s.gears[next], 'frostRoot')) {
+        const root = gear.rootGain(gear.frozenBudCount(s.board));
+        nextMagic += root;
+        if (root > 0) bumpStat(s, 'frostRoot', root);
+    }
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
         const upkeep = proliferateUpkeep(s.proliferateCount[next]);
@@ -814,6 +846,8 @@ function advanceTurn(s) {
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
     s.snapOwners = s.board.map((sq) => sq.player);
+    s.snapBuds = gear.budCounts(s.board);
+    s.snapFlames = gear.flameCounts(s.board);
     s.lastMoveCell = null;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)

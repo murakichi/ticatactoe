@@ -31,6 +31,13 @@ import {
     gearTokenBindDelta,
     adjustCostByGear,
     countVarietySquares,
+    burnedBudCount,
+    scorchGain,
+    ignitedCount,
+    flameCounts,
+    frozenBudCount,
+    rootGain,
+    budCounts,
     countAilmentKinds,
     lostCells,
     CostContext,
@@ -146,6 +153,10 @@ export const Game = (props: GameProps) => {
         active: Array<boolean>(seatCount).fill(false),
         pending: Array<boolean>(seatCount).fill(false),
         snap: null as (Player | undefined)[] | null,
+        snapBuds: null as number[] | null, // 焦土: 手番開始時の各マスの🌱の数
+        snapFlames: null as number[] | null, // 灰の供物: 手番開始時の各マスの🔥の数
+        ashActive: Array<number>(seatCount).fill(0), // 灰の供物: 有効な割引の重ね数
+        ashPending: Array<number>(seatCount).fill(0), // 次の自分の手番から有効になる重ね数
         lastMove: null as number | null,
     });
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
@@ -158,8 +169,8 @@ export const Game = (props: GameProps) => {
     const gearCtxFor = (seat: number): CostContext => {
         const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
         return seat === turnSeat
-            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat] }
-            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat] };
+            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat], ash: ruinState.current.ashActive[seat] }
+            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat], ash: ruinState.current.ashPending[seat] };
     };
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
@@ -618,10 +629,31 @@ export const Game = (props: GameProps) => {
         const nextCharacter = characters[nextSeat];
         const nextSymbol = symbols[nextSeat];
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
+        let scorchForNext = 0;
         if (gearTurn.current.processedTurn !== currentTurn) {
             gearTurn.current.processedTurn = currentTurn;
+            // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力（次の手番の席なら下で足す）
+            if (ruinState.current.snap && ruinState.current.snapBuds) {
+                symbols.forEach((sym, seat) => {
+                    if (!hasGear(gearsBySeat[seat], 'scorchedEarth')) return;
+                    const gain = scorchGain(burnedBudCount(ruinState.current.snap!, ruinState.current.snapBuds!, currentBoard, sym));
+                    if (gain <= 0) return;
+                    if (seat === nextSeat) scorchForNext = gain;
+                    else setMagicAt(seat, (m) => m + gain);
+                    gearTrigger('scorchedEarth', `魔力+${gain}`);
+                });
+            }
             // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
             const ruin = ruinState.current;
+            // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引（重複する）
+            if (ruin.snap && ruin.snapFlames && hasGear(gearsBySeat[turnSeat], 'ashOffering')) {
+                const n = ignitedCount(ruin.snap, ruin.snapFlames, currentBoard, symbols[turnSeat]);
+                if (n > 0) ruin.ashPending[turnSeat] += n;
+            }
+            ruin.ashActive[turnSeat] = 0;
+            ruin.ashActive[nextSeat] = ruin.ashPending[nextSeat];
+            if (ruin.ashActive[nextSeat] > 0 && hasGear(gearsBySeat[nextSeat], 'ashOffering')) gearTrigger('ashOffering', `スキルのコスト-${ruin.ashActive[nextSeat] * GEAR_PARAMS.ashDiscount}`);
+            ruin.ashPending[nextSeat] = 0;
             if (ruin.snap) {
                 const after = currentBoard.map((sq) => sq.player);
                 symbols.forEach((sym, seat) => {
@@ -633,6 +665,8 @@ export const Game = (props: GameProps) => {
             if (ruin.active[nextSeat]) gearTrigger('ruinSurge', `スキルのコスト-${GEAR_PARAMS.ruinDiscount}`);
             ruin.pending[nextSeat] = false;
             ruin.snap = currentBoard.map((sq) => sq.player);
+            ruin.snapBuds = budCounts(currentBoard);
+            ruin.snapFlames = flameCounts(currentBoard);
             ruin.lastMove = null;
             gearTurn.current.skills[nextSeat] = 0;
             gearTurn.current.kinds[nextSeat] = new Set();
@@ -688,6 +722,13 @@ export const Game = (props: GameProps) => {
         }
         const standBonus = lastStandActiveAgainst(nextSeat);
         if (standBonus) nextMagic += GEAR_PARAMS.lastStandMagic;
+        // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+        nextMagic += scorchForNext;
+        if (hasGear(gearsBySeat[nextSeat], 'frostRoot')) {
+            const root = rootGain(frozenBudCount(currentBoard));
+            nextMagic += root;
+            if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
+        }
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
         if (proliferate[nextSeat]) {
@@ -2926,7 +2967,16 @@ export const Game = (props: GameProps) => {
             fireBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,
         };
-        ruinState.current = { active: Array<boolean>(seatCount).fill(false), pending: Array<boolean>(seatCount).fill(false), snap: null, lastMove: null };
+        ruinState.current = {
+            active: Array<boolean>(seatCount).fill(false),
+            pending: Array<boolean>(seatCount).fill(false),
+            snap: null,
+            snapBuds: null,
+            snapFlames: null,
+            ashActive: Array<number>(seatCount).fill(0),
+            ashPending: Array<number>(seatCount).fill(0),
+            lastMove: null,
+        };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
