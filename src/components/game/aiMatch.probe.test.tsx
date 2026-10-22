@@ -3,6 +3,7 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Game, PlayerConfig } from './Game';
+import AIPlayer from './AIPlayer';
 
 const run = process.env.AI_MATCH ? describe : describe.skip;
 
@@ -17,6 +18,16 @@ run('AI同士の実戦（本番TS版）', () => {
             const players: PlayerConfig[] = yinFirst
                 ? [{ character: 'yinYangMaster', isAI: true }, { character: opp, isAI: true }]
                 : [{ character: opp, isAI: true }, { character: 'yinYangMaster', isAI: true }];
+            const trace: string[] = [];
+            const orig = AIPlayer.prototype.makeMove;
+            const spy = process.env.AI_MATCH_TRACE ? jest.spyOn(AIPlayer.prototype, 'makeMove').mockImplementation(function (this: AIPlayer, ...args: Parameters<AIPlayer['makeMove']>) {
+                const r = orig.apply(this, args);
+                if (this.character === 'yinYangMaster') {
+                    const empties = args[0].filter((q) => !q.player).length;
+                    trace.push(`magic=${args[1]} hand=[${args[5]}] empties=${empties} win=${this.floodComboWins(args[0]) ? 1 : 0} -> ${r.reroll ? 'REROLL' : ''}${r.skills.join('+')}${r.chargeClicks ? ' clicks:' + r.chargeClicks.map((c) => c.skill.replace('onClick', '')).join(',') : ''}${r.move !== null ? ' move=' + r.move : ''}`);
+                }
+                return r;
+            }) : null;
             const { container, unmount } = render(<Game players={players} />);
             fireEvent.click(screen.getByLabelText(/自動進行/));
             let text = '';
@@ -26,8 +37,15 @@ run('AI同士の実戦（本番TS版）', () => {
                 if (/勝ち|勝利|Win/.test(text) && /💙|⭕/.test(text) && container.querySelector('[class*="winner"]')) break;
             }
             const m = text.match(/(💙|⭕)[^。]{0,6}(の勝ち|勝利)/);
+            const yinWon = !!m && ((m[1] === '💙') === yinFirst);
+            if (process.env.AI_MATCH_DETAIL) {
+                const cnt = (re: RegExp) => (text.match(re) ?? []).length;
+                console.log(`detail ${yinWon ? 'WIN ' : 'LOSE'} flood=${cnt(/「百鬼夜行」を使用/g)} all=${cnt(/「式神一括」を使用/g)} shuffle=${cnt(/「シャッフル」を使用/g)} charge=${cnt(/「チャージ」を使用/g)} markdown=${cnt(/「特売」を使用/g)} turns=${cnt(/手番/g)}`);
+            }
             console.log(`game ${g}: ${m ? m[0] : 'no winner'} (yinFirst=${yinFirst})`);
             if (m) { done++; if ((m[1] === '💙') === yinFirst) wins++; }
+            if (process.env.AI_MATCH_TRACE && !yinWon) console.log('TRACE LOSE game ' + g + '\n' + trace.join('\n'));
+            spy?.mockRestore();
             unmount();
         }
         console.log(`yinYang wins ${wins}/${done}`);

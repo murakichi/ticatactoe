@@ -28,6 +28,7 @@ const SHIKIGAMI_BLAST_DAMAGE = 4;
 const SH_MAX = 3; // 同時に持つ式神の数
 const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
+const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
 const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
@@ -1504,9 +1505,12 @@ class AIPlayer {
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
+        // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（sim/ai.js の noDig53=8）
+        const waitFor13 = availableSkills.includes(71) && availableSkills.includes(73) && !availableSkills.includes(53)
+            && magic >= NO_DIG_53_MIN && magic < this.comboPlan(costs, availableSkills).total;
         // 陰陽師: 勝てる盤面で、魔力がコンボ分（特売が引ける前提）+引き直し分あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
         // （sim/ai.js の shuffleDig。コンボの発動率 53→75%、環境勝率 +8pt）
-        if (this.character === 'yinYangMaster' && this.rerollsLeft > 0) {
+        if (this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !waitFor13) {
             const complete = availableSkills.includes(71) && availableSkills.includes(73)
                 && (availableSkills.includes(53) || magic >= this.comboPlan(costs, availableSkills).total);
             if (!complete && this.floodComboWins(board) && magic >= this.comboPlan(costs, availableSkills, true).total + costs.onClickShuffle) {
@@ -1516,10 +1520,10 @@ class AIPlayer {
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
         if (this.character === 'yinYangMaster' && this.opponents.every((o) => this.countReaches(board, o) === 0)
-            && this.floodComboWins(board) && magic < this.comboPlan(costs, availableSkills, true).total + costs.onClickShuffle) {
+            && this.floodComboWins(board) && (magic < this.comboPlan(costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
-        if (this.rerollsLeft > 0 && this.character !== 'magician' && magic >= SURPLUS_MAGIC) {
+        if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
             const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
             if (plan.length === 0) return { move: null, skills: [], reroll: {} };
         }
