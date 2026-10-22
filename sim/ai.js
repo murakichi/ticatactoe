@@ -834,19 +834,6 @@ function ownOffense(board, me) {
     }
     return sc;
 }
-function budLoop(s, me, availableSkills) {
-    // F.budForce=1: 手札に無くても撃てるものとして、ループの上限値(2枚が常に手札にある場合)を測る
-    if (!F.budForce && (!availableSkills.includes(33) || !availableSkills.includes(36))) return;
-    for (let i = 0; i < F.budLoop; i++) {
-        const before = curMagic(s);
-        const sow = calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
-        if (before < sow || thermal.sowCandidates(s.board, me).length === 0) return;
-        E.SKILLS.windborne(s);
-        if (ownBuds(s) < 1 || curMagic(s) < calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve')) return;
-        E.SKILLS.harvestEve(s);
-        if (curMagic(s) <= before) return; // 増えなくなったら止める
-    }
-}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -1207,8 +1194,7 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx))
-        || (F.budLock && character === 'necromancer' && (idx === 33 || idx === 36)); // #160 ループの2枚を手札に固定する
+        || (tokenLockAi && gearTokenIdx.includes(idx));
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
@@ -1490,8 +1476,6 @@ function faithfulMakeMoveInner(s) {
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
-    // #160 風の落とし子→刈り入れ前夜のループ(連鎖割引・病炎の契りでコストが1+1になると毎周+1)。手札に2枚あれば魔力が増える限り回す
-    if (F.budLoop && curChar(s) === 'necromancer' && !s.silenced[s.turn]) budLoop(s, me, availableSkills);
 
     // 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
