@@ -79,6 +79,7 @@ const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxSta
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
 const SHIKIGAMI_LIFE = 2;
+const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(ランダムな空きマス)
 const SHIKIGAMI_BLAST_DAMAGE = 4; // 式神のライフ
 const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; // SIM_POOL_SIZE: A/B検証用の上書き
 
@@ -142,9 +143,9 @@ const skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
-    onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
+    onClickShikigamiAll: 4, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
-    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
+    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): ランダムな空きマス3つにライフ0の式神を置く
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -1362,20 +1363,22 @@ function exeShikigamiBlast(s, i) {
     addCorpses(s, destroyed);
     return true;
 }
-// 汎用(コスト6): 自分の式神を全て通常の自陣コマにする
+// 汎用(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。式神がいなければ何もしない
+const shikigamiAllBase = (s) => costsOf(s).onClickShikigamiAll * s.board.filter((sq) => sq.player === curPlayer(s) && isShikigami(sq)).length;
 function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
+    const base = shikigamiAllBase(s);
+    if (base === 0) return;
     for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
-    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
+    spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
-// 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
+// 汎用(百鬼夜行・コスト7): ランダムな空きマス3つにライフ0の式神を置く
 function onClickShikigamiFlood(s) {
     const cur = curPlayer(s);
-    for (let k = 0; k < s.board.length; k++) {
-        const sq = s.board[k];
-        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
-    }
+    const pool = [];
+    for (let k = 0; k < s.board.length; k++) if (!s.board[k].player && !thermal.emptyBlocked(s.board[k])) pool.push(k);
+    for (let n = 0; n < SHIKIGAMI_FLOOD_COUNT && pool.length; n++) s.board[pool.splice(Math.floor(s.rng() * pool.length), 1)[0]] = newShikigami(cur, 0);
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);
 }
@@ -2298,7 +2301,7 @@ function renderBoard(s) {
 module.exports = {
     bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
-    makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
+    makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_FLOOD_COUNT, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,

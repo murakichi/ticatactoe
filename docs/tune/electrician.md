@@ -1,20 +1,36 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: cc22236
+- 最後に検証したmaster: 81ad8ce
 - 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,49,50,51,52,53,58] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
 - 連続不採用回数: 0
-- 状態: running(トップ未達: envDeck varied は新デッキで1位に届いたが基本が僅差の2位。issue #109 は継続)
+- 状態: blocked(issue #109 / #124。陰陽師(89%)・毒使い(63%)が突出)。対陰陽師は対策済み(12→33%)
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
 - 陥落: master 837a29b(seed3/200試合)で 4位 59.2% / 1位 magician 65.3%(差6.1pt)・cryomancer 62.1%・tactician 59.2%。envDeck varied でも 2位 62.1% vs magician 63.7%。原因は magician(デッキ調整 #98)と cryomancer の調整。
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
+- 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
+## 診断(master 81ad8ce, seed50/300, --target)
+- 基本: 4位 54.1%(1位 poisoner 75.0 / magician 59.7 / necromancer 54.9)、envDeck varied: 7位 50.6%(1位 poisoner 66.3)。1位 poisoner との差は 21pt/16pt と大きい。
+- 律速は **対毒使い 21%(envDeck varied 25%)**。他は対 necromancer 39%、対 magician 43% が弱い。ほか(対あなた78・対巨人65・対氷室65)は強い。→ 次は対毒使いの原因を調べる(毒でライフが削られる中、⚡の盾が働くか・毒札が多い試合の手数)。
+## 診断(新ギア追加後)
+- 勝ち筋: 帯電トークンで⚡を重ねた自陣は無敵+弱点。帯電トークン6回/試合が主力(サマリ: 寄与 帯電トークン+14pt、ギア lightToken/harvest +15pt前後)。AIは既定でギアを見ない(hasGear参照なし)ので、ギアは効果の付与・コストなどパッシブで効く。
+- 新ギアの機構: 彩りの庭=1マスにエフェクト複数種類(雷霆の巫は⚡中心で成立しにくい) / 病炎の契り=自陣の毒・火炎(雷霆の巫は無縁) / 廃墟の底力=自陣が破壊されたときコスト-(相手の破壊が少なければ稀) / 土壇場の防壁=初めて負ける列をコマごと消して延命(+相手に魔力+4・ライフ+2)。→ 土壇場の防壁だけ有望と仮説。
+- 完了判定は 基本 と envDeck varied の2条件のみ(ユーザー指示 2026-10-21。ギアなし/ギアランダムは測らない)
+- 最新master(8adca66, seed40/300, --target): 基本 5位 56.0%(1位 poisoner 71.8) / envDeck varied 5位 53.9%(1位 poisoner 64.6)。poisoner・pyromancer の調整で環境が大きく動いた。
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 26 | strategy(対陰陽師) | ユーザー指示『陰陽師の一撃対策』。陰陽師は百鬼夜行→式神一括を92%の試合で撃ち、撃った試合は100%勝つ(対電巫 89%)。空きが全部相手のコマになっても列が完成しないよう、自コマの無い線の数×重みを着手で減点(F.floodCover、雷霆の巫のみ・相手に陰陽師がいるとき)。単発の『一撃が成立する盤面を避ける』(antiFlood)は 11→14〜15 で効かず、早い段階から全線を覆う方が効く | 対陰陽師のみ seed81/82×300: 11.0/11.3 → 重み20:18.0 / 60:26.7 / 150:28.7,27.3 / 400:27.3 / 1000:28.3。全キャラ順位表 seed90/250: 4位 49.9 vs 対策なし5位 47.5(+2.4、対陰陽師 12→33%のみ変化、他の相手は不変) | 採用(sim/ai.js 既定150・雷霆の巫限定、AIPlayer.ts にミラー+回帰テスト)。本番AIでの勝率は未計測。式神一括ナーフ後(master 28291db, seed91/300): 対陰陽師 対策なし52.7 → あり84.3 |
+| 25 | strategy(陰陽師のコンボ待ちを参考) | 帯電拡散(固有)の発動ファネルを測定: 手番の11.7%で撃てる盤面(対象あり)・払えるのは2.8%(魔力平均3.2/コスト平均6.9、盤面の⚡平均0.11)。『撃てる盤面で1チャージ(+3)で足りるなら駒を置かずチャージして次手番に撃つ』ノブ F.spreadCharge。上位4相手 seed70/300 | 38.4 → 34.0(-4.4) | 不採用(ノブ削除)。盤面は相手の手番で変わるため、陰陽師のように待てない |
+| 24 | joint(issue #160 の周回) | 連鎖割引ギア+36/33入りデッキで、風の落とし子→刈り入れ前夜を1手番に最大6周回すノブ F.harvestLoop。ロック固定の有無で比較。上位3相手(magician,poisoner,tactician) seed60/300 | 基準(現行) 37.0 / chainDiscount,harvest+デッキ 24.4 / +ループ 24.8 / +ループ+36・33をロック固定 17.7。ロック固定ではループが 3.9周/試合 回る(魔力は増える)が勝てない | 不採用(ノブ削除)。雷霆の巫では実用性なし |
+| 23 | gear(対poisoner) | 対毒使いのみのギア近傍(seed51/150): 基準 lightToken,harvest 18.7、最良 ironLock,harvest 36.0(多くの差し替えが基準超え=lightTokenのトークンライフ-1が毒に弱い)。全キャラ順位表で ironLock,harvest を測定(seed50/300) | 基本 54.1→49.0 / envDeck varied 50.6→47.6、対magician 43→26。全体で悪化 | 不採用 |
+| 22 | gear+deck+strategy(彩りの庭) | ユーザー指摘: 彩りの庭は『2種類エフェクトのマス』で魔力+1/マス。🌱を重ねる札(風の落とし子36・ワルプルギス14・ひこばえ35・バッズトークン9)入りデッキ+gear colorGarden,harvest。AIは14/36を既定で撃たないため F.elecGarden で撃つ条件を足した(⚡があり🌱が無い自陣コマ≥N)。上位3相手 seed31/300 | 現行 58.8 → 構成のみ 44.2 → +ワルプルギス(N=2/3) 44.1 → +風の落とし子(N=1/2) 44.6/44.2。ノブがほぼ効かない(ワルプルギスはコスト9で撃てない、風の落とし子は撃っても伸びない)。さらに colorGarden は主力の lightToken(寄与+15pt)か harvest(+14pt)を押し出すため、魔力+1/マスでそれを補えない | 不採用(ノブ削除)。新ギア4種を現行構成に1枠差し替えのみで測ると(seed30/100) lastStand 41.3 / ruinSurge 40.3 / colorGarden 39.3 / ailmentPact 39.3 で現行 47.7 を下回る |
+| 21 | strategy(sim に写し身を実装) | sim エンジンに写し身(51)を実装(本番 Game.tsx と同じ: 1クリック・置き先ランダム・手番継続)、雷霆の巫AIが『どの置き先でも自陣リーチが平均+0.5以上増えるコマ』で撃つ(F.elecClone=1)。上位3相手 seed25/400 | 58.4 → 59.2(+0.8、誤差内)。使用は0.05回/試合と稀(魔力が帯電トークンに回り、手札に51が来て条件を満たす場面が少ない) | 不採用(実装・ノブとも削除)。死に札の活用で伸ばす案(#109)は慈雨・写し身とも効果なし |
+| 20 | strategy(sim に慈雨を実装) | sim エンジンに慈雨(49)を実装し、雷霆の巫AIが『ライフ1以下の自陣コマ ≥N』で撃つ(F.elecBoost=2/3)。上位3相手 seed24/400 | 基準 58.8 → N=2: 57.8(-1.0) / N=3: 58.3(-0.5)。効果なし | 不採用(実装・ノブとも削除)。#109 の死に札案のうち慈雨は不要と判明。縮地/写し身は未検証 |
 | 19 | deck+gear(別案) | 追い剥ぎ52を入れ(sim では撃てない札=帯電札比率が上がる)、ダブルロック12を抜く(案X)。ギア別案 afterglow,harvest / luckyPurse,harvest を測定 | 上位3相手 envDeck varied seed22/400: 59.1→63.9。rank envDeck varied seed23/400(--target): 旧デッキ 58.9(3位)→案X 66.7(1位, +7.8)。seed4/300: 基本 案X 64.0(2位, 旧64.8と同等)、envDeck varied 案X 65.7(1位)。ギア別案 afterglow: 基本 62.7 / env 65.0(主案と同等)、luckyPurse: 基本 59.3(弱い) | 採用: デッキ案X、ギア別案 afterglow,harvest(主案と50%ずつ)。本番AIでは未計測 |
 | 18 | gear/strategy | envDeck varied 向けギア近傍(seed20/120)、サイレンス早撃ち F.silenceEarly=2 (上位3相手 envDeck varied seed21/400) | ギア: 現行が最上位級(57.1 vs afterglow 59.2、誤差内)。silenceEarly: 55.9→56.3(+0.4) | 不採用(ノブ削除) |
 | 17 | deck(envDeck varied向け) | `--envDeck varied --opp magician,cryomancer` 2枚swap 40候補(seed19/100) | 最良 74.5%±6.0 vs base 65.0%(z≈1、閾値未達)。envDeck variedの順位は seed5/400でも 2位 60.3 vs magician 62.3(-2.0)で再現 | 不採用 |

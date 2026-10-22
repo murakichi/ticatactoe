@@ -9,7 +9,7 @@
  * 'random'    -> pure random (strength benchmark baseline).
  */
 
-const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
+const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_FLOOD_COUNT, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
@@ -54,9 +54,11 @@ const AI_DEFAULTS = {
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
+    floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -881,6 +883,13 @@ function ownOffense(board, me) {
     }
     return sc;
 }
+function facingYinYang(s) { return otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster'); }
+// 自分のコマが1つ以上入っている勝ち筋の列の数
+function coveredLines(board, me, cells) {
+    let n = 0;
+    for (const line of geometryForCells(cells).winLines) if (line.some((idx) => board[idx].player === me)) n++;
+    return n;
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -938,6 +947,9 @@ function getEnhancedBestMove(s) {
         return bi;
     }
     // minimax + fork bonus
+    const yyPresent = otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster');
+    const floodCover = character === 'electrician' ? (F.floodCover || 0) : 0; // 雷霆の巫のみ
+    const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
     for (const i of allMoves) {
@@ -948,10 +960,13 @@ function getEnhancedBestMove(s) {
         const reaches = countReaches(sim, me);
         if (reaches >= 2) score += 200;        // フォーク
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
+        // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
+        if (F.yyCover && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
+        if (floodCover && yyPresent) { let unc = 0; for (const line of floodLines) if (!line.some((k) => sim[k].player === me)) unc++; score -= unc * floodCover; }
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
@@ -1232,7 +1247,11 @@ function chooseLocks(s, availableSkills) {
     const character0 = curChar(s);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
-    if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53));
+    if (character0 === 'yinYangMaster' && F.floodLock) {
+        // 特売(53)は 71 と 73 が両方揃ってから固定する（先に固定すると手札の空きが1枠になり、足りない札を引きにくい）
+        const both = availableSkills.includes(71) && availableSkills.includes(73);
+        return availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53 && (!F.lock53Late || both)));
+    }
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
     // 他キャラは -0.6〜-1.8pt(毒使いが強くなった分)。勝率の幅は 0.276→0.218 に縮んだ。TK_AI=0 で無効化(A/B用)
@@ -1252,7 +1271,8 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
-        || (tokenLockAi && gearTokenIdx.includes(idx));
+        || (tokenLockAi && gearTokenIdx.includes(idx))
+        || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
         switch (idx) {
             case 3: case 4: case 9: case 11: return empties >= 3;
@@ -1329,9 +1349,9 @@ function bestShikigamiCell(s, me) {
     return best;
 }
 // 百鬼夜行→式神一括の実コストの計画。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする（特売は1魔力で次のスキルを-3、何回でも撃てる）
-function comboPlan(s) {
+function comboPlan(s, assumeMd = false) {
     const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
-    const md = s.skills.includes(53) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
+    const md = (assumeMd || s.skills.includes(53)) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
     const best = (base) => {
         let bm = 0, bt = base;
         for (let m = 1; m <= 4 && md !== Infinity; m++) {
@@ -1340,12 +1360,27 @@ function comboPlan(s) {
         }
         return { m: bm, total: bt };
     };
+    // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
+    const nAfterFlood = ownShikigami(s, curPlayer(s)).length + Math.min(SHIKIGAMI_FLOOD_COUNT, s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length);
     const f = best(cost('onClickShikigamiFlood'));
-    const a = best(cost('onClickShikigamiAll'));
+    const a = best(calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
     return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
 }
+// 相手が次の一手で2つ以上のリーチ（フォーク）か即勝ちを作れるか。チャージで駒を置かない手番の安全確認
+function oppCanFork(s, opps) {
+    for (const o of opps) {
+        for (const m of getMovesFor(s.board, o, 4)) {
+            const sim = simulatePlace(s.board, m, o, 4);
+            if (countReaches(sim, o) >= 2 || calculateWinner(lineSyms(sim)) === o) return true;
+        }
+    }
+    return false;
+}
+const oppReachesNow = (s, opps) => opps.reduce((n, o) => n + countReaches(s.board, o), 0);
 // 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か
 function floodComboWins(s, me) {
+    // 百鬼夜行は3マスだけ(ランダム)。空きが3以下で全部埋まるときだけ結果が確定する
+    if (s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length > SHIKIGAMI_FLOOD_COUNT) return false;
     const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
         : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
     return calculateWinner(lineSyms(nb)) === me;
@@ -1372,7 +1407,8 @@ function shikigamiTurn(s, me) {
     // 空きマスに式神を置いて一括で通常のコマに戻し、その手番に列を完成させる(式神は列に数えないので相手は警戒しない)
     if (s.skills.includes(71) && !s.useShikigamiPlace) {
         const placeCost = costOf('onClickShikigamiPlace');
-        const allCost = costOf('onClickShikigamiAll');
+        const ownShiki = ownShikigami(s, me).length;
+        const allCostFor = (n) => calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, n), false, false, 'onClickShikigamiAll'); // 式神1体あたり
         const toggleCost = costOf('onClickToggleYingYang');
         const mode = s.yy[s.turn];
         let bestLine = null;
@@ -1386,7 +1422,7 @@ function shikigamiTurn(s, me) {
                 else empties.push(idx);
             }
             if (bad || real < F.shComboReal || shiki + empties.length === 0) continue;
-            const total = empties.length * placeCost + allCost + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+            const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
             if (curMagic(s) < total) continue;
             if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
         }
@@ -1799,12 +1835,15 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
-    // 陰陽師(F.shuffleDig): 魔力が「コンボ分+引き直し分」あり、百鬼夜行→式神一括で勝てる盤面なら、1コストで手札を引き直してコンボ札を探す
-    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && !(s.skills.includes(71) && s.skills.includes(73))) {
-        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
-        const need = comboPlan(s).total;
-        if (floodComboWins(s, me)) {
-            for (let k = 0; k < F.shuffleDig && curMagic(s) >= need + costsOf(s).onClickShuffle && !(s.skills.includes(71) && s.skills.includes(73)); k++) {
+    // 陰陽師(F.shuffleDig): 勝てる盤面で、魔力が「コンボ分(特売が引ける前提)+引き直し分」あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
+    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
+        const shufCost = costsOf(s).onClickShuffle;
+        const complete = () => s.skills.includes(71) && s.skills.includes(73) && (s.skills.includes(53) || !F.comboDiscount || curMagic(s) >= comboPlan(s).total);
+        const hold53 = F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53; // 特売を探すより、チャージで13を目指す
+        if (!complete() && !hold53 && floodComboWins(s, me)) {
+            for (let k = 0; k < F.shuffleDig && !complete() && curMagic(s) >= comboPlan(s, true).total + shufCost + F.digSpare; k++) {
+                // 引き直しのたびに、見つけたコンボ札を固定し直す（本番は引き直し→再計画のたびに chooseLocks が走る）
+                if (F.digRelock) s.lockedSkills[s.turn] = chooseLocks(s, s.skills.slice());
                 E.shuffleHand(s);
                 s.digShuffles = (s.digShuffles || 0) + 1;
             }
@@ -1828,6 +1867,14 @@ function faithfulMakeMoveInner(s) {
             s.loopCycles = (s.loopCycles || 0) + 1;
             if (curMagic(s) >= 16) break;
         }
+    }
+    // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
+    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && oppReachesNow(s, opps) === 0
+        && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
+            || (F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53 && curMagic(s) < comboPlan(s).total))
+        && !(F.chargeSafe && oppCanFork(s, opps))) {
+        SKILLS.charge(s);
+        return { move: null, turnEnded: true };
     }
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
     const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
