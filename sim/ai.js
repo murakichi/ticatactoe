@@ -855,9 +855,11 @@ function getEnhancedBestMove(s) {
 
     if (allMoves.length === 0) return null;
 
-    // immediate win
+    // immediate win（F.lsWait: 相手が未発動の土壇場の防壁を持つとき、その相手の盤上のコマが lsWait 個未満なら今は揃えない。揃えた列と防壁持ちの自陣が消えるだけなので、相手のコマが多いほど痛い）
+    const waitHolder = F.lsWait ? s.gears.findIndex((g, seat) => seat !== s.turn && hasGear(g, 'lastStand') && !s.lastStandUsed[seat]) : -1;
+    const holdWin = waitHolder >= 0 && board.filter((sq) => sq.player === SYMBOLS[waitHolder]).length < F.lsWait;
     for (const i of allMoves) {
-        if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) return i;
+        if (calculateWinner(simulatePlace(board, i, me, life).map(sq => sq.player)) === me) { if (holdWin) continue; return i; }
     }
     // 土壇場の防壁が未発動なら、相手の1回目の勝ちは防壁が受けてくれる(相手の列と自陣が消えるだけ)ので止めに行かず、攻めを続ける(AI_DEFAULTS.lsAggro)
     const lsFree = F.lsAggro && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
