@@ -426,6 +426,21 @@
     scroll-snap-align: start;
 }
 
+/* 狭い画面では横スクロールだと右側の手札が画面外に隠れて見つからないので、折り返して全部見せる */
+@media (max-width: 720px) {
+    .skillGrid {
+        flex-wrap: wrap;
+        justify-content: center;
+        overflow-x: visible;
+    }
+
+    .skillGrid > :first-child,
+    .skillGrid > :last-child {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
 /* キャラ固有スキルの現在コスト */
 .skillCosts {
     width: 100%;
