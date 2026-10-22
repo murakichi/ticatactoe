@@ -834,6 +834,18 @@ function ownOffense(board, me) {
     }
     return sc;
 }
+function budLoop(s, me, availableSkills) {
+    if (!availableSkills.includes(33) || !availableSkills.includes(36)) return;
+    for (let i = 0; i < F.budLoop; i++) {
+        const before = curMagic(s);
+        const sow = calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
+        if (before < sow || thermal.sowCandidates(s.board, me).length === 0) return;
+        E.SKILLS.windborne(s);
+        if (ownBuds(s) < 1 || curMagic(s) < calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve')) return;
+        E.SKILLS.harvestEve(s);
+        if (curMagic(s) <= before) return; // 増えなくなったら止める
+    }
+}
 function getEnhancedBestMove(s) {
     const me = curPlayer(s);
     const opps = opponentsOf(s);
@@ -1476,6 +1488,8 @@ function faithfulMakeMoveInner(s) {
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
+    // #160 風の落とし子→刈り入れ前夜のループ(連鎖割引・病炎の契りでコストが1+1になると毎周+1)。手札に2枚あれば魔力が増える限り回す
+    if (F.budLoop && curChar(s) === 'necromancer' && !s.silenced[s.turn]) budLoop(s, me, availableSkills);
 
     // 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
