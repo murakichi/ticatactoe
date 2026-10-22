@@ -13,12 +13,15 @@
  * 指標(ゲーム全体と、50手ごとの区間(lateMagic の刻み)で出す):
  *   income       手番あたりの平均収入
  *   stock        手番開始時の平均魔力
- *   stockToCost  stock ÷ 基準コスト(skillCosts の正の数値の中央値)。1手番で何発撃てる財布か
+ *   skills       手番あたりのスキル使用数
+ *   effCost      実効コスト = 純支出 ÷ スキル数(割引・ギア込み)
+ *   stockToCost  stock ÷ 基準コスト(skillCosts の正の数値の中央値。割引を無視した素の値)
+ *   stockToEffCost stock ÷ effCost。実際の払い方で何発撃てる財布か
  *   spendRatio   Σspent ÷ Σincome。1未満なら使い切れず溜まっている
- *   hoardRate    手番開始時の魔力が基準コストの HOARD_MULT 倍以上ある手番の割合
+ *   hoardRate    手番終了時に実効コストの HOARD_MULT 倍以上を残した手番の割合(撃ち切れず持ち越し)
  *
  * 区間幅は既定50手(--bucket で変更。2人戦は50手内に終わるので --bucket 10 など)。
- * 総合: inflationIndex = 後半区間の stockToCost ÷ 序盤区間の stockToCost。
+ * 総合: inflationIndex = 後半区間の stockToEffCost ÷ 序盤区間の stockToEffCost。
  *   1 付近なら収入と支出が釣り合っている。大きいほど長引くほど財布が膨らむ(インフレ)。
  */
 
@@ -44,7 +47,7 @@ function createTracker(s) {
         onTurnChange(state) {
             if (cur) {
                 const end = state.magic[cur.seat];
-                rows.push({ seat: cur.seat, turn: cur.turnIndex, start: cur.start, end, income: cur.start - lastEnd[cur.seat] });
+                rows.push({ seat: cur.seat, turn: cur.turnIndex, start: cur.start, end, income: cur.start - lastEnd[cur.seat], skills: state.gearSkills[cur.seat] || 0 });
                 lastEnd[cur.seat] = end;
             }
             cur = { seat: state.turn, turnIndex: state.currentTurn, start: state.magic[state.turn] };
@@ -60,14 +63,21 @@ function summarize(games, refCost, bucketTurns = BUCKET_TURNS) {
     const agg = (rows) => {
         const income = rows.reduce((a, r) => a + r.income, 0);
         const spent = rows.reduce((a, r) => a + (r.start - r.end), 0);
+        const skills = rows.reduce((a, r) => a + (r.skills || 0), 0);
+        // 実効コスト: 割引・ギア込みで実際に払った魔力 ÷ スキル数。スキルを撃っていない区間は素の基準コストで代用
+        const effCost = skills > 0 && spent > 0 ? spent / skills : refCost;
         const stock = mean(rows.map((r) => r.start));
         return {
             turns: rows.length,
             income: mean(rows.map((r) => r.income)),
             stock,
+            skillsPerTurn: rows.length ? skills / rows.length : null,
+            effCost,
             stockToCost: stock == null ? null : stock / refCost,
+            stockToEffCost: stock == null ? null : stock / effCost,
             spendRatio: income > 0 ? spent / income : null,
-            hoardRate: rows.length ? rows.filter((r) => r.start >= HOARD_MULT * refCost).length / rows.length : null,
+            // 手番終了時に実効コストの HOARD_MULT 倍以上を残した手番の割合(撃ち切れず持ち越した)
+            hoardRate: rows.length ? rows.filter((r) => r.end >= HOARD_MULT * effCost).length / rows.length : null,
         };
     };
     const all = games.flat();
@@ -83,7 +93,7 @@ function summarize(games, refCost, bucketTurns = BUCKET_TURNS) {
     const minTurns = Math.max(30, 0.05 * (buckets[0] ? buckets[0].turns : 0));
     const solid = buckets.filter((b) => b.turns >= minTurns);
     const first = solid[0], last = solid[solid.length - 1];
-    const inflationIndex = first && last && first !== last && first.stockToCost > 0 ? last.stockToCost / first.stockToCost : null;
+    const inflationIndex = first && last && first !== last && first.stockToEffCost > 0 ? last.stockToEffCost / first.stockToEffCost : null;
     return { referenceCost: refCost, hoardMult: HOARD_MULT, bucketTurns, overall: agg(all), buckets, inflationIndex };
 }
 

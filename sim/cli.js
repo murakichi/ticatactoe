@@ -144,10 +144,10 @@ function inflation(args) {
     if (args.json) return console.log(JSON.stringify(out, null, 2));
     const f = (x, d = 2) => (x == null ? 'n/a' : x.toFixed(d));
     console.log(`# 魔力インフレ  ${players}人 ${out.boardSize}x${out.boardSize}  games=${games}  AI=${mode}  seed=${baseSeed}  基準コスト=${f(out.referenceCost, 1)}`);
-    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToCost / 序盤 stockToCost。1付近=均衡、大=膨らむ)\n`);
-    console.log('区間(手番)    手番数   収入/手番  手持ち  財布/コスト  支出/収入  溜め込み率');
+    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)\n`);
+    console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
     for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
-        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.stockToCost), 11)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
+        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
     }
 }
 

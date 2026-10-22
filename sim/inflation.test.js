@@ -9,7 +9,7 @@ describe('inflation metrics', () => {
 
     test('flat economy gives index 1 and spendRatio 1', () => {
         const rows = [];
-        for (let t = 0; t < 200; t++) rows.push({ seat: 0, turn: t, start: 4, end: 0, income: 4 });
+        for (let t = 0; t < 200; t++) rows.push({ seat: 0, turn: t, start: 4, end: 0, income: 4, skills: 1 });
         const m = summarize([rows], 4);
         expect(m.inflationIndex).toBeCloseTo(1);
         expect(m.overall.spendRatio).toBeCloseTo(1);
