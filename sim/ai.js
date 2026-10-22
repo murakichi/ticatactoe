@@ -56,7 +56,7 @@ const AI_DEFAULTS = {
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.shuffleDig = 0; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1231,7 +1231,7 @@ function chooseLocks(s, availableSkills) {
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
-    if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && availableSkills.includes(33) && availableSkills.includes(36)) return [33, 36];
+    if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return availableSkills.filter((i) => i === 33 || i === 36);
     if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
@@ -1327,6 +1327,12 @@ function bestShikigamiCell(s, me) {
         if (v > bestV) { bestV = v; best = i; }
     });
     return best;
+}
+// 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か
+function floodComboWins(s, me) {
+    const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+        : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+    return calculateWinner(lineSyms(nb)) === me;
 }
 // 陰陽師の1手番の式神運用。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。何か撃ったら true
 function shikigamiTurn(s, me) {
@@ -1777,6 +1783,18 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
+    // 陰陽師(F.shuffleDig): 魔力が「コンボ分+引き直し分」あり、百鬼夜行→式神一括で勝てる盤面なら、1コストで手札を引き直してコンボ札を探す
+    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && !(s.skills.includes(71) && s.skills.includes(73))) {
+        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        const need = cost('onClickShikigamiFlood') + cost('onClickShikigamiAll');
+        if (floodComboWins(s, me)) {
+            for (let k = 0; k < F.shuffleDig && curMagic(s) >= need + costsOf(s).onClickShuffle && !(s.skills.includes(71) && s.skills.includes(73)); k++) {
+                E.shuffleHand(s);
+                s.digShuffles = (s.digShuffles || 0) + 1;
+            }
+            availableSkills = s.skills.slice();
+        }
+    }
     // 陰陽師(検証用 F.bloomLoop): 風の落とし子→刈り入れ前夜の周回で魔力を稼ぐ(issue #160。連鎖割引・病炎の契りで1周のコストが獲得を下回るとき)
     if (F.bloomLoop && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
         const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
