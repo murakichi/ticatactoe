@@ -235,6 +235,8 @@ const skillCosts = {
     onClickAutumn: 4,
     onClickLeafFrost: 3, // 霜枯れ(idx 69)
     onClickSpringWind: 2, // 春一番(idx 70)
+    onClickKimon: 5, // 鬼門封じ(idx 74)
+    onClickFireWheel: 5, // 火の車(idx 75)。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -547,6 +549,10 @@ function newGame(opts = {}) {
         ruinActive: fill(false),
         ruinPending: fill(false),
         snapOwners: null,
+        snapBuds: null,
+        snapFlames: null,
+        ashActive: fill(0), // 灰の供物: 有効な割引の重ね数 / 次の自分の手番から有効になる重ね数
+        ashPending: fill(0),
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
@@ -565,6 +571,8 @@ function newGame(opts = {}) {
         useFrostSpread: false,
         useShatter: false,
         useSacrifice: false,
+        useKimon: false,
+        fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
@@ -615,12 +623,14 @@ function gearCtx(s, seat) {
         echoReady: s.echoReady[seat],
         ailments: hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0,
         ruin: s.ruinActive[seat],
+        ash: hasGear(s.gears[seat], 'ashOffering') ? s.ashActive[seat] : 0,
     };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key);
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
     const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
     // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
@@ -768,6 +778,26 @@ function advanceTurn(s) {
     const magicCharacter = ['magician'];
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
+    // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
+    let scorchForNext = 0;
+    if (s.snapOwners && s.snapBuds) {
+        s.gears.forEach((g, seat) => {
+            if (!hasGear(g, 'scorchedEarth')) return;
+            const gain = gear.scorchGain(gear.burnedBudCount(s.snapOwners, s.snapBuds, s.board, SYMBOLS[seat]));
+            if (gain <= 0) return;
+            if (seat === next) scorchForNext = gain;
+            else s.magic[seat] += gain;
+            bumpStat(s, 'scorchedEarth', gain);
+        });
+    }
+    // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引。終わる席の割引はここで切れる
+    if (s.snapOwners && s.snapFlames && hasGear(s.gears[s.turn], 'ashOffering')) {
+        const n = gear.ignitedCount(s.snapOwners, s.snapFlames, s.board, SYMBOLS[s.turn]);
+        if (n > 0) { s.ashPending[s.turn] += n; bumpStat(s, 'ashOffering', n); }
+    }
+    s.ashActive[s.turn] = 0;
+    s.ashActive[next] = s.ashPending[next];
+    s.ashPending[next] = 0;
     s.ruinActive[s.turn] = false;
     s.ruinActive[next] = s.ruinPending[next];
     s.ruinPending[next] = false;
@@ -780,6 +810,13 @@ function advanceTurn(s) {
     // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
     if (hasGear(s.gears[next], 'colorGarden')) nextMagic += gear.countVarietySquares(s.board, sym) * GP.varietyMagic;
     if (lastStandActiveAgainst(s, next)) nextMagic += GP.lastStandMagic;
+    // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+    nextMagic += scorchForNext;
+    if (hasGear(s.gears[next], 'frostRoot')) {
+        const root = gear.rootGain(gear.frozenBudCount(s.board));
+        nextMagic += root;
+        if (root > 0) bumpStat(s, 'frostRoot', root);
+    }
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
         const upkeep = proliferateUpkeep(s.proliferateCount[next]);
@@ -804,10 +841,13 @@ function advanceTurn(s) {
     s.skillKinds[next] = new Set();
     s.discount[next] = discountMod.emptyDiscount();
     s.oppSkillPrev[next] = s.oppSkilled[next];
+    s.fireBase[next] = thermal.fireStacksTotal(s.board);
     s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
     s.snapOwners = s.board.map((sq) => sq.player);
+    s.snapBuds = gear.budCounts(s.board);
+    s.snapFlames = gear.flameCounts(s.board);
     s.lastMoveCell = null;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
@@ -872,6 +912,11 @@ function placeMove(s, i) {
     if (s.useSwidden) {
         if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
         s.useSwidden = false;
+        return true;
+    }
+    if (s.useKimon) {
+        if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
+        s.useKimon = false;
         return true;
     }
     if (s.useSacrifice) {
@@ -2062,6 +2107,37 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
+// 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
+function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function onClickKimon(s) {
+    if (kimonCandidates(s).length === 0) return;
+    s.useKimon = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickKimon, false, false, 'onClickKimon'), 'onClickKimon');
+    bumpMagicCount(s);
+    bumpStat(s, 'kimon');
+}
+function exeKimon(s, i) {
+    if (!kimonCandidates(s).includes(i)) return false;
+    const r = thermal.kimon(s.board, i);
+    if (r.destroyed) addCorpses(s, 1);
+    return true;
+}
+// 火の車 (idx75): ランダムな敵マス2つに🔥+1、その後自分の手札をシャッフル（無料）。このターン敵か自陣に🔥を付与していれば0コスト（撃つとリセット）。クリック不要
+function fireWheelCandidates(s) { return thermal.fireWheelTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function fireWheelLegal(s) { return fireWheelCandidates(s).length > 0; }
+function onClickFireWheel(s) {
+    const cands = fireWheelCandidates(s);
+    if (cands.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickFireWheel, false, false, 'onClickFireWheel'); // 無料かは撃つ前の盤面で決まる
+    const picks = randomAnyPick(cands, Math.min(thermal.FIRE_WHEEL_COUNT, cands.length), s.rng);
+    thermal.fireWheel(s.board, picks, s.size, keepBudsOf(s));
+    spendMagic(s, pay, 'onClickFireWheel');
+    s.fireBase[s.turn] = thermal.fireStacksTotal(s.board); // 条件のリセット（この札自身が付けた🔥は数えない）
+    s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE); // 手札のシャッフル（無料。スキル扱いではない）
+    bumpMagicCount(s);
+    bumpStat(s, 'fireWheel');
+}
+
 function onClickCleanse(s) {
     if (!hasAilment(s.board, curPlayer(s))) return;
     const done = thermal.cleanse(s.board, curPlayer(s));
@@ -2169,6 +2245,8 @@ const SKILLS = {
     autumn: onClickAutumn,
     leafFrost: onClickLeafFrost,
     springWind: onClickSpringWind,
+    kimon: onClickKimon,
+    fireWheel: onClickFireWheel,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2212,7 +2290,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

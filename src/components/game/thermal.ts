@@ -183,7 +183,7 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
 /** 煉獄の鍛冶師のパッシブでコストが常に-1される、🔥を付与するスキル（コストキー。業火は固有スキルなので含めない）。sim/thermal.js と同じ */
-export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 /** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
 export const INFERNO_FREE_SKILLS = 3;
 /** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。
@@ -483,6 +483,42 @@ export const thawAll = (board: SquareInfo[], player: SquareInfo['player']): { st
     }
     return { stacks, cells };
 };
+
+// ---- 鬼門封じ / 火の車 ----
+
+/** 鬼門封じが空きマスにかけるロックの長さ（ターン数。ロックの bind に入れる） */
+export const KIMON_LOCK_TURNS = 3;
+
+/** 盤面全体（敵味方・空きマス含む）の🔥の総数。火の車の「このターンに🔥を付与したか」を、手番開始時（や火の車を撃った直後）との差で見る */
+export const fireStacksTotal = (board: SquareInfo[]): number => board.reduce((n, sq) => n + flameStacks(sq), 0);
+
+/** 鬼門封じの対象: player 以外のコマのうち、guarded（🔑ロック・⚡無敵など）でないマス（昇順。氷結中でも選べる） */
+export const kimonTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * 鬼門封じ: cell のコマを破壊する（氷結中なら破壊せず❄を1つ減らすだけ）。破壊して空きマスになったら KIMON_LOCK_TURNS ターンのロックを掛ける。
+ * board を直接書き換える。sim/thermal.js の kimon と同じ
+ */
+export const kimon = (board: SquareInfo[], cell: number): { destroyed: boolean; thawed: boolean; locked: boolean } => {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { destroyed: false, thawed: true, locked: false };
+    }
+    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    return { destroyed: true, thawed: false, locked: true };
+};
+
+/** 火の車の対象: player 以外のコマのうち、guarded（🔑ロック・⚡無敵など）でないマス（昇順。氷結中でも選べる＝🔥は付かず❄が解ける） */
+export const fireWheelTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    kimonTargets(board, player, guarded);
+
+/** 火の車が🔥を付ける敵マスの数 */
+export const FIRE_WHEEL_COUNT = 2;
+
+/** 火の車: picks（呼び出し側がランダムに選んだ敵マス）に🔥を1つずつ付ける（ignite の規則どおり）。解けたマスを返す。board を直接書き換える */
+export const fireWheel = (board: SquareInfo[], picks: number[], size: number, keepBuds?: (sq: SquareInfo) => boolean): number[] =>
+    ignite(board, picks, size, 1, keepBuds).thawed;
 
 /** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマス（昇順）。氷結中は🍂が休眠する点に注意 */
 export const leafFrostTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>

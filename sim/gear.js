@@ -33,13 +33,17 @@ const GEAR_PARAMS = {
     ruinDiscount: 1,
     lastStandMagic: 4,
     lastStandLife: 2,
+    scorchMagic: 2,
+    scorchCap: 6,
+    ashDiscount: 1,
+    rootMagic: 1,
 };
 const P = GEAR_PARAMS;
 
 const GEAR_IDS = [
     'emptyLock', 'ironLock', 'bindingLock', 'quadMastery', 'afterglow', 'luckyPurse', 'sturdy', 'titanCost', 'reinforce',
     'harvest', 'toxicBloom', 'priceWreck', 'chainDiscount', 'propagate', 'lightToken', 'gambler', 'vengeance',
-    'colorGarden', 'ailmentPact', 'ruinSurge', 'lastStand',
+    'colorGarden', 'ailmentPact', 'ruinSurge', 'scorchedEarth', 'ashOffering', 'frostRoot', 'lastStand',
 ];
 
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
@@ -75,6 +79,23 @@ function lostCells(before, after, player, exclude) {
     return before.map((p, i) => (p === player && after[i] !== player && i !== exclude ? i : -1)).filter((i) => i >= 0);
 }
 
+const budCount = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+const hasEffect = (sq, effect) => sq.effects.some((e) => e.effect === effect);
+/** 焦土: 手番開始時の記録に対し、holder 以外のコマの🌱が🔥で消えた数 */
+function burnedBudCount(owners, buds, squares, holder) {
+    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - budCount(sq)) : n), 0);
+}
+const scorchGain = (burned) => Math.min(P.scorchCap, burned * P.scorchMagic);
+const flameCount = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
+/** 灰の供物: 手番開始時の記録に対し、holder 以外のコマで🔥が増えたマスの数 */
+function ignitedCount(owners, flames, squares, holder) {
+    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && flameCount(sq) > flames[i] ? n + 1 : n), 0);
+}
+const flameCounts = (squares) => squares.map(flameCount);
+const frozenBudCount = (squares) => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
+const rootGain = (frozenBuds) => frozenBuds * P.rootMagic;
+const budCounts = (squares) => squares.map(budCount);
+
 function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (!gears || gears.length === 0) return cost;
     if (hasGear(gears, 'quadMastery') && ctx.skillsThisTurn === P.quadCount) return 0;
@@ -85,6 +106,7 @@ function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (hasGear(gears, 'lightToken') && isToken) delta += P.lightTokenCost;
     if (hasGear(gears, 'ailmentPact') && !(skillKey && EXCLUSIVE_SKILL_KEYS.includes(skillKey))) delta -= P.ailmentDiscount * (ctx.ailments || 0);
     if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
+    if (hasGear(gears, 'ashOffering')) delta -= P.ashDiscount * (ctx.ash || 0);
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 }
@@ -132,7 +154,7 @@ const RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
-    giant: ['vengeance', 'sturdy'],
+    giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'sturdy'],
     necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'sturdy'],
@@ -154,5 +176,5 @@ const pickRecommendedGears = (character, rng = Math.random) => {
 
 module.exports = {
     GEAR_PARAMS, GEAR_IDS, gearSlotsFor, hasGear, gearLifeBonus, gearLifeStd, gearLockBind, gearTokenBindDelta,
-    adjustCostByGear, EXCLUSIVE_SKILL_KEYS, countVarietySquares, countAilmentKinds, lostCells, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
+    adjustCostByGear, EXCLUSIVE_SKILL_KEYS, countVarietySquares, countAilmentKinds, lostCells, burnedBudCount, scorchGain, ignitedCount, flameCounts, frozenBudCount, rootGain, budCounts, rollPriceOffsets, applyPriceOffsets, priceShift, randomGears, RECOMMENDED_GEARS, recommendedGears, ALT_RECOMMENDED_GEARS, pickRecommendedGears,
 };

@@ -151,6 +151,25 @@ function bestInjectionTarget(board, me, minValue) {
     return bestVal >= minValue ? bestIdx : null;
 }
 
+// 鬼門封じ: 敵のラインの要のコマ（氷結中・🔑ロック・無敵は除く）。AIPlayer.ts findKimonTarget と同一
+function bestKimonTarget(board, me, minValue) {
+    const geo = geometryForCells(board.length);
+    let bestIdx = null, bestVal = 0;
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (!isEnemy(sq.player, me) || shield.has(i) || thermal.isFrozen(sq) || sq.effects.some(e => e.effect === '🔑')) continue;
+        let val = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            let oc = 0, foreign = 0;
+            for (const idx of line) { if (board[idx].player === sq.player) oc++; else if (board[idx].player) foreign++; }
+            if (foreign === 0) val += LINE_SCORES[Math.min(oc, 4)];
+        }
+        if (val > bestVal) { bestVal = val; bestIdx = i; }
+    }
+    return bestVal >= minValue ? bestIdx : null;
+}
+
 // 毒使いミアズマ: 自陣の毒マスの周囲の敵マスに毒を撒き、自陣の毒は消える（対象選択なし）。
 // 敵2マス以上、または敵1マス+リーチ列(=3)なら撃つ価値あり。
 function miasmaScore(s, me) {
@@ -1199,6 +1218,12 @@ function chooseSkills(s, availableSkills) {
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
     }
 
+    // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。AIPlayer.ts と同一）
+    if (availableSkills.includes(75) && thermal.fireWheelTargets(board, me, (sq, i) => shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2
+        && remaining >= cost(costsOf(s).onClickFireWheel, false, 'onClickFireWheel')) {
+        spend(cost(costsOf(s).onClickFireWheel, false, 'onClickFireWheel'), 'fireWheel');
+    }
+
     { skills.spent = curMagic(s) - remaining; return skills; }
 }
 
@@ -1247,7 +1272,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 71)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 76)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1389,7 +1414,7 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
@@ -1680,6 +1705,17 @@ function faithfulMakeMoveInner(s) {
         const target = bestInjectionTarget(s.board, me, INJ_MIN);
         if (target !== null) {
             SKILLS.injection(s);
+            placeMove(s, target);
+            const move = getEnhancedBestMove(s);
+            return { move, turnEnded: false };
+        }
+    }
+
+    // 鬼門封じ: 敵のラインの要のコマを破壊して、その空きマスを3ターンロックする。自分に勝ち手があるときは温存（AIPlayer.ts と同一）
+    if (availableSkills.includes(74) && magic >= calculateCost(s, costsOf(s).onClickKimon, false, false, 'onClickKimon') && countReaches(s.board, me) === 0) {
+        const target = bestKimonTarget(s.board, me, 50);
+        if (target !== null) {
+            SKILLS.kimon(s);
             placeMove(s, target);
             const move = getEnhancedBestMove(s);
             return { move, turnEnded: false };
