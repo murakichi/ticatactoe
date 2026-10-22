@@ -25,6 +25,7 @@ const SURPLUS_MAGIC = 12;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
 const SHIKIGAMI_LIFE = 2;
 const SHIKIGAMI_BLAST_DAMAGE = 4;
+const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(Game.tsx と同じ)
 const SH_MAX = 3; // 同時に持つ式神の数
 const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
@@ -1351,7 +1352,7 @@ class AIPlayer {
         };
         const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
         // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
-        const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
+        const nAfterFlood = board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length + Math.min(SHIKIGAMI_FLOOD_COUNT, board.filter((sq) => !sq.player && !emptyBlocked(sq)).length);
         const a = best(this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
         return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
     }
@@ -1359,6 +1360,8 @@ class AIPlayer {
     /** 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か (sim/ai.js floodComboWins) */
     floodComboWins(board: SquareInfo[]): boolean {
         const me = this.playerSymbol;
+        // 百鬼夜行は3マスだけ(ランダム)。空きが3以下で全部埋まるときだけ結果が確定する
+        if (board.filter((sq) => !sq.player && !emptyBlocked(sq)).length > SHIKIGAMI_FLOOD_COUNT) return false;
         const nb = board.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
             : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))) as SquareInfo[];
         return calculateWinner(lineSymbols(nb)) === me;
@@ -1426,7 +1429,7 @@ class AIPlayer {
                 if (m >= combo.total) {
                     const nb: SquareInfo[] = b.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
                         : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
-                    if (calculateWinner(lineSymbols(nb)) === me) {
+                    if (this.floodComboWins(b)) {
                         // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ
                         for (let k = 0; k < combo.floodCasts; k++) clicks.push({ skill: 'onClickMarkdown' });
                         clicks.push({ skill: 'onClickShikigamiFlood' });
