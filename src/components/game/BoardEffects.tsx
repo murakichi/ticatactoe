@@ -31,6 +31,7 @@ export type SkillEffectType =
     | 'solstice'
     | 'sprout'
     | 'windborne'
+    | 'autumn'
     | 'iceBreak'
     | 'thaw'
     | 'burn'
@@ -133,6 +134,7 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     solstice: { label: '冬至の種子', bg: '#1d2a5a', fg: '#cfe0ff' },
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
+    autumn: { label: '落ち葉', bg: '#e8a24a', fg: '#3a1d00' },
     zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
     heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
     double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
@@ -438,6 +440,15 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     <>
                         {sweepParticles('🍃')}
                         {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
+            case 'autumn':
+                // 🍂落ち葉系: 枯れ葉が舞い落ち、対象のマスにも一枚ずつ散る
+                return (
+                    <>
+                        {fallParticles('🍂')}
+                        {sweepParticles('🍂')}
+                        {cellPops(effect.indexes, '🍂')}
                     </>
                 );
             case 'silence':

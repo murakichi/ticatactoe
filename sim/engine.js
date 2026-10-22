@@ -219,6 +219,14 @@ const skillCosts = {
     onClickRandomCast: 2, // 福引き(idx 59)
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
+    // 🍂落ち葉系の汎用スキル(idx 62-68)。src/components/game/skillCosts.ts と同値
+    onClickLeafToken: 3,
+    onClickTwinLeafToken: 5,
+    onClickDoubleLeafToken: 6,
+    onClickBothLeafToken: 4,
+    onClickBonfire: 3,
+    onClickMulch: 2,
+    onClickAutumn: 4,
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -601,7 +609,9 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key);
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
-    return seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
+    const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
+    // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
+    return discounted + thermal.leafSurcharge(s.board, SYMBOLS[seat]);
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
 function noteSkillUsed(s) {
@@ -1825,6 +1835,71 @@ function onClickFrostfall(s) {
     bumpStat(s, 'frostfall');
 }
 
+// ---- 🍂落ち葉系の汎用スキル (idx 62〜68) ----
+// 🍂付きのトークンはトークンのエフェクトを持たない扱い（収穫/伝播ギアとは連動しない。火炎トークンと同じ）
+function placeLeafTokens(s, count, leaves) {
+    const empties = findEmptyIndexes(s.board);
+    for (const idx of randomAnyPick(empties, Math.min(count, empties.length), s.rng)) {
+        if (idx == null) continue;
+        thermal.placeLeafToken(s.board, idx, curPlayer(s), calculateTokenBind(s), leaves);
+        harvestMagic(s, afterTokenPlaced(s, idx));
+    }
+}
+function finishLeafToken(s, key, stat) {
+    spendMagic(s, calculateCost(s, costsOf(s)[key], true, false, key), key);
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, stat);
+}
+// 木枯らしの使い (idx62): 🍂付きトークン
+function onClickLeafToken(s) { placeLeafTokens(s, 1, 1); finishLeafToken(s, 'onClickLeafToken', 'leafToken'); }
+// 落葉松の双子 (idx63): 🍂が2枚付いたトークン
+function onClickTwinLeafToken(s) { placeLeafTokens(s, 1, 2); finishLeafToken(s, 'onClickTwinLeafToken', 'twinLeafToken'); }
+// 紅葉狩り (idx64): 🍂付きのダブルトークン
+function onClickDoubleLeafToken(s) { placeLeafTokens(s, 2, 1); finishLeafToken(s, 'onClickDoubleLeafToken', 'doubleLeafToken'); }
+// 枯野の相席 (idx65): 両トークン。🍂が付くのは自分のコマだけ（敵のコマに付けると自分のコストが上がるため）
+function onClickBothLeafToken(s) {
+    const empties = findEmptyIndexes(s.board);
+    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
+    let granted = 0;
+    picks.forEach((idx, seat) => {
+        if (seat === s.turn) thermal.placeLeafToken(s.board, idx, SYMBOLS[seat], calculateTokenBind(s), 1);
+        else s.board[idx] = { player: SYMBOLS[seat], bind: 4, effects: [] };
+        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
+    });
+    harvestMagic(s, granted);
+    finishLeafToken(s, 'onClickBothLeafToken', 'bothLeafToken');
+}
+// 焚き火の唄 (idx66): 敵陣の🍂を全て除去（🔑ロック・❄氷結のマスは対象外）。対象が無ければ使えない
+function bonfireLegal(s) { return thermal.bonfireTargets(s.board, curPlayer(s)).length > 0; }
+function onClickBonfire(s) {
+    const pay = calculateCost(s, costsOf(s).onClickBonfire, false, false, 'onClickBonfire'); // 払うコストは除去する前の盤面で決まる（画面の表示と同じ）
+    thermal.bonfire(s.board, curPlayer(s));
+    spendMagic(s, pay, 'onClickBonfire');
+    bumpMagicCount(s);
+    bumpStat(s, 'bonfire');
+}
+// 腐葉土の目覚め (idx67): 自陣のランダムな🍂1枚を🌱に変える。自陣に🍂が無ければ使えない
+function mulchLegal(s) { return thermal.mulchCandidates(s.board, curPlayer(s)).length > 0; }
+function onClickMulch(s) {
+    const cands = thermal.mulchCandidates(s.board, curPlayer(s));
+    const pay = calculateCost(s, costsOf(s).onClickMulch, false, false, 'onClickMulch');
+    if (cands.length) thermal.mulch(s.board, randomPick(cands, s.rng));
+    spendMagic(s, pay, 'onClickMulch');
+    bumpMagicCount(s);
+    bumpStat(s, 'mulch');
+}
+// 一葉知秋 (idx68): 盤面の🌱をすべて🍂に変える（敵味方問わず）。盤上に🌱が無ければ使えない
+function autumnLegal(s) { return thermal.autumnTargets(s.board).length > 0; }
+function onClickAutumn(s) {
+    const pay = calculateCost(s, costsOf(s).onClickAutumn, false, false, 'onClickAutumn');
+    thermal.autumn(s.board);
+    spendMagic(s, pay, 'onClickAutumn');
+    bumpMagicCount(s);
+    bumpStat(s, 'autumn');
+}
+
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
@@ -1990,6 +2065,13 @@ const SKILLS = {
     cleanse: onClickCleanse,
     harvestEve: onClickHarvestEve,
     flameToken: onClickFlameToken,
+    leafToken: onClickLeafToken,
+    twinLeafToken: onClickTwinLeafToken,
+    doubleLeafToken: onClickDoubleLeafToken,
+    bothLeafToken: onClickBothLeafToken,
+    bonfire: onClickBonfire,
+    mulch: onClickMulch,
+    autumn: onClickAutumn,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2033,6 +2115,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
+    bonfireLegal, mulchLegal, autumnLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, findEmptyIndexes,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

@@ -126,8 +126,9 @@ export const ignite = (
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くと🌱は燃えて消える（冬至の種子のガード中は消えない）。⚡☠は消えず、休眠もしない
-            board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
+            const guarded = keepBuds?.(board[k]) ?? false;
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -340,6 +341,67 @@ export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player'])
 /** 風の落とし子: picks の各マス（重複可）に🌱を1つずつ足す。board を直接書き換える */
 export const sow = (board: SquareInfo[], picks: number[]): void => {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+};
+
+// ---- 🍂落ち葉（🌱バッズの対）。自陣にあると、相手全員のスキルコストが落ち葉の数だけ増える ----
+
+/** マスの🍂の数 */
+export const leafStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🍂').length;
+
+/** 効力を発揮している🍂の数。氷結中のマスの🍂は消えないが休眠する（🌱と同じ） */
+export const activeLeaves = (sq: SquareInfo): number => (isDormant(sq) ? 0 : leafStacks(sq));
+
+/** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数（全員対象・上限なし） */
+export const leafSurcharge = (board: SquareInfo[], player: SquareInfo['player']): number =>
+    board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+
+/** 🍂付きトークン: idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
+export const placeLeafToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number, n: number = 1): void => {
+    board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' as const })) };
+};
+
+/** 焚き火の唄の対象: player 以外のコマのうち、🍂を持ち、🔑ロックも❄氷結もないマス（昇順） */
+export const bonfireTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !hasLock(sq) && !isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 焚き火の唄: 対象マスの🍂を全て除去して、除去した枚数とマスを返す。board を直接書き換える */
+export const bonfire = (board: SquareInfo[], player: SquareInfo['player']): { n: number; cells: number[] } => {
+    const cells = bonfireTargets(board, player);
+    let n = 0;
+    for (const k of cells) {
+        n += leafStacks(board[k]);
+        board[k] = without(board[k], '🍂');
+    }
+    return { n, cells };
+};
+
+/** 腐葉土の目覚めの候補: player のコマの🍂を1枚ずつ数えた添字の列（マスの🍂が多いほど当たりやすい。ランダムに1つ選ぶ元） */
+export const mulchCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.flatMap((sq, i) => (sq.player === player ? Array<number>(leafStacks(sq)).fill(i) : []));
+
+/** 腐葉土の目覚め: cell の🍂を1枚だけ🌱に変える（枚数の順序は保つ）。🍂が無ければ false。board を直接書き換える */
+export const mulch = (board: SquareInfo[], cell: number): boolean => {
+    const at = board[cell].effects.findIndex((e) => e.effect === '🍂');
+    if (at < 0) return false;
+    const effects = board[cell].effects.slice();
+    effects[at] = { effect: '🌱' };
+    board[cell] = { ...board[cell], effects };
+    return true;
+};
+
+/** 一葉知秋の対象: 🌱を持ち、🔥が付いていないマス（🔥中は🍂がすぐ燃えるので変換しない。冬至の種子で残った🌱がそれにあたる） */
+export const autumnTargets = (board: SquareInfo[]): number[] =>
+    board.map((sq, i) => (budStacks(sq) > 0 && flameStacks(sq) === 0 ? i : -1)).filter((i) => i !== -1);
+
+/** 一葉知秋: 盤面の🌱をすべて🍂に変える（敵味方問わず・1枚ずつ）。変えた枚数とマスを返す。board を直接書き換える */
+export const autumn = (board: SquareInfo[]): { n: number; cells: number[] } => {
+    const cells = autumnTargets(board);
+    let n = 0;
+    for (const k of cells) {
+        n += budStacks(board[k]);
+        board[k] = { ...board[k], effects: board[k].effects.map((e) => (e.effect === '🌱' ? { effect: '🍂' as const } : e)) };
+    }
+    return { n, cells };
 };
 
 // ---- 火炎系の汎用スキル（火炎トークン・焼畑）の純粋ロジック ----

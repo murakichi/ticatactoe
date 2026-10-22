@@ -1912,7 +1912,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2113,6 +2113,88 @@ test('火遁: 空きマスにも🔥を置ける。空きマスの🔥は、そ�
     assert.strictEqual(e.placeMove(s, 7), true);
     assert.strictEqual(s.board[7].player, e.SYMBOLS[owner]);
     assert.strictEqual(s.board[7].effects.filter((x) => x.effect === '🔥').length, 1);
+});
+
+const LEAF = { effect: '🍂' };
+const leavesOn = (sq) => sq.effects.filter((x) => x.effect === '🍂').length;
+
+test('🍂落ち葉: 他の席の🍂の枚数ぶんスキルコストが上がる（自陣の🍂は数えない・氷結中は休眠・上限なし）', () => {
+    const s = game();
+    s.heartTurn = true; s.heartMagic = 30;
+    const base = e.calculateCost(s, 3, false, false, 'onClickAddLife');
+    s.board[0] = { player: '💙', bind: 3, effects: [LEAF, LEAF] }; // 自陣
+    assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base);
+    s.board[1] = { player: '⭕', bind: 3, effects: [LEAF, LEAF, LEAF] };
+    assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3);
+    s.board[2] = { player: '⭕', bind: 3, effects: [LEAF, FRZ] }; // 氷結中は休眠
+    assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3);
+    for (let i = 3; i < 8; i++) s.board[i] = { player: '⭕', bind: 3, effects: [LEAF, LEAF] };
+    assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3 + 10);
+});
+
+test('🍂落ち葉トークン4種: 自陣のコマに🍂を付けて置く（コスト3/5/6/4・トークンはターン1回）', () => {
+    const run = (key, pre) => {
+        const s = game(); s.heartTurn = true; s.heartMagic = 30;
+        e.SKILLS[key](s);
+        assert.strictEqual(s.usedTokenThisTurn, true);
+        return s;
+    };
+    let s = run('leafToken');
+    assert.strictEqual(s.heartMagic, 30 - 3);
+    assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1]);
+    s = run('twinLeafToken');
+    assert.strictEqual(s.heartMagic, 30 - 5);
+    assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [2]);
+    s = run('doubleLeafToken');
+    assert.strictEqual(s.heartMagic, 30 - 6);
+    assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1, 1]);
+    assert.strictEqual(s.board.filter((q) => q.player === '💙').length, 2);
+    s = run('bothLeafToken');
+    assert.strictEqual(s.heartMagic, 30 - 4);
+    const mine = s.board.filter((q) => q.player === '💙');
+    const theirs = s.board.filter((q) => q.player === '⭕');
+    assert.strictEqual(mine.length, 1);
+    assert.strictEqual(leavesOn(mine[0]), 1);
+    assert.strictEqual(theirs.length, 1);
+    assert.strictEqual(leavesOn(theirs[0]), 0); // 🍂が付くのは自分のコマだけ
+});
+
+test('焚き火の唄 / 腐葉土の目覚め / 一葉知秋: 効果とコスト', () => {
+    const s = game(); s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '⭕', bind: 3, effects: [LEAF, LEAF] };
+    s.board[1] = { player: '⭕', bind: 3, effects: [LEAF, { effect: '🔑' }] };
+    const bonfireCost = e.calculateCost(s, e.skillCosts.onClickBonfire, false, false, 'onClickBonfire');
+    assert.strictEqual(bonfireCost, 3 + 3); // 基礎3 + 敵陣の🍂3枚（払うコストは除去する前の盤面で決まる）
+    e.SKILLS.bonfire(s);
+    assert.strictEqual(s.heartMagic, 30 - bonfireCost);
+    assert.strictEqual(leavesOn(s.board[0]), 0);
+    assert.strictEqual(leavesOn(s.board[1]), 1); // ロック中は対象外
+    s.board[5] = { player: '💙', bind: 3, effects: [LEAF] };
+    const before = s.heartMagic;
+    const mulchCost = e.calculateCost(s, e.skillCosts.onClickMulch, false, false, 'onClickMulch');
+    e.SKILLS.mulch(s);
+    assert.strictEqual(s.heartMagic, before - mulchCost);
+    assert.strictEqual(leavesOn(s.board[5]), 0);
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '🌱').length, 1);
+    const b2 = s.heartMagic;
+    s.board[6] = { player: '⭕', bind: 3, effects: [BUD, BUD] };
+    const autumnCost = e.calculateCost(s, e.skillCosts.onClickAutumn, false, false, 'onClickAutumn');
+    e.SKILLS.autumn(s);
+    assert.strictEqual(s.heartMagic, b2 - autumnCost);
+    assert.strictEqual(leavesOn(s.board[6]), 2);
+    assert.strictEqual(leavesOn(s.board[5]), 1); // 自陣の🌱も🍂になる
+});
+
+test('🍂落ち葉: 🔥が付くと燃えて消える（sim/thermal ignite）', () => {
+    const th = require('./thermal');
+    const b = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    b[5] = { player: '💙', bind: 3, effects: [BUD, LEAF, { effect: '☠' }] };
+    th.ignite(b, [5], 4);
+    assert.deepStrictEqual(b[5].effects.map((x) => x.effect), ['☠', '🔥']);
+    const g = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    g[5] = { player: '💙', bind: 3, effects: [BUD, LEAF] };
+    th.ignite(g, [5], 4, 1, () => true);
+    assert.deepStrictEqual(g[5].effects.map((x) => x.effect), ['🌱', '🔥']);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

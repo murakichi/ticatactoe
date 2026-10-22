@@ -49,6 +49,16 @@ import {
     detonate,
     GLACIER_BASE_COST,
     FLAME_BURN_DAMAGE,
+    leafStacks,
+    activeLeaves,
+    leafSurcharge,
+    placeLeafToken,
+    bonfireTargets,
+    bonfire,
+    mulchCandidates,
+    mulch,
+    autumnTargets,
+    autumn,
 } from './thermal';
 import { lineCells } from './boardGeometry';
 import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
@@ -881,5 +891,80 @@ describe('バーンアウト', () => {
         c[1] = sq('⭕', 5, '🔥');
         c[4] = sq('🟩', 5, '🔥', '⚡');
         expect(simT.burnoutTargets(c, cs, ['💙', '⭕', '🟩'])).toEqual(burnoutTargets(c, cs));
+    });
+});
+
+describe('🍂落ち葉（🌱バッズの対）', () => {
+    const board = (): SquareInfo[] => Array.from({ length: 16 }, () => sq(undefined, 0));
+
+    it('他の席のコマに乗った効力のある🍂の枚数ぶん、そのプレイヤーのスキルコストが上がる（自陣の🍂は数えない・氷結中は休眠）', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂', '🍂');
+        b[1] = sq('⭕', 3, '🍂');
+        b[2] = sq('⭕', 3, '🍂', '❄'); // 氷結中は休眠して数えない
+        expect(leafStacks(b[0])).toBe(2);
+        expect(activeLeaves(b[2])).toBe(0);
+        expect(leafSurcharge(b, '⭕')).toBe(2); // 💙の🍂2枚
+        expect(leafSurcharge(b, '💙')).toBe(1); // ⭕の🍂1枚（氷結中の1枚は数えない）
+        expect(leafSurcharge(b, '🟩')).toBe(3); // 第三者には全員ぶん
+    });
+
+    it('🔥が付くと🌱と同じく🍂は燃えて消える（冬至の種子のガードは🌱だけ守る）', () => {
+        const b = board();
+        b[5] = sq('💙', 3, '🌱', '🍂', '☠');
+        ignite(b, [5], 4);
+        expect(b[5].effects.map((e) => e.effect)).toEqual(['☠', '🔥']);
+        const g = board();
+        g[5] = sq('💙', 3, '🌱', '🍂');
+        ignite(g, [5], 4, 1, () => true);
+        expect(g[5].effects.map((e) => e.effect)).toEqual(['🌱', '🔥']);
+    });
+
+    it('placeLeafToken は🍂を指定枚数持つコマを置く', () => {
+        const b = board();
+        placeLeafToken(b, 3, '💙', 4, 2);
+        expect(b[3]).toEqual({ player: '💙', bind: 4, effects: [{ effect: '🍂' }, { effect: '🍂' }] });
+    });
+
+    it('焚き火の唄: 敵陣の🍂だけを全て除去する。🔑ロックと❄氷結のマス・自陣は対象外', () => {
+        const b = board();
+        b[0] = sq('⭕', 3, '🍂', '🍂');
+        b[1] = sq('⭕', 3, '🍂', '🔑');
+        b[2] = sq('⭕', 3, '🍂', '❄');
+        b[3] = sq('💙', 3, '🍂');
+        b[4] = sq('⭕', 3, '☠');
+        expect(bonfireTargets(b, '💙')).toEqual([0]);
+        const r = bonfire(b, '💙');
+        expect(r).toEqual({ n: 2, cells: [0] });
+        expect(leafStacks(b[0])).toBe(0);
+        expect(leafStacks(b[1])).toBe(1);
+        expect(leafStacks(b[2])).toBe(1);
+        expect(leafStacks(b[3])).toBe(1);
+        expect(bonfireTargets(b, '💙')).toEqual([]);
+    });
+
+    it('腐葉土の目覚め: 自陣の🍂を1枚ずつ数えた候補から1枚だけを🌱に変える', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂', '☠', '🍂');
+        b[1] = sq('💙', 3, '🍂');
+        b[2] = sq('⭕', 3, '🍂');
+        expect(mulchCandidates(b, '💙')).toEqual([0, 0, 1]);
+        expect(mulch(b, 0)).toBe(true);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱', '☠', '🍂']);
+        expect(mulch(b, 3)).toBe(false);
+    });
+
+    it('一葉知秋: 盤面の🌱を敵味方問わず🍂に変える。🔥が付いたマスは変えない', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🌱', '🌱');
+        b[1] = sq('⭕', 3, '🌱', '⚡');
+        b[2] = sq('⭕', 3, '🌱', '🔥'); // 冬至の種子で🌱が残った火炎中のマス
+        b[3] = sq('⭕', 3, '☠');
+        expect(autumnTargets(b)).toEqual([0, 1]);
+        expect(autumn(b)).toEqual({ n: 3, cells: [0, 1] });
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🍂', '🍂']);
+        expect(b[1].effects.map((e) => e.effect)).toEqual(['🍂', '⚡']);
+        expect(budStacks(b[2])).toBe(1);
+        expect(autumn(b).n).toBe(0);
     });
 });

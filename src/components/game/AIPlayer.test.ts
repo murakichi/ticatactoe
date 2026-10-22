@@ -788,3 +788,41 @@ describe('AIPlayer 土壇場の防壁 (lastStandReady)', () => {
         expect([3, 7]).not.toContain(ai.getBestMove(setup(), 3));
     });
 });
+
+describe('🍂落ち葉スキルのAI使用', () => {
+    const costs = { onClickLeafToken: 3, onClickTwinLeafToken: 5, onClickDoubleLeafToken: 6, onClickBonfire: 3, onClickMulch: 2, onClickAutumn: 4 } as any;
+    const lone = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙');
+        put(b, 15, '⭕');
+        return b;
+    };
+
+    it('pickLeafToken: ダブル(空き4以上)→双子→1枚の順に、払える最初のものを選ぶ', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        expect(ai.pickLeafToken([62, 63, 64], 10, 10, costs)).toEqual({ skill: 'onClickDoubleLeafToken', cost: 6 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 5, costs)).toEqual({ skill: 'onClickTwinLeafToken', cost: 5 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 3, costs)).toEqual({ skill: 'onClickLeafToken', cost: 3 });
+        expect(ai.pickLeafToken([62, 63, 64], 10, 2, costs)).toBeNull();
+        expect(ai.pickLeafToken([0, 1], 10, 10, costs)).toBeNull();
+        expect(ai.pickLeafToken([64], 3, 10, costs)).toBeNull(); // 空きが足りない
+    });
+
+    it('トークンを撃てる手番では、🍂付きトークンを普通のトークンより先に撃つ（固有トークン持ち以外）', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const r = ai.makeMove(lone(), 10, { ...costs, onClickToken: 4 } as any, 0, 5, [62, 3, 0], false);
+        expect(r.skills).toContain('onClickLeafToken');
+        expect(r.skills).not.toContain('onClickToken');
+    });
+
+    it('焚き火の唄: 敵陣の🍂が2枚以上あるときだけ撃つ', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = lone();
+        b[15] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+        const r = ai.makeMove(b, 10, costs, 0, 5, [66, 0, 1], false);
+        expect(r.chargeClicks?.map((c) => c.skill)).toContain('onClickBonfire');
+        const one = lone();
+        one[15] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        expect(ai.makeMove(one, 10, costs, 0, 5, [66, 0, 1], false).chargeClicks?.map((c) => c.skill) ?? []).not.toContain('onClickBonfire');
+    });
+});
