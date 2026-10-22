@@ -64,6 +64,9 @@ const EMPTY_LOCK_DENY = 2;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
 /** 1手番に引き直せる回数の上限。陰陽師はコンボ札(71/73/53)を探すので多め（sim/ai.js の shuffleDig=8） */
+/** 雷霆の巫が陰陽師の一撃(百鬼夜行→式神一括)に備えて、自コマの無い線1本ごとに引く点（sim/ai.js AI_DEFAULTS.floodCover） */
+export const FLOOD_COVER_WEIGHT = 150;
+
 export const rerollBudget = (character: CharacterId): number => (character === 'yinYangMaster' ? 8 : MAX_REROLLS);
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
@@ -114,6 +117,8 @@ class AIPlayer {
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
+    /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
+    floodCoverWeight: number = FLOOD_COVER_WEIGHT;
 
     constructor(
         playerSymbol: Player,
@@ -721,6 +726,10 @@ class AIPlayer {
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
         let bestMove = allMoves[0];
+        // 雷霆の巫: 相手に陰陽師がいると、百鬼夜行→式神一括で空きマスが全部相手のコマになる。自分のコマが1つも無い線があると
+        // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（sim/ai.js F.floodCover と同じ。対陰陽師 11→28%）
+        const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
+        const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
 
         for (const i of allMoves) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life);
@@ -739,6 +748,12 @@ class AIPlayer {
 
             // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
             score += this.fireGain(board, i);
+
+            if (floodCover) {
+                let uncovered = 0;
+                for (const line of floodLines) if (!line.some((k) => simBoard[k].player === this.playerSymbol)) uncovered++;
+                score -= uncovered * floodCover;
+            }
 
             if (score > bestScore) {
                 bestScore = score;

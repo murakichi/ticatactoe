@@ -54,6 +54,7 @@ const AI_DEFAULTS = {
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
+    floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
@@ -938,6 +939,9 @@ function getEnhancedBestMove(s) {
         return bi;
     }
     // minimax + fork bonus
+    const yyPresent = otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster');
+    const floodCover = character === 'electrician' ? (F.floodCover || 0) : 0; // 雷霆の巫のみ
+    const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
     for (const i of allMoves) {
@@ -952,6 +956,7 @@ function getEnhancedBestMove(s) {
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
+        if (floodCover && yyPresent) { let unc = 0; for (const line of floodLines) if (!line.some((k) => sim[k].player === me)) unc++; score -= unc * floodCover; }
         if (score > bestScore) { bestScore = score; bestMove = i; }
     }
     return bestMove;
