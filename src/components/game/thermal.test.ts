@@ -768,8 +768,28 @@ describe('殉火（仮名）', () => {
         expect(r.targets).toEqual([1, 2, 3]);
         expect(b[0].bind).toBe(0);
         expect(flameStacks(b[0])).toBe(0);
-        [1, 2, 3].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        [1, 2].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        expect(b[1].bind).toBe(3); // 付与の瞬間に1ダメージ
+        expect(b[2].bind).toBe(1);
+        expect(b[3].player).toBeUndefined(); // ライフ0の敵コマは🔥で破壊される
         [4, 5, 6, 7].forEach((k) => expect(flameStacks(b[k])).toBe(0));
+    });
+
+    it('🔥でライフが0になったコマは破壊される: 継続ダメージ・付与時のダメージ・すでにライフ0。🔑・氷結中は除く', () => {
+        const none = [] as CharacterId[];
+        // 継続ダメージ(1スタック=2)でライフ2→0
+        expect(decayTick(sq('⭕', 3, '🔥'), none).player).toBeUndefined(); // 自然減衰で2、継続ダメージで0
+        // ライフに余裕があれば残る
+        const alive = decayTick(sq('⭕', 6, '🔥'), none);
+        expect(alive.player).toBe('⭕');
+        // 🔑ロック中は🔥のダメージも破壊も受けない
+        expect(decayTick(sq('⭕', 2, '🔥', '🔑'), none).player).toBe('⭕');
+        // 付与時: ライフ1のコマは1ダメージで0になり破壊。破壊したマスには続けて🔥を付けない（業火の2スタック目）
+        const b = emptyBoard();
+        b[0] = sq('⭕', 1);
+        ignite(b, [0], 4, 2);
+        expect(b[0].player).toBeUndefined();
+        expect(flameStacks(b[0])).toBe(0);
     });
 
     it('氷結中の敵は🔥の代わりに氷結が全解除される', () => {

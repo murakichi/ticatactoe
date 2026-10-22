@@ -132,7 +132,15 @@ export const ignite = (
             const guarded = keepBuds?.(board[k]) ?? false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && board[k].bind > 0 && !hasLock(board[k])) board[k] = { ...board[k], bind: board[k].bind - FLAME_INSTANT_DAMAGE };
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) {
+                    board[k] = { player: undefined, bind: 0, effects: [] };
+                    break;
+                }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -261,6 +269,8 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
+    // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next)) return { player: undefined, bind: 0, effects: [] };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;

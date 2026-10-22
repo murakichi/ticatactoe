@@ -1546,7 +1546,8 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     assert.strictEqual(s.heartTurn, true);
     const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
-    assert.strictEqual(fl(5), 2); assert.strictEqual(fl(6), 2);
+    assert.strictEqual(fl(5), 2); assert.strictEqual(s.board[5].bind, 1); // ライフ3: 付与のたびに1ダメージで 3→1
+    assert.strictEqual(s.board[6].player, undefined); assert.strictEqual(fl(6), 0); // ライフ0のコマは🔥で破壊され空きマスになる
     assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
     assert.strictEqual(fr(8), 0); assert.strictEqual(fl(8), 1); // 1つ目で氷結が全解除、2つ目が🔥
     assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
@@ -1793,7 +1794,7 @@ test('殉火: 自コマのライフをゼロにして、ライフがそれ以下
     assert.strictEqual(s.board[5].bind, 0);
     assert.strictEqual(flames(s.board[5]), 0);                                 // 自コマの🔥は消える
     assert.strictEqual(flames(s.board[0]), 1);
-    assert.strictEqual(flames(s.board[1]), 1);
+    assert.strictEqual(s.board[1].player, undefined); assert.strictEqual(flames(s.board[1]), 0); // ライフ0の敵コマは🔥で破壊される
     assert.strictEqual(flames(s.board[2]), 0);
     assert.strictEqual(flames(s.board[3]), 0);
     assert.strictEqual(flames(s.board[4]), 0);

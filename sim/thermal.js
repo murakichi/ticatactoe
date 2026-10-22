@@ -85,7 +85,12 @@ function ignite(board, cells, size, n = 1, keepBuds) {
             const guarded = !!(keepBuds && keepBuds(board[k]));
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && board[k].bind > 0 && !hasLock(board[k])) board[k] = { ...board[k], bind: board[k].bind - FLAME_INSTANT_DAMAGE };
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
