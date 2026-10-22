@@ -54,7 +54,6 @@ const AI_DEFAULTS = {
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
-    harvestLoop: 0, // 連鎖割引などで 風の落とし子(36)→刈り入れ前夜(33) の周回が魔力プラスになるとき、手札に2枚あれば1手番に最大N周する（issue #160 の検証用。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
@@ -1231,8 +1230,6 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
-    // 風の落とし子+刈り入れ前夜の周回(issue #160): 2枚を手札に固定して毎手番回せるようにする
-    if (F.harvestLoop && F.harvestLoop >= 1 && hasGear(s.gears[s.turn], 'chainDiscount')) { const pair = availableSkills.filter((i) => i === 36 || i === 33); if (pair.length) return pair; }
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.floodLock) return availableSkills.filter((i) => i === 71 || i === 73);
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
@@ -1617,17 +1614,6 @@ function faithfulMakeMoveInner(s) {
 
     // 雷霆の巫: 固有スキル(帯電拡散)・帯電付与は対象マスをクリックする2段階スキル。
     // 手番は進まないので、撃った後は通常の着手/他スキルの判断へ続ける
-    if (F.harvestLoop && availableSkills.includes(36) && availableSkills.includes(33)) {
-        for (let k = 0; k < F.harvestLoop; k++) {
-            const m0 = curMagic(s);
-            if (m0 < calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne')) break;
-            if (!thermal.sowCandidates(s.board, me).length) break;
-            SKILLS.windborne(s);
-            if (curMagic(s) < calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve')) break;
-            SKILLS.harvestEve(s);
-            if (curMagic(s) <= m0) break; // 周回で魔力が増えないなら止める
-        }
-    }
     if (curChar(s) === 'electrician' && opps.every((o) => countReaches(s.board, o) === 0)) {
         if (curMagic(s) >= chargeSpreadCost(s)) {
             const start = bestChargeSpreadTarget(s.board, me);
