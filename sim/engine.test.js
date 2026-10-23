@@ -448,16 +448,28 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
 });
 
-test('式神一括(コスト6): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま', () => {
+test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');
     s.board[1] = e.newShikigami('💙');
     s.board[2] = e.newShikigami('⭕');
-    s.magic[0] = 10;
+    s.magic[0] = 20;
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(s.magic[0], 4 + (e.calculateCost(s, 6, false, false, 'onClickShikigamiAll') - 6));
+    assert.strictEqual(s.magic[0], 20 - 3 * 2); // 自分の式神2体 × 3
     assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
     assert.strictEqual(e.isShikigami(s.board[2]), true);
+    e.SKILLS.shikigamiAll(s); // 式神がもういない
+    assert.strictEqual(s.magic[0], 14);
+});
+
+test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
+    const s = game('yinYangMaster', 'you');
+    for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
+    s.magic[0] = 80;
+    e.SKILLS.shikigamiFlood(s); // 16マス全て式神
+    const before = s.magic[0];
+    e.SKILLS.shikigamiAll(s);
+    assert.strictEqual(before - s.magic[0], 3 * 16);
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
@@ -1250,7 +1262,7 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コ�
     assert.strictEqual(th.GRAFT_MAX, 2);
 });
 
-test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
+test('風の落とし子: canBud の自陣コマに重複なしでランダムに2つ🌱を足す（コスト4）。候補が無ければ不可', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -1258,14 +1270,23 @@ test('風の落とし子: canBud の自陣コマに重複を許してランダ�
     s.board[3] = { player: '⭕', bind: 3, effects: [] };
     const before = s.heartMagic;
     e.SKILLS.windborne(s);
-    assert.strictEqual(s.heartMagic, before - 3);
-    assert.strictEqual(budsOn(s.board[1]), 3); // 候補が1つだけなので3回とも同じコマ
+    assert.strictEqual(s.heartMagic, before - 4);
+    assert.strictEqual(budsOn(s.board[1]), 1); // 候補が1つだけなので1つだけ（1マスに1つまで）
     assert.strictEqual(budsOn(s.board[2]) + budsOn(s.board[3]), 0);
     assert.strictEqual(s.heartTurn, true);
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     e.SKILLS.windborne(t);
     assert.strictEqual(t.heartMagic, 20);
+    // 候補が複数あれば、異なる2マスに1つずつ
+    for (let seed = 1; seed <= 20; seed++) {
+        const u = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        u.heartTurn = true; u.heartMagic = 20;
+        [1, 2, 3, 4].forEach((i) => { u.board[i] = { player: '💙', bind: 3, effects: [] }; });
+        e.SKILLS.windborne(u);
+        const counts = [1, 2, 3, 4].map((i) => budsOn(u.board[i]));
+        assert.deepStrictEqual(counts.slice().sort(), [0, 0, 1, 1]);
+    }
 });
 
 test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () => {
@@ -1279,7 +1300,7 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
     assert.strictEqual(e.skillCosts.onClickSolstice, 4);
     assert.strictEqual(e.skillCosts.onClickSucker, 4);
-    assert.strictEqual(e.skillCosts.onClickWindborne, 3);
+    assert.strictEqual(e.skillCosts.onClickWindborne, 4);
 });
 
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
@@ -1546,7 +1567,8 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     assert.strictEqual(s.heartTurn, true);
     const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
-    assert.strictEqual(fl(5), 2); assert.strictEqual(fl(6), 2);
+    assert.strictEqual(fl(5), 2); assert.strictEqual(s.board[5].bind, 1); // ライフ3: 付与のたびに1ダメージで 3→1
+    assert.strictEqual(s.board[6].player, undefined); assert.strictEqual(fl(6), 0); // ライフ0のコマは🔥で破壊され空きマスになる
     assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
     assert.strictEqual(fr(8), 0); assert.strictEqual(fl(8), 1); // 1つ目で氷結が全解除、2つ目が🔥
     assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
@@ -1793,7 +1815,7 @@ test('殉火: 自コマのライフをゼロにして、ライフがそれ以下
     assert.strictEqual(s.board[5].bind, 0);
     assert.strictEqual(flames(s.board[5]), 0);                                 // 自コマの🔥は消える
     assert.strictEqual(flames(s.board[0]), 1);
-    assert.strictEqual(flames(s.board[1]), 1);
+    assert.strictEqual(s.board[1].player, undefined); assert.strictEqual(flames(s.board[1]), 0); // ライフ0の敵コマは🔥で破壊される
     assert.strictEqual(flames(s.board[2]), 0);
     assert.strictEqual(flames(s.board[3]), 0);
     assert.strictEqual(flames(s.board[4]), 0);

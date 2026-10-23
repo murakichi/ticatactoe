@@ -12,10 +12,10 @@ describe('盤面からキャラ選択に戻る', () => {
         const confirm = jest.spyOn(window, 'confirm');
         render(<App />);
         start();
-        expect(screen.queryByText('戦術三目並べ')).not.toBeInTheDocument();
+        expect(screen.queryByText('戦術四目並べ')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'キャラ選択に戻る' }));
         expect(confirm).not.toHaveBeenCalled();
-        expect(screen.getByText('戦術三目並べ')).toBeInTheDocument();
+        expect(screen.getByText('戦術四目並べ')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /対戦スタート/ })).toBeInTheDocument();
     });
 
@@ -26,7 +26,7 @@ describe('盤面からキャラ選択に戻る', () => {
         fireEvent.click(container.querySelectorAll('button.square')[0]); // 1手進める
         fireEvent.click(screen.getByRole('button', { name: 'キャラ選択に戻る' }));
         expect(confirm).toHaveBeenCalledTimes(1);
-        expect(screen.queryByText('戦術三目並べ')).not.toBeInTheDocument();
+        expect(screen.queryByText('戦術四目並べ')).not.toBeInTheDocument();
     });
 
     it('対戦の途中でも、確認で OK すれば戻れる', () => {
@@ -35,7 +35,7 @@ describe('盤面からキャラ選択に戻る', () => {
         start();
         fireEvent.click(container.querySelectorAll('button.square')[0]);
         fireEvent.click(screen.getByRole('button', { name: 'キャラ選択に戻る' }));
-        expect(screen.getByText('戦術三目並べ')).toBeInTheDocument();
+        expect(screen.getByText('戦術四目並べ')).toBeInTheDocument();
     });
 
     it('戻っても、選んだキャラクターの設定は残っている。もう一度始めると新しい対戦になる', () => {

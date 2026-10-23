@@ -37,6 +37,7 @@ import {
     GRAFT_MAX,
     sowCandidates,
     sow,
+    SOW_COUNT,
     cleanse,
     ailmentStacks,
     AILMENTS,
@@ -570,7 +571,7 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(graft(b, 5, '💙', 4, [0, 15])).toEqual([]); // 受け手でないマスは無視
     });
 
-    it('風の落とし子: 候補は自陣の🌱を持てるコマ。同じコマへの重複付与も可', () => {
+    it('風の落とし子: 候補は自陣の🌱を持てるコマ。picks の各マスに🌱を1つずつ足す', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '❄');
@@ -578,9 +579,10 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         b[3] = sq('⭕', 3);
         b[4] = sq('💙', 3, '🌱');
         expect(sowCandidates(b, '💙')).toEqual([0, 4]);
-        sow(b, [0, 0, 4]);
-        expect(budStacks(b[0])).toBe(2);
+        sow(b, [0, 4]);
+        expect(budStacks(b[0])).toBe(1);
         expect(budStacks(b[4])).toBe(2);
+        expect(SOW_COUNT).toBe(2);
     });
 
     it('sim/thermal.js と一致', () => {
@@ -616,8 +618,9 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(a).toEqual(c);
         const d = mk();
         const e = mk();
-        sim.sow(d, [0, 0, 5]);
-        sow(e, [0, 0, 5]);
+        sim.sow(d, [0, 5]);
+        sow(e, [0, 5]);
+        expect(sim.SOW_COUNT).toBe(SOW_COUNT);
         expect(d).toEqual(e);
         for (const [fs, ft] of [[sim.freeze, freeze], [sim.ignite, ignite]] as const) {
             expect(fs).toBeDefined();
@@ -695,10 +698,31 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
         b[9] = sq('⭕', 3, '❄'); // 斜め
         const thawed = placeFlameToken(b, 6, '💙', 4, 4);
         expect(b[6].player).toBe('💙');
-        expect(b[6].bind).toBe(4);
+        expect(b[6].bind).toBe(3); // 🔥を付与した瞬間に1ダメージ（4→3）
         expect(flameStacks(b[6])).toBe(1);
         expect(thawed).toEqual([5]);
         expect(isFrozen(b[9])).toBe(true);
+    });
+
+    it('🔥を付与した瞬間に1ダメージ: スタックごとに1。🔑・氷結・ライフ0・空きマスには入らず、🔥は消えない', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 5);
+        b[1] = sq('⭕', 5, '🔑');
+        b[2] = sq('⭕', 0);
+        ignite(b, [0, 1, 2, 4], 4, 2); // 2スタック
+        expect(b[0].bind).toBe(3); // 5-2。🔥は2つ残る
+        expect(flameStacks(b[0])).toBe(2);
+        expect(b[1].bind).toBe(5); // 🔑ロック中は入らない
+        expect(b[2].bind).toBe(0); // ライフ0はそのまま
+        expect(b[4].player).toBeUndefined(); // 空きマスは🔥だけ
+        expect(flameStacks(b[4])).toBe(2);
+        // 氷結中のマスは、1回目の付与で❄が解けるだけ（🔥もダメージも入らない）。2回目で🔥1つとダメージ1
+        const f = emptyBoard();
+        f[15] = sq('⭕', 5, '❄');
+        ignite(f, [15], 4, 1);
+        expect(flameStacks(f[15])).toBe(0);
+        expect(isFrozen(f[15])).toBe(false);
+        expect(f[15].bind).toBe(5);
     });
 
     it('sim/thermal.js と一致', () => {
@@ -747,8 +771,28 @@ describe('殉火（仮名）', () => {
         expect(r.targets).toEqual([1, 2, 3]);
         expect(b[0].bind).toBe(0);
         expect(flameStacks(b[0])).toBe(0);
-        [1, 2, 3].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        [1, 2].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        expect(b[1].bind).toBe(3); // 付与の瞬間に1ダメージ
+        expect(b[2].bind).toBe(1);
+        expect(b[3].player).toBeUndefined(); // ライフ0の敵コマは🔥で破壊される
         [4, 5, 6, 7].forEach((k) => expect(flameStacks(b[k])).toBe(0));
+    });
+
+    it('🔥でライフが0になったコマは破壊される: 継続ダメージ・付与時のダメージ・すでにライフ0。🔑・氷結中は除く', () => {
+        const none = [] as CharacterId[];
+        // 継続ダメージ(1スタック=2)でライフ2→0
+        expect(decayTick(sq('⭕', 3, '🔥'), none).player).toBeUndefined(); // 自然減衰で2、継続ダメージで0
+        // ライフに余裕があれば残る
+        const alive = decayTick(sq('⭕', 6, '🔥'), none);
+        expect(alive.player).toBe('⭕');
+        // 🔑ロック中は🔥のダメージも破壊も受けない
+        expect(decayTick(sq('⭕', 2, '🔥', '🔑'), none).player).toBe('⭕');
+        // 付与時: ライフ1のコマは1ダメージで0になり破壊。破壊したマスには続けて🔥を付けない（業火の2スタック目）
+        const b = emptyBoard();
+        b[0] = sq('⭕', 1);
+        ignite(b, [0], 4, 2);
+        expect(b[0].player).toBeUndefined();
+        expect(flameStacks(b[0])).toBe(0);
     });
 
     it('氷結中の敵は🔥の代わりに氷結が全解除される', () => {

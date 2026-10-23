@@ -50,7 +50,7 @@ module.exports = {
         "harvestEveCost": 2,
         "solsticeCost": 4,
         "suckerCost": 4,
-        "windborneCost": 3,
+        "windborneCost": 4,
         "flameTokenCost": 3,
         "flameDoubleTokenCost": 6,
         "swiddenCost": 3,
