@@ -3262,7 +3262,7 @@ export const Game = (props: GameProps) => {
                         )}
                     </div>
                     <div className={styles.controls}>
-                        <button className={styles.btn} onClick={onClickRestart}>
+                        <button className={`${styles.btn}${winner ? ` ${styles.btnPrimary}` : ''}`} onClick={onClickRestart}>
                             リスタート
                         </button>
                         <button
