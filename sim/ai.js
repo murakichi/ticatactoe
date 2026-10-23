@@ -1590,6 +1590,24 @@ function faithfulMakeMoveInner(s) {
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
         }
     }
+    // 魔法使い(F.magFreeze): 魔力に余裕(F.magFreeze 以上)があるとき、毒で倒れそうな自陣コマを氷結カード(30)で先に凍らせる。氷結中の毒は継続ダメージを与えない（ユーザー案）
+    if (F.magFreeze && curChar(s) === 'magician' && !s.silenced[s.turn] && threats.length === 0) {
+        const poisoned = () => s.board.findIndex((sq, i) => {
+            if (sq.player !== me || shield.has(i) || thermal.isFrozen(sq) || !thermal.canFreeze(sq)) return false;
+            const p = sq.effects.filter((e) => e.effect === '☠').length;
+            return p > 0 && p >= sq.bind - 2;
+        });
+        if (poisoned() !== -1) {
+            for (let i = 0; i < (F.magFreezeShuffle || 4) && !s.skills.includes(30) && curMagic(s) >= F.magFreeze + costsOf(s).onClickShuffle; i++) E.shuffleHand(s);
+            for (let k = 0; k < 3 && s.skills.includes(30); k++) {
+                const fz = calculateCost(s, costsOf(s).onClickFreeze, false, false, 'onClickFreeze');
+                const cell = poisoned();
+                if (cell === -1 || curMagic(s) < Math.max(F.magFreeze, fz)) break;
+                SKILLS.freeze(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; break; }
+            }
+        }
+    }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
     // 氷結中のコマは❄1つが身代わりになって壊れない。魔法使いAIは範囲内の氷結中コマを数えず、net<2 になれば撃たない（bestJudgeTarget）
     if (F.antiJudge && curChar(s) === 'cryomancer' && !s.silenced[s.turn]) {
