@@ -57,7 +57,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 33, name: '刈り入れ前夜', icon: '🌾', category: 'buds', costKey: 'onClickHarvestEve', desc: '自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます' },
     { idx: 34, name: '冬至の種子', icon: '🌰', category: 'buds', costKey: 'onClickSolstice', desc: '次の自分の手番まで、自陣の🌱が氷結・火炎中のマスでも働きます' },
     { idx: 35, name: 'ひこばえ', icon: '🌿', category: 'buds', costKey: 'onClickSucker', desc: '🌱を持つ自陣のコマの縦横隣の自陣コマに🌱を付けます（隣が3つ以上ならランダムに2つ）' },
-    { idx: 36, name: '風の落とし子', icon: '🍃', category: 'buds', costKey: 'onClickWindborne', desc: '自陣のコマにランダムで🌱を3つ配ります' },
+    { idx: 36, name: '風の落とし子', icon: '🍃', category: 'buds', costKey: 'onClickWindborne', desc: '自陣のコマにランダムで🌱を2つ配ります（1マスに1つまで）' },
     { idx: 37, name: '火炎トークン', icon: '🪙', category: 'fire', costKey: 'onClickFlameToken', desc: '🔥付きの自陣コマをランダムに設置します（ターン1回）' },
     { idx: 38, name: '火炎ダブルトークン', icon: '🪙', category: 'fire', costKey: 'onClickDoubleFlameToken', desc: '🔥付きの自陣コマをランダムに2つ設置します（ターン1回）' },
     { idx: 39, name: '焼畑', icon: '🌾', category: 'fire', costKey: 'onClickSwidden', desc: '🌱のあるマスを選び、🌱を全て同じ数の🔥に変えます' },

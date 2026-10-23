@@ -1063,8 +1063,8 @@ function chooseSkills(s, availableSkills) {
     // 冬至の種子: 自陣の休眠マス（氷結中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
     const dormantBuds = board.reduce((n, sq) => (sq.player === me && thermal.isDormant(sq) ? n + thermal.budStacks(sq) : n), 0);
     if (availableSkills.includes(34) && dormantBuds >= 2 && !s.budGuard[s.turn]) spend(calculateCost(s, costsOf(s).onClickSolstice, false, false, 'onClickSolstice'), 'solstice');
-    // 風の落とし子: 自陣のコマ(🌱を持てる)が3個以上あり🌱が3個未満なら撒く
-    if (availableSkills.includes(36) && myBuds < 3 && thermal.sowCandidates(board, me).length >= 3) spend(calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'windborne');
+    // 風の落とし子: 自陣のコマ(🌱を持てる)が SOW_COUNT 個以上あり🌱が SOW_COUNT 個未満なら撒く
+    if (availableSkills.includes(36) && myBuds < thermal.SOW_COUNT && thermal.sowCandidates(board, me).length >= thermal.SOW_COUNT) spend(calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'windborne');
 
     // 浄化: 自陣のライフが残るコマの状態異常が合計3スタック以上で撃つ（雷霆の巫の自陣⚡無敵コマの⚡は数えない。雷霆の巫AIは⚡を剥がすので撃たない）
     if (character !== 'electrician' && availableSkills.includes(32) && hasAilment(board, me)) {

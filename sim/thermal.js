@@ -143,7 +143,9 @@ function graft(board, cell, player, size, picked) {
 /** player のコマで canBud なマス（昇順） */
 const sowCandidates = (board, player) =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
-/** picks の各添字（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで */
+const SOW_COUNT = 2;
+/** picks の各マスに🌱を1つずつ足す。board を直接書き換える */
 function sow(board, picks) {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 }
@@ -343,7 +345,7 @@ module.exports = {
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
     KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };
