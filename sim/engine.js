@@ -79,7 +79,6 @@ const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxSta
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
 const SHIKIGAMI_LIFE = 2;
-const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(ランダムな空きマス)
 const SHIKIGAMI_BLAST_DAMAGE = 4; // 式神のライフ
 const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; // SIM_POOL_SIZE: A/B検証用の上書き
 
@@ -143,9 +142,9 @@ const skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
-    onClickShikigamiAll: 4, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
+    onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
-    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): ランダムな空きマス3つにライフ0の式神を置く
+    onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -196,7 +195,7 @@ const skillCosts = {
     onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
     onClickSucker: (config.thermal && config.thermal.suckerCost) || 4,
-    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
+    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 4,
     // 火炎系の汎用スキル idx 37〜40（対氷結の手段）
     onClickFlameToken: (config.thermal && config.thermal.flameTokenCost) || 3,
     onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
@@ -1373,12 +1372,13 @@ function onClickShikigamiAll(s) {
     spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
-// 汎用(百鬼夜行・コスト7): ランダムな空きマス3つにライフ0の式神を置く
+// 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
 function onClickShikigamiFlood(s) {
     const cur = curPlayer(s);
-    const pool = [];
-    for (let k = 0; k < s.board.length; k++) if (!s.board[k].player && !thermal.emptyBlocked(s.board[k])) pool.push(k);
-    for (let n = 0; n < SHIKIGAMI_FLOOD_COUNT && pool.length; n++) s.board[pool.splice(Math.floor(s.rng() * pool.length), 1)[0]] = newShikigami(cur, 0);
+    for (let k = 0; k < s.board.length; k++) {
+        const sq = s.board[k];
+        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
+    }
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);
 }
@@ -1850,11 +1850,11 @@ function onClickSucker(s) {
     bumpMagicCount(s);
     bumpStat(s, 'sucker');
 }
-// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複を許してランダムに3回選び、🌱を1つずつ足す
+// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複なしでランダムに SOW_COUNT 個選び、🌱を1つずつ足す
 function onClickWindborne(s) {
     const cands = thermal.sowCandidates(s.board, curPlayer(s));
     if (!cands.length) return;
-    const picks = [0, 1, 2].map(() => randomPick(cands, s.rng));
+    const picks = randomAnyPick(cands, Math.min(thermal.SOW_COUNT, cands.length), s.rng);
     thermal.sow(s.board, picks);
     spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'onClickWindborne');
     bumpMagicCount(s);
@@ -2301,7 +2301,7 @@ function renderBoard(s) {
 module.exports = {
     bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
-    makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_FLOOD_COUNT, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
+    makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,

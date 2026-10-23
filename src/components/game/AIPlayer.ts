@@ -5,7 +5,8 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked } from './thermal';
+import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -27,7 +28,6 @@ const SHIKIGAMI_LIFE = 2;
 const SHIKIGAMI_BLAST_DAMAGE = 4;
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
 const YY_COVER_WEIGHT = 150;
-const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(Game.tsx と同じ)
 const SH_MAX = 3; // 同時に持つ式神の数
 const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
@@ -117,6 +117,9 @@ class AIPlayer {
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
+    /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
+    placements: number = 0;
+    seatCount: number = 2;
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
@@ -580,7 +583,20 @@ class AIPlayer {
         return threats;
     }
 
-    /** 盤面上にコマを置いたシミュレーション (bind=0の乗っ取り対応) */
+    /**
+     * 着手ごとのライフ減衰を先読み用に適用した盤面（sim/ai.js decayBoard と同じ）。着手マス skip の毒消滅だけは除く。
+     * ライフ1の自コマは自分の着手の直後に0になり、相手に奪われる
+     */
+    decayBoard(board: SquareInfo[], skip: number): SquareInfo[] {
+        return board.map((sq, k) => {
+            const hadPoison = !isDormant(sq) && sq.effects.some((e) => e.effect === '☠');
+            const next = decayTick(sq, this.characters);
+            const effects = next.bind === 0 ? next.effects.filter((e) => e.effect !== '🔑') : next.effects;
+            if (hadPoison && next.bind === 0 && next.player && k !== skip) return { player: undefined, bind: 0, effects: [] };
+            return { ...next, effects };
+        });
+    }
+
     /**
      * 巨人のオーラを着手後の盤面に反映する（Game.tsx / giantAura.ts と同じ規則。sim/ai.js の auraSim=1 と同一）。
      * 着手マスの周囲の敵コマを壊し、周囲を全部ロックする。A/B: 環境勝率 53.1→60.2%（seed2/200）
@@ -601,8 +617,10 @@ class AIPlayer {
         return sim;
     }
 
-    simulatePlace(board: SquareInfo[], index: number, player: Player, life: number): SquareInfo[] {
-        const newBoard = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
+    /** 盤面上にコマを置いたシミュレーション (bind=0の乗っ取り対応)。ply を渡すと、その着手で減衰が進む場合は先に減衰させる（0=今回の着手） */
+    simulatePlace(board: SquareInfo[], index: number, player: Player, life: number, ply?: number): SquareInfo[] {
+        const decayed = ply !== undefined && shouldDecay(this.placements + ply, this.seatCount) ? this.decayBoard(board, index) : board;
+        const newBoard = decayed.map(sq => ({ ...sq, effects: [...sq.effects] }));
         const sq = newBoard[index];
 
         if (isShikigami(sq) && sq.player !== player && sq.bind <= 0) {
@@ -660,6 +678,25 @@ class AIPlayer {
         return moves;
     }
 
+    /**
+     * 自コマを重ね置きで補強する候補。補強しないと、着手後の減衰で自コマのライフが0になり、
+     * 相手がそこを取って4つ揃える(負ける)コマだけを返す (sim/ai.js reinforceMoves と同じ)
+     */
+    reinforceMoves(board: SquareInfo[], life: number): number[] {
+        const decayed = shouldDecay(this.placements, this.seatCount) ? this.decayBoard(board, -1) : board;
+        const moves: number[] = [];
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0) continue;
+            if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) continue;
+            if (overwriteBlocked(sq)) continue;
+            const lost = this.opponents.some((o) =>
+                calculateWinner(lineSymbols(this.simulatePlace(decayed, i, o, life))) === o);
+            if (lost) moves.push(i);
+        }
+        return moves;
+    }
+
     /** 指定プレイヤーが着手可能なマスを列挙 */
     getMovesFor(board: SquareInfo[], player: Player, life: number): number[] {
         const moves: number[] = [];
@@ -677,7 +714,7 @@ class AIPlayer {
     }
 
     /** Minimax + Alpha-Beta 枝刈り (深さ2) */
-    minimax(board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number): number {
+    minimax(board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number, ply: number = 1): number {
         const winner = calculateWinner(lineSymbols(board));
         if (winner === this.playerSymbol) return 1000 + depth;
         if (winner) return -1000 - depth;
@@ -692,8 +729,8 @@ class AIPlayer {
             let best = -Infinity;
             for (const idx of moves) {
                 const score = this.minimax(
-                    this.simulatePlace(board, idx, this.playerSymbol, life),
-                    depth - 1, false, alpha, beta, life
+                    this.simulatePlace(board, idx, this.playerSymbol, life, ply),
+                    depth - 1, false, alpha, beta, life, ply + 1
                 );
                 best = Math.max(best, score);
                 alpha = Math.max(alpha, score);
@@ -704,8 +741,8 @@ class AIPlayer {
             let best = Infinity;
             for (const idx of moves) {
                 const score = this.minimax(
-                    this.simulatePlace(board, idx, opponent, life),
-                    depth - 1, true, alpha, beta, life
+                    this.simulatePlace(board, idx, opponent, life, ply),
+                    depth - 1, true, alpha, beta, life, ply + 1
                 );
                 best = Math.min(best, score);
                 beta = Math.min(beta, score);
@@ -719,7 +756,7 @@ class AIPlayer {
     getBestMove(board: SquareInfo[], life: number): number | null {
         const empty = findEmptyIndexes(board);
         const validMoves = this.getValidMoves(board, life);
-        const allMoves = Array.from(new Set([...empty, ...validMoves]));
+        const allMoves = Array.from(new Set([...empty, ...validMoves, ...this.reinforceMoves(board, life)]));
 
         if (allMoves.length === 0) return null;
 
@@ -749,7 +786,7 @@ class AIPlayer {
         const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
 
         for (const i of allMoves) {
-            const simBoard = this.simulatePlace(board, i, this.playerSymbol, life);
+            const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
             if (this.character === 'giant' && simBoard[i].player === this.playerSymbol) this.applyAuraSim(simBoard, i);
             let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
 
@@ -1376,7 +1413,7 @@ class AIPlayer {
         };
         const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
         // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
-        const nAfterFlood = board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length + Math.min(SHIKIGAMI_FLOOD_COUNT, board.filter((sq) => !sq.player && !emptyBlocked(sq)).length);
+        const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
         const a = best(this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
         return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
     }
@@ -1384,8 +1421,6 @@ class AIPlayer {
     /** 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か (sim/ai.js floodComboWins) */
     floodComboWins(board: SquareInfo[]): boolean {
         const me = this.playerSymbol;
-        // 百鬼夜行は3マスだけ(ランダム)。空きが3以下で全部埋まるときだけ結果が確定する
-        if (board.filter((sq) => !sq.player && !emptyBlocked(sq)).length > SHIKIGAMI_FLOOD_COUNT) return false;
         const nb = board.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
             : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))) as SquareInfo[];
         return calculateWinner(lineSymbols(nb)) === me;
@@ -1453,7 +1488,7 @@ class AIPlayer {
                 if (m >= combo.total) {
                     const nb: SquareInfo[] = b.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
                         : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
-                    if (this.floodComboWins(b)) {
+                    if (calculateWinner(lineSymbols(nb)) === me) {
                         // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ
                         for (let k = 0; k < combo.floodCasts; k++) clicks.push({ skill: 'onClickMarkdown' });
                         clicks.push({ skill: 'onClickShikigamiFlood' });
@@ -1915,11 +1950,11 @@ class AIPlayer {
             }
             if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne')) {
                 const cands = sowCandidates(board, this.playerSymbol);
-                if (cands.length >= 3 && ownBuds() < 3) {
+                if (cands.length >= SOW_COUNT && ownBuds() < SOW_COUNT) {
                     chargeClicks.push({ skill: 'onClickWindborne' });
-                    // 実際の配置はランダム。AIの内部盤面は代表として先頭3マスに足して見積もる
+                    // 実際の配置はランダム。AIの内部盤面は代表として先頭のマスに足して見積もる
                     board = board.slice();
-                    sow(board, cands.slice(0, 3));
+                    sow(board, cands.slice(0, SOW_COUNT));
                     magic -= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne');
                 }
             }
@@ -1953,7 +1988,7 @@ class AIPlayer {
                     for (const f of fillers.filter((x) => chosen.includes(x))) {
                         chargeClicks.push({ skill: f.skill });
                         board = board.slice();
-                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, 3));
+                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, SOW_COUNT));
                         else if (f.idx === 32) cleanse(board, this.playerSymbol);
                         else if (f.idx === 33) magic += harvestBuds(board, this.playerSymbol, this.budGuard);
                         magic -= f.cost;

@@ -1,0 +1,166 @@
+.overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    z-index: 6;
+}
+
+.flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    animation: flash 420ms ease-out;
+}
+
+@keyframes flash {
+    0% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+/* 金のリングが盤面の中心から3重に広がる */
+.ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    border-radius: 50%;
+    border: 6px solid var(--color-accent);
+    opacity: 0;
+    animation: ring 900ms var(--ease) forwards;
+}
+
+/* 縁の太さを保ったまま広がるよう、拡大(scale)ではなく大きさそのものを変える */
+@keyframes ring {
+    0% {
+        width: 40px;
+        height: 40px;
+        margin: -20px 0 0 -20px;
+        opacity: 0.95;
+    }
+    100% {
+        width: 900px;
+        height: 900px;
+        margin: -450px 0 0 -450px;
+        opacity: 0;
+    }
+}
+
+/* 紙吹雪: 上から、揺れながら回って落ちる */
+.confetti {
+    position: absolute;
+    top: -4%;
+    opacity: 0;
+    animation-name: fall;
+    animation-timing-function: cubic-bezier(0.3, 0.2, 0.5, 1);
+    animation-fill-mode: forwards;
+}
+
+.c0 {
+    background: var(--seat);
+}
+
+.c1 {
+    background: var(--color-accent);
+}
+
+.c2 {
+    background: #fff;
+}
+
+.c3 {
+    background: color-mix(in srgb, var(--seat) 55%, #fff);
+}
+
+@keyframes fall {
+    0% {
+        opacity: 1;
+        top: -4%;
+        transform: translateX(0) rotate(0deg);
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        top: 104%;
+        transform: translateX(var(--drift)) rotate(var(--spin));
+    }
+}
+
+/* 「勝利！」: 大きく弾んで出て、2.4秒ほどで消えて盤面(光る勝ち列)を見せる */
+.banner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 28px;
+    border-radius: var(--radius);
+    background: var(--color-bg);
+    border: 3px solid var(--color-accent);
+    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    transform: translate(-50%, -50%) scale(0);
+    animation: bannerPop 2600ms var(--ease) 120ms forwards;
+}
+
+.bannerMark {
+    font-size: 40px;
+}
+
+@keyframes bannerPop {
+    0% {
+        transform: translate(-50%, -50%) scale(0) rotate(-6deg);
+    }
+    14% {
+        transform: translate(-50%, -50%) scale(1.25) rotate(2deg);
+    }
+    22% {
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    }
+    80% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.05);
+        opacity: 0;
+    }
+}
+
+@media (max-width: 720px) {
+    .banner {
+        font-size: 32px;
+        padding: 8px 18px;
+    }
+    .bannerMark {
+        font-size: 30px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flash,
+    .ring,
+    .confetti {
+        display: none;
+    }
+    .banner {
+        animation: none;
+        transform: translate(-50%, -50%);
+        opacity: 1;
+    }
+}

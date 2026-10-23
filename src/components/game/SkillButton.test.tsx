@@ -77,9 +77,61 @@ describe('ゲーム画面のスキル欄', () => {
         expect(/\.wrap \{([^}]*)\}/.exec(wrap)?.[1]).toMatch(/flex:\s*0 0 auto/);
     });
 
-    it('狭い画面では折り返して全カードを見せる（横スクロールだと右側の手札が画面外に隠れる）', () => {
+    it('狭い画面でも折り返さない(縦に積むと、横に続くことも手札の数も分からなくなる)', () => {
         const css = fs.readFileSync(path.join(__dirname, 'Game.module.css'), 'utf8');
-        const media = /@media \(max-width: 720px\) \{\s*\.skillGrid \{([^}]*)\}/.exec(css)?.[1] ?? '';
-        expect(media).toMatch(/flex-wrap:\s*wrap/);
+        // 画面幅で .skillGrid を wrap に戻す指定が無いこと
+        const wrapped = Array.from(css.matchAll(/\.skillGrid\s*\{([^}]*)\}/g)).filter((m) => /flex-wrap:\s*wrap\b/.test(m[1]));
+        expect(wrapped).toHaveLength(0);
+    });
+
+    it('「詳細」で、モバイルの1画面表示と全部入りの表示が切り替わる', () => {
+        const { container } = renderGame();
+        const root = container.firstChild as HTMLElement;
+        expect(root.className).not.toMatch(/detail/);
+        fireEvent.click(screen.getByRole('button', { name: '詳細 ▾' }));
+        expect(root.className).toMatch(/detail/);
+        fireEvent.click(screen.getByRole('button', { name: '詳細を閉じる ▴' }));
+        expect(root.className).not.toMatch(/detail/);
+    });
+
+    describe('横に続くことを示す「‹ ›」', () => {
+        const metrics = (scrollWidth: number, clientWidth: number) => {
+            Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => scrollWidth });
+            Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => clientWidth });
+        };
+        afterEach(() => {
+            // jsdom の既定(0)に戻す
+            delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollWidth;
+            delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+        });
+
+        it('はみ出していて、先頭にいるときは右だけ出る。押すと右へスクロールする', () => {
+            metrics(1000, 300);
+            renderGame();
+            expect(screen.queryByRole('button', { name: '左のスキルを見る' })).toBeNull();
+            const right = screen.getByRole('button', { name: '右のスキルを見る' });
+            const grid = right.parentElement!.querySelector('[class*="skillGrid"]') as HTMLElement;
+            const scrollBy = jest.fn();
+            grid.scrollBy = scrollBy;
+            fireEvent.click(right);
+            expect(scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: expect.any(Number) }));
+            expect(scrollBy.mock.calls[0][0].left).toBeGreaterThan(0);
+        });
+
+        it('途中までスクロールしたら左も出る', () => {
+            metrics(1000, 300);
+            renderGame();
+            const grid = screen.getByRole('button', { name: '右のスキルを見る' }).parentElement!.querySelector('[class*="skillGrid"]') as HTMLElement;
+            grid.scrollLeft = 200;
+            fireEvent.scroll(grid);
+            expect(screen.getByRole('button', { name: '左のスキルを見る' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: '右のスキルを見る' })).toBeInTheDocument();
+        });
+
+        it('全部収まっているときは出ない', () => {
+            metrics(300, 300);
+            renderGame();
+            expect(screen.queryByRole('button', { name: /のスキルを見る/ })).toBeNull();
+        });
     });
 });

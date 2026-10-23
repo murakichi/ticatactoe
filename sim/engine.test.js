@@ -448,31 +448,31 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
 });
 
-test('式神一括(1体あたりコスト4): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
+test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');
     s.board[1] = e.newShikigami('💙');
     s.board[2] = e.newShikigami('⭕');
     s.magic[0] = 20;
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(s.magic[0], 20 - 4 * 2); // 自分の式神2体 × 4
+    assert.strictEqual(s.magic[0], 20 - 3 * 2); // 自分の式神2体 × 3
     assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
     assert.strictEqual(e.isShikigami(s.board[2]), true);
     e.SKILLS.shikigamiAll(s); // 式神がもういない
-    assert.strictEqual(s.magic[0], 12);
+    assert.strictEqual(s.magic[0], 14);
 });
 
 test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
     s.magic[0] = 80;
-    for (let i = 0; i < 16; i++) s.board[i] = e.newShikigami('💙', 2); // 16マス全て式神
+    e.SKILLS.shikigamiFlood(s); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(before - s.magic[0], 4 * 16);
+    assert.strictEqual(before - s.magic[0], 3 * 16);
 });
 
-test('百鬼夜行(コスト7): ランダムな空きマス3つにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
+test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = { player: '⭕', bind: 3, effects: [] };
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -484,15 +484,14 @@ test('百鬼夜行(コスト7): ランダムな空きマス3つにライフ0の�
     assert.deepStrictEqual(s.board[0], { player: '⭕', bind: 3, effects: [] });
     assert.deepStrictEqual(s.board[2], { player: undefined, bind: 0, effects: [frz] });
     const placed = s.board.filter((sq) => e.isShikigami(sq));
-    assert.strictEqual(placed.length, 3);
+    assert.strictEqual(placed.length, 13);
     assert.ok(placed.every((sq) => sq.player === '💙' && sq.bind === 0));
 });
 
-test('百鬼夜行→式神一括: 空きが3マスなら全て自コマになり、敵の入っていない列が完成して勝つ', () => {
+test('百鬼夜行→式神一括: 空きマスが全て自コマになり、敵の入っていない列が完成して勝つ', () => {
     const s = game('yinYangMaster', 'you');
-    for (let i = 0; i < 16; i++) s.board[i] = { player: (2 * Math.floor(i / 4) + (i % 4)) % 4 < 2 ? '⭕' : '🟩', bind: 3, effects: [] };
-    for (const i of [4, 5, 6]) s.board[i] = { player: undefined, bind: 0, effects: [] };
-    s.board[7] = { player: '💙', bind: 3, effects: [] };
+    for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };
     s.magic[0] = 20;
     e.SKILLS.shikigamiFlood(s);
     e.settleWinner(s);
@@ -1263,7 +1262,7 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コ�
     assert.strictEqual(th.GRAFT_MAX, 2);
 });
 
-test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
+test('風の落とし子: canBud の自陣コマに重複なしでランダムに2つ🌱を足す（コスト4）。候補が無ければ不可', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -1271,14 +1270,23 @@ test('風の落とし子: canBud の自陣コマに重複を許してランダ�
     s.board[3] = { player: '⭕', bind: 3, effects: [] };
     const before = s.heartMagic;
     e.SKILLS.windborne(s);
-    assert.strictEqual(s.heartMagic, before - 3);
-    assert.strictEqual(budsOn(s.board[1]), 3); // 候補が1つだけなので3回とも同じコマ
+    assert.strictEqual(s.heartMagic, before - 4);
+    assert.strictEqual(budsOn(s.board[1]), 1); // 候補が1つだけなので1つだけ（1マスに1つまで）
     assert.strictEqual(budsOn(s.board[2]) + budsOn(s.board[3]), 0);
     assert.strictEqual(s.heartTurn, true);
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     e.SKILLS.windborne(t);
     assert.strictEqual(t.heartMagic, 20);
+    // 候補が複数あれば、異なる2マスに1つずつ
+    for (let seed = 1; seed <= 20; seed++) {
+        const u = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        u.heartTurn = true; u.heartMagic = 20;
+        [1, 2, 3, 4].forEach((i) => { u.board[i] = { player: '💙', bind: 3, effects: [] }; });
+        e.SKILLS.windborne(u);
+        const counts = [1, 2, 3, 4].map((i) => budsOn(u.board[i]));
+        assert.deepStrictEqual(counts.slice().sort(), [0, 0, 1, 1]);
+    }
 });
 
 test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () => {
@@ -1292,7 +1300,7 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
     assert.strictEqual(e.skillCosts.onClickSolstice, 4);
     assert.strictEqual(e.skillCosts.onClickSucker, 4);
-    assert.strictEqual(e.skillCosts.onClickWindborne, 3);
+    assert.strictEqual(e.skillCosts.onClickWindborne, 4);
 });
 
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {

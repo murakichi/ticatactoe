@@ -19,6 +19,8 @@ type SkillButtonProps = {
     tokenUsed?: boolean;
     /** キャラ固有スキル */
     exclusive?: boolean;
+    /** AIの手番など、人間の操作を受け付けない間(カードもロック切替も押せない。AIは別経路で実行する) */
+    inputBlocked?: boolean;
     /** 「説明をすべて開く/閉じる」の状態。変わるたびに、このカードの説明の開閉もそろえる */
     expandAll?: boolean;
 }
@@ -50,7 +52,7 @@ export const SkillButton = (props: SkillButtonProps) => {
                 <button
                     className={classes}
                     onClick={props.onClick}
-                    disabled={props.disabled}
+                    disabled={props.disabled || props.inputBlocked}
                     onMouseEnter={props.onHoverStart}
                     onMouseLeave={props.onHoverEnd}
                     aria-label={props.buttonText}
@@ -79,6 +81,7 @@ export const SkillButton = (props: SkillButtonProps) => {
                     <button
                         className={`${styles.lock}${props.locked ? ` ${styles.lockOn}` : ''}`}
                         onClick={props.onToggleLock}
+                        disabled={props.inputBlocked}
                         title={props.locked ? 'ロック解除' : 'ロック（シャッフルで固定）'}
                     >
                         {props.locked ? '🔒' : '🔓'}
