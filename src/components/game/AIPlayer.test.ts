@@ -690,10 +690,9 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
 
 describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
     const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 2, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any; // 式神一括は式神1体あたり2
-    // 終盤の盤面: 行0のうち1〜3だけが空き(0は自コマ)、残りは敵のコマ。百鬼夜行は3マスなので空き3マスが式神になり、行0が敵のいない列になる
+    // 終盤の盤面: 行0(0〜3)だけが空き、残りは敵のコマ。百鬼夜行で空き4マスが式神になり、行0が敵のいない列になる
     const nearFull = (): SquareInfo[] => {
         const b = emptyBoard();
-        put(b, 0, '💙', 3);
         // 行1〜3: ⭕⭕💙💙 / 💙💙⭕⭕ / ⭕⭕💙💙（どの列にもリーチが出ない並び）
         const pattern: Player[] = ['⭕', '⭕', '💙', '💙', '💙', '💙', '⭕', '⭕', '⭕', '⭕', '💙', '💙'];
         pattern.forEach((p, k) => put(b, 4 + k, p, 3));
@@ -742,40 +741,40 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
 
     it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
         const flood = { ...costs, onClickShikigamiFlood: 7 };
-        const b = nearFull(); // 式神になる空き3マス → 式神一括は 2×3 = 6
-        const plan = mk().planShikigami(b, 13, flood, [73, 71]);
+        const b = nearFull(); // 式神になる空き4マス → 式神一括は 2×4 = 8
+        const plan = mk().planShikigami(b, 15, flood, [73, 71]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 12, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
+        expect(mk().planShikigami(b, 14, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
         // 序盤（空きが多い）は式神一括が式神の数に比例して重く、盤面を埋めるコンボは撃てない
         const early = emptyBoard();
         put(early, 0, '⭕', 3);
         expect(mk().planShikigami(early, 30, flood, [73, 71])?.win ?? false).toBe(false);
     });
 
-    it('特売(53)が手札にあれば重ね撃ちしてコンボのコストを圧縮する（特売×2→百鬼夜行→特売×2→式神一括。終盤の盤面で 7+6=13 → 6）', () => {
+    it('特売(53)が手札にあれば重ね撃ちしてコンボのコストを圧縮する（特売×2→百鬼夜行→特売×2→式神一括。終盤の盤面で 7+8=15 → 7）', () => {
         const withMd = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1 };
         const b = nearFull();
-        const plan = mk().planShikigami(b, 6, withMd, [73, 71, 53]);
+        const plan = mk().planShikigami(b, 7, withMd, [73, 71, 53]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual([
             'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
         ]);
-        // 5魔力では足りない。特売が無ければ 7+6=13 必要
-        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
-        expect(mk().planShikigami(b, 12, withMd, [73, 71])?.win ?? false).toBe(false);
+        // 6魔力では足りない。特売が無ければ 7+8=15 必要
+        expect(mk().planShikigami(b, 6, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 14, withMd, [73, 71])?.win ?? false).toBe(false);
     });
 
     it('シャッフル探索: 勝てる盤面でコンボ札が揃わず、魔力が足りるなら引き直す。揃っているか魔力が足りなければ引き直さない', () => {
         const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
-        const b = nearFull(); // 特売が引ける前提のコンボは 6 、探索に +1
+        const b = nearFull(); // 特売が引ける前提のコンボは 7 、探索に +1
         const ai = mk();
         ai.rerollsLeft = 8;
-        expect(ai.makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、6+1 以上ある
-        expect(ai.makeMove(b, 6, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
-        expect(ai.makeMove(b, 7, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、7+1 以上ある
+        expect(ai.makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
+        expect(ai.makeMove(b, 8, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
         ai.rerollsLeft = 0;
-        expect(ai.makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
+        expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
     });
 
     it('チャージ待ち: 勝てる盤面で相手のリーチが無く、探索に足りない魔力なら、駒を置かずチャージする', () => {
@@ -785,7 +784,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(r.skills).toEqual(['onClickCharge']);
         expect(r.move).toBeNull();
         // 魔力が足りれば（探索に回る）チャージしない
-        expect(mk().makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
+        expect(mk().makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).skills).not.toContain('onClickCharge');
         // 相手のリーチがあるときは防御を優先する
         const threat = emptyBoard();
         [4, 5, 6].forEach((i) => put(threat, i, '⭕'));

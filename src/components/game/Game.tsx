@@ -341,6 +341,7 @@ export const Game = (props: GameProps) => {
             case 'onClickHarvestEve': onClickHarvestEve(); break;
             case 'onClickSolstice': onClickSolstice(); break;
             case 'onClickSucker': onClickSucker(); break;
+            case 'onClickToggleYingYang': onClickToggleYingYang(); break;
             case 'onClickShikigamiPlace': onClickShikigamiPlace(); break;
             case 'onClickShikigamiBlast': onClickShikigamiBlast(); break;
             case 'onClickShikigamiAll': onClickShikigamiAll(); break;
@@ -1681,7 +1682,6 @@ export const Game = (props: GameProps) => {
     // 陰: 任意の空きマスに置く(コスト3) / 陽: 自分の式神を1つ選んで爆破(コスト5)。sim/engine.js の SHIKIGAMI_* と同値
     const SHIKIGAMI_LIFE = 2;
     const SHIKIGAMI_BLAST_DAMAGE = 4;
-    const SHIKIGAMI_FLOOD_COUNT = 3; // 百鬼夜行が式神を置くマス数(AIPlayer.ts と同じ)
     const newShikigami = (player: Player, bind: number = SHIKIGAMI_LIFE): SquareInfo => ({ player, bind, effects: [{ effect: '📜' }] });
     const [useShikigamiPlace, setUseShikigamiPlace] = useState<boolean>(false);
     const [useShikigamiBlast, setUseShikigamiBlast] = useState<boolean>(false);
@@ -1749,16 +1749,13 @@ export const Game = (props: GameProps) => {
         // コストは式神1体あたり
         spendMagic(calculateCost(seatCosts.onClickShikigamiAll * mine.length, false, false, currentTurnPlayer, 'onClickShikigamiAll'), true, true, 'onClickShikigamiAll');
     };
-    // 汎用(idx 73 百鬼夜行): ランダムな空きマス3つにライフ0の式神を置く
+    // 汎用(idx 73 百鬼夜行): 着手できる全ての空きマスにライフ0の式神を置く
     const onClickShikigamiFlood = () => {
         const board = currentBoard.slice();
-        const pool = board.map((sq, i) => (!sq.player && !emptyBlocked(sq) ? i : -1)).filter((i) => i >= 0);
         const placed: number[] = [];
-        for (let n = 0; n < SHIKIGAMI_FLOOD_COUNT && pool.length > 0; n++) {
-            const i = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-            board[i] = newShikigami(currentTurnPlayer, 0);
-            placed.push(i);
-        }
+        board.forEach((sq, i) => {
+            if (!sq.player && !emptyBlocked(sq)) { board[i] = newShikigami(currentTurnPlayer, 0); placed.push(i); }
+        });
         addLog(`「百鬼夜行」を使用（${placed.length}マスに式神）`);
         flashCells(placed);
         playEffect('shikigami');
@@ -3214,7 +3211,7 @@ export const Game = (props: GameProps) => {
         { idx: 70, onClick: onClickSpringWind, buttonText: `春一番-${calculateCost(seatCosts.onClickSpringWind, false, false, currentTurnPlayer, 'onClickSpringWind')}`, paragraph: `自陣の❄をすべて解除し、解除した❄の数だけ、このターンに打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickSpringWind) || thawTargets(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 71, onClick: onClickShikigamiAll, buttonText: `式神一括-${calculateCost(seatCosts.onClickShikigamiAll * Math.max(1, ownShikigami().length), false, false, currentTurnPlayer, 'onClickShikigamiAll')}`, paragraph: `自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）\nコストは式神1体につき${seatCosts.onClickShikigamiAll}です`, disabled: ownShikigami().length === 0 || checkSkillDisable(seatCosts.onClickShikigamiAll * ownShikigami().length) },
         { idx: 72, onClick: onClickShikigamiRandom, buttonText: `式神ランダム設置-${calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom')}`, paragraph: `ランダムな空きマスにライフ${Math.max(1, SHIKIGAMI_LIFE + gearTokenBindDelta(turnGears))}の式神を置きます 式神は列の並びに数えません\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickShikigamiRandom, true) },
-        { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, paragraph: 'ランダムな空きマス3つに、ライフ0の式神を置きます', disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
+        { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, paragraph: '着手できる全ての空きマスに、ライフ0の式神を置きます', disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
         { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
         { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
     ];
