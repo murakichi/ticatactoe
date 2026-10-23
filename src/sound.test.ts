@@ -68,12 +68,15 @@ const ALL: Sfx[] = [
     'gear', 'gearKey', 'gearBloom', 'gearSpread', 'gearEmpty',
 ];
 
-test.each(ALL)('%s は音源を予約し、2秒以内に鳴り終わる', (sfx) => {
+// 勝利のファンファーレだけは、1試合に1回の締めなので3秒まで許す(スキル音は2秒以内)
+const maxSeconds = (sfx: string) => (sfx === 'win' ? 3 : 2);
+
+test.each(ALL)('%s は音源を予約し、規定の時間内に鳴り終わる', (sfx) => {
     const { ctx, sources, dest } = makeCtx();
     const dur = scheduleSfx(ctx, dest, sfx, 0);
     expect(sources.length).toBeGreaterThan(0);
     expect(dur).toBeGreaterThan(0);
-    expect(dur).toBeLessThanOrEqual(2);
+    expect(dur).toBeLessThanOrEqual(maxSeconds(sfx));
 });
 
 test('未知の演出でも無音にならない', () => {

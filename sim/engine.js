@@ -142,7 +142,7 @@ const skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
     onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
-    onClickShikigamiAll: 6, // 汎用: 自分の式神を全て通常の自陣コマにする
+    onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
     onClickStomp: 3,
@@ -195,7 +195,7 @@ const skillCosts = {
     onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
     onClickSucker: (config.thermal && config.thermal.suckerCost) || 4,
-    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
+    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 4,
     // 火炎系の汎用スキル idx 37〜40（対氷結の手段）
     onClickFlameToken: (config.thermal && config.thermal.flameTokenCost) || 3,
     onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
@@ -1003,6 +1003,12 @@ function placeMove(s, i) {
         // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
         const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
         if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
+        // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
+        if (sq.player && sq.bind === 0 && thermal.flameStacks(sq) > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑')) {
+            board[k] = { player: undefined, bind: 0, effects: [] };
+            bumpStat(s, 'flameKill');
+            continue;
+        }
         const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
             // ダメージが通れば🔥は消える
@@ -1356,11 +1362,14 @@ function exeShikigamiBlast(s, i) {
     addCorpses(s, destroyed);
     return true;
 }
-// 汎用(コスト6): 自分の式神を全て通常の自陣コマにする
+// 汎用(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。式神がいなければ何もしない
+const shikigamiAllBase = (s) => costsOf(s).onClickShikigamiAll * s.board.filter((sq) => sq.player === curPlayer(s) && isShikigami(sq)).length;
 function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
+    const base = shikigamiAllBase(s);
+    if (base === 0) return;
     for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
-    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiAll, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
+    spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
 // 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
@@ -1841,11 +1850,11 @@ function onClickSucker(s) {
     bumpMagicCount(s);
     bumpStat(s, 'sucker');
 }
-// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複を許してランダムに3回選び、🌱を1つずつ足す
+// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複なしでランダムに SOW_COUNT 個選び、🌱を1つずつ足す
 function onClickWindborne(s) {
     const cands = thermal.sowCandidates(s.board, curPlayer(s));
     if (!cands.length) return;
-    const picks = [0, 1, 2].map(() => randomPick(cands, s.rng));
+    const picks = randomAnyPick(cands, Math.min(thermal.SOW_COUNT, cands.length), s.rng);
     thermal.sow(s.board, picks);
     spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'onClickWindborne');
     bumpMagicCount(s);

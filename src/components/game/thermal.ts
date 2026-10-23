@@ -27,6 +27,8 @@ export const FLAME_BURN_DAMAGE = 2;
 export const PYROMANCER_EXTRA_BURN = 1;
 /** 火炎状態のマスがスキルでダメージを受けるときの倍率（切り上げ） */
 export const FLAME_SKILL_MULT = 1.5;
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき。sim/thermal.js と同値） */
+export const FLAME_INSTANT_DAMAGE = 1;
 
 export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
@@ -129,6 +131,16 @@ export const ignite = (
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = keepBuds?.(board[k]) ?? false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) {
+                    board[k] = { player: undefined, bind: 0, effects: [] };
+                    break;
+                }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -257,6 +269,8 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
+    // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next)) return { player: undefined, bind: 0, effects: [] };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
@@ -338,7 +352,10 @@ export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['pla
 export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
 
-/** 風の落とし子: picks の各マス（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで（候補が少なければ候補の数だけ） */
+export const SOW_COUNT = 2;
+
+/** 風の落とし子: picks の各マスに🌱を1つずつ足す。board を直接書き換える（呼び出し側が SOW_COUNT 個を重複なく選ぶ） */
 export const sow = (board: SquareInfo[], picks: number[]): void => {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 };

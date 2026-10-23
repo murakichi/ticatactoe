@@ -30,6 +30,8 @@ const isFrozen = (sq) => frozenStacks(sq) > 0;
 const isDormant = (sq) => isFrozen(sq); // 休眠は氷結のみ（火炎中のマスは🌱が消え、⚡☠は重複して働く）
 const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき） */
+const FLAME_INSTANT_DAMAGE = 1;
 const without = (sq, ...kinds) => ({ ...sq, effects: sq.effects.filter((e) => !kinds.includes(e.effect)) });
 
 const thaw = (sq) => (isFrozen(sq) ? without(sq, '❄') : sq);
@@ -82,6 +84,13 @@ function ignite(board, cells, size, n = 1, keepBuds) {
             // 🔥が付くと🌱と🍂は燃えて消える（keepBuds が真=冬至の種子のガード中は🌱だけ消えない）
             const guarded = !!(keepBuds && keepBuds(board[k]));
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
@@ -143,7 +152,9 @@ function graft(board, cell, player, size, picked) {
 /** player のコマで canBud なマス（昇順） */
 const sowCandidates = (board, player) =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
-/** picks の各添字（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで */
+const SOW_COUNT = 2;
+/** picks の各マスに🌱を1つずつ足す。board を直接書き換える */
 function sow(board, picks) {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 }
@@ -343,7 +354,7 @@ module.exports = {
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
     KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };
