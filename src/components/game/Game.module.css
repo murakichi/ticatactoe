@@ -426,19 +426,39 @@
     scroll-snap-align: start;
 }
 
-/* 狭い画面では横スクロールだと右側の手札が画面外に隠れて見つからないので、折り返して全部見せる */
-@media (max-width: 720px) {
-    .skillGrid {
-        flex-wrap: wrap;
-        justify-content: center;
-        overflow-x: visible;
-    }
+/* 横にスクロールできることが分かるように、続きがある側に「‹ ›」と端のフェードを出す */
+.skillStrip {
+    position: relative;
+}
 
-    .skillGrid > :first-child,
-    .skillGrid > :last-child {
-        margin-left: 0;
-        margin-right: 0;
-    }
+.stripArrow {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    width: 34px;
+    border: none;
+    padding: 0;
+    color: var(--color-accent);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.stripLeft {
+    left: 0;
+    background: linear-gradient(to right, var(--color-bg) 35%, transparent);
+}
+
+.stripRight {
+    right: 0;
+    background: linear-gradient(to left, var(--color-bg) 35%, transparent);
+}
+
+.stripArrow:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
 }
 
 /* キャラ固有スキルの現在コスト */
@@ -537,4 +557,120 @@
     font-weight: 400;
     font-size: 0.85em;
     color: #ff4d79;
+}
+
+/* ===== モバイル: 1画面に収めて、スクロールなしで遊べるようにする =====
+   上から プレイヤー → 手番 → 盤面(残りの高さに収まる大きさ) → 操作 → スキル(横スクロール1行) → 最新ログ1行。
+   ギア・固有コスト・ログ全文・スキルの説明は「詳細」を押すと出る(従来の縦に長い表示) */
+.detailBtn,
+.logPreview {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .detailBtn {
+        display: inline-block;
+    }
+
+    .game:not(.detail) {
+        /* 盤面の高さは、盤面の領域(.boardWrap)の残り高さから手番表示と操作ボタンの分を引いたもの */
+        --board-h: calc(100cqh - 84px);
+        height: 100dvh;
+        padding: 6px var(--space-2);
+        grid-template-rows: auto minmax(0, 1fr) auto auto;
+        gap: 4px;
+        align-content: stretch;
+    }
+
+    .game:not(.detail) .boardWrap {
+        justify-content: center;
+        gap: 4px;
+        min-height: 0;
+        container-type: size;
+    }
+
+    .game:not(.detail) .seatList {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+    }
+
+    .game:not(.detail) .panel {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 4px 6px;
+        gap: 2px 6px;
+    }
+
+    .game:not(.detail) .avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 16px;
+    }
+
+    .game:not(.detail) .name {
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .tags {
+        min-height: 0;
+    }
+
+    .game:not(.detail) .more,
+    .game:not(.detail) .log,
+    .game:not(.detail) .expandAll {
+        display: none;
+    }
+
+    .game:not(.detail) .controls {
+        gap: var(--space-2);
+    }
+
+    .game:not(.detail) .btn {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .skills {
+        margin-top: 0;
+    }
+
+    .game:not(.detail) .skillsHead {
+        margin-bottom: 2px;
+    }
+
+    .game:not(.detail) .skillsTitle {
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .skillGrid {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        gap: var(--space-2);
+        padding-bottom: 2px;
+    }
+
+    .game:not(.detail) .skillGrid > * {
+        width: 148px;
+    }
+
+    .game:not(.detail) .skillGrid button[aria-controls] {
+        display: none;
+    }
+
+    .game:not(.detail) .logPreview {
+        display: block;
+        grid-column: 1 / -1;
+        grid-row: 4;
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        color: var(--color-text-dim);
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+    }
 }

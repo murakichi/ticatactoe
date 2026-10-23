@@ -33,7 +33,7 @@ export const Board: React.FC<BoardProps> = (props: BoardProps) => {
     return (
         <div
             className={styles.board}
-            style={{ ['--turn' as string]: props.turnColor, gridTemplateColumns: `repeat(${props.size}, 1fr)`, ['--sq' as string]: `min(${cellPixelsFor(props.size)}px, calc((100vw - 56px - ${(props.size - 1) * 8}px) / ${props.size}))` }}
+            style={{ ['--turn' as string]: props.turnColor, gridTemplateColumns: `repeat(${props.size}, 1fr)`, ['--sq' as string]: `min(${cellPixelsFor(props.size)}px, calc((100vw - 56px - ${(props.size - 1) * 8}px) / ${props.size}), calc((var(--board-h, 9999px) - ${24 + (props.size - 1) * 8}px) / ${props.size}))` }}
         >
             {props.squares.map((info, i) => (
                 <Square

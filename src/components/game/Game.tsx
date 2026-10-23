@@ -228,6 +228,25 @@ export const Game = (props: GameProps) => {
     };
     // スキルカードの説明を、すべて開く/閉じる(カードごとの開閉は SkillButton 側)
     const [expandAllDesc, setExpandAllDesc] = useState<boolean>(false);
+    // モバイルは、通常は1画面に収めてスクロールなしで遊べる表示。「詳細」でログ・ギア・コストまで全部出す
+    const [showDetail, setShowDetail] = useState<boolean>(false);
+    // スキルカードは横一列で、はみ出す側にだけ「‹ ›」と端のフェードを出す(横に続くことを見落とさないため)
+    const skillGridRef = useRef<HTMLDivElement>(null);
+    const [stripEdge, setStripEdge] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+    const updateStripEdge = () => {
+        const el = skillGridRef.current;
+        if (!el) return;
+        const left = el.scrollLeft > 4;
+        const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+        setStripEdge((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    const scrollStrip = (dir: -1 | 1) => skillGridRef.current?.scrollBy({ left: dir * 160, behavior: 'smooth' });
+    // 手札・表示モード・画面幅が変わったら判定し直す(依存を付けず毎描画で判定。値が同じなら再描画されない)
+    useEffect(updateStripEdge);
+    useEffect(() => {
+        window.addEventListener('resize', updateStripEdge);
+        return () => window.removeEventListener('resize', updateStripEdge);
+    }, []);
     // 効果音のオン/オフ(設定は localStorage に保存される)
     const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
     const onClickToggleSound = () => {
@@ -2840,7 +2859,7 @@ export const Game = (props: GameProps) => {
                     {isCurrent && <span className={styles.turnBadge}>手番</span>}
                 </div>
                 {gearsBySeat[seat].length > 0 && (
-                    <div className={styles.gears}>
+                    <div className={`${styles.gears} ${styles.more}`}>
                         {gearsBySeat[seat].map((id) => {
                             // 土壇場の防壁は1試合に1回きり。発動済みの席は非活性(灰色・取り消し線)で表示する
                             const spent = id === 'lastStand' && lastStandUsed.current[seat];
@@ -2863,7 +2882,7 @@ export const Game = (props: GameProps) => {
                     <span className={`${styles.chip} ${styles.chipMagic}`}>⚡ {magic[seat]}</span>
                 </div>
                 {exclusiveCosts.length > 0 && (
-                    <div className={styles.skillCosts}>
+                    <div className={`${styles.skillCosts} ${styles.more}`}>
                         {exclusiveCosts.map((s) => (
                             <div key={s.name} className={styles.skillCost}>
                                 <span>{s.name}</span>
@@ -2873,7 +2892,7 @@ export const Game = (props: GameProps) => {
                     </div>
                 )}
                 {effects.length > 0 && (
-                    <div className={styles.effects}>
+                    <div className={`${styles.effects} ${styles.more}`}>
                         {effects.map((label) => (
                             <span key={label} className={styles.effectBadge}>
                                 {label}
@@ -3199,7 +3218,7 @@ export const Game = (props: GameProps) => {
     ];
 
     return (
-        <div className={styles.game}>
+        <div className={`${styles.game}${showDetail ? ` ${styles.detail}` : ''}`}>
             <div className={styles.main}>
                 {seatCount === 2 ? playerPanel(0) : <div className={styles.seatList}>{range(0, seatCount).map(playerPanel)}</div>}
                 <div className={styles.boardWrap}>
@@ -3248,6 +3267,9 @@ export const Game = (props: GameProps) => {
                         >
                             {soundOn ? '🔊 音あり' : '🔇 音なし'}
                         </button>
+                        <button className={`${styles.btn} ${styles.detailBtn}`} aria-pressed={showDetail} onClick={() => setShowDetail((v) => !v)}>
+                            {showDetail ? '詳細を閉じる ▴' : '詳細 ▾'}
+                        </button>
                         {props.onBackToSetup && (
                             <button className={styles.btn} onClick={onClickBackToSetup}>
                                 キャラ選択に戻る
@@ -3271,6 +3293,9 @@ export const Game = (props: GameProps) => {
                     </div>
                 </div>
                 {seatCount === 2 && playerPanel(1)}
+                <div className={styles.logPreview} aria-hidden='true'>
+                    {gameLog.length === 0 ? 'まだ操作はありません' : gameLog[gameLog.length - 1]}
+                </div>
                 <div className={styles.log}>
                     <div className={styles.logHead}>
                         <span className={styles.logTitle}>操作ログ</span>
@@ -3301,7 +3326,13 @@ export const Game = (props: GameProps) => {
                         {expandAllDesc ? '説明をすべて閉じる' : '説明をすべて開く'}
                     </button>
                 </div>
-                <div className={styles.skillGrid}>
+                <div className={styles.skillStrip}>
+                    {stripEdge.left && (
+                        <button type='button' className={`${styles.stripArrow} ${styles.stripLeft}`} aria-label='左のスキルを見る' onClick={() => scrollStrip(-1)}>
+                            ‹
+                        </button>
+                    )}
+                    <div className={styles.skillGrid} ref={skillGridRef} onScroll={updateStripEdge}>
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
                     <SkillButton magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShuffle}
@@ -3435,6 +3466,12 @@ export const Game = (props: GameProps) => {
                             onHoverEnd={s.onHoverEnd}
                         />
                     ))}
+                    </div>
+                    {stripEdge.right && (
+                        <button type='button' className={`${styles.stripArrow} ${styles.stripRight}`} aria-label='右のスキルを見る' onClick={() => scrollStrip(1)}>
+                            ›
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
