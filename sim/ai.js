@@ -524,25 +524,6 @@ const DISCOUNT_REDUCERS = [
     { idx: 53, key: 'markdown', cost: 'onClickMarkdown' },
 ];
 const DISCOUNT_ALL = DISCOUNT_REDUCERS.concat([{ idx: 57, key: 'uniqueDiscount', cost: 'onClickUniqueDiscount' }]);
-// 魔法使い: 魔力が F.windSpam 以上あるとき、風の落とし子(36)を（手札に無ければ最大 F.windShuffle 回引き直して）、バッズの無い自陣コマが無くなるまで連打する。
-// 使ったスキルは手札に残るので連打できる。バッズが付いたコマは後続の lockAll で全部ロックされる
-function windSpam(s, me) {
-    if (curChar(s) !== 'magician' || curMagic(s) < F.windSpam) return false;
-    const costW = () => calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
-    const lacking = () => s.board.filter((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🌱')).length;
-    if (lacking() === 0) return false;
-    for (let i = 0; i < (F.windShuffle || 6) && !s.skills.includes(36); i++) {
-        if (curMagic(s) < costsOf(s).onClickShuffle + 10) return false;
-        E.shuffleHand(s);
-    }
-    if (!s.skills.includes(36)) return false;
-    let did = false;
-    for (let n = 0; n < 8 && lacking() > 0 && thermal.sowCandidates(s.board, me).length && curMagic(s) >= costW() + 6; n++) {
-        SKILLS.windborne(s);
-        did = true;
-    }
-    return did;
-}
 function discountPlan(s, me, availableSkills) {
     if (!F.discountPlan || s.silenced[s.turn]) return;
     const seat = s.turn;
@@ -1754,7 +1735,6 @@ function faithfulMakeMoveInner(s) {
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
     // 足りない種類数だけ先に撃ち、その合計が業火の通常コスト以下なら連打してから無料で業火を撃つ
-    if (F.windSpam && windSpam(s, me)) availableSkills = s.skills.slice(); // 魔力に余裕があれば風の落とし子を連打して全コマにバッズを付ける（ユーザー案）
     if (F.discountPlan) { discountPlan(s, me, availableSkills); availableSkills = s.skills.slice(); } // 軽減札を撃った/引き直したので手札を取り直す
     pyroChain(s, me, availableSkills);
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
@@ -1973,13 +1953,9 @@ function faithfulMakeMoveInner(s) {
         if (ch === 'magician' || (ch === 'yinYangMaster' && F.yyBudLock)) {
             // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 magLockN 個）。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS
             let locked = 0;
-            while (locked < (ch === 'magician' ? (F.lockAll ? 12 : F.magLockN) : F.yyBudLock)) {
+            while (locked < (ch === 'magician' ? F.magLockN : F.yyBudLock)) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
-                let budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
-                // 魔力に余裕(F.lockAll 以上)があれば、バッズ駒以外の自陣のコマも全てロックする（ダメージ系・毒・火炎・帯電・乗っ取りを通さない）
-                if (budCell === -1 && ch === 'magician' && F.lockAll && curMagic(s) >= F.lockAll + lockCost) {
-                    budCell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
-                }
+                const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
                 if (!(curMagic(s) >= lockCost && budCell !== -1)) break;
                 SKILLS.lock(s);
                 placeMove(s, budCell);  // ロック対象クリック(手番は進まない)
