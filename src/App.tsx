@@ -123,7 +123,7 @@ export const App = () => {
                 <div className={styles.prep}>
                     <header className={styles.hero}>
                         <div className={styles.heroText}>
-                            <h1 className={styles.title}>戦術三目並べ</h1>
+                            <h1 className={styles.title}>戦術四目並べ</h1>
                             <div className={styles.subtitle}>人数・キャラクター・操作を選んで対戦開始</div>
                         </div>
                         <MiniBoard />

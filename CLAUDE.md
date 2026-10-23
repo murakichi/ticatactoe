@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A tactical tic-tac-toe variant built with React 18 + TypeScript. 2–8 players compete on a grid (2 players = 4x4, up to 7x7 for 7–8 players) with fantasy characters (軍師, 魔法使い, 巨人, 陰陽師, ネクロマンサー), each having unique passive abilities and exclusive magic skills. Features an AI opponent.
+A tactical 4-in-a-row game (title: 戦術四目並べ; repo name ticatactoe is historical) built with React 18 + TypeScript. 2–8 players compete on a grid (2 players = 4x4, up to 7x7 for 7–8 players) with fantasy characters (軍師, 魔法使い, 巨人, 陰陽師, ネクロマンサー), each having unique passive abilities and exclusive magic skills. Features an AI opponent.
 
 ## Commands
 
