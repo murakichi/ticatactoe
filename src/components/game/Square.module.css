@@ -25,6 +25,33 @@
     color: var(--color-text-muted);
 }
 
+/* 空きマスは交点の小さな十字。カーソルを重ねると、いま置く席の色の縁が出る(どの色で置くかが手元で分かる) */
+.empty::before,
+.empty::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: var(--color-border);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.empty::before {
+    width: 10px;
+    height: 1px;
+}
+
+.empty::after {
+    width: 1px;
+    height: 10px;
+}
+
+.empty:hover:not(.preview) {
+    border-color: var(--turn, var(--color-border-strong));
+    box-shadow: inset 0 0 0 1px var(--turn, transparent);
+}
+
 .heart {
     background: var(--color-heart-grad);
     border-color: transparent;
@@ -91,10 +118,10 @@
 .life {
     position: relative;
     z-index: 1;
-    font-size: 26px;
-    font-weight: 900;
+    font-size: 28px;
+    font-weight: 800;
     line-height: 1;
-    font-family: var(--font-num);
+    font-family: var(--font-display);
 }
 
 .empty .life {
@@ -175,6 +202,13 @@
     box-shadow: 0 0 0 3px #bfe9ff inset, 0 0 10px rgba(125, 211, 252, 0.8);
 }
 
+/* 📜式神のマス（紙の分身。プレイヤーの色は保ち、点線の縁と薄い見た目で本物のコマと区別する） */
+.shikigami {
+    outline: 2px dashed #8a6d3b;
+    outline-offset: -4px;
+    opacity: 0.8;
+}
+
 /* 🔥火炎のマス（橙の縁。氷結と重なったときは氷の縁を上に重ねる） */
 .burning {
     box-shadow: 0 0 0 2px #fb923c inset, 0 0 10px rgba(249, 115, 22, 0.7);
@@ -187,4 +221,33 @@
 /* 氷結中のマスの他のエフェクトは休眠している（❄以外のバッジを薄くする） */
 .dormant {
     opacity: 0.45;
+}
+
+/* 勝負が付いたら、勝ちを決めた列だけが金に光り、ほかのマスは沈む */
+.win {
+    z-index: 2;
+    border-color: var(--color-accent);
+    box-shadow: inset 0 0 0 3px var(--color-accent);
+    animation: winPulse 900ms var(--ease) 2;
+}
+
+.dimmed {
+    opacity: 0.35;
+    transition: opacity 400ms var(--ease);
+}
+
+@keyframes winPulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .win {
+        animation: none;
+    }
 }

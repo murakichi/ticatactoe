@@ -72,6 +72,20 @@ const SKILL_CATALOG = [
     { idx: 59, name: '福引き', icon: '🎰', category: 'support' },
     { idx: 60, name: '返し特売', icon: '↩️', category: 'support' },
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire' },
+    { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds' },
+    { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds' },
+    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds' },
+    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds' },
+    { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds' },
+    { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds' },
+    { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds' },
+    { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice' },
+    { idx: 70, name: '春一番', icon: '🌬️', category: 'ice' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
 ];
 
 
@@ -84,9 +98,9 @@ const RECOMMENDED_DECKS = {
     tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 14, 27, 28, 32],
-    necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
-    poisoner: [0, 3, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
+    necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
@@ -126,11 +140,16 @@ function randomDeck(rng = Math.random) {
 const AI_DECK_SWAPS = 3;
 
 /** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
+const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
+
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     const deck = pickRecommendedDeck(character, rng);
     const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
-    for (let k = 0; k < swaps && outside.length > 0; k++) {
-        const at = Math.floor(rng() * deck.length);
+    const core = CORE_CARDS[character] || [];
+    const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
+    for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
+        const at = swappable[Math.floor(rng() * swappable.length)];
         const incoming = outside.splice(Math.floor(rng() * outside.length), 1)[0];
         outside.push(deck[at]);
         deck[at] = incoming;
@@ -138,4 +157,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };

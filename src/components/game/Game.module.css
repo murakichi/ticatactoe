@@ -51,21 +51,26 @@
 
 /* ===== プレイヤーパネル ===== */
 .panel {
+    --seat: var(--color-border-strong);
     width: 150px;
     padding: var(--space-3);
     border-radius: var(--radius-lg);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
+    /* 席の色は左端の太線。セットアップ画面のカードと同じ */
+    border-left: 4px solid var(--seat);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-2);
-    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+    transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 
+/* 手番の席は、その席の色で全体を縁取り、地を一段明るくする(金は勝ちと開始ボタン用に取っておく) */
 .panelCurrent {
-    border-color: var(--color-accent);
-    box-shadow: inset 0 0 0 1px var(--color-accent);
+    border-color: var(--seat);
+    box-shadow: inset 0 0 0 1px var(--seat);
+    background: var(--color-surface-3);
 }
 
 .avatar {
@@ -103,8 +108,10 @@
 }
 
 .name {
-    font-weight: 700;
-    font-size: 15px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0;
 }
 
 .tags {
@@ -124,11 +131,11 @@
 
 .turnBadge {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     padding: 1px 8px;
     border-radius: var(--radius-pill);
-    background: var(--color-accent);
-    color: #3a2a00;
+    background: var(--seat);
+    color: var(--color-bg);
 }
 
 .stats {
@@ -144,14 +151,21 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: var(--radius-pill);
-    background: var(--color-surface-2);
+    background: transparent;
     border: 1px solid var(--color-border);
+    color: var(--color-text-dim);
     font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
 }
 
+/* 魔力はこのパネルでいちばん見たい数字なので大きく。勝利数は控えめに */
 .chipMagic {
     color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 800;
+    padding: 2px 12px;
+    line-height: 1.2;
 }
 
 .effects {
@@ -177,6 +191,23 @@
     border: 1px solid rgba(140, 170, 255, 0.55);
     color: var(--color-text, inherit);
     cursor: help;
+}
+
+/* 発動済みで使えなくなったギア(土壇場の防壁): 灰色にして取り消し線 */
+.gearSpent {
+    background: rgba(140, 150, 170, 0.1);
+    border-color: rgba(140, 150, 170, 0.35);
+    color: var(--color-text-muted, #8a93a6);
+    text-decoration: line-through;
+    cursor: default;
+}
+
+.gearSpentLabel {
+    margin-left: 4px;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
 }
 
 .effectBadge {
@@ -214,6 +245,16 @@
 .btn:hover:not(:disabled) {
     background: var(--color-surface-3);
     transform: translateY(-1px);
+}
+
+.btnPrimary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #2a1d00;
+}
+
+.btnPrimary:hover:not(:disabled) {
+    background: var(--color-accent);
 }
 
 .btn:disabled {
@@ -265,9 +306,15 @@
 }
 
 .logEntry {
-    padding: 3px 0;
+    padding: 4px 0;
     border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-dim);
+    color: var(--color-text-muted);
+}
+
+/* 最新の1件だけ明るく、過去のものは沈める */
+.logEntry:first-child {
+    color: var(--color-text);
+    font-weight: 700;
 }
 
 .logBtn {
@@ -351,18 +398,97 @@
     width: 100%;
 }
 
+.skillsHead {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-3);
+}
+
 .skillsTitle {
     font-weight: 700;
     font-size: 16px;
-    margin-bottom: var(--space-3);
     text-align: center;
 }
 
+/* 説明をすべて開く/閉じる */
+.expandAll {
+    padding: 3px 12px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    color: var(--color-text-dim);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.expandAll:hover {
+    background: var(--color-surface-3);
+    color: var(--color-text);
+}
+
+/* スキルカードは横一列に並べ、あふれた分は横スクロールする。
+   収まるときは中央寄せ(先頭/末尾の auto マージン)、あふれたら左端から並ぶ */
 .skillGrid {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: flex-start;
     gap: var(--space-3);
-    justify-content: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 2px var(--space-2);
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+}
+
+.skillGrid > :first-child {
+    margin-left: auto;
+}
+
+.skillGrid > :last-child {
+    margin-right: auto;
+}
+
+.skillGrid > * {
+    scroll-snap-align: start;
+}
+
+/* 横にスクロールできることが分かるように、続きがある側に「‹ ›」と端のフェードを出す */
+.skillStrip {
+    position: relative;
+}
+
+.stripArrow {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    width: 34px;
+    border: none;
+    padding: 0;
+    color: var(--color-accent);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.stripLeft {
+    left: 0;
+    background: linear-gradient(to right, var(--color-bg) 35%, transparent);
+}
+
+.stripRight {
+    right: 0;
+    background: linear-gradient(to left, var(--color-bg) 35%, transparent);
+}
+
+.stripArrow:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
 }
 
 /* キャラ固有スキルの現在コスト */
@@ -461,4 +587,120 @@
     font-weight: 400;
     font-size: 0.85em;
     color: #ff4d79;
+}
+
+/* ===== モバイル: 1画面に収めて、スクロールなしで遊べるようにする =====
+   上から プレイヤー → 手番 → 盤面(残りの高さに収まる大きさ) → 操作 → スキル(横スクロール1行) → 最新ログ1行。
+   ギア・固有コスト・ログ全文・スキルの説明は「詳細」を押すと出る(従来の縦に長い表示) */
+.detailBtn,
+.logPreview {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .detailBtn {
+        display: inline-block;
+    }
+
+    .game:not(.detail) {
+        /* 盤面の高さは、盤面の領域(.boardWrap)の残り高さから手番表示と操作ボタンの分を引いたもの */
+        --board-h: calc(100cqh - 84px);
+        height: 100dvh;
+        padding: 6px var(--space-2);
+        grid-template-rows: auto minmax(0, 1fr) auto auto;
+        gap: 4px;
+        align-content: stretch;
+    }
+
+    .game:not(.detail) .boardWrap {
+        justify-content: center;
+        gap: 4px;
+        min-height: 0;
+        container-type: size;
+    }
+
+    .game:not(.detail) .seatList {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+    }
+
+    .game:not(.detail) .panel {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 4px 6px;
+        gap: 2px 6px;
+    }
+
+    .game:not(.detail) .avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 16px;
+    }
+
+    .game:not(.detail) .name {
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .tags {
+        min-height: 0;
+    }
+
+    .game:not(.detail) .more,
+    .game:not(.detail) .log,
+    .game:not(.detail) .expandAll {
+        display: none;
+    }
+
+    .game:not(.detail) .controls {
+        gap: var(--space-2);
+    }
+
+    .game:not(.detail) .btn {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .skills {
+        margin-top: 0;
+    }
+
+    .game:not(.detail) .skillsHead {
+        margin-bottom: 2px;
+    }
+
+    .game:not(.detail) .skillsTitle {
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .skillGrid {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        gap: var(--space-2);
+        padding-bottom: 2px;
+    }
+
+    .game:not(.detail) .skillGrid > * {
+        width: 148px;
+    }
+
+    .game:not(.detail) .skillGrid button[aria-controls] {
+        display: none;
+    }
+
+    .game:not(.detail) .logPreview {
+        display: block;
+        grid-column: 1 / -1;
+        grid-row: 4;
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        color: var(--color-text-dim);
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+    }
 }

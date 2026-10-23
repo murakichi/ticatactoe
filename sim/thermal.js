@@ -30,6 +30,8 @@ const isFrozen = (sq) => frozenStacks(sq) > 0;
 const isDormant = (sq) => isFrozen(sq); // 休眠は氷結のみ（火炎中のマスは🌱が消え、⚡☠は重複して働く）
 const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき） */
+const FLAME_INSTANT_DAMAGE = 1;
 const without = (sq, ...kinds) => ({ ...sq, effects: sq.effects.filter((e) => !kinds.includes(e.effect)) });
 
 const thaw = (sq) => (isFrozen(sq) ? without(sq, '❄') : sq);
@@ -79,8 +81,16 @@ function ignite(board, cells, size, n = 1, keepBuds) {
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くと🌱は燃えて消える（keepBuds が真=冬至の種子のガード中は消えない）
-            board[k] = { ...board[k], effects: [...(keepBuds && keepBuds(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥が付くと🌱と🍂は燃えて消える（keepBuds が真=冬至の種子のガード中は🌱だけ消えない）
+            const guarded = !!(keepBuds && keepBuds(board[k]));
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }
@@ -142,9 +152,56 @@ function graft(board, cell, player, size, picked) {
 /** player のコマで canBud なマス（昇順） */
 const sowCandidates = (board, player) =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
-/** picks の各添字（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで */
+const SOW_COUNT = 2;
+/** picks の各マスに🌱を1つずつ足す。board を直接書き換える */
 function sow(board, picks) {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+}
+
+// ---- 🍂落ち葉（🌱バッズの対）。自陣にあると、相手全員のスキルコストが落ち葉の数だけ増える。src/components/game/thermal.ts と同じ ----
+const leafStacks = (sq) => sq.effects.filter((e) => e.effect === '🍂').length;
+/** 効力を発揮している🍂の数。氷結中のマスの🍂は消えないが休眠する */
+const activeLeaves = (sq) => (isDormant(sq) ? 0 : leafStacks(sq));
+/** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数 */
+const leafSurcharge = (board, player) => board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+/** idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
+function placeLeafToken(board, idx, player, bind, n = 1) {
+    board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' })) };
+}
+/** 焚き火の唄の対象: player 以外のコマのうち、🍂を持ち、🔑ロックも❄氷結もないマス */
+const bonfireTargets = (board, player) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !hasLock(sq) && !isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+/** 対象マスの🍂を全て除去。除去枚数とマスを返す。board を直接書き換える */
+function bonfire(board, player) {
+    const cells = bonfireTargets(board, player);
+    let n = 0;
+    for (const k of cells) { n += leafStacks(board[k]); board[k] = without(board[k], '🍂'); }
+    return { n, cells };
+}
+/** 腐葉土の目覚めの候補: player のコマの🍂を1枚ずつ数えた添字の列 */
+const mulchCandidates = (board, player) =>
+    board.flatMap((sq, i) => (sq.player === player ? Array(leafStacks(sq)).fill(i) : []));
+/** cell の🍂を1枚だけ🌱に変える。🍂が無ければ false */
+function mulch(board, cell) {
+    const at = board[cell].effects.findIndex((e) => e.effect === '🍂');
+    if (at < 0) return false;
+    const effects = board[cell].effects.slice();
+    effects[at] = { effect: '🌱' };
+    board[cell] = { ...board[cell], effects };
+    return true;
+}
+/** 一葉知秋の対象: 🌱を持ち、🔥が付いていないマス */
+const autumnTargets = (board) => board.map((sq, i) => (budStacks(sq) > 0 && flameStacks(sq) === 0 ? i : -1)).filter((i) => i !== -1);
+/** 盤面の🌱をすべて🍂に変える（敵味方問わず）。変えた枚数とマスを返す。board を直接書き換える */
+function autumn(board) {
+    const cells = autumnTargets(board);
+    let n = 0;
+    for (const k of cells) {
+        n += budStacks(board[k]);
+        board[k] = { ...board[k], effects: board[k].effects.map((e) => (e.effect === '🌱' ? { effect: '🍂' } : e)) };
+    }
+    return { n, cells };
 }
 
 /** 浄化で除去する状態異常 */
@@ -206,6 +263,41 @@ function shatter(board, cell) {
 const frostfallTargets = (board, player) =>
     board.map((sq, i) => (sq.player === player && sq.bind <= 2 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
+/** 春一番の対象: player のコマで❄を持つマスの昇順 */
+const thawTargets = (board, player) => board.map((sq, i) => (sq.player === player && isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+/** player のコマの❄を全スタック解除し、解除した❄の数とマスを返す。board を直接書き換える */
+function thawAll(board, player) {
+    const cells = thawTargets(board, player);
+    let stacks = 0;
+    for (const k of cells) { stacks += frozenStacks(board[k]); board[k] = thaw(board[k]); }
+    return { stacks, cells };
+}
+// ---- 鬼門封じ / 火の車（src/components/game/thermal.ts と同じ）----
+const KIMON_LOCK_TURNS = 3;
+/** 盤面全体の🔥の総数（火の車の「このターンに🔥を付与したか」の判定用） */
+const fireStacksTotal = (board) => board.reduce((n, sq) => n + flameStacks(sq), 0);
+/** 鬼門封じの対象: player 以外のコマのうち guarded でないマス */
+const kimonTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 氷結中なら❄を1つ減らすだけ。そうでなければ破壊して KIMON_LOCK_TURNS ターンのロックを掛ける。board を直接書き換える */
+function kimon(board, cell) {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { destroyed: false, thawed: true, locked: false };
+    }
+    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    return { destroyed: true, thawed: false, locked: true };
+}
+/** 火の車の対象: player 以外のコマのうち guarded でないマス */
+const fireWheelTargets = (board, player, guarded) => kimonTargets(board, player, guarded);
+const FIRE_WHEEL_COUNT = 2;
+/** picks に🔥を1つずつ（ignite の規則どおり）。解けたマスを返す。board を直接書き換える */
+function fireWheel(board, picks, size, keepBuds) {
+    return ignite(board, picks, size, 1, keepBuds).thawed;
+}
+/** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマスの昇順 */
+const leafFrostTargets = (board, player) =>
+    board.map((sq, i) => (sq.player === player && leafStacks(sq) > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
 // ---- 焼畑 / 火炎トークン / 殉火 ----
 /** 焼畑: cell の🌱を全て除去し、除去した数と同じ数だけ ignite する（氷結中なら最初のスタックで氷結が全解除、残りが🔥）。🌱が無ければ n=0。board を直接書き換える */
 function swidden(board, cell, size) {
@@ -236,7 +328,7 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     return { threshold, targets, thawed };
 }
 
-const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 
 // バーンアウト（thermal.ts と同じ）
 const BURNOUT_FREE_FLAMES = 4;
@@ -262,6 +354,7 @@ module.exports = {
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
-    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow,
+    applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
+    KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

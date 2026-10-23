@@ -2,8 +2,12 @@ export const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickYingYangSkill: 5,
-    onClickStomp: 6,
+    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiAll: 3, // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
+    onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
+    onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
+    onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
@@ -53,12 +57,12 @@ export const skillCosts = {
     onClickCryoFreeze: 2,
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
     onClickCleanse: 5,
-    onClickInferno: 9,
+    onClickInferno: 7,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
     onClickSucker: 4,
-    onClickWindborne: 3,
+    onClickWindborne: 4,
     // 火炎系の汎用スキル(idx 37-39)。氷結への対抗手段
     onClickFlameToken: 3,
     onClickDoubleFlameToken: 6,
@@ -89,6 +93,18 @@ export const skillCosts = {
     onClickRandomCast: 2, // 福引き(idx 59)
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
+    // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
+    onClickLeafToken: 3, //       木枯らしの使い(idx 62): 🍂付きトークン
+    onClickTwinLeafToken: 5, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
+    onClickDoubleLeafToken: 6, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
+    onClickBothLeafToken: 4, //   枯野の相席(idx 65): 🍂付きの両トークン（🍂は自分のコマだけ）
+    onClickBonfire: 3, //         焚き火の唄(idx 66): 敵陣の🍂を全て除去（🔑・❄のマスは対象外）
+    onClickMulch: 2, //           腐葉土の目覚め(idx 67): 自陣の🍂1枚を🌱に変える
+    onClickAutumn: 4, //          一葉知秋(idx 68): 盤面の🌱をすべて🍂に変える
+    onClickLeafFrost: 3, //       霜枯れ(idx 69): 自陣の🍂マスに❄を付ける（氷結中は🍂が休眠する）
+    onClickSpringWind: 2, //      春一番(idx 70): 自陣の❄を全て解除し、解除した数だけこのターンに打つスキルを軽減する
+    onClickKimon: 5, //           鬼門封じ(idx 74): 敵コマを1つ破壊（氷結中は❄-1）し、空きマスになれば3ターンロック
+    onClickFireWheel: 5, //       火の車(idx 75): ランダムな敵マス2つに🔥、その後手札をシャッフル。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -21,6 +21,13 @@ import {
     countVarietySquares,
     countAilmentKinds,
     lostCells,
+    burnedBudCount,
+    scorchGain,
+    ignitedCount,
+    flameCounts,
+    frozenBudCount,
+    rootGain,
+    budCounts,
 } from './gear';
 import { skillCosts } from './skillCosts';
 
@@ -141,6 +148,34 @@ describe('新ギア（彩りの庭・病炎の契り・廃墟の底力・土壇�
     });
 });
 
+describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根）', () => {
+    const sq = (player: string | undefined, ...effects: string[]) => ({ player, effects: effects.map((effect) => ({ effect })) });
+
+    it('焦土: 敵の🌱が🔥で消えた数×2、上限6。自分の🌱や🔥のないマスは数えない', () => {
+        const board = [sq('⭕', '🔥'), sq('💙', '🔥'), sq('⭕')];
+        expect(burnedBudCount(['⭕', '💙', '⭕'], [2, 2, 2], board, '💙')).toBe(2);
+        expect(scorchGain(2)).toBe(4);
+        expect(scorchGain(10)).toBe(6);
+    });
+
+    it('灰の供物: 敵のマスで🔥が増えた数だけ、全スキルのコストを下げる(重複・下限1)', () => {
+        const board = [sq('⭕', '🔥'), sq('💙', '🔥'), sq('⭕', '🔥', '🔥'), sq('⭕')];
+        expect(ignitedCount(['⭕', '💙', '⭕', '⭕'], [0, 0, 1, 0], board, '💙')).toBe(2);
+        expect(flameCounts(board)).toEqual([1, 1, 2, 0]);
+        expect(adjustCostByGear(5, ['ashOffering'], ctx(), false, undefined)).toBe(5);
+        expect(adjustCostByGear(5, ['ashOffering'], { skillsThisTurn: 0, echoReady: false, ash: 3 })).toBe(2);
+        expect(adjustCostByGear(2, ['ashOffering'], { skillsThisTurn: 0, echoReady: false, ash: 3 })).toBe(1);
+    });
+
+    it('凍てつく根: 氷結中のマスの🌱を敵味方問わず数え、魔力は上限なし', () => {
+        const board = [sq('💙', '🌱', '❄'), sq('⭕', '🌱', '🌱', '❄'), sq('⭕', '🌱'), sq('⭕', '🌱', '🌱', '🌱', '❄')];
+        expect(frozenBudCount(board)).toBe(6);
+        expect(rootGain(6)).toBe(6);
+        expect(rootGain(2)).toBe(2);
+        expect(budCounts(board)).toEqual([1, 2, 1, 3]);
+    });
+});
+
 describe('価格破壊', () => {
     it('対象外のスキルが決まっている（シャッフル・チャージは固定）', () => {
         expect(PRICEABLE_KEYS).not.toContain('onClickShuffle');
@@ -198,6 +233,20 @@ describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
     it('ギアのID一覧と数値パラメータが同じ', () => {
         expect(simGear.GEAR_IDS).toEqual(GEAR_IDS);
         expect(simGear.GEAR_PARAMS).toEqual(GEAR_PARAMS);
+    });
+
+    it('下位キャラ向けギアの補助関数が同じ結果を返す', () => {
+        const sq = (player: string | undefined, ...effects: string[]) => ({ player, effects: effects.map((effect) => ({ effect })) });
+        const board = [sq('⭕', '🌱', '🔥'), sq('💙', '🌱', '❄'), sq('⭕', '🌱', '🌱', '❄'), sq(undefined)];
+        expect(simGear.budCounts(board)).toEqual(budCounts(board));
+        expect(simGear.burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙')).toBe(burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙'));
+        expect(simGear.frozenBudCount(board)).toBe(frozenBudCount(board));
+        expect(simGear.flameCounts(board)).toEqual(flameCounts(board));
+        expect(simGear.ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙')).toBe(ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙'));
+        for (const n of [0, 1, 2, 3, 5, 10]) {
+            expect(simGear.scorchGain(n)).toBe(scorchGain(n));
+            expect(simGear.rootGain(n)).toBe(rootGain(n));
+        }
     });
 
     it('新ギアの補助関数が同じ結果を返す', () => {

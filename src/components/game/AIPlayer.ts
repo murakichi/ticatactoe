@@ -2,15 +2,15 @@ import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { calculateWinner, findEmptyIndexes } from '../../util';
+import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, decayTick, overwriteBlocked } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked } from './thermal';
 import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..52)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 62;
+// 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 76;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -20,6 +20,19 @@ const CHARGE_AREA_MIN_SCORE = 2;
 const JAMMER_MIN_DMG = 2;
 // ランダム帯電を撃つときに残しておく魔力の余裕 (sim/ai.js の CHG_RAND_MARGIN)
 const CHARGE_RANDOM_MARGIN = 1;
+/** この魔力以上あって撃てるスキルが手札に無いとき、魔法使い以外も1コストで手札を引き直す（防壁発動後の魔力の使い道） */
+const SURPLUS_MAGIC = 12;
+
+// 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
+const SHIKIGAMI_LIFE = 2;
+const SHIKIGAMI_BLAST_DAMAGE = 4;
+/** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
+const YY_COVER_WEIGHT = 150;
+const SH_MAX = 3; // 同時に持つ式神の数
+const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
+const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
+const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
+const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
 
 export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 
@@ -45,8 +58,19 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
 ];
 /** 魔法使いが1手番にロックするバッズ駒の最大数。sim/ai.js の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
+/** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (sim/ai.js の EL_MAX / EL_MIN_VALUE / EL_DENY) */
+export const EMPTY_LOCK_MAX = 2;
+const EMPTY_LOCK_MIN_VALUE = 10;
+/** 火遁で魔法使いの🌱を優先して燃やす重み（sim/ai.js の igniteBud） */
+const IGNITE_BUD_WEIGHT = 6;
+const EMPTY_LOCK_DENY = 2;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
+/** 1手番に引き直せる回数の上限。陰陽師はコンボ札(71/73/53)を探すので多め（sim/ai.js の shuffleDig=8） */
+/** 雷霆の巫が陰陽師の一撃(百鬼夜行→式神一括)に備えて、自コマの無い線1本ごとに引く点（sim/ai.js AI_DEFAULTS.floodCover） */
+export const FLOOD_COVER_WEIGHT = 150;
+
+export const rerollBudget = (character: CharacterId): number => (character === 'yinYangMaster' ? 8 : MAX_REROLLS);
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
@@ -70,6 +94,8 @@ class AIPlayer {
     shield: Set<number> = new Set();
     /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */
     glacierPending: boolean = false;
+    /** 土壇場の防壁を装備していて未発動（Game が手番ごとに設定する）。真なら相手の1回目の勝ちは防壁が受けるので止めに行かず攻める。sim/ai.js の AI_DEFAULTS.lsAggro と同じ */
+    lastStandReady: boolean = false;
     /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
     glacierCharge: number = 0;
     /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
@@ -86,6 +112,9 @@ class AIPlayer {
     /** 冬至の種子の🌱ガード中（Game が手番ごとに設定する）。ガード中は撃たない */
     budGuard: boolean = false;
 
+    /** 陰陽師の現在のモード(Game が手番ごとに設定する)。陽は全スキルのコスト+1 */
+    yinYangMode: 'ying' | 'yang' = 'ying';
+
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
     /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
@@ -93,6 +122,9 @@ class AIPlayer {
     seatCount: number = 2;
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
+    hasEmptyLock: boolean = false;
+    /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
+    floodCoverWeight: number = FLOOD_COVER_WEIGHT;
 
     constructor(
         playerSymbol: Player,
@@ -100,7 +132,8 @@ class AIPlayer {
         opponents: Player[] = [playerSymbol === '💙' ? '⭕' : '💙'],
         characters: readonly CharacterId[] = [],
         gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
-        hasToxicBloom: boolean = false
+        hasToxicBloom: boolean = false,
+        hasEmptyLock: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -108,10 +141,97 @@ class AIPlayer {
         this.characters = characters;
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
+        this.hasEmptyLock = hasEmptyLock;
+    }
+
+    /** 相手に陰陽師がいるか */
+    private facingYinYang(): boolean {
+        return this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster');
+    }
+
+    /** 自分のコマが1つ以上入っている勝ち筋の列の数 (sim/ai.js coveredLines と同一) */
+    private coveredLines(board: SquareInfo[]): number {
+        let n = 0;
+        for (const line of geometryForCells(board.length).winLines) {
+            if (line.some((idx) => board[idx].player === this.playerSymbol)) n++;
+        }
+        return n;
     }
 
     private characterOf(player: Player): CharacterId | undefined {
         return player === this.playerSymbol ? this.character : this.characters[seatOf(player)];
+    }
+
+    /** 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数 (sim/ai.js myEmptyLocks) */
+    private myEmptyLocks(board: SquareInfo[]): number {
+        const owner = seatOf(this.playerSymbol) + 1;
+        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === owner)).length;
+    }
+
+    /** 空蔵: ロックしておく空きマス。自分の列の要になるマス、または敵の列を止められるマスのうち価値が最大のもの。なければ null
+     * (sim/ai.js bestEmptyLockTarget と同一。EL_MIN_VALUE=10, EL_DENY=2) */
+    private bestEmptyLockTarget(board: SquareInfo[]): number | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let bestIdx: number | null = null;
+        let bestVal = EMPTY_LOCK_MIN_VALUE - 1e-9;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(i)) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let mine = 0;
+                let foreign = 0;
+                const oc = new Map<Player, number>();
+                for (const idx of line) {
+                    const p = board[idx].player;
+                    if (p === this.playerSymbol) mine++;
+                    else if (p) {
+                        foreign++;
+                        oc.set(p, (oc.get(p) || 0) + 1);
+                    }
+                }
+                if (foreign === 0) val += lineScores[Math.min(mine + 1, 4)] - lineScores[Math.min(mine, 4)];
+                else if (mine === 0 && oc.size === 1) {
+                    const c = Array.from(oc.values())[0];
+                    val += EMPTY_LOCK_DENY * (lineScores[Math.min(c + 1, 4)] - lineScores[Math.min(c, 4)]);
+                }
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
+
+    /** 火遁(鍛冶師の固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上・自コマなし)とライフが高いものを優先。
+     * なければ null (sim/ai.js bestIgniteTarget の mode 1 と同一) */
+    private bestIgniteTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!sq.player || sq.player === this.playerSymbol || sq.bind <= 0) continue;
+            if (this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2) build += foes;
+            }
+            let val = sq.bind + build * 2;
+            // 魔法使いの🌱は🔥で燃えて消える（🌱1つで魔力+3の稼ぎ頭）。優先して燃やす（sim/ai.js の igniteBud=6）
+            if (this.characterOf(sq.player) === 'magician') val += IGNITE_BUD_WEIGHT * sq.effects.filter((e) => e.effect === '🌱').length * 3;
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /** 無敵マス(雷霆の巫の⚡付き自陣)の集合を更新する (sim/ai.js updateShield) */
@@ -351,8 +471,8 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
 
         for (const line of geometryForCells(board.length).winLines) {
-            // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない
-            if (line.some((idx) => emptyBlocked(board[idx]))) continue;
+            // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
+            if (line.some((idx) => emptyBlocked(board[idx]) || isShikigami(board[idx]))) continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
             const enemiesInLine = new Set<Player>();
@@ -402,6 +522,7 @@ class AIPlayer {
     countReaches(board: SquareInfo[], player: Player): number {
         let reaches = 0;
         for (const line of geometryForCells(board.length).winLines) {
+            if (line.some((idx) => isShikigami(board[idx]))) continue; // 式神は列に数えない
             let my = 0, op = 0, blocked = false;
             for (const idx of line) {
                 const sq = board[idx];
@@ -447,6 +568,7 @@ class AIPlayer {
     findThreatSquares(board: SquareInfo[], player: Player): number[] {
         const threats: number[] = [];
         for (const line of geometryForCells(board.length).winLines) {
+            if (line.some((idx) => isShikigami(board[idx]))) continue; // 式神は列に数えない
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];
@@ -475,13 +597,35 @@ class AIPlayer {
         });
     }
 
+    /**
+     * 巨人のオーラを着手後の盤面に反映する（Game.tsx / giantAura.ts と同じ規則。sim/ai.js の auraSim=1 と同一）。
+     * 着手マスの周囲の敵コマを壊し、周囲を全部ロックする。A/B: 環境勝率 53.1→60.2%（seed2/200）
+     */
+    applyAuraSim(sim: SquareInfo[], index: number): SquareInfo[] {
+        const range = geometryForCells(sim.length).surroundRange(index);
+        for (const j of range) {
+            const sq = sim[j];
+            if (!sq.player || sq.player === this.playerSymbol || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(j)) continue;
+            const guard = absorbDestroy(sq);
+            sim[j] = guard.blocked ? guard.sq : { player: undefined, bind: 0, effects: [] };
+        }
+        for (const j of range) {
+            const sq = sim[j];
+            if (isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            sim[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        }
+        return sim;
+    }
+
     /** 盤面上にコマを置いたシミュレーション (bind=0の乗っ取り対応)。ply を渡すと、その着手で減衰が進む場合は先に減衰させる（0=今回の着手） */
     simulatePlace(board: SquareInfo[], index: number, player: Player, life: number, ply?: number): SquareInfo[] {
         const decayed = ply !== undefined && shouldDecay(this.placements + ply, this.seatCount) ? this.decayBoard(board, index) : board;
         const newBoard = decayed.map(sq => ({ ...sq, effects: [...sq.effects] }));
         const sq = newBoard[index];
 
-        if (!sq.player) {
+        if (isShikigami(sq) && sq.player !== player && sq.bind <= 0) {
+            newBoard[index] = { player: undefined, bind: 0, effects: [] }; // 式神は乗っ取られると空きマスになる
+        } else if (!sq.player) {
             // 空きマスに配置
             newBoard[index] = { player, bind: life, effects: [] };
         } else if (sq.player !== player) {
@@ -502,6 +646,8 @@ class AIPlayer {
         } else {
             // 自分のマスに重ね置き
             newBoard[index] = { ...sq, bind: sq.bind + life + 1 };
+            // 式神を補強すると🌱付きの通常コマになる
+            if (isShikigami(sq)) newBoard[index].effects = newBoard[index].effects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]);
         }
 
         return newBoard;
@@ -545,7 +691,7 @@ class AIPlayer {
             if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) continue;
             if (overwriteBlocked(sq)) continue;
             const lost = this.opponents.some((o) =>
-                calculateWinner(this.simulatePlace(decayed, i, o, life).map((x) => x.player)) === o);
+                calculateWinner(lineSymbols(this.simulatePlace(decayed, i, o, life))) === o);
             if (lost) moves.push(i);
         }
         return moves;
@@ -569,7 +715,7 @@ class AIPlayer {
 
     /** Minimax + Alpha-Beta 枝刈り (深さ2) */
     minimax(board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number, ply: number = 1): number {
-        const winner = calculateWinner(board.map(sq => sq.player));
+        const winner = calculateWinner(lineSymbols(board));
         if (winner === this.playerSymbol) return 1000 + depth;
         if (winner) return -1000 - depth;
 
@@ -617,15 +763,15 @@ class AIPlayer {
         // 1. 即勝ち
         for (const i of allMoves) {
             const sim = this.simulatePlace(board, i, this.playerSymbol, life);
-            if (calculateWinner(sim.map(sq => sq.player)) === this.playerSymbol) return i;
+            if (calculateWinner(lineSymbols(sim)) === this.playerSymbol) return i;
         }
 
-        // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)
-        for (const opp of this.opponents) {
+        // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
+        for (const opp of this.lastStandReady ? [] : this.opponents) {
             const oppMoves = this.getMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);
-                if (calculateWinner(sim.map(sq => sq.player)) === opp) {
+                if (calculateWinner(lineSymbols(sim)) === opp) {
                     if (allMoves.includes(i)) return i;
                 }
             }
@@ -634,15 +780,26 @@ class AIPlayer {
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
         let bestMove = allMoves[0];
+        // 雷霆の巫: 相手に陰陽師がいると、百鬼夜行→式神一括で空きマスが全部相手のコマになる。自分のコマが1つも無い線があると
+        // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（sim/ai.js F.floodCover と同じ。対陰陽師 11→28%）
+        const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
+        const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
 
         for (const i of allMoves) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
+            if (this.character === 'giant' && simBoard[i].player === this.playerSymbol) this.applyAuraSim(simBoard, i);
             let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
 
             // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
             const reaches = this.countReaches(simBoard, this.playerSymbol);
             if (reaches >= 2) score += 200;        // フォーク
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
+
+            // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
+            // (sim/ai.js yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%)
+            if (this.character === 'necromancer' && this.facingYinYang()) {
+                score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
+            }
 
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
             if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
@@ -651,6 +808,12 @@ class AIPlayer {
 
             // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
             score += this.fireGain(board, i);
+
+            if (floodCover) {
+                let uncovered = 0;
+                for (const line of floodLines) if (!line.some((k) => simBoard[k].player === this.playerSymbol)) uncovered++;
+                score -= uncovered * floodCover;
+            }
 
             if (score > bestScore) {
                 bestScore = score;
@@ -673,7 +836,9 @@ class AIPlayer {
     ): number[] {
         // A/B検証の結果、固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが柔軟性を削いで不利だったため無効化。
         // 有益だったキャラ(軍師=トークン固定 / あなた / ネクロ=中立)のみロックする。
-        if (this.character === 'giant' || this.character === 'magician' || this.character === 'yinYangMaster') {
+        // 陰陽師は百鬼夜行(73)+式神一括(71)のコンボ札だけを手札に固定して、揃うまで持ち続ける（sim/ai.js の floodLock=1）
+        if (this.character === 'yinYangMaster') return availableSkills.filter((i) => i === 71 || i === 73 || i === 53); // 特売(53)もコンボの圧縮に使うので固定
+        if (this.character === 'giant' || this.character === 'magician') {
             return [];
         }
         let myPieces = 0, oppPieces = 0, empties = 0;
@@ -695,7 +860,9 @@ class AIPlayer {
         const preferred = (idx: number) =>
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             (this.character === 'magician' && budsIdx.includes(idx)) ||
-            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx));
+            (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
+            // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (sim/ai.js necroLock=1)
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
@@ -730,6 +897,7 @@ class AIPlayer {
         if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
         else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
         else if (this.character === 'pyromancer' && skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1) cost -= 1; // 🔥付与スキルは常に-1
+        else if (this.character === 'yinYangMaster' && this.yinYangMode === 'yang') cost += 1; // 陽は全スキル+1
         const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
         // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
         return this.hypoCut > 0 && paid > 0 && !(skillKey && isDiscountSkill(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;
@@ -834,14 +1002,6 @@ class AIPlayer {
                 }
                 // 死体が1つでもあれば即発動 (sim/ai.js と同一。A/B: 他キャラの勝率 -3〜-4.6pt)
                 if (corpses >= 1 || absorbable >= 2) spend(necroPay, 'onClickNecromancy');
-            }
-
-            // 陰陽師: 凶荒の舞(相手-2)
-            if (this.character === 'yinYangMaster') {
-                const yyCost = this.calculateAICost(costs.onClickYingYangSkill, false, false, 'onClickYingYangSkill');
-                if (remaining >= yyCost && (oppHit > myPieces || myPieces >= 3)) {
-                    spend(yyCost, 'onClickYingYangSkill');
-                }
             }
 
             // 軍師: 全軍突撃 (実コストは「9−使用トークン×2」。calculateAICostの+2ペナルティは誤りなので使わない)
@@ -958,9 +1118,25 @@ class AIPlayer {
         if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
             spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
         }
-        if (!tokenUsed) {
+        // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。sim/ai.js と同一）
+        if (
+            availableSkills.includes(69) &&
+            this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'pyromancer') &&
+            leafFrostTargets(board, this.playerSymbol).filter((i) => !this.shield.has(i)).length >= 2
+        ) {
+            spend(this.calculateAICost(costs.onClickLeafFrost, false, false, 'onClickLeafFrost'), 'onClickLeafFrost');
+        }
+        // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
+        const leafToken = !tokenUsed && !cryo && this.character !== 'electrician' ? this.pickLeafToken(availableSkills, freeCells, remaining, costs) : null;
+        if (leafToken && spend(leafToken.cost, leafToken.skill)) {
+            // 🍂付きのトークンを撃った（トークンはターンに1回）
+        } else if (!tokenUsed) {
             if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
                 spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
+            } else if (this.character === 'yinYangMaster' && availableSkills.includes(72)
+                && board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length < SH_MAX
+                && remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + SH_RESERVE) {
+                spend(this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
             } else if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
             } else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
@@ -994,7 +1170,57 @@ class AIPlayer {
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
         }
 
+        // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。sim/ai.js と同一）
+        if (
+            availableSkills.includes(75) &&
+            fireWheelTargets(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2
+        ) {
+            spend(this.calculateAICost(costs.onClickFireWheel, false, false, 'onClickFireWheel'), 'onClickFireWheel');
+        }
+
         return skills;
+    }
+
+    /** 🍂付きトークンの選択: ダブル(空き4以上)→双子→1枚の順に、払える最初のもの (sim/ai.js pickLeafToken と同一) */
+    pickLeafToken(availableSkills: number[], freeCells: number, remaining: number, costs: Record<keyof SkillCosts, number>): { skill: string; cost: number } | null {
+        const options: { idx: number; skill: 'onClickDoubleLeafToken' | 'onClickTwinLeafToken' | 'onClickLeafToken'; minFree: number }[] = [
+            { idx: 64, skill: 'onClickDoubleLeafToken', minFree: 4 },
+            { idx: 63, skill: 'onClickTwinLeafToken', minFree: 3 },
+            { idx: 62, skill: 'onClickLeafToken', minFree: 3 },
+        ];
+        for (const o of options) {
+            if (!availableSkills.includes(o.idx) || freeCells < o.minFree) continue;
+            const cost = this.calculateAICost(costs[o.skill], true, false, o.skill);
+            if (remaining >= cost) return { skill: o.skill, cost };
+        }
+        return null;
+    }
+
+    /**
+     * 鬼門封じ: 敵のコマを破壊して3ターンロックする対象。氷結中・🔑ロック・無敵のコマは選ばない。
+     * 破壊されたコマの持ち主のラインの価値（そのコマを含む、他の敵の駒が混ざらないライン）が大きいものを選び、minValue 未満なら null (sim/ai.js bestKimonTarget と同一)
+     */
+    findKimonTarget(board: SquareInfo[], minValue: number): number | null {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player) || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player) oc++;
+                    else if (board[idx].player) foreign++;
+                }
+                if (foreign === 0) val += lineScores[Math.min(oc, 4)];
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        }
+        return bestVal >= minValue ? best : null;
     }
 
     /**
@@ -1057,7 +1283,10 @@ class AIPlayer {
         return best;
     }
 
-    /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵2体以上で価値あり)。なければ null */
+    /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
+    private lastRescueThreats = 0;
+
+    /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵1体以上で価値あり。コスト2なので積極的に撃つ)。なければ null */
     findStompTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestEnemies = 0, bestEmptyCenter = false;
@@ -1071,7 +1300,7 @@ class AIPlayer {
                 bestEnemies = enemies; bestIdx = i; bestEmptyCenter = emptyCenter;
             }
         }
-        return bestEnemies >= 2 ? bestIdx : null;
+        return bestEnemies >= 1 ? bestIdx : null;
     }
 
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
@@ -1131,6 +1360,7 @@ class AIPlayer {
             const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;
             if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) { bestThreats = threats; bestKilled = killed; bestIdx = i; }
         }
+        this.lastRescueThreats = bestThreats;
         return bestIdx;
     }
 
@@ -1166,6 +1396,173 @@ class AIPlayer {
         }
     }
 
+
+    /**
+     * 百鬼夜行→式神一括の実コストの計画 (sim/ai.js comboPlan)。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする
+     * （特売は1魔力で次のスキルを-3、何回でも撃てる。下限1）
+     */
+    comboPlan(board: SquareInfo[], costs: Record<keyof SkillCosts, number>, availableSkills: number[], assumeMd: boolean = false): { floodCasts: number; allCasts: number; total: number } {
+        const md = assumeMd || availableSkills.includes(53) ? this.calculateAICost(costs.onClickMarkdown, false, false, 'onClickMarkdown') : Infinity;
+        const best = (base: number): { m: number; total: number } => {
+            let bm = 0, bt = base;
+            for (let m = 1; m <= 4 && md !== Infinity; m++) {
+                const t = m * md + Math.max(1, base - 3 * m);
+                if (t < bt) { bt = t; bm = m; }
+            }
+            return { m: bm, total: bt };
+        };
+        const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
+        // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
+        const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
+        const a = best(this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
+        return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
+    }
+
+    /** 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か (sim/ai.js floodComboWins) */
+    floodComboWins(board: SquareInfo[]): boolean {
+        const me = this.playerSymbol;
+        const nb = board.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+            : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))) as SquareInfo[];
+        return calculateWinner(lineSymbols(nb)) === me;
+    }
+
+    /** 爆破の価値 (sim/ai.js blastValue): 周囲8マスの敵陣（4ダメージで壊れるコマは3、それ以外は1）と、式神になる空きマス（0.5） */
+    private blastValue(board: SquareInfo[], i: number): number {
+        const geo = geometryForCells(board.length);
+        let v = 0;
+        for (const j of geo.surroundRange(i)) {
+            const sq = board[j];
+            if (!sq.player) { if (!emptyBlocked(sq)) v += 0.5; continue; }
+            if (sq.player === this.playerSymbol || isGuarded(sq, this.characters)) continue;
+            if (isFrozen(sq)) { v += 0.2; continue; }
+            v += sq.bind <= SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
+        }
+        return v;
+    }
+
+    private bestShikigamiCell(board: SquareInfo[]): number | null {
+        let best: number | null = null, bestV = -1;
+        board.forEach((sq, i) => {
+            if (sq.player || emptyBlocked(sq) || this.shield.has(i)) return;
+            const v = this.blastValue(board, i);
+            if (v > bestV) { bestV = v; best = i; }
+        });
+        return best;
+    }
+
+    /** 爆破の盤面反映（Game.tsx exeShikigamiBlast と同じ） */
+    private applyShikigamiBlast(board: SquareInfo[], i: number): void {
+        const geo = geometryForCells(board.length);
+        board[i] = { player: undefined, bind: 0, effects: [] };
+        for (const j of geo.surroundRange(i)) {
+            const sq = board[j];
+            if (!sq.player) { if (!emptyBlocked(sq)) board[j] = { player: this.playerSymbol, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] }; continue; }
+            if (sq.player === this.playerSymbol || isGuarded(sq, this.characters)) continue;
+            const hit = applyDamage(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill');
+            if (hit.blocked) { board[j] = hit.sq; continue; }
+            board[j] = hit.sq.bind < 1 ? { player: undefined, bind: 0, effects: [] } : hit.sq;
+        }
+    }
+
+    /**
+     * 陰陽師の1手番の式神運用 (sim/ai.js shikigamiTurn と同一)。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。
+     * 式神一括（手札に idx 71）は、通常のコマに戻して列が完成するようにコンボで組む。スキル→対象クリックの列と、それを反映した盤面を返す。何もしないなら null
+     */
+    planShikigami(board: SquareInfo[], magic: number, costs: Record<keyof SkillCosts, number>, availableSkills: number[]): { clicks: { skill: string; target?: number }[]; board: SquareInfo[]; win: boolean } | null {
+        const me = this.playerSymbol;
+        const b = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        const clicks: { skill: string; target?: number }[] = [];
+        let m = magic;
+        let mode = this.yinYangMode;
+        const savedMode = this.yinYangMode;
+        const costOf = (key: 'onClickShikigamiPlace' | 'onClickShikigamiBlast' | 'onClickShikigamiAll' | 'onClickToggleYingYang'): number => {
+            this.yinYangMode = mode;
+            return this.calculateAICost(costs[key], false, false, key);
+        };
+        const mine = (): number[] => b.map((sq, i) => (sq.player === me && isShikigami(sq) ? i : -1)).filter((i) => i >= 0);
+        try {
+            // 百鬼夜行(73)+式神一括(71): 全ての空きマスをライフ0の自コマにして、列が完成するなら一手番で勝つ
+            if (availableSkills.includes(73) && availableSkills.includes(71)) {
+                this.yinYangMode = mode;
+                const combo = this.comboPlan(b, costs, availableSkills);
+                if (m >= combo.total) {
+                    const nb: SquareInfo[] = b.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+                        : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+                    if (calculateWinner(lineSymbols(nb)) === me) {
+                        // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ
+                        for (let k = 0; k < combo.floodCasts; k++) clicks.push({ skill: 'onClickMarkdown' });
+                        clicks.push({ skill: 'onClickShikigamiFlood' });
+                        for (let k = 0; k < combo.allCasts; k++) clicks.push({ skill: 'onClickMarkdown' });
+                        clicks.push({ skill: 'onClickShikigamiAll' });
+                        return { clicks, board: nb, win: true };
+                    }
+                }
+            }
+            // 式神一括コンボ: 同じ列に自コマ+式神(+空き)で4つ揃えられ、置く分+一括の魔力があるなら一手番で完成させる
+            if (availableSkills.includes(71)) {
+                const placeCost = costOf('onClickShikigamiPlace');
+                const ownShiki = mine().length;
+                const allCostFor = (n: number): number => this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, n), false, false, 'onClickShikigamiAll'); // 式神1体あたり
+                const toggleCost = costOf('onClickToggleYingYang');
+                let bestLine: { empties: number[]; total: number } | null = null;
+                for (const line of geometryForCells(b.length).winLines) {
+                    let real = 0, shiki = 0, bad = false;
+                    const empties: number[] = [];
+                    for (const idx of line) {
+                        const sq = b[idx];
+                        if (sq.player === me) { if (isShikigami(sq)) shiki++; else real++; }
+                        else if (sq.player) bad = true;
+                        else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) || this.shield.has(idx)) bad = true;
+                        else empties.push(idx);
+                    }
+                    if (bad || real < SH_COMBO_REAL || shiki + empties.length === 0) continue;
+                    const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+                    if (m < total) continue;
+                    if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
+                }
+                if (bestLine) {
+                    if (bestLine.empties.length > 0 && mode === 'yang') clicks.push({ skill: 'onClickToggleYingYang' });
+                    for (const cell of bestLine.empties) clicks.push({ skill: 'onClickShikigamiPlace', target: cell });
+                    clicks.push({ skill: 'onClickShikigamiAll' });
+                    return { clicks, board: b, win: true };
+                }
+            }
+            for (let guard = 0; guard < 3; guard++) {
+                const own = mine();
+                const best = own.map((i) => ({ i, v: this.blastValue(b, i) })).sort((x, y) => y.v - x.v)[0];
+                const worth = !!best && best.v >= SH_BLAST_MIN;
+                const toggleCost = costOf('onClickToggleYingYang');
+                const blastCost = costOf('onClickShikigamiBlast') + (mode === 'ying' ? 1 : 0); // 陰からは転化+陽のコスト+1
+                if (worth && m >= blastCost + (mode === 'ying' ? toggleCost : 0)) {
+                    if (mode === 'ying') { clicks.push({ skill: 'onClickToggleYingYang' }); m -= toggleCost; mode = 'yang'; }
+                    const c = costOf('onClickShikigamiBlast');
+                    clicks.push({ skill: 'onClickShikigamiBlast', target: best!.i });
+                    m -= c;
+                    this.applyShikigamiBlast(b, best!.i);
+                    continue;
+                }
+                if (mode === 'yang' && !worth && own.length === 0) {
+                    if (m >= toggleCost) clicks.push({ skill: 'onClickToggleYingYang' }); // 爆破する式神が無いので陰に戻って貯める
+                    break;
+                }
+                if (worth) break; // 爆破できる式神があるなら、魔力を貯めて爆破に備える
+                const placeCost = costOf('onClickShikigamiPlace');
+                if (mode === 'ying' && own.length < SH_MAX && m >= placeCost + SH_RESERVE) {
+                    const cell = this.bestShikigamiCell(b);
+                    if (cell === null) break;
+                    clicks.push({ skill: 'onClickShikigamiPlace', target: cell });
+                    m -= placeCost;
+                    b[cell] = { player: me, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
+                    continue;
+                }
+                break;
+            }
+        } finally {
+            this.yinYangMode = savedMode;
+        }
+        return clicks.length > 0 ? { clicks, board: b, win: false } : null;
+    }
+
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(
         board: SquareInfo[],
@@ -1188,6 +1585,28 @@ class AIPlayer {
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
+        // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（sim/ai.js の noDig53=8）
+        const waitFor13 = availableSkills.includes(71) && availableSkills.includes(73) && !availableSkills.includes(53)
+            && magic >= NO_DIG_53_MIN && magic < this.comboPlan(board, costs, availableSkills).total;
+        // 陰陽師: 勝てる盤面で、魔力がコンボ分（特売が引ける前提）+引き直し分あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
+        // （sim/ai.js の shuffleDig。コンボの発動率 53→75%、環境勝率 +8pt）
+        if (this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !waitFor13) {
+            const complete = availableSkills.includes(71) && availableSkills.includes(73)
+                && (availableSkills.includes(53) || magic >= this.comboPlan(board, costs, availableSkills).total);
+            if (!complete && this.floodComboWins(board) && magic >= this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle) {
+                return { move: null, skills: [], reroll: {} };
+            }
+        }
+        // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
+        // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
+        if (this.character === 'yinYangMaster' && this.opponents.every((o) => this.countReaches(board, o) === 0)
+            && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
+            return { move: null, skills: ['onClickCharge'] };
+        }
+        if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
+            const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+            if (plan.length === 0) return { move: null, skills: [], reroll: {} };
+        }
         if (this.character === 'magician' && this.rerollsLeft > 0) {
             const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
             if (rr) return { move: null, skills: [], reroll: rr };
@@ -1208,11 +1627,67 @@ class AIPlayer {
             }
         }
 
+        // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
+        const holdFlood = this.character === 'yinYangMaster' && (availableSkills.includes(71) || availableSkills.includes(73))
+            && magic < this.comboPlan(board, costs, availableSkills).total;
+        // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
+        if (this.character === 'yinYangMaster' && !holdFlood) {
+            const plan = this.planShikigami(board, magic, costs, availableSkills);
+            if (plan) {
+                if (plan.win) return { move: null, skills: [], chargeClicks: plan.clicks };
+                this.updateShield(plan.board);
+                const followup = this.getBestMove(plan.board, life);
+                this.updateShield(board);
+                return { move: followup, skills: [], chargeClicks: plan.clicks };
+            }
+        }
+
         // マルチリーチ防御: 脅威数に応じてロック種別を選択
         const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
+        // 巨人: 相手にリーチがあるとき、ストンプ(コスト2・着手も兼ねる)で脅威が減るならロックより先に撃つ
+        // （sim/ai.js の stompDef=1 と同一。A/B: 環境勝率 12.4→19.8% seed1/100、stompMin=1 と併せて 14.6→26.2% seed2/200）
+        if (this.character === 'giant' && threatSquares.length >= 1 && magic >= this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp')) {
+            const rescue = this.findRescueCenter(board, 'stomp');
+            if (rescue !== null && this.lastRescueThreats < threatSquares.length) {
+                const postBoard = this.simulateStomp(board, rescue, this.playerSymbol, life);
+                const followup = this.getBestMove(postBoard, life);
+                return { move: followup, skills: ['onClickStomp'], stompTarget: rescue };
+            }
+        }
 
         // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
         // （sim/ai.js と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
+        // 氷室の番人: 脅威が無いとき、魔法使いの🌱付きでロックされていないコマを凍らせる。氷結中の🌱は休眠して魔力を生まず、魔法使いの魔力エンジンが止まる
+        // （sim/ai.js F.freezeBuds と同一。A/B: 対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt。魔法使い以外のコマは凍らせない: 毒使い相手では 64→31% に悪化）
+        // 氷室の番人: 毒で倒れそうな（毒≥ライフ-2）自陣コマを先に凍らせる。氷結中のマスの毒は継続ダメージを与えない
+        // （sim/ai.js F.antiPoison=1, antiPoisonMargin=2 と同一。A/B: 対毒使い 勝ち86→112/200試合、環境勝率 seed2/200 で +1.5pt）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const poisoned = board.findIndex((sq, i) => {
+                if (sq.player !== this.playerSymbol || this.shield.has(i) || isFrozen(sq) || !canFreeze(sq)) return false;
+                const p = sq.effects.filter((e) => e.effect === '☠').length;
+                return p > 0 && p >= sq.bind - 2;
+            });
+            if (poisoned !== -1) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                freeze(post, [poisoned]);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [poisoned] };
+                this.updateShield(board);
+            }
+        }
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const cell = board.findIndex((sq, i) => !!sq.player && this.isEnemy(sq.player) && this.characterOf(sq.player) === 'magician'
+                && !this.shield.has(i) && budStacks(sq) > 0 && !isFrozen(sq) && canFreeze(sq));
+            if (cell !== -1) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                freeze(post, [cell]);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                this.updateShield(board);
+            }
+        }
         if (this.character === 'cryomancer' && threatSquares.length === 1 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             freeze(post, [threatSquares[0]]);
@@ -1308,6 +1783,19 @@ class AIPlayer {
                 const postBoard = board.map((sq, i) => (inj.kills && i === inj.index ? { ...sq, player: undefined, bind: 0, effects: [] } : sq));
                 const followup = this.getBestMove(postBoard, life);
                 return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
+            }
+        }
+
+        // 鬼門封じ: 敵のラインの要（3つ揃いなど）のコマを破壊して、その空きマスを3ターンロックする。自分に勝ち手があるときは温存 (sim/ai.js と同一)
+        if (
+            availableSkills.includes(74) &&
+            magic >= this.calculateAICost(costs.onClickKimon, false, false, 'onClickKimon') &&
+            this.countReaches(board, this.playerSymbol) === 0
+        ) {
+            const target = this.findKimonTarget(board, 50);
+            if (target !== null) {
+                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 3, effects: [{ effect: '🔑' as const }] } : sq));
+                return { move: this.getBestMove(postBoard, life), skills: ['onClickKimon'], stompTarget: target };
             }
         }
 
@@ -1433,13 +1921,40 @@ class AIPlayer {
                     magic -= this.calculateAICost(costs.onClickSucker, false, false, 'onClickSucker');
                 }
             }
+            // 🍂落ち葉: 敵陣の🍂が2枚以上でコストが重いなら焚き火の唄で払う。自陣の🍂が3枚以上たまったら1枚を腐葉土で🌱に。
+            // 一葉知秋は、自陣の🌱が多く敵に🌱が無く、相手がスキルに頼っている（魔力が多い）ときだけ（盤面の🌱が全部🍂になる）
+            const leafCost = (key: 'onClickBonfire' | 'onClickMulch' | 'onClickAutumn') => this.calculateAICost(costs[key], false, false, key);
+            if (availableSkills.includes(66) && leafSurcharge(board, this.playerSymbol) >= 2 && bonfireTargets(board, this.playerSymbol).length > 0 && magic >= leafCost('onClickBonfire')) {
+                chargeClicks.push({ skill: 'onClickBonfire' });
+                board = board.slice();
+                bonfire(board, this.playerSymbol);
+                magic -= leafCost('onClickBonfire');
+            }
+            if (availableSkills.includes(67) && magic >= leafCost('onClickMulch')) {
+                const leaves = mulchCandidates(board, this.playerSymbol);
+                if (leaves.length >= 3) {
+                    chargeClicks.push({ skill: 'onClickMulch' });
+                    board = board.slice();
+                    mulch(board, leaves[0]);
+                    magic -= leafCost('onClickMulch');
+                }
+            }
+            if (availableSkills.includes(68) && opponentMagic >= 6 && ownBuds() >= 4 && magic >= leafCost('onClickAutumn')) {
+                const enemyBuds = board.reduce((n, sq) => (sq.player && sq.player !== this.playerSymbol ? n + budStacks(sq) : n), 0);
+                if (enemyBuds === 0) {
+                    chargeClicks.push({ skill: 'onClickAutumn' });
+                    board = board.slice();
+                    autumn(board);
+                    magic -= leafCost('onClickAutumn');
+                }
+            }
             if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne')) {
                 const cands = sowCandidates(board, this.playerSymbol);
-                if (cands.length >= 3 && ownBuds() < 3) {
+                if (cands.length >= SOW_COUNT && ownBuds() < SOW_COUNT) {
                     chargeClicks.push({ skill: 'onClickWindborne' });
-                    // 実際の配置はランダム。AIの内部盤面は代表として先頭3マスに足して見積もる
+                    // 実際の配置はランダム。AIの内部盤面は代表として先頭のマスに足して見積もる
                     board = board.slice();
-                    sow(board, cands.slice(0, 3));
+                    sow(board, cands.slice(0, SOW_COUNT));
                     magic -= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne');
                 }
             }
@@ -1473,7 +1988,7 @@ class AIPlayer {
                     for (const f of fillers.filter((x) => chosen.includes(x))) {
                         chargeClicks.push({ skill: f.skill });
                         board = board.slice();
-                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, 3));
+                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, SOW_COUNT));
                         else if (f.idx === 32) cleanse(board, this.playerSymbol);
                         else if (f.idx === 33) magic += harvestBuds(board, this.playerSymbol, this.budGuard);
                         magic -= f.cost;
@@ -1510,6 +2025,22 @@ class AIPlayer {
                     chargeClicks.push({ skill: pick.r.key });
                     magic -= pick.rc;
                     plannedCut += pick.r.cut;
+                }
+            }
+            // 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる。
+            // ネクロマンサーが相手のときは撃たない（コマが壊れるたび墓地が増え、蘇生の資源になる）。sim/ai.js の igniteSig=1 / igniteSkip=1
+            const igniteCost = this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite');
+            const necroFoe = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'necromancer');
+            // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
+            const blocksInferno = worth && magic >= infernoNow() && magic - igniteCost < infernoNow();
+            if (!necroFoe && !blocksInferno && !this.skillKinds.has('onClickIgnite') && !chargeClicks.some((c) => c.skill === 'onClickIgnite') && magic >= igniteCost) {
+                const t = this.bestIgniteTarget(board);
+                if (t !== null) {
+                    chargeClicks.push({ skill: 'onClickIgnite', target: t });
+                    board = board.slice();
+                    ignite(board, [t], this.sizeOf(board), 1);
+                    this.updateShield(board);
+                    magic -= igniteCost;
                 }
             }
             const cost = infernoNow();
@@ -1575,10 +2106,28 @@ class AIPlayer {
             }
         }
 
+        // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
+        // ロック中は敵も置けないので敵の列を止める効果もある（sim/ai.js の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
+        if (
+            this.hasEmptyLock &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock') &&
+            this.myEmptyLocks(board) < EMPTY_LOCK_MAX
+        ) {
+            const target = this.bestEmptyLockTarget(board);
+            if (target !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[target] = { ...post[target], bind: Math.max(post[target].bind, 1), effects: [...post[target].effects, { effect: '🔑', value: seatOf(this.playerSymbol) + 1 }] };
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [target] };
+            }
+        }
+
         // 軽減札を先に撃つと、この手番に撃てるスキルが増える/魔力が余るなら撃つ（sim/ai.js の discountPlan と同方針。
         // chooseSkills を「次のスキルを軽減した状態」で選び直して比べる）。クリック不要の計画（chargeClicks）に軽減札以外があると
         // 「次に打つ」の軽減をそちらが消費してしまうので、そのときは行わない
-        let planned = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+        const holdNoSpend = holdFlood && this.opponents.every((o) => this.countReaches(board, o) === 0); // 相手のリーチがあるときは防御のため通常どおり
+        let planned = holdNoSpend ? [] : [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
         if (chargeClicks.every((c) => isDiscountSkill(c.skill)) && !planned.some((s) => TURN_ENDING_SKILLS.includes(s))) {
             const baseLeft = magic - this.lastSpent;
             const reducers: { idx: number; key: keyof typeof costs; cut: number }[] = [

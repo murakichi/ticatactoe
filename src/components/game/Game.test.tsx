@@ -30,8 +30,9 @@ test('⭕側の陰陽師でも陰陽転化でモードが切り替わり、陽�
     expect(screen.getByText(/現在のモード:陽/)).toBeInTheDocument();
     // 陽なので全スキル+1 (修正前は⭕がこの割増を免れていた)
     expect(screen.getByRole('button', { name: 'ロック-3' })).toBeInTheDocument();
-    // 陽のモード限定スキルに切り替わる
-    expect(screen.getByRole('button', { name: /豊穣の舞/ })).toBeInTheDocument();
+    // 陽のモード限定スキルに切り替わる（陰の式神設置は隠れ、陽の式神爆破が出る）
+    expect(screen.getByRole('button', { name: /式神爆破/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /式神設置/ })).not.toBeInTheDocument();
 });
 
 test('相手が陽でも自分が陰ならコストは増えない', () => {
@@ -60,7 +61,7 @@ test('プレイヤーパネルにキャラ固有スキルの現在コストが�
     );
     const panels = () => Array.from(container.querySelectorAll('[class*="panel"]'));
     const [heartPanel, circlePanel] = panels().filter((el) => /panel(?!Current)/.test(el.className) || el.className.includes('panelCurrent'));
-    expect(heartPanel).toHaveTextContent('ストンプ⚡ 6');
+    expect(heartPanel).toHaveTextContent('ストンプ⚡ 3');
     expect(circlePanel).toHaveTextContent('審判の日⚡ 11');
 
     // 💙が着手(使用回数は変わらない)しても非手番側の表示は維持される
@@ -106,27 +107,28 @@ describe('多人数', () => {
         expect(container.querySelector('.winner')?.textContent).toContain('💙');
     });
 
-    it('2人戦で巨人は5ターンに1回休む（従来どおり。休みの間は相手が連続手番）', () => {
+    it('2人戦で巨人は2ターンに1回しか動かない（休みの間は相手が連続手番）', () => {
+        // 巨人(⭕)の置いたマスの周囲は1手番ロックされるので、巨人から離れたマスを打つ
         const { container } = render(<Game players={cfg('you', 'giant')} />);
         fireEvent.click(cells(container)[0]); // 💙 → 巨人
         expect(turnPlayer(container)).toBe('⭕');
-        fireEvent.click(cells(container)[1]); // ⭕(巨人) → 💙
+        fireEvent.click(cells(container)[15]); // ⭕(巨人) → 💙
         expect(turnPlayer(container)).toBe('💙');
-        fireEvent.click(cells(container)[2]); // 💙 → 本来は巨人だが休みで💙のまま
+        fireEvent.click(cells(container)[1]); // 💙 → 巨人は休みで💙のまま
         expect(turnPlayer(container)).toBe('💙');
+        fireEvent.click(cells(container)[2]); // 💙 → 巨人
+        expect(turnPlayer(container)).toBe('⭕');
     });
 
-    it('3人戦で巨人の席だけが飛ばされる', () => {
-        // 席: 0=あなた, 1=巨人, 2=あなた。巨人が次に来るのは着手後のターン数が2,5,8,11,14のとき。14で 14%5=4 になり巨人が休む
+    it('3人戦で巨人の席は2周に1回しか回ってこない', () => {
+        // 席: 0=あなた, 1=巨人, 2=あなた。並びは 0,1,2,0,2 の繰り返し。巨人は右下隅(24)を打つ
         const { container } = render(<Game players={cfg('you', 'giant', 'you')} />);
         const seq: string[] = [];
-        for (let k = 0; k < 13; k++) {
+        [0, 24, 1, 2, 3].forEach((cell) => {
             seq.push(turnPlayer(container) ?? '');
-            fireEvent.click(cells(container)[k]);
-        }
-        // 13手目(💙)の次は巨人(⭕)が飛ばされて🟩の手番
-        expect(seq[12]).toBe('💙');
-        expect(turnPlayer(container)).toBe('🟩');
+            fireEvent.click(cells(container)[cell]);
+        });
+        expect(seq).toEqual(['💙', '⭕', '🟩', '💙', '🟩']);
     });
 });
 
@@ -175,10 +177,10 @@ test('スキルカードにコストバッジ・種類タグ・使えない理�
             ]}
         />
     );
-    // 初期マジック2: ストンプ(コスト6)は使えず、不足分が出る。固有タグも付く
-    const stomp = screen.getByRole('button', { name: 'ストンプ-6' });
+    // 初期マジック2: ストンプ(コスト3)は使えず、不足分が出る。固有タグも付く
+    const stomp = screen.getByRole('button', { name: 'ストンプ-3' });
     expect(stomp).toBeDisabled();
-    expect(stomp).toHaveTextContent('あと⚡4');
+    expect(stomp).toHaveTextContent('あと⚡1');
     expect(stomp).toHaveTextContent('固有');
     // ロック(コスト2)は使える。コストバッジが出て、不足表示はない
     const lock = screen.getByRole('button', { name: 'ロック-2' });
@@ -270,4 +272,48 @@ test('ミアズマ: 魔力が足りていても、自陣に毒が乗ったマス
     const miasma = screen.getByRole('button', { name: 'ミアズマ-5' }) as HTMLButtonElement;
     expect(miasma.textContent).not.toContain('あと⚡');
     expect(miasma.disabled).toBe(true);
+});
+
+describe('式神', () => {
+    const charge = () => fireEvent.click(screen.getByRole('button', { name: /チャージ\+/ }));
+    // 両者がチャージして魔力を貯め、💙の手番に戻す
+    const rich = (container: HTMLElement) => {
+        for (let i = 0; i < 3; i++) { charge(); charge(); }
+        return container;
+    };
+    const squareText = (container: HTMLElement, i: number) => cells(container)[i].textContent ?? '';
+
+    it('陰の式神設置: 任意の空きマスに📜付きで置ける。手番は続き、そのまま通常の着手もできる', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        expect(squareText(container, 5)).toContain('📜');
+        expect(squareText(container, 5)).toContain('2'); // ライフ2
+        // 手番は続くので、通常の着手ができる
+        fireEvent.click(cells(container)[0]);
+        expect(squareText(container, 0)).not.toContain('📜');
+    });
+
+    it('式神を自分で補強すると📜が消えて🌱付きの通常コマになる（列にも数えられる）', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        fireEvent.click(cells(container)[5]); // 補強
+        expect(squareText(container, 5)).not.toContain('📜');
+        expect(squareText(container, 5)).toContain('🌱');
+    });
+
+    it('陽の式神爆破: 自分の式神が消え、周囲8マスの空きマスが式神になる', () => {
+        const { container } = renderYinYangGame();
+        rich(container);
+        fireEvent.click(screen.getByRole('button', { name: /式神設置/ }));
+        fireEvent.click(cells(container)[5]);
+        fireEvent.click(screen.getByRole('button', { name: /陰陽転化/ }));
+        fireEvent.click(screen.getByRole('button', { name: /式神爆破/ }));
+        fireEvent.click(cells(container)[5]);
+        expect(squareText(container, 5)).not.toContain('📜');
+        for (const j of [0, 1, 2, 4, 6, 8, 9, 10]) expect(squareText(container, j)).toContain('📜');
+    });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { cellPixelsFor } from './boardGeometry';
 import styles from './BoardEffects.module.css';
+import { isUniqueEffect, renderUniqueEffect } from './UniqueEffects';
 
 export type SkillEffectType =
     | 'slash'
@@ -31,6 +32,9 @@ export type SkillEffectType =
     | 'solstice'
     | 'sprout'
     | 'windborne'
+    | 'autumn'
+    | 'shikigami'
+    | 'shikigamiBlast'
     | 'iceBreak'
     | 'thaw'
     | 'burn'
@@ -41,10 +45,17 @@ export type SkillEffectType =
     | 'chargeUp'
     | 'shuffle'
     | 'token'
-    | 'lock';
+    | 'lock'
+    | 'rain'
+    | 'dash'
+    | 'clone'
+    | 'plunder'
+    | 'bulwark'
+    | 'miasma'
+    | 'chainZap';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
-export type BurstType = 'iceBreak' | 'thaw' | 'burn';
+export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
 
 export type BurstEffect = {
     type: BurstType;
@@ -59,6 +70,10 @@ export type SkillEffect = {
     indexes?: number[];
     /** バナーの文言を上書きする（バッズ/ダブルバッズ、トークン各種など、同じ演出を共有するスキルの名前出し分け用） */
     label?: string;
+    /** 陰陽転化: '陰'/'陽' など、演出の出し分け */
+    variant?: string;
+    /** ミアズマ: 毒が広がる元のマス */
+    sources?: number[];
     nonce: number;
 };
 
@@ -77,25 +92,6 @@ const cellCenter = (index: number, size: number) => {
     const row = Math.floor(index / size);
     return { left: 12 + cell / 2 + col * (cell + 8), top: 12 + cell / 2 + row * (cell + 8) };
 };
-
-// 全軍突撃: 盤面各所に着弾する衝撃 (軍師の総攻撃)。4x4 での位置を相対座標のまま他サイズへ写す
-const ASSAULT_IMPACTS_4X4 = [3, 6, 9, 1, 12, 14, 7];
-const assaultImpacts = (size: number): number[] =>
-    ASSAULT_IMPACTS_4X4.map((idx) => {
-        const row = Math.round(Math.floor(idx / 4) * ((size - 1) / 3));
-        const col = Math.round((idx % 4) * ((size - 1) / 3));
-        return row * size + col;
-    });
-
-// ストンプの飛び散る瓦礫の移動量(px)
-const DEBRIS: [number, number][] = [
-    [-90, -70],
-    [90, -80],
-    [-120, 10],
-    [120, 20],
-    [-60, 90],
-    [70, 100],
-];
 
 // 上昇/落下パーティクルの横位置(%)
 const PARTICLE_X = [6, 16, 26, 36, 46, 56, 66, 76, 86, 94];
@@ -128,6 +124,9 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     solstice: { label: '冬至の種子', bg: '#1d2a5a', fg: '#cfe0ff' },
     sprout: { label: 'ひこばえ', bg: '#5fd06a', fg: '#082a0c' },
     windborne: { label: '風の落とし子', bg: '#b9f0c8', fg: '#0b3a1c' },
+    autumn: { label: '落ち葉', bg: '#e8a24a', fg: '#3a1d00' },
+    shikigami: { label: '式神', bg: '#f1e4c3', fg: '#3a2a10' },
+    shikigamiBlast: { label: '式神爆破！', bg: '#ffb347', fg: '#3a1a00' },
     zap: { label: '帯電', bg: '#fff44f', fg: '#2a2500' },
     heal: { label: 'ライフ3', bg: '#5fd06a', fg: '#082a0c' },
     double: { label: 'バイバイン', bg: '#ffc24a', fg: '#2a1d00' },
@@ -137,12 +136,28 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     shuffle: { label: 'シャッフル', bg: '#ffffff', fg: '#10131c' },
     token: { label: 'トークン', bg: '#46a6ff', fg: '#06182e' },
     lock: { label: 'ロック', bg: '#ffc24a', fg: '#2a1d00' },
+    rain: { label: '慈雨', bg: '#9fe3c8', fg: '#06322a' },
+    dash: { label: '縮地', bg: '#ffffff', fg: '#10131c' },
+    clone: { label: '写し身', bg: '#c7d0ff', fg: '#10173d' },
+    plunder: { label: '追い剥ぎ', bg: '#ff4d79', fg: '#fff' },
+    bulwark: { label: '土壇場の防壁', bg: '#ffd966', fg: '#3a2a00' },
+    miasma: { label: 'ミアズマ', bg: '#c98bff', fg: '#1d0b33' },
+    chainZap: { label: '帯電拡散', bg: '#fff44f', fg: '#2a2500' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
 const RING_DELAYS = [0, 130, 260];
 
-const BURST_EMOJI: Record<BurstType, string> = { iceBreak: '💠', thaw: '💧', burn: '🔥' };
+const BURST_EMOJI: Record<BurstType, string> = {
+    iceBreak: '💠',
+    thaw: '💧',
+    burn: '🔥',
+    // ギアの発動で、対象のマスに出る小演出
+    gearKey: '🗝️',
+    gearBloom: '🌺',
+    gearSpread: '🌊',
+    gearEmpty: '🕳️',
+};
 
 export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
     if (!effect && !burst) return null;
@@ -195,6 +210,8 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
         ));
 
     const render = () => {
+        // キャラ固有スキルは UniqueEffects で予兆→本体→余波の多段演出にする
+        if (isUniqueEffect(effect.type)) return renderUniqueEffect(effect, size);
         switch (effect.type) {
             case 'slash':
             case 'backslash': {
@@ -213,35 +230,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     </>
                 );
             }
-            case 'stomp': {
-                const pos = cellCenter(effect.index ?? size + 1, size);
-                return (
-                    <>
-                        {[0, 1, 2].map((i) => (
-                            <div key={i} className={styles.shockwave} style={{ left: pos.left, top: pos.top, animationDelay: `${i * 140}ms` }} />
-                        ))}
-                        {DEBRIS.map((d, i) => (
-                            <span
-                                key={i}
-                                className={styles.debris}
-                                style={{ left: pos.left, top: pos.top, ['--dx' as string]: `${d[0]}px`, ['--dy' as string]: `${d[1]}px` }}
-                            >
-                                🪨
-                            </span>
-                        ))}
-                    </>
-                );
-            }
-            case 'judge':
-                return (
-                    <>
-                        <div className={styles.flash} />
-                        <div className={`${styles.flash} ${styles.flashLate}`} />
-                        <div className={styles.bolt}>⚡</div>
-                        <div className={`${styles.bolt} ${styles.boltL}`}>⚡</div>
-                        <div className={`${styles.bolt} ${styles.boltR}`}>⚡</div>
-                    </>
-                );
             case 'opium':
                 return (
                     <>
@@ -256,41 +244,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                             <div key={i} className={styles.wave} style={{ animationDelay: `${i * 160}ms` }} />
                         ))}
                         {riseParticles('💦')}
-                    </>
-                );
-            case 'assault':
-                // 軍師「全軍突撃」: 各所に着弾する衝撃 + 旗
-                return (
-                    <>
-                        {assaultImpacts(size).map((idx, i) => {
-                            const pos = cellCenter(idx, size);
-                            return (
-                                <div
-                                    key={i}
-                                    className={styles.impact}
-                                    style={{ left: pos.left, top: pos.top, animationDelay: `${i * 60}ms` }}
-                                />
-                            );
-                        })}
-                        <div className={styles.bannerCharge}>🚩</div>
-                        {riseParticles('🔥')}
-                    </>
-                );
-            case 'necromancy':
-                // ネクロマンサー「蘇生」: 闇のオーラから魂が立ち昇る
-                return (
-                    <>
-                        <div className={styles.necroGlow} />
-                        {riseParticles('👻')}
-                        <div className={styles.necroSigil}>💀</div>
-                    </>
-                );
-            case 'yinyang':
-                // 陰陽師「陰陽転化」: 回転する太極図
-                return (
-                    <>
-                        <div className={`${styles.yinyangRing}`} />
-                        <div className={styles.yinyang}>☯️</div>
                     </>
                 );
             case 'harvest':
@@ -336,17 +289,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {riseParticles('🔥')}
                     </>
                 );
-            case 'glacier':
-                // 絶対零度: 盤面全体が凍りつく。青いオーラ、降りしきる雪、中央に冷気の紋章
-                return (
-                    <>
-                        <div className={`${styles.aura} ${styles.auraIce}`} />
-                        <div className={styles.haze} style={{ background: 'rgba(186, 230, 253, 0.55)' }} />
-                        {fallParticles('❄')}
-                        {fallParticles('🧊')}
-                        <div className={styles.sigil}>🥶</div>
-                    </>
-                );
             case 'glacierBurst': {
                 // 氷結崩壊: 凍った敵が砕け散る。白い閃光と中央からの衝撃波、ダメージを受けたマスに破片
                 const pos = cellCenter(effect.index ?? Math.floor((size * size) / 2), size);
@@ -362,17 +304,6 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     </>
                 );
             }
-            case 'inferno':
-                // 業火: 画面が炎に包まれる。赤橙のオーラと立ち昇る炎、敵コマの上に火柱
-                return (
-                    <>
-                        <div className={`${styles.aura} ${styles.auraFire}`} />
-                        {riseParticles('🔥')}
-                        {riseParticles('🔥')}
-                        {cellPops(effect.indexes, '🔥', styles.burst_burn)}
-                        <div className={styles.sigil}>🌋</div>
-                    </>
-                );
             case 'cleanse':
                 // 浄化: 白金の光が盤面を洗い、きらめきが舞い上がる
                 return (
@@ -419,6 +350,15 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                     <>
                         {sweepParticles('🍃')}
                         {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
+            case 'autumn':
+                // 🍂落ち葉系: 枯れ葉が舞い落ち、対象のマスにも一枚ずつ散る
+                return (
+                    <>
+                        {fallParticles('🍂')}
+                        {sweepParticles('🍂')}
+                        {cellPops(effect.indexes, '🍂')}
                     </>
                 );
             case 'silence':
@@ -490,6 +430,74 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         <div className={styles.flashQuick} />
                         {sweepParticles('🃏')}
                         <div className={`${styles.sigil} ${styles.sigilSpin}`}>🔀</div>
+                    </>
+                );
+            case 'rain':
+                // 慈雨: やわらかな緑のオーラに雨粒が降り注ぎ、潤ったコマに水滴と若葉が出る
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGreen}`} />
+                        {fallParticles('💧')}
+                        {fallParticles('💧')}
+                        {cellPops(effect.indexes, '🌱')}
+                    </>
+                );
+            case 'dash':
+            case 'clone': {
+                // 縮地: 元のマスに残像を残して移動先へ駆ける。写し身: 元のコマの分身が隣のマスへ飛ぶ
+                const [from, to] = [effect.indexes?.[0], effect.indexes?.[1] ?? effect.index];
+                if (from === undefined || to === undefined) return null;
+                const a = cellCenter(from, size);
+                const b = cellCenter(to, size);
+                const isDash = effect.type === 'dash';
+                return (
+                    <>
+                        {/* 元のマス: 残像(縮地)/ 光(写し身) */}
+                        <span className={`${styles.cellPop} ${styles.afterImage}`} style={{ left: a.left, top: a.top }}>
+                            {isDash ? '💨' : '✨'}
+                        </span>
+                        {/* 元のマスから移動先へ飛ぶ本体 */}
+                        <span
+                            className={styles.flyer}
+                            style={{ left: a.left, top: a.top, ['--dx' as string]: `${b.left - a.left}px`, ['--dy' as string]: `${b.top - a.top}px` }}
+                        >
+                            {isDash ? '💨' : '👤'}
+                        </span>
+                        {/* 移動先: 着地の輪と絵文字 */}
+                        <div className={styles.impact} style={{ left: b.left, top: b.top, animationDelay: '320ms' }} />
+                        <span className={`${styles.cellPop} ${styles.landing}`} style={{ left: b.left, top: b.top }}>
+                            {isDash ? '⚡' : '👥'}
+                        </span>
+                    </>
+                );
+            }
+            case 'plunder': {
+                // 追い剥ぎ: 奪うマスに斬撃が走り、硬貨が舞い上がる
+                const idxs = effect.indexes ?? (effect.index !== undefined ? [effect.index] : []);
+                return (
+                    <>
+                        <div className={styles.flashQuick} />
+                        {idxs.slice(0, 49).map((idx, i) => {
+                            const pos = cellCenter(idx, size);
+                            return <div key={`r-${idx}-${i}`} className={styles.impact} style={{ left: pos.left, top: pos.top, borderColor: '#ff4d79' }} />;
+                        })}
+                        {cellPops(idxs, '🗡️')}
+                        {riseParticles('🪙')}
+                    </>
+                );
+            }
+            case 'bulwark':
+                // 土壇場の防壁: 閃光と衝撃波が広がり、揃った列が消し飛ぶ。中央に城が現れ、瓦礫が降る
+                return (
+                    <>
+                        <div className={`${styles.aura} ${styles.auraGold}`} />
+                        <div className={styles.flash} />
+                        {RING_DELAYS.map((d) => (
+                            <div key={d} className={styles.shockwave} style={{ left: '50%', top: '50%', animationDelay: `${d}ms`, borderColor: '#ffd966' }} />
+                        ))}
+                        {fallParticles('🧱')}
+                        {riseParticles('✨')}
+                        <div className={styles.sigil}>🏰</div>
                     </>
                 );
             case 'token':

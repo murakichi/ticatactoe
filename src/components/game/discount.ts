@@ -5,11 +5,17 @@
 //   - effect : 「エフェクトを付与するスキル」の永続軽減（そのターン中、該当スキルを打つたびに効く）
 //   - token  : 「トークンを付与するスキル」の永続軽減
 //   - unique : 「固有スキル」の軽減。1ターンに1度だけ使える（uniqueUsed）
+//   - turn   : 「このターンに打つ全スキル」の軽減（春一番が解除した氷結の数だけ。ターンを跨がない）
 // 軽減札どうしは軽減されず、「次に打つスキル」も消費しない。
 
-export type Discount = { next: number; effect: number; token: number; unique: number; uniqueUsed: boolean };
+export type Discount = { next: number; effect: number; token: number; unique: number; turn: number; uniqueUsed: boolean };
 
-export const emptyDiscount = (): Discount => ({ next: 0, effect: 0, token: 0, unique: 0, uniqueUsed: false });
+export const emptyDiscount = (): Discount => ({ next: 0, effect: 0, token: 0, unique: 0, turn: 0, uniqueUsed: false });
+
+/** 春一番: 氷結を解除した数だけ、このターンに打つ全スキルを軽減する。軽減量が可変なので DISCOUNT_SKILLS の表には入れず、軽減札として別に扱う */
+export const SPRING_WIND_KEY = 'onClickSpringWind';
+/** 軽減札か（DISCOUNT_SKILLS の7種＋春一番）。軽減札どうしは軽減されず、「次に打つスキル」も消費しない */
+export const isReducerSkill = (key: string): boolean => isDiscountSkill(key) || key === SPRING_WIND_KEY;
 
 /** 軽減札のコストキー → 効果 */
 export const DISCOUNT_SKILLS = {
@@ -35,13 +41,13 @@ export const EFFECT_SKILL_KEYS: ReadonlySet<string> = new Set([
 /** 各キャラの固有スキル（コストキー） */
 export const UNIQUE_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickStomp', 'onClickJudgeDay', 'onClickTotalAssault', 'onClickMiasma', 'onClickChargeSpread',
-    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickYingYangSkill',
+    'onClickGlacier', 'onClickInferno', 'onClickNecromancy', 'onClickToggleYingYang', 'onClickShikigamiPlace', 'onClickShikigamiBlast',
 ]);
 
 /** key のスキルにかかる軽減量。軽減札どうしには効かない */
 export const discountAmount = (d: Discount, key: string | undefined, isToken: boolean): number => {
-    if (key && isDiscountSkill(key)) return 0;
-    let n = d.next;
+    if (key && isReducerSkill(key)) return 0;
+    let n = d.next + d.turn;
     if (isToken) n += d.token;
     else if (key && EFFECT_SKILL_KEYS.has(key)) n += d.effect;
     if (key && UNIQUE_SKILL_KEYS.has(key)) n += d.unique;
@@ -52,6 +58,7 @@ export const applyDiscount = (cost: number, amount: number): number => (cost <= 
 
 /** スキルを打ったあとの状態。軽減札なら効果を足し、それ以外なら「次に打つスキル」の軽減を消費する */
 export const afterSkill = (d: Discount, key: string): Discount => {
+    if (key === SPRING_WIND_KEY) return d; // 軽減量は解除した氷結の数で決まるので、呼び出し側が turn に足す
     if (isDiscountSkill(key)) {
         const e: Partial<Record<'next' | 'effect' | 'token' | 'unique' | 'life', number>> = DISCOUNT_SKILLS[key];
         return {
@@ -59,6 +66,7 @@ export const afterSkill = (d: Discount, key: string): Discount => {
             effect: d.effect + (e.effect ?? 0),
             token: d.token + (e.token ?? 0),
             unique: d.unique + (e.unique ?? 0),
+            turn: d.turn,
             uniqueUsed: d.uniqueUsed || key === 'onClickUniqueDiscount',
         };
     }

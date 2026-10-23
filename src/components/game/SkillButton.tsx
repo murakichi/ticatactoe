@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import styles from './SkillButton.module.css';
 import { CATEGORY_LABEL, metaOf, parseSkillText } from './skillMeta';
 
@@ -19,9 +19,19 @@ type SkillButtonProps = {
     tokenUsed?: boolean;
     /** キャラ固有スキル */
     exclusive?: boolean;
+    /** AIの手番など、人間の操作を受け付けない間(カードもロック切替も押せない。AIは別経路で実行する) */
+    inputBlocked?: boolean;
+    /** 「説明をすべて開く/閉じる」の状態。変わるたびに、このカードの説明の開閉もそろえる */
+    expandAll?: boolean;
 }
 
 export const SkillButton = (props: SkillButtonProps) => {
+    // 説明のアコーディオン: 既定は2行に省略。開くと全文を出す
+    const [open, setOpen] = useState<boolean>(props.expandAll ?? false);
+    useEffect(() => {
+        if (props.expandAll !== undefined) setOpen(props.expandAll);
+    }, [props.expandAll]);
+    const descId = useId();
     if (props.hidden) return null;
     const parsed = parseSkillText(props.buttonText);
     const name = parsed?.name ?? props.buttonText;
@@ -42,7 +52,7 @@ export const SkillButton = (props: SkillButtonProps) => {
                 <button
                     className={classes}
                     onClick={props.onClick}
-                    disabled={props.disabled}
+                    disabled={props.disabled || props.inputBlocked}
                     onMouseEnter={props.onHoverStart}
                     onMouseLeave={props.onHoverEnd}
                     aria-label={props.buttonText}
@@ -62,19 +72,26 @@ export const SkillButton = (props: SkillButtonProps) => {
                         <span className={styles.tagCategory}>{CATEGORY_LABEL[meta.category]}</span>
                         {parsed?.suffix && <span className={styles.tagCategory}>{parsed.suffix.replace(/[()]/g, '')}</span>}
                     </span>
-                    <span className={styles.desc}>{props.paragraph}</span>
+                    <span id={descId} className={`${styles.desc}${open ? ` ${styles.descOpen}` : ''}`}>
+                        {props.paragraph}
+                    </span>
                     {reason && <span className={styles.reason}>{reason}</span>}
                 </button>
                 {props.onToggleLock && (
                     <button
                         className={`${styles.lock}${props.locked ? ` ${styles.lockOn}` : ''}`}
                         onClick={props.onToggleLock}
+                        disabled={props.inputBlocked}
                         title={props.locked ? 'ロック解除' : 'ロック（シャッフルで固定）'}
                     >
                         {props.locked ? '🔒' : '🔓'}
                     </button>
                 )}
             </div>
+            {/* 説明の開閉(アコーディオン)。カード自体がボタンなので、入れ子にならないよう外に置く */}
+            <button type='button' className={styles.descToggle} aria-expanded={open} aria-controls={descId} onClick={() => setOpen((o) => !o)}>
+                {open ? '説明を閉じる ▴' : '説明を開く ▾'}
+            </button>
         </div>
     );
 };

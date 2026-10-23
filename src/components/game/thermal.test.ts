@@ -37,6 +37,7 @@ import {
     GRAFT_MAX,
     sowCandidates,
     sow,
+    SOW_COUNT,
     cleanse,
     ailmentStacks,
     AILMENTS,
@@ -49,6 +50,26 @@ import {
     detonate,
     GLACIER_BASE_COST,
     FLAME_BURN_DAMAGE,
+    leafStacks,
+    activeLeaves,
+    leafSurcharge,
+    placeLeafToken,
+    bonfireTargets,
+    bonfire,
+    mulchCandidates,
+    mulch,
+    autumnTargets,
+    autumn,
+    leafFrostTargets,
+    thawTargets,
+    thawAll,
+    KIMON_LOCK_TURNS,
+    fireStacksTotal,
+    kimonTargets,
+    kimon,
+    fireWheelTargets,
+    FIRE_WHEEL_COUNT,
+    fireWheel,
 } from './thermal';
 import { lineCells } from './boardGeometry';
 import { fireCharges, applyJammer, chargeStacks, canJam, isShielded, boardChargeCount, isFullyCharged } from './charge';
@@ -550,7 +571,7 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(graft(b, 5, '💙', 4, [0, 15])).toEqual([]); // 受け手でないマスは無視
     });
 
-    it('風の落とし子: 候補は自陣の🌱を持てるコマ。同じコマへの重複付与も可', () => {
+    it('風の落とし子: 候補は自陣の🌱を持てるコマ。picks の各マスに🌱を1つずつ足す', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '❄');
@@ -558,9 +579,10 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         b[3] = sq('⭕', 3);
         b[4] = sq('💙', 3, '🌱');
         expect(sowCandidates(b, '💙')).toEqual([0, 4]);
-        sow(b, [0, 0, 4]);
-        expect(budStacks(b[0])).toBe(2);
+        sow(b, [0, 4]);
+        expect(budStacks(b[0])).toBe(1);
         expect(budStacks(b[4])).toBe(2);
+        expect(SOW_COUNT).toBe(2);
     });
 
     it('sim/thermal.js と一致', () => {
@@ -596,8 +618,9 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(a).toEqual(c);
         const d = mk();
         const e = mk();
-        sim.sow(d, [0, 0, 5]);
-        sow(e, [0, 0, 5]);
+        sim.sow(d, [0, 5]);
+        sow(e, [0, 5]);
+        expect(sim.SOW_COUNT).toBe(SOW_COUNT);
         expect(d).toEqual(e);
         for (const [fs, ft] of [[sim.freeze, freeze], [sim.ignite, ignite]] as const) {
             expect(fs).toBeDefined();
@@ -675,10 +698,31 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
         b[9] = sq('⭕', 3, '❄'); // 斜め
         const thawed = placeFlameToken(b, 6, '💙', 4, 4);
         expect(b[6].player).toBe('💙');
-        expect(b[6].bind).toBe(4);
+        expect(b[6].bind).toBe(3); // 🔥を付与した瞬間に1ダメージ（4→3）
         expect(flameStacks(b[6])).toBe(1);
         expect(thawed).toEqual([5]);
         expect(isFrozen(b[9])).toBe(true);
+    });
+
+    it('🔥を付与した瞬間に1ダメージ: スタックごとに1。🔑・氷結・ライフ0・空きマスには入らず、🔥は消えない', () => {
+        const b = emptyBoard();
+        b[0] = sq('⭕', 5);
+        b[1] = sq('⭕', 5, '🔑');
+        b[2] = sq('⭕', 0);
+        ignite(b, [0, 1, 2, 4], 4, 2); // 2スタック
+        expect(b[0].bind).toBe(3); // 5-2。🔥は2つ残る
+        expect(flameStacks(b[0])).toBe(2);
+        expect(b[1].bind).toBe(5); // 🔑ロック中は入らない
+        expect(b[2].bind).toBe(0); // ライフ0はそのまま
+        expect(b[4].player).toBeUndefined(); // 空きマスは🔥だけ
+        expect(flameStacks(b[4])).toBe(2);
+        // 氷結中のマスは、1回目の付与で❄が解けるだけ（🔥もダメージも入らない）。2回目で🔥1つとダメージ1
+        const f = emptyBoard();
+        f[15] = sq('⭕', 5, '❄');
+        ignite(f, [15], 4, 1);
+        expect(flameStacks(f[15])).toBe(0);
+        expect(isFrozen(f[15])).toBe(false);
+        expect(f[15].bind).toBe(5);
     });
 
     it('sim/thermal.js と一致', () => {
@@ -727,8 +771,28 @@ describe('殉火（仮名）', () => {
         expect(r.targets).toEqual([1, 2, 3]);
         expect(b[0].bind).toBe(0);
         expect(flameStacks(b[0])).toBe(0);
-        [1, 2, 3].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        [1, 2].forEach((k) => expect(flameStacks(b[k])).toBe(1));
+        expect(b[1].bind).toBe(3); // 付与の瞬間に1ダメージ
+        expect(b[2].bind).toBe(1);
+        expect(b[3].player).toBeUndefined(); // ライフ0の敵コマは🔥で破壊される
         [4, 5, 6, 7].forEach((k) => expect(flameStacks(b[k])).toBe(0));
+    });
+
+    it('🔥でライフが0になったコマは破壊される: 継続ダメージ・付与時のダメージ・すでにライフ0。🔑・氷結中は除く', () => {
+        const none = [] as CharacterId[];
+        // 継続ダメージ(1スタック=2)でライフ2→0
+        expect(decayTick(sq('⭕', 3, '🔥'), none).player).toBeUndefined(); // 自然減衰で2、継続ダメージで0
+        // ライフに余裕があれば残る
+        const alive = decayTick(sq('⭕', 6, '🔥'), none);
+        expect(alive.player).toBe('⭕');
+        // 🔑ロック中は🔥のダメージも破壊も受けない
+        expect(decayTick(sq('⭕', 2, '🔥', '🔑'), none).player).toBe('⭕');
+        // 付与時: ライフ1のコマは1ダメージで0になり破壊。破壊したマスには続けて🔥を付けない（業火の2スタック目）
+        const b = emptyBoard();
+        b[0] = sq('⭕', 1);
+        ignite(b, [0], 4, 2);
+        expect(b[0].player).toBeUndefined();
+        expect(flameStacks(b[0])).toBe(0);
     });
 
     it('氷結中の敵は🔥の代わりに氷結が全解除される', () => {
@@ -881,5 +945,158 @@ describe('バーンアウト', () => {
         c[1] = sq('⭕', 5, '🔥');
         c[4] = sq('🟩', 5, '🔥', '⚡');
         expect(simT.burnoutTargets(c, cs, ['💙', '⭕', '🟩'])).toEqual(burnoutTargets(c, cs));
+    });
+});
+
+describe('🍂落ち葉（🌱バッズの対）', () => {
+    const board = (): SquareInfo[] => Array.from({ length: 16 }, () => sq(undefined, 0));
+
+    it('他の席のコマに乗った効力のある🍂の枚数ぶん、そのプレイヤーのスキルコストが上がる（自陣の🍂は数えない・氷結中は休眠）', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂', '🍂');
+        b[1] = sq('⭕', 3, '🍂');
+        b[2] = sq('⭕', 3, '🍂', '❄'); // 氷結中は休眠して数えない
+        expect(leafStacks(b[0])).toBe(2);
+        expect(activeLeaves(b[2])).toBe(0);
+        expect(leafSurcharge(b, '⭕')).toBe(2); // 💙の🍂2枚
+        expect(leafSurcharge(b, '💙')).toBe(1); // ⭕の🍂1枚（氷結中の1枚は数えない）
+        expect(leafSurcharge(b, '🟩')).toBe(3); // 第三者には全員ぶん
+    });
+
+    it('🔥が付くと🌱と同じく🍂は燃えて消える（冬至の種子のガードは🌱だけ守る）', () => {
+        const b = board();
+        b[5] = sq('💙', 3, '🌱', '🍂', '☠');
+        ignite(b, [5], 4);
+        expect(b[5].effects.map((e) => e.effect)).toEqual(['☠', '🔥']);
+        const g = board();
+        g[5] = sq('💙', 3, '🌱', '🍂');
+        ignite(g, [5], 4, 1, () => true);
+        expect(g[5].effects.map((e) => e.effect)).toEqual(['🌱', '🔥']);
+    });
+
+    it('placeLeafToken は🍂を指定枚数持つコマを置く', () => {
+        const b = board();
+        placeLeafToken(b, 3, '💙', 4, 2);
+        expect(b[3]).toEqual({ player: '💙', bind: 4, effects: [{ effect: '🍂' }, { effect: '🍂' }] });
+    });
+
+    it('焚き火の唄: 敵陣の🍂だけを全て除去する。🔑ロックと❄氷結のマス・自陣は対象外', () => {
+        const b = board();
+        b[0] = sq('⭕', 3, '🍂', '🍂');
+        b[1] = sq('⭕', 3, '🍂', '🔑');
+        b[2] = sq('⭕', 3, '🍂', '❄');
+        b[3] = sq('💙', 3, '🍂');
+        b[4] = sq('⭕', 3, '☠');
+        expect(bonfireTargets(b, '💙')).toEqual([0]);
+        const r = bonfire(b, '💙');
+        expect(r).toEqual({ n: 2, cells: [0] });
+        expect(leafStacks(b[0])).toBe(0);
+        expect(leafStacks(b[1])).toBe(1);
+        expect(leafStacks(b[2])).toBe(1);
+        expect(leafStacks(b[3])).toBe(1);
+        expect(bonfireTargets(b, '💙')).toEqual([]);
+    });
+
+    it('腐葉土の目覚め: 自陣の🍂を1枚ずつ数えた候補から1枚だけを🌱に変える', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂', '☠', '🍂');
+        b[1] = sq('💙', 3, '🍂');
+        b[2] = sq('⭕', 3, '🍂');
+        expect(mulchCandidates(b, '💙')).toEqual([0, 0, 1]);
+        expect(mulch(b, 0)).toBe(true);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🌱', '☠', '🍂']);
+        expect(mulch(b, 3)).toBe(false);
+    });
+
+    it('一葉知秋: 盤面の🌱を敵味方問わず🍂に変える。🔥が付いたマスは変えない', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🌱', '🌱');
+        b[1] = sq('⭕', 3, '🌱', '⚡');
+        b[2] = sq('⭕', 3, '🌱', '🔥'); // 冬至の種子で🌱が残った火炎中のマス
+        b[3] = sq('⭕', 3, '☠');
+        expect(autumnTargets(b)).toEqual([0, 1]);
+        expect(autumn(b)).toEqual({ n: 3, cells: [0, 1] });
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🍂', '🍂']);
+        expect(b[1].effects.map((e) => e.effect)).toEqual(['🍂', '⚡']);
+        expect(budStacks(b[2])).toBe(1);
+        expect(autumn(b).n).toBe(0);
+    });
+
+    it('霜枯れ: 自陣の🍂を持ち氷結を付けられるマスだけが対象。付けると🍂は休眠してコスト上乗せが止まる', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '🍂');
+        b[1] = sq('💙', 3, '🍂', '🔑'); // ロック中は凍らせられない
+        b[2] = sq('💙', 3, '🍂', '❄'); // 氷結中でも重ねられる
+        b[3] = sq('💙', 3, '🌱'); // 🍂が無い
+        b[4] = sq('⭕', 3, '🍂');
+        expect(leafFrostTargets(b, '💙')).toEqual([0, 2]);
+        expect(leafSurcharge(b, '⭕')).toBe(2); // 💙の🍂: b[0] と b[1]（b[2] は氷結中で休眠）
+        freeze(b, leafFrostTargets(b, '💙'));
+        expect(leafSurcharge(b, '⭕')).toBe(1); // b[1] はロック中で凍らせられず、🍂が働き続ける
+    });
+
+    it('春一番: 自陣のコマの❄を全スタック解除して、解除した❄の数を返す（敵のコマ・空きマスの❄は触らない）', () => {
+        const b = board();
+        b[0] = sq('💙', 3, '❄', '❄', '🍂');
+        b[1] = sq('💙', 3, '❄', '🔑'); // ロック中でも解ける
+        b[2] = sq('💙', 3, '🌱');
+        b[3] = sq('⭕', 3, '❄');
+        b[4] = sq(undefined, 0, '❄');
+        expect(thawTargets(b, '💙')).toEqual([0, 1]);
+        expect(thawAll(b, '💙')).toEqual({ stacks: 3, cells: [0, 1] });
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🍂']);
+        expect(b[1].effects.map((e) => e.effect)).toEqual(['🔑']);
+        expect(b[3].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(b[4].effects.map((e) => e.effect)).toEqual(['❄']);
+        expect(thawAll(b, '💙').stacks).toBe(0);
+    });
+});
+
+describe('鬼門封じ / 火の車', () => {
+    const board = (): SquareInfo[] => Array.from({ length: 16 }, () => sq(undefined, 0));
+    const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+
+    it('鬼門封じ: 対象は敵のコマのうち守られていないもの（氷結中は選べる）', () => {
+        const b = board();
+        b[0] = sq('⭕', 3);
+        b[1] = sq('⭕', 3, '🔑'); // ロック中は選べない
+        b[2] = sq('⭕', 3, '❄');
+        b[3] = sq('💙', 3); // 自陣は選べない
+        expect(kimonTargets(b, '💙', guard)).toEqual([0, 2]);
+    });
+
+    it('鬼門封じ: 氷結していなければ破壊して3ターンロック。氷結中は❄が1つ減るだけでコマは残りロックしない', () => {
+        const b = board();
+        b[0] = sq('⭕', 5, '☠', '🌱');
+        expect(kimon(b, 0)).toEqual({ destroyed: true, thawed: false, locked: true });
+        expect(b[0]).toEqual({ player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] });
+        expect(KIMON_LOCK_TURNS).toBe(3);
+        const f = board();
+        f[2] = sq('⭕', 5, '❄', '❄');
+        expect(kimon(f, 2)).toEqual({ destroyed: false, thawed: true, locked: false });
+        expect(f[2].player).toBe('⭕');
+        expect(f[2].effects.map((e) => e.effect)).toEqual(['❄']);
+    });
+
+    it('火の車: 対象は鬼門封じと同じ（敵のコマで守られていないもの）。🔥を1つずつ付け、氷結中なら解けるだけ', () => {
+        const b = board();
+        b[0] = sq('⭕', 3);
+        b[10] = sq('⭕', 3, '❄'); // 隣り合わないマス（🔥は縦横隣の氷結も解くため）
+        b[2] = sq('💙', 3);
+        expect(fireWheelTargets(b, '💙', guard)).toEqual([0, 10]);
+        expect(FIRE_WHEEL_COUNT).toBe(2);
+        const thawed = fireWheel(b, [0, 10], 4);
+        expect(b[0].effects.map((e) => e.effect)).toEqual(['🔥']);
+        expect(b[10].effects.map((e) => e.effect)).toEqual([]); // 氷結中は🔥が付かず❄が解けるだけ
+        expect(thawed).toContain(10);
+    });
+
+    it('fireStacksTotal: 敵味方・空きマスを問わず盤面全体の🔥を数える（火の車の無料条件に使う）', () => {
+        const b = board();
+        expect(fireStacksTotal(b)).toBe(0);
+        b[0] = sq('⭕', 3, '🔥');
+        b[1] = sq('💙', 3, '🔥', '🔥');
+        b[2] = sq(undefined, 0, '🔥');
+        expect(fireStacksTotal(b)).toBe(4);
     });
 });

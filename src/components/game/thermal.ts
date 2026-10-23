@@ -27,6 +27,8 @@ export const FLAME_BURN_DAMAGE = 2;
 export const PYROMANCER_EXTRA_BURN = 1;
 /** 火炎状態のマスがスキルでダメージを受けるときの倍率（切り上げ） */
 export const FLAME_SKILL_MULT = 1.5;
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき。sim/thermal.js と同値） */
+export const FLAME_INSTANT_DAMAGE = 1;
 
 export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
 export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
@@ -126,8 +128,19 @@ export const ignite = (
                 thawed.add(k);
                 continue;
             }
-            // 🔥が付くと🌱は燃えて消える（冬至の種子のガード中は消えない）。⚡☠は消えず、休眠もしない
-            board[k] = { ...board[k], effects: [...(keepBuds?.(board[k]) ? board[k].effects : board[k].effects.filter((e) => e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
+            const guarded = keepBuds?.(board[k]) ?? false;
+            board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) {
+                    board[k] = { player: undefined, bind: 0, effects: [] };
+                    break;
+                }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const m of orthoNeighbors(k, size)) {
                 if (isFrozen(board[m])) {
                     board[m] = thaw(board[m]);
@@ -182,7 +195,7 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
 /** 煉獄の鍛冶師のパッシブでコストが常に-1される、🔥を付与するスキル（コストキー。業火は固有スキルなので含めない）。sim/thermal.js と同じ */
-export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden']);
+export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 /** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
 export const INFERNO_FREE_SKILLS = 3;
 /** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。
@@ -232,7 +245,7 @@ export const detonate = (board: SquareInfo[], me: SquareInfo['player']): Detonat
 };
 
 /** 業火の基礎コスト。sim/config.js の thermal.infernoCost と同値 */
-export const INFERNO_COST = 9;
+export const INFERNO_COST = 7;
 /** 業火が敵コマ1つに足す🔥のスタック数 */
 export const INFERNO_STACKS = 2;
 
@@ -256,6 +269,8 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
+    // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next)) return { player: undefined, bind: 0, effects: [] };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
@@ -337,9 +352,73 @@ export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['pla
 export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
 
-/** 風の落とし子: picks の各マス（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで（候補が少なければ候補の数だけ） */
+export const SOW_COUNT = 2;
+
+/** 風の落とし子: picks の各マスに🌱を1つずつ足す。board を直接書き換える（呼び出し側が SOW_COUNT 個を重複なく選ぶ） */
 export const sow = (board: SquareInfo[], picks: number[]): void => {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
+};
+
+// ---- 🍂落ち葉（🌱バッズの対）。自陣にあると、相手全員のスキルコストが落ち葉の数だけ増える ----
+
+/** マスの🍂の数 */
+export const leafStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🍂').length;
+
+/** 効力を発揮している🍂の数。氷結中のマスの🍂は消えないが休眠する（🌱と同じ） */
+export const activeLeaves = (sq: SquareInfo): number => (isDormant(sq) ? 0 : leafStacks(sq));
+
+/** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数（全員対象・上限なし） */
+export const leafSurcharge = (board: SquareInfo[], player: SquareInfo['player']): number =>
+    board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+
+/** 🍂付きトークン: idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
+export const placeLeafToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number, n: number = 1): void => {
+    board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' as const })) };
+};
+
+/** 焚き火の唄の対象: player 以外のコマのうち、🍂を持ち、🔑ロックも❄氷結もないマス（昇順） */
+export const bonfireTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !hasLock(sq) && !isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 焚き火の唄: 対象マスの🍂を全て除去して、除去した枚数とマスを返す。board を直接書き換える */
+export const bonfire = (board: SquareInfo[], player: SquareInfo['player']): { n: number; cells: number[] } => {
+    const cells = bonfireTargets(board, player);
+    let n = 0;
+    for (const k of cells) {
+        n += leafStacks(board[k]);
+        board[k] = without(board[k], '🍂');
+    }
+    return { n, cells };
+};
+
+/** 腐葉土の目覚めの候補: player のコマの🍂を1枚ずつ数えた添字の列（マスの🍂が多いほど当たりやすい。ランダムに1つ選ぶ元） */
+export const mulchCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.flatMap((sq, i) => (sq.player === player ? Array<number>(leafStacks(sq)).fill(i) : []));
+
+/** 腐葉土の目覚め: cell の🍂を1枚だけ🌱に変える（枚数の順序は保つ）。🍂が無ければ false。board を直接書き換える */
+export const mulch = (board: SquareInfo[], cell: number): boolean => {
+    const at = board[cell].effects.findIndex((e) => e.effect === '🍂');
+    if (at < 0) return false;
+    const effects = board[cell].effects.slice();
+    effects[at] = { effect: '🌱' };
+    board[cell] = { ...board[cell], effects };
+    return true;
+};
+
+/** 一葉知秋の対象: 🌱を持ち、🔥が付いていないマス（🔥中は🍂がすぐ燃えるので変換しない。冬至の種子で残った🌱がそれにあたる） */
+export const autumnTargets = (board: SquareInfo[]): number[] =>
+    board.map((sq, i) => (budStacks(sq) > 0 && flameStacks(sq) === 0 ? i : -1)).filter((i) => i !== -1);
+
+/** 一葉知秋: 盤面の🌱をすべて🍂に変える（敵味方問わず・1枚ずつ）。変えた枚数とマスを返す。board を直接書き換える */
+export const autumn = (board: SquareInfo[]): { n: number; cells: number[] } => {
+    const cells = autumnTargets(board);
+    let n = 0;
+    for (const k of cells) {
+        n += budStacks(board[k]);
+        board[k] = { ...board[k], effects: board[k].effects.map((e) => (e.effect === '🌱' ? { effect: '🍂' as const } : e)) };
+    }
+    return { n, cells };
 };
 
 // ---- 火炎系の汎用スキル（火炎トークン・焼畑）の純粋ロジック ----
@@ -406,6 +485,61 @@ export const placeFrostToken = (board: SquareInfo[], idx: number, player: Square
 /** 霜降り: player のコマでライフが maxLife 以下（0含む）かつ氷結を付けられるマス（昇順） */
 export const frostfallTargets = (board: SquareInfo[], player: SquareInfo['player'], maxLife: number = FROSTFALL_MAX_LIFE): number[] =>
     board.map((sq, i) => (sq.player === player && sq.bind <= maxLife && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 春一番の対象: player のコマで❄を持つマス（昇順。🔑ロック中でも解ける） */
+export const thawTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === player && isFrozen(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** 春一番: player のコマの❄を全スタック解除し、解除した❄の数とマスを返す。board を直接書き換える */
+export const thawAll = (board: SquareInfo[], player: SquareInfo['player']): { stacks: number; cells: number[] } => {
+    const cells = thawTargets(board, player);
+    let stacks = 0;
+    for (const k of cells) {
+        stacks += frozenStacks(board[k]);
+        board[k] = thaw(board[k]);
+    }
+    return { stacks, cells };
+};
+
+// ---- 鬼門封じ / 火の車 ----
+
+/** 鬼門封じが空きマスにかけるロックの長さ（ターン数。ロックの bind に入れる） */
+export const KIMON_LOCK_TURNS = 3;
+
+/** 盤面全体（敵味方・空きマス含む）の🔥の総数。火の車の「このターンに🔥を付与したか」を、手番開始時（や火の車を撃った直後）との差で見る */
+export const fireStacksTotal = (board: SquareInfo[]): number => board.reduce((n, sq) => n + flameStacks(sq), 0);
+
+/** 鬼門封じの対象: player 以外のコマのうち、guarded（🔑ロック・⚡無敵など）でないマス（昇順。氷結中でも選べる） */
+export const kimonTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * 鬼門封じ: cell のコマを破壊する（氷結中なら破壊せず❄を1つ減らすだけ）。破壊して空きマスになったら KIMON_LOCK_TURNS ターンのロックを掛ける。
+ * board を直接書き換える。sim/thermal.js の kimon と同じ
+ */
+export const kimon = (board: SquareInfo[], cell: number): { destroyed: boolean; thawed: boolean; locked: boolean } => {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { destroyed: false, thawed: true, locked: false };
+    }
+    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    return { destroyed: true, thawed: false, locked: true };
+};
+
+/** 火の車の対象: player 以外のコマのうち、guarded（🔑ロック・⚡無敵など）でないマス（昇順。氷結中でも選べる＝🔥は付かず❄が解ける） */
+export const fireWheelTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    kimonTargets(board, player, guarded);
+
+/** 火の車が🔥を付ける敵マスの数 */
+export const FIRE_WHEEL_COUNT = 2;
+
+/** 火の車: picks（呼び出し側がランダムに選んだ敵マス）に🔥を1つずつ付ける（ignite の規則どおり）。解けたマスを返す。board を直接書き換える */
+export const fireWheel = (board: SquareInfo[], picks: number[], size: number, keepBuds?: (sq: SquareInfo) => boolean): number[] =>
+    ignite(board, picks, size, 1, keepBuds).thawed;
+
+/** 霜枯れ: player のコマで🍂を持ち、氷結を付けられるマス（昇順）。氷結中は🍂が休眠する点に注意 */
+export const leafFrostTargets = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === player && leafStacks(sq) > 0 && canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
 
 /** 霜降りの対象になるライフの上限 */
 export const FROSTFALL_MAX_LIFE = 2;

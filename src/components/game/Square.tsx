@@ -10,6 +10,10 @@ type SquareProps = {
     onSquareClick: () => void;
     highlight?: 'preview' | 'destroy';
     shielded?: boolean;
+    /** 勝ちを決めた列のマス */
+    win?: boolean;
+    /** 勝負が付いたあと、勝ち列以外のマス */
+    dimmed?: boolean;
     onHover?: () => void;
     onHoverEnd?: () => void;
 };
@@ -37,8 +41,11 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     const frozen = info.effects.some((e) => e.effect === '❄');
     const burning = info.effects.some((e) => e.effect === '🔥');
     const dormant = frozen; // 氷結中のマスの他のエフェクト（🌱⚡☠）は消えないが休眠（火炎中は休眠しない）
+    if (props.win) classes.push(styles.win);
+    else if (props.dimmed) classes.push(styles.dimmed);
     if (props.shielded) classes.push(styles.shielded);
     else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
+    if (info.effects.some((e) => e.effect === '📜')) classes.push(styles.shikigami);
     if (frozen) classes.push(styles.frozen);
     if (burning) classes.push(styles.burning);
 
