@@ -30,6 +30,8 @@ const isFrozen = (sq) => frozenStacks(sq) > 0;
 const isDormant = (sq) => isFrozen(sq); // 休眠は氷結のみ（火炎中のマスは🌱が消え、⚡☠は重複して働く）
 const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+/** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき） */
+const FLAME_INSTANT_DAMAGE = 1;
 const without = (sq, ...kinds) => ({ ...sq, effects: sq.effects.filter((e) => !kinds.includes(e.effect)) });
 
 const thaw = (sq) => (isFrozen(sq) ? without(sq, '❄') : sq);
@@ -82,6 +84,13 @@ function ignite(board, cells, size, n = 1, keepBuds) {
             // 🔥が付くと🌱と🍂は燃えて消える（keepBuds が真=冬至の種子のガード中は🌱だけ消えない）
             const guarded = !!(keepBuds && keepBuds(board[k]));
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
+            // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
+            if (board[k].player && !hasLock(board[k])) {
+                const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
+                // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
+                if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
+                board[k] = { ...board[k], bind: left };
+            }
             for (const nb of orthoNeighbors(k, size)) {
                 if (isFrozen(board[nb])) { board[nb] = thaw(board[nb]); thawed.add(nb); }
             }

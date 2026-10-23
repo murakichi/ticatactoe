@@ -1,16 +1,22 @@
 # tune-top: necromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: (未到達。取り込み済み master=4dad41d)
-- 現在の推奨設定: gears=[vengeance,lastStand] deck=既定 AIフラグ=なし
+- 最後に検証したmaster: (未到達。取り込み済み master=81ad8ce)
+- 現在の推奨設定: gears=[vengeance,lastStand] deck=[0,2,3,5,6,8,11,12,32,53,57,58] AIフラグ=necroLock=1(割引札53/57/58をロック固定) yyCover=150(陰陽師が相手なら全ての列に自コマ)
 - 基準線: 環境勝率 42.6% / 9位 / 1位 tactician 67.8%  (--rank, seed 1, games 60, 2026-10-20)
 - 最新master(4dad41d)での順位: 7位 40.9% / 1位 electrician 66.8% (--rank seed1 games60, 2026-10-21)。42.6%(9位)から順位は上がったが、他キャラの変動(poisoner/you/pyromancerの低下)による相対的なもの
 - 基準線(採用後, master 3bc89db): 基本 3位 58.0%(1位 magician 64.3%) / envDeck varied 2位 59.9% / oppGears none 1位 72.3% / oppGears random 2位 66.4%  (--rank seed3 games200)
 - 最新環境(master 349cb36, --rank seed1 games100): 1 poisoner 76.3% / 2 magician 61.9% / 3 necromancer 55.1% / 4 tactician 54.9%。対キャラ別(seed2 games200): poisoner 18% が唯一の大敗、他は46〜89%
+- 最新環境(master 81ad8ce, --rank seed1 games100): 1 poisoner 76.7% / 2 magician 62.1% / 3 necromancer 54.8% / 4 tactician 54.7%(新札62〜70は未採用デッキのため順位は不変)
+- 最新(master 6c8ebaf + 採用, --rank seed3 games200 基本): 1 yinYangMaster 79.4% / 2 poisoner 64.4% / 3 necromancer 57.8% / 4 magician 52.8%。陰陽師は式神リワーク+戦略強化で突出(ユーザーがナーフ予定)。他の3条件は --target を付け忘れたため無効(要再測定)
 - 連続不採用回数: 0 (採用で戻した)
 - 状態: blocked(issue #124, #92)  # master 349cb36 で 3位 55.1%、1位 poisoner 76.3%(防壁採用で突出)。対poisoner 14〜18%は構造的な天敵
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 20 | strategy(AI)+deck | 陰陽師のコンボ(百鬼夜行→式神一括は敵コマの入っていない列を完成)への対策 yyCover(自コマの入っていない列を減らす手に+150)・yySilence(サイレンス固定) (opp=yinYangMaster seed1 games150) | yyCover: 対陰陽師 7.3→28.7(60)/30.0(150)/30.0(300)/31.3(600)%。yySilence 5.3%(効かず、削除)。重みは150で飽和 | **採用**(yyCover=150) |
+| 19 | strategy+deck | 陰陽師の戦略を参考: 降霊は固有スキルなので固有割引(57,-6)・特売(53,-3)・大特価(58,-7)が効く。デッキに53/57/58を入れ(死に札27/28/13と交換)、手札にロック固定する necroLock(seed1 games150→seed2 games200) | 基準49.5%±2.1に対し、デッキ変更のみ51.1% / +necroLock 55.3% / +yyCover 57.9%。再測定(seed2/200): 58.1%±2.1(+8.6pt)。you 59→74・pyromancer 49→68・cryomancer 54→63、陰陽師10→28、悪化相手なし | **採用** gears=[vengeance,lastStand] deck=[0,2,3,5,6,8,11,12,32,53,57,58] |
+| 18 | strategy+gear | #160 の風の落とし子→刈り入れ前夜ループ(budLoop)。連鎖割引ギア+デッキに33,36を入れ、(a)手札任せ (b)上限(2枚が常に手札: budForce) (c)ロックで固定(budLock) (seed1 games150) | gears=[vengeance,chainDiscount]: ループなし31.0→上限42.8 / gears=[lastStand,chainDiscount]: ループなし49.0→上限59.0→ロック固定53.4%(±2.5)。手札任せは風の落とし子0.20回/試合・刈り入れ前夜0.02回で不発(31.0→31.0)。現推奨[vengeance,lastStand]の約55〜56%を実現可能な形では超えない(-2.6pt)。ノブ削除 | 不採用 |
+| 17 | synergy+メタ(対poisoner) | 3枚同時入替60近傍(新札62〜70を含む, opp=poisoner, seed4 games100) | 基準25.0%±8.5が最良。候補は21〜24%。新札(落ち葉🍂系・霜枯れ・春一番)も効かず | 不採用 |
 | 16 | メタ(対poisoner) | 2枚同時入替40近傍(opp=poisoner, seed1 games100) | 基準14〜18%に対し最良19.0%±7.7。誤差内 | 不採用 |
 | 15 | メタ(対poisoner) | 血清(17)を死に札と入替3案(opp=poisoner, seed3 games150) | 基準14.0%に対し14.0/14.7/14.0%。血清は撃たれず無効 | 不採用 |
 | 14 | メタ(対poisoner) | ギア1枠差し替え30近傍(opp=poisoner, seed1 games120) | 基準18.3%±6.9に対し最良 ironLock/lastStand 25.2%±7.8(z≈1.3)。誤差内 | 不採用 |

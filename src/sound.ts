@@ -528,13 +528,26 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             return 0.45;
         }
         case 'win': {
-            // ファンファーレ: 上昇アルペジオ → 最後に和音で締める
-            [C5, E5, G5, C6].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(i * 0.1), dur: 0.3, gain: 0.3 }));
-            for (const f of [C5, E5, G5, C6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(0.5), dur: 1.0, gain: 0.2 });
-            tone(ctx, d, { type: 'square', f0: C6, t: T(0.5), dur: 0.9, gain: 0.08, lowpass: 3000 });
-            sparkle(ctx, d, T(0.55), [E6, G5 * 2, C6 * 2], 0.09, 0.14);
-            boom(ctx, d, T(0.5), 0.5);
-            return 1.6;
+            // 勝利のファンファーレ(全体を通して音程は上がる):
+            // ①ドラムロールが加速しながら高まる → ②金管の和音がドン、シンバルが鳴る → ③きらめきの上昇音階 → ④高い和音で締める
+            for (let i = 0; i < 12; i++) {
+                const t = i * (0.06 - i * 0.002);
+                tone(ctx, d, { f0: 60 + i * 6, f1: 140 + i * 8, t: T(t), dur: 0.08, gain: 0.35 + i * 0.03 });
+            }
+            noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.25, filter: 'bandpass', f0: 800, f1: 3000, q: 0.8 });
+            // ②
+            const hit = 0.55;
+            for (const f of [C5, E5, G5, C6]) tone(ctx, d, { type: 'sawtooth', f0: f, t: T(hit), dur: 0.9, gain: 0.14, lowpass: 2600 });
+            for (const f of [C5, E5, G5, C6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(hit), dur: 1.2, gain: 0.2 });
+            boom(ctx, d, T(hit), 0.9);
+            noise(ctx, d, { t: T(hit), dur: 1.3, gain: 0.45, filter: 'highpass', f0: 5000 });
+            // ③
+            sparkle(ctx, d, T(hit + 0.25), [C6, E6, G5 * 2, C6 * 2, E6 * 2, G5 * 4], 0.08, 0.2);
+            // ④
+            const fin = hit + 0.95;
+            for (const f of [G5, C6, E6, G5 * 2]) tone(ctx, d, { type: 'triangle', f0: f, t: T(fin), dur: 1.0, gain: 0.2 });
+            tone(ctx, d, { type: 'square', f0: C6 * 2, t: T(fin), dur: 0.8, gain: 0.07, lowpass: 4000 });
+            return 2.6;
         }
         default: {
             // 未知の演出でも無音にはしない
