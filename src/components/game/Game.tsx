@@ -2850,7 +2850,11 @@ export const Game = (props: GameProps) => {
         const effects = continuousEffects(seat);
         const exclusiveCosts = exclusiveSkillCosts(seat);
         return (
-            <div key={seat} className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}>
+            <div
+                key={seat}
+                className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}
+                style={{ ['--seat' as string]: `var(--color-seat-${seat})` }}
+            >
                 <div className={`${styles.avatar} ${AVATAR_CLASSES[seat]}`}>{player}</div>
                 <div className={styles.name}>{CHARACTER_NAMES[character]}</div>
                 <div className={styles.tags}>
