@@ -9,7 +9,7 @@
  * 'random'    -> pure random (strength benchmark baseline).
  */
 
-const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_FLOOD_COUNT, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
+const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
@@ -1361,7 +1361,7 @@ function comboPlan(s, assumeMd = false) {
         return { m: bm, total: bt };
     };
     // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
-    const nAfterFlood = ownShikigami(s, curPlayer(s)).length + Math.min(SHIKIGAMI_FLOOD_COUNT, s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length);
+    const nAfterFlood = ownShikigami(s, curPlayer(s)).length + s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length;
     const f = best(cost('onClickShikigamiFlood'));
     const a = best(calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
     return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
@@ -1379,8 +1379,6 @@ function oppCanFork(s, opps) {
 const oppReachesNow = (s, opps) => opps.reduce((n, o) => n + countReaches(s.board, o), 0);
 // 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か
 function floodComboWins(s, me) {
-    // 百鬼夜行は3マスだけ(ランダム)。空きが3以下で全部埋まるときだけ結果が確定する
-    if (s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length > SHIKIGAMI_FLOOD_COUNT) return false;
     const nb = s.board.map((sq) => (!sq.player && !thermal.emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
         : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
     return calculateWinner(lineSyms(nb)) === me;
