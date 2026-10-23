@@ -2737,6 +2737,10 @@ export const Game = (props: GameProps) => {
     // 土壇場の防壁が発動する勝利は、列が消えるまで勝ちとして扱わない
     const rawWinner = calculateWinner(lineSymbols(currentBoard));
     const winner = rawWinner && lastStandHolderFor(rawWinner) < 0 ? rawWinner : undefined;
+    // 勝ちを決めた列(複数同時に揃ったら全部)。盤面で光らせる
+    const winCells = winner
+        ? Array.from(new Set(geo.winLines.filter((line) => line.every((idx) => lineSymbols(currentBoard)[idx] === winner)).flat()))
+        : [];
     const currentNecroCost = necroCost[turnSeat];
     const currentNecroRemain = remainNecro[turnSeat];
 
@@ -3219,6 +3223,8 @@ export const Game = (props: GameProps) => {
                             destroyCells={highlightedCells}
                             previewCells={previewCells}
                             shieldedCells={shieldedCells(currentBoard, characters)}
+                            winCells={winCells}
+                            turnColor={winner ? undefined : `var(--color-seat-${turnSeat})`}
                             onCellHover={onCellHover}
                             onCellLeave={onCellLeave}
                         />
