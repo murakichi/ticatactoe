@@ -8,6 +8,7 @@ import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPla
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { isUniqueEffect } from './UniqueEffects';
+import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
@@ -2850,7 +2851,11 @@ export const Game = (props: GameProps) => {
         const effects = continuousEffects(seat);
         const exclusiveCosts = exclusiveSkillCosts(seat);
         return (
-            <div key={seat} className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}>
+            <div
+                key={seat}
+                className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}
+                style={{ ['--seat' as string]: `var(--color-seat-${seat})` }}
+            >
                 <div className={`${styles.avatar} ${AVATAR_CLASSES[seat]}`}>{player}</div>
                 <div className={styles.name}>{CHARACTER_NAMES[character]}</div>
                 <div className={styles.tags}>
@@ -3250,6 +3255,7 @@ export const Game = (props: GameProps) => {
                             onCellLeave={onCellLeave}
                         />
                         <BoardEffects effect={boardEffect} burst={boardBurst} size={geo.size} />
+                        {winner && <VictoryEffect key={winner} winner={winner} seat={seatOf(winner)} />}
                         <GearToasts toasts={gearToasts} />
                         {hailMarySpin && (
                             <div className={styles.hmOverlay}>
@@ -3258,7 +3264,7 @@ export const Game = (props: GameProps) => {
                         )}
                     </div>
                     <div className={styles.controls}>
-                        <button className={styles.btn} onClick={onClickRestart}>
+                        <button className={`${styles.btn}${winner ? ` ${styles.btnPrimary}` : ''}`} onClick={onClickRestart}>
                             リスタート
                         </button>
                         <button

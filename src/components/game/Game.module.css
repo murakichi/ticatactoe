@@ -51,21 +51,26 @@
 
 /* ===== プレイヤーパネル ===== */
 .panel {
+    --seat: var(--color-border-strong);
     width: 150px;
     padding: var(--space-3);
     border-radius: var(--radius-lg);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
+    /* 席の色は左端の太線。セットアップ画面のカードと同じ */
+    border-left: 4px solid var(--seat);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-2);
-    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+    transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 
+/* 手番の席は、その席の色で全体を縁取り、地を一段明るくする(金は勝ちと開始ボタン用に取っておく) */
 .panelCurrent {
-    border-color: var(--color-accent);
-    box-shadow: inset 0 0 0 1px var(--color-accent);
+    border-color: var(--seat);
+    box-shadow: inset 0 0 0 1px var(--seat);
+    background: var(--color-surface-3);
 }
 
 .avatar {
@@ -103,8 +108,10 @@
 }
 
 .name {
-    font-weight: 700;
-    font-size: 15px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0;
 }
 
 .tags {
@@ -124,11 +131,11 @@
 
 .turnBadge {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     padding: 1px 8px;
     border-radius: var(--radius-pill);
-    background: var(--color-accent);
-    color: #3a2a00;
+    background: var(--seat);
+    color: var(--color-bg);
 }
 
 .stats {
@@ -144,14 +151,21 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: var(--radius-pill);
-    background: var(--color-surface-2);
+    background: transparent;
     border: 1px solid var(--color-border);
+    color: var(--color-text-dim);
     font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
 }
 
+/* 魔力はこのパネルでいちばん見たい数字なので大きく。勝利数は控えめに */
 .chipMagic {
     color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 800;
+    padding: 2px 12px;
+    line-height: 1.2;
 }
 
 .effects {
@@ -233,6 +247,16 @@
     transform: translateY(-1px);
 }
 
+.btnPrimary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #2a1d00;
+}
+
+.btnPrimary:hover:not(:disabled) {
+    background: var(--color-accent);
+}
+
 .btn:disabled {
     opacity: 0.45;
     cursor: default;
@@ -282,9 +306,15 @@
 }
 
 .logEntry {
-    padding: 3px 0;
+    padding: 4px 0;
     border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-dim);
+    color: var(--color-text-muted);
+}
+
+/* 最新の1件だけ明るく、過去のものは沈める */
+.logEntry:first-child {
+    color: var(--color-text);
+    font-weight: 700;
 }
 
 .logBtn {
