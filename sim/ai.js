@@ -11,7 +11,7 @@
 
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -763,8 +763,33 @@ function findThreatSquares(board, player) {
     return threats;
 }
 
-function simulatePlace(board, index, player, life) {
-    const nb = board.map(sq => ({ player: sq.player, bind: sq.bind, effects: sq.effects.slice() }));
+// 先読み用のライフ減衰の文脈。getEnhancedBestMove が手番ごとに設定する (AIPlayer.ts の placements / seatCount / characters)
+let decayCtx = null;
+
+// 着手ごとのライフ減衰を先読み用に適用した盤面 (AIPlayer.ts decayBoard / engine.js placeMove の減衰と同じ)。
+// ライフ1の自コマは自分の着手の直後に0になり、相手に奪われる。着手マス skip の毒消滅だけは除く
+function decayBoard(board, skip) {
+    return board.map((sq, k) => {
+        const q = { player: sq.player, bind: sq.bind, effects: sq.effects.slice() };
+        if ((q.player || q.effects.some((e) => e.effect === '🔑')) && q.bind > 0 && !thermal.isFrozen(q)) q.bind--;
+        const burn = thermal.burnDamageOf(q, decayCtx.chars, SYMBOLS);
+        if (burn > 0) q.bind = Math.max(0, q.bind - burn);
+        const poison = thermal.isDormant(q) ? 0 : q.effects.filter((e) => e.effect === '☠').length;
+        if (poison > 0 && q.bind > 0) {
+            const hit = thermal.applyDamage(q, poison, 'poison').sq;
+            q.bind = hit.bind;
+            q.effects = hit.effects;
+        }
+        if (q.bind === 0) q.effects = q.effects.filter((e) => e.effect !== '🔑');
+        if (poison > 0 && q.bind === 0 && q.player && k !== skip) return { player: undefined, bind: 0, effects: [] };
+        return q;
+    });
+}
+
+// ply を渡すと、その着手で減衰が進む場合は先に減衰させる (0 = 今回の着手)
+function simulatePlace(board, index, player, life, ply) {
+    const src = decayCtx && ply !== undefined && E.shouldDecay(decayCtx.placements + ply, decayCtx.n) ? decayBoard(board, index) : board;
+    const nb = src.map(sq => ({ player: sq.player, bind: sq.bind, effects: sq.effects.slice() }));
     const sq = nb[index];
     if (isShikigami(sq) && sq.player !== player && sq.bind <= 0) {
         nb[index] = { player: undefined, bind: 0, effects: [] }; // 式神は乗っ取られると空きマスになる
@@ -821,6 +846,21 @@ function getValidMoves(board, me, character) {
     return moves;
 }
 
+// 自コマを重ね置きで補強する候補 (AIPlayer.ts reinforceMoves と同じ)。補強しないと、着手後の減衰で自コマが0になり、
+// 相手がそこを取って4つ揃える(負ける)コマだけ
+function reinforceMoves(board, me, opps, life) {
+    const decayed = decayCtx && E.shouldDecay(decayCtx.placements, decayCtx.n) ? decayBoard(board, -1) : board;
+    const moves = [];
+    for (let i = 0; i < board.length; i++) {
+        const sq = board[i];
+        if (sq.player !== me || decayed[i].player !== sq.player || decayed[i].bind > 0) continue;
+        if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) continue;
+        if (thermal.overwriteBlocked(sq)) continue;
+        if (opps.some((o) => calculateWinner(lineSyms(simulatePlace(decayed, i, o, life))) === o)) moves.push(i);
+    }
+    return moves;
+}
+
 function getMovesFor(board, player, life) {
     const moves = [];
     for (let i = 0; i < board.length; i++) {
@@ -837,7 +877,7 @@ function getMovesFor(board, player, life) {
     return moves;
 }
 
-function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
+function minimax(board, depth, isMax, alpha, beta, me, opp, life, ply = 1) {
     const winner = calculateWinner(lineSyms(board));
     if (winner === me) return 1000 + depth;
     if (winner) return -1000 - depth;
@@ -848,7 +888,7 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     if (isMax) {
         let best = -Infinity;
         for (const idx of moves) {
-            const score = minimax(simulatePlace(board, idx, me, life), depth - 1, false, alpha, beta, me, opp, life);
+            const score = minimax(simulatePlace(board, idx, me, life, ply), depth - 1, false, alpha, beta, me, opp, life, ply + 1);
             best = Math.max(best, score);
             alpha = Math.max(alpha, score);
             if (beta <= alpha) break;
@@ -857,7 +897,7 @@ function minimax(board, depth, isMax, alpha, beta, me, opp, life) {
     } else {
         let best = Infinity;
         for (const idx of moves) {
-            const score = minimax(simulatePlace(board, idx, opp, life), depth - 1, true, alpha, beta, me, opp, life);
+            const score = minimax(simulatePlace(board, idx, opp, life, ply), depth - 1, true, alpha, beta, me, opp, life, ply + 1);
             best = Math.min(best, score);
             beta = Math.min(beta, score);
             if (beta <= alpha) break;
@@ -897,6 +937,7 @@ function getEnhancedBestMove(s) {
     const character = curChar(s);
     const life = s.life;
     const board = s.board;
+    decayCtx = { chars: s.chars, placements: s.placements, n: seatCount(s) };
 
     const empty = findEmptyIndexes(board);
     const valid = getValidMoves(board, me, character);
@@ -904,6 +945,7 @@ function getEnhancedBestMove(s) {
     const allMoves = [];
     for (const m of empty) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
     for (const m of valid) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
+    for (const m of reinforceMoves(board, me, opps, life)) { if (!seen[m]) { seen[m] = true; allMoves.push(m); } }
 
     if (allMoves.length === 0) return null;
 
@@ -953,7 +995,7 @@ function getEnhancedBestMove(s) {
     let bestScore = -Infinity;
     let bestMove = allMoves[0];
     for (const i of allMoves) {
-        const sim = simulatePlace(board, i, me, life);
+        const sim = simulatePlace(board, i, me, life, 0);
         if (F.auraSim && character === 'giant' && sim[i].player === me) applyAuraSim(sim, i, me);
         let score = minimax(sim, searchDepth(board), false, -Infinity, Infinity, me, opp, life);
         // テンポ/レース強化(A/B検証で +8pt): リーチ作成を重視して先に盤面を取りに行く
