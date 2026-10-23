@@ -1,8 +1,8 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 6c8ebaf
+- 最後に検証したmaster: 942f19c
 - 現在の推奨設定: gears=[afterglow,sturdy] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2)(既定)
-- 基準線: 環境勝率 53.5% / 5位 / 1位 poisoner 73.9%, 2位 magician 59.1%, 3位 tactician 56.8%, 4位 necromancer 55.8%  (seed=3, games=200, master 81ad8ce)
+- 基準線: 環境勝率 45.4% / 8位 / 1位 poisoner 70.8%, 2位 necromancer 61.4%, 3位 magician 53.8%  (seed=3, games=200, master 942f19c)。対キャラ別(seed3/400): あなた65 / 魔法使い69 / 毒使い52 / 軍師46 / ネクロ44 / 雷霆の巫36 / 巨人35 / 陰陽師27 / 鍛冶師25。氷結コンボあり: 全体 44.2→45.9
 - 連続不採用回数: 0
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
 - 状態: blocked(issue #94。master 81ad8ce で5位53.5%、1位 poisoner 73.9%。再開後の gear/meta/synergy を測って全て不採用)
