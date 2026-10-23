@@ -195,7 +195,7 @@ const skillCosts = {
     onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
     onClickSucker: (config.thermal && config.thermal.suckerCost) || 4,
-    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 3,
+    onClickWindborne: (config.thermal && config.thermal.windborneCost) || 4,
     // 火炎系の汎用スキル idx 37〜40（対氷結の手段）
     onClickFlameToken: (config.thermal && config.thermal.flameTokenCost) || 3,
     onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
@@ -1850,11 +1850,11 @@ function onClickSucker(s) {
     bumpMagicCount(s);
     bumpStat(s, 'sucker');
 }
-// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複を許してランダムに3回選び、🌱を1つずつ足す
+// 風の落とし子 (idx 36): 自陣の🌱を持てるコマから重複なしでランダムに SOW_COUNT 個選び、🌱を1つずつ足す
 function onClickWindborne(s) {
     const cands = thermal.sowCandidates(s.board, curPlayer(s));
     if (!cands.length) return;
-    const picks = [0, 1, 2].map(() => randomPick(cands, s.rng));
+    const picks = randomAnyPick(cands, Math.min(thermal.SOW_COUNT, cands.length), s.rng);
     thermal.sow(s.board, picks);
     spendMagic(s, calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne'), 'onClickWindborne');
     bumpMagicCount(s);

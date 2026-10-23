@@ -37,6 +37,7 @@ import {
     GRAFT_MAX,
     sowCandidates,
     sow,
+    SOW_COUNT,
     cleanse,
     ailmentStacks,
     AILMENTS,
@@ -570,7 +571,7 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(graft(b, 5, '💙', 4, [0, 15])).toEqual([]); // 受け手でないマスは無視
     });
 
-    it('風の落とし子: 候補は自陣の🌱を持てるコマ。同じコマへの重複付与も可', () => {
+    it('風の落とし子: 候補は自陣の🌱を持てるコマ。picks の各マスに🌱を1つずつ足す', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '❄');
@@ -578,9 +579,10 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         b[3] = sq('⭕', 3);
         b[4] = sq('💙', 3, '🌱');
         expect(sowCandidates(b, '💙')).toEqual([0, 4]);
-        sow(b, [0, 0, 4]);
-        expect(budStacks(b[0])).toBe(2);
+        sow(b, [0, 4]);
+        expect(budStacks(b[0])).toBe(1);
         expect(budStacks(b[4])).toBe(2);
+        expect(SOW_COUNT).toBe(2);
     });
 
     it('sim/thermal.js と一致', () => {
@@ -616,8 +618,9 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(a).toEqual(c);
         const d = mk();
         const e = mk();
-        sim.sow(d, [0, 0, 5]);
-        sow(e, [0, 0, 5]);
+        sim.sow(d, [0, 5]);
+        sow(e, [0, 5]);
+        expect(sim.SOW_COUNT).toBe(SOW_COUNT);
         expect(d).toEqual(e);
         for (const [fs, ft] of [[sim.freeze, freeze], [sim.ignite, ignite]] as const) {
             expect(fs).toBeDefined();

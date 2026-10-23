@@ -352,7 +352,10 @@ export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['pla
 export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);
 
-/** 風の落とし子: picks の各マス（重複可）に🌱を1つずつ足す。board を直接書き換える */
+/** 風の落とし子で撒く🌱の数。1マスに1つまで（候補が少なければ候補の数だけ） */
+export const SOW_COUNT = 2;
+
+/** 風の落とし子: picks の各マスに🌱を1つずつ足す。board を直接書き換える（呼び出し側が SOW_COUNT 個を重複なく選ぶ） */
 export const sow = (board: SquareInfo[], picks: number[]): void => {
     for (const k of picks) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
 };

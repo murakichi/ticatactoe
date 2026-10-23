@@ -1262,7 +1262,7 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コ�
     assert.strictEqual(th.GRAFT_MAX, 2);
 });
 
-test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
+test('風の落とし子: canBud の自陣コマに重複なしでランダムに2つ🌱を足す（コスト4）。候補が無ければ不可', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -1270,14 +1270,23 @@ test('風の落とし子: canBud の自陣コマに重複を許してランダ�
     s.board[3] = { player: '⭕', bind: 3, effects: [] };
     const before = s.heartMagic;
     e.SKILLS.windborne(s);
-    assert.strictEqual(s.heartMagic, before - 3);
-    assert.strictEqual(budsOn(s.board[1]), 3); // 候補が1つだけなので3回とも同じコマ
+    assert.strictEqual(s.heartMagic, before - 4);
+    assert.strictEqual(budsOn(s.board[1]), 1); // 候補が1つだけなので1つだけ（1マスに1つまで）
     assert.strictEqual(budsOn(s.board[2]) + budsOn(s.board[3]), 0);
     assert.strictEqual(s.heartTurn, true);
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     e.SKILLS.windborne(t);
     assert.strictEqual(t.heartMagic, 20);
+    // 候補が複数あれば、異なる2マスに1つずつ
+    for (let seed = 1; seed <= 20; seed++) {
+        const u = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        u.heartTurn = true; u.heartMagic = 20;
+        [1, 2, 3, 4].forEach((i) => { u.board[i] = { player: '💙', bind: 3, effects: [] }; });
+        e.SKILLS.windborne(u);
+        const counts = [1, 2, 3, 4].map((i) => budsOn(u.board[i]));
+        assert.deepStrictEqual(counts.slice().sort(), [0, 0, 1, 1]);
+    }
 });
 
 test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () => {
@@ -1291,7 +1300,7 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
     assert.strictEqual(e.skillCosts.onClickSolstice, 4);
     assert.strictEqual(e.skillCosts.onClickSucker, 4);
-    assert.strictEqual(e.skillCosts.onClickWindborne, 3);
+    assert.strictEqual(e.skillCosts.onClickWindborne, 4);
 });
 
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {

@@ -62,7 +62,7 @@ export const skillCosts = {
     onClickHarvestEve: 2,
     onClickSolstice: 4,
     onClickSucker: 4,
-    onClickWindborne: 3,
+    onClickWindborne: 4,
     // 火炎系の汎用スキル(idx 37-39)。氷結への対抗手段
     onClickFlameToken: 3,
     onClickDoubleFlameToken: 6,

@@ -5,7 +5,7 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets } from './thermal';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -1912,11 +1912,11 @@ class AIPlayer {
             }
             if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne')) {
                 const cands = sowCandidates(board, this.playerSymbol);
-                if (cands.length >= 3 && ownBuds() < 3) {
+                if (cands.length >= SOW_COUNT && ownBuds() < SOW_COUNT) {
                     chargeClicks.push({ skill: 'onClickWindborne' });
-                    // 実際の配置はランダム。AIの内部盤面は代表として先頭3マスに足して見積もる
+                    // 実際の配置はランダム。AIの内部盤面は代表として先頭のマスに足して見積もる
                     board = board.slice();
-                    sow(board, cands.slice(0, 3));
+                    sow(board, cands.slice(0, SOW_COUNT));
                     magic -= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne');
                 }
             }
@@ -1950,7 +1950,7 @@ class AIPlayer {
                     for (const f of fillers.filter((x) => chosen.includes(x))) {
                         chargeClicks.push({ skill: f.skill });
                         board = board.slice();
-                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, 3));
+                        if (f.idx === 36) sow(board, sowCandidates(board, this.playerSymbol).slice(0, SOW_COUNT));
                         else if (f.idx === 32) cleanse(board, this.playerSymbol);
                         else if (f.idx === 33) magic += harvestBuds(board, this.playerSymbol, this.budGuard);
                         magic -= f.cost;
