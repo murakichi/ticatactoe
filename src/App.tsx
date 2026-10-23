@@ -121,52 +121,61 @@ export const App = () => {
                 </div>
             ) : (
                 <div className={styles.prep}>
-                    <div className={styles.title}>戦術三目並べ</div>
-                    <div className={styles.subtitle}>人数・キャラクター・操作を選んで対戦開始</div>
-                    <div className={styles.countRow}>
-                        <span className={styles.countLabel}>人数</span>
-                        <div className={styles.seg} role='group' aria-label='人数'>
-                            {range(MIN_PLAYERS, MAX_PLAYERS - MIN_PLAYERS + 1).map((n) => (
-                                <button
-                                    key={n}
-                                    className={`${styles.segBtn} ${playerCount === n ? styles.segBtnActive : ''}`}
-                                    onClick={() => setPlayerCount(n)}
-                                >
-                                    {n}人
-                                </button>
-                            ))}
+                    <header className={styles.hero}>
+                        <div className={styles.heroText}>
+                            <h1 className={styles.title}>戦術三目並べ</h1>
+                            <div className={styles.subtitle}>人数・キャラクター・操作を選んで対戦開始</div>
                         </div>
-                        <span className={styles.boardSizeNote}>
-                            盤面 {boardSize}x{boardSize}・4マス並べで勝ち
-                        </span>
-                    </div>
-                    <div className={styles.countRow}>
-                        <span className={styles.countLabel}>マス数</span>
-                        <div className={styles.seg} role='group' aria-label='マス数'>
-                            <button
-                                className={`${styles.segBtn} ${boardSizeChoice === 'auto' ? styles.segBtnActive : ''}`}
-                                onClick={() => setBoardSizeChoice('auto')}
-                                title='人数に応じて自動で決めます（2人=4x4 / 3〜4人=5x5 / 5〜6人=6x6 / 7〜8人=7x7）'
-                            >
-                                おまかせ
+                        <MiniBoard />
+                    </header>
+                    <section className={styles.rules} aria-label='対戦ルール'>
+                        <div className={styles.countRow}>
+                            <span className={styles.countLabel}>人数</span>
+                            <div className={styles.seg} role='group' aria-label='人数'>
+                                {range(MIN_PLAYERS, MAX_PLAYERS - MIN_PLAYERS + 1).map((n) => (
+                                    <button
+                                        key={n}
+                                        className={`${styles.segBtn} ${playerCount === n ? styles.segBtnActive : ''}`}
+                                        onClick={() => setPlayerCount(n)}
+                                    >
+                                        {n}人
+                                    </button>
+                                ))}
+                            </div>
+                            <span className={styles.boardSizeNote}>
+                                盤面 {boardSize}x{boardSize}・4マス並べで勝ち
+                            </span>
+                        </div>
+                        <div className={styles.countRow}>
+                            <span className={styles.countLabel}>マス数</span>
+                            <div className={styles.seg} role='group' aria-label='マス数'>
+                                <button
+                                    className={`${styles.segBtn} ${boardSizeChoice === 'auto' ? styles.segBtnActive : ''}`}
+                                    onClick={() => setBoardSizeChoice('auto')}
+                                    title='人数に応じて自動で決めます（2人=4x4 / 3〜4人=5x5 / 5〜6人=6x6 / 7〜8人=7x7）'
+                                >
+                                    おまかせ
+                                </button>
+                                {range(MIN_BOARD_SIZE, MAX_BOARD_SIZE - MIN_BOARD_SIZE + 1).map((n) => (
+                                    <button
+                                        key={n}
+                                        className={`${styles.segBtn} ${boardSizeChoice === n ? styles.segBtnActive : ''}`}
+                                        onClick={() => setBoardSizeChoice(n)}
+                                    >
+                                        {n}x{n}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className={styles.randomRow}>
+                            <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
+                                🎲 AI席のキャラをランダムに決める（あなた以外）
                             </button>
-                            {range(MIN_BOARD_SIZE, MAX_BOARD_SIZE - MIN_BOARD_SIZE + 1).map((n) => (
-                                <button
-                                    key={n}
-                                    className={`${styles.segBtn} ${boardSizeChoice === n ? styles.segBtnActive : ''}`}
-                                    onClick={() => setBoardSizeChoice(n)}
-                                >
-                                    {n}x{n}
-                                </button>
-                            ))}
+                            <button className={styles.randomBtn} onClick={randomizeAllGears}>
+                                🎲 全員のギアをランダムに決める
+                            </button>
                         </div>
-                    </div>
-                    <button className={styles.randomBtn} onClick={randomizeAICharacters} disabled={!hasAISeat}>
-                        🎲 AI席のキャラをランダムに決める（あなた以外）
-                    </button>
-                    <button className={styles.randomBtn} onClick={randomizeAllGears}>
-                        🎲 全員のギアをランダムに決める
-                    </button>
+                    </section>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting
@@ -190,21 +199,45 @@ export const App = () => {
                             プレイヤー{invalidDeckSeat + 1}のデッキが{DECK_SIZE}枚ではありません（「推奨」に戻すか、{DECK_SIZE}枚に調整してください）
                         </div>
                     )}
-                    <button
-                        className={styles.start}
-                        disabled={invalidDeckSeat >= 0}
-                        onClick={() => {
-                            setStartedPlayers(buildGamePlayers());
-                            setIsGameStarted(true);
-                        }}
-                    >
-                        ⚔️ 対戦スタート
-                    </button>
+                    <div className={styles.startBar}>
+                        <span className={styles.startSummary}>
+                            {playerCount}人で対戦（{players.slice(0, playerCount).filter((p) => !p.isAI).length}人が操作）
+                        </span>
+                        <button
+                            className={styles.start}
+                            disabled={invalidDeckSeat >= 0}
+                            onClick={() => {
+                                setStartedPlayers(buildGamePlayers());
+                                setIsGameStarted(true);
+                            }}
+                        >
+                            ⚔️ 対戦スタート
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
     );
 };
+
+/** タイトル横の小さな盤。4つ並べると勝ち、を見せるだけの飾り(一度だけ対角線が金に光る) */
+const MINI_BLUE = [0, 5, 10, 15];
+const MINI_RED = [2, 4, 9, 13];
+const MiniBoard = () => (
+    <div className={styles.miniBoard} aria-hidden='true'>
+        {range(0, 16).map((i) => {
+            const blue = MINI_BLUE.indexOf(i);
+            const red = MINI_RED.indexOf(i);
+            return (
+                <span
+                    key={i}
+                    className={`${styles.miniCell} ${blue >= 0 ? styles.miniWin : ''} ${red >= 0 ? styles.miniRed : ''}`}
+                    style={blue >= 0 ? { ['--d' as string]: `${300 + blue * 260}ms` } : red >= 0 ? { ['--d' as string]: `${150 + red * 260}ms` } : undefined}
+                />
+            );
+        })}
+    </div>
+);
 
 type PlayerSettingProps = {
     seat: number;
@@ -230,7 +263,7 @@ const PlayerSetting = (props: PlayerSettingProps) => {
     return (
         <div
             className={`${styles.playerCard}${props.compact ? ` ${styles.playerCardCompact}` : ''}`}
-            style={{ borderTopColor: `var(--color-seat-${props.seat})` }}
+            style={{ borderLeftColor: `var(--color-seat-${props.seat})`, ['--seat-color' as string]: `var(--color-seat-${props.seat})` }}
         >
             <div className={styles.playerHead}>
                 <span>{PLAYER_SYMBOLS[props.seat]}</span>
