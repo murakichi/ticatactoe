@@ -3,20 +3,128 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-5);
-    padding: var(--space-6) var(--space-4);
+    padding: var(--space-6) var(--space-4) 0;
+    text-align: left;
+}
+
+/* ===== ヒーロー: タイトルと、4つ並べで勝ちを見せる小さな盤 ===== */
+.hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 760px;
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.heroText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
 }
 
 .title {
-    font-size: 30px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    color: var(--color-accent);
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(38px, 9vw, 60px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0.06em;
+    color: var(--color-text);
 }
 
 .subtitle {
     color: var(--color-text-dim);
-    margin-top: -12px;
     font-size: 13px;
+}
+
+.miniBoard {
+    display: grid;
+    grid-template-columns: repeat(4, 26px);
+    gap: 4px;
+    padding: 8px;
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+}
+
+.miniCell {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+}
+
+/* 駒が順に置かれ、4つ揃ったところで金に光る */
+.miniWin,
+.miniRed {
+    opacity: 0;
+    animation: miniPlace 360ms var(--ease) var(--d, 0ms) forwards;
+}
+
+.miniWin {
+    --piece: var(--color-seat-0);
+    animation-name: miniPlace, miniGold;
+    animation-duration: 360ms, 600ms;
+    animation-fill-mode: forwards, forwards;
+    animation-delay: var(--d, 0ms), 1500ms;
+}
+
+.miniRed {
+    --piece: var(--color-seat-1);
+}
+
+@keyframes miniPlace {
+    from {
+        opacity: 0;
+        transform: scale(0.4);
+        background: var(--piece);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+        background: var(--piece);
+    }
+}
+
+/* 4つ目が置かれる(約1.1秒)頃に、4つが同時に金へ */
+@keyframes miniGold {
+    0% {
+        background: var(--piece);
+    }
+    100% {
+        background: var(--color-accent);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .miniWin,
+    .miniRed {
+        animation: none;
+        opacity: 1;
+        background: var(--piece);
+    }
+    .miniWin {
+        background: var(--color-accent);
+    }
+}
+
+/* ===== 対戦ルール(人数・マス数) ===== */
+.rules {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    width: 100%;
+    max-width: 760px;
+}
+
+.randomRow {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
 }
 
 .players {
@@ -26,12 +134,13 @@
     justify-content: center;
 }
 
+/* 席の色は上端ではなく左端の太線にして、カードの中身(キャラ・ギア・デッキ)を主役にする */
 .playerCard {
     width: 380px;
-    max-width: 90vw;
+    max-width: 100%;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-top-width: 3px;
+    border-left-width: 4px;
     border-radius: var(--radius-lg);
     padding: var(--space-4);
 }
@@ -50,7 +159,7 @@
     margin-top: var(--space-2);
     font-size: 11px;
     color: var(--color-text-dim);
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
 .countRow {
@@ -58,7 +167,6 @@
     align-items: center;
     gap: var(--space-3);
     flex-wrap: wrap;
-    justify-content: center;
 }
 
 .countRow .seg {
@@ -66,7 +174,10 @@
 }
 
 .countLabel {
+    width: 3.6em;
     font-weight: 800;
+    font-size: 13px;
+    color: var(--color-text-dim);
 }
 
 .boardSizeNote {
@@ -78,21 +189,25 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 800;
     margin-bottom: var(--space-3);
 }
 
 .seg {
     display: inline-flex;
+    flex-wrap: nowrap;
+    max-width: 100%;
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-pill);
-    overflow: hidden;
+    overflow-x: auto;
+    scrollbar-width: none;
     margin-bottom: var(--space-3);
 }
 
 .segBtn {
-    padding: 6px 18px;
+    flex: 0 0 auto;
+    padding: 6px 16px;
     background: transparent;
     color: var(--color-text-dim);
     border: none;
@@ -102,9 +217,17 @@
     transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
-.segBtnActive {
-    background: var(--color-surface-3);
+.segBtn:hover {
     color: var(--color-text);
+}
+
+.segBtnActive {
+    background: var(--color-text);
+    color: var(--color-bg);
+}
+
+.segBtnActive:hover {
+    color: var(--color-bg);
 }
 
 .charGrid {
@@ -121,22 +244,26 @@
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius);
     border: 1px solid var(--color-border);
-    background: var(--color-surface-2);
+    background: transparent;
     color: var(--color-text);
     cursor: pointer;
-    transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
-        background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+    transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
 .charCard:hover {
-    transform: translateY(-1px);
     border-color: var(--color-border-strong);
+    background: var(--color-surface-2);
 }
 
-.charCardActive {
-    border-color: var(--color-accent);
-    box-shadow: inset 0 0 0 1px var(--color-accent);
+/* 選んだキャラは、その席の色で縁取って塗る(金は開始ボタンに取っておく) */
+.playerCard .charCardActive {
+    border-color: var(--seat-color, var(--color-text));
+    box-shadow: inset 0 0 0 1px var(--seat-color, var(--color-text));
     background: var(--color-surface-3);
+}
+
+.charCard > span:last-child {
+    min-width: 0;
 }
 
 .charIcon {
@@ -146,8 +273,10 @@
 
 .charName {
     display: block;
+    font-family: var(--font-display);
     font-weight: 800;
     font-size: 14px;
+    letter-spacing: 0;
 }
 
 .charDesc {
@@ -155,43 +284,72 @@
     font-size: 11px;
     color: var(--color-text-dim);
     margin-top: 2px;
-    line-height: 1.3;
+    line-height: 1.4;
+}
+
+/* 開始ボタンは画面下に固定して、長い設定画面でもすぐ押せるようにする */
+.startBar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    align-self: stretch;
+    margin: 0 calc(var(--space-4) * -1);
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    background: var(--color-bg);
+    border-top: 1px solid var(--color-border);
+}
+
+.startSummary {
+    font-size: 12px;
+    color: var(--color-text-dim);
 }
 
 .start {
-    margin-top: var(--space-3);
-    padding: 14px 52px;
-    font-size: 18px;
+    padding: 12px 44px;
+    font-size: 17px;
     font-weight: 900;
-    letter-spacing: 1px;
+    letter-spacing: 0.08em;
     border: none;
     border-radius: var(--radius-pill);
     background: var(--color-accent);
     color: #2a1d00;
     cursor: pointer;
-    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+    transition: transform var(--dur) var(--ease);
 }
 
-.start:hover {
-    transform: translateY(-2px) scale(1.04);
+.start:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.03);
+}
+
+.start:focus-visible,
+.segBtn:focus-visible,
+.charCard:focus-visible,
+.randomBtn:focus-visible,
+.gearChip:focus-visible,
+.gearMiniBtn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
 }
 
 .randomBtn {
-    margin-top: calc(var(--space-2) * -1);
-    padding: 8px 18px;
+    padding: 7px 16px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--color-border-strong);
-    background: var(--color-surface-2);
+    background: transparent;
     color: var(--color-text);
     font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
-    transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+    transition: background var(--dur-fast) var(--ease);
 }
 
 .randomBtn:hover:not(:disabled) {
-    background: var(--color-surface-3);
-    transform: translateY(-1px);
+    background: var(--color-surface-2);
 }
 
 .randomBtn:disabled {
