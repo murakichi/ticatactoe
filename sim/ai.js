@@ -1913,9 +1913,13 @@ function faithfulMakeMoveInner(s) {
         if (ch === 'magician' || (ch === 'yinYangMaster' && F.yyBudLock)) {
             // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 magLockN 個）。本番は AIPlayer.ts の MAGICIAN_MAX_LOCKS
             let locked = 0;
-            while (locked < (ch === 'magician' ? F.magLockN : F.yyBudLock)) {
+            while (locked < (ch === 'magician' ? (F.lockAll ? 12 : F.magLockN) : F.yyBudLock)) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
-                const budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
+                let budCell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑'));
+                // 魔力に余裕(F.lockAll 以上)があれば、バッズ駒以外の自陣のコマも全てロックする（ダメージ系・毒・火炎・帯電・乗っ取りを通さない）
+                if (budCell === -1 && ch === 'magician' && F.lockAll && curMagic(s) >= F.lockAll + lockCost) {
+                    budCell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                }
                 if (!(curMagic(s) >= lockCost && budCell !== -1)) break;
                 SKILLS.lock(s);
                 placeMove(s, budCell);  // ロック対象クリック(手番は進まない)
