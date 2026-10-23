@@ -571,7 +571,7 @@ function discountPlan(s, me, availableSkills) {
     }
     if (best) { SKILLS[best.r.key](s); return; }
     // 魔力が有り余っていて撃てるスキルが手札に無い（防壁発動後の+4など）: 魔法使い以外も引き直して探す (AIPlayer.makeMove と同じ)
-    if (curChar(s) !== 'magician' && base.length === 0 && curMagic(s) >= SURPLUS_MAGIC) {
+    if (curChar(s) !== 'magician' && curChar(s) !== 'yinYangMaster' && base.length === 0 && curMagic(s) >= SURPLUS_MAGIC) { // 陰陽師は魔力を貯めてコンボを待つので除外(AIPlayer.ts と同じ)
         for (let i = 0; i < 2; i++) {
             if (curMagic(s) < SURPLUS_MAGIC) return;
             E.shuffleHand(s);
@@ -961,7 +961,7 @@ function getEnhancedBestMove(s) {
         if (reaches >= 2) score += 200;        // フォーク
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
         // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
-        if (F.yyCover && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
+        if (F.yyCover && character === 'necromancer' && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
@@ -1926,7 +1926,7 @@ function faithfulMakeMoveInner(s) {
         }
     }
 
-    const skills = holdFlood && oppReaches === 0 ? [] : chooseSkills(s, availableSkills);
+    const skills = holdFlood && (oppReaches === 0 || F.holdAlways) ? [] : chooseSkills(s, availableSkills);
     for (const sk of skills) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };

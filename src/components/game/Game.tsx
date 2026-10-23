@@ -322,6 +322,7 @@ export const Game = (props: GameProps) => {
             case 'onClickHarvestEve': onClickHarvestEve(); break;
             case 'onClickSolstice': onClickSolstice(); break;
             case 'onClickSucker': onClickSucker(); break;
+            case 'onClickToggleYingYang': onClickToggleYingYang(); break;
             case 'onClickShikigamiPlace': onClickShikigamiPlace(); break;
             case 'onClickShikigamiBlast': onClickShikigamiBlast(); break;
             case 'onClickShikigamiAll': onClickShikigamiAll(); break;
