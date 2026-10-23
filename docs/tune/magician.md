@@ -119,3 +119,7 @@ swap3 80近傍・swap2 80近傍（対 poisoner seed2/100）。最良は swap3 �
 ## master 取り込み後（式神ナーフ・yyCover 入り）の順位（seed3/200）
 1 poisoner 70.4 / 2 necromancer 62.5 / **3 magician 58.8** / 4 tactician 53.9 / 5 electrician 53.4。1位との差 11.6pt（前回 52.4% 時の 14.1pt → 縮小）。陰陽師は 10位 20.7% に落ちた（ナーフ+各キャラの線カバー）。
 魔法使いの設定は変更なし。1位 poisoner（lastStand+sturdy）は gear/deck/AI では崩せず #124 待ちで blocked 維持。
+
+## master da549f3（鍛冶師の火炎変更）取り込み後の順位（seed3/200）
+1 poisoner 70.8 / 2 necromancer 61.6 / **3 magician 58.5** / 4 pyromancer 58.4 / 5 electrician 52.7。1位との差 12.3pt。前回(58.8%・3位)とほぼ同じ。鍛冶師は環境4位に浮上（58.4%、魔法使いと誤差内）。
+設定変更なし。1位 poisoner は #124 待ちで blocked 維持。
