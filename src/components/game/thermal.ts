@@ -73,7 +73,8 @@ export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): num
     return stacks * FLAME_BURN_DAMAGE + extra;
 };
 
-export type DamageKind = 'skill' | 'electric' | 'poison';
+/** pure = 倍率なし・氷結貫通で、通れば🔥が消える（砕氷・絶対零度）。poison は🔥を消さない */
+export type DamageKind = 'skill' | 'electric' | 'poison' | 'pure';
 
 export type DamageResult = {
     sq: SquareInfo;
@@ -85,7 +86,7 @@ export type DamageResult = {
 
 /**
  * マスにダメージを与える。skill は氷結に吸収され（氷結が解除されるだけ）、火炎なら1.5倍（切り上げ）。
- * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。1以上ダメージが通ると🔥は全部消える。
+ * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。skill / electric は1以上ダメージが通ると🔥が全部消える（poison は🔥を消さない）。
  */
 export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): DamageResult => {
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
@@ -95,7 +96,7 @@ export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): D
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
     const next = { ...sq, bind };
-    return { sq: dealt > 0 ? without(next, '🔥') : next, dealt, blocked: false };
+    return { sq: dealt > 0 && kind !== 'poison' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒のダメージでは🔥は消えない（毒と火炎は重複する）
 };
 
 /**
@@ -232,7 +233,7 @@ export const detonate = (board: SquareInfo[], me: SquareInfo['player']): Detonat
             return;
         }
         if (sq.player === me) return;
-        const hit = applyDamage(thaw(sq), frozenStacks(sq) * GLACIER_DAMAGE_PER_STACK, 'poison').sq;
+        const hit = applyDamage(thaw(sq), frozenStacks(sq) * GLACIER_DAMAGE_PER_STACK, 'pure').sq;
         damaged.push(i);
         if (hit.bind <= 0) {
             board[i] = { player: undefined, bind: 0, effects: [] };
@@ -261,7 +262,7 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
 
 /**
  * ターン進行1回ぶんのライフ減衰（自然減衰・🔥の継続ダメージ・毒）を1マスに適用した新しいマスを返す。
- * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通して通れば🔥が消える。
+ * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
 export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => {
@@ -556,7 +557,7 @@ export const shatter = (board: SquareInfo[], cell: number): { stacks: number; da
     if (!sq.player || !isFrozen(sq)) return { stacks: 0, damage: 0, destroyed: false };
     const stacks = frozenStacks(sq);
     const damage = stacks * SHATTER_DAMAGE_PER_STACK;
-    const hit = applyDamage(thaw(sq), damage, 'poison').sq;
+    const hit = applyDamage(thaw(sq), damage, 'pure').sq;
     if (hit.bind <= 0) {
         board[cell] = { player: undefined, bind: 0, effects: [] };
         return { stacks, damage, destroyed: true };

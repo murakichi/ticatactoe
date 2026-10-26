@@ -53,7 +53,7 @@ function burnDamageOf(sq, chars, symbols) {
     return stacks * FLAME_BURN_DAMAGE + bonus;
 }
 
-/** kind: 'skill' | 'electric' | 'poison' */
+/** kind: 'skill' | 'electric' | 'poison'（🔥を消さない）| 'pure'（倍率なし・氷結貫通・🔥は消える。砕氷・絶対零度） */
 function applyDamage(sq, amount, kind) {
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）。毒は貫通する
@@ -62,7 +62,7 @@ function applyDamage(sq, amount, kind) {
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
     const next = { ...sq, bind };
-    return { sq: dealt > 0 ? without(next, '🔥') : next, dealt, blocked: false };
+    return { sq: dealt > 0 && kind !== 'poison' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒のダメージでは🔥は消えない（毒と火炎は重複する）
 }
 const absorbDestroy = (sq) => (isFrozen(sq) ? { sq: thawOne(sq), blocked: true } : { sq, blocked: false });
 const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
@@ -115,7 +115,7 @@ function freeze(board, cells) {
 const freezeAll = (board) => freeze(board, board.map((_, i) => i));
 /**
  * 絶対零度の発動（使用者の次の手番開始時）: 使用者 me 以外のコマで❄が付いたマスに、❄スタック数×3の
- * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
+ * 倍率なしダメージ（pure=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
  * 空きマスの❄は（試合が止まらないよう）ダメージなしで全除去する。自陣コマの❄だけ残す。board を直接書き換える
  */
 // ---- 🌱バッズ操作（刈り入れ前夜 / ひこばえ / 風の落とし子） ----
@@ -223,7 +223,7 @@ function detonate(board, me) {
         const sq = board[k];
         if (!sq.player) { if (isFrozen(sq)) board[k] = thaw(sq); continue; } // 空きマスの❄はダメージなしで全除去（damaged/destroyed には含めない）
         if (sq.player === me || !isFrozen(sq)) continue;
-        const hit = applyDamage(sq, frozenStacks(sq) * 3, 'poison').sq;
+        const hit = applyDamage(sq, frozenStacks(sq) * 3, 'pure').sq;
         damaged.push(k);
         if (hit.bind <= 0) { board[k] = { player: undefined, bind: 0, effects: [] }; destroyed.push(k); }
         else board[k] = thaw(hit);
@@ -251,7 +251,7 @@ function shatter(board, cell) {
     if (!sq.player || !isFrozen(sq)) return { stacks: 0, damage: 0, destroyed: false };
     const stacks = frozenStacks(sq);
     const damage = stacks * 3;
-    const hit = applyDamage(sq, damage, 'poison').sq;
+    const hit = applyDamage(sq, damage, 'pure').sq;
     if (hit.bind <= 0) {
         board[cell] = { player: undefined, bind: 0, effects: [] };
         return { stacks, damage, destroyed: true };

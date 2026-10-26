@@ -1011,7 +1011,7 @@ function placeMove(s, i) {
         }
         const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
-            // ダメージが通れば🔥は消える
+            // 毒のダメージでは🔥は消えない
             const hit = thermal.applyDamage(sq, poison, 'poison').sq;
             sq.bind = hit.bind;
             sq.effects = hit.effects;

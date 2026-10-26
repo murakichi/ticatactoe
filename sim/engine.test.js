@@ -1176,14 +1176,14 @@ test('後から火炎が付くと🌱は消える（冬至の種子のガード�
     assert.strictEqual(budsOn(g.board[1]), 1);
 });
 
-test('🔥中のマス: 毒・⚡は休眠せず働く。🔥はダメージで消える', () => {
+test('🔥中のマス: 毒・⚡は休眠せず働く。🔥は毒では消えず、電気のダメージで消える', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
     e.placeMove(s, 0);
-    // 🔥中でも毒は働く。ダメージが通るので🔥は消え、毒は残る
+    // 🔥中でも毒は働く。毒のダメージでは🔥は消えず、毒も残る
     assert.ok(s.board[5].bind < 6);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
     // 電気のダメージを受けると🔥は消える
     const t = game();
