@@ -953,11 +953,6 @@ function getEnhancedBestMove(s) {
     for (const i of allMoves) {
         if (calculateWinner(lineSyms(simulatePlace(board, i, me, life))) === me) return i;
     }
-    // 検証中(play-learn C1): 4x4 の最初の着手を中央4マスにする。相手のリーチが無く、自分のコマが盤に無いときだけ
-    if (F.openMid && s.size === 4 && !board.some((q) => q.player === me) && opps.every((o) => countReaches(board, o) === 0)) {
-        const mid = [5, 6, 9, 10].filter((i) => empty.includes(i));
-        if (mid.length) return mid[F.openMid === 2 ? Math.floor(s.rng() * mid.length) : 0];
-    }
     // 土壇場の防壁が未発動なら、相手の1回目の勝ちは防壁が受けてくれる(相手の列と自陣が消えるだけ)ので止めに行かず、攻めを続ける(AI_DEFAULTS.lsAggro)
     const lsFree = F.lsAggro && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn];
     if (rushActive(s) && F.rush !== 2) { // rush=2: 着手は通常のまま、スキルによる守りだけ捨てる
