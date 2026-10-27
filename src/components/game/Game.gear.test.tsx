@@ -160,9 +160,9 @@ describe('ギア（ブラウザ版）', () => {
     it('復讐の刃: 自分が奪取すると魔力-1', () => {
         const { container } = vengeanceGame([], ['vengeance']);
         fireEvent.click(cells(container)[0]);
-        expect(magicChips(container)[1]).toBe(4); // 巨人の手番開始: 初期2+1+巨人の+1
+        expect(magicChips(container)[1]).toBe(3); // 巨人の手番開始: 初期2+1
         fireEvent.click(cells(container)[0]); // 奪取
-        expect(magicChips(container)[1]).toBe(3);
+        expect(magicChips(container)[1]).toBe(2);
     });
     it('土壇場の防壁: 相手が揃えても勝利にならず、その列と持ち主の自陣が消える。2度目は勝利', () => {
         const { container } = render(<Game players={players([], ['lastStand'])} />);
