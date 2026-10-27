@@ -1820,6 +1820,8 @@ class AIPlayer {
         if (
             this.character !== 'tactician' &&
             this.character !== 'poisoner' &&
+            // 雷霆の巫は撃たない: 魔力を帯電トークン等に回すほうが強い (sim/ai.js elecNoAnti=1。対ネクロ22→57/対毒使い15→41%, 環境 50.3→57.8%)
+            this.character !== 'electrician' &&
             this.characters.some(
                 (c, seat) =>
                     seat !== seatOf(this.playerSymbol) &&

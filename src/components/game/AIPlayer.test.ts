@@ -1144,6 +1144,27 @@ describe('氷室の番人の対陰陽師の列カバー', () => {
     });
 });
 
+describe('雷霆の巫は対策ロックを撃たない (sim/ai.js elecNoAnti)', () => {
+    const costs = { onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const board = () => {
+        const b = emptyBoard();
+        [0, 1].forEach((i) => put(b, i, '💙', 1));
+        return b;
+    };
+
+    it('敵がネクロでも、低bindの自コマをロックしない（魔力は他の用途に回す）', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'necromancer']);
+        const r = ai.makeMove(board(), 10, costs, 0, 4, [], false);
+        expect(r.skills ?? []).not.toContain('onClickUseLock');
+    });
+
+    it('対照: 同じ盤でも「あなた」はネクロ相手に対策ロックを撃つ', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'necromancer']);
+        const r = ai.makeMove(board(), 10, costs, 0, 4, [], false);
+        expect(r.skills).toContain('onClickUseLock');
+    });
+});
+
 describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () => {
     // 💙番人が2に居て、ライフ0の⭕が5にある。奪取(5)は墓地+1になるので、空きマスの手を選ぶ
     const setup = () => {
