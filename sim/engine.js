@@ -775,7 +775,7 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    const magicCharacter = ['magician'];
+    const magicCharacter = ['magician', 'cryomancer'];
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
     // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
