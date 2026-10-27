@@ -1,7 +1,7 @@
 # tune-top: poisoner
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 81ad8ce
-- 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,12,15,16,17,18,19,29,39,45,46,48] AIフラグ=cryoPoison=1(既定)
+- 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 79.2% / 順位 1位 / 2位 magician 64.3%   (seed3, games100, rank --target poisoner, master 3bc89db)
 - 連続不採用回数: 6
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索
@@ -9,6 +9,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 29 | play-learn | 対 cryomancer の千日手を火遁(31)で崩す（unblock=2 は既存）。デッキ 39→31（17→31 も同等） | 対cryo 56-141-203 → 147-148-105（400局 seed11）。全相手 seed5 65.9→67.4（他相手は完全一致）| 採用（台帳27） |
 | 28 | joint | 新デッキ下でギア pair: lastStand,reinforce/propagate/toxicBloom(seed72/200) | 現状76.8に対し 76.5/76.5/69.4 すべて以下 | 不採用 |
 | 27 | deck | 全相手 1枚40近傍(seed71/60) | 基準77.1に対し最良 -19+6 80.2 (+3.1, z≈0.9)。他は +0.6以内 | 不採用 |
 | 26 | メタ | 対 cryomancer に絞った deck 1枚40近傍(seed62/100)・gear 1枠(seed63/100)。対 cryomancer 現状 46.8%(seed61/200)で互角 | deck最良 49.5(インジェクション抜き、追加札は同値=未使用、SE±9.8)、gear最良 +4.3(SE±10) すべてノイズ内 | 不採用 |
