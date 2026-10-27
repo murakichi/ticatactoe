@@ -108,6 +108,31 @@ function bestJudgeTarget(board, me) {
     return bestNet >= 2 ? bestIdx : null;
 }
 
+// 検証中(play-learn M1): 審判の日で「自分が3つ揃えた列の4つ目に居座る敵の壁」を消し、次の自分の手番(巨人が休む周など、次も自分の手番)で完成させる中心。net<2 でも撃つ
+function judgeUnblockTarget(board, me) {
+    const geo = geometryForCells(board.length);
+    for (let i = 0; i < board.length; i++) {
+        if (shield.has(i)) continue;
+        const gone = new Set();
+        for (const idx of geo.judgeRange(i)) {
+            const sq = board[idx];
+            const locked = sq.effects.some(e => e.effect === '🔑');
+            const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
+            if (locked && protectedBud) continue;
+            if (thermal.isFrozen(sq)) continue;
+            gone.add(idx);
+        }
+        const after = (k) => (k === i ? me : gone.has(k) ? undefined : board[k].player);
+        for (const line of geo.winLines) {
+            if (!line.some((k) => gone.has(k) && isEnemy(board[k].player, me))) continue; // 壁を消す列だけ
+            let mine = 0, empty = 0;
+            for (const k of line) { const o = after(k); if (o === me) mine++; else if (o === undefined) empty++; }
+            if (mine === 3 && empty === 1) return i;
+        }
+    }
+    return null;
+}
+
 // 敵駒 i が「どかさないと負ける列」(その持ち主が3つ揃い・自駒なし・他の敵駒なし・残り1マスが空き) に含まれるか
 function inOppReachLine(board, i, me) {
     const owner = board[i].player;
@@ -1942,7 +1967,8 @@ function faithfulMakeMoveInner(s) {
             }
         }
         if (ch === 'magician' && magic >= judgeDayCost(s)) {
-            const target = bestJudgeTarget(s.board, me);
+            let target = bestJudgeTarget(s.board, me);
+            if (target === null && F.judgeUnblock && E.judgeNextSeat(s) === s.turn) target = judgeUnblockTarget(s.board, me);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
                 placeMove(s, target);   // exeJudgeDay: 十字破壊+中心配置+手番終了
