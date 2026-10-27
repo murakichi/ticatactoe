@@ -24,5 +24,8 @@
 ## ギア走査(2026-10-27, `probe-top --target cryomancer --scan gears --games 60 --seed 1`)
 base afterglow,sturdy 46.6±4.0。最良 afterglow+lastStand 47.2 / lightToken 46.2 / vengeance 45.4。afterglow を外すと 34以下。1枠差し替えでは動かない(飽和)。
 
+## デッキ走査(2026-10-27, `--scan deck --swap 2 --neighbors 40 --games 60 --seed 5`)
+base 46.0±4.1。最良 47.9(オピウム・範囲氷結→バッズトークン・ライフ3)、次点 47.2 / 47.0。全て誤差内でデッキも飽和。
+
 ## 道具の発見
 - `duel.js` は『空きマスなし=引き分け』と誤判定していた(氷結で空きマスが全部塞がっただけ)。本番はチャージ可、サイレンスで置けないときだけ自動パス(Game.tsx mustPass)。duel.js を同じ挙動に直した。
