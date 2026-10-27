@@ -10,7 +10,7 @@ module.exports = {
         "yinYangMaster_ying": 4,
         "poisoner": 5,
         "electrician": 6,
-        "cryomancer": 5,
+        "cryomancer": 4,
         "pyromancer": 6,
         "default": 5
     },
