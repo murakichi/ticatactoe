@@ -1162,6 +1162,9 @@ describe('雷霆の巫は対策ロックを撃たない (sim/ai.js elecNoAnti)',
         const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'necromancer']);
         const r = ai.makeMove(board(), 10, costs, 0, 4, [], false);
         expect(r.skills).toContain('onClickUseLock');
+    });
+});
+
 describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () => {
     // 💙番人が2に居て、ライフ0の⭕が5にある。奪取(5)は墓地+1になるので、空きマスの手を選ぶ
     const setup = () => {
