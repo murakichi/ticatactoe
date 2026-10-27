@@ -435,7 +435,7 @@ export const Game = (props: GameProps) => {
         ai.skillKinds = gearTurn.current.kinds[turnSeat];
         ai.rerollsLeft = aiReroll.current.left;
         ai.discountActive = aiReroll.current.started;
-        const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost));
+        const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost), necroCost);
 
         // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
         // （氷室の番人はロックの代わりに氷結を撃つので、氷結が付けられるかで見る）

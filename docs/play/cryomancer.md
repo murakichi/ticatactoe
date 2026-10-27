@@ -2,7 +2,13 @@
 
 関連: [[LEDGER]] / `docs/tune/cryomancer.md`
 
-## 現状(2026-10-27, master e609c95, `--rank --games 100 --seed 3`)
+## 到達状況(2026-10-27 夕、master b99d2b9: 魔力+1・ライフ4・yyCoverCryo・noCapNecro・antiSummon・antiFlood・afterglow+lastStand)
+環境順位(`--rank`): seed9/150 1位 cryomancer 69.0 / 2位 poisoner 65.3、seed77/250 1位 poisoner 67.2 / 2位 cryomancer 64.0、seed91/400 1位 poisoner 65.9 / 2位 cryomancer 65.5。3回の平均は cryomancer 66.2 / poisoner 66.1 で**同率首位(誤差内)**。
+対キャラ別(seed77/400): you 87 / tactician 62 / magician 86 / giant 72 / yinYang 58 / necro 50 / poisoner 78 / electrician 55 / pyromancer 55。
+ギア再走査(seed71/80): 最良 sturdy+lastStand 66.0 vs base 63.4 だが seed101/102(400)では 64.2/65.6 vs 66.0/66.3 で不採用。antiSummonMax=2 は対ネクロ +2〜5pt(3 seed)だが環境勝率では+0.3pt程度で未採用。
+次に効きそうな弱点: 対雷霆の巫(55%。帯電の発火で自コマが一気に消える。局5 seed3)、対鍛冶師(55%)、対ネクロ(50%)。
+
+## 旧現状(2026-10-27 朝, master e609c95, `--rank --games 100 --seed 3`)
 9位 44.3%(1位 poisoner 68.0 / 2位 necromancer 65.7)。対キャラ別(seed1/100): you 74 / magician 72 / poisoner 61 / tactician 46 / giant 38 / electrician 32 / necromancer 29 / yinYang 26 / pyromancer 24。
 
 ## 対局ログ
@@ -20,6 +26,12 @@
 ### 局3: vs necromancer, 先手, seed12, afterglow+sturdy — 負け(手番4)
 - 序盤は互いに1〜2コマ。手番3でライフ0の自駒(5)を凍らせたが、氷結中でも奪取された(氷結はライフ0の奪取を防がない。要確認)。
 - 手番4で相手が 整理→降霊 を撃ち、行2(8〜11)の空き3マスに一括召喚して完成。行に相手のコマが1つ(9)しかない段階から1手で4連になる。列カバー(自コマを入れる)は対陰陽師には効いたが対ネクロでは逆効果(台帳6)。
+
+### 局4: vs necromancer, 後手, seed14, afterglow+sturdy — 負け(手番9, turn20)
+- ネクロの蘇生は『墓地(敵味方問わず駒が消える/奪われる)の数だけ空きマスにランダム召喚、コスト10−墓地』(engine.js addCorpses/summonCorpses)。奪取も絶対零度の破壊も墓地を増やす。
+- 手番3: ダブルロックで自駒のライフを伸ばし行1を3連→相手が4に置いて防いだ。手番6: 相手が 整理→降霊 で私の5を奪い対角 0,5,10 を作った。15に置かれると負けなので絶対零度(魔力11)で盤を凍らせ、相手5コマを破壊した。
+- 手番9: 絶対零度の破壊5個が全部墓地になり、降霊が安く(コスト5)・5体召喚に。私がチャージで盤を空けていた手番に 0,1,9,12,13 に召喚され、列1(1,5,9,13)が相手のコマで完成して負け。**対ネクロでは破壊系を撃つと相手の降霊を強くする**。空きマスを残すことも召喚の置き場になる。
+- 相手のネクロは lastStand(防壁)を持つ。ネクロ・陰陽師・巨人・魔法使い・軍師は推奨ギアに lastStand があり、1回目の列完成は吸収される(完成させても盤が自駒全消滅になる)。番人が lastStand を装備すると対毒使いが 53→78% だが対陰陽師・対ネクロが下がる(seed31/400)。
 
 ## ギア走査(2026-10-27, `probe-top --target cryomancer --scan gears --games 60 --seed 1`)
 base afterglow,sturdy 46.6±4.0。最良 afterglow+lastStand 47.2 / lightToken 46.2 / vengeance 45.4。afterglow を外すと 34以下。1枠差し替えでは動かない(飽和)。

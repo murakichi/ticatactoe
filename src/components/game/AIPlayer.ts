@@ -26,6 +26,9 @@ const SURPLUS_MAGIC = 12;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
 const SHIKIGAMI_LIFE = 2;
 const SHIKIGAMI_BLAST_DAMAGE = 4;
+/** 氷室の番人が対ネクロで敵コマの奪取に付ける減点 (sim/ai.js noCapNecro) */
+const NO_CAP_NECRO_WEIGHT = 100;
+
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
 const YY_COVER_WEIGHT = 150;
 const SH_MAX = 3; // 同時に持つ式神の数
@@ -809,6 +812,11 @@ class AIPlayer {
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
             if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
                 score += 30;
+                // 氷室の番人はネクロが相手のとき奪取を避ける（奪取は敵味方問わずネクロの墓地+1＝降霊の召喚数とコスト減）。
+                // sim/ai.js noCapNecro=100: 対ネクロ +5〜+11pt (seed1-3、各300〜400試合)
+                if (this.character === 'cryomancer' && this.opponents.some((o) => this.characterOf(o) === 'necromancer')) {
+                    score -= NO_CAP_NECRO_WEIGHT;
+                }
             }
 
             // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
@@ -1583,7 +1591,8 @@ class AIPlayer {
         assaultCost: number = 99,
         proliferateActive: boolean = false,
         seatMagic: number[] = [],
-        necroPay: number = necroCost
+        necroPay: number = necroCost,
+        necroCosts: number[] = []
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
@@ -1681,6 +1690,56 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 氷室の番人: 対陰陽師。百鬼夜行は氷結中の空きマスを飛ばすので、陰陽師の魔力が12以上のとき、自コマも氷結も入っていない列の空きマスを
+        // 最も多くの列に乗るものから1つ凍らせる（sim/ai.js F.antiFlood=13。対陰陽師 seed1-3/400 で 31〜36% → 49〜53%。常時や魔力7では悪化）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const yy = this.opponents.find((o) => this.characterOf(o) === 'yinYangMaster' && (seatMagic[seatOf(o)] ?? 0) >= 12);
+            if (yy) {
+                const score = new Map<number, number>();
+                for (const line of geometryForCells(board.length).winLines) {
+                    if (line.some((i) => board[i].player === this.playerSymbol || (!board[i].player && isFrozen(board[i])))) continue;
+                    for (const i of line) if (!board[i].player && canFreeze(board[i])) score.set(i, (score.get(i) || 0) + 1);
+                }
+                let cell = -1;
+                let best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    freeze(post, [cell]);
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
+            }
+        }
+        // 氷室の番人: 対ネクロ。降霊は墓地の数だけ空きマスにランダム召喚する。氷結した空きマスには召喚されないので、墓地が1以上のとき、
+        // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（sim/ai.js F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const necro = this.opponents.find((o) => this.characterOf(o) === 'necromancer');
+            if (necro && 10 - (necroCosts[seatOf(necro)] ?? 10) >= 1) {
+                const score = new Map<number, number>();
+                for (const line of geometryForCells(board.length).winLines) {
+                    if (line.some((i) => board[i].player === this.playerSymbol)) continue;
+                    const n = line.filter((i) => board[i].player === necro).length;
+                    if (n === 0) continue;
+                    const empt = line.filter((i) => !board[i].player && !isFrozen(board[i]) && canFreeze(board[i]));
+                    if (empt.length === 0 || line.some((i) => !board[i].player && isFrozen(board[i]))) continue;
+                    for (const i of empt) score.set(i, (score.get(i) || 0) + n);
+                }
+                let cell = -1;
+                let best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    freeze(post, [cell]);
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
+            }
+        }
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const cell = board.findIndex((sq, i) => !!sq.player && this.isEnemy(sq.player) && this.characterOf(sq.player) === 'magician'
                 && !this.shield.has(i) && budStacks(sq) > 0 && !isFrozen(sq) && canFreeze(sq));
@@ -1761,6 +1820,8 @@ class AIPlayer {
         if (
             this.character !== 'tactician' &&
             this.character !== 'poisoner' &&
+            // 雷霆の巫は撃たない: 魔力を帯電トークン等に回すほうが強い (sim/ai.js elecNoAnti=1。対ネクロ22→57/対毒使い15→41%, 環境 50.3→57.8%)
+            this.character !== 'electrician' &&
             this.characters.some(
                 (c, seat) =>
                     seat !== seatOf(this.playerSymbol) &&
