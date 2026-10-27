@@ -6,7 +6,7 @@
  * 対局は設定(JSON) + 自分の操作列だけをファイルに持ち、呼ぶたびに最初から再生する。
  * 乱数は seed 固定なので、同じ操作列なら必ず同じ盤面になる（相手AIの手も含めて）。
  *
- *   node sim/duel.js new  <file> --me you --opp giant [--seat 0|1] [--seed N] [--size N] [--gears a,b] [--deck 0,3,..] [--oppGears a,b] [--oppDeck ..] [--oppVaried]
+ *   node sim/duel.js new  <file> --me you --opp giant [--seat 0|1] [--seed N] [--size N] [--gears a,b] [--deck 0,3,..] [--oppGears a,b] [--oppDeck ..] [--oppVaried] [--oppFlags k=v,..]
  *   node sim/duel.js show <file>                       # 現在の盤・手札・コスト・直前の相手AIの動き
  *   node sim/duel.js do   <file> "h 3" "p 5" ...        # 操作を順に実行（不正な操作はそこで止まり、以降は実行しない）
  *   node sim/duel.js log  <file>                       # 操作列とAIの動きの全履歴（日記・学習メモ用）
@@ -98,7 +98,9 @@ function build(cfg) {
     const decks = cfg.seat === 0 ? [myDeck, oppDeck] : [oppDeck, myDeck];
     const gears = cfg.seat === 0 ? [myGears, oppGears] : [oppGears, myGears];
     const s = engine.newGame({ chars, rng, size: cfg.size, decks, gears });
-    s.aiFlags = [{}, {}];
+    const flags = {};
+    for (const kv of cfg.oppFlags || []) { const [k, v] = kv.split('='); flags[k] = v === undefined ? true : Number.isNaN(Number(v)) ? v : Number(v); }
+    s.aiFlags = cfg.seat === 0 ? [{}, flags] : [flags, {}];
     return s;
 }
 
@@ -267,7 +269,7 @@ function main() {
         const cfg = {
             me, opp, seat: a.seat === '1' ? 1 : 0, seed: parseInt(a.seed || '1', 10), size: a.size ? parseInt(a.size, 10) : undefined,
             gears: gears || undefined, deck: deck ? [...deck].sort((x, y) => x - y) : undefined,
-            oppGears: arr(a.oppGears) || undefined, oppDeck: arr(a.oppDeck) ? arr(a.oppDeck).map(Number) : undefined, oppVaried: a.oppVaried === 'true',
+            oppGears: arr(a.oppGears) || undefined, oppDeck: arr(a.oppDeck) ? arr(a.oppDeck).map(Number) : undefined, oppVaried: a.oppVaried === 'true', oppFlags: arr(a.oppFlags) || undefined,
             actions: [],
         };
         fs.writeFileSync(file, JSON.stringify(cfg, null, 1));
