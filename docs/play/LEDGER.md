@@ -27,6 +27,7 @@
 | 18 | 2026-10-27 | 戦略 / electrician vs 全相手 | E3: 帯電トークン(21)が手札に無く魔力に余裕があれば1コストで引き直して探す（F.elecDig=1/3） | **指した局**: 行17と同じ。勝ち筋の中心が帯電トークン1枚(デッキ12枚中の1枚)で、手札に来ない局が多い | `node sim/probe-top.js --target electrician [--flags elecDig=N] --games 300 --seed 52`: 57.0→55.0(N=1)/53.7(N=3) | 不採用（悪化。引き直しの魔力のほうが重い） | フラグ・コードは削除済み |
 | 19 | 2026-10-27 | 戦略 / electrician vs 全相手 | F1: 着手評価の発火の損得（fireGain）の重みを 0.5/2/4 倍にする（環境変数 CHG_FIRE_W） | **指した局**: 行17と同じ。範囲帯電で相手駒を体力0にして奪取に繋がった局（vs necromancer seed73 手番8〜10）から、発火を重く見れば伸びるか確認 | `CHG_FIRE_W=w node sim/probe-top.js --target electrician --games 300 --seed 52`: base 57.0 / 0.5:57.1 / 2:57.2 / 4:56.9 | 不採用（平坦。評価の重みは律速でない） | 変更なし |
 | 20 | 2026-10-27 | 戦略 / electrician vs 全相手 | F2: 雷霆の巫だけ探索を1手深くする（F.deepElec=1。深さ3→4） | 同上 | `node sim/probe-top.js --target electrician [--flags deepElec=1] --games 100 --seed 52`: 55.8→56.4（+0.6、誤差内。所要は約3倍） | 不採用（コード削除済み） | 変更なし |
+| 21 | 2026-10-27 | AIの穴 / electrician vs magician | S3: 対魔法使いでサイレンス(28)を手札にロック固定し、審判の日の前に封じられるようにする（F.silLock） | **指した局**: `node sim/duel.js new g.json --me electrician --opp magician --seat 0 --seed 14`、操作 p 5; p 10; h 21,p 2; h 21,p 7（手番1〜4）。手番6で相手が審判の日を撃ち盤が一掃された。サイレンスは手札に来ず（12枚中1枚）、来たのは撃たれた後 | `node sim/probe-top.js --target electrician --opp magician [--flags silLock=1] --games 300 --seed 53`: 43.7±5.6→38.0±5.5 | 不採用（悪化。ロックの2コスト×複数手番が重く、帯電トークン固定の魔力も食う）。コード削除済み | 変更なし |
 
 ※ 行1・2は実際には指さず、コード読みと AI 対 AI の測定だけで判断した（スキルの趣旨から外れていた）。結論（不採用）は測定としては有効だが、『指して気づく』検証は未実施。C1・C2 の着想を実戦局面で確かめ直すなら、指した局を根拠に新しい行を足す。
 
