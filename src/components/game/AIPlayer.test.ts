@@ -1143,3 +1143,56 @@ describe('氷室の番人の対陰陽師の列カバー', () => {
         expect(afterUncovered(b, mk(['cryomancer', 'tactician']).getBestMove(b, 4) as number)).toBeGreaterThan(best);
     });
 });
+
+describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () => {
+    // 💙番人が2に居て、ライフ0の⭕が5にある。奪取(5)は墓地+1になるので、空きマスの手を選ぶ
+    const setup = () => {
+        const b = emptyBoard();
+        put(b, 5, '⭕'); b[5] = { ...b[5], bind: 0 };
+        return b;
+    };
+    it('相手にネクロがいると、ライフ0の敵コマを奪わず空きマスに置く', () => {
+        const b = setup();
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'necromancer']);
+        expect(ai.getBestMove(b, 4)).not.toBe(5);
+    });
+    it('ネクロ以外が相手なら奪取ボーナスが残る（5を奪う）', () => {
+        const b = setup();
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'tactician']);
+        expect(ai.getBestMove(b, 4)).toBe(5);
+    });
+});
+
+describe('氷室の番人の対ネクロ: 降霊の召喚先になる空きマスを先に凍らせる', () => {
+    const costs = { onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+    // ⭕ネクロが行0に2つ（0,1）。自コマは無い。墓地が貯まっていれば行0の空き(2か3)を凍らせる
+    const setup = () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕'); put(b, 1, '⭕'); put(b, 15, '💙');
+        return b;
+    };
+    const mk = () => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'necromancer']);
+    it('墓地が1以上なら、ネクロの列の空きマスを氷結する', () => {
+        const r = mk().makeMove(setup(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [], 10, [10, 9]);
+        expect(r.skills).toContain('onClickUseLock');
+        expect([2, 3]).toContain((r.lockTargets as number[])[0]);
+    });
+    it('墓地が0なら凍らせない', () => {
+        const r = mk().makeMove(setup(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [], 10, [10, 10]);
+        expect(r.lockTargets ?? []).toHaveLength(0);
+    });
+});
+
+describe('氷室の番人の対陰陽師: 百鬼夜行の置き場になる空きマスを先に凍らせる', () => {
+    const costs = { onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+    const mk = () => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'yinYangMaster']);
+    const board = () => { const b = emptyBoard(); put(b, 5, '💙'); return b; };
+    it('陰陽師の魔力が12以上なら、自コマの入っていない列の空きマスを氷結する', () => {
+        const r = mk().makeMove(board(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [10, 12]);
+        expect(r.skills).toContain('onClickUseLock');
+    });
+    it('陰陽師の魔力が少なければ凍らせない', () => {
+        const r = mk().makeMove(board(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [10, 11]);
+        expect(r.lockTargets ?? []).toHaveLength(0);
+    });
+});

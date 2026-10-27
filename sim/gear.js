@@ -159,7 +159,7 @@ const RECOMMENDED_GEARS = {
     necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
-    cryomancer: ['afterglow', 'sturdy'],
+    cryomancer: ['afterglow', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));

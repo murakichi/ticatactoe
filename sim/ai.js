@@ -58,7 +58,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
-AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
+AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1005,7 +1005,11 @@ function getEnhancedBestMove(s) {
         // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
         if (F.yyCover && (character === 'necromancer' || (F.yyCoverCryo && character === 'cryomancer')) && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
-        if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
+        if (isEnemy(board[i].player, me) && board[i].bind <= 0) {
+            score += 30;
+            // F.noCapNecro: 奪取は敵味方問わずネクロの墓地+1（降霊の召喚数とコスト減）。ネクロが相手のときは減点する
+            if (F.noCapNecro && character === 'cryomancer' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')) score -= F.noCapNecro;
+        }
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
         score += fireGain(board, i, me, electricianSymbols(s));
         if (floodCover && yyPresent) { let unc = 0; for (const line of floodLines) if (!line.some((k) => sim[k].player === me)) unc++; score -= unc * floodCover; }
@@ -1609,6 +1613,51 @@ function faithfulMakeMoveInner(s) {
             if (ownBuds(s) < 1 || curMagic(s) < c33) break;
             SKILLS.harvestEve(s);
             if (curMagic(s) <= before) break; // 増えない周は打ち切り
+        }
+    }
+    // 対ネクロ(F.antiSummon): 降霊は墓地の数だけ空きマスにランダム召喚する。氷結した空きマスには召喚されないので、
+    // 墓地が F.antiSummon 以上たまったら、ネクロのコマがあり自コマが無い列の空きマスを先に凍らせて、召喚で列が完成するのを防ぐ
+    if (F.antiSummon && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
+        const necroSeat = otherSeats(s).find((seat) => s.chars[seat] === 'necromancer');
+        if (necroSeat !== undefined && 10 - s.necroCost[necroSeat] >= F.antiSummon) {
+            const nsym = SYMBOLS[necroSeat];
+            for (let k = 0; k < (F.antiSummonMax || 2); k++) {
+                const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+                if (curMagic(s) < fz + (F.antiSummonReserve || 0)) break;
+                const score = new Map();
+                for (const line of geometryForCells(s.board.length).winLines) {
+                    if (line.some((i) => s.board[i].player === me)) continue;
+                    const n = line.filter((i) => s.board[i].player === nsym).length;
+                    if (n === 0) continue;
+                    const empt = line.filter((i) => !s.board[i].player && !thermal.isFrozen(s.board[i]) && thermal.canFreeze(s.board[i]));
+                    if (empt.length === 0 || line.some((i) => !s.board[i].player && thermal.isFrozen(s.board[i]))) continue; // 既に凍った空きがある列は安全
+                    for (const i of empt) score.set(i, (score.get(i) || 0) + n);
+                }
+                let cell = -1, best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell === -1) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+            }
+        }
+    }
+    // 対陰陽師(F.antiFlood): 百鬼夜行は氷結中の空きマスを飛ばす。陰陽師の魔力が F.antiFlood 以上のとき、
+    // 自コマも氷結も入っていない列（百鬼夜行→式神一括で相手のコマだけになりうる列）の空きマスを、最も多くの列に乗るものから1つ凍らせる
+    if (F.antiFlood && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0
+        && otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster' && s.magic[seat] >= F.antiFlood - 1)) {
+        const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+        if (curMagic(s) >= fz + (F.antiFloodReserve || 0)) {
+            const score = new Map();
+            for (const line of geometryForCells(s.board.length).winLines) {
+                if (line.some((i) => s.board[i].player === me || (!s.board[i].player && thermal.isFrozen(s.board[i])))) continue;
+                for (const i of line) if (!s.board[i].player && thermal.canFreeze(s.board[i])) score.set(i, (score.get(i) || 0) + 1);
+            }
+            let cell = -1, best = 0;
+            score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+            if (cell !== -1) {
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; }
+            }
         }
     }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
