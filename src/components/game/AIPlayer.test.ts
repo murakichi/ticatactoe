@@ -688,6 +688,45 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
     });
 });
 
+describe('AIPlayer: 着手後の減衰で奪われる自コマ', () => {
+    it('ライフ1の自コマが減衰で0になり相手の4つ目になるなら、その自コマを補強する', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [1, 2, 3].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.getBestMove(b, 3)).toBe(0);
+    });
+
+    it('3人以上で減衰しない着手なら、ライフ1のコマを見込みで守らなくてよい', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'you', 'you']);
+        ai.seatCount = 3;
+        ai.placements = 1; // 1 % 3 !== 0: この着手では減衰しない
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [1, 2, 3].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.simulatePlace(b, 5, '💙', 3, 0)[0].bind).toBe(1);
+        ai.placements = 0;
+        expect(ai.simulatePlace(b, 5, '💙', 3, 0)[0].bind).toBe(0);
+    });
+});
+
+describe('AIPlayer: 補強は必要なときだけ', () => {
+    it('奪われても負けないライフ1の自コマは補強の候補にしない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [5, 6].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.reinforceMoves(b, 3)).toEqual([]);
+    });
+    it('奪われると相手が4つ揃うライフ1の自コマは補強の候補にする', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        [1, 2, 3].forEach((i) => put(b, i, '⭕', 5));
+        expect(ai.reinforceMoves(b, 3)).toEqual([0]);
+    });
+});
+
 describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
     const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 2, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any; // 式神一括は式神1体あたり2
     // 終盤の盤面: 行0(0〜3)だけが空き、残りは敵のコマ。百鬼夜行で空き4マスが式神になり、行0が敵のいない列になる
