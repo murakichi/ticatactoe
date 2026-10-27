@@ -311,7 +311,8 @@ describe('🔥火炎', () => {
     });
 
     it('ダメージを受けると🔥は全部消える。ダメージが通らなければ残る', () => {
-        expect(flameStacks(applyDamage(sq('⭕', 10, '🔥', '🔥'), 1, 'electric').sq)).toBe(0);
+        expect(flameStacks(applyDamage(sq('⭕', 10, '🔥', '🔥'), 1, 'skill').sq)).toBe(0);
+        expect(flameStacks(applyDamage(sq('⭕', 10, '🔥', '🔥'), 1, 'electric').sq)).toBe(2); // 電気のダメージでは消えない
         expect(flameStacks(applyDamage(sq('⭕', 0, '🔥'), 1, 'electric').sq)).toBe(1);
         expect(flameStacks(zeroOut(sq('⭕', 4, '🔥')))).toBe(0);
         const ticked = decayTick(sq('⭕', 5, '🔥', '☠'), chars); // 🔥中でも☠は働き、毒のダメージでは🔥は消えない（重複する）
@@ -324,13 +325,13 @@ describe('🔥火炎', () => {
         expect(flameStacks(decayTick(sq('⭕', 5, '🔥'), chars))).toBe(1);
     });
 
-    it('電気の発火で🔥が消える', () => {
+    it('電気の発火では🔥は消えない', () => {
         const b = emptyBoard();
         b[5] = sq(undefined, 0, '⚡');
         b[6] = sq('⭕', 4, '🔥');
         fireCharges(b, 4, 4);
         expect(b[6].bind).toBe(3);
-        expect(flameStacks(b[6])).toBe(0);
+        expect(flameStacks(b[6])).toBe(1);
     });
 
     it('🔥が付くと、縦横隣の氷結が全スタック即座に解ける（斜めは解けない）', () => {

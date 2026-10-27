@@ -18,7 +18,7 @@ import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTarget
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
@@ -819,7 +819,7 @@ export const Game = (props: GameProps) => {
         const necroActive = currentCharacter === 'necromancer' && remainNecro[turnSeat] > 0;
         const nextBoard = currentBoard.slice();
         if (useChargeOne) {
-            nextBoard[i] = { ...nextBoard[i], effects: [...nextBoard[i].effects, { effect: '⚡' }] };
+            nextBoard[i] = addCharge(nextBoard[i], characters);
             addLog(`${posName(i)}に⚡を付与`);
             playEffect('zap', i, undefined, '帯電付与');
             harvestMagic(1);
@@ -834,7 +834,7 @@ export const Game = (props: GameProps) => {
             flashCells(cells);
             playEffect('zap', i, undefined, '範囲帯電');
             setUseChargeArea(false);
-            setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
+            setCurrentBoard(withOverload(withCharge(currentBoard, cells, characters)));
             return;
         }
 
@@ -846,7 +846,7 @@ export const Game = (props: GameProps) => {
             flashCells(cells);
             playEffect('chainZap', i, cells);
             setUseChargeSpread(false);
-            setCurrentBoard(withOverload(withCharge(currentBoard, cells)));
+            setCurrentBoard(withOverload(withCharge(currentBoard, cells, characters)));
             return;
         }
 
@@ -2007,7 +2007,7 @@ export const Game = (props: GameProps) => {
         const emptyIndexes = findEmptyIndexes(board);
         if (emptyIndexes.length > 0) {
             const index = randomPick(emptyIndexes);
-            board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
+            board[index] = landCharge({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] }, characters);
             addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
             harvestMagic(afterTokenPlaced(board, index, '⚡'));
             playEffect('zap', index, undefined, '帯電トークン');
@@ -2033,7 +2033,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
         for (const idx of picks) {
-            board[idx] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] };
+            board[idx] = landCharge({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] }, characters);
         }
         addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (picks.length > 0) playEffect('zap', picks[0], undefined, '帯電ダブルトークン');
@@ -2057,7 +2057,7 @@ export const Game = (props: GameProps) => {
             flashCells(picks);
             playEffect('zap', picks[0], undefined, 'ランダム帯電');
         }
-        setCurrentBoard(withOverload(withCharge(currentBoard, picks)));
+        setCurrentBoard(withOverload(withCharge(currentBoard, picks, characters)));
         spendMagic(calculateCost(seatCosts.onClickChargeRandom, false, false, currentTurnPlayer, 'onClickChargeRandom'), true, true, 'onClickChargeRandom');
     };
     // ジャマー: ⚡のあるマスを選び、縦横隣接の敵コマのライフを⚡の数だけ減らして⚡を取り除く

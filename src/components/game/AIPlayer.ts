@@ -158,6 +158,11 @@ class AIPlayer {
         return n;
     }
 
+    /** 席ごとのキャラ（自分の席は this.character）。charge.ts の addCharge に渡す */
+    private seatCharacters(): (CharacterId | undefined)[] {
+        return this.characters.map((c, seat) => (seat === seatOf(this.playerSymbol) ? this.character : c));
+    }
+
     private characterOf(player: Player): CharacterId | undefined {
         return player === this.playerSymbol ? this.character : this.characters[seatOf(player)];
     }
@@ -1832,7 +1837,7 @@ class AIPlayer {
                 const start = this.bestChargeSpreadTarget(board);
                 if (start !== null) {
                     chargeClicks.push({ skill: 'onClickChargeSpread', target: start });
-                    board = withCharge(board, connectedPieces(board, start, this.sizeOf(board)));
+                    board = withCharge(board, connectedPieces(board, start, this.sizeOf(board)), this.seatCharacters());
                     magic -= spreadCost;
                     this.updateShield(board);
                 }
@@ -1841,7 +1846,7 @@ class AIPlayer {
                 const center = this.bestChargeAreaTarget(board);
                 if (center !== null) {
                     chargeClicks.push({ skill: 'onClickChargeArea', target: center });
-                    board = withCharge(board, geometryForCells(board.length).stompRange(center));
+                    board = withCharge(board, geometryForCells(board.length).stompRange(center), this.seatCharacters());
                     magic -= this.calculateAICost(costs.onClickChargeArea, false, false, 'onClickChargeArea');
                     this.updateShield(board);
                 }
@@ -1851,7 +1856,7 @@ class AIPlayer {
                 const target = this.bestChargeOneTarget(board);
                 if (target !== null) {
                     chargeClicks.push({ skill: 'onClickChargeOne', target });
-                    board = withCharge(board, [target]);
+                    board = withCharge(board, [target], this.seatCharacters());
                     magic -= oneCost;
                     this.updateShield(board);
                 }

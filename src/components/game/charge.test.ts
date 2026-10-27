@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -11,6 +11,8 @@ const put = (b: SquareInfo[], i: number, player: Player, bind = 4, zap = false):
 };
 // 席ごとのキャラ（添字 = 席番号）。💙=席0, ⭕=席1, 🟩=席2
 const chars: PlayerCharacters = ['you', 'electrician'];
+/** 付与ダメージを受けない（全席が雷霆の巫）: 既存テストは⚡の数だけを見る */
+const noLanding: PlayerCharacters = ['electrician', 'electrician'];
 const chars3: PlayerCharacters = ['you', 'tactician', 'electrician'];
 
 describe('帯電 ⚡ helpers', () => {
@@ -61,7 +63,7 @@ describe('帯電 ⚡ helpers', () => {
 
     it('withCharge は元の盤面を変えない', () => {
         const b = emptyBoard();
-        const n = withCharge(b, [3]);
+        const n = withCharge(b, [3], noLanding);
         expect(chargeStacks(b[3])).toBe(0);
         expect(chargeStacks(n[3])).toBe(1);
     });
@@ -152,7 +154,7 @@ describe('帯電 ⚡ スキル2 (#40/#43)', () => {
         const b = emptyBoard();
         const id = (c: number) => c;
         expect(reducedChargeCost(skillCosts.onClickChargeSpread, b, id)).toBe(7);
-        const withN = (n: number) => withCharge(b, Array.from({ length: n }, (_, k) => k));
+        const withN = (n: number) => withCharge(b, Array.from({ length: n }, (_, k) => k), noLanding);
         expect(reducedChargeCost(skillCosts.onClickChargeSpread, withN(3), id)).toBe(4);
         expect(reducedChargeCost(skillCosts.onClickChargeOne, withN(1), id)).toBe(1);
         expect(reducedChargeCost(skillCosts.onClickChargeOne, withN(9), id)).toBe(CHARGE_MIN_COST);
@@ -163,10 +165,10 @@ describe('帯電 ⚡ スキル2 (#40/#43)', () => {
     it('範囲帯電: 5x5 の中心なら 3x3 の9マス（空きマス含む）、角なら4マスに⚡が付く', () => {
         const geo = geometryOf(5);
         const b = emptyBoard(5);
-        const mid = withCharge(b, geo.stompRange(12));
+        const mid = withCharge(b, geo.stompRange(12), noLanding);
         expect(mid.filter((sq) => chargeStacks(sq) === 1).length).toBe(9);
         expect([6, 7, 8, 11, 12, 13, 16, 17, 18].every((k) => chargeStacks(mid[k]) === 1)).toBe(true);
-        const corner = withCharge(b, geo.stompRange(0));
+        const corner = withCharge(b, geo.stompRange(0), noLanding);
         expect(corner.filter((sq) => chargeStacks(sq) > 0).length).toBe(4);
     });
 
@@ -368,5 +370,26 @@ describe('雷霆の巫は自陣由来の発火ダメージを受けない', () =
         put(b2, 6, '💙', 4);
         fireCharges(b2, 4, 4, chars);
         expect(b2[6].bind).toBe(3);
+    });
+});
+
+describe('⚡が乗った時点のダメージ（雷霆の巫以外）', () => {
+    const piece = (player: '💙' | '⭕', bind: number, ...effects: string[]) => ({ player, bind, effects: effects.map((effect) => ({ effect })) as any });
+    it('雷霆の巫以外のコマは2ダメージ、雷霆の巫・空きマス・ライフ0・🔑・氷結中は受けない', () => {
+        const cs: PlayerCharacters = ['you', 'electrician']; // 💙=あなた, ⭕=雷霆の巫
+        expect(addCharge(piece('💙', 5), cs).bind).toBe(3);
+        expect(addCharge(piece('⭕', 5), cs).bind).toBe(5);
+        expect(addCharge(piece('💙', 1), cs).bind).toBe(0);
+        expect(addCharge(piece('💙', 0), cs).bind).toBe(0);
+        expect(addCharge(piece('💙', 5, '🔑'), cs).bind).toBe(5);
+        expect(addCharge(piece('💙', 5, '❄'), cs).bind).toBe(5);
+        expect(addCharge({ player: undefined, bind: 0, effects: [] }, cs).effects).toEqual([{ effect: '⚡' }]);
+        expect(chargeStacks(addCharge(piece('💙', 5), cs))).toBe(1);
+    });
+    it('🔥は消えない。トークン用の landCharge も同じダメージ', () => {
+        const hit = addCharge(piece('💙', 5, '🔥'), ['you', 'electrician']);
+        expect(hit.effects.filter((e) => e.effect === '🔥')).toHaveLength(1);
+        expect(landCharge(piece('💙', 4, '⚡'), ['you', 'electrician']).bind).toBe(2);
+        expect(landCharge(piece('⭕', 4, '⚡'), ['you', 'electrician']).bind).toBe(4);
     });
 });

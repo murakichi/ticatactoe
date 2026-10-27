@@ -62,7 +62,7 @@ function applyDamage(sq, amount, kind) {
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
     const next = { ...sq, bind };
-    return { sq: dealt > 0 && kind !== 'poison' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒のダメージでは🔥は消えない（毒と火炎は重複する）
+    return { sq: dealt > 0 && kind !== 'poison' && kind !== 'electric' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒・電気のダメージでは🔥は消えない（毒・帯電と火炎は重複する）
 }
 const absorbDestroy = (sq) => (isFrozen(sq) ? { sq: thawOne(sq), blocked: true } : { sq, blocked: false });
 const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });

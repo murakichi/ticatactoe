@@ -86,7 +86,7 @@ export type DamageResult = {
 
 /**
  * マスにダメージを与える。skill は氷結に吸収され（氷結が解除されるだけ）、火炎なら1.5倍（切り上げ）。
- * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。skill / electric は1以上ダメージが通ると🔥が全部消える（poison は🔥を消さない）。
+ * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。skill は1以上ダメージが通ると🔥が全部消える（poison / electric は🔥を消さない）。
  */
 export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): DamageResult => {
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
@@ -96,7 +96,7 @@ export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): D
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
     const next = { ...sq, bind };
-    return { sq: dealt > 0 && kind !== 'poison' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒のダメージでは🔥は消えない（毒と火炎は重複する）
+    return { sq: dealt > 0 && kind !== 'poison' && kind !== 'electric' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒・電気のダメージでは🔥は消えない（毒・帯電と火炎は重複する）
 };
 
 /**
