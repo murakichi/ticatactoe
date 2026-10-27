@@ -58,7 +58,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
-AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
+AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1613,6 +1613,32 @@ function faithfulMakeMoveInner(s) {
             if (ownBuds(s) < 1 || curMagic(s) < c33) break;
             SKILLS.harvestEve(s);
             if (curMagic(s) <= before) break; // 増えない周は打ち切り
+        }
+    }
+    // 対ネクロ(F.antiSummon): 降霊は墓地の数だけ空きマスにランダム召喚する。氷結した空きマスには召喚されないので、
+    // 墓地が F.antiSummon 以上たまったら、ネクロのコマがあり自コマが無い列の空きマスを先に凍らせて、召喚で列が完成するのを防ぐ
+    if (F.antiSummon && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0) {
+        const necroSeat = otherSeats(s).find((seat) => s.chars[seat] === 'necromancer');
+        if (necroSeat !== undefined && 10 - s.necroCost[necroSeat] >= F.antiSummon) {
+            const nsym = SYMBOLS[necroSeat];
+            for (let k = 0; k < (F.antiSummonMax || 2); k++) {
+                const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+                if (curMagic(s) < fz + (F.antiSummonReserve || 0)) break;
+                const score = new Map();
+                for (const line of geometryForCells(s.board.length).winLines) {
+                    if (line.some((i) => s.board[i].player === me)) continue;
+                    const n = line.filter((i) => s.board[i].player === nsym).length;
+                    if (n === 0) continue;
+                    const empt = line.filter((i) => !s.board[i].player && !thermal.isFrozen(s.board[i]) && thermal.canFreeze(s.board[i]));
+                    if (empt.length === 0 || line.some((i) => !s.board[i].player && thermal.isFrozen(s.board[i]))) continue; // 既に凍った空きがある列は安全
+                    for (const i of empt) score.set(i, (score.get(i) || 0) + n);
+                }
+                let cell = -1, best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell === -1) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+            }
         }
     }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。

@@ -1591,7 +1591,8 @@ class AIPlayer {
         assaultCost: number = 99,
         proliferateActive: boolean = false,
         seatMagic: number[] = [],
-        necroPay: number = necroCost
+        necroPay: number = necroCost,
+        necroCosts: number[] = []
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
@@ -1687,6 +1688,33 @@ class AIPlayer {
                 const followup = this.getBestMove(post, life);
                 if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [poisoned] };
                 this.updateShield(board);
+            }
+        }
+        // 氷室の番人: 対ネクロ。降霊は墓地の数だけ空きマスにランダム召喚する。氷結した空きマスには召喚されないので、墓地が1以上のとき、
+        // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（sim/ai.js F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const necro = this.opponents.find((o) => this.characterOf(o) === 'necromancer');
+            if (necro && 10 - (necroCosts[seatOf(necro)] ?? 10) >= 1) {
+                const score = new Map<number, number>();
+                for (const line of geometryForCells(board.length).winLines) {
+                    if (line.some((i) => board[i].player === this.playerSymbol)) continue;
+                    const n = line.filter((i) => board[i].player === necro).length;
+                    if (n === 0) continue;
+                    const empt = line.filter((i) => !board[i].player && !isFrozen(board[i]) && canFreeze(board[i]));
+                    if (empt.length === 0 || line.some((i) => !board[i].player && isFrozen(board[i]))) continue;
+                    for (const i of empt) score.set(i, (score.get(i) || 0) + n);
+                }
+                let cell = -1;
+                let best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    freeze(post, [cell]);
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
             }
         }
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {

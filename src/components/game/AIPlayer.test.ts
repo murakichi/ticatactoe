@@ -1162,3 +1162,23 @@ describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () =>
         expect(ai.getBestMove(b, 4)).toBe(5);
     });
 });
+
+describe('氷室の番人の対ネクロ: 降霊の召喚先になる空きマスを先に凍らせる', () => {
+    const costs = { onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+    // ⭕ネクロが行0に2つ（0,1）。自コマは無い。墓地が貯まっていれば行0の空き(2か3)を凍らせる
+    const setup = () => {
+        const b = emptyBoard();
+        put(b, 0, '⭕'); put(b, 1, '⭕'); put(b, 15, '💙');
+        return b;
+    };
+    const mk = () => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'necromancer']);
+    it('墓地が1以上なら、ネクロの列の空きマスを氷結する', () => {
+        const r = mk().makeMove(setup(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [], 10, [10, 9]);
+        expect(r.skills).toContain('onClickUseLock');
+        expect([2, 3]).toContain((r.lockTargets as number[])[0]);
+    });
+    it('墓地が0なら凍らせない', () => {
+        const r = mk().makeMove(setup(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [], 10, [10, 10]);
+        expect(r.lockTargets ?? []).toHaveLength(0);
+    });
+});
