@@ -2437,5 +2437,20 @@ test('氷室の番人: 毎ターンの魔力は魔法使いと同じ基本分+1�
     assert.strictEqual(gain('cryomancer') - gain('you'), 1, `氷室の番人 +${gain('cryomancer')} / あなた +${gain('you')}`);
 });
 
+test('毒使い: 推奨デッキに火遁(31)があり、氷結で塞がれた4つ目を火遁で解凍して完成させる（対氷室の番人の千日手を崩す）', () => {
+    const ai = require('./ai');
+    assert.ok(require('./deck').recommendedDeck('poisoner').includes(31), '毒使いの推奨デッキに火遁(31)');
+    const s = game('poisoner', 'cryomancer');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 5;
+    s.skills = [31, 0, 16];
+    const mine = { player: '💙', bind: 5, effects: [] };
+    for (const i of [4, 6, 7]) s.board[i] = { ...mine, effects: [] };
+    s.board[1] = { player: '⭕', bind: 5, effects: [] };
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+    const r = ai.makeMove(s, 'faithful');
+    if (!r.turnEnded && r.move != null) e.placeMove(s, r.move);
+    assert.strictEqual(s.board[5].player, '💙', '解凍して5に着手できた');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
