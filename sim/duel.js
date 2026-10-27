@@ -118,12 +118,24 @@ function wrapSkills(log) {
     return () => { for (const k of Object.keys(orig)) SKILLS[k] = orig[k]; };
 }
 
+/** 本番(Game.tsx の mustPass)と同じ: サイレンス中は着手しかできない。置けるマスが無ければ自動でパス。
+ *  サイレンスが無ければチャージできるので、空きマスが無くても詰まらない（引き分けにはならない）。置けるかは近似(空き / 自駒 / ライフ0の敵駒) */
+function mustPass(s) {
+    if (!s.silenced[s.turn]) return false;
+    const mine = engine.symbolOfSeat(s.turn);
+    return !s.board.some((sq) => {
+        if (sq.effects.some((e) => e.effect === '🔑')) return false;
+        if (sq.player === undefined) return engine.findEmptyIndexes([sq]).length > 0;
+        return sq.player === mine || sq.bind <= 0;
+    });
+}
+
 /** 相手AIの手番を、自分の手番になるまで（または決着まで）進める */
 function runAI(s, cfg, aiLog, mod) {
     let g = 0;
-    while (!s.winner && s.turn !== cfg.seat && g++ < 50) {
-        const empties = engine.findEmptyIndexes(s.board);
-        if (empties.length === 0) break;
+    while (!s.winner && g++ < 50) {
+        if (mustPass(s)) { aiLog.push(s.turn === cfg.seat ? 'あなたはパス（サイレンス中で置ける場所がない）' : 'パス（サイレンス中で置ける場所がない）'); s.currentTurn += 1; engine.settleWinner(s); engine.advanceTurn(s); engine.settleWinner(s); continue; }
+        if (s.turn === cfg.seat) break;
         const unwrap = wrapSkills(aiLog);
         const r = (mod || ai).makeMove(s, 'faithful');
         unwrap();
@@ -221,7 +233,7 @@ function show(cfg, res) {
     console.log(engine.renderBoard(s));
     console.log(`ライフ値(次に置くコマ)=${s.life}  魔力 自分:${s.magic[me]} 相手:${s.magic[1 - me]}  直前の相手AI: ${res.lastReply.length ? res.lastReply.join(' / ') : 'なし'}`);
     if (s.winner) { console.log(`\n*** 決着: ${s.winner}${s.winner === sym ? '（あなたの勝ち）' : '（あなたの負け）'} ***`); return; }
-    if (engine.findEmptyIndexes(s.board).length === 0) { console.log('\n*** 引き分け（空きマスなし） ***'); return; }
+    if (engine.findEmptyIndexes(s.board).length === 0) console.log('\n（着手できるマスなし: charge で手番を終えられる）');
     const pend = pendingOf(s);
     if (pend.length) console.log(`待ち状態: ${pend.join(',')} → p N で対象マスを指定`);
     const cat = deckMod.SKILL_CATALOG;
@@ -248,7 +260,7 @@ function fullLog(cfg, res) {
         if (t.reply.length) console.log(`        AI: ${t.reply.join(' / ')}`);
     });
     const w = res.s.winner;
-    console.log(`\n結果: ${w ? (w === engine.symbolOfSeat(cfg.seat) ? '勝ち' : '負け') : (engine.findEmptyIndexes(res.s.board).length === 0 ? '引き分け' : '未決着')}  (turn ${res.s.currentTurn})`);
+    console.log(`\n結果: ${w ? (w === engine.symbolOfSeat(cfg.seat) ? '勝ち' : '負け') : '未決着'}  (turn ${res.s.currentTurn})`);
 }
 
 function main() {

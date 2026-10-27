@@ -1118,3 +1118,28 @@ describe('雷霆の巫の対陰陽師(百鬼夜行→式神一括)対策', () =>
         expect(mk(['electrician', 'tactician']).getBestMove(b, 4)).toBe(off.getBestMove(b, 4));
     });
 });
+
+describe('氷室の番人の対陰陽師の列カバー', () => {
+    const uncoveredLines = (b: SquareInfo[], me: Player): number =>
+        geometryForCells(b.length).winLines.filter((line) => !line.some((k) => b[k].player === me)).length;
+    const setup = () => {
+        const b = emptyBoard();
+        [1, 6].forEach((i) => put(b, i, '💙'));
+        [8, 12].forEach((i) => put(b, i, '⭕'));
+        return b;
+    };
+    const mk = (opponents: string[]) => new AIPlayer('💙', 'cryomancer', ['⭕'], opponents as any);
+    const afterUncovered = (b: SquareInfo[], i: number) => { const c = b.map((sq) => ({ ...sq })); c[i] = { player: '💙', bind: 4, effects: [] }; return uncoveredLines(c, '💙'); };
+
+    it('相手に陰陽師がいると、自コマの無い線が最も少なくなる手を選ぶ', () => {
+        const b = setup();
+        const best = Math.min(...b.map((sq, i) => (sq.player ? Infinity : afterUncovered(b, i))));
+        expect(afterUncovered(b, mk(['cryomancer', 'yinYangMaster']).getBestMove(b, 4) as number)).toBe(best);
+    });
+
+    it('相手に陰陽師がいなければ線カバーは効かない', () => {
+        const b = setup();
+        const best = Math.min(...b.map((sq, i) => (sq.player ? Infinity : afterUncovered(b, i))));
+        expect(afterUncovered(b, mk(['cryomancer', 'tactician']).getBestMove(b, 4) as number)).toBeGreaterThan(best);
+    });
+});

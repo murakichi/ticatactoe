@@ -796,8 +796,8 @@ class AIPlayer {
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
 
             // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
-            // (sim/ai.js yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%)
-            if (this.character === 'necromancer' && this.facingYinYang()) {
+            // (sim/ai.js yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%。氷室の番人も同様: yyCoverCryo 対陰陽師 +4.6〜+17.4pt, seed1-3)
+            if ((this.character === 'necromancer' || this.character === 'cryomancer') && this.facingYinYang()) {
                 score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
             }
 
