@@ -1183,7 +1183,7 @@ function chooseSkills(s, availableSkills) {
             if (!sq.player) emptyCount++;
             if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
         }
-        if (emptyCount >= 6 && myBuds < 3) {
+        if (character === 'cryomancer' && F.cryoBuds ? (emptyCount >= (F.cryoBudsEmpty || 4) && myBuds < (F.cryoBudsTarget || 4)) : (emptyCount >= 6 && myBuds < 3)) {
             spend(cost(costsOf(s).onClickBuds, false, 'onClickBuds'), 'buds');
         }
     }
@@ -1291,6 +1291,8 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 氷室の番人(F.cryoBuds): バッズ札(2,10)を手札に固定して毎手番撃てるようにする。自陣の🌱1つにつき毎手番+1魔力（上限実験: 毎手番+1で環境勝率+19pt）
+    if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
     if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
