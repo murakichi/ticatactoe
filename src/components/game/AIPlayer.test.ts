@@ -1182,3 +1182,17 @@ describe('氷室の番人の対ネクロ: 降霊の召喚先になる空きマ�
         expect(r.lockTargets ?? []).toHaveLength(0);
     });
 });
+
+describe('氷室の番人の対陰陽師: 百鬼夜行の置き場になる空きマスを先に凍らせる', () => {
+    const costs = { onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+    const mk = () => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'yinYangMaster']);
+    const board = () => { const b = emptyBoard(); put(b, 5, '💙'); return b; };
+    it('陰陽師の魔力が12以上なら、自コマの入っていない列の空きマスを氷結する', () => {
+        const r = mk().makeMove(board(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [10, 12]);
+        expect(r.skills).toContain('onClickUseLock');
+    });
+    it('陰陽師の魔力が少なければ凍らせない', () => {
+        const r = mk().makeMove(board(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [10, 11]);
+        expect(r.lockTargets ?? []).toHaveLength(0);
+    });
+});

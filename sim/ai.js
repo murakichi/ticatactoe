@@ -58,7 +58,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
-AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
+AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1638,6 +1638,25 @@ function faithfulMakeMoveInner(s) {
                 if (cell === -1) break;
                 SKILLS.lock(s);
                 if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
+            }
+        }
+    }
+    // 対陰陽師(F.antiFlood): 百鬼夜行は氷結中の空きマスを飛ばす。陰陽師の魔力が F.antiFlood 以上のとき、
+    // 自コマも氷結も入っていない列（百鬼夜行→式神一括で相手のコマだけになりうる列）の空きマスを、最も多くの列に乗るものから1つ凍らせる
+    if (F.antiFlood && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && threats.length === 0
+        && otherSeats(s).some((seat) => s.chars[seat] === 'yinYangMaster' && s.magic[seat] >= F.antiFlood - 1)) {
+        const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+        if (curMagic(s) >= fz + (F.antiFloodReserve || 0)) {
+            const score = new Map();
+            for (const line of geometryForCells(s.board.length).winLines) {
+                if (line.some((i) => s.board[i].player === me || (!s.board[i].player && thermal.isFrozen(s.board[i])))) continue;
+                for (const i of line) if (!s.board[i].player && thermal.canFreeze(s.board[i])) score.set(i, (score.get(i) || 0) + 1);
+            }
+            let cell = -1, best = 0;
+            score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+            if (cell !== -1) {
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; }
             }
         }
     }

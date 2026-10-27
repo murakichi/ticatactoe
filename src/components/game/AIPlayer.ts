@@ -1690,6 +1690,29 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 氷室の番人: 対陰陽師。百鬼夜行は氷結中の空きマスを飛ばすので、陰陽師の魔力が12以上のとき、自コマも氷結も入っていない列の空きマスを
+        // 最も多くの列に乗るものから1つ凍らせる（sim/ai.js F.antiFlood=13。対陰陽師 seed1-3/400 で 31〜36% → 49〜53%。常時や魔力7では悪化）
+        if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
+            const yy = this.opponents.find((o) => this.characterOf(o) === 'yinYangMaster' && (seatMagic[seatOf(o)] ?? 0) >= 12);
+            if (yy) {
+                const score = new Map<number, number>();
+                for (const line of geometryForCells(board.length).winLines) {
+                    if (line.some((i) => board[i].player === this.playerSymbol || (!board[i].player && isFrozen(board[i])))) continue;
+                    for (const i of line) if (!board[i].player && canFreeze(board[i])) score.set(i, (score.get(i) || 0) + 1);
+                }
+                let cell = -1;
+                let best = 0;
+                score.forEach((v, i) => { if (v > best) { best = v; cell = i; } });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    freeze(post, [cell]);
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
+            }
+        }
         // 氷室の番人: 対ネクロ。降霊は墓地の数だけ空きマスにランダム召喚する。氷結した空きマスには召喚されないので、墓地が1以上のとき、
         // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（sim/ai.js F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
