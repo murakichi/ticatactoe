@@ -1004,6 +1004,8 @@ function getEnhancedBestMove(s) {
         else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
         // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
         if (F.yyCover && character === 'necromancer' && facingYinYang(s)) score += F.yyCover * (coveredLines(sim, me, board.length) - coveredLines(board, me, board.length));
+        // 検証中(play-learn C2): 着手後に相手が次の手でフォーク(2リーチ)を作れるなら減点
+        if (F.denyFork && !lsFree && opps.some((o) => getMovesFor(sim, o, 4).some((m) => countReaches(simulatePlace(sim, m, o, 4), o) >= 2))) score -= F.denyFork;
         // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明）
         if (isEnemy(board[i].player, me) && board[i].bind <= 0) score += 30;
         // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点
