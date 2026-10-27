@@ -145,7 +145,7 @@ const skillCosts = {
     onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
-    onClickStomp: 3,
+    onClickStomp: 2,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,
@@ -791,7 +791,7 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    const magicCharacter = ['magician', 'cryomancer']; // 氷室の番人も+1（issue #94。tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）
+    const magicCharacter = ['magician', 'cryomancer', 'giant']; // 巨人も+1（tune-top 上限実験: 魔力+1とストンプ2で環境勝率 43→70%・1位） // 氷室の番人も+1（issue #94。tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
     // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
