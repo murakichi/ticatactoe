@@ -490,7 +490,7 @@ function forceTable(s, me) {
         14: { key: 'walpurgis', cost: 'onClickWalpurgisNight', legal: () => s.board.some((sq) => sq.player) },
         15: { key: 'injection', cost: 'onClickInjection', poison: true, cands: () => pieceCells(s).filter((i) => isEnemy(s.board[i].player, me)), apply: (b, c) => b[c].effects.push({ effect: '☠' }) },
         19: { key: 'pandemic', cost: 'onClickPandemic', poison: true, cands: () => allCells(s), apply: (b, c) => { for (const k of geo.stompRange(c)) if (b[k].player) b[k].effects.push({ effect: '☠' }); } },
-        22: { key: 'chargeOne', costFn: () => chargeOneCost(s), cands: () => allCells(s).filter((i) => !s.board[i].effects.some((e) => e.effect === '🔑')), apply: (b, c) => b[c].effects.push({ effect: '⚡' }), pick: () => bestChargeOneTarget(s.board, me) },
+        22: { key: 'chargeOne', costFn: () => chargeOneCost(s), cands: () => allCells(s).filter((i) => !s.board[i].effects.some((e) => e.effect === '🔑')), apply: (b, c) => { b[c].effects.push({ effect: '⚡' }); b[c] = E.landedCharge(s.chars, b[c]); }, pick: () => bestChargeOneTarget(s.board, me) },
         29: { key: 'poisonMist', cost: 'onClickPoisonMist', poison: true, legal: () => s.board.some((sq) => sq.player) },
         30: { key: 'freeze', cost: 'onClickFreeze', cands: () => allCells(s).filter((i) => thermal.canFreeze(s.board[i])), apply: (b, c) => thermal.freeze(b, [c]) },
         31: { key: 'ignite', cost: 'onClickIgnite', cands: () => pieceCells(s), apply: (b, c) => thermal.ignite(b, [c], size, 1) },

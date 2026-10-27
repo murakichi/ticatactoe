@@ -684,7 +684,7 @@ test('帯電ダブルトークン: ⚡付きのコマを2つ設置し、ダメ�
     assert.strictEqual(s.usedTokenThisTurn, true);
 });
 
-test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出ない', () => {
+test('範囲帯電: 選んだマスを中心に3x3へ⚡。雷霆の巫以外のコマは乗った時点で2ダメージ', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.heartMagic = 20;
     s.board[6] = { player: '⭕', bind: 4, effects: [] };
@@ -694,7 +694,7 @@ test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出な
     const cells = [0, 1, 2, 4, 5, 6, 8, 9, 10];
     assert.ok(cells.every((i) => e.chargeStacks(s.board[i]) === 1));
     assert.strictEqual(e.chargeStacks(s.board[3]), 0);
-    assert.strictEqual(s.board[6].bind, 4);
+    assert.strictEqual(s.board[6].bind, 2); // あなた(雷霆の巫以外)のコマ: 4 → 2
 });
 
 test('ランダム帯電: 1〜4マスに⚡。ロック中・無敵マスは対象外', () => {
@@ -1176,22 +1176,22 @@ test('後から火炎が付くと🌱は消える（冬至の種子のガード�
     assert.strictEqual(budsOn(g.board[1]), 1);
 });
 
-test('🔥中のマス: 毒・⚡は休眠せず働く。🔥はダメージで消える', () => {
+test('🔥中のマス: 毒・⚡は休眠せず働く。🔥は毒・電気のダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
     e.placeMove(s, 0);
-    // 🔥中でも毒は働く。ダメージが通るので🔥は消え、毒は残る
+    // 🔥中でも毒は働く。毒のダメージでは🔥は消えず、毒も残る
     assert.ok(s.board[5].bind < 6);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
-    // 電気のダメージを受けると🔥は消える
+    // 電気のダメージを受けても🔥は消えない
     const t = game();
     t.heartTurn = true; t.life = 3;
     t.board[5] = { player: '⭕', bind: 8, effects: [{ effect: '⚡' }] };
     t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
     e.placeMove(t, 4);
-    assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
+    assert.ok(t.board[6].effects.some((x) => x.effect === '🔥'));
     // 🔥中のマスの⚡も働く: 巫の無敵が効き、盤面の⚡数にも数える
     const u = game('electrician', 'you');
     u.heartTurn = true; u.life = 3;
