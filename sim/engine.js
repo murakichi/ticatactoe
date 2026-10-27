@@ -775,7 +775,7 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    const magicCharacter = ['magician'];
+    const magicCharacter = ['magician', 'cryomancer']; // 氷室の番人も+1（issue #94。tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
     // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力

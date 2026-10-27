@@ -1058,6 +1058,10 @@ function chooseSkills(s, availableSkills) {
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
         if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
+        if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
+            && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
+            && remaining - c < glacierCost(s) + 5) return false;
         // F.silGlacier=3: サイレンス+絶対零度のコンボ分(両方のコスト)を貯めるまで、他のスキルに魔力を使わない
         if (F.silGlacier === 3 && character === 'cryomancer' && !s.glacierPending[s.turn] && availableSkills.includes(28) && name !== 'silence'
             && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
@@ -1179,7 +1183,7 @@ function chooseSkills(s, availableSkills) {
             if (!sq.player) emptyCount++;
             if (sq.player === me && sq.effects.some(e => e.effect === '🌱')) myBuds++;
         }
-        if (emptyCount >= 6 && myBuds < 3) {
+        if (character === 'cryomancer' && F.cryoBuds ? (emptyCount >= (F.cryoBudsEmpty || 4) && myBuds < (F.cryoBudsTarget || 4)) : (emptyCount >= 6 && myBuds < 3)) {
             spend(cost(costsOf(s).onClickBuds, false, 'onClickBuds'), 'buds');
         }
     }
@@ -1287,6 +1291,10 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 氷室の番人(F.cryoBuds): バッズ札(2,10)を手札に固定して毎手番撃てるようにする。自陣の🌱1つにつき毎手番+1魔力（上限実験: 毎手番+1で環境勝率+19pt）
+    if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
+    // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
+    if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) {
@@ -1590,6 +1598,19 @@ function faithfulMakeMoveInner(s) {
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
         }
     }
+    // #160 検証(F.windLoop): 連鎖割引で 風の落とし子(36)→刈り入れ前夜(33) が1周+1魔力になる。手札に両方があれば最大 F.windLoop 周回す
+    if (F.windLoop && hasGear(s.gears[s.turn], 'chainDiscount') && !s.silenced[s.turn] && availableSkills.includes(33) && availableSkills.includes(36)) {
+        for (let k = 0; k < F.windLoop; k++) {
+            const c36 = calculateCost(s, costsOf(s).onClickWindborne, false, false, 'onClickWindborne');
+            if (curMagic(s) < c36 || thermal.sowCandidates(s.board, me).length === 0) break;
+            const before = curMagic(s);
+            SKILLS.windborne(s);
+            const c33 = calculateCost(s, costsOf(s).onClickHarvestEve, false, false, 'onClickHarvestEve');
+            if (ownBuds(s) < 1 || curMagic(s) < c33) break;
+            SKILLS.harvestEve(s);
+            if (curMagic(s) <= before) break; // 増えない周は打ち切り
+        }
+    }
     // 対魔法使い(F.antiJudge): 相手の審判の日が撃てる魔力なら、その最善の中心の範囲にある自陣コマを先に氷結する。
     // 氷結中のコマは❄1つが身代わりになって壊れない。魔法使いAIは範囲内の氷結中コマを数えず、net<2 になれば撃たない（bestJudgeTarget）
     if (F.antiJudge && curChar(s) === 'cryomancer' && !s.silenced[s.turn]) {
@@ -1615,7 +1636,7 @@ function faithfulMakeMoveInner(s) {
         for (let k = 0; k < (F.freezeBudsMax || 2); k++) {
             const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
             if (curMagic(s) < fz + (F.freezeBudsReserve === undefined ? 3 : F.freezeBudsReserve)) break;
-            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && s.chars[SYMBOLS.indexOf(sq.player)] === (F.freezeBudsVs || 'magician') && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && (F.freezeBudsVs === 'any' || s.chars[SYMBOLS.indexOf(sq.player)] === (F.freezeBudsVs || 'magician')) && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
             if (cell === -1) break;
             SKILLS.lock(s);
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
@@ -1775,6 +1796,34 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 氷室の番人 絶対零度: 発動待ちでなく、魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない）
+    // 氷結コンボ(F.iceCombo): 範囲氷結(41)・氷柱(42)で敵コマに❄を重ね（❄が作られるたび絶対零度のコストが-1）、続けて絶対零度で爆破する。
+    // 凍った敵コマは爆破で❄1つにつき3ダメージ。絶対零度の❄(+1)と合わせて2スタックなら6ダメージで多くが壊れる。陰陽師の「コンボ札を揃えて一気に決める」型
+    if (F.iceCombo && curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
+        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
+        const geoC = geometryForCells(s.board.length);
+        for (let k = 0; k < (F.iceComboMax || 2); k++) {
+            const gcNow = glacierCost(s);
+            let best = null;
+            const consider = (idx, key, costKey, cells, extra) => {
+                if (!availableSkills.includes(idx)) return;
+                const cst = calculateCost(s, costsOf(s)[costKey], false, false, costKey);
+                const hit = cells.filter((i) => isEnemy(s.board[i].player, me) && s.board[i].bind > 0 && thermal.canFreeze(s.board[i]) && !shield.has(i)).length;
+                const made = cells.filter((i) => thermal.canFreeze(s.board[i])).length;
+                if (hit < (F.iceComboHit || 2)) return;
+                if (curMagic(s) < cst + Math.max(1, gcNow - made)) return;
+                if (!best || hit > best.hit) best = { key, hit, extra };
+            };
+            for (let c = 0; c < s.board.length; c++) {
+                if (shield.has(c)) continue;
+                consider(41, 'frostArea', 'onClickFrostArea', geoC.stompRange(c), { c });
+                for (const d of ['row', 'col', 'diag', 'anti']) consider(42, 'icicle', 'onClickIcicle', lineCells(s.size, c, d), { c, d });
+            }
+            if (!best) break;
+            SKILLS[best.key](s);
+            if (best.key === 'icicle') s.icicleDir = best.extra.d;
+            if (!placeMove(s, best.extra.c)) { s.useFrostArea = false; s.useIcicle = false; break; }
+        }
+    }
     // F.silGlacier: サイレンス(idx28)を先に撃って、凍結中の相手がスキルで解凍・反撃できないようにしてから撃つ。
     // =2: 手札にサイレンスがあれば、両方の魔力が貯まるまで絶対零度を待つ
     if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
