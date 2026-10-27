@@ -731,9 +731,10 @@ export const Game = (props: GameProps) => {
                 addCorpses(r.destroyed.length);
             }
         }
-        // 巨人は2ターンに1回しか動けず魔力が律速だったので、魔法使いと同じ+1（上限実験: 魔力+1とストンプ2で環境勝率 43→70%・環境1位）
+        // 巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し
+        // (life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)
         // 氷室の番人は、魔力が律速（tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）だったので魔法使いと同じ+1（issue #94）
-        const magicCharacter: CharacterId[] = ['magician', 'cryomancer', 'giant'];
+        const magicCharacter: CharacterId[] = ['magician', 'cryomancer'];
         // 50ターンごとに、手番開始時に得られる魔力が全員+1ずつ増える（長引く試合の打ち切り用）
         let nextMagic: number = magic[nextSeat] + 1 + lateMagicBonus(currentTurn, seatCount) + activeBudsCount(nextSymbol);
         if (magicCharacter.includes(nextCharacter)) {
