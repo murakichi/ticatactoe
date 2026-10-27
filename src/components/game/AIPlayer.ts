@@ -26,6 +26,9 @@ const SURPLUS_MAGIC = 12;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
 const SHIKIGAMI_LIFE = 2;
 const SHIKIGAMI_BLAST_DAMAGE = 4;
+/** 氷室の番人が対ネクロで敵コマの奪取に付ける減点 (sim/ai.js noCapNecro) */
+const NO_CAP_NECRO_WEIGHT = 100;
+
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
 const YY_COVER_WEIGHT = 150;
 const SH_MAX = 3; // 同時に持つ式神の数
@@ -809,6 +812,11 @@ class AIPlayer {
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
             if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
                 score += 30;
+                // 氷室の番人はネクロが相手のとき奪取を避ける（奪取は敵味方問わずネクロの墓地+1＝降霊の召喚数とコスト減）。
+                // sim/ai.js noCapNecro=100: 対ネクロ +5〜+11pt (seed1-3、各300〜400試合)
+                if (this.character === 'cryomancer' && this.opponents.some((o) => this.characterOf(o) === 'necromancer')) {
+                    score -= NO_CAP_NECRO_WEIGHT;
+                }
             }
 
             // ⚡の発火: 隣の帯電マスが敵を削れば加点、自コマを削れば減点

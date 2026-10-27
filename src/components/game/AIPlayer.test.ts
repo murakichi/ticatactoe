@@ -1143,3 +1143,22 @@ describe('氷室の番人の対陰陽師の列カバー', () => {
         expect(afterUncovered(b, mk(['cryomancer', 'tactician']).getBestMove(b, 4) as number)).toBeGreaterThan(best);
     });
 });
+
+describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () => {
+    // 💙番人が2に居て、ライフ0の⭕が5にある。奪取(5)は墓地+1になるので、空きマスの手を選ぶ
+    const setup = () => {
+        const b = emptyBoard();
+        put(b, 5, '⭕'); b[5] = { ...b[5], bind: 0 };
+        return b;
+    };
+    it('相手にネクロがいると、ライフ0の敵コマを奪わず空きマスに置く', () => {
+        const b = setup();
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'necromancer']);
+        expect(ai.getBestMove(b, 4)).not.toBe(5);
+    });
+    it('ネクロ以外が相手なら奪取ボーナスが残る（5を奪う）', () => {
+        const b = setup();
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'tactician']);
+        expect(ai.getBestMove(b, 4)).toBe(5);
+    });
+});
