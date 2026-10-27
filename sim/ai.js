@@ -1634,7 +1634,7 @@ function faithfulMakeMoveInner(s) {
         for (let k = 0; k < (F.freezeBudsMax || 2); k++) {
             const fz = calculateCost(s, costsOf(s).onClickCryoFreeze, false, false, 'onClickCryoFreeze');
             if (curMagic(s) < fz + (F.freezeBudsReserve === undefined ? 3 : F.freezeBudsReserve)) break;
-            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && s.chars[SYMBOLS.indexOf(sq.player)] === (F.freezeBudsVs || 'magician') && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
+            const cell = s.board.findIndex((sq, i) => isEnemy(sq.player, me) && (F.freezeBudsVs === 'any' || s.chars[SYMBOLS.indexOf(sq.player)] === (F.freezeBudsVs || 'magician')) && !shield.has(i) && thermal.budStacks(sq) > 0 && !thermal.isFrozen(sq) && thermal.canFreeze(sq));
             if (cell === -1) break;
             SKILLS.lock(s);
             if (!placeMove(s, cell)) { s.useFreeze = false; s.useLock = 0; break; }
