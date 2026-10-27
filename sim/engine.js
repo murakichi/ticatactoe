@@ -810,6 +810,7 @@ function advanceTurn(s) {
     // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
     if (hasGear(s.gears[next], 'colorGarden')) nextMagic += gear.countVarietySquares(s.board, sym) * GP.varietyMagic;
     if (lastStandActiveAgainst(s, next)) nextMagic += GP.lastStandMagic;
+    { const cf = s.aiFlags && s.aiFlags[next]; if (cf && cf.cheatMagic && s.currentTurn <= (cf.cheatUntil || 1e9) && s.currentTurn >= (cf.cheatFrom || 0)) nextMagic += cf.cheatMagic; } // 上限実験(測定後に削除)
     // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
     nextMagic += scorchForNext;
     if (hasGear(s.gears[next], 'frostRoot')) {
