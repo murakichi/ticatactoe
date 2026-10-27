@@ -684,7 +684,7 @@ test('帯電ダブルトークン: ⚡付きのコマを2つ設置し、ダメ�
     assert.strictEqual(s.usedTokenThisTurn, true);
 });
 
-test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出ない', () => {
+test('範囲帯電: 選んだマスを中心に3x3へ⚡。雷霆の巫以外のコマは乗った時点で2ダメージ', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.heartMagic = 20;
     s.board[6] = { player: '⭕', bind: 4, effects: [] };
@@ -694,7 +694,7 @@ test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出な
     const cells = [0, 1, 2, 4, 5, 6, 8, 9, 10];
     assert.ok(cells.every((i) => e.chargeStacks(s.board[i]) === 1));
     assert.strictEqual(e.chargeStacks(s.board[3]), 0);
-    assert.strictEqual(s.board[6].bind, 4);
+    assert.strictEqual(s.board[6].bind, 2); // あなた(雷霆の巫以外)のコマ: 4 → 2
 });
 
 test('ランダム帯電: 1〜4マスに⚡。ロック中・無敵マスは対象外', () => {
@@ -1001,7 +1001,7 @@ test('氷結中のマスにはロックが掛からない（ロック系スキ�
     assert.strictEqual(s.useLock, 1);
 });
 
-test('氷室の番人: ライフ平均は5で、自陣の❄によるライフ加算は無い', () => {
+test('氷室の番人: ライフ平均は4で、自陣の❄によるライフ加算は無い', () => {
     const mean = (board) => {
         let sum = 0;
         for (let k = 0; k < 200; k++) {
@@ -1016,9 +1016,9 @@ test('氷室の番人: ライフ平均は5で、自陣の❄によるライフ�
     };
     const plain = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
     const icy = plain.map((x, k) => (k < 6 ? { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ, FRZ] } : x));
-    assert.ok(Math.abs(mean(plain) - 5) < 1, 'plain ' + mean(plain));
-    assert.ok(Math.abs(mean(icy) - 5) < 1, 'icy ' + mean(icy)); // ❄24個でも加算なし
-    assert.strictEqual(require('./config').lifeMeans.cryomancer, 5);
+    assert.ok(Math.abs(mean(plain) - 4) < 1, 'plain ' + mean(plain));
+    assert.ok(Math.abs(mean(icy) - 4) < 1, 'icy ' + mean(icy)); // ❄24個でも加算なし
+    assert.strictEqual(require('./config').lifeMeans.cryomancer, 4);
 });
 
 test('氷結は🔥のあるマスには付かない（空きマス・氷結済みへの重ね掛けは可）。freezeAll も🔥マスを飛ばす', () => {
@@ -1176,22 +1176,22 @@ test('後から火炎が付くと🌱は消える（冬至の種子のガード�
     assert.strictEqual(budsOn(g.board[1]), 1);
 });
 
-test('🔥中のマス: 毒・⚡は休眠せず働く。🔥はダメージで消える', () => {
+test('🔥中のマス: 毒・⚡は休眠せず働く。🔥は毒・電気のダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
     e.placeMove(s, 0);
-    // 🔥中でも毒は働く。ダメージが通るので🔥は消え、毒は残る
+    // 🔥中でも毒は働く。毒のダメージでは🔥は消えず、毒も残る
     assert.ok(s.board[5].bind < 6);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
-    // 電気のダメージを受けると🔥は消える
+    // 電気のダメージを受けても🔥は消えない
     const t = game();
     t.heartTurn = true; t.life = 3;
     t.board[5] = { player: '⭕', bind: 8, effects: [{ effect: '⚡' }] };
     t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
     e.placeMove(t, 4);
-    assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
+    assert.ok(t.board[6].effects.some((x) => x.effect === '🔥'));
     // 🔥中のマスの⚡も働く: 巫の無敵が効き、盤面の⚡数にも数える
     const u = game('electrician', 'you');
     u.heartTurn = true; u.life = 3;
@@ -1597,7 +1597,7 @@ test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録さ�
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
     assert.strictEqual(e.skillCosts.onClickIgnite, 3);
     const mean = (c, bonus = 0) => Array.from({ length: 400 }, (_, k) => e.calculateLife(c, undefined, e.makeRng(k + 1), bonus)).reduce((a, b) => a + b, 0) / 400;
-    assert.ok(Math.abs(mean('cryomancer') - 5) < 1);
+    assert.ok(Math.abs(mean('cryomancer') - 4) < 1);
     assert.ok(Math.abs(mean('pyromancer') - 6) < 1);
 });
 
@@ -2424,6 +2424,17 @@ test('火の車: ランダムな敵2マスに🔥、手札をシャッフル。�
     // 次の手番の頭で基準が取り直される
     e.advanceTurn(s);
     assert.strictEqual(s.fireBase[s.turn], flames());
+});
+
+test('氷室の番人: 毎ターンの魔力は魔法使いと同じ基本分+1（合計+2。バッズ経済は魔法使いのみ）', () => {
+    // 手番が回ってきた席の魔力増分（チャージで手番を渡す）を、氷室の番人とあなたで比べる
+    const gain = (char) => {
+        const g = game('you', char);
+        const before = g.magic[1];
+        e.SKILLS.charge(g); // 席0の手番を終えて席1へ
+        return g.magic[1] - before;
+    };
+    assert.strictEqual(gain('cryomancer') - gain('you'), 1, `氷室の番人 +${gain('cryomancer')} / あなた +${gain('you')}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

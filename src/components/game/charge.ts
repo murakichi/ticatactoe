@@ -55,7 +55,7 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             if (isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
-            board[n] = applyDamage(sq, 1, 'electric').sq; // 電気は氷結を貫通する。ダメージが通れば🔥は消える
+            board[n] = applyDamage(sq, 1, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             damaged.push(n);
         }
         board[k] = { ...board[k], effects: board[k].effects.filter((e) => e.effect !== '⚡') };
@@ -80,10 +80,26 @@ export const connectedPieces = (board: SquareInfo[], start: number, size: number
     return Array.from(seen);
 };
 
+/** 雷霆の巫以外のコマは、⚡が乗った時点でこのダメージを受ける。sim/engine.js の CHARGE_LANDING_DAMAGE と同値 */
+export const CHARGE_LANDING_DAMAGE = 2;
+
+/**
+ * ⚡を1つ付与したマスを返す（元のマスは変更しない）。雷霆の巫以外のコマは付いた時点で2ダメージ
+ * （ライフ0・🔑ロック中・氷結中のコマと空きマスは受けない。🔥は消えない）。トークンは ⚡ 付きで作ったマスに landCharge をかける
+ */
+export const addCharge = (sq: SquareInfo, chars: readonly (CharacterId | undefined)[]): SquareInfo =>
+    landCharge({ ...sq, effects: [...sq.effects, { effect: '⚡' }] }, chars);
+
+/** すでに⚡が乗ったマスに、乗った時点のダメージ（addCharge の後半）だけをかける */
+export const landCharge = (sq: SquareInfo, chars: readonly (CharacterId | undefined)[]): SquareInfo => {
+    if (!sq.player || sq.bind <= 0 || hasLock(sq) || chars[seatOf(sq.player)] === 'electrician') return sq;
+    return applyDamage(sq, CHARGE_LANDING_DAMAGE, 'electric').sq;
+};
+
 /** 指定マスに⚡を1つずつ付与した新しい盤面を返す（元の盤面は変更しない） */
-export const withCharge = (board: SquareInfo[], cells: number[]): SquareInfo[] => {
+export const withCharge = (board: SquareInfo[], cells: number[], chars: readonly (CharacterId | undefined)[]): SquareInfo[] => {
     const next = board.slice();
-    for (const k of cells) next[k] = { ...next[k], effects: [...next[k].effects, { effect: '⚡' }] };
+    for (const k of cells) next[k] = addCharge(next[k], chars);
     return next;
 };
 

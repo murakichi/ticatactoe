@@ -242,6 +242,8 @@ const skillCosts = {
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
 // 盤面の⚡の数だけ、帯電付与・帯電拡散のコストを軽減する。下限（#43）
 // ⚡の発火ダメージ。config.charge.fireDamage（A/B検証用に環境変数 CHG_FIRE_DMG でも上書き可）
+/** 雷霆の巫以外のコマは、⚡が乗った時点でこのダメージを受ける（charge.ts の CHARGE_LANDING_DAMAGE と同値） */
+const CHARGE_LANDING_DAMAGE = 2;
 const FIRE_DAMAGE = Number(process.env.CHG_FIRE_DMG) || (config.charge && config.charge.fireDamage) || 1;
 // 過負荷: 全マスが⚡で埋まったら、全⚡と🔑ロックを取り除いて全マスのライフを0にする（ユーザー案。ロックも解除する）。
 // 既定は有効。環境変数 CHG_DISCHARGE=0 / config.charge.discharge=false で無効化できる（A/B検証用）
@@ -355,6 +357,20 @@ function checkDischarge(s) {
 function bumpStat(s, key, n = 1) {
     s.stats[key] = (s.stats[key] || 0) + n;
 }
+// 純粋版: すでに⚡が乗ったマス sq に「乗った時点のダメージ」をかけたマスを返す。ライフ0・🔑・氷結中・空きマス・雷霆の巫は受けない
+function landedCharge(chars, sq) {
+    if (!sq.player || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑') || chars[seatOf(sq.player)] === 'electrician') return sq;
+    return thermal.applyDamage(sq, CHARGE_LANDING_DAMAGE, 'electric').sq;
+}
+// s.board[k] に⚡を1つ付与する（雷霆の巫以外のコマは乗った時点で2ダメージ）
+function addCharge(s, k) {
+    s.board[k].effects.push({ effect: '⚡' });
+    landCharge(s, k);
+}
+// すでに⚡が乗った s.board[k] に、乗った時点のダメージだけをかける（トークン用）
+function landCharge(s, k) {
+    s.board[k] = landedCharge(s.chars, s.board[k]);
+}
 // 着手マス i の隣にある⚡を発火させる。mover = 着手した側のシンボル
 function fireCharges(s, i, mover) {
     const board = s.board;
@@ -369,7 +385,7 @@ function fireCharges(s, i, mover) {
             if (thermal.isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && charOfPlayer(s, sq.player) === 'electrician') continue;
-            board[n] = thermal.applyDamage(sq, FIRE_DAMAGE, 'electric').sq; // 電気は氷結を貫通する。ダメージが通れば🔥は消える
+            board[n] = thermal.applyDamage(sq, FIRE_DAMAGE, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / それ以外の駒に与えた被害
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
         }
@@ -775,7 +791,7 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    const magicCharacter = ['magician', 'cryomancer'];
+    const magicCharacter = ['magician', 'cryomancer']; // 氷室の番人も+1（issue #94。tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
     // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
@@ -875,7 +891,7 @@ function placeMove(s, i) {
 
     // pending targeted skills consume the click without advancing the turn
     if (s.useChargeOne) {
-        board[i].effects.push({ effect: '⚡' });
+        addCharge(s, i);
         harvestMagic(s, 1);
         s.useChargeOne = false;
         checkDischarge(s);
@@ -1011,7 +1027,7 @@ function placeMove(s, i) {
         }
         const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
         if (poison > 0 && sq.bind > 0) {
-            // ダメージが通れば🔥は消える
+            // 毒のダメージでは🔥は消えない
             const hit = thermal.applyDamage(sq, poison, 'poison').sq;
             sq.bind = hit.bind;
             sq.effects = hit.effects;
@@ -1638,6 +1654,7 @@ function onClickChargeToken(s) {
     if (empties.length) {
         const idx = randomPick(empties, s.rng);
         s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
+        landCharge(s, idx);
         granted = afterTokenPlaced(s, idx, '⚡');
     }
     harvestMagic(s, granted);
@@ -1662,7 +1679,7 @@ function onClickChargeSpread(s) {
 }
 function exeChargeSpread(s, i) {
     const cells = connectedPieces(s.board, i, s.size);
-    for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
+    for (const k of cells) addCharge(s, k);
     harvestMagic(s, cells.length);
     bumpStat(s, 'spreadCells', cells.length);
     s.useChargeSpread = false;
@@ -1674,7 +1691,7 @@ function exeChargeSpread(s, i) {
 function onClickDoubleChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
     for (const idx of randomAnyPick(empties, 2, s.rng)) {
-        if (idx != null) s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
+        if (idx != null) { s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] }; landCharge(s, idx); }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
     bumpMagicCount(s);
@@ -1692,7 +1709,7 @@ function onClickChargeArea(s) {
 }
 function exeChargeArea(s, i) {
     const cells = geometryOf(s.size).stompRange(i);
-    for (const k of cells) s.board[k].effects.push({ effect: '⚡' });
+    for (const k of cells) addCharge(s, k);
     bumpStat(s, 'areaCells', cells.length);
     s.useChargeArea = false;
     checkDischarge(s);
@@ -1704,7 +1721,7 @@ function onClickChargeRandom(s) {
         if (!isShielded(s, s.board[k]) && !s.board[k].effects.some((e) => e.effect === '🔑')) cands.push(k);
     }
     const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
-    for (const k of randomAnyPick(cands, n, s.rng)) s.board[k].effects.push({ effect: '⚡' });
+    for (const k of randomAnyPick(cands, n, s.rng)) addCharge(s, k);
     spendMagic(s, calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom'), 'onClickChargeRandom');
     bumpMagicCount(s);
     bumpStat(s, 'chargeRandom');
@@ -2306,5 +2323,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };
