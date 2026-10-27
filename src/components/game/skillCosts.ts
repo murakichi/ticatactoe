@@ -7,7 +7,7 @@ export const skillCosts = {
     onClickShikigamiAll: 3, // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
-    onClickStomp: 3,
+    onClickStomp: 2,
     onClickJudgeDay: 11,
     onClickCharge: 3,
     onClickAddLife: 3,

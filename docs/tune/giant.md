@@ -4,7 +4,7 @@
 - 現在の推奨設定: gears=[lastStand, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=stompMin=1,stompDef=1,auraSim=1(既定)
 - 基準線: 環境勝率 50.9% / 6位 / 1位 poisoner 70.7%, 2位 magician 56.4%   (--rank seed=3 games=100, master 取り込み後)
 - 連続不採用回数: 1
-- 状態: blocked(issue #97。6種の軸を測り終え、1位poisonerが2位より約14pt突出=調整は別途)
+- 状態: 魔力+1とストンプ2を本体に採用（2026-10-27, play-learn 台帳#11）。基本条件で1位 68.0% vs poisoner 67.7%（僅差）。issue #97 の案1・2に相当
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
