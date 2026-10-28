@@ -52,7 +52,15 @@ export type SkillEffectType =
     | 'plunder'
     | 'bulwark'
     | 'miasma'
-    | 'chainZap';
+    | 'chainZap'
+    | 'thunderHeal'
+    | 'thunderFall'
+    | 'thunderFire'
+    | 'stash'
+    | 'staticSeason'
+    | 'bristle'
+    | 'darkPot'
+    | 'strip';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
 export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
@@ -143,6 +151,14 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     bulwark: { label: '土壇場の防壁', bg: '#ffd966', fg: '#3a2a00' },
     miasma: { label: 'ミアズマ', bg: '#c98bff', fg: '#1d0b33' },
     chainZap: { label: '帯電拡散', bg: '#fff44f', fg: '#2a2500' },
+    thunderHeal: { label: '雷を食らわば皿まで', bg: '#5fd06a', fg: '#082a0c' },
+    thunderFall: { label: '落雷は忘れた頃に', bg: '#fff44f', fg: '#2a2500' },
+    thunderFire: { label: '雷のない所に火は立たぬ', bg: '#ff7a2f', fg: '#2a0d00' },
+    stash: { label: '雷神のへそくり', bg: '#ffc24a', fg: '#2a1d00' },
+    staticSeason: { label: '静電気の季節', bg: '#fff44f', fg: '#2a2500' },
+    bristle: { label: '総毛立つ', bg: '#fff44f', fg: '#2a2500' },
+    darkPot: { label: '一寸先は闇鍋', bg: '#5a2896', fg: '#fff' },
+    strip: { label: '裸の王様', bg: '#ffd966', fg: '#3a2a00' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
