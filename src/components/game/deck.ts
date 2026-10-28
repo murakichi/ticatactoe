@@ -98,6 +98,8 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },
     { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付け、その後手札をシャッフルします。このターン敵か自陣に🔥を付与していればコスト0（使うとリセット）' },    { idx: 76, name: '裸の王様', icon: '👑', category: 'control', costKey: 'onClickStrip', desc: '相手全員のギアを、その相手の次の手番の終わりまで無効にします' },    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge', costKey: 'onClickChargeSeason', desc: '今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます' },
     { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge', costKey: 'onClickBristle', desc: '自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます' },    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge', costKey: 'onClickRelease', desc: '自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）' },    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge', costKey: 'onClickStash', desc: '⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコストを-1します（軽減後は最低1）' },    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge', costKey: 'onClickThunderFire', desc: '⚡のあるコマを1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を付けます（氷結中のコマは❄が1つ減るだけ）' },    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control', costKey: 'onClickDarkPot', desc: '敵味方を問わず全コマに🔥❄⚡☠🌱🍂をランダムに付けます（各エフェクトは最大1。🔑ロック・無敵のコマは除く）。盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます' },    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge', costKey: 'onClickChargeHeal', desc: '⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します。この手番に付与した⚡の数だけコストが下がります（最低1）' },
+    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
+    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -120,7 +122,7 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
-    witch: [0, 3, 5, 8, 11, 12, 28, 53, 62, 63, 64, 65], // 🍂付きトークン4種(木枯らしの使い・落葉松の双子・紅葉狩り・枯野の相席)で🍂を撒く
+    witch: [0, 3, 5, 8, 12, 28, 53, 62, 63, 64, 84, 85], // 🍂付きトークン3種で自陣に🍂を撒き、落ち葉の置き土産+焚きつけで敵の🍂を🔥にする
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

@@ -115,6 +115,8 @@ export const skillCosts = {
     onClickThunderFire: 7, //     雷のない所に火は立たぬ(idx 81): ⚡のあるコマを1つ破壊し、周囲8マスの敵コマ2〜全部に🔥+1
     onClickDarkPot: 9, //         一寸先は闇鍋(idx 82): 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1）。盤面のエフェクトの数だけ軽減（最低1）
     onClickChargeHeal: 6, //     雷を食らわば皿まで(idx 83): ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。この手番に付与した⚡の数だけ軽減（最低1）
+    onClickLeafDrop: 1, //       落ち葉の置き土産(idx 84): ランダムな敵のコマ1つに🍂を1つ付与。敵の🍂は自分のコストも上げる（魔女は相殺）ので最安
+    onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -1,4 +1,8 @@
 import {
+    leafDropTargets,
+    leafDrop,
+    kindlingTargets,
+    kindling,
     boardLeaves,
     witchCostOf,
     mogaribue,
@@ -1226,5 +1230,58 @@ describe('凩の魔女（パッシブ・虎落笛）', () => {
         expect(a).toEqual(c);
         expect(witchCostOf(7, mk())).toBe(sim.witchCostOf(7, mk()));
         expect(boardLeaves(mk())).toBe(sim.boardLeaves(mk()));
+    });
+});
+
+describe('落ち葉の置き土産・焚きつけ', () => {
+    const lv = (player: Player | undefined, bind: number, n: number, ...rest: Effect['effect'][]) => sq(player, bind, ...Array<Effect['effect']>(n).fill('🍂'), ...rest);
+    const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+
+    it('落ち葉の置き土産: 対象は使用者以外のコマ（guarded を除く）。🍂が1つ付く', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 3);
+        b[2] = sq('⭕', 3, '🔑');
+        expect(leafDropTargets(b, '💙', guard)).toEqual([1]);
+        leafDrop(b, 1);
+        expect(b[1].effects).toEqual([{ effect: '🍂' }]);
+        expect(b[0].effects).toEqual([]);
+    });
+
+    it('焚きつけ: 敵の🍂を全て取り除き、1枚につき🔥を1つ付ける（自陣・🔑は対象外）', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 1);
+        b[1] = lv('⭕', 8, 3);
+        b[2] = lv('⭕', 8, 1, '🔑');
+        b[3] = sq('⭕', 8);
+        expect(kindlingTargets(b, '💙', guard)).toEqual([1]);
+        const r = kindling(b, [1], 4);
+        expect(r.leaves).toBe(3);
+        expect(b[1].effects.filter((e) => e.effect === '🍂')).toHaveLength(0);
+        expect(flameStacks(b[1])).toBe(3);
+        expect(b[0].effects).toHaveLength(1);
+        expect(b[2].effects).toHaveLength(2);
+    });
+
+    it('焚きつけ: 氷結中のコマは最初の1スタックが氷結の解除に使われ、🍂は全て消える。sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[1] = lv('⭕', 8, 2, '❄');
+            b[5] = lv('⭕', 8, 1);
+            b[6] = sq('⭕', 8, '❄');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        const ra = kindling(a, [1, 5], 4);
+        const rc = sim.kindling(c, [1, 5], 4);
+        expect(ra).toEqual(rc);
+        expect(a).toEqual(c);
+        expect(a[1].effects.filter((e) => e.effect === '🍂')).toHaveLength(0);
+        expect(isFrozen(a[1])).toBe(false);
+        expect(flameStacks(a[1])).toBe(1); // 2スタックのうち1つが❄の解除、残り1つが🔥
+        expect(leafDropTargets(mk(), '💙', guard)).toEqual(sim.leafDropTargets(mk(), '💙', guard));
     });
 });

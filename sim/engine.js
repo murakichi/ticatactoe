@@ -248,6 +248,8 @@ const skillCosts = {
     onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
     onClickDarkPot: 9, // 一寸先は闇鍋(idx 82)。盤面のエフェクトの数だけ軽減（最低1）
     onClickChargeHeal: 6, // 雷を食らわば皿まで(idx 83)。この手番に付与した⚡の数だけ軽減（最低1）
+    onClickLeafDrop: 1, // 落ち葉の置き土産(idx 84)
+    onClickKindling: 5, // 焚きつけ(idx 85)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -1767,6 +1769,32 @@ function onClickChargeHeal(s) {
     s.chargeBase[s.turn] = comboMod.ownCharges(s.board, curPlayer(s)); // 条件のリセット
 }
 
+// 落ち葉の置き土産 (idx 84): ランダムな敵のコマ1つに🍂を1つ付ける（🔑ロック・⚡無敵のコマは除く）。対象が無ければ使えない
+function leafDropCandidates(s) { return thermal.leafDropTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function leafDropLegal(s) { return leafDropCandidates(s).length > 0; }
+function onClickLeafDrop(s) {
+    const cands = leafDropCandidates(s);
+    if (cands.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickLeafDrop, false, false, 'onClickLeafDrop'); // 払うコストは付与する前の盤面で決まる（画面の表示と同じ）
+    thermal.leafDrop(s.board, randomPick(cands, s.rng));
+    spendMagic(s, pay, 'onClickLeafDrop');
+    bumpMagicCount(s);
+    bumpStat(s, 'leafDrop');
+}
+// 焚きつけ (idx 85): 敵の🍂を全て🔥に変換する（🍂1枚につき🔥1つ。🔑ロック・⚡無敵のコマは除く）。対象が無ければ使えない
+function kindlingCandidates(s) { return thermal.kindlingTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function kindlingLegal(s) { return kindlingCandidates(s).length > 0; }
+function onClickKindling(s) {
+    const cands = kindlingCandidates(s);
+    if (cands.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickKindling, false, false, 'onClickKindling');
+    const r = thermal.kindling(s.board, cands, s.size, keepBudsOf(s));
+    spendMagic(s, pay, 'onClickKindling');
+    bumpMagicCount(s);
+    bumpStat(s, 'kindling');
+    bumpStat(s, 'kindlingLeaves', r.leaves);
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2532,6 +2560,8 @@ const SKILLS = {
     thunderFire: onClickThunderFire,
     darkPot: onClickDarkPot,
     chargeHeal: onClickChargeHeal,
+    leafDrop: onClickLeafDrop,
+    kindling: onClickKindling,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2576,7 +2606,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

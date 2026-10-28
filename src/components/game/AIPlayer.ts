@@ -5,12 +5,12 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
 import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 84;
+export const SKILL_POOL_SIZE = 86;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1144,6 +1144,17 @@ class AIPlayer {
                 && sq.effects.filter(e => e.effect === '☠').length >= Math.max(1, sq.bind)
                 && sq.effects.some(e => e.effect === '☠')).length;
             if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true, 'onClickSerum'), 'onClickSerum');
+        }
+
+        // 凩の魔女: 落ち葉の置き土産（1コスト）で敵のコマに🍂を溜め、敵の🍂が3枚以上になったら焚きつけで🔥に変える。敵の🍂は魔女のコストを上げるが、パッシブで相殺される (sim/ai.js と同一)
+        if (this.character === 'witch') {
+            const foeLeaves = board.reduce((n, sq) => (sq.player && sq.player !== this.playerSymbol ? n + sq.effects.filter((e) => e.effect === '🍂').length : n), 0);
+            const guardedCell = (sq: SquareInfo, i: number) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
+            if (availableSkills.includes(85) && foeLeaves >= 3 && kindlingTargets(board, this.playerSymbol, guardedCell).length > 0) {
+                spend(this.calculateAICost(costs.onClickKindling, false, false, 'onClickKindling'), 'onClickKindling');
+            } else if (availableSkills.includes(84) && foeLeaves < 3 && leafDropTargets(board, this.playerSymbol, guardedCell).length > 0) {
+                spend(this.calculateAICost(costs.onClickLeafDrop, false, false, 'onClickLeafDrop'), 'onClickLeafDrop');
+            }
         }
 
         // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ (sim/ai.js と同一)

@@ -381,6 +381,38 @@ export const boardLeaves = (board: SquareInfo[]): number => board.reduce((n, sq)
 /** 凩の魔女のパッシブ: 盤面の🍂1枚につきスキルコスト-1（下限1。もともと1以下のコストは変えない） */
 export const witchCostOf = (cost: number, board: SquareInfo[]): number => (cost > 1 ? Math.max(1, cost - boardLeaves(board)) : cost);
 
+// ---- 落ち葉の置き土産・焚きつけ（敵の🍂を使う汎用スキル）----
+
+/** 落ち葉の置き土産の対象: 使用者以外のコマのうち、guarded（🔑ロック・⚡無敵）でないもの（昇順） */
+export const leafDropTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    kimonTargets(board, player, guarded);
+
+/** 落ち葉の置き土産: cell のコマに🍂を1つ付ける（氷結中でも付く。休眠するだけ）。board を直接書き換える */
+export const leafDrop = (board: SquareInfo[], cell: number): void => {
+    board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] };
+};
+
+/** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
+export const kindlingTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * 焚きつけ: 対象マスの🍂を全て取り除き、取り除いた🍂1枚につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて🔥は残りのスタックぶん、
+ * 付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。変換した🍂の枚数と、解けたマスを返す。board を直接書き換える
+ */
+export const kindling = (board: SquareInfo[], cells: number[], size: number, keepBuds?: (sq: SquareInfo) => boolean): { leaves: number; thawed: number[] } => {
+    let leaves = 0;
+    const thawed: number[] = [];
+    for (const k of cells) {
+        const n = leafStacks(board[k]);
+        if (n === 0) continue;
+        leaves += n;
+        board[k] = without(board[k], '🍂');
+        thawed.push(...ignite(board, [k], size, n, keepBuds).thawed);
+    }
+    return { leaves, thawed };
+};
+
 /** 虎落笛で自陣のコマ全てが得るライフ */
 export const MOGARIBUE_LIFE = 2;
 

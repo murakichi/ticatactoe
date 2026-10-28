@@ -1224,6 +1224,17 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // 凩の魔女: 落ち葉の置き土産（1コスト）で敵のコマに🍂を溜め、敵の🍂が3枚以上になったら焚きつけで🔥に変える。敵の🍂は魔女のコストを上げるが、パッシブで相殺される（AIPlayer.ts と同一）
+    if (character === 'witch') {
+        const foeLeaves = board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.leafStacks(sq) : n), 0);
+        const guardedCell = (sq, i) => shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
+        if (availableSkills.includes(85) && foeLeaves >= 3 && thermal.kindlingTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickKindling, false, 'onClickKindling')) {
+            spend(cost(costsOf(s).onClickKindling, false, 'onClickKindling'), 'kindling');
+        } else if (availableSkills.includes(84) && foeLeaves < 3 && thermal.leafDropTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop')) {
+            spend(cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop'), 'leafDrop');
+        }
+    }
+
     // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
     if (character === 'electrician') {
         // 落雷は忘れた頃に: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（AIPlayer.ts と同一）
@@ -1375,7 +1386,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 84)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 86)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
