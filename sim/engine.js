@@ -675,15 +675,16 @@ function gearCtx(s, seat) {
     };
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
-function gearCost(s, cost, isToken = false, seat = s.turn, key) {
+// withLeaf: 敵の🍂の増加分を、ギアの補正・割引より先に足す（増加分→減少分の順）。calculateCost は characterCost の中で足し済みなので false で呼ぶ
+function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true) {
+    const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
-    const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
     const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
-    // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
-    return discounted + thermal.leafSurcharge(s.board, SYMBOLS[seat]);
+    return discounted;
 }
 // 術中の加護: スキルを使った手番の間、装備した席のコマは効果(☠🔥⚡)のダメージを受けない。thermal の述語を、この試合の状態で差し込む
 function armWard(s) {
@@ -733,8 +734,10 @@ function bumpMagicCount(s) {
 }
 
 // [FAITHFUL] Game.tsx calculateCost
-function characterCost(s, cost, isToken, isPoison, key) {
+function characterCost(s, baseCost, isToken, isPoison, key) {
     const c = curChar(s);
+    // 敵の🍂による増加分を先に足す（キャラの減少分・割引はそのあと）
+    const cost = baseCost + thermal.leafSurcharge(s.board, curPlayer(s));
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (c === 'pyromancer') return key && thermal.FLAME_SKILL_KEYS.has(key) && cost > 1 ? cost - 1 : cost;
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
@@ -746,7 +749,7 @@ function characterCost(s, cost, isToken, isPoison, key) {
     return cost;
 }
 function calculateCost(s, cost, isToken = false, isPoison = false, key) {
-    return gearCost(s, characterCost(s, cost, isToken, isPoison, key), isToken, s.turn, key);
+    return gearCost(s, characterCost(s, cost, isToken, isPoison, key), isToken, s.turn, key, false);
 }
 
 // [FAITHFUL] Game.tsx calculateTokenBind

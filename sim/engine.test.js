@@ -2809,7 +2809,8 @@ test('凩の魔女: パッシブ。盤面の🍂（敵味方）1枚につきス�
     s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🍂' }] };
     // 敵の🍂は魔女のコストを+1するが、パッシブの-3で相殺されて -3 +1 = 5
     assert.strictEqual(e.calculateCost(s, 7, false, false, 'onClickMogaribue'), 5);
-    assert.strictEqual(e.calculateCost(s, 2, false, false, 'x'), 1 + 1); // 下限1のあとで敵の🍂の+1
+    // 増加分（敵の🍂+1）を先に足してから減少分（パッシブ-3）を引く: 2+1-3=0 → 下限1。以前は下限1のあとに+1して2になっていた
+    assert.strictEqual(e.calculateCost(s, 2, false, false, 'x'), 1);
 });
 
 test('凩の魔女: 虎落笛。自陣の🍂の枚数ぶん敵全てにダメージ、自陣はライフ+2、手番は続く', () => {
@@ -2952,6 +2953,27 @@ test('凩の魔女: 毎ターンの魔力は+2（基本+1＋キャラ補正+1）
     assert.strictEqual(w.heartMagic - m0, 2);
     assert.strictEqual(y.heartMagic - m0, 1);
     assert.strictEqual(require('./config').lifeMeans.witch, 4);
+});
+
+test('コストの計算順: 敵の🍂による増加分を先に足し、魔女のパッシブ・ギア・割引の減少分をそのあとに引く', () => {
+    // 魔女: 盤面に敵の🍂だけが3枚。7+3-3=7（以前は 7-3=4 のあとに+3 で7、下限1が絡むと差が出る）
+    const w = game('witch', 'you');
+    w.heartTurn = true;
+    w.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(w, 7, false, false, 'x'), 7);
+    assert.strictEqual(e.calculateCost(w, 2, false, false, 'x'), 2); // 2+3-3=2（以前は max(1,2-3)=1 のあとに+3 で4）
+    assert.strictEqual(e.calculateCost(w, 1, false, false, 'x'), 1);
+    // 魔女以外: 敵の🍂の増加分は従来どおりそのまま乗る
+    const y = game('you', 'you');
+    y.heartTurn = true;
+    y.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(y, 3, false, false, 'x'), 5);
+    // 軍師: 非トークンは+2。増加分(+2, 🍂+2)を足してから。トークンは-1が増加分のあと
+    const t = game('tactician', 'you');
+    t.heartTurn = true;
+    t.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(t, 3, false, false, 'x'), 3 + 2 + 2);
+    assert.strictEqual(e.calculateCost(t, 3, true, false, 'x'), 3 + 2 - 1);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
