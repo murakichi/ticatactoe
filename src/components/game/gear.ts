@@ -282,12 +282,12 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'afterglow'],
     necromancer: ['vengeance', 'lastStand'],
-    poisoner: ['lastStand', 'sturdy'],
+    poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
-    cryomancer: ['afterglow', 'lastStand'],
+    cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
-    witch: ['lightToken', 'priceWreck'], // 🍂トークンのコスト軽減＋価格破壊(魔力が足りない魔女は、🍂トークンが安く引ける試合で伸びる)。tune-top: 環境勝率 21.9→33.8%(seed2/200)。🍂付きトークンは収穫/伝播に乗らない
+    witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
