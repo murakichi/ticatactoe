@@ -1880,6 +1880,8 @@ class AIPlayer {
             this.character !== 'poisoner' &&
             // 雷霆の巫は撃たない: 魔力を帯電トークン等に回すほうが強い (sim/ai.js elecNoAnti=1。対ネクロ22→57/対毒使い15→41%, 環境 50.3→57.8%)
             this.character !== 'electrician' &&
+            // 凩の魔女も撃たない: 毎手番2魔力が対策ロックに消えて🍂トークンが撃たれなかった (sim/ai.js witchNoAnti=1。環境勝率 51.3→61.4%, seed2/200)
+            this.character !== 'witch' &&
             this.characters.some(
                 (c, seat) =>
                     seat !== seatOf(this.playerSymbol) &&
