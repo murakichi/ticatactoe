@@ -30,7 +30,9 @@ export type GearId =
     | 'lastStand'
     | 'scorchedEarth'
     | 'ashOffering'
-    | 'frostRoot';
+    | 'frostRoot'
+    | 'conduction'
+    | 'spellWard';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -116,6 +118,8 @@ export const GEARS: GearDef[] = [
     { id: 'scorchedEarth', name: '焦土', icon: '🌋', desc: `敵の🌱が🔥で消えるたびに魔力+${P.scorchMagic}（1手番に最大${P.scorchCap}）` },
     { id: 'ashOffering', name: '灰の供物', icon: '⚱️', desc: `敵のマスに🔥を付与すると、付与したマス1つにつき次の自分の手番の終わりまでスキルのコスト-${P.ashDiscount}（重複する）` },
     { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠している🌱（敵味方問わず）1つにつき魔力+${P.rootMagic}` },
+    { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
+    { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
@@ -279,8 +283,9 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
-    cryomancer: ['afterglow', 'sturdy'],
+    cryomancer: ['afterglow', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
+    witch: ['lightToken', 'priceWreck'], // 🍂トークンのコスト軽減＋価格破壊(魔力が足りない魔女は、🍂トークンが安く引ける試合で伸びる)。tune-top: 環境勝率 21.9→33.8%(seed2/200)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>

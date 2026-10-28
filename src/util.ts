@@ -15,8 +15,9 @@ export const LIFE_MEANS = {
     yinYangMaster_yang: 7,
     yinYangMaster_ying: 4,
     electrician: 6,
-    cryomancer: 5,
+    cryomancer: 4, // 魔力+1(Game.tsx)とセット。鍛冶師と互角（対鍛冶師 53%）にするため、魔法使い並みに紙
     pyromancer: 6,
+    witch: 4, // 魔力+1(Game.tsx)とセット（ユーザー指示）
     default: 5,
 } as const;
 

@@ -43,18 +43,24 @@ function thawOne(sq) {
 }
 const overwriteBlocked = (sq) => isFrozen(sq);
 
+// ギア「術中の加護」: 効果(☠🔥⚡)のダメージを受けないマスの述語。engine.js が手番の状況から差し込む（既定は無し）。thermal.ts と同じ仕様
+let effectWard = () => false;
+const setEffectWard = (fn) => { effectWard = fn; };
+const isEffectWarded = (sq) => !!sq.player && effectWard(sq);
+
 /** chars = 席ごとのキャラ配列、symbols = 席のシンボル配列（seatOf 用） */
 function burnDamageOf(sq, chars, symbols) {
     const stacks = flameStacks(sq);
-    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
+    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq) || isEffectWarded(sq)) return 0;
     // 煉獄の鍛冶師のパッシブ: 持ち主以外の席に煉獄の鍛冶師が居れば、敵の火炎ダメージが1回につき+1
     const owner = sq.player ? symbols.indexOf(sq.player) : -1;
     const bonus = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? 1 : 0;
     return stacks * FLAME_BURN_DAMAGE + bonus;
 }
 
-/** kind: 'skill' | 'electric' | 'poison' */
+/** kind: 'skill' | 'electric' | 'poison'（🔥を消さない）| 'pure'（倍率なし・氷結貫通・🔥は消える。砕氷・絶対零度） */
 function applyDamage(sq, amount, kind) {
+    if ((kind === 'poison' || kind === 'electric') && isEffectWarded(sq)) return { sq, dealt: 0, blocked: false }; // 術中の加護
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）。毒は貫通する
     if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
@@ -62,7 +68,7 @@ function applyDamage(sq, amount, kind) {
     const bind = Math.max(0, sq.bind - real);
     const dealt = sq.bind - bind;
     const next = { ...sq, bind };
-    return { sq: dealt > 0 ? without(next, '🔥') : next, dealt, blocked: false };
+    return { sq: dealt > 0 && kind !== 'poison' && kind !== 'electric' ? without(next, '🔥') : next, dealt, blocked: false }; // 毒・電気のダメージでは🔥は消えない（毒・帯電と火炎は重複する）
 }
 const absorbDestroy = (sq) => (isFrozen(sq) ? { sq: thawOne(sq), blocked: true } : { sq, blocked: false });
 const zeroOut = (sq) => (sq.bind > 0 ? without({ ...sq, bind: 0 }, '🔥') : { ...sq, bind: 0 });
@@ -85,7 +91,7 @@ function ignite(board, cells, size, n = 1, keepBuds) {
             const guarded = !!(keepBuds && keepBuds(board[k]));
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && !hasLock(board[k])) {
+            if (board[k].player && !hasLock(board[k]) && !isEffectWarded(board[k])) {
                 const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
                 // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
                 if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
@@ -115,7 +121,7 @@ function freeze(board, cells) {
 const freezeAll = (board) => freeze(board, board.map((_, i) => i));
 /**
  * 絶対零度の発動（使用者の次の手番開始時）: 使用者 me 以外のコマで❄が付いたマスに、❄スタック数×3の
- * 倍率なしダメージ（毒扱い=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
+ * 倍率なしダメージ（pure=氷結を貫通・通れば🔥は消える）を与えて❄を全除去。ライフが0になったら破壊（空きマス化）。
  * 空きマスの❄は（試合が止まらないよう）ダメージなしで全除去する。自陣コマの❄だけ残す。board を直接書き換える
  */
 // ---- 🌱バッズ操作（刈り入れ前夜 / ひこばえ / 風の落とし子） ----
@@ -165,6 +171,53 @@ const leafStacks = (sq) => sq.effects.filter((e) => e.effect === '🍂').length;
 const activeLeaves = (sq) => (isDormant(sq) ? 0 : leafStacks(sq));
 /** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数 */
 const leafSurcharge = (board, player) => board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+// ---- 落ち葉の置き土産・焚きつけ。src/components/game/thermal.ts と同じ ----
+const leafDropTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+function leafDrop(board, cell) { board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] }; }
+const leafAllTargets = (board, guarded) => board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+const leafCloakTargets = (board, me) => board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+// 火口の対象: 使用者以外のコマのうち、🌱か🍂を持ち、guarded でないもの（昇順）
+const tinderTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && (budStacks(sq) > 0 || leafStacks(sq) > 0) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+const kindlingTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 対象マスの🍂を全て取り除き、1枚につき🔥を1つ付ける（ignite の規則どおり）。board を直接書き換える */
+function kindling(board, cells, size, keepBuds) {
+    let leaves = 0;
+    const thawed = [];
+    for (const k of cells) {
+        const n = leafStacks(board[k]);
+        if (n === 0) continue;
+        leaves += n;
+        board[k] = without(board[k], '🍂');
+        thawed.push(...ignite(board, [k], size, n, keepBuds).thawed);
+    }
+    return { leaves, thawed };
+}
+
+// ---- 凩の魔女。src/components/game/thermal.ts と同じ ----
+/** 盤面にある効力のある🍂の総数（敵味方問わず） */
+const boardLeaves = (board) => board.reduce((n, sq) => n + activeLeaves(sq), 0);
+/** 凩の魔女のパッシブ: 盤面の🍂1枚につきスキルコスト-1（下限1。もともと1以下のコストは変えない） */
+const witchCostOf = (cost, board) => (cost > 1 ? Math.max(1, cost - boardLeaves(board)) : cost);
+/** 虎落笛で自陣のコマ全てが得るライフ */
+const MOGARIBUE_LIFE = 2;
+/** 虎落笛が敵に与えるダメージ: 使用者の効力のある🍂の枚数 */
+const mogaribueDamage = (board, me) => board.reduce((n, sq) => (sq.player === me ? n + activeLeaves(sq) : n), 0);
+/** 虎落笛の敵の対象: 使用者以外のコマでライフが残り、🔑でなく、isShielded（雷霆の巫の⚡無敵）でないもの */
+const mogaribueTargets = (board, me, isShielded = () => false) =>
+    board.map((sq, i) => (sq.player && sq.player !== me && sq.bind > 0 && !hasLock(sq) && !isShielded(sq) ? i : -1)).filter((i) => i !== -1);
+const canMogaribue = (board, me) => board.some((sq) => sq.player === me);
+/** 虎落笛: 自陣の🍂の枚数ぶん敵全てにスキルダメージ、自陣のコマ全てのライフ+2。board を直接書き換える */
+function mogaribue(board, me, isShielded = () => false) {
+    const damage = mogaribueDamage(board, me);
+    const hit = damage > 0 ? mogaribueTargets(board, me, isShielded) : [];
+    for (const k of hit) board[k] = applyDamage(board[k], damage, 'skill').sq;
+    const boosted = board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+    for (const k of boosted) board[k] = { ...board[k], bind: board[k].bind + MOGARIBUE_LIFE };
+    return { damage, hit, boosted };
+}
 /** idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
 function placeLeafToken(board, idx, player, bind, n = 1) {
     board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' })) };
@@ -223,7 +276,7 @@ function detonate(board, me) {
         const sq = board[k];
         if (!sq.player) { if (isFrozen(sq)) board[k] = thaw(sq); continue; } // 空きマスの❄はダメージなしで全除去（damaged/destroyed には含めない）
         if (sq.player === me || !isFrozen(sq)) continue;
-        const hit = applyDamage(sq, frozenStacks(sq) * 3, 'poison').sq;
+        const hit = applyDamage(sq, frozenStacks(sq) * 3, 'pure').sq;
         damaged.push(k);
         if (hit.bind <= 0) { board[k] = { player: undefined, bind: 0, effects: [] }; destroyed.push(k); }
         else board[k] = thaw(hit);
@@ -251,7 +304,7 @@ function shatter(board, cell) {
     if (!sq.player || !isFrozen(sq)) return { stacks: 0, damage: 0, destroyed: false };
     const stacks = frozenStacks(sq);
     const damage = stacks * 3;
-    const hit = applyDamage(sq, damage, 'poison').sq;
+    const hit = applyDamage(sq, damage, 'pure').sq;
     if (hit.bind <= 0) {
         board[cell] = { player: undefined, bind: 0, effects: [] };
         return { stacks, damage, destroyed: true };
@@ -272,6 +325,20 @@ function thawAll(board, player) {
     for (const k of cells) { stacks += frozenStacks(board[k]); board[k] = thaw(board[k]); }
     return { stacks, cells };
 }
+// ---- 雷のない所に火は立たぬ（src/components/game/thermal.ts と同じ）----
+const THUNDER_FIRE_MIN = 2;
+/** 周囲8マスの敵コマ cands から、2〜全部の個数をランダムに決め、その個数だけランダムに選ぶ（昇順）。rng は [0,1) を返す関数 */
+function thunderFireVictims(cands, rng) {
+    const n = cands.length;
+    if (n === 0) return [];
+    const lo = Math.min(THUNDER_FIRE_MIN, n);
+    const k = lo + Math.floor(rng() * (n - lo + 1));
+    const pool = cands.slice();
+    const out = [];
+    for (let i = 0; i < k; i++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+    return out.sort((a, b) => a - b);
+}
+
 // ---- 鬼門封じ / 火の車（src/components/game/thermal.ts と同じ）----
 const KIMON_LOCK_TURNS = 3;
 /** 盤面全体の🔥の総数（火の車の「このターンに🔥を付与したか」の判定用） */
@@ -328,7 +395,7 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     return { threshold, targets, thawed };
 }
 
-const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
+const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickTinder', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 
 // バーンアウト（thermal.ts と同じ）
 const BURNOUT_FREE_FLAMES = 4;
@@ -353,8 +420,8 @@ module.exports = {
     BURNOUT_FREE_FLAMES, totalFlames, burnoutCostOf, burnoutTargets, burnout,
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
-    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
+    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, setEffectWard, isEffectWarded, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
-    KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, boardLeaves, witchCostOf, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, tinderTargets, kindling, MOGARIBUE_LIFE, mogaribueDamage, mogaribueTargets, canMogaribue, mogaribue, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

@@ -477,6 +477,70 @@ test('凍てつく根: 氷結で休眠した🌱1つにつき手番開始時の�
     assert.strictEqual(run([['frostRoot'], []]) - run([[], []]), 4, '休眠した🌱4つぶん');
 });
 
+test('伝導: 帯電していたコマの毒・火炎が、発火でダメージを受けた敵のマスに1スタック移る(持ち主のコマには移らない・装備なしなら移らない)', () => {
+    const run = (gears) => {
+        const s = game(gears);
+        s.life = 8;
+        s.board[5] = { player: C, bind: 9, effects: [{ effect: '☠' }, { effect: '🔥' }, { effect: '⚡' }] };
+        s.board[6] = { player: C, bind: 9, effects: [] };
+        s.board[9] = { player: H, bind: 9, effects: [] };
+        e.placeMove(s, 4); // 💙が帯電マスの左隣に着手 → 発火
+        return s;
+    };
+    const s = run([[], ['conduction']]);
+    for (const k of [4, 9]) {
+        assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '☠').length, 1, `マス${k}の毒`);
+        assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '🔥').length, 1, `マス${k}の火炎`);
+    }
+    assert.ok(!s.board[6].effects.some((x) => x.effect === '☠' || x.effect === '🔥'), '持ち主のコマには移らない');
+    const t = run([[], []]);
+    assert.ok(![4, 9].some((k) => t.board[k].effects.some((x) => x.effect === '☠' || x.effect === '🔥')), '装備なしなら移らない');
+    const u = run([['conduction'], []]);
+    assert.ok(![4, 9].some((k) => u.board[k].effects.some((x) => x.effect === '☠')), '帯電コマの持ち主が装備していなければ移らない');
+});
+
+test('術中の加護: スキルを使った手番は、装備した席のコマが🔥・☠・⚡のダメージを受けない(使わなければ受ける)', () => {
+    const run = (gears, useSkill) => {
+        const s = game(gears);
+        s.board[5] = { player: C, bind: 9, effects: [{ effect: '🔥' }, { effect: '☠' }] };
+        s.board[9] = { player: C, bind: 9, effects: [] };
+        s.board[10] = { player: C, bind: 9, effects: [{ effect: '⚡' }] };
+        if (useSkill) e.spendMagic(s, 0, 'onClickAddLife'); // 💙がスキルを使う
+        e.placeMove(s, 0); // 💙が着手(減衰が1回走る)
+        return s;
+    };
+    const warded = run([[], ['spellWard']], true);
+    assert.strictEqual(warded.board[5].bind, 9 - 1, '自然減衰の-1だけ(火炎・毒は通らない)');
+    const open = run([[], ['spellWard']], false);
+    assert.ok(open.board[5].bind < 9 - 1, 'スキルを使わなければ火炎・毒が通る');
+    const noGear = run([[], []], true);
+    assert.ok(noGear.board[5].bind < 9 - 1, 'ギアなしなら通る');
+});
+
+test('術中の加護: 帯電の発火も、🔥を付けた瞬間のダメージも通らない', () => {
+    const fire = (gears) => {
+        const s = game(gears);
+        s.board[5] = { player: C, bind: 9, effects: [{ effect: '⚡' }] };
+        s.board[6] = { player: C, bind: 9, effects: [] };
+        e.spendMagic(s, 0, 'onClickAddLife');
+        e.placeMove(s, 4); // 💙が⚡マスの左隣へ → 発火。6(⭕)が1ダメージ
+        return s.board[6].bind;
+    };
+    assert.strictEqual(fire([[], ['spellWard']]), 9 - 1, '減衰の-1だけ');
+    assert.strictEqual(fire([[], []]), 9 - 1 - 1, 'ギアなしは発火の-1も受ける');
+    const t = thermalIgnite(['spellWard']);
+    assert.strictEqual(t, 9, '加護なら火炎付与の即時ダメージなし');
+    assert.strictEqual(thermalIgnite([]), 8, 'なしなら即時1ダメージ');
+    function thermalIgnite(g) {
+        const s = game([[], g]);
+        s.board[6] = { player: C, bind: 9, effects: [] };
+        e.spendMagic(s, 0, 'onClickAddLife');
+        const thermal = require('./thermal');
+        thermal.ignite(s.board, [6], s.size);
+        return s.board[6].bind;
+    }
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

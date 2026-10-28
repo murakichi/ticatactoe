@@ -33,6 +33,7 @@ description: 新しい魔法スキルやキャラクターを提案し、採用�
 gh issue list --state all --limit 50        # ← closed も見る。却下済みの案を再提案しない
 cat docs/characters.md                       # キャラのコンセプトと21スキル一覧
 cat src/components/game/skillCosts.ts        # コスト帯の分布
+cat docs/skill-cost-rules.md                # コスト基準（案のコストは必ずこれで出す）
 git log --oneline -15
 ```
 
@@ -126,6 +127,7 @@ gh label create proposal --color "c2e0c6" --description "スキル/キャラの�
 - 日記の `## 積み残し` に `- [ ] <案> — issue #N` を残す
 
 ## やってはいけないこと
+- `docs/skill-cost-rules.md` を読まずにコストを置く（基準から外すなら理由を書く）
 
 - このスキルで実装を始める（提案と実装を分ける意味が消える）
 - closed issue を確認せずにネタ出しする
