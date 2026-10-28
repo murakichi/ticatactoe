@@ -63,6 +63,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
@@ -2142,6 +2143,7 @@ function faithfulMakeMoveInner(s) {
         }
         // 魔法使い(F.lockFirstCryo): 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力エンジンを止める（ロック中のコマには❄が付かない）。
         // 相手に氷室がいるときは、審判の日より先に🌱付きのコマを全てロックする（2なら🌱の無い自陣コマも）
+        let lockedFirst = 0;
         if (F.lockFirstCryo && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer')) {
             for (let n = 0; n < 12; n++) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
@@ -2150,7 +2152,9 @@ function faithfulMakeMoveInner(s) {
                 if (!(curMagic(s) >= lockCost + (F.lockFirstReserve || 0) && cell !== -1)) break;
                 SKILLS.lock(s);
                 if (!placeMove(s, cell)) { s.useLock = 0; break; }
+                lockedFirst++;
             }
+            if (lockedFirst > 0) return { move: getEnhancedBestMove(s), turnEnded: false }; // 本番(AIPlayer.ts)はロックのあと通常着手で手番を終える
         }
         const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
         if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {
