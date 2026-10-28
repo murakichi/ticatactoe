@@ -605,6 +605,7 @@ function newGame(opts = {}) {
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
+        darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -886,6 +887,7 @@ function advanceTurn(s) {
     s.oppSkillPrev[next] = s.oppSkilled[next];
     s.fireBase[next] = thermal.fireStacksTotal(s.board);
     s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
+    s.darkPotUsed[next] = false;
     s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
@@ -1703,6 +1705,8 @@ function onClickPoisonMist(s) {
 // 一寸先は闇鍋 (idx 82): 敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付ける。各エフェクト最大1、複数種類は同居。
 // 🔥を先に付け（氷結の解除・燃焼は他を乗せる前に済ませる）、そのあと⚡☠🌱🍂❄の順 [FAITHFUL] Game.tsx onClickDarkPot
 function onClickDarkPot(s) {
+    if (s.darkPotUsed[s.turn]) return; // 1手番に1度まで
+    s.darkPotUsed[s.turn] = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickDarkPot, false, false, 'onClickDarkPot'), 'onClickDarkPot');
     bumpMagicCount(s);
     const targets = [];

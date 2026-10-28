@@ -2600,6 +2600,26 @@ test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をラン
     for (const k of Object.keys(seen)) assert.ok(seen[k] > 0, `${k}が一度も乗らない`);
 });
 
+test('一寸先は闇鍋: 1手番に1度だけ（2回目は何も起きず魔力も減らない）。次の手番では使える', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(2) });
+    s.magic[0] = 40; s.magic[1] = 40;
+    s.board[0] = { player: '💙', bind: 4, effects: [] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.darkPot(s);
+    const left = s.magic[0];
+    assert.ok(left < 40);
+    const snapshot = JSON.stringify(s.board);
+    e.SKILLS.darkPot(s);
+    assert.strictEqual(s.magic[0], left);
+    assert.strictEqual(JSON.stringify(s.board), snapshot);
+    e.advanceTurn(s); // 相手の手番
+    e.advanceTurn(s); // 自分の手番に戻る
+    assert.strictEqual(s.turn, 0);
+    s.magic[0] = 40;
+    e.SKILLS.darkPot(s);
+    assert.ok(s.magic[0] < 40);
+});
+
 test('一寸先は闇鍋: コストは盤面のエフェクトの数だけ下がり、最低1', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(1) });
     s.magic[0] = 30;
