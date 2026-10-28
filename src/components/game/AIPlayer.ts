@@ -2261,9 +2261,9 @@ class AIPlayer {
                     return { move: followup, skills: ['onClickStomp'], stompTarget: target };
                 }
             }
-            // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止める。ロック中のコマには❄が付かないので、氷室が相手のときは
-            // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。sim/ai.js lockFirstCryo=2: 対氷室 10→28%, seed32/300）
-            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer')) {
+            // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止め、鍛冶師の🔥もロック中のコマには付かない。ロックしておけば防げるので、氷室・鍛冶師が相手のときは
+            // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。sim/ai.js lockFirstCryo=2: 対氷室 10→20%, lockFirstPyro=2: 対鍛冶師 33〜37→47〜51%）
+            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer' || this.characters[seatOf(o)] === 'pyromancer')) {
                 const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
                 const afford = lockCost > 0 ? Math.floor(magic / lockCost) : CRYO_LOCK_MAX;
                 const cells: number[] = [];
