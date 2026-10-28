@@ -294,7 +294,9 @@ async function main() {
         for (const [k, dv] of Object.entries(defaults)) {
             if (typeof dv !== 'number' || (only && !only.includes(k))) continue;
             const v = k in cur ? cur[k] : dv;
-            const alts = v === 0 ? [1] : v === 1 ? [0] : [...new Set([Math.round(v / 2), Math.round(v * 2)])].filter((x) => x !== v);
+            // 0 は 1 へ。小さい整数(1〜10)は ±1 と半分/2倍（件数や段階のノブ)。大きい値は半分/2倍だけ
+            const alts = v === 0 ? [1] : [...new Set([...(Number.isInteger(v) && v <= 10 ? [v - 1, v + 1] : []), Math.round(v / 2), Math.round(v * 2)])].filter((x) => x !== v && x >= 0);
+            if (exKnobs.has(`${k}=*`)) continue; // ノブ単位の除外（autotune の無効ノブ記憶）
             for (const a of alts) if (!exKnobs.has(`${k}=${a}`)) cands.push([k, a]);
         }
         for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }

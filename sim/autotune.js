@@ -83,7 +83,7 @@ function forget(char) { for (const k of ['cards', 'gears', 'flags']) delete mem[
 /** 人が読むメモ。docs/tune/autotune.md に毎回書き出す */
 function writeNotes() {
     const L = ['# autotune 記憶(自動生成)', '', `sim/autotune.js が「効かない/明らかに悪い」と判断して探索から外したもの。コード(sim/*.js)が変わると失効する。コード版: \`${HASH}\``, '',
-        '- **無効ノブ**: そのキャラのAIが使わず、動かしても全試合の結果が基準と完全一致したノブ（pilot / 本探索で判定）',
+        '- **無効ノブ**: そのキャラのAIが使わず、動かしても全試合の結果が基準と完全一致したノブ（`k=*` は全ての値が一致）（pilot / 本探索で判定）',
         `- **悪い候補**: 観測${BAD_MIN_N}回以上で平均 z ≤ ${BAD_Z} かつ一度も改善しなかったもの（${BAD_TTL_ROUNDS}周回で失効）`, ''];
     const chars_ = new Set([...Object.keys(mem.inert), ...Object.keys(mem.cards), ...Object.keys(mem.gears), ...Object.keys(mem.flags)]);
     for (const c of [...chars_].sort()) {
@@ -127,11 +127,22 @@ const curDeck = (char) => tunedOf(char).deck || require('./deck').recommendedDec
 const curGears = (char) => tunedOf(char).gears || require('./gear').recommendedGears(char);
 
 /** そのキャラのAIが使わないノブを pilot（少数試合）で洗い出す。基準と全試合の結果が完全一致 = 無効。コードが変わるまで再測定しない */
+/** 基準と全試合一致した行をノブ単位にまとめる。そのノブの全ての値が一致なら `k=*`（値が増えても再測定しない）、一部だけなら `k=v` */
+function inertLabels(base, rest) {
+    const byKnob = {};
+    for (const x of rest) { const k = x.label.split('=')[0]; (byKnob[k] = byKnob[k] || []).push(x); }
+    const out = [];
+    for (const [k, xs] of Object.entries(byKnob)) {
+        const same = xs.filter((x) => x.tally === base.tally);
+        if (same.length === xs.length) out.push(`${k}=*`); else out.push(...same.map((x) => x.label));
+    }
+    return out;
+}
 function pilotInert(char, round) {
     if (mem.inert[char]) return;
     const r = probe({ games: PILOT_GAMES, seed: 7777, argv: ['--target', char, '--scan', 'flags', '--neighbors', '9999', '--excludeKnobs', (mem.inertDone || []).join(',')] });
     const [base, ...rest] = r.rows;
-    mem.inert[char] = rest.filter((x) => x.tally === base.tally).map((x) => x.label);
+    mem.inert[char] = inertLabels(base, rest);
     console.log(`  ${char}: pilot(${PILOT_GAMES}試合) 無効ノブ ${mem.inert[char].length}/${rest.length} を除外`);
     saveMem();
 }
@@ -200,6 +211,13 @@ function step(char, axis, round, stepNo) {
 
 function main() {
     if (!fs.existsSync(tunedFile)) save({});
+    // --inert-from <probe-top --scan flags --json の出力> --inert-char <char>: 既に測った pilot を記憶に取り込む（再測定を省く）
+    if (args['inert-from'] && args['inert-char']) {
+        const o = JSON.parse(fs.readFileSync(args['inert-from'], 'utf8'));
+        mem.inert[args['inert-char']] = inertLabels(o.rows[0], o.rows.slice(1));
+        saveMem();
+        console.log(`pilot を取り込み: ${args['inert-char']} 無効 ${mem.inert[args['inert-char']].length} 件`);
+    }
     let stepNo = 0;
     for (let round = 0; round < rounds; round++) {
         let maxGain = 0, accepted = 0;
