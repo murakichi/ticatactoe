@@ -2259,7 +2259,9 @@ class AIPlayer {
                     return { move: followup, skills: ['onClickStomp'], stompTarget: target };
                 }
             }
-            if (this.character === 'magician' && magic >= judgeCost) {
+            // 審判の日で壊したコマは墓地になり、ネクロマンサーの蘇生を安く大きくする。ネクロが相手のときは撃たない（sim/ai.js noJudgeNecro: 対ネクロ 17→26%, seed22/300）
+            const judgeFuelsNecro = this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer');
+            if (this.character === 'magician' && !judgeFuelsNecro && magic >= judgeCost) {
                 const target = this.findJudgeTarget(board);
                 if (target !== null) {
                     // 審判の日はそのターゲット着手で手番終了する
