@@ -11,7 +11,7 @@ import { isUniqueEffect } from './UniqueEffects';
 import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
-import { boardSizeFor, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
+import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
 import { shouldDecay } from './decay';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
@@ -3477,7 +3477,10 @@ export const Game = (props: GameProps) => {
                             ))}
                         </div>
                     )}
-                    <div className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}>
+                    <div
+                        className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}
+                        style={{ ['--sq' as string]: boardSqCss(geo.size) }}
+                    >
                         <Board
                             size={geo.size}
                             squares={currentBoard}

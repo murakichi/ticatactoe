@@ -1,5 +1,5 @@
 import React from 'react';
-import { cellPixelsFor } from './boardGeometry';
+import { boardLayoutOf, cellCenterUnits } from './boardGeometry';
 import type { SkillEffect } from './BoardEffects';
 import base from './BoardEffects.module.css';
 import styles from './UniqueEffects.module.css';
@@ -27,15 +27,11 @@ export const isUniqueEffect = (type: string): boolean => (UNIQUE_EFFECT_TYPES as
 
 type Pt = { x: number; y: number };
 
-const boardPx = (size: number) => 24 + size * cellPixelsFor(size) + (size - 1) * 8;
-
-/** マス index の中心(盤面に対する%) */
+/** マス index の中心(盤面に対する%)。寸法はマス1つを1とした比率なので、実際のマスの大きさに依らず合う */
 const center = (i: number, size: number): Pt => {
-    const cell = cellPixelsFor(size);
-    const w = boardPx(size);
-    const col = i % size;
-    const row = Math.floor(i / size);
-    return { x: ((12 + cell / 2 + col * (cell + 8)) / w) * 100, y: ((12 + cell / 2 + row * (cell + 8)) / w) * 100 };
+    const total = boardLayoutOf(size).units;
+    const c = cellCenterUnits(i, size);
+    return { x: (c.x / total) * 100, y: (c.y / total) * 100 };
 };
 
 const MID: Pt = { x: 50, y: 50 };
