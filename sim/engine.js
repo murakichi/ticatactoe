@@ -238,6 +238,8 @@ const skillCosts = {
     onClickKimon: 5, // 鬼門封じ(idx 74)
     onClickFireWheel: 5, // 火の車(idx 75)。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
     onClickStrip: 4, // 裸の王様(idx 76)
+    onClickChargeSeason: 6, // 静電気の季節(idx 77)
+    onClickBristle: 5, // 総毛立つ(idx 78)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -431,6 +433,8 @@ function toxicBloom(s, cells) {
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
 function afterTokenPlaced(s, idx, effect) {
+    // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
+    if (s.chargeBuff[s.turn] > 0 && s.board[idx].player === curPlayer(s)) addCharge(s, idx);
     const g = s.gears[s.turn];
     let granted = effect ? 1 : 0;
     if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
@@ -540,6 +544,7 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
+        chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
         gearHeld: fill(null),
         usedTokenThisTurn: false,
@@ -790,6 +795,8 @@ function settleWinner(s) {
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
+    s.chargeBuff[s.turn] = Math.max(0, s.chargeBuff[s.turn] - 1);
     // 裸の王様は、ギアを封じられた側の手番が終わるたびに解除（預かっていた装備を戻す）
     if (s.gearOff[s.turn]) {
         s.gearOff[s.turn] = false;
@@ -1062,6 +1069,7 @@ function placeMove(s, i) {
 
     const cur = curPlayer(s);
     const life = s.life;
+    const placedNew = board[i].player !== cur; // 静電気の季節: 補強は設置ではない
     let newBind, newEffects, newPlayer;
     let capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
     const shikigamiHere = isShikigami(board[i]);
@@ -1114,7 +1122,11 @@ function placeMove(s, i) {
     // total-assault residual: drop a random 0-bind token after the move
     if (s.useAssault[s.turn] > 0) {
         const empties = findEmptyIndexes(board);
-        if (empties.length) board[randomPick(empties, s.rng)] = { player: cur, bind: 0, effects: [] };
+        if (empties.length) {
+            const tk = randomPick(empties, s.rng);
+            board[tk] = { player: cur, bind: 0, effects: [] };
+            if (s.chargeBuff[s.turn] > 0) addCharge(s, tk);
+        }
         s.useAssault[s.turn] -= 1;
     }
 
@@ -1133,6 +1145,12 @@ function placeMove(s, i) {
 
     // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ
     fireCharges(s, i, cur);
+
+    // 静電気の季節: 新しく置いた（奪った）自分のコマに⚡。発火のあとに付けるので自分では発火しない
+    if (s.chargeBuff[s.turn] > 0 && placedNew && board[i].player === cur) {
+        addCharge(s, i);
+        checkDischarge(s);
+    }
 
     // 巨人のオーラ: コマを置くと周囲8マスの敵コマが破壊され、周囲8マス全部がロックされる
     if (curChar(s) === 'giant' && board[i].player === cur) giantAura(s, surroundRange(s, i), cur);
@@ -2158,6 +2176,28 @@ function exeKimon(s, i) {
     if (r.destroyed) addCorpses(s, 1);
     return true;
 }
+// 静電気の季節 (idx77): 今の手番を含む3ターン、自分が設置する駒（着手・トークン・全軍突撃のトークン）に⚡。クリック不要。掛かっている間は撃てない
+function chargeSeasonLegal(s) { return s.chargeBuff[s.turn] === 0; }
+function onClickChargeSeason(s) {
+    if (!chargeSeasonLegal(s)) return;
+    s.chargeBuff[s.turn] = 3;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeSeason, false, false, 'onClickChargeSeason'), 'onClickChargeSeason');
+    bumpMagicCount(s);
+    bumpStat(s, 'chargeSeason');
+}
+// 総毛立つ (idx78): 自陣の全コマ（🔑ロック中を除く）に⚡を1つずつ。対象が無ければ使えない
+function bristleTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && !sq.effects.some((e) => e.effect === '🔑') ? i : -1)).filter((i) => i !== -1); }
+function bristleLegal(s) { return bristleTargets(s).length > 0; }
+function onClickBristle(s) {
+    const cells = bristleTargets(s);
+    if (cells.length === 0) return;
+    for (const k of cells) addCharge(s, k);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBristle, false, false, 'onClickBristle'), 'onClickBristle');
+    bumpMagicCount(s);
+    bumpStat(s, 'bristle');
+    checkDischarge(s);
+}
+
 // 裸の王様 (idx76): 自分以外の全席のギアを、その席の次の手番の終わりまで無効にする（ギアを装備していて、まだ無効でない席が対象）。クリック不要
 function stripSeats(s) { return otherSeats(s).filter((seat) => s.gears[seat].length > 0 && !s.gearOff[seat]); }
 function stripLegal(s) { return stripSeats(s).length > 0; }
@@ -2300,6 +2340,8 @@ const SKILLS = {
     kimon: onClickKimon,
     fireWheel: onClickFireWheel,
     strip: onClickStrip,
+    chargeSeason: onClickChargeSeason,
+    bristle: onClickBristle,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2343,7 +2385,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

@@ -1222,6 +1222,18 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
+    if (character === 'electrician') {
+        if (availableSkills.includes(77) && s.chargeBuff[s.turn] === 0 && board.filter((sq) => !sq.player).length >= 3
+            && remaining >= cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason')) {
+            spend(cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason'), 'chargeSeason');
+        }
+        const bare = board.filter((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
+        if (availableSkills.includes(78) && bare >= 3 && remaining >= cost(costsOf(s).onClickBristle, false, 'onClickBristle')) {
+            spend(cost(costsOf(s).onClickBristle, false, 'onClickBristle'), 'bristle');
+        }
+    }
+
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
@@ -1354,7 +1366,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 77)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 79)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }

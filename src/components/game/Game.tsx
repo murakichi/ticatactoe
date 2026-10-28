@@ -336,6 +336,8 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeSpread': onClickChargeSpread(); break;
             case 'onClickSilence': onClickSilence(); break;
             case 'onClickStrip': onClickStrip(); break;
+            case 'onClickChargeSeason': onClickChargeSeason(); break;
+            case 'onClickBristle': onClickBristle(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -425,6 +427,7 @@ export const Game = (props: GameProps) => {
 
         ai.lastStandReady = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
         // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
+        ai.chargeBuffActive = chargeBuff[turnSeat] > 0;
         ai.oppGearCount = otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0);
         ai.oppLastStand = otherSeats(turnSeat).some((seat) => hasGear(gearsBySeat[seat], 'lastStand') && !lastStandUsed.current[seat]);
         ai.yinYangMode = currentYinYangMode === 'yang' ? 'yang' : 'ying';
@@ -617,6 +620,8 @@ export const Game = (props: GameProps) => {
     const proliferateMaxStacks = 8;
     // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
     const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // 静電気の季節: 立っている間（残りターン数）、その席が設置する駒（着手・トークン・全軍突撃のトークン）に⚡が付く
+    const [chargeBuff, setChargeBuffAt, setChargeBuffAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const [proliferate, setProliferateAt, setProliferateAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     const [proliferateCount, setProliferateCountAt, setProliferateCountAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const proliferateUpkeep = (count: number): number => count * proliferateUpkeepStep;
@@ -799,6 +804,8 @@ export const Game = (props: GameProps) => {
         setSilencedAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
         setGearOffAt(turnSeat, false);
+        // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
+        setChargeBuffAt(turnSeat, (v) => Math.max(0, v - 1));
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
         if (currentCharacter === 'necromancer' && remainNecro[turnSeat] > 0) {
             setRemainNecroAt(turnSeat, remainNecro[turnSeat] - 1);
@@ -1132,6 +1139,7 @@ export const Game = (props: GameProps) => {
         if (useAssault[turnSeat] > 0) {
             const emptyIndex = randomPick(findEmptyIndexes(nextBoard));
             nextBoard[emptyIndex] = { player: currentTurnPlayer, bind: 0, effects: [] };
+            if (chargeBuff[turnSeat] > 0) nextBoard[emptyIndex] = addCharge(nextBoard[emptyIndex], characters);
             addLog(`全軍突撃で${posName(emptyIndex)}にトークンを設置`);
             setUseAssaultAt(turnSeat, useAssault[turnSeat] - 1);
         }
@@ -1159,6 +1167,13 @@ export const Game = (props: GameProps) => {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
+        }
+
+        // 静電気の季節: 新しく置いた（奪った）自分のコマに⚡を付ける。発火のあとに付けるので、自分では発火しない（補強は設置ではないので対象外）
+        let buffCharged = false;
+        if (chargeBuff[turnSeat] > 0 && prevPlayer !== currentTurnPlayer && nextBoard[i].player === currentTurnPlayer) {
+            nextBoard[i] = addCharge(nextBoard[i], characters);
+            buffCharged = true;
         }
 
         // 巨人のオーラ: 周囲8マスの敵コマを破壊し、周囲8マス全部をロックする
@@ -1194,7 +1209,7 @@ export const Game = (props: GameProps) => {
             addLog('毒が周囲に拡散');
         }
 
-        setCurrentBoard(nextBoard);
+        setCurrentBoard(buffCharged ? withOverload(nextBoard) : nextBoard);
 
         setHistory(nextHistory);
         setCurrentTurn(currentTurn + 1);
@@ -1274,6 +1289,8 @@ export const Game = (props: GameProps) => {
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
     const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
         let granted = effect ? 1 : 0;
+        // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
+        if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
         if (hasGear(turnGears, 'bindingLock') && Math.random() < GEAR_PARAMS.bindingLockChance) {
             applyLock(board, idx);
             granted += 1;
@@ -1576,6 +1593,27 @@ export const Game = (props: GameProps) => {
             toxicBloom(board, [index]);
         }
         return `${posName(index)}に${item.effect}を追加`;
+    };
+
+    // 静電気の季節: 今の手番を含む3ターンの間、自分が設置する駒（着手・トークン・全軍突撃のトークン）に⚡を付ける。雷霆の巫以外は乗った時点でダメージを受ける
+    const CHARGE_SEASON_TURNS = 3;
+    const onClickChargeSeason = () => {
+        addLog(`「静電気の季節」を使用（今の手番を含む${CHARGE_SEASON_TURNS}ターン、設置する駒に⚡）`);
+        playEffect('zap', undefined, undefined, '静電気の季節');
+        setChargeBuffAt(turnSeat, CHARGE_SEASON_TURNS);
+        spendMagic(calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason'), true, true, 'onClickChargeSeason');
+    };
+    // 総毛立つ: 自陣の全てのコマ（🔑ロック中を除く）に⚡を1つずつ付ける。雷霆の巫以外は乗った時点でダメージを受ける
+    const bristleTargets = (): number[] =>
+        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && !sq.effects.some((e) => e.effect === '🔑') ? i : -1)).filter((i) => i !== -1);
+    const onClickBristle = () => {
+        const cells = bristleTargets();
+        if (cells.length === 0) return;
+        addLog(`「総毛立つ」を使用（自陣${cells.length}コマに⚡）`);
+        flashCells(cells);
+        playEffect('zap', undefined, cells, '総毛立つ');
+        setCurrentBoard(withOverload(withCharge(currentBoard, cells, characters)));
+        spendMagic(calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle'), true, true, 'onClickBristle');
     };
 
     // 裸の王様: 自分以外の全員のギアが、その席の次の手番の終わりまで無効になる（対象はギアを装備していて、まだ無効でない席）。クリック不要・手番は続く
@@ -2820,6 +2858,7 @@ export const Game = (props: GameProps) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');
         const dl = discountLabel(seat);
         if (dl) labels.push(dl);
@@ -2989,6 +3028,7 @@ export const Game = (props: GameProps) => {
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
         setGearOffAll(Array(seatCount).fill(false));
+        setChargeBuffAll(Array(seatCount).fill(0));
         setProliferateCountAll(zeros());
         setUseStomp(false);
         setUseJudgeDay(false);
@@ -3245,6 +3285,8 @@ export const Game = (props: GameProps) => {
         { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
         { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
         { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
+        { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, paragraph: `今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます（雷霆の巫以外は乗った時点でダメージ）`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason) || chargeBuff[turnSeat] > 0 },
+        { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, paragraph: `自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます（雷霆の巫以外は乗った時点でダメージ）`, disabled: checkSkillDisable(seatCosts.onClickBristle) || bristleTargets().length === 0 },
     ];
 
     return (

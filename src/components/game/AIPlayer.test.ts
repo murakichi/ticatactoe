@@ -1244,3 +1244,26 @@ describe('裸の王様のAI使用', () => {
         expect(ai.makeMove(quiet(), 10, costs, 0, 5, [76, 0, 1], false).skills).not.toContain('onClickStrip');
     });
 });
+
+describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
+    const costs = { onClickChargeSeason: 6, onClickBristle: 5 } as any;
+    const own3 = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        put(b, 15, '⭕');
+        return b;
+    };
+    it('雷霆の巫は、掛かっていなければ静電気の季節を、⚡なしの自陣コマが3つ以上なら総毛立つを撃つ', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        const r = ai.makeMove(own3(), 20, costs, 0, 5, [77, 78, 0], false);
+        expect(r.skills).toContain('onClickChargeSeason');
+        expect(r.skills).toContain('onClickBristle');
+    });
+    it('静電気の季節が掛かっている間は掛け直さない。雷霆の巫以外は撃たない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        ai.chargeBuffActive = true;
+        expect(ai.makeMove(own3(), 20, costs, 0, 5, [77, 0, 1], false).skills).not.toContain('onClickChargeSeason');
+        const other = new AIPlayer('💙', 'you', ['⭕']);
+        expect(other.makeMove(own3(), 20, costs, 0, 5, [77, 78, 0], false).skills).not.toContain('onClickBristle');
+    });
+});

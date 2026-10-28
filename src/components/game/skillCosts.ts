@@ -106,6 +106,8 @@ export const skillCosts = {
     onClickKimon: 5, //           鬼門封じ(idx 74): 敵コマを1つ破壊（氷結中は❄-1）し、空きマスになれば3ターンロック
     onClickFireWheel: 5, //       火の車(idx 75): ランダムな敵マス2つに🔥、その後手札をシャッフル。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
     onClickStrip: 4, //           裸の王様(idx 76): 相手全員のギアを、その席の次の手番の終わりまで無効にする
+    onClickChargeSeason: 6, //    静電気の季節(idx 77): 今の手番を含む3ターン、設置する駒に⚡
+    onClickBristle: 5, //         総毛立つ(idx 78): 自陣の全コマ(ロック中を除く)に⚡
 };
 
 export type SkillCosts = typeof skillCosts;
