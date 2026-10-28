@@ -40,6 +40,7 @@ const IDX_SKILL = {
     56: 'vitalMarkdown', 57: 'uniqueDiscount', 58: 'clearance', 60: 'counterMarkdown', 61: 'burnout', 62: 'leafToken',
     63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'bothLeafToken', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
+    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
 };
 
 /** キャラ固有の SKILLS キー */
