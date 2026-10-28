@@ -242,7 +242,7 @@ const skillCosts = {
     onClickBristle: 5, // 総毛立つ(idx 78)
     onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
     onClickStash: 1, // 雷神のへそくり(idx 80)
-    onClickThunderFire: 4, // 雷のない所に火は立たぬ(idx 81)
+    onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }

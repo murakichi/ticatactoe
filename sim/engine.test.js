@@ -2601,7 +2601,7 @@ test('雷神のへそくり: ⚡のある自陣のコマ(無敵の⚡マスも)�
     assert.strictEqual(slash(), before);
 });
 
-test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲8マスの敵コマ2〜全部に🔥。コスト4。ロック・他人の無敵マスは選べず、氷結中は❄-1だけで燃え移らない', () => {
+test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲8マスの敵コマ2〜全部に🔥。コスト7。ロック・他人の無敵マスは選べず、氷結中は❄-1だけで燃え移らない', () => {
     const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(21) });
     s.magic[0] = 30;
     assert.strictEqual(e.thunderFireLegal(s), false);
@@ -2610,9 +2610,9 @@ test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲
     s.board[14] = { player: '⭕', bind: 4, effects: [BOLT] }; // 他人の（雷霆の巫ではない）⚡コマは選べる。5 の周囲8マスの外
     s.board[15] = { player: '💙', bind: 4, effects: [BOLT, { effect: '🔑' }] }; // ロック中は選べない
     assert.deepStrictEqual(e.thunderFireTargets(s), [5, 14]);
-    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickThunderFire, false, false, 'onClickThunderFire'), 4);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickThunderFire, false, false, 'onClickThunderFire'), 7);
     e.SKILLS.thunderFire(s);
-    assert.strictEqual(s.magic[0], 30 - 4);
+    assert.strictEqual(s.magic[0], 30 - 7);
     assert.strictEqual(e.placeMove(s, 0), false); // ⚡のないマスは選び直せる
     assert.strictEqual(e.placeMove(s, 15), false); // ロック中は選べない
     assert.strictEqual(e.placeMove(s, 5), true);
