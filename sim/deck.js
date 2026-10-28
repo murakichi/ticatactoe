@@ -94,6 +94,9 @@ const SKILL_CATALOG = [
     { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge' },
     { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control' },
     { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge' },
+    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds' },
+    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
 ];
 
 
@@ -112,6 +115,7 @@ const RECOMMENDED_DECKS = {
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
+    witch: [0, 3, 5, 8, 12, 28, 44, 53, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)は置き土産(84)より強い(tune-top: 環境勝率 61.4→65.0%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

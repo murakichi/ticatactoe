@@ -1,5 +1,5 @@
 import React from 'react';
-import { cellPixelsFor } from './boardGeometry';
+import { cellCenterUnits } from './boardGeometry';
 import styles from './BoardEffects.module.css';
 import { isUniqueEffect, renderUniqueEffect } from './UniqueEffects';
 
@@ -52,7 +52,15 @@ export type SkillEffectType =
     | 'plunder'
     | 'bulwark'
     | 'miasma'
-    | 'chainZap';
+    | 'chainZap'
+    | 'thunderHeal'
+    | 'thunderFall'
+    | 'thunderFire'
+    | 'stash'
+    | 'staticSeason'
+    | 'bristle'
+    | 'darkPot'
+    | 'strip';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
 export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
@@ -85,12 +93,12 @@ type Props = {
     size: number;
 };
 
-// 盤面のセル中心座標 (padding 12 + cell + gap 8。4x4 なら cell 64 → step 72, 中心 44)
+// 盤面のセル中心座標。マス1つの大きさ(--sq。Game の boardArea が決める)に対する比率で指定するので、
+// 画面が狭くてマスが縮んだときも、演出が同じマスの中心に出る
+const sqCalc = (units: number) => `calc(var(--sq, 64px) * ${units})`;
 const cellCenter = (index: number, size: number) => {
-    const cell = cellPixelsFor(size);
-    const col = index % size;
-    const row = Math.floor(index / size);
-    return { left: 12 + cell / 2 + col * (cell + 8), top: 12 + cell / 2 + row * (cell + 8) };
+    const c = cellCenterUnits(index, size);
+    return { left: sqCalc(c.x), top: sqCalc(c.y), ux: c.x, uy: c.y };
 };
 
 // 上昇/落下パーティクルの横位置(%)
@@ -143,6 +151,14 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     bulwark: { label: '土壇場の防壁', bg: '#ffd966', fg: '#3a2a00' },
     miasma: { label: 'ミアズマ', bg: '#c98bff', fg: '#1d0b33' },
     chainZap: { label: '帯電拡散', bg: '#fff44f', fg: '#2a2500' },
+    thunderHeal: { label: '雷を食らわば皿まで', bg: '#5fd06a', fg: '#082a0c' },
+    thunderFall: { label: '落雷は忘れた頃に', bg: '#fff44f', fg: '#2a2500' },
+    thunderFire: { label: '雷のない所に火は立たぬ', bg: '#ff7a2f', fg: '#2a0d00' },
+    stash: { label: '雷神のへそくり', bg: '#ffc24a', fg: '#2a1d00' },
+    staticSeason: { label: '静電気の季節', bg: '#fff44f', fg: '#2a2500' },
+    bristle: { label: '総毛立つ', bg: '#fff44f', fg: '#2a2500' },
+    darkPot: { label: '一寸先は闇鍋', bg: '#5a2896', fg: '#fff' },
+    strip: { label: '裸の王様', bg: '#ffd966', fg: '#3a2a00' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
@@ -459,7 +475,7 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {/* 元のマスから移動先へ飛ぶ本体 */}
                         <span
                             className={styles.flyer}
-                            style={{ left: a.left, top: a.top, ['--dx' as string]: `${b.left - a.left}px`, ['--dy' as string]: `${b.top - a.top}px` }}
+                            style={{ left: a.left, top: a.top, ['--dx' as string]: sqCalc(b.ux - a.ux), ['--dy' as string]: sqCalc(b.uy - a.uy) }}
                         >
                             {isDash ? '💨' : '👤'}
                         </span>

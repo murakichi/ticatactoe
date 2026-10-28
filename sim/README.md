@@ -31,6 +31,22 @@ node sim/cli.js sim --games 2000 --mode capture           # 捕獲考慮AIで比
 ```
 `--seed` で再現可能（mulberry32 のシード固定）。
 
+### 3b. 常駐対戦（watch）
+```bash
+node sim/cli.js watch                          # 2人戦。Ctrl-C か勝率が収束するまで対戦し続ける
+node sim/cli.js watch --players 4 --matrix     # 対面別勝率の表も常時表示
+node sim/cli.js watch --forever --log w.jsonl  # 自動停止なし。停止時の統計をJSONで追記
+```
+キャラ別勝率(±95%)・席別勝率・**対面別勝率**（行が列に勝つ割合。多人数では同卓した試合のうち
+どちらかが勝った試合で按分）を1秒ごとに更新。収束判定は「直近 `--window`(10) 回の
+スナップショット(`--checkpoint` 200局ごと)で全キャラの勝率の動きが `--eps`(0.5pt) 以内」かつ
+`--min-games`(2000) 以上。`--max N` で局数上限。停止時（Ctrl-C含む）は必ず最終統計と対面表を出す。
+
+**ブラウザ版**: セットアップ画面の「📊 シミュレーション」から同じ集計を画面で見られる（ユーザーの端末の Web Worker で動く。
+`public/simWorker.js` が `sim/` のモジュールを読む。`npm start` / `npm run build` の前に `scripts/copy-sim.js` が
+`run.js` / `live.js` から辿れる `sim/*.js` を `public/sim/` にコピーする（git管理外）。sim のエンジンを直せば
+CLI と画面の両方に反映される。`sim/` に Node 専用 API（fs 等）を足すとブラウザ版が壊れるので注意。
+
 ### 4. 改善ループ用の計測
 ```bash
 node sim/cli.js metrics --games 800 --mode faithful --seed 1   # バランス指標をJSON出力

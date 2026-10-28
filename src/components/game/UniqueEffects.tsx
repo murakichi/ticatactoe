@@ -1,5 +1,5 @@
 import React from 'react';
-import { cellPixelsFor } from './boardGeometry';
+import { boardLayoutOf, cellCenterUnits } from './boardGeometry';
 import type { SkillEffect } from './BoardEffects';
 import base from './BoardEffects.module.css';
 import styles from './UniqueEffects.module.css';
@@ -21,21 +21,26 @@ export const UNIQUE_EFFECT_TYPES = [
     'chainZap',
     'glacier',
     'inferno',
+    // 雷霆の巫・毒使いなどの、汎用スキルの新作(専用の演出を持たせる)
+    'thunderHeal',
+    'thunderFall',
+    'thunderFire',
+    'stash',
+    'staticSeason',
+    'bristle',
+    'darkPot',
+    'strip',
 ] as const;
 
 export const isUniqueEffect = (type: string): boolean => (UNIQUE_EFFECT_TYPES as readonly string[]).includes(type);
 
 type Pt = { x: number; y: number };
 
-const boardPx = (size: number) => 24 + size * cellPixelsFor(size) + (size - 1) * 8;
-
-/** マス index の中心(盤面に対する%) */
+/** マス index の中心(盤面に対する%)。寸法はマス1つを1とした比率なので、実際のマスの大きさに依らず合う */
 const center = (i: number, size: number): Pt => {
-    const cell = cellPixelsFor(size);
-    const w = boardPx(size);
-    const col = i % size;
-    const row = Math.floor(i / size);
-    return { x: ((12 + cell / 2 + col * (cell + 8)) / w) * 100, y: ((12 + cell / 2 + row * (cell + 8)) / w) * 100 };
+    const total = boardLayoutOf(size).units;
+    const c = cellCenterUnits(i, size);
+    return { x: (c.x / total) * 100, y: (c.y / total) * 100 };
 };
 
 const MID: Pt = { x: 50, y: 50 };
@@ -389,6 +394,151 @@ export const renderUniqueEffect = (effect: SkillEffect, size: number): React.Rea
                     {rise('🔥', 'ember')}
                     {rise('✨', 'spark')}
                     {ring('ring-0', MID, 100, '#ff7a2f', 6)}
+                </>
+            );
+        }
+        case 'thunderHeal': {
+            // 雷を食らわば皿まで: 空から雷が⚡のコマへ落ち、そのまま緑の光になってライフが回復する
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.flashAt} style={{ background: '#fff44f' }} />
+                    <div className={`${base.aura} ${base.auraGreen}`} />
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`h-${k}`}>
+                            {beam(`bolt-${k}`, { x: p.x, y: -4 }, p, k * 60, '#fde047', 7, 260)}
+                            {beam(`core-${k}`, { x: p.x, y: -4 }, p, k * 60, '#ffffff', 3, 260)}
+                            {pop(`zap-${k}`, p, '⚡', k * 60 + 200)}
+                            {pop(`heart-${k}`, p, '💚', k * 60 + 520, styles.bigPop)}
+                            {ring(`ring-${k}`, p, k * 60 + 300, '#5fd06a', 2.6)}
+                        </React.Fragment>
+                    ))}
+                    {rise('✨', 'heal')}
+                </>
+            );
+        }
+        case 'thunderFall': {
+            // 落雷は忘れた頃に: 空が暗くなり、溜めた⚡が一斉に落雷となって敵のコマへ降り注ぐ
+            const pts = cells.slice(0, 40).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '900ms' }} />
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '350ms' }} />
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`f-${k}`}>
+                            {beam(`bolt-${k}`, { x: p.x + (k % 2 ? 6 : -6), y: -4 }, p, 350 + (k % 8) * 70, '#fde047', 8, 240)}
+                            {beam(`core-${k}`, { x: p.x + (k % 2 ? 6 : -6), y: -4 }, p, 350 + (k % 8) * 70, '#ffffff', 3, 240)}
+                            {pop(`hit-${k}`, p, '⚡', 520 + (k % 8) * 70, styles.bigPop)}
+                            {ring(`ring-${k}`, p, 520 + (k % 8) * 70, '#fde047', 3)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('sky', MID, '⚡', 350, styles.bigPop)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'thunderFire': {
+            // 雷のない所に火は立たぬ: 選んだコマに雷が落ちて砕け、その火が周囲の敵のコマへ燃え移る
+            const hit = cells.length > 0 && effect.index !== undefined ? center(effect.index, size) : target;
+            const victims = (effect.indexes ?? []).filter((k) => k !== effect.index).slice(0, 12).map((k) => center(k, size));
+            return (
+                <>
+                    {beam('bolt', { x: hit.x, y: -4 }, hit, 0, '#fde047', 9, 260)}
+                    {beam('bolt-core', { x: hit.x, y: -4 }, hit, 0, '#ffffff', 4, 260)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '220ms' }} />
+                    {pop('boom', hit, '💥', 220, styles.bigPop)}
+                    {ring('ring-0', hit, 240, '#fde047', 4)}
+                    {ring('ring-1', hit, 380, '#ff7a2f', 5)}
+                    {DIRS_8.map((d, i) => beam(`crack-${i}`, hit, radial(hit, d, 9), 320, '#ff7a2f', 5, 300))}
+                    {victims.map((p, k) => (
+                        <React.Fragment key={`v-${k}`}>
+                            {fly(`fire-${k}`, hit, p, '🔥', 450 + k * 50, 600)}
+                            {pop(`burn-${k}`, p, '🔥', 1000 + k * 50)}
+                        </React.Fragment>
+                    ))}
+                    {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'stash': {
+            // 雷神のへそくり: マスの⚡が吸い出されて財布に貯まり、小銭が弾む(次のスキルが安くなる)
+            const purse: Pt = { x: 50, y: 90 };
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {pop('src', target, '⚡', 0)}
+                    {[0, 1, 2, 3].map((k) => fly(`bolt-${k}`, target, purse, '⚡', 150 + k * 110, 650))}
+                    {beam('line', target, purse, 150, '#fde047', 4, 500)}
+                    {pop('purse', purse, '👛', 700, styles.bigPop)}
+                    {[0, 1, 2, 3, 4, 5].map((k) => fly(`coin-${k}`, purse, { x: 38 + k * 5, y: 70 - (k % 2) * 8 }, '🪙', 850 + k * 70, 600))}
+                    {ring('ring-0', purse, 720, '#ffc24a', 3)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'staticSeason': {
+            // 静電気の季節: 盤面のあちこちでパチパチと静電気が走り、しばらく帯電した空気に包まれる
+            const spots = Array.from({ length: 22 }, (_, i): Pt => ({ x: 8 + ((i * 37) % 85), y: 8 + ((i * 53) % 85) }));
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    <div className={styles.flashAt} style={{ background: '#fff44f' }} />
+                    {spots.map((p, i) => pop(`sp-${i}`, p, '⚡', 80 + i * 55, i % 5 === 0 ? styles.bigPop : ''))}
+                    {spots.slice(0, 10).map((p, i) => beam(`arc-${i}`, p, spots[(i + 3) % spots.length], 120 + i * 80, '#fde047', 4, 200))}
+                    {ring('ring-0', MID, 0, '#fde047', 6)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'bristle': {
+            // 総毛立つ: 自陣のコマが次々と総毛立ち、⚡が逆立つように走る
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`b-${k}`}>
+                            {pop(`zap-${k}`, p, '⚡', k * 55, styles.bigPop)}
+                            {ring(`ring-${k}`, p, k * 55 + 60, '#fde047', 2.2)}
+                            {[0, 2, 4, 6].map((j) => beam(`hair-${k}-${j}`, p, radial(p, DIRS_8[j], 4.5), k * 55 + 100, '#fde047', 3, 240))}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '⚡', 0, styles.bigPop)}
+                    {rise('⚡', 'bristle')}
+                </>
+            );
+        }
+        case 'darkPot': {
+            // 一寸先は闇鍋: 闇の鍋が現れてぐつぐつ煮え、何が入っているか分からない具(🔥❄⚡☠🌱🍂)が全コマへ飛び散る
+            const items = ['🔥', '❄', '⚡', '☠', '🌱', '🍂'];
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1500ms' }} />
+                    <div className={base.haze} style={{ background: 'rgba(90, 40, 150, 0.4)' }} />
+                    {pop('pot', MID, '🍲', 100, styles.bigPop)}
+                    {ring('ring-0', MID, 300, '#c98bff', 5)}
+                    {rise('🫧', 'bubble')}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`i-${k}`}>
+                            {fly(`item-${k}`, MID, p, items[k % items.length], 700 + k * 45, 650)}
+                            {pop(`land-${k}`, p, items[k % items.length], 1250 + k * 45)}
+                        </React.Fragment>
+                    ))}
+                </>
+            );
+        }
+        case 'strip': {
+            // 裸の王様: 王冠が落ちてきて、相手のギアが身ぐるみ剥がされるように四方へ飛んでいく
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1300ms' }} />
+                    {pop('crown', MID, '👑', 100, styles.bigPop)}
+                    {ring('ring-0', MID, 450, '#ffd966', 5)}
+                    {DIRS_8.map((d, i) => fly(`cloth-${i}`, MID, radial(MID, d, 44), i % 2 ? '👕' : '🧦', 500 + i * 40, 700))}
+                    {DIRS_8.map((d, i) => fly(`dust-${i}`, MID, radial(MID, d, 30), '💨', 560 + i * 40, 600))}
+                    {pop('naked', MID, '🙈', 1200)}
+                    {rise('✨', 'spark')}
                 </>
             );
         }

@@ -30,6 +30,7 @@ const SKILL_META: Record<string, Meta> = {
     ミアズマ: { icon: '☠', category: 'poison' },
     絶対零度: { icon: '🥶', category: 'ice' },
     業火: { icon: '💥', category: 'fire' },
+    虎落笛: { icon: '🍂', category: 'buds' },
 };
 
 /** カタログか、基本操作・固有スキルの表に載っているスキル名か(載っていなければカードは既定の「✨・基本」表示になる) */

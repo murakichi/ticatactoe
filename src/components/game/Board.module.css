@@ -1,8 +1,7 @@
 .board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-2);
-    padding: var(--space-3);
+    /* gap と padding は Board.tsx が --sq の比率で指定する */
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
