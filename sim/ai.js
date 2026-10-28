@@ -609,6 +609,8 @@ function pyroChainShuffle(s, me, table) {
     let need = INFERNO_FREE_SKILLS - kinds.size;
     const budget = PYRO_COSTS.slice(0, need).reduce((n, c) => n + c, 0) + need;
     if (curMagic(s) < budget) return;
+    // デッキに入っている軽量札だけでは足りない種類数なら、引き直しても揃わないので始めない
+    if (PYRO_FILLERS.filter((idx) => inDeck(s, idx) && !kinds.has((PYRO_EXTRA[idx] || table[idx] || {}).cost)).length < need) return;
     for (let step = 0; step < 8 && need > 0; step++) {
         const picks = [];
         for (const idx of PYRO_FILLERS) {
@@ -1404,7 +1406,12 @@ function bestShikigamiCell(s, me) {
     return best;
 }
 // 百鬼夜行→式神一括の実コストの計画。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする（特売は1魔力で次のスキルを-3、何回でも撃てる）
+// 自分のデッキに idx があるか(手札にあるものは必ずデッキにある)。デッキ未指定の対局(従来の乱数プール)では全て引けるとみなす
+function inDeck(s, idx) { return !s.decks || s.decks[s.turn].includes(idx) || s.skills.includes(idx); }
+// 陰陽師のコンボ札(百鬼夜行71・式神一括73)がどちらも手札かデッキにある=引き直しや温存が報われる
+function comboReachable(s) { return inDeck(s, 71) && inDeck(s, 73); }
 function comboPlan(s, assumeMd = false) {
+    assumeMd = assumeMd && inDeck(s, 53); // 特売がデッキに無いなら『引ける前提』にしない
     const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
     const md = (assumeMd || s.skills.includes(53)) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
     const best = (base) => {
@@ -1975,7 +1982,7 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 陰陽師(F.shuffleDig): 勝てる盤面で、魔力が「コンボ分(特売が引ける前提)+引き直し分」あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
-    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
+    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s)) {
         const shufCost = costsOf(s).onClickShuffle;
         const complete = () => s.skills.includes(71) && s.skills.includes(73) && (s.skills.includes(53) || !F.comboDiscount || curMagic(s) >= comboPlan(s).total);
         const hold53 = F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53; // 特売を探すより、チャージで13を目指す
@@ -2008,7 +2015,7 @@ function faithfulMakeMoveInner(s) {
         }
     }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
-    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && oppReachesNow(s, opps) === 0
+    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
             || (F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53 && curMagic(s) < comboPlan(s).total))
         && !(F.chargeSafe && oppCanFork(s, opps))) {
@@ -2016,7 +2023,7 @@ function faithfulMakeMoveInner(s) {
         return { move: null, turnEnded: true };
     }
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
-    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
+    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 式神の設置・転化・爆破

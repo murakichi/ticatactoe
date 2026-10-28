@@ -27,6 +27,7 @@ npm test     # Jest in watch mode
 - `Game.tsx` — Core game logic, state management, skill execution (~1000 lines)
 - `Board.tsx` / `Square.tsx` — Grid rendering, click delegation
 - `AIPlayer.ts` — Simple AI: checks win/block moves first, then uses skills, then random. Takes all other seats as `opponents`; search depth shrinks with board size (3/2/1)
+  - AI は自分のデッキを把握する: `AIPlayer` のコンストラクタ `deck`(`Game.tsx` が `deckBySeat[seat]` を渡す)、sim は `s.decks[seat]`。`inDeck(idx)`/`comboReachable()`(sim/ai.js と同名)で『引き直し・温存が報われるか』を判定し、陰陽師はコンボ札(71/73)がデッキに無ければ探索・温存しない。特売(53)が無ければコンボ計画は『特売が引ける前提』にしない。デッキ未指定は従来どおり全て引ける扱い
 
 **Magic system:** Players gain magic per turn, spend it on skills. Skill costs are defined in `src/types/skillCosts.ts`. Cost modifiers apply per character (e.g., Tactician gets -2 on token skills). Only 3 random skills available at a time (shuffleable for 1 cost).
 
