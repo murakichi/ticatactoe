@@ -2140,6 +2140,18 @@ function faithfulMakeMoveInner(s) {
                 return { move, turnEnded: false };
             }
         }
+        // 魔法使い(F.lockFirstCryo): 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力エンジンを止める（ロック中のコマには❄が付かない）。
+        // 相手に氷室がいるときは、審判の日より先に🌱付きのコマを全てロックする（2なら🌱の無い自陣コマも）
+        if (F.lockFirstCryo && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer')) {
+            for (let n = 0; n < 12; n++) {
+                const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+                let cell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (cell === -1 && F.lockFirstCryo >= 2) cell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (!(curMagic(s) >= lockCost + (F.lockFirstReserve || 0) && cell !== -1)) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useLock = 0; break; }
+            }
+        }
         const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
         if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {
             const target = bestJudgeTarget(s.board, me);
