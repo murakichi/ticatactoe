@@ -339,6 +339,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeSeason': onClickChargeSeason(); break;
             case 'onClickBristle': onClickBristle(); break;
             case 'onClickRelease': onClickRelease(); break;
+            case 'onClickStash': onClickStash(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -824,6 +825,12 @@ export const Game = (props: GameProps) => {
     const onCellClick = (i: number) => {
         if (hailMarySpin) return;
         setPreviewCells([]);
+        // 雷神のへそくり: ⚡のある自陣のコマを選ぶ。無敵マスでも自分のものは選べる（雷霆の巫の⚡マスはすべて無敵なので、無敵の早期リターンより前に判定する）
+        if (useStash) {
+            if (!stashTargets().includes(i)) return; // ⚡のない・自陣でないマスは選び直せる
+            exeStash(i);
+            return;
+        }
         // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。
         // ⚡のないマス・他人の無敵マスは無視（選び直せる）。無敵の早期リターンより前に判定する
         if (useJammer) {
@@ -1617,15 +1624,38 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle'), true, true, 'onClickBristle');
     };
 
-    // 堪忍袋の緒: 自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与える（ロック・無敵・氷結中・ライフ0のコマは受けない）。無敵だった自陣の⚡コマは普通のコマに戻る
+    // 雷神のへそくり: 自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1する（軽減後は最低1）
+    const [useStash, setUseStash] = useState<boolean>(false);
+    const stashTargets = (): number[] =>
+        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const onClickStash = () => {
+        addLog('「雷神のへそくり」を使用（⚡のある自陣のコマを選択）');
+        setUseStash(true);
+        spendMagic(calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash'), true, true, 'onClickStash');
+    };
+    const exeStash = (i: number) => {
+        const n = chargeStacks(currentBoard[i]);
+        if (n === 0) return;
+        const board = currentBoard.slice();
+        board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n }; // 軽減札なので「次に打つスキル」を消費せず、足す
+        addLog(`${posName(i)}の⚡${n}個を除去（次のスキル-${n}）`);
+        flashCells([i]);
+        playEffect('zap', i, [i], '雷神のへそくり');
+        setUseStash(false);
+        setCurrentBoard(board);
+    };
+
+    // 落雷は忘れた頃に: 自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与える（ロック・無敵・氷結中・ライフ0のコマは受けない）。無敵だった自陣の⚡コマは普通のコマに戻る
     const ownChargeStacks = (): number => currentBoard.reduce((n, sq) => (sq.player === currentTurnPlayer ? n + chargeStacks(sq) : n), 0);
     const onClickRelease = () => {
         const board = currentBoard.slice();
         const r = releaseCharges(board, currentTurnPlayer, characters);
         if (r.removed === 0) return;
-        addLog(`「堪忍袋の緒」を使用（自陣の⚡${r.removed}個を放出・敵${r.damaged.length}コマに${r.removed}ダメージ）`);
+        addLog(`「落雷は忘れた頃に」を使用（自陣の⚡${r.removed}個を放出・敵${r.damaged.length}コマに${r.removed}ダメージ）`);
         flashCells(r.damaged);
-        playEffect('zap', undefined, r.damaged, '堪忍袋の緒');
+        playEffect('zap', undefined, r.damaged, '落雷は忘れた頃に');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease'), true, true, 'onClickRelease');
     };
@@ -3150,15 +3180,18 @@ export const Game = (props: GameProps) => {
         else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
         else if (useIgnite) setPreviewCells([i]);
+        else if (useStash) setPreviewCells(stashTargets().includes(i) ? [i] : []);
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useFreeze || useIgnite || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useFreeze || useIgnite || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
     const pendingSkillName = useStomp
         ? 'ストンプ'
+        : useStash
+        ? '雷神のへそくり'
         : useJudgeDay
         ? '審判の日'
         : useChargeSpread
@@ -3301,7 +3334,8 @@ export const Game = (props: GameProps) => {
         { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
         { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, paragraph: `今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます（雷霆の巫以外は乗った時点でダメージ）`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason) || chargeBuff[turnSeat] > 0 },
         { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, paragraph: `自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます（雷霆の巫以外は乗った時点でダメージ）`, disabled: checkSkillDisable(seatCosts.onClickBristle) || bristleTargets().length === 0 },
-        { idx: 79, onClick: onClickRelease, buttonText: `堪忍袋の緒-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, paragraph: `自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
+        { idx: 79, onClick: onClickRelease, buttonText: `落雷は忘れた頃に-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, paragraph: `自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
+        { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
     ];
 
     return (

@@ -240,7 +240,8 @@ const skillCosts = {
     onClickStrip: 4, // 裸の王様(idx 76)
     onClickChargeSeason: 6, // 静電気の季節(idx 77)
     onClickBristle: 5, // 総毛立つ(idx 78)
-    onClickRelease: 5, // 堪忍袋の緒(idx 79)
+    onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
+    onClickStash: 1, // 雷神のへそくり(idx 80)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -597,6 +598,7 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        useStash: false,
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -895,6 +897,13 @@ function advanceTurn(s) {
  */
 function placeMove(s, i) {
     const board = s.board;
+
+    // 雷神のへそくり: ⚡のある自陣のコマを選ぶ。無敵マスでも自分のものは選べる（雷霆の巫の⚡マスはすべて無敵なので、無敵の早期リターンより前に判定する）
+    if (s.useStash) {
+        if (!exeStash(s, i)) return false; // ⚡のない・自陣でないマスは選び直せる
+        s.useStash = false;
+        return true;
+    }
 
     // ジャマー: ⚡のあるマスを選ぶ。無敵マスでも**自分の**ものは選べる（弱点を解く唯一の手段）。他人の無敵マスは選べない
     if (s.useJammer) {
@@ -2199,7 +2208,7 @@ function onClickBristle(s) {
     checkDischarge(s);
 }
 
-// 堪忍袋の緒 (idx79): 自陣のコマの⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで。ライフ0・ロック・無敵・氷結中は受けない）。⚡が無ければ使えない
+// 落雷は忘れた頃に (idx79): 自陣のコマの⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで。ライフ0・ロック・無敵・氷結中は受けない）。⚡が無ければ使えない
 function ownChargeStacks(s) { return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + chargeStacks(sq) : n), 0); }
 function releaseCharges(s) {
     const me = curPlayer(s);
@@ -2225,6 +2234,25 @@ function onClickRelease(s) {
     bumpMagicCount(s);
     bumpStat(s, 'release');
     bumpStat(s, 'releaseBolts', n);
+}
+
+// 雷神のへそくり (idx80): ⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコスト-1（軽減札）。⚡のある自陣のコマが無ければ使えない
+function stashTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function stashLegal(s) { return stashTargets(s).length > 0; }
+function onClickStash(s) {
+    if (!stashLegal(s)) return;
+    s.useStash = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickStash, false, false, 'onClickStash'), 'onClickStash');
+    bumpMagicCount(s);
+    bumpStat(s, 'stash');
+}
+function exeStash(s, i) {
+    if (!stashTargets(s).includes(i)) return false;
+    const n = chargeStacks(s.board[i]);
+    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((e) => e.effect !== '⚡') };
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { next: s.discount[s.turn].next + n }); // 軽減札なので「次に打つスキル」を消費せず、足す
+    bumpStat(s, 'stashBolts', n);
+    return true;
 }
 
 // 裸の王様 (idx76): 自分以外の全席のギアを、その席の次の手番の終わりまで無効にする（ギアを装備していて、まだ無効でない席が対象）。クリック不要
@@ -2372,6 +2400,7 @@ const SKILLS = {
     chargeSeason: onClickChargeSeason,
     bristle: onClickBristle,
     release: onClickRelease,
+    stash: onClickStash,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2415,7 +2444,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal, stashLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

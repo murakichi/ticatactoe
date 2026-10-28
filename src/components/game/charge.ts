@@ -73,7 +73,7 @@ export type ReleaseResult = {
 };
 
 /**
- * 堪忍袋の緒: player の自陣のコマの⚡をすべて取り除き、取り除いた数だけ、敵の全コマにダメージを与える（ライフは0まで。破壊はしない）。
+ * 落雷は忘れた頃に: player の自陣のコマの⚡をすべて取り除き、取り除いた数だけ、敵の全コマにダメージを与える（ライフは0まで。破壊はしない）。
  * ライフ0のコマ・🔑ロック・⚡の無敵コマ・氷結中のコマ（隣接⚡のダメージと同じく通らない）は受けない。board を直接書き換える。sim/engine.js の releaseCharges と同じ
  */
 export const releaseCharges = (board: SquareInfo[], player: Player | undefined, chars: PlayerCharacters): ReleaseResult => {

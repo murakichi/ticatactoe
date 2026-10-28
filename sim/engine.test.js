@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2549,7 +2549,7 @@ test('静電気の季節は3手番で切れる', () => {
     assert.strictEqual(e.chargeSeasonLegal(s), true); // 切れたら掛け直せる
 });
 
-test('堪忍袋の緒: 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで）。⚡が無ければ使えない。コスト5', () => {
+test('落雷は忘れた頃に: 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで）。⚡が無ければ使えない。コスト5', () => {
     const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(13) });
     s.magic[0] = 30;
     assert.strictEqual(e.releaseLegal(s), false);
@@ -2571,6 +2571,34 @@ test('堪忍袋の緒: 自陣の⚡を全て取り除き、取り除いた数だ
     assert.strictEqual(s.board[7].bind, 5);
     assert.strictEqual(s.board[8].bind, 5);
     assert.strictEqual(e.releaseLegal(s), false); // もう⚡が無い
+});
+
+test('雷神のへそくり: ⚡のある自陣のコマ(無敵の⚡マスも)を選んで⚡を全て除去し、スタック1つにつき次のスキルを-1。コスト1。軽減札なので「次のスキル」を消費しない', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.stashLegal(s), false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT, BOLT] }; // 雷霆の巫の⚡マスは無敵だが、自分のものは選べる
+    s.board[1] = { player: '💙', bind: 4, effects: [] };
+    s.board[2] = { player: '⭕', bind: 4, effects: [BOLT] };
+    assert.strictEqual(e.stashLegal(s), true);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickStash, false, false, 'onClickStash'), 1);
+    const slash = () => e.calculateCost(s, 6, false, false, 'onClickSlash');
+    const before = slash();
+    e.SKILLS.stash(s);
+    assert.strictEqual(s.magic[0], 29);
+    assert.strictEqual(s.useStash, true);
+    assert.strictEqual(e.placeMove(s, 1), false); // ⚡のない自陣は選び直せる
+    assert.strictEqual(e.placeMove(s, 2), false); // 敵のコマは選べない
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(s.useStash, false);
+    assert.strictEqual(boltsOn(s.board[0]), 0);
+    assert.strictEqual(boltsOn(s.board[2]), 1); // 敵の⚡はそのまま
+    assert.strictEqual(s.discount[0].next, 3);
+    assert.strictEqual(slash(), before - 3);
+    // 次に打つスキルでだけ消費される
+    e.SKILLS.addLife(s);
+    assert.strictEqual(s.discount[0].next, 0);
+    assert.strictEqual(slash(), before);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

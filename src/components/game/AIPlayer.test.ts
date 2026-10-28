@@ -1268,7 +1268,7 @@ describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
     });
 });
 
-describe('堪忍袋の緒のAI使用', () => {
+describe('落雷は忘れた頃にのAI使用', () => {
     const costs = { onClickRelease: 5, onClickChargeSeason: 6, onClickBristle: 5 } as any;
     const bolts = (n: number) => {
         const b = emptyBoard();

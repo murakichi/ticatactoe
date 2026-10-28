@@ -108,7 +108,8 @@ export const skillCosts = {
     onClickStrip: 4, //           裸の王様(idx 76): 相手全員のギアを、その席の次の手番の終わりまで無効にする
     onClickChargeSeason: 6, //    静電気の季節(idx 77): 今の手番を含む3ターン、設置する駒に⚡
     onClickBristle: 5, //         総毛立つ(idx 78): 自陣の全コマ(ロック中を除く)に⚡
-    onClickRelease: 5, //         堪忍袋の緒(idx 79): 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ
+    onClickRelease: 5, //         落雷は忘れた頃に(idx 79): 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ
+    onClickStash: 1, //           雷神のへそくり(idx 80): 自陣を1つ選んで⚡を全て除去し、除去したスタック1つにつき次のスキルのコスト-1
 };
 
 export type SkillCosts = typeof skillCosts;

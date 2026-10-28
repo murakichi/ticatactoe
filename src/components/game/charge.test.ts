@@ -394,7 +394,7 @@ describe('⚡が乗った時点のダメージ（雷霆の巫以外）', () => {
     });
 });
 
-describe('堪忍袋の緒 (releaseCharges)', () => {
+describe('落雷は忘れた頃に (releaseCharges)', () => {
     it('自陣の⚡を全て取り除き、取り除いた数（スタック込み）だけ敵の全コマにダメージ。破壊はせずライフは0まで', () => {
         const b = emptyBoard();
         b[0] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '⚡' }] };
