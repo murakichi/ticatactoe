@@ -1,7 +1,7 @@
 /* ブラウザ内の対戦シミュレーション用 Web Worker。
  * sim/ の CommonJS モジュール(public/sim/ にコピーされたもの)を同期XHRで読み、require を自前で用意して動かす。
  * メインスレッドとのやりとり:
- *   -> { cmd: 'start', players, size, mode, seed, fixedChars, conv: {window, eps, minGames} | null, maxGames }
+ *   -> { cmd: 'start', players, size, mode, seed, fixedChars, skills(既定true), gears(既定true), conv: {window, eps, minGames} | null, maxGames }
  *   -> { cmd: 'stop' }
  *   <- { type: 'progress' | 'done', reason?, summary, matchups, drift, elapsed }
  */
@@ -55,7 +55,7 @@ function start(o) {
         while (Date.now() < end && g < o.maxGames) {
             const chars = pickChars(o.players, o.fixedChars, pickRng);
             const rng = engine.makeRng(o.seed * 1000003 + g * 7919 + o.players);
-            live.record(stats, chars, runGame(chars, rng, o.mode, o.size));
+            live.record(stats, chars, runGame(chars, rng, o.mode, o.size, undefined, { deck: o.skills !== false, gears: o.gears !== false, skills: o.skills !== false }));
             g++;
             if (g % o.checkpoint === 0) live.checkpoint(stats);
         }
