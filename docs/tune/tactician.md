@@ -1,8 +1,9 @@
 # tune-top: tactician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 3bc89db(新ギア colorGarden/ailmentPact/ruinSurge/lastStand 追加後)(魔法使いの推奨デッキ更新が入った。sim エンジン・AI は不変)
+- 最後に検証したmaster: edb9fff（2026-10-28 再基準。基本 7位 48.5%・varied 7位 47.2%。1位 witch 68.1% / 64.9%）
 - 現在の推奨設定: gears=[lastStand, priceWreck](sturdy→lastStand に変更, 試行#11) deck=推奨のまま AIフラグ=なし
-- 基準線: 環境勝率 61.3% / 3位 / 1位 magician 66.0% / 2位 poisoner 63.3%   (seed 3, games 100, 基本条件, lastStand+lsAggro 採用後。4条件の完了判定は未実施)
+- 基準線: 環境勝率 48.5% / 7位(11キャラ中) / 1位 witch 68.1% / 2位 poisoner 62.6%   (--rank --target tactician seed3 games100, master edb9fff, 基本条件)。envDeck varied: 47.2% / 7位 / 1位 witch 64.9%
+  - 旧基準線(3bc89db): 61.3% / 3位 / 1位 magician 66.0%
 - 連続不採用回数: 2(#13, #14)
 - 状態: running(ギア4種追加を受けて再開, master 3bc89db)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
@@ -45,6 +46,12 @@
 
 ## 採用後の順位(master 3bc89db + lastStand, seed3/100, 基本条件)
 1位 magician 65.8% / 2位 poisoner 63.5% / **3位 tactician 58.8%** / 4位 electrician 58.8%。トップ未達(魔法使い・毒使いに届かない)。
+
+## 診断(2026-10-28, master edb9fff)
+- 軍師の対キャラ別(seed1/150, field 45.1%): you 70 / magician 28 / giant 46 / yinYangMaster 82 / necromancer 38 / poisoner 41 / electrician 35 / cryomancer 35 / pyromancer 33 / witch 43。広く負けている。
+- 勝ち筋=トークン展開→総攻撃。対witch(seed1/100)の使用: token 0.70回/試合、doubleToken 0.29、総攻撃 0.10回/試合(使った試合の勝率80%)。**総攻撃は撃てば勝つが10%の試合でしか撃てない=律速は発動頻度(魔力)**。issue #85 と同じ結論。
+- 前回(3bc89db, 3位58.8%)から7位に落ちた主因は、環境側の変化（witch 追加・防壁推奨ギア・コスト計算順の変更 #235 など）。軍師自身の設定は不変。
+- 軸の選び方: 魔力を作るギアは前回 `--scan gears` から新ギアが増えたので、まず gear 再スキャン。数値でしか解けない場合は #85 に追記。
 
 ## 次に試す候補
 - 新ギアでの deck 再探索(lastStand は被弾前提のため、守りの札・ロックとの joint): `node sim/probe-top.js --target tactician --gears lastStand,priceWreck --scan deck --neighbors 15 --games 60 --cache .tune-cache`
