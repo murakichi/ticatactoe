@@ -2976,5 +2976,28 @@ test('コストの計算順: 敵の🍂による増加分を先に足し、魔�
     assert.strictEqual(e.calculateCost(t, 3, true, false, 'x'), 3 + 2 - 1);
 });
 
+test('火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける。対象が無ければ使えない。鍛冶師は🔥付与で-1、選べるのは🌱🍂のあるコマだけ', () => {
+    const s = game('pyromancer', 'magician');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 5;
+    s.board[5] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[6] = { player: '⭕', bind: 5, effects: [] };
+    s.board[9] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, { effect: '🔑' }] }; // ロック中は選べない（敵の🍂は自分のコストを上げるので🌱で確かめる）
+    assert.deepStrictEqual(e.tinderCandidates(s), [5]);
+    const before = s.magic[s.turn];
+    e.SKILLS.tinder(s);
+    assert.strictEqual(before - s.magic[s.turn], 1, '基本2-1');
+    assert.strictEqual(e.placeMove(s, 6), false, '🌱🍂が無いコマは選び直せる');
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🌱'), '🔥は🌱を焼く');
+    assert.strictEqual(s.board[5].bind, 4, '付与の瞬間に1ダメージ');
+    const t = game('pyromancer', 'magician');
+    t.board[6] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.tinderLegal(t), false);
+    const m0 = t.magic[t.turn];
+    e.SKILLS.tinder(t);
+    assert.strictEqual(t.magic[t.turn], m0, '対象が無ければ何もしない');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

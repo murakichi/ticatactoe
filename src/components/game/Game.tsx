@@ -3007,7 +3007,12 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         addLog(`${posName(i)}に🔥を付与（火口）`);
         setUseTinder(false);
-        igniteCells(board, [i]);
+        const { thawed } = ignite(board, [i], geo.size, 1, keepBuds);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        flashCells([i]);
+        playEffect('flame', i, undefined, '火口');
+        playBurst('thaw', thawed);
+        setCurrentBoard(board);
     };
     const exeIgnite = (i: number) => {
         const board = currentBoard.slice();

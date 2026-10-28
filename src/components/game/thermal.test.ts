@@ -4,6 +4,7 @@ import {
     leafDropTargets,
     leafDrop,
     kindlingTargets,
+    tinderTargets,
     kindling,
     boardLeaves,
     witchCostOf,
@@ -1249,6 +1250,20 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         leafDrop(b, 1);
         expect(b[1].effects).toEqual([{ effect: '🍂' }]);
         expect(b[0].effects).toEqual([]);
+    });
+
+    it('火口: 🌱か🍂を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 1);
+        b[1] = lv('⭕', 8, 1);
+        b[2] = lv('⭕', 8, 1, '🔑');
+        b[3] = sq('⭕', 8);
+        b[4] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }] };
+        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4]);
+        const post = b.map((q) => ({ ...q, effects: [...q.effects] }));
+        ignite(post, [4], 4, 1);
+        expect(post[4].effects.some((e) => e.effect === '🌱')).toBe(false);
+        expect(post[4].effects.some((e) => e.effect === '🔥')).toBe(true);
     });
 
     it('焚きつけ: 敵の🍂を全て取り除き、1枚につき🔥を1つ付ける（自陣・🔑は対象外）', () => {
