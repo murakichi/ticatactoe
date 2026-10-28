@@ -2741,5 +2741,28 @@ test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲
     assert.strictEqual(t.board[6].effects.length, 0);
 });
 
+test('AIは自分のデッキを把握する: 陰陽師はコンボ札(百鬼夜行71)がデッキに無ければ、引き直して探さない', () => {
+    const e = require('./engine');
+    const ai = require('./ai');
+    const deckMod = require('./deck');
+    const digs = (deck) => {
+        let n = 0;
+        for (let g = 0; g < 4; g++) {
+            const chars = ['yinYangMaster', 'magician'];
+            const s = e.newGame({ chars, rng: e.makeRng(900 + g), decks: [deck, deckMod.recommendedDeck('magician')] });
+            s.aiFlags = chars.map(() => ({}));
+            for (let t = 0; t < 120 && !s.winner; t++) {
+                const r = ai.makeMove(s, 'faithful');
+                if (!r.turnEnded && r.move != null) e.placeMove(s, r.move);
+                else if (!r.turnEnded) e.SKILLS.charge(s);
+            }
+            n += s.digShuffles || 0;
+        }
+        return n;
+    };
+    assert.ok(digs(deckMod.recommendedDeck('yinYangMaster')) > 0, '推奨デッキでは探す');
+    assert.strictEqual(digs([0, 2, 3, 5, 6, 8, 10, 12, 72, 73, 53, 1]), 0, '百鬼夜行が無ければ探さない');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
