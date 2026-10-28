@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
+    witchReserve: 0, // 凩の魔女が🍂トークンの分の魔力を温存する（再検証中）
     mogaL: 2, mogaHits: 2, // 凩の魔女の虎落笛を撃つ条件: 自陣の🍂がL枚以上かつ、ライフの残った敵コマがHits個以上（検証中）
     cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
@@ -1085,9 +1086,16 @@ function chooseSkills(s, availableSkills) {
     if (character === 'necromancer') {
         if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
+    // F.witchReserve: 凩の魔女は手札に🍂付きトークンがあるとき、その最安のコスト分を下回る他のスキルの支払いを控える。
+    // 以前(対策ロックが魔力を食っていた時期)は±0で不採用。対策ロック停止後の前提で測り直す
+    const WITCH_LEAF_SPEND = ['leafToken', 'twinLeafToken', 'doubleLeafToken', 'leafDrop', 'kindling', 'leafCloak'];
+    if (F.witchReserve && character === 'witch' && !tokenUsed) {
+        const leafOpts = [{ idx: 64, cost: 'onClickDoubleLeafToken' }, { idx: 63, cost: 'onClickTwinLeafToken' }, { idx: 62, cost: 'onClickLeafToken' }].filter((o) => availableSkills.includes(o.idx));
+        if (leafOpts.length) reserve = Math.min(...leafOpts.map((o) => cost(costsOf(s)[o.cost], true, o.cost)));
+    }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        if (reserve && (RESERVE_SKIP.includes(name)) && remaining - c < reserve) return false;
+        if (reserve && (RESERVE_SKIP.includes(name) || (F.witchReserve && character === 'witch' && !WITCH_LEAF_SPEND.includes(name))) && remaining - c < reserve) return false;
         // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
         if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
             && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
