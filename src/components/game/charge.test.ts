@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -431,5 +431,26 @@ describe('落雷は忘れた頃に (releaseCharges)', () => {
         put(none, 5, '⭕', 5);
         expect(releaseCharges(none, '💙', ['you', 'you'])).toEqual({ removed: 0, from: [], damaged: [] });
         expect(none[5].bind).toBe(5);
+    });
+});
+
+describe('雷を食らわば皿まで(healCharged)', () => {
+    const bolt = { effect: '⚡' as const };
+    it('⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2する。敵・⚡なし・氷結中(休眠)は対象外', () => {
+        const board = emptyBoard();
+        board[0] = { bind: 3, player: '💙', effects: [bolt] };
+        board[1] = { bind: 1, player: '💙', effects: [bolt, bolt, bolt] };
+        board[2] = { bind: 4, player: '💙', effects: [bolt, { effect: '❄' }] };
+        board[3] = { bind: 4, player: '⭕', effects: [bolt] };
+        board[4] = { bind: 5, player: '💙', effects: [] };
+        board[5] = { bind: 0, player: '💙', effects: [bolt] };
+        const r = healCharged(board, '💙');
+        expect(r.healed).toEqual([0, 1, 5]);
+        expect(r.total).toBe(2 + 6 + 2);
+        expect([0, 1, 2, 3, 4, 5].map((i) => board[i].bind)).toEqual([5, 7, 4, 4, 5, 2]);
+    });
+    it('対象が無ければ何も変えない', () => {
+        const board = emptyBoard();
+        expect(healCharged(board, '💙')).toEqual({ healed: [], total: 0 });
     });
 });

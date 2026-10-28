@@ -28,12 +28,17 @@ export const ownCharges = (board: SquareInfo[], player: Player): number => count
  * - 紅葉狩り: この手番、自陣の🍂が手番開始時（leafBase）より増えていれば
  * - 総毛立つ: この手番に⚡を付与するスキルを使っていれば（kinds=手番内に使ったスキルの種類）
  * - 静電気の季節: 自陣に⚡が1つもなければ
- * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型。下限1は呼び出し側 gearCost が掛ける）
+ * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型）
+ * - 雷を食らわば皿まで: この手番に付与した⚡の数だけ（自陣の⚡が手番開始時 chargeBase より増えたぶん。撃つと基準がリセットされる）
  */
-export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>): number => {
+export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>, chargeBase: number = 0): number => {
     if (skillKey === 'onClickDoubleLeafToken') return ownLeaves(board, player) > leafBase ? COMBO_CUT : 0;
     if (skillKey === 'onClickBristle') return Array.from(kinds).some((k) => CHARGE_GRANT_KEYS.has(k)) ? COMBO_CUT : 0;
     if (skillKey === 'onClickChargeSeason') return ownCharges(board, player) === 0 ? COMBO_CUT : 0;
     if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
+    if (skillKey === 'onClickChargeHeal') return Math.max(0, ownCharges(board, player) - chargeBase);
     return 0;
 };
+
+/** 軽減の下限が1のスキル（カウント型で、軽減しきると0円になってしまうもの） */
+export const comboFloor = (skillKey: string | undefined): number => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' ? 1 : 0);

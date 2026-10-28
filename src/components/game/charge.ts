@@ -199,3 +199,22 @@ export const applyOverload = (board: SquareInfo[]): SquareInfo[] => {
         bind: 0,
     }));
 };
+
+/**
+ * 雷を食らわば皿まで: player の⚡が効いているコマ（休眠中を除く）のライフを、⚡のスタック1つにつき +CHARGE_HEAL する。
+ * board を直接書き換え、回復したコマと合計回復量を返す。ライフ0のコマも回復する
+ */
+export const CHARGE_HEAL = 2;
+export const healCharged = (board: SquareInfo[], player: Player | undefined): { healed: number[]; total: number } => {
+    const healed: number[] = [];
+    let total = 0;
+    board.forEach((sq, i) => {
+        if (sq.player !== player || isDormant(sq)) return;
+        const stacks = chargeStacks(sq);
+        if (stacks === 0) return;
+        board[i] = { ...sq, bind: sq.bind + stacks * CHARGE_HEAL };
+        healed.push(i);
+        total += stacks * CHARGE_HEAL;
+    });
+    return { healed, total };
+};

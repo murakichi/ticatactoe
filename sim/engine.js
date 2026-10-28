@@ -246,6 +246,7 @@ const skillCosts = {
     onClickStash: 1, // 雷神のへそくり(idx 80)
     onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
     onClickDarkPot: 9, // 一寸先は闇鍋(idx 82)。盤面のエフェクトの数だけ軽減（最低1）
+    onClickChargeHeal: 6, // 雷を食らわば皿まで(idx 83)。この手番に付与した⚡の数だけ軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -606,6 +607,7 @@ function newGame(opts = {}) {
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
+        chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -663,8 +665,8 @@ function gearCtx(s, seat) {
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
-    const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat]) : 0; // 導線（コンボ）による軽減
-    const adjusted = Math.max(key === 'onClickDarkPot' ? 1 : 0, gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // 一寸先は闇鍋は下限1
+    const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
+    const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
@@ -888,6 +890,7 @@ function advanceTurn(s) {
     s.fireBase[next] = thermal.fireStacksTotal(s.board);
     s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
     s.darkPotUsed[next] = false;
+    s.chargeBase[next] = comboMod.ownCharges(s.board, SYMBOLS[next]);
     s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
@@ -1740,6 +1743,21 @@ function onClickDarkPot(s) {
     checkDischarge(s);
 }
 
+// 雷を食らわば皿まで (idx 83): ⚡が効いている（休眠中でない）自陣のコマのライフを、⚡のスタック1つにつき+2する。⚡のコマが無ければ使えない。
+// この手番に付与した⚡の数だけコスト軽減（撃つとリセット） [FAITHFUL] Game.tsx onClickChargeHeal
+const CHARGE_HEAL = 2;
+function chargeHealCells(s) { return s.board.map((sq, k) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 && !thermal.isDormant(sq) ? k : -1)).filter((k) => k !== -1); }
+function chargeHealLegal(s) { return chargeHealCells(s).length > 0; }
+function onClickChargeHeal(s) {
+    const cells = chargeHealCells(s);
+    if (cells.length === 0) return;
+    for (const k of cells) s.board[k] = { ...s.board[k], bind: s.board[k].bind + chargeStacks(s.board[k]) * CHARGE_HEAL };
+    spendMagic(s, calculateCost(s, costsOf(s).onClickChargeHeal, false, false, 'onClickChargeHeal'), 'onClickChargeHeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'chargeHeal');
+    s.chargeBase[s.turn] = comboMod.ownCharges(s.board, curPlayer(s)); // 条件のリセット
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2491,6 +2509,7 @@ const SKILLS = {
     stash: onClickStash,
     thunderFire: onClickThunderFire,
     darkPot: onClickDarkPot,
+    chargeHeal: onClickChargeHeal,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2534,7 +2553,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
