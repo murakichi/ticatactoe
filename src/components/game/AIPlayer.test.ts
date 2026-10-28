@@ -1237,6 +1237,22 @@ describe('凩の魔女は対策ロックを撃たない (sim/ai.js witchNoAnti)'
     });
 });
 
+describe('凩の魔女は🍂トークンの分の魔力を温存する (sim/ai.js witchReserve)', () => {
+    const costs = { onClickAddLife: 3, onClickLeafToken: 3, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const board = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        return b;
+    };
+
+    it('魔力が🍂トークン1枚ぶんしか無いとき、ライフ3に使わず🍂トークンを撃つ', () => {
+        const ai = new AIPlayer('💙', 'witch', ['⭕'], ['witch', 'you']);
+        const r = ai.makeMove(board(), 4, costs, 0, 1, [0, 62], false);
+        expect(r.skills ?? []).toContain('onClickLeafToken');
+        expect(r.skills ?? []).not.toContain('onClickAddLife');
+    });
+});
+
 describe('コストの計算順: 敵の🍂の増加分を先に足し、魔女のパッシブの減少分をそのあとに引く', () => {
     it('魔女: 敵の🍂3枚だけの盤面で、コスト2は2のまま（以前は下限1のあとに+3で4）', () => {
         const b = emptyBoard();
