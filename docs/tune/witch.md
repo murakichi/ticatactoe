@@ -1,7 +1,8 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 9e6c8d8（コスト計算順の変更 31f7718 を取り込み後の再検証OK）
-- 現在の推奨設定: gears=[lightToken, priceWreck] deck=[5,8,12,28,36,44,53,62,63,64,85,86] AIフラグ=witchNoAnti=1（既定）
+- 現在の推奨設定: gears=[lightToken, bindingLock] deck=[5,8,12,28,36,44,53,62,63,64,85,86] AIフラグ=witchNoAnti=1（既定）
+- 完了判定の再確認（道連れの鍵ギアの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 76.0%** / 2位 poisoner 63.0%（差13.1pt）、条件2（`--envDeck varied`）**1位 witch 69.6%** / 2位 cryomancer 61.2%（差8.4pt）。
 - 完了判定の再確認（風の落とし子デッキの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 67.0%** / 2位 poisoner 64.3%（差2.7pt）、条件2（`--envDeck varied`）**1位 witch 62.2%** / 2位 poisoner 62.1%（差0.1pt）。デッキ変更前(68.7% / 62.5%)より seed3 では僅かに低い（-1.7pt, ノイズの範囲。seed2/200 では +3.9pt）。
 - 完了判定（1条件目・基本、氷結拡散の採用後）`--rank --games 200 --seed 3 --target witch`: **1位 witch 68.7%** / 2位 poisoner 64.2% / 3位 electrician 60.1% / 4位 cryomancer 59.9% / 5位 necromancer 58.6%（差4.5pt）。2条件目（`--envDeck varied`、同条件）: **1位 witch 62.5%** / 2位 poisoner 62.4%（差0.1pt）/ 3位 cryomancer 60.4% / 4位 necromancer 59.1% / 5位 electrician 55.3%。**2条件とも1位でトップ到達**（2条件目は僅差）。
 - 基準線（完了判定の1条件目(氷結拡散の前) `--rank --games 200 --seed 3 --target witch`: **3位 61.5%**（1位 poisoner 64.9%、2位 electrician 61.5%、4位 cryomancer 61.0%、5位 necromancer 59.3%。差3.4pt）。（その前の順位: witchNoAnti 採用後 `--rank --games 60 --seed 1` **2位 65.3%** / 1位 poisoner 66.7%（差1.4pt）/ 3位 cryomancer 63.1% / 4位 necromancer 58.5% / 5位 electrician 57.2%。`--target witch --games 200 --seed 2` 61.4%）。（その前: 魔力+2/ライフ平均4 変更後 `--target witch --games 100 --seed 1` 51.7% ±2.8、`--rank --games 60 --seed 1` 5位 54.2% / 1位 poisoner 70.2%、2位 necromancer 63.2%、3位 cryomancer 63.1%。以下は旧い値）（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
@@ -41,6 +42,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 15 | joint(gear) | **priceWreck → bindingLock**（ギア1枠差し替え走査 41通り seed1/60: 基準 74.0 → 78.2%, z≈1.8 で閾値未満だが別シードで再測定。reinforce / lastStand も同時に測定）。機構: ロック中のコマは奪われず削られないので、🍂が長生きする（診断の律速に合う） | `[lightToken, bindingLock]`: 69.0→**77.7%**（+8.7pt, z≈6.5, seed2/200）。reinforce 74.5（+5.5）、lastStand 74.0（+5.0）。悪化した相手なし（対毒使い 51→67 / 対魔法使い 55→69 / 対煉獄 62→73 / 対氷室 69→82） | **採用 bindingLock**。別案候補: reinforce・lastStand（主案との差 -3〜-4pt なので別案にはしない） |
+| 14 | deck | 死に札(86 落葉の衣 / 85 焚きつけ)を、🌱で魔力を作る札に替える。新master(火口が入った環境)の基準 71.7%（seed1/100）。D1 86→35 ひこばえ 68.4 / D2 86→10 ダブルバッズ 66.4 / D3 86→33 刈り入れ前夜 68.4 / D4 85→35 68.4 / D5 86→14 ワルプルギスの夜 67.2 / D6 86→2 バッズ 61.0 | 全て基準未満（-3〜-11pt） | 不採用。死に札のほうが、AIが気軽に撃つ札より害が小さい |
 | 13 | synergy | **buds 2枚入れ替え走査（seed1/60・26通り）の最良「ライフ3(0)・トークン(3) → 落葉の衣(86)・風の落とし子(36)」**（走査 72.7% vs 基準 68.3%, z≈1.8 で閾値未満だが別シードで再測定）。B「サイレンス・トークン→腐葉土・風の落とし子」、C「A の86をライフ3に戻す」も同時に測定 | A: 64.8→**68.7%**（+3.9pt, seed2/200。対煉獄 50→64 / 対氷室 63→68 / 対軍師 66→74）。B: 65.6%（+0.8）。C: 62.7%（-2.1） | **採用 A**。AとCの差6pt=ライフ3を入れておくだけで悪化。86はAIが撃たない死に札 |
 | 12 | strategy | `witchReserve=1` を対策ロック停止後の前提で再検証（手札に🍂トークンがあれば、その最安コスト未満になる他スキルの支払いを控える）。診断: 対毒使いで🍂トークンが手札にあるのに魔力不足で撃てない手番が38%（387手番中146） | 64.8→65.9%（+1.1pt, seed2/200）。最低効果量(+1.5pt)・+1.96×SE に届かない | 不採用（保留・要追試。ノブ F.witchReserve は既定オフで残す） |
 | R1 | 再検証 | master 9e6c8d8（コストの計算順を「増加→減少」に変更後）で完了判定をやり直し | 条件1（seed3/200）1位 witch 68.7%（2位 poisoner 64.2%）。条件2（`--envDeck varied`）seed3/200: 2位 witch 62.3%（1位 poisoner 62.4%、差0.1pt=ノイズ）→ seed4/200: **1位 witch 65.9%**（2位 necromancer 60.6%）。変更なしでトップ維持 | 再検証OK |
