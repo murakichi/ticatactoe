@@ -1,14 +1,15 @@
 # tune-top: poisoner
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 81ad8ce
-- 現在の推奨設定: gears=[lastStand,sturdy] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
-- 基準線: 環境勝率 79.2% / 順位 1位 / 2位 magician 64.3%   (seed3, games100, rank --target poisoner, master 3bc89db)
-- 連続不採用回数: 6
+- 最後に検証したmaster: 227a4bd
+- 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
+- 基準線: 環境勝率 77.0% / 1位 / 2位 witch 69.2%（条件1 seed3/200）。条件2（envDeck varied）71.0% / 1位 / 2位 witch 62.0%（master 227a4bd）
+- 連続不採用回数: 0
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索
-- 状態: done(洗練が飽和: 試行17の採用以降、synergy/gear/strategy/メタ/deck/joint の6種類で連続不採用6回。master 156a174 で4条件1位を確認)
+- 状態: refining(master で witch 追加により一度2位に陥落(64.2% vs witch 68.7%)→ギア spellWard で再びトップ)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 30 | gear | 新master（witch追加・新スキル）で陥落（2位 64.2%）。ギア1枠差し替え走査(seed41/80)で slot1 sturdy→**spellWard**（誰かがスキルを使うターン、自陣のコマは毒・火炎・帯電のダメージを受けない=自陣の毒で自滅しない）が 77.8% vs 基準 65.9%。seed2/200 で再測定 | 65.2→**77.6%**（+12.4pt, z≈4.8）。対witch 52→50、対巨人 42→55、対氷室 50→74、対電気 59→69。悪化なし。完了判定 条件1 77.0%(1位, 2位witch 69.2) / 条件2 71.0%(1位, 2位witch 62.0) | **採用**（lastStand,spellWard） |
 | 29 | play-learn | 対 cryomancer の千日手を火遁(31)で崩す（unblock=2 は既存）。デッキ 39→31（17→31 も同等） | 対cryo 56-141-203 → 147-148-105（400局 seed11）。全相手 seed5 65.9→67.4（他相手は完全一致）| 採用（台帳27） |
 | 28 | joint | 新デッキ下でギア pair: lastStand,reinforce/propagate/toxicBloom(seed72/200) | 現状76.8に対し 76.5/76.5/69.4 すべて以下 | 不採用 |
 | 27 | deck | 全相手 1枚40近傍(seed71/60) | 基準77.1に対し最良 -19+6 80.2 (+3.1, z≈0.9)。他は +0.6以内 | 不採用 |
