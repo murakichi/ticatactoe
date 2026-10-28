@@ -52,6 +52,7 @@ const gear = require('./gear');
 const deckMod = require('./deck');
 const discountMod = require('./discount');
 const comboMod = require('./comboCost');
+const darkPotMod = require('./darkPot');
 const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
 
@@ -244,6 +245,7 @@ const skillCosts = {
     onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
     onClickStash: 1, // 雷神のへそくり(idx 80)
     onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
+    onClickDarkPot: 8, // 一寸先は闇鍋(idx 82)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -1698,6 +1700,42 @@ function onClickPoisonMist(s) {
     toxicBloom(s, poisoned);
 }
 
+// 一寸先は闇鍋 (idx 82): 敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付ける。各エフェクト最大1、複数種類は同居。
+// 🔥を先に付け（氷結の解除・燃焼は他を乗せる前に済ませる）、そのあと⚡☠🌱🍂❄の順 [FAITHFUL] Game.tsx onClickDarkPot
+function onClickDarkPot(s) {
+    spendMagic(s, calculateCost(s, costsOf(s).onClickDarkPot, false, false, 'onClickDarkPot'), 'onClickDarkPot');
+    bumpMagicCount(s);
+    const targets = [];
+    s.board.forEach((sq, k) => { if (sq.player && !isGuarded(s, sq)) targets.push(k); });
+    const rolls = darkPotMod.darkPotRolls(targets.map((k) => s.board[k].effects.map((e) => e.effect)), s.rng);
+    const has = (k, e) => s.board[k].effects.some((x) => x.effect === e);
+    const owners = s.board.map((sq) => sq.player);
+    let granted = 0;
+    targets.forEach((k, n) => {
+        if (!rolls[n].includes('🔥')) return;
+        const f = thermal.flameStacks(s.board[k]);
+        thermal.ignite(s.board, [k], s.size, 1, keepBudsOf(s));
+        if (thermal.flameStacks(s.board[k]) > f) granted++;
+    });
+    const destroyed = targets.filter((k) => owners[k] && !s.board[k].player).length;
+    if (destroyed > 0) addCorpses(s, destroyed);
+    const poisoned = [];
+    targets.forEach((k, n) => {
+        for (const e of rolls[n]) {
+            if (!s.board[k].player || e === '🔥' || e === '❄' || has(k, e)) continue;
+            if (e === '⚡') addCharge(s, k);
+            else if (e === '☠') { s.board[k].effects.push({ effect: '☠' }); poisonStrike(s, s.board[k]); poisoned.push(k); }
+            else s.board[k].effects.push({ effect: e });
+            granted++;
+        }
+        if (s.board[k].player && rolls[n].includes('❄') && !has(k, '❄') && thermal.canFreeze(s.board[k])) granted += thermal.freeze(s.board, [k]).length;
+    });
+    harvestMagic(s, granted);
+    toxicBloom(s, poisoned);
+    bumpStat(s, 'darkPot');
+    checkDischarge(s);
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2448,6 +2486,7 @@ const SKILLS = {
     release: onClickRelease,
     stash: onClickStash,
     thunderFire: onClickThunderFire,
+    darkPot: onClickDarkPot,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,

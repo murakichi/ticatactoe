@@ -20,6 +20,7 @@ import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
 import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { comboCut, ownLeaves } from './comboCost';
+import { darkPotRolls } from './darkPot';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
@@ -344,6 +345,7 @@ export const Game = (props: GameProps) => {
             case 'onClickRelease': onClickRelease(); break;
             case 'onClickStash': onClickStash(); break;
             case 'onClickThunderFire': onClickThunderFire(); break;
+            case 'onClickDarkPot': onClickDarkPot(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -2141,6 +2143,48 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickPoisonMist, false, true, currentTurnPlayer, 'onClickPoisonMist'), true, true, 'onClickPoisonMist');
     };
 
+    // 一寸先は闇鍋: 敵味方を問わず全コマ(🔑ロック・無敵は除く)に🔥❄⚡☠🌱🍂をランダムに付ける。各エフェクトは最大1、複数種類は同居する。
+    // 🔥は先に付けて（氷結の解除・燃焼は他のエフェクトを乗せる前に済ませる）、そのあと⚡☠🌱🍂❄の順に乗せる。抽選は darkPot.ts
+    const onClickDarkPot = () => {
+        const board = currentBoard.slice();
+        const targets = board.map((_, k) => k).filter((k) => board[k].player && !isGuarded(board[k], characters));
+        const rolls = darkPotRolls(targets.map((k) => board[k].effects.map((e) => e.effect)), Math.random);
+        const had = (k: number, e: Effect['effect']) => board[k].effects.some((x) => x.effect === e);
+        const before = board.map((sq) => sq.player);
+        const thawedAll: number[] = [];
+        let granted = 0;
+        targets.forEach((k, n) => {
+            if (!rolls[n].includes('🔥')) return;
+            const f = board[k].effects.filter((e) => e.effect === '🔥').length;
+            thawedAll.push(...ignite(board, [k], geo.size, 1, keepBuds).thawed);
+            if (board[k].effects.filter((e) => e.effect === '🔥').length > f) granted++;
+        });
+        const destroyed = targets.filter((k) => before[k] && !board[k].player);
+        if (destroyed.length > 0) addCorpses(destroyed.length);
+        const poisoned: number[] = [];
+        targets.forEach((k, n) => {
+            for (const e of rolls[n]) {
+                if (!board[k].player || e === '🔥' || e === '❄') continue;
+                if (had(k, e)) continue;
+                if (e === '⚡') board[k] = addCharge(board[k], characters);
+                else if (e === '☠') { board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, { effect: '☠' }] }); poisoned.push(k); }
+                else board[k] = { ...board[k], effects: [...board[k].effects, { effect: e }] };
+                granted++;
+            }
+            if (board[k].player && rolls[n].includes('❄') && canFreeze(board[k]) && !had(k, '❄')) {
+                granted += freeze(board, [k]).length;
+            }
+        });
+        harvestMagic(granted);
+        toxicBloom(board, poisoned);
+        addLog(`「一寸先は闇鍋」を使用（${targets.length}コマに合計${granted}個のエフェクト${destroyed.length > 0 ? `・${destroyed.length}コマが燃え尽きた` : ''}）`);
+        if (thawedAll.length > 0) addLog(`氷結が溶けた（${thawedAll.map(posName).join('・')}）`);
+        flashCells(targets);
+        playEffect('poison', undefined, undefined, '一寸先は闇鍋');
+        setCurrentBoard(withOverload(board));
+        spendMagic(calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot'), true, true, 'onClickDarkPot');
+    };
+
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
@@ -3388,6 +3432,7 @@ export const Game = (props: GameProps) => {
         { idx: 79, onClick: onClickRelease, buttonText: `落雷は忘れた頃に-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, paragraph: `自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
         { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
         { idx: 81, onClick: onClickThunderFire, buttonText: `雷のない所に火は立たぬ-${calculateCost(seatCosts.onClickThunderFire, false, false, currentTurnPlayer, 'onClickThunderFire')}`, paragraph: `⚡のあるコマ（自分の無敵マスも可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を1つずつ付けます（氷結中のコマは❄が1つ減るだけで、火は燃え移りません）`, disabled: checkSkillDisable(seatCosts.onClickThunderFire) || thunderFireTargets().length === 0 },
+        { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
     ];
 
     return (

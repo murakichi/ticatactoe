@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2565,6 +2565,50 @@ test('導線(コンボ)の軽減: 紅葉狩り=自陣の🍂が手番開始よ�
     assert.strictEqual(price(c, 'onClickChargeSeason'), 7);
     c.board[0] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
     assert.strictEqual(price(c, 'onClickChargeSeason'), 5); // 敵の⚡は数えない
+});
+
+test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1・🔥は❄🌱🍂と同居しない）。🔑ロック・空きマスは対象外。コスト8', () => {
+    const count = (sq, k) => sq.effects.filter((x) => x.effect === k).length;
+    const seen = { '🔥': 0, '❄': 0, '⚡': 0, '☠': 0, '🌱': 0, '🍂': 0 };
+    let pieces = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+        const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(seed) });
+        s.magic[0] = 30;
+        for (let i = 0; i < 16; i++) {
+            if (i === 0) s.board[i] = { player: '💙', bind: 5, effects: [{ effect: '🔑' }] };
+            else if (i < 7) s.board[i] = { player: '💙', bind: 5, effects: [] };
+            else if (i < 13) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+        }
+        s.board[1].effects.push({ effect: '🌱' });
+        e.SKILLS.darkPot(s);
+        assert.strictEqual(s.magic[0], 30 - 8);
+        assert.deepStrictEqual(s.board[0].effects, [{ effect: '🔑' }]); // ロック中は対象外
+        for (let i = 13; i < 16; i++) assert.strictEqual(s.board[i].player, undefined);
+        for (const sq of s.board) {
+            if (!sq.player) { assert.strictEqual(sq.effects.length, 0); continue; }
+            for (const k of Object.keys(seen)) assert.ok(count(sq, k) <= 1, `${k}が重なった`);
+            if (count(sq, '🔥') === 1) assert.strictEqual(count(sq, '❄') + count(sq, '🌱') + count(sq, '🍂'), 0);
+            if (sq.effects.some((x) => x.effect === '🔑')) continue;
+            pieces++;
+            for (const k of Object.keys(seen)) seen[k] += count(sq, k);
+        }
+    }
+    // どの種類もおおむね半々で乗る（🔥・❄・🌱・🍂は同居の衝突で減る、⚡・☠は素直に半々）
+    assert.ok(seen['⚡'] / pieces > 0.35 && seen['⚡'] / pieces < 0.65, `⚡ ${seen['⚡'] / pieces}`);
+    assert.ok(seen['☠'] / pieces > 0.35 && seen['☠'] / pieces < 0.65, `☠ ${seen['☠'] / pieces}`);
+    for (const k of Object.keys(seen)) assert.ok(seen[k] > 0, `${k}が一度も乗らない`);
+});
+
+test('一寸先は闇鍋: 雷霆の巫の⚡で無敵のコマは対象外。毒使いの毒はライフ1.5倍', () => {
+    const s = e.newGame({ chars: ['electrician', 'poisoner'], rng: e.makeRng(7) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] }; // 雷霆の巫の無敵
+    s.board[1] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.darkPot(s);
+    assert.deepStrictEqual(s.board[0].effects, [{ effect: '⚡' }]);
+    assert.strictEqual(s.board[0].bind, 5);
+    const sq = s.board[1];
+    if (sq.effects.some((x) => x.effect === '☠') && !sq.effects.some((x) => x.effect === '🔥') && !sq.effects.some((x) => x.effect === '⚡')) assert.strictEqual(sq.bind, 6);
 });
 
 test('静電気の季節は3手番で切れる', () => {

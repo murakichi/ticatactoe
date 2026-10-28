@@ -19,7 +19,7 @@ const EFFECT_SKILL_KEYS = new Set([
     'onClickInjection', 'onClickIntensify', 'onClickPandemic', 'onClickPoisonMist',
     'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom',
     'onClickFreeze', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostfall',
-    'onClickIgnite', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne',
+    'onClickIgnite', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
 ]);
 const UNIQUE_SKILL_KEYS = new Set([
     'onClickStomp', 'onClickJudgeDay', 'onClickTotalAssault', 'onClickMiasma', 'onClickChargeSpread',
