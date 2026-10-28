@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -33,6 +33,41 @@ describe('帯電 ⚡ helpers', () => {
         expect(r.fired).toEqual([5]);
         expect([b[4].bind, b[6].bind, b[9].bind, b[10].bind, b[1].bind]).toEqual([4, 3, 3, 4, 4]);
         expect(chargeStacks(b[5])).toBe(0);
+    });
+
+    it('fireCharges: 伝導(ギア)を持つ側の帯電コマの毒・火炎を、ダメージを受けた敵のマスに1スタック移す(自分のコマには移さない)', () => {
+        // 5=⭕の帯電コマ(☠+🔥+⚡)。4に💙が着手 → 5の隣の💙(4と6)がダメージ、⭕の1は自分のコマなので移らない
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '🔥' }, { effect: '⚡' }] };
+        put(b, 4, '💙', 6);
+        put(b, 6, '💙', 6);
+        put(b, 1, '⭕', 6);
+        const r = fireCharges(b, 4, 4, noLanding, [false, true]);
+        expect(r.carried.sort()).toEqual([4, 6]);
+        for (const k of [4, 6]) {
+            expect(b[k].effects.filter((e) => e.effect === '☠')).toHaveLength(1);
+            expect(b[k].effects.filter((e) => e.effect === '🔥')).toHaveLength(1);
+        }
+        expect(b[1].effects).toEqual([]);
+    });
+
+    it('fireCharges: 毒だけ・火炎だけなら、その1種類だけ移す。コマのない帯電マスからは移らない', () => {
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '⚡' }] };
+        put(b, 4, '💙', 6);
+        fireCharges(b, 4, 4, noLanding, [false, true]);
+        expect(b[4].effects.map((e) => e.effect)).toEqual(['☠']);
+        const c = emptyBoard();
+        c[5] = { player: undefined, bind: 0, effects: [{ effect: '🔥' }, { effect: '⚡' }] };
+        put(c, 4, '💙', 6);
+        fireCharges(c, 4, 4, noLanding, [false, true]);
+        expect(c[4].effects).toEqual([]);
+        // 伝導(ギア)を持たない側の帯電コマからは移らない
+        const d = emptyBoard();
+        d[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '⚡' }] };
+        put(d, 4, '💙', 6);
+        expect(fireCharges(d, 4, 4, noLanding).carried).toEqual([]);
+        expect(d[4].effects).toEqual([]);
     });
 
     it('fireCharges: 連鎖しない / 帯電マスの隣でなければ何も起きない', () => {
@@ -302,7 +337,7 @@ describe('帯電 AI スキル2', () => {
         const ai = new AIPlayer('⭕', 'electrician', ['💙'], ['you', 'electrician']);
         const b = emptyBoard();
         expect(ai.chooseSkills(b, 8, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickDoubleChargeToken']);
-        expect(ai.chooseSkills(b, 5, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickChargeToken']);
+        expect(ai.chooseSkills(b, 4, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickChargeToken']);
         expect(ai.chooseSkills(b, 4, costsAll, 0, 5, [25], true)).toEqual(['onClickChargeRandom']);
         expect(ai.chooseSkills(b, 3, costsAll, 0, 5, [25], true)).toEqual([]); // コスト3ちょうどでは余裕が無いので撃たない
     });
@@ -391,5 +426,66 @@ describe('⚡が乗った時点のダメージ（雷霆の巫以外）', () => {
         expect(hit.effects.filter((e) => e.effect === '🔥')).toHaveLength(1);
         expect(landCharge(piece('💙', 4, '⚡'), ['you', 'electrician']).bind).toBe(2);
         expect(landCharge(piece('⭕', 4, '⚡'), ['you', 'electrician']).bind).toBe(4);
+    });
+});
+
+describe('落雷は忘れた頃に (releaseCharges)', () => {
+    it('自陣の⚡を全て取り除き、取り除いた数（スタック込み）だけ敵の全コマにダメージ。破壊はせずライフは0まで', () => {
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '⚡' }] };
+        b[1] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        put(b, 2, '💙', 4); // ⚡なしの自陣コマ
+        put(b, 5, '⭕', 5);
+        put(b, 6, '⭕', 2);
+        put(b, 7, '🟩', 9);
+        const r = releaseCharges(b, '💙', ['you', 'you', 'you']);
+        expect(r.removed).toBe(3);
+        expect(r.from).toEqual([0, 1]);
+        expect(r.damaged).toEqual([5, 6, 7]);
+        expect(b[0].effects).toEqual([]);
+        expect(b[1].effects).toEqual([]);
+        expect([b[5].bind, b[6].bind, b[7].bind]).toEqual([2, 0, 6]); // 2のコマは0で止まる（破壊はしない）
+        expect(b[2].bind).toBe(4); // 自陣は無傷
+        expect(b[6].player).toBe('⭕');
+    });
+
+    it('ライフ0・🔑ロック・氷結中・⚡で無敵のコマは受けない。自陣に⚡が無ければ何も起きない', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true);
+        b[4] = { player: '⭕', bind: 0, effects: [] }; // ライフ0
+        b[5] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロック
+        b[6] = { player: '⭕', bind: 5, effects: [{ effect: '❄' }] }; // 氷結中
+        b[7] = { player: '⭕', bind: 5, effects: [{ effect: '⚡' }] }; // 雷霆の巫の⚡マスは無敵
+        b[8] = { player: '⭕', bind: 5, effects: [] };
+        const r = releaseCharges(b, '💙', ['you', 'electrician']);
+        expect(r.removed).toBe(1);
+        expect(r.damaged).toEqual([8]);
+        expect(b[8].bind).toBe(4);
+        expect([b[5].bind, b[6].bind, b[7].bind]).toEqual([5, 5, 5]);
+        const none = emptyBoard();
+        put(none, 5, '⭕', 5);
+        expect(releaseCharges(none, '💙', ['you', 'you'])).toEqual({ removed: 0, from: [], damaged: [] });
+        expect(none[5].bind).toBe(5);
+    });
+});
+
+describe('雷を食らわば皿まで(healCharged)', () => {
+    const bolt = { effect: '⚡' as const };
+    it('⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2する。敵・⚡なし・氷結中(休眠)は対象外', () => {
+        const board = emptyBoard();
+        board[0] = { bind: 3, player: '💙', effects: [bolt] };
+        board[1] = { bind: 1, player: '💙', effects: [bolt, bolt, bolt] };
+        board[2] = { bind: 4, player: '💙', effects: [bolt, { effect: '❄' }] };
+        board[3] = { bind: 4, player: '⭕', effects: [bolt] };
+        board[4] = { bind: 5, player: '💙', effects: [] };
+        board[5] = { bind: 0, player: '💙', effects: [bolt] };
+        const r = healCharged(board, '💙');
+        expect(r.healed).toEqual([0, 1, 5]);
+        expect(r.total).toBe(2 + 6 + 2);
+        expect([0, 1, 2, 3, 4, 5].map((i) => board[i].bind)).toEqual([5, 7, 4, 4, 5, 2]);
+    });
+    it('対象が無ければ何も変えない', () => {
+        const board = emptyBoard();
+        expect(healCharged(board, '💙')).toEqual({ healed: [], total: 0 });
     });
 });

@@ -35,6 +35,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     scorchedEarth: 'trigger', // 敵の🌱が燃えて魔力
     ashOffering: 'trigger', // 敵に🔥を付与して割引開始
     frostRoot: 'trigger', // 休眠した🌱で魔力
+    conduction: 'trigger', // 毒・火炎が移る
     lastStand: 'trigger', // 防壁の発動
 };
 

@@ -272,6 +272,20 @@ function thawAll(board, player) {
     for (const k of cells) { stacks += frozenStacks(board[k]); board[k] = thaw(board[k]); }
     return { stacks, cells };
 }
+// ---- 雷のない所に火は立たぬ（src/components/game/thermal.ts と同じ）----
+const THUNDER_FIRE_MIN = 2;
+/** 周囲8マスの敵コマ cands から、2〜全部の個数をランダムに決め、その個数だけランダムに選ぶ（昇順）。rng は [0,1) を返す関数 */
+function thunderFireVictims(cands, rng) {
+    const n = cands.length;
+    if (n === 0) return [];
+    const lo = Math.min(THUNDER_FIRE_MIN, n);
+    const k = lo + Math.floor(rng() * (n - lo + 1));
+    const pool = cands.slice();
+    const out = [];
+    for (let i = 0; i < k; i++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+    return out.sort((a, b) => a - b);
+}
+
 // ---- 鬼門封じ / 火の車（src/components/game/thermal.ts と同じ）----
 const KIMON_LOCK_TURNS = 3;
 /** 盤面全体の🔥の総数（火の車の「このターンに🔥を付与したか」の判定用） */
@@ -356,5 +370,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
-    KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };

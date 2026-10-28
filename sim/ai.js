@@ -609,6 +609,8 @@ function pyroChainShuffle(s, me, table) {
     let need = INFERNO_FREE_SKILLS - kinds.size;
     const budget = PYRO_COSTS.slice(0, need).reduce((n, c) => n + c, 0) + need;
     if (curMagic(s) < budget) return;
+    // デッキに入っている軽量札だけでは足りない種類数なら、引き直しても揃わないので始めない
+    if (PYRO_FILLERS.filter((idx) => inDeck(s, idx) && !kinds.has((PYRO_EXTRA[idx] || table[idx] || {}).cost)).length < need) return;
     for (let step = 0; step < 8 && need > 0; step++) {
         const picks = [];
         for (const idx of PYRO_FILLERS) {
@@ -1222,6 +1224,24 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
+    if (character === 'electrician') {
+        // 落雷は忘れた頃に: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（AIPlayer.ts と同一）
+        const ownBolts = board.reduce((n, sq) => (sq.player === me ? n + chargeStacks(sq) : n), 0);
+        const hittable = board.filter((sq, i) => isEnemy(sq.player, me) && sq.bind > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !shield.has(i)).length;
+        if (availableSkills.includes(79) && ownBolts >= 3 && hittable >= 2 && remaining >= cost(costsOf(s).onClickRelease, false, 'onClickRelease')) {
+            spend(cost(costsOf(s).onClickRelease, false, 'onClickRelease'), 'release');
+        }
+        if (availableSkills.includes(77) && s.chargeBuff[s.turn] === 0 && board.filter((sq) => !sq.player).length >= 3
+            && remaining >= cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason')) {
+            spend(cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason'), 'chargeSeason');
+        }
+        const bare = board.filter((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
+        if (availableSkills.includes(78) && bare >= 3 && remaining >= cost(costsOf(s).onClickBristle, false, 'onClickBristle')) {
+            spend(cost(costsOf(s).onClickBristle, false, 'onClickBristle'), 'bristle');
+        }
+    }
+
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
@@ -1278,6 +1298,16 @@ function chooseSkills(s, availableSkills) {
     if (character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
         const rc = calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom');
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
+    }
+
+    // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる（AIPlayer.ts と同一）
+    if (availableSkills.includes(76)) {
+        const others = otherSeats(s);
+        const oppGears = others.reduce((n, seat) => n + s.gears[seat].length, 0);
+        const oppLastStand = others.some((seat) => hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat]);
+        if (((oppLastStand && countReaches(board, me) > 0) || oppGears >= 2) && remaining >= cost(costsOf(s).onClickStrip, false, 'onClickStrip')) {
+            spend(cost(costsOf(s).onClickStrip, false, 'onClickStrip'), 'strip');
+        }
     }
 
     // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。AIPlayer.ts と同一）
@@ -1344,7 +1374,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 76)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 84)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1404,7 +1434,12 @@ function bestShikigamiCell(s, me) {
     return best;
 }
 // 百鬼夜行→式神一括の実コストの計画。特売(53)が手札にあれば、各スキルの前に特売を重ね撃ちして安くする（特売は1魔力で次のスキルを-3、何回でも撃てる）
+// 自分のデッキに idx があるか(手札にあるものは必ずデッキにある)。デッキ未指定の対局(従来の乱数プール)では全て引けるとみなす
+function inDeck(s, idx) { return !s.decks || s.decks[s.turn].includes(idx) || s.skills.includes(idx); }
+// 陰陽師のコンボ札(百鬼夜行71・式神一括73)がどちらも手札かデッキにある=引き直しや温存が報われる
+function comboReachable(s) { return inDeck(s, 71) && inDeck(s, 73); }
 function comboPlan(s, assumeMd = false) {
+    assumeMd = assumeMd && inDeck(s, 53); // 特売がデッキに無いなら『引ける前提』にしない
     const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
     const md = (assumeMd || s.skills.includes(53)) && F.comboDiscount ? cost('onClickMarkdown') : Infinity;
     const best = (base) => {
@@ -1522,7 +1557,7 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
@@ -1975,7 +2010,7 @@ function faithfulMakeMoveInner(s) {
     }
 
     // 陰陽師(F.shuffleDig): 勝てる盤面で、魔力が「コンボ分(特売が引ける前提)+引き直し分」あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
-    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn]) {
+    if (F.shuffleDig && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s)) {
         const shufCost = costsOf(s).onClickShuffle;
         const complete = () => s.skills.includes(71) && s.skills.includes(73) && (s.skills.includes(53) || !F.comboDiscount || curMagic(s) >= comboPlan(s).total);
         const hold53 = F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53; // 特売を探すより、チャージで13を目指す
@@ -2008,7 +2043,7 @@ function faithfulMakeMoveInner(s) {
         }
     }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
-    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && oppReachesNow(s, opps) === 0
+    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
             || (F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53 && curMagic(s) < comboPlan(s).total))
         && !(F.chargeSafe && oppCanFork(s, opps))) {
@@ -2016,7 +2051,7 @@ function faithfulMakeMoveInner(s) {
         return { move: null, turnEnded: true };
     }
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
-    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold
+    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 式神の設置・転化・爆破

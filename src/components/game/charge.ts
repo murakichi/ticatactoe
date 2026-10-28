@@ -5,7 +5,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
 import { orthoNeighbors } from './boardGeometry';
-import { applyDamage, isFrozen, isDormant } from './thermal';
+import { applyDamage, isFrozen, isDormant, ignite } from './thermal';
 
 export { orthoNeighbors };
 
@@ -35,16 +35,20 @@ export type FireResult = {
     fired: number[];
     /** 実際に1ダメージを受けたマス */
     damaged: number[];
+    /** 伝導(ギア)で毒・火炎を移されたマス */
+    carried: number[];
 };
 
 /**
  * 着手マス i の隣にある⚡を発火させる（size は盤の一辺。board を直接書き換える）。
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
+ * ギア「伝導」: conductors[席] が真の席のコマが載った帯電マス k に☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = []): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = []): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
+    const carried: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
         if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マスの⚡は発火源にならない（発火せず消えもしない）
         fired.push(k);
@@ -57,10 +61,50 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
             board[n] = applyDamage(sq, 1, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             damaged.push(n);
+            // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
+            const owner = board[k].player;
+            if (owner && sq.player !== owner && conductors[seatOf(owner)]) {
+                const before = board[n].effects.length;
+                if (board[k].effects.some((e) => e.effect === '☠')) board[n] = { ...board[n], effects: [...board[n].effects, { effect: '☠' }] };
+                if (board[k].effects.some((e) => e.effect === '🔥')) ignite(board, [n], size);
+                if (board[n].effects.length !== before || !board[n].player) carried.push(n);
+            }
         }
         board[k] = { ...board[k], effects: board[k].effects.filter((e) => e.effect !== '⚡') };
     }
-    return { fired, damaged };
+    return { fired, damaged, carried };
+};
+
+export type ReleaseResult = {
+    /** 取り除いた⚡の数（スタック込み）= 敵の各コマに与えるダメージ */
+    removed: number;
+    /** ⚡を取り除いた自陣のマス */
+    from: number[];
+    /** 実際にダメージを受けた敵のマス */
+    damaged: number[];
+};
+
+/**
+ * 落雷は忘れた頃に: player の自陣のコマの⚡をすべて取り除き、取り除いた数だけ、敵の全コマにダメージを与える（ライフは0まで。破壊はしない）。
+ * ライフ0のコマ・🔑ロック・⚡の無敵コマ・氷結中のコマ（隣接⚡のダメージと同じく通らない）は受けない。board を直接書き換える。sim/engine.js の releaseCharges と同じ
+ */
+export const releaseCharges = (board: SquareInfo[], player: Player | undefined, chars: PlayerCharacters): ReleaseResult => {
+    const from: number[] = [];
+    let removed = 0;
+    board.forEach((sq, i) => {
+        if (sq.player !== player || chargeStacks(sq) === 0) return;
+        removed += chargeStacks(sq);
+        from.push(i);
+        board[i] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '⚡') };
+    });
+    const damaged: number[] = [];
+    if (removed === 0) return { removed, from, damaged };
+    board.forEach((sq, i) => {
+        if (!sq.player || sq.player === player || sq.bind <= 0 || isFrozen(sq) || isGuarded(sq, chars)) return;
+        board[i] = applyDamage(sq, removed, 'electric').sq;
+        damaged.push(i);
+    });
+    return { removed, from, damaged };
 };
 
 /** 固有スキル: start から、コマのあるマスだけを縦横に辿って届くすべてのマス（start 自身を含む）。空きマスなら [] */
@@ -166,4 +210,23 @@ export const applyOverload = (board: SquareInfo[]): SquareInfo[] => {
         effects: sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑'),
         bind: 0,
     }));
+};
+
+/**
+ * 雷を食らわば皿まで: player の⚡が効いているコマ（休眠中を除く）のライフを、⚡のスタック1つにつき +CHARGE_HEAL する。
+ * board を直接書き換え、回復したコマと合計回復量を返す。ライフ0のコマも回復する
+ */
+export const CHARGE_HEAL = 2;
+export const healCharged = (board: SquareInfo[], player: Player | undefined): { healed: number[]; total: number } => {
+    const healed: number[] = [];
+    let total = 0;
+    board.forEach((sq, i) => {
+        if (sq.player !== player || isDormant(sq)) return;
+        const stacks = chargeStacks(sq);
+        if (stacks === 0) return;
+        board[i] = { ...sq, bind: sq.bind + stacks * CHARGE_HEAL };
+        healed.push(i);
+        total += stacks * CHARGE_HEAL;
+    });
+    return { healed, total };
 };

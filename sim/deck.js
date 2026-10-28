@@ -86,6 +86,14 @@ const SKILL_CATALOG = [
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
     { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
+    { idx: 76, name: '裸の王様', icon: '👑', category: 'control' },
+    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge' },
+    { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge' },
+    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge' },
+    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge' },
+    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge' },
+    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control' },
+    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge' },
 ];
 
 
@@ -100,7 +108,7 @@ const RECOMMENDED_DECKS = {
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
-    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
     cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],

@@ -816,6 +816,21 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
     });
 
+    it('デッキを把握している: コンボ札がデッキに無ければ、引き直しても揃わないので探さない。特売が無ければ「引ける前提」の計画にしない', () => {
+        const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
+        const b = nearFull();
+        const rest = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const mkDeck = (deck: number[]) => { const ai = new AIPlayer('💙', 'yinYangMaster', ['⭕'], [], undefined, false, false, deck); ai.rerollsLeft = 8; return ai; };
+        expect(mkDeck([71, 73, ...rest]).makeMove(b, 20, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札はデッキにある
+        expect(mkDeck([73, 53, ...rest]).makeMove(b, 20, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 百鬼夜行が無い
+        expect(mkDeck([71, 53, ...rest]).makeMove(b, 20, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 式神一括が無い
+        const noMd = mkDeck([71, 73, ...rest]);
+        expect(noMd.inDeck(53, [0])).toBe(false);
+        expect(noMd.inDeck(53, [53])).toBe(true); // 手札にあればデッキにある
+        // 特売が無いデッキの計画は、特売を引ける前提(assumeMd)でも特売なしのコストになる
+        expect(noMd.comboPlan(b, dig, [0], true).total).toBeGreaterThan(mk().comboPlan(b, dig, [0], true).total);
+    });
+
     it('チャージ待ち: 勝てる盤面で相手のリーチが無く、探索に足りない魔力なら、駒を置かずチャージする', () => {
         const dig = { ...costs, onClickShikigamiFlood: 7, onClickMarkdown: 1, onClickShuffle: 1 };
         const b = nearFull();
@@ -1215,5 +1230,76 @@ describe('氷室の番人の対陰陽師: 百鬼夜行の置き場になる空�
     it('陰陽師の魔力が少なければ凍らせない', () => {
         const r = mk().makeMove(board(), 10, costs, 0, 5, [], false, 0, 10, 99, 99, false, [10, 11]);
         expect(r.lockTargets ?? []).toHaveLength(0);
+    });
+});
+
+describe('裸の王様のAI使用', () => {
+    const costs = { onClickStrip: 4 } as any;
+    const quiet = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙');
+        put(b, 15, '⭕');
+        return b;
+    };
+    it('相手の有効なギアが2つ以上あるときに使う。1つ以下・スキルがスロットに無いときは使わない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        ai.oppGearCount = 2;
+        expect(ai.makeMove(quiet(), 10, costs, 0, 5, [76, 0, 1], false).skills).toContain('onClickStrip');
+        expect(ai.makeMove(quiet(), 10, costs, 0, 5, [0, 1, 2], false).skills).not.toContain('onClickStrip');
+        ai.oppGearCount = 1;
+        expect(ai.makeMove(quiet(), 10, costs, 0, 5, [76, 0, 1], false).skills).not.toContain('onClickStrip');
+    });
+    it('自分にリーチがあって、相手に使える土壇場の防壁があるときは、ギアが1つでも使う', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕']);
+        ai.oppGearCount = 1;
+        ai.oppLastStand = true;
+        const b = quiet();
+        [1, 2, 3].forEach((i) => put(b, i + 4, '💙')); // 5,6,7 の3つ → 4 に置けば勝ち
+        expect(ai.makeMove(b, 10, costs, 0, 5, [76, 0, 1], false).skills).toContain('onClickStrip');
+        expect(ai.makeMove(quiet(), 10, costs, 0, 5, [76, 0, 1], false).skills).not.toContain('onClickStrip');
+    });
+});
+
+describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
+    const costs = { onClickChargeSeason: 6, onClickBristle: 5 } as any;
+    const own3 = () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        put(b, 15, '⭕');
+        return b;
+    };
+    it('雷霆の巫は、掛かっていなければ静電気の季節を、⚡なしの自陣コマが3つ以上なら総毛立つを撃つ', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        const r = ai.makeMove(own3(), 20, costs, 0, 5, [77, 78, 0], false);
+        expect(r.skills).toContain('onClickChargeSeason');
+        expect(r.skills).toContain('onClickBristle');
+    });
+    it('静電気の季節が掛かっている間は掛け直さない。雷霆の巫以外は撃たない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        ai.chargeBuffActive = true;
+        expect(ai.makeMove(own3(), 20, costs, 0, 5, [77, 0, 1], false).skills).not.toContain('onClickChargeSeason');
+        const other = new AIPlayer('💙', 'you', ['⭕']);
+        expect(other.makeMove(own3(), 20, costs, 0, 5, [77, 78, 0], false).skills).not.toContain('onClickBristle');
+    });
+});
+
+describe('落雷は忘れた頃にのAI使用', () => {
+    const costs = { onClickRelease: 5, onClickChargeSeason: 6, onClickBristle: 5 } as any;
+    const bolts = (n: number) => {
+        const b = emptyBoard();
+        for (let i = 0; i < n; i++) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        put(b, 14, '⭕', 5);
+        put(b, 15, '⭕', 5);
+        return b;
+    };
+    it('雷霆の巫は、自陣の⚡が3つ以上たまり、ダメージの通る敵のコマが2つ以上あれば撃つ', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        expect(ai.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).toContain('onClickRelease');
+        expect(ai.makeMove(bolts(2), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease'); // 溜まりが足りない
+        const one = bolts(3);
+        one[15] = { player: undefined, bind: 0, effects: [] };
+        expect(ai.makeMove(one, 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease'); // 敵が1つだけ
+        const other = new AIPlayer('💙', 'you', ['⭕']);
+        expect(other.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease');
     });
 });

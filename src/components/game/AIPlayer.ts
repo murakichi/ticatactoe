@@ -10,7 +10,7 @@ import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 76;
+export const SKILL_POOL_SIZE = 84;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -99,6 +99,10 @@ class AIPlayer {
     glacierPending: boolean = false;
     /** 土壇場の防壁を装備していて未発動（Game が手番ごとに設定する）。真なら相手の1回目の勝ちは防壁が受けるので止めに行かず攻める。sim/ai.js の AI_DEFAULTS.lsAggro と同じ */
     lastStandReady: boolean = false;
+    /** 裸の王様の判断材料: 相手全員の有効なギアの数 / 使える土壇場の防壁を持つ相手がいるか（Game.tsx runAIMove が毎手番入れる） */
+    chargeBuffActive: boolean = false; // 静電気の季節が自分に掛かっている
+    oppGearCount: number = 0;
+    oppLastStand: boolean = false;
     /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
     glacierCharge: number = 0;
     /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
@@ -126,6 +130,16 @@ class AIPlayer {
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（sim/ai.js の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
+    /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（sim/ai.js の s.decks と同じ） */
+    deck?: number[];
+    /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。sim/ai.js の inDeck */
+    inDeck(idx: number, availableSkills: number[]): boolean {
+        return !this.deck || this.deck.includes(idx) || availableSkills.includes(idx);
+    }
+    /** 陰陽師のコンボ札(71/73)がどちらも手札かデッキにある=引き直しや温存が報われる。sim/ai.js の comboReachable */
+    comboReachable(availableSkills: number[]): boolean {
+        return this.inDeck(71, availableSkills) && this.inDeck(73, availableSkills);
+    }
     /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
     floodCoverWeight: number = FLOOD_COVER_WEIGHT;
 
@@ -136,7 +150,8 @@ class AIPlayer {
         characters: readonly CharacterId[] = [],
         gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
         hasToxicBloom: boolean = false,
-        hasEmptyLock: boolean = false
+        hasEmptyLock: boolean = false,
+        deck?: number[]
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -145,6 +160,7 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+        this.deck = deck;
     }
 
     /** 相手に陰陽師がいるか */
@@ -1124,6 +1140,23 @@ class AIPlayer {
             if (doomed >= 1) spend(this.calculateAICost(costs.onClickSerum, false, true, 'onClickSerum'), 'onClickSerum');
         }
 
+        // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ (sim/ai.js と同一)
+        if (this.character === 'electrician') {
+            // 落雷は忘れた頃に: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（このあとで季節・総毛立つが⚡を付け直す）
+            const ownBolts = board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + chargeStacks(sq) : n), 0);
+            const hittable = board.filter((sq, i) => this.isEnemy(sq.player) && sq.bind > 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !this.shield.has(i)).length;
+            if (availableSkills.includes(79) && ownBolts >= 3 && hittable >= 2) {
+                spend(this.calculateAICost(costs.onClickRelease, false, false, 'onClickRelease'), 'onClickRelease');
+            }
+            if (availableSkills.includes(77) && !this.chargeBuffActive && board.filter((sq) => !sq.player).length >= 3) {
+                spend(this.calculateAICost(costs.onClickChargeSeason, false, false, 'onClickChargeSeason'), 'onClickChargeSeason');
+            }
+            const bare = board.filter((sq) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
+            if (availableSkills.includes(78) && bare >= 3) {
+                spend(this.calculateAICost(costs.onClickBristle, false, false, 'onClickBristle'), 'onClickBristle');
+            }
+        }
+
         // --- トークン系 ---
         // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
         const freeCells = findEmptyIndexes(board).length;
@@ -1181,6 +1214,14 @@ class AIPlayer {
         if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
             const rc = this.calculateAICost(costs.onClickChargeRandom, false, false, 'onClickChargeRandom');
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
+        }
+
+        // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる (sim/ai.js と同一)
+        if (
+            availableSkills.includes(76) &&
+            ((this.oppLastStand && this.countReaches(board, this.playerSymbol) > 0) || this.oppGearCount >= 2)
+        ) {
+            spend(this.calculateAICost(costs.onClickStrip, false, false, 'onClickStrip'), 'onClickStrip');
         }
 
         // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。sim/ai.js と同一）
@@ -1415,7 +1456,7 @@ class AIPlayer {
      * （特売は1魔力で次のスキルを-3、何回でも撃てる。下限1）
      */
     comboPlan(board: SquareInfo[], costs: Record<keyof SkillCosts, number>, availableSkills: number[], assumeMd: boolean = false): { floodCasts: number; allCasts: number; total: number } {
-        const md = assumeMd || availableSkills.includes(53) ? this.calculateAICost(costs.onClickMarkdown, false, false, 'onClickMarkdown') : Infinity;
+        const md = (assumeMd && this.inDeck(53, availableSkills)) || availableSkills.includes(53) ? this.calculateAICost(costs.onClickMarkdown, false, false, 'onClickMarkdown') : Infinity;
         const best = (base: number): { m: number; total: number } => {
             let bm = 0, bt = base;
             for (let m = 1; m <= 4 && md !== Infinity; m++) {
@@ -1600,11 +1641,11 @@ class AIPlayer {
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
         // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（sim/ai.js の noDig53=8）
-        const waitFor13 = availableSkills.includes(71) && availableSkills.includes(73) && !availableSkills.includes(53)
+        const waitFor13 = this.comboReachable(availableSkills) && availableSkills.includes(71) && availableSkills.includes(73) && !availableSkills.includes(53)
             && magic >= NO_DIG_53_MIN && magic < this.comboPlan(board, costs, availableSkills).total;
         // 陰陽師: 勝てる盤面で、魔力がコンボ分（特売が引ける前提）+引き直し分あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
         // （sim/ai.js の shuffleDig。コンボの発動率 53→75%、環境勝率 +8pt）
-        if (this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !waitFor13) {
+        if (this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !waitFor13 && this.comboReachable(availableSkills)) {
             const complete = availableSkills.includes(71) && availableSkills.includes(73)
                 && (availableSkills.includes(53) || magic >= this.comboPlan(board, costs, availableSkills).total);
             if (!complete && this.floodComboWins(board) && magic >= this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle) {
@@ -1613,7 +1654,7 @@ class AIPlayer {
         }
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
-        if (this.character === 'yinYangMaster' && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        if (this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
@@ -1642,7 +1683,7 @@ class AIPlayer {
         }
 
         // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
-        const holdFlood = this.character === 'yinYangMaster' && (availableSkills.includes(71) || availableSkills.includes(73))
+        const holdFlood = this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
             && magic < this.comboPlan(board, costs, availableSkills).total;
         // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
         if (this.character === 'yinYangMaster' && !holdFlood) {
