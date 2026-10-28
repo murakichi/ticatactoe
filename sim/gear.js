@@ -159,7 +159,7 @@ const RECOMMENDED_GEARS = {
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'afterglow'],
     necromancer: ['vengeance', 'lastStand'],
-    poisoner: ['lastStand', 'sturdy'],
+    poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
