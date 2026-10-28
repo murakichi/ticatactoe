@@ -125,15 +125,18 @@ export const Game = (props: GameProps) => {
     const otherSeats = (seat: number): number[] => range(0, seatCount).filter((i) => i !== seat);
 
     // --- ギア（キャラ選択時に装備する追加パッシブ。定義は gear.ts、ヘッドレス版は sim/gear.js） ---
-    const gearsBySeat: GearId[][] = props.players.map((p) => p.gears ?? []);
+    // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効になる。以降の判定は無効化後の gearsBySeat を見る（表示と価格破壊の抽選だけは元の装備）
+    const [gearOff, setGearOffAt, setGearOffAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    const baseGearsBySeat: GearId[][] = props.players.map((p) => p.gears ?? []);
+    const gearsBySeat: GearId[][] = baseGearsBySeat.map((g, seat) => (gearOff[seat] ? [] : g));
     // 席ごとのデッキ（手札3枠の引き元）。指定が無い・不正ならキャラの推奨デッキ
     const deckBySeat: number[][] = props.players.map((p) => resolveDeck(p.deck, p.character));
     const turnGears = gearsBySeat[turnSeat];
     // 価格破壊: 席ごとのコスト表。試合開始時(リスタート時)に1回だけ抽選して固定する
     const rollPriceTables = (): (SkillCosts | null)[] =>
-        gearsBySeat.map((g) => (hasGear(g, 'priceWreck') ? applyPriceOffsets(skillCosts, rollPriceOffsets(Math.random)) : null));
+        baseGearsBySeat.map((g) => (hasGear(g, 'priceWreck') ? applyPriceOffsets(skillCosts, rollPriceOffsets(Math.random)) : null));
     const [priceTables, setPriceTables] = useState<(SkillCosts | null)[]>(rollPriceTables);
-    const costTableFor = (seat: number): SkillCosts => priceTables[seat] ?? skillCosts;
+    const costTableFor = (seat: number): SkillCosts => (gearOff[seat] ? skillCosts : priceTables[seat] ?? skillCosts);
     const seatCosts = costTableFor(turnSeat);
     // 手番内のスキル使用状況（四連の極意・連鎖割引・余韻の入力）。AIが同じ描画のうちに続けて使うスキルにも
     // すぐ反映したいので state でなく ref に持つ。echoNext=次の手番に余韻が付く / echoReady=この手番の1つ目に余韻が効く
@@ -332,6 +335,7 @@ export const Game = (props: GameProps) => {
             case 'onClickChargeOne': onClickChargeOne(); break;
             case 'onClickChargeSpread': onClickChargeSpread(); break;
             case 'onClickSilence': onClickSilence(); break;
+            case 'onClickStrip': onClickStrip(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -420,6 +424,9 @@ export const Game = (props: GameProps) => {
         const aiProliferate = proliferate[turnSeat];
 
         ai.lastStandReady = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
+        // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
+        ai.oppGearCount = otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0);
+        ai.oppLastStand = otherSeats(turnSeat).some((seat) => hasGear(gearsBySeat[seat], 'lastStand') && !lastStandUsed.current[seat]);
         ai.yinYangMode = currentYinYangMode === 'yang' ? 'yang' : 'ying';
         // サイレンス中はスキルを使えない: 通常の着手だけ行う
         if (silenced[turnSeat]) {
@@ -790,6 +797,8 @@ export const Game = (props: GameProps) => {
         );
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
+        // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
+        setGearOffAt(turnSeat, false);
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
         if (currentCharacter === 'necromancer' && remainNecro[turnSeat] > 0) {
             setRemainNecroAt(turnSeat, remainNecro[turnSeat] - 1);
@@ -1567,6 +1576,17 @@ export const Game = (props: GameProps) => {
             toxicBloom(board, [index]);
         }
         return `${posName(index)}に${item.effect}を追加`;
+    };
+
+    // 裸の王様: 自分以外の全員のギアが、その席の次の手番の終わりまで無効になる（対象はギアを装備していて、まだ無効でない席）。クリック不要・手番は続く
+    const stripTargets = (): number[] => otherSeats(turnSeat).filter((seat) => baseGearsBySeat[seat].length > 0 && !gearOff[seat]);
+    const onClickStrip = () => {
+        const seats = stripTargets();
+        if (seats.length === 0) return;
+        addLog(`「裸の王様」を使用（${seats.map((seat) => symbols[seat]).join('・')}のギアが次の手番の終わりまで無効）`);
+        playEffect('silence', undefined, undefined, '裸の王様');
+        seats.forEach((seat) => setGearOffAt(seat, true));
+        spendMagic(calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip'), true, true, 'onClickStrip');
     };
 
     // サイレンス: 自分以外の全員が、次の手番にスキルを使えなくなる
@@ -2800,6 +2820,7 @@ export const Game = (props: GameProps) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');
         const dl = discountLabel(seat);
         if (dl) labels.push(dl);
         if (budGuard[seat]) labels.push('冬至の種子 🌱は火炎で消えず氷結中も働く');
@@ -2865,11 +2886,11 @@ export const Game = (props: GameProps) => {
                     <span className={styles.tag}>{isAI ? 'AI' : '人間'}</span>
                     {isCurrent && <span className={styles.turnBadge}>手番</span>}
                 </div>
-                {gearsBySeat[seat].length > 0 && (
+                {baseGearsBySeat[seat].length > 0 && (
                     <div className={`${styles.gears} ${styles.more}`}>
-                        {gearsBySeat[seat].map((id) => {
+                        {baseGearsBySeat[seat].map((id) => {
                             // 土壇場の防壁は1試合に1回きり。発動済みの席は非活性(灰色・取り消し線)で表示する
-                            const spent = id === 'lastStand' && lastStandUsed.current[seat];
+                            const spent = gearOff[seat] || (id === 'lastStand' && lastStandUsed.current[seat]); // 裸の王様で無効な間は全部灰色
                             return (
                                 <span
                                     key={id}
@@ -2967,6 +2988,7 @@ export const Game = (props: GameProps) => {
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
+        setGearOffAll(Array(seatCount).fill(false));
         setProliferateCountAll(zeros());
         setUseStomp(false);
         setUseJudgeDay(false);
@@ -3222,6 +3244,7 @@ export const Game = (props: GameProps) => {
         { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, paragraph: '着手できる全ての空きマスに、ライフ0の式神を置きます', disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
         { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
         { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
+        { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
     ];
 
     return (

@@ -237,6 +237,7 @@ const skillCosts = {
     onClickSpringWind: 2, // 春一番(idx 70)
     onClickKimon: 5, // 鬼門封じ(idx 74)
     onClickFireWheel: 5, // 火の車(idx 75)。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
+    onClickStrip: 4, // 裸の王様(idx 76)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -539,6 +540,8 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
+        gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
+        gearHeld: fill(null),
         usedTokenThisTurn: false,
         // necromancer 蘇生 state
         remainNecro: fill(0),
@@ -631,6 +634,7 @@ const otherSeats = (s, seat = s.turn) => s.chars.map((_, i) => i).filter((i) => 
 // ---- ギア ----
 /** 席ごとのスキルコスト表。価格破壊を装備していればその席の抽選結果、なければ基礎表 */
 function costsOf(s, seat = s.turn) {
+    if (s.gearOff && s.gearOff[seat]) return skillCosts; // 裸の王様: 価格破壊も無効
     return s.priceTables[seat] || skillCosts;
 }
 function gearCtx(s, seat) {
@@ -786,6 +790,12 @@ function settleWinner(s) {
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    // 裸の王様は、ギアを封じられた側の手番が終わるたびに解除（預かっていた装備を戻す）
+    if (s.gearOff[s.turn]) {
+        s.gearOff[s.turn] = false;
+        s.gears[s.turn] = s.gearHeld[s.turn] || s.gears[s.turn];
+        s.gearHeld[s.turn] = null;
+    }
     // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る (s.turn = 直前に動いた席)
     if (s.chars[s.turn] === 'necromancer' && s.remainNecro[s.turn] > 0) s.remainNecro[s.turn]--;
     const next = judgeNextSeat(s);
@@ -2148,6 +2158,22 @@ function exeKimon(s, i) {
     if (r.destroyed) addCorpses(s, 1);
     return true;
 }
+// 裸の王様 (idx76): 自分以外の全席のギアを、その席の次の手番の終わりまで無効にする（ギアを装備していて、まだ無効でない席が対象）。クリック不要
+function stripSeats(s) { return otherSeats(s).filter((seat) => s.gears[seat].length > 0 && !s.gearOff[seat]); }
+function stripLegal(s) { return stripSeats(s).length > 0; }
+function onClickStrip(s) {
+    const seats = stripSeats(s);
+    if (seats.length === 0) return;
+    for (const seat of seats) {
+        s.gearOff[seat] = true;
+        s.gearHeld[seat] = s.gears[seat];
+        s.gears[seat] = [];
+    }
+    spendMagic(s, calculateCost(s, costsOf(s).onClickStrip, false, false, 'onClickStrip'), 'onClickStrip');
+    bumpMagicCount(s);
+    bumpStat(s, 'strip');
+}
+
 // 火の車 (idx75): ランダムな敵マス2つに🔥+1、その後自分の手札をシャッフル（無料）。このターン敵か自陣に🔥を付与していれば0コスト（撃つとリセット）。クリック不要
 function fireWheelCandidates(s) { return thermal.fireWheelTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function fireWheelLegal(s) { return fireWheelCandidates(s).length > 0; }
@@ -2273,6 +2299,7 @@ const SKILLS = {
     springWind: onClickSpringWind,
     kimon: onClickKimon,
     fireWheel: onClickFireWheel,
+    strip: onClickStrip,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2316,7 +2343,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2450,6 +2450,39 @@ test('毒使い: 推奨デッキに火遁(31)があり、氷結で塞がれた4�
     const r = ai.makeMove(s, 'faithful');
     if (!r.turnEnded && r.move != null) e.placeMove(s, r.move);
     assert.strictEqual(s.board[5].player, '💙', '解凍して5に着手できた');
+});
+
+test('裸の王様: 相手のギアを、その席の次の手番の終わりまで無効にする（コスト4・ギアのある相手だけが対象）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], gears: [[], ['luckyPurse', 'quadMastery']], rng: e.makeRng(7) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.stripLegal(s), true);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickStrip, false, false, 'onClickStrip'), 4);
+    e.SKILLS.strip(s);
+    assert.strictEqual(s.magic[0], 30 - 4);
+    assert.deepStrictEqual(s.gears[1], []);
+    assert.deepStrictEqual(s.gearHeld[1], ['luckyPurse', 'quadMastery']);
+    assert.strictEqual(s.gearOff[1], true);
+    assert.strictEqual(e.stripLegal(s), false); // もう無効なので撃てない
+    // 相手の手番が終わるまで無効のまま。相手の手番が終わると装備が戻る
+    s.currentTurn = 2; // 最初の手番(currentTurn<=1)は常に席0に戻る仕様なので、2手目以降として進める
+    e.advanceTurn(s); // 席0の手番が終わる → 席1の手番へ
+    assert.strictEqual(s.turn, 1);
+    assert.deepStrictEqual(s.gears[1], []);
+    e.advanceTurn(s); // 席1の手番が終わる
+    assert.deepStrictEqual(s.gears[1], ['luckyPurse', 'quadMastery']);
+    assert.strictEqual(s.gearOff[1], false);
+    assert.strictEqual(s.gearHeld[1], null);
+});
+
+test('裸の王様: 価格破壊も無効になる（無効の間は基礎のコスト表）。ギアが無い相手には撃てない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], gears: [[], ['priceWreck']], rng: e.makeRng(3) });
+    const wreck = e.costsOf(s, 1);
+    assert.notStrictEqual(wreck, e.skillCosts);
+    s.magic[0] = 30;
+    e.SKILLS.strip(s);
+    assert.strictEqual(e.costsOf(s, 1), e.skillCosts);
+    const none = e.newGame({ chars: ['you', 'you'], gears: [[], []], rng: e.makeRng(3) });
+    assert.strictEqual(e.stripLegal(none), false);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

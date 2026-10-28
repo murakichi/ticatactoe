@@ -1280,6 +1280,16 @@ function chooseSkills(s, availableSkills) {
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
     }
 
+    // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる（AIPlayer.ts と同一）
+    if (availableSkills.includes(76)) {
+        const others = otherSeats(s);
+        const oppGears = others.reduce((n, seat) => n + s.gears[seat].length, 0);
+        const oppLastStand = others.some((seat) => hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat]);
+        if (((oppLastStand && countReaches(board, me) > 0) || oppGears >= 2) && remaining >= cost(costsOf(s).onClickStrip, false, 'onClickStrip')) {
+            spend(cost(costsOf(s).onClickStrip, false, 'onClickStrip'), 'strip');
+        }
+    }
+
     // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。AIPlayer.ts と同一）
     if (availableSkills.includes(75) && thermal.fireWheelTargets(board, me, (sq, i) => shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2
         && remaining >= cost(costsOf(s).onClickFireWheel, false, 'onClickFireWheel')) {
@@ -1344,7 +1354,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 76)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 77)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }

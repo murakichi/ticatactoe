@@ -10,7 +10,7 @@ import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 76;
+export const SKILL_POOL_SIZE = 77;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -99,6 +99,9 @@ class AIPlayer {
     glacierPending: boolean = false;
     /** 土壇場の防壁を装備していて未発動（Game が手番ごとに設定する）。真なら相手の1回目の勝ちは防壁が受けるので止めに行かず攻める。sim/ai.js の AI_DEFAULTS.lsAggro と同じ */
     lastStandReady: boolean = false;
+    /** 裸の王様の判断材料: 相手全員の有効なギアの数 / 使える土壇場の防壁を持つ相手がいるか（Game.tsx runAIMove が毎手番入れる） */
+    oppGearCount: number = 0;
+    oppLastStand: boolean = false;
     /** 絶対零度のコスト軽減（氷結が作られた回数。撃つとリセット）。Game が手番ごとに設定する */
     glacierCharge: number = 0;
     /** 業火の無料権（手番を跨いで持ち越し）と、この手番に使ったスキルの種類。Game が毎回セットする */
@@ -1181,6 +1184,14 @@ class AIPlayer {
         if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
             const rc = this.calculateAICost(costs.onClickChargeRandom, false, false, 'onClickChargeRandom');
             if (remaining >= rc + CHARGE_RANDOM_MARGIN) spend(rc, 'onClickChargeRandom');
+        }
+
+        // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる (sim/ai.js と同一)
+        if (
+            availableSkills.includes(76) &&
+            ((this.oppLastStand && this.countReaches(board, this.playerSymbol) > 0) || this.oppGearCount >= 2)
+        ) {
+            spend(this.calculateAICost(costs.onClickStrip, false, false, 'onClickStrip'), 'onClickStrip');
         }
 
         // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。sim/ai.js と同一）
