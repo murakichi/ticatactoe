@@ -1373,6 +1373,8 @@ function chooseLocks(s, availableSkills) {
     if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
     if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
+    // 検証用 F.mistLock(issue #237): 収穫ギアなら毒霧(29)・付与割引(54)を手札に固定し続け、mistLoop の周回を毎手番回せるようにする
+    if (F.mistLoop && F.mistLock && hasGear(s.gears[s.turn], 'harvest')) return availableSkills.filter((i) => i === 29 || i === 54);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) {
@@ -2100,6 +2102,24 @@ function faithfulMakeMoveInner(s) {
             if (curMagic(s) <= before) break; // 増えないなら止める
             s.loopCycles = (s.loopCycles || 0) + 1;
             if (curMagic(s) >= 16) break;
+        }
+    }
+    // 検証用 F.mistLoop(issue #237): 収穫ギア+付与割引(54)+毒霧(29)の周回で魔力を稼ぐ。F.mistLoop=最大周回数、F.mistCap=この魔力に届いたら止める、F.mistDig=2枚が揃うまで引き直す最大回数(魔力が F.loopMin 以上のとき)
+    if (F.mistLoop && hasGear(s.gears[s.turn], 'harvest') && !s.silenced[s.turn]) {
+        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        const have = () => s.skills.includes(29) && s.skills.includes(54);
+        if (F.mistDig) {
+            for (let k = 0; k < F.mistDig && curMagic(s) >= (F.loopMin || 5) && !have(); k++) E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
+        const cap = F.mistCap || 25;
+        for (let k = 0; k < F.mistLoop && have() && curMagic(s) < cap; k++) {
+            if (curMagic(s) < 1 + cost('onClickPoisonMist')) break;
+            const before = curMagic(s);
+            SKILLS.effectDiscount(s);
+            SKILLS.poisonMist(s);
+            s.loopCycles = (s.loopCycles || 0) + 1;
+            if (k >= 4 && curMagic(s) <= before) break; // 立ち上がり(割引を積む数周)のあとも増えないなら止める
         }
     }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
