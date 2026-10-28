@@ -1,9 +1,9 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: ddaaf05（ブランチ claude/gallant-cannon-29t4ti は master + 凩の魔女の追加）
-- 現在の推奨設定: gears=[lightToken, priceWreck] deck=[0,3,5,8,12,28,53,62,63,64,84,85] AIフラグ=witchNoAnti=1（既定）
-- 基準線（最新の順位: witchNoAnti 採用後 `--rank --games 60 --seed 1` **2位 65.3%** / 1位 poisoner 66.7%（差1.4pt）/ 3位 cryomancer 63.1% / 4位 necromancer 58.5% / 5位 electrician 57.2%。`--target witch --games 200 --seed 2` 61.4%）。（その前: 魔力+2/ライフ平均4 変更後 `--target witch --games 100 --seed 1` 51.7% ±2.8、`--rank --games 60 --seed 1` 5位 54.2% / 1位 poisoner 70.2%、2位 necromancer 63.2%、3位 cryomancer 63.1%。以下は旧い値）（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
-- 連続不採用回数: 2
+- 現在の推奨設定: gears=[lightToken, priceWreck] deck=[0,3,5,8,12,28,44,53,62,63,64,85] AIフラグ=witchNoAnti=1（既定）
+- 基準線（完了判定の1条件目 `--rank --games 200 --seed 3 --target witch`: **3位 61.5%**（1位 poisoner 64.9%、2位 electrician 61.5%、4位 cryomancer 61.0%、5位 necromancer 59.3%。差3.4pt）。（その前の順位: witchNoAnti 採用後 `--rank --games 60 --seed 1` **2位 65.3%** / 1位 poisoner 66.7%（差1.4pt）/ 3位 cryomancer 63.1% / 4位 necromancer 58.5% / 5位 electrician 57.2%。`--target witch --games 200 --seed 2` 61.4%）。（その前: 魔力+2/ライフ平均4 変更後 `--target witch --games 100 --seed 1` 51.7% ±2.8、`--rank --games 60 --seed 1` 5位 54.2% / 1位 poisoner 70.2%、2位 necromancer 63.2%、3位 cryomancer 63.1%。以下は旧い値）（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
+- 連続不採用回数: 0
 - 関連 issue: #224 凩の魔女が下位（AIが🍂を溜められず虎落笛が撃たれない）/ #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running(トップ未達)
 
@@ -39,6 +39,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 11 | deck | **置き土産(84)→氷結拡散(44)**（走査で保留にした案を seed2/200 で再測定） | 61.4→**65.0%**（+3.6pt, z≈2.6）。対毒使い 45→50 / 対巨人 53→59 / 対ネクロ 56→64 / 対電気 56→61。悪化なし | **採用** |
+| 10 | strategy | 虎落笛の発動条件を緩める `mogaL=1` / `mogaHits=1` / 両方（seed2/200） | 61.4→61.2 / 61.6 / 61.4%（誤差） | 不採用 |
 | 9 | deck | 1枚差し替え30近傍（seed1/60、基準 64.0%）。最良は 84(置き土産)→44(氷結拡散) の 68.3%（+4.3pt, z≈1.7）、次点 5(スラッシュ)→56(活力特売) 66.2%。それ以外は基準±2pt内 | 閾値(n≤40: z≥3.0)未満 | 不採用（保留・要追試: 氷結拡散を入れる案。氷結で自陣の🍂が休眠するので理屈は弱い） |
 | 8 | strategy+deck | 落葉の衣 `cloak=2/3` + デッキA を、witchNoAnti 採用後に測り直し（seed1/100） | 64.5→64.1 / 63.6%（誤差）。対ネクロ 65→60/59 とやや悪化 | 不採用（再測定済み。ノブ F.cloak は削除予定） |
 | 7 | strategy | **`witchNoAnti=1`**: 魔女は対策ロック(ANTI_LOCK_VS)を撃たない。トレースで、魔力6・🍂トークン(実コスト2)が手札にあるのに10手番撃たれず、毎手番2魔力が対策ロックに消えていた | seed1/100: 51.7→64.5%。seed2/200: **51.3→61.4%**（+10.1pt, z≈7）。対ネクロ 13→56 / 対毒使い 10→45 / 対陰陽師 73→95、他は±0 | **採用**（AI_DEFAULTS.witchNoAnti=1、AIPlayer.ts にミラー、回帰テスト追加） |
