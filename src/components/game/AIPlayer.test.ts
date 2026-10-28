@@ -1368,3 +1368,23 @@ describe('落雷は忘れた頃にのAI使用', () => {
         expect(other.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease');
     });
 });
+
+describe('魔法使いはネクロマンサー相手に審判の日を撃たない (sim/ai.js noJudgeNecro と同じ)', () => {
+    // 💙(魔法使い)の周りに⭕のコマが固まっていて、審判の日なら2つ以上巻き込める盤面
+    const board = () => {
+        const b = emptyBoard();
+        [5, 6, 9, 10].forEach((i) => put(b, i, '⭕', 4));
+        return b;
+    };
+    const plan = (foe: 'tactician' | 'necromancer') => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(board(), 20, { onClickToken: 4, onClickLock: 2, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+
+    it('ネクロマンサー相手なら審判の日を撃たない', () => {
+        expect(plan('necromancer').skills).not.toContain('onClickJudgeDay');
+    });
+    it('ほかの相手なら審判の日を撃つ', () => {
+        expect(plan('tactician').skills).toContain('onClickJudgeDay');
+    });
+});
