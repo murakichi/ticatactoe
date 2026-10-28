@@ -1,9 +1,9 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: edb9fff（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
-- 現在の推奨設定: gears=[afterglow,lastStand] deck=[3,8,12,28,41,42,43,44,45,46,47,48] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2), yyCoverCryo=1, noCapNecro=100, antiSummon=1/antiSummonMax=1, antiFlood=13(すべて既定)
+- 現在の推奨設定: gears=[lightToken,lastStand] deck=[8,12,28,37,41,43,44,45,46,47,48,73] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2), yyCoverCryo=1, noCapNecro=100, antiSummon=1/antiSummonMax=1, antiFlood=13(すべて既定)
 - 基準線: 魔力+1・ライフ4 の採用後 環境勝率 約59% / 3位(1位 poisoner 約68%)。対鍛冶師 53%(互角)。対キャラ別(seed3/400): あなた89 / 魔法使い87 / 軍師61 / 巨人66 / 雷霆の巫58 / 毒使い60 / 鍛冶師56 / 陰陽師30 / ネクロ23
-- 連続不採用回数: 4（試行26〜29。meta×2・gear・deckの4種類は測定済み。残り: synergy / strategy / joint）
+- 連続不採用回数: 0（試行30のjointで採用）
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
 - 状態: running(2026-10-28 に新キャラ witch が1位になり陥落。`--rank --games 100 --seed 3` (master 9efd0e5): 1位 witch 68.1 / 2位 poisoner 62.6 / 3位 cryomancer 60.4 / 4位 electrician 59.7 / 5位 necromancer 58.1。対 witch 22%が最大の弱点)
 ## 診断(2026-10-21、新ギア4種を含む master 3bc89db で再開)
@@ -31,6 +31,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 30 | joint | ギア lightToken+lastStand とデッキ A（[8,12,28,37,41,43,44,45,46,47,48,73]：氷柱・トークン→火炎トークン・百鬼夜行）の同時変更（現行 afterglow,lastStand+推奨デッキと比較、各400試合） | seed85: 65.2 vs 61.5（+3.7）、seed86: 63.2 vs 61.0（+2.2）、seed87: 64.2 vs 59.9（+4.3）。3つとも +1.5pt 以上、平均 +3.4pt（プールSE_diff約1.2）。対陰陽師・巨人・雷霆の巫・鍛冶師が上がり、対ネクロ・毒使いは-1〜-3 | **採用**（sim/gear.js・deck.js と gear.ts・deck.ts にミラー済み。本番AIでは未計測） |
 | 29 | deck | 2枚同時入れ替え40近傍（seed82/80、base 61.0±3.4）の上位3つを別seedで再測定。A=オピウム→…ではなく [8,12,28,37,41,43,44,45,46,47,48,73]（氷柱・トークン→火炎トークン・百鬼夜行）、B=[8,12,17,41,42,43,44,45,46,47,48,57]（サイレンス・トークン→血清・固有割引）、C=[3,12,28,41,43,44,45,46,47,48,69,82] | 探索 A 66.2 / B 65.9 / C 65.1（+5.2 / +4.9 / +4.1）。再測定 seed83/300（base 60.5）: A 63.2 / B 61.9 / C 62.2（+2.7 / +1.4 / +1.7）。A だけ seed84/400（base 60.6）: 62.2（+1.6）。A は両seedで+1.5pt以上だが +1.96×SE（約3.4pt）に届かず。対 witch はA 33/31 vs base 29/30 とほぼ同じ | 不採用（保留: A は要追試。games を増やせば境界） |
 | 28 | gear | 1枠差し替え全近傍（witch 追加後の master、seed81/80、base afterglow,lastStand 60.4±3.4、41通り） | 最良 lightToken+lastStand 64.1（+3.7, z<1）、次点 sturdy+lastStand 63.2。afterglow を外す側が軒並み上位だが誤差内（SE約4.8）。閾値z≥3.0に届かず | 不採用（保留: 軽量トークン+防壁を追試する余地） |
 | 27 | meta | 対witch: 虎落笛で倒れる（ライフ<=魔女の🍂数）自陣コマを先に凍らせる F.antiMoga=1/2（氷結中は❄が1つ減るだけ）（seed1/300、基準 32.7） | 31.3 / 32.0（差なし）。魔女は虎落笛を1試合1.07回撃ち、撃った試合の勝率96%だが、凍らせても勝敗が動かない | 不採用（コード撤回） |
