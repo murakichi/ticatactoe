@@ -2,7 +2,7 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: ddaaf05（ブランチ claude/gallant-cannon-29t4ti は master + 凩の魔女の追加）
 - 現在の推奨設定: gears=[lightToken, priceWreck] deck=[0,3,5,8,12,28,53,62,63,64,84,85] AIフラグ=なし
-- 基準線: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
+- 基準線（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
 - 連続不採用回数: 0
 - 関連 issue: #224 凩の魔女が下位（AIが🍂を溜められず虎落笛が撃たれない）/ #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running(トップ未達)
@@ -42,6 +42,9 @@
 | 3 | gear | `[priceWreck, emptyLock]`（再測定） | 21.9→23.4%（+1.5pt, 基準未満の効果量）。対陰陽師 56→35 | 不採用 |
 | 2 | gear | **`[lightToken, priceWreck]`**（sturdy→priceWreck）。走査(seed1/60)で+13.7pt(z≈5.9)。別案 `[priceWreck, sturdy]` は seed2/200 で32.0%（採用案との差 -1.8pt） | 21.9→**33.8%**（+11.9pt, z≈8.9, seed2/200）。対キャラ別の最悪悪化は necromancer 15→11（-4pt）。magician 8→30 / giant 14→32 / cryomancer 16→36 / pyromancer 10→28 | **採用** |
 | 1 | strategy | `witchReserve=1`: 手札に🍂トークンがあれば、その最安コスト未満になる他スキルの支払いを控える | 21.0%→20.7%（Δ-0.3pt, SE≈3）。対magician 7→8 / necromancer 13→20 / poisoner 13→8 で一貫せず | 不採用（ノブは削除） |
+
+## 前提の変更（ユーザー指示）
+- 2026-10-28: 木枯らしの使い（idx 62）のコストを 5→3 に変更（`skillCosts.ts` / `sim/engine.js`）。🍂1枚の単価(約2)＋トークン(4)−R1 の基準(5〜6)より安い。魔女の🍂供給が律速という診断に沿った調整。基準線を取り直す。実行中だったデッキ走査（変更前の基準）は中断した。
 
 ## 次に試す候補(軸の順 gear → deck → strategy を巡回)
 - (済) gear: `--scan gears` で priceWreck を採用

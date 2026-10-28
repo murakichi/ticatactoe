@@ -96,7 +96,7 @@ export const skillCosts = {
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
-    onClickLeafToken: 5, //       木枯らしの使い(idx 62): 🍂付きトークン
+    onClickLeafToken: 3, //       木枯らしの使い(idx 62): 🍂付きトークン
     onClickTwinLeafToken: 7, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
     onClickDoubleLeafToken: 9, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
     onClickBothLeafToken: 5, //   枯野の相席(idx 65): 🍂付きの両トークン（🍂は自分のコマだけ）

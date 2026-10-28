@@ -229,7 +229,7 @@ const skillCosts = {
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。src/components/game/skillCosts.ts と同値
-    onClickLeafToken: 5,
+    onClickLeafToken: 3,
     onClickTwinLeafToken: 7,
     onClickDoubleLeafToken: 9,
     onClickBothLeafToken: 5,
