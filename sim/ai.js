@@ -11,7 +11,7 @@
 
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -1024,7 +1024,7 @@ function getEnhancedBestMove(s) {
 // ---- strategic skill selection (mirrors AIPlayer.ts chooseSkills) ----
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。AIPlayer.ts と同値
-const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9 };
+const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9, witch: 7 };
 
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
@@ -1355,7 +1355,8 @@ function chooseLocks(s, availableSkills) {
     const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !thermal.isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
-    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
+    const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(双子・紅葉狩りを含む。枯野の相席は敵にコマを渡すので除く)を手札に固定して毎手番撒く
+    const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
@@ -1837,6 +1838,12 @@ function faithfulMakeMoveInner(s) {
     if (curChar(s) === 'electrician' && availableSkills.includes(26) && curMagic(s) >= calculateCost(s, costsOf(s).onClickJammer, false, false, 'onClickJammer')) {
         const target = bestJammerTarget(s.board, me);
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
+    }
+
+    // 凩の魔女: 虎落笛（クリック不要・手番は続く）。自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
+    if (curChar(s) === 'witch' && curMagic(s) >= mogaribueCost(s)) {
+        const hits = thermal.mogaribueTargets(s.board, me, (sq) => isShielded(s, sq)).length;
+        if (thermal.mogaribueDamage(s.board, me) >= 2 && hits >= 2) { SKILLS.mogaribue(s); updateShield(s); }
     }
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を

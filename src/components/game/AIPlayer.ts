@@ -5,7 +5,7 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked } from './thermal';
+import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
 import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
@@ -77,7 +77,7 @@ export const rerollBudget = (character: CharacterId): number => (character === '
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。sim/ai.js の EXCLUSIVE_MIN_MAGIC と同値
 const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
-    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9,
+    giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9, witch: 7,
 };
 
 // 毒使い×毒花・ミアズマの調整値 (sim/ai.js の BLOOM_* / MIASMA_MIN_SCORE と同値)
@@ -124,6 +124,8 @@ class AIPlayer {
 
     /** ギアのコスト補正（キャラ補正済みのコストを受け取り、補正後を返す）。ギアが無ければ未指定 */
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
+    /** 盤面にある効力のある🍂の総数（凩の魔女のパッシブ割引。updateShield で更新する） */
+    private leafCount = 0;
     /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
     placements: number = 0;
     seatCount: number = 2;
@@ -260,6 +262,7 @@ class AIPlayer {
 
     /** 無敵マス(雷霆の巫の⚡付き自陣)の集合を更新する (sim/ai.js updateShield) */
     updateShield(board: SquareInfo[]): void {
+        this.leafCount = boardLeaves(board);
         this.shield = new Set();
         board.forEach((sq, i) => {
             if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結中は⚡が休眠で無敵でない
@@ -887,6 +890,8 @@ class AIPlayer {
         // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
         const poisonerTokenIdx = [3, 9, 11, 16];
         const preferred = (idx: number) =>
+            // 凩の魔女: 🍂付きトークン(双子・紅葉狩りを含む。枯野の相席は敵にコマを渡すので除く)を手札に固定して毎手番撒く (sim/ai.js と同一)
+            (this.character === 'witch' && (idx === 62 || idx === 63 || idx === 64)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             (this.character === 'magician' && budsIdx.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
@@ -926,6 +931,7 @@ class AIPlayer {
         if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
         else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
         else if (this.character === 'pyromancer' && skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1) cost -= 1; // 🔥付与スキルは常に-1
+        else if (this.character === 'witch' && cost > 1) cost = Math.max(1, cost - this.leafCount); // 盤面の🍂1枚につき-1（下限1）
         else if (this.character === 'yinYangMaster' && this.yinYangMode === 'yang') cost += 1; // 陽は全スキル+1
         const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
         // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
@@ -1982,6 +1988,17 @@ class AIPlayer {
                 board = board.slice();
                 freezeAll(board);
                 magic -= cost;
+            }
+        }
+        // 凩の魔女の虎落笛（クリック不要・手番は続く）: 自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
+        if (this.character === 'witch') {
+            const cost = this.calculateAICost(costs.onClickMogaribue, false, false, 'onClickMogaribue');
+            if (magic >= cost && mogaribueDamage(board, this.playerSymbol) >= 2 && mogaribueTargets(board, this.playerSymbol, this.seatCharacters()).filter((i) => !this.shield.has(i)).length >= 2) {
+                chargeClicks.push({ skill: 'onClickMogaribue' });
+                board = board.slice();
+                mogaribue(board, this.playerSymbol, this.seatCharacters());
+                magic -= cost;
+                this.updateShield(board);
             }
         }
         // 浄化（汎用スキル）: 自陣のコマ（ライフ>0）の状態異常が合計3スタック以上で撃つ。雷霆の巫の⚡無敵は数えない

@@ -161,6 +161,7 @@ const RECOMMENDED_GEARS = {
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
+    witch: ['lightToken', 'sturdy'], // 🍂トークンが主力(トークンのコスト軽減＋ライフ)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 

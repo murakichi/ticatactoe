@@ -58,6 +58,8 @@ export const skillCosts = {
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
     onClickCleanse: 5,
     onClickInferno: 7,
+    // 凩の魔女の固有スキル 虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣のライフ+2。sim/engine.js の onClickMogaribue と一致させること
+    onClickMogaribue: 7,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,

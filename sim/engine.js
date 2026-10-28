@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -193,6 +193,7 @@ const skillCosts = {
     onClickCryoFreeze: (config.thermal && config.thermal.cryoFreezeCost) || 2, // 氷室の番人のロック置換
     onClickCleanse: (config.thermal && config.thermal.cleanseCost) || 5, // idx 32
     onClickInferno: (config.thermal && config.thermal.infernoCost) || 9,
+    onClickMogaribue: 7, // 凩の魔女の固有スキル 虎落笛。src/components/game/skillCosts.ts と一致させること
     // 🌱バッズ系の汎用スキル idx 33〜36
     onClickHarvestEve: (config.thermal && config.thermal.harvestEveCost) || 2,
     onClickSolstice: (config.thermal && config.thermal.solsticeCost) || 4,
@@ -727,6 +728,8 @@ function characterCost(s, cost, isToken, isPoison, key) {
     const c = curChar(s);
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (c === 'pyromancer') return key && thermal.FLAME_SKILL_KEYS.has(key) && cost > 1 ? cost - 1 : cost;
+    // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
+    if (c === 'witch') return thermal.witchCostOf(cost, s.board);
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
     if (c === 'tactician') return isToken ? cost - 1 : cost + 2;
@@ -2445,6 +2448,19 @@ function onClickInferno(s) {
     bumpStat(s, 'infernoCells', targets.length);
 }
 
+// 固有スキル 虎落笛（凩の魔女）: 自陣の🍂の枚数ぶん敵全てにスキルダメージ、自陣のコマ全てのライフ+2。クリック不要・手番は続く
+function mogaribueCost(s) {
+    return calculateCost(s, costsOf(s).onClickMogaribue, false, false, 'onClickMogaribue');
+}
+function onClickMogaribue(s) {
+    const me = curPlayer(s);
+    if (!thermal.canMogaribue(s.board, me)) return; // 自陣のコマが無ければ不発
+    const r = thermal.mogaribue(s.board, me, (sq) => isShielded(s, sq));
+    spendMagic(s, mogaribueCost(s), 'onClickMogaribue');
+    bumpStat(s, 'mogaribue');
+    bumpStat(s, 'mogaribueDamage', r.damage * r.hit.length);
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -2531,6 +2547,7 @@ const SKILLS = {
     sucker: onClickSucker,
     windborne: onClickWindborne,
     inferno: onClickInferno,
+    mogaribue: onClickMogaribue,
     burnout: onClickBurnout,
     markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
     effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
@@ -2566,5 +2583,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

@@ -373,6 +373,56 @@ export const activeLeaves = (sq: SquareInfo): number => (isDormant(sq) ? 0 : lea
 export const leafSurcharge = (board: SquareInfo[], player: SquareInfo['player']): number =>
     board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
 
+// ---- 凩の魔女（🍂を使うキャラ）----
+
+/** 盤面にある効力のある🍂の総数（敵味方問わず）。凩の魔女のパッシブ: この枚数ぶんスキルコストが下がる（下限1） */
+export const boardLeaves = (board: SquareInfo[]): number => board.reduce((n, sq) => n + activeLeaves(sq), 0);
+
+/** 凩の魔女のパッシブ: 盤面の🍂1枚につきスキルコスト-1（下限1。もともと1以下のコストは変えない） */
+export const witchCostOf = (cost: number, board: SquareInfo[]): number => (cost > 1 ? Math.max(1, cost - boardLeaves(board)) : cost);
+
+/** 虎落笛で自陣のコマ全てが得るライフ */
+export const MOGARIBUE_LIFE = 2;
+
+/** 虎落笛が敵に与えるダメージ: 使用者の効力のある🍂の枚数 */
+export const mogaribueDamage = (board: SquareInfo[], me: SquareInfo['player']): number =>
+    board.reduce((n, sq) => (sq.player === me ? n + activeLeaves(sq) : n), 0);
+
+/** 虎落笛の敵の対象: 使用者以外のコマのうち、ライフが残り、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの */
+export const mogaribueTargets = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly (CharacterId | undefined)[]): number[] =>
+    board
+        .map((sq, i) => {
+            if (!sq.player || sq.player === me || sq.bind <= 0 || hasLock(sq)) return -1;
+            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            return i;
+        })
+        .filter((i) => i !== -1);
+
+/** 虎落笛を撃てるか: 自陣のコマが1つでもある（🍂が0枚でも自陣のライフ+2は入る） */
+export const canMogaribue = (board: SquareInfo[], me: SquareInfo['player']): boolean => board.some((sq) => sq.player === me);
+
+export type MogaribueResult = {
+    /** 敵に与えたダメージ（使用者の🍂の枚数） */
+    damage: number;
+    /** ダメージを与えようとした敵マス（氷結が肩代わりしたマスも含む） */
+    hit: number[];
+    /** ライフ+2を受けた自陣のマス */
+    boosted: number[];
+};
+
+/**
+ * 虎落笛（凩の魔女）: 自陣の🍂の枚数ぶん、敵のコマ全てにスキルダメージ（氷結中は❄が1つ減るだけ、🔥中は1.5倍）を与え、
+ * 同時に自陣のコマ全てのライフを+2する。board を直接書き換える
+ */
+export const mogaribue = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly (CharacterId | undefined)[]): MogaribueResult => {
+    const damage = mogaribueDamage(board, me);
+    const hit = damage > 0 ? mogaribueTargets(board, me, chars) : [];
+    for (const k of hit) board[k] = applyDamage(board[k], damage, 'skill').sq;
+    const boosted = board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+    for (const k of boosted) board[k] = { ...board[k], bind: board[k].bind + MOGARIBUE_LIFE };
+    return { damage, hit, boosted };
+};
+
 /** 🍂付きトークン: idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
 export const placeLeafToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number, n: number = 1): void => {
     board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' as const })) };

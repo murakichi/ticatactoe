@@ -22,7 +22,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { darkPotRolls } from './darkPot';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
+import { witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -87,6 +87,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     electrician: '雷霆の巫',
     cryomancer: '氷室の番人',
     pyromancer: '煉獄の鍛冶師',
+    witch: '凩の魔女',
 };
 
 const AVATAR_CLASSES = [
@@ -378,6 +379,7 @@ export const Game = (props: GameProps) => {
             case 'onClickFrostfall': onClickFrostfall(); break;
             case 'onClickIgnite': onClickIgnite(); break;
             case 'onClickInferno': onClickInferno(); break;
+            case 'onClickMogaribue': onClickMogaribue(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
             case 'onClickBurnout': onClickBurnout(); break;
             case 'onClickLeafToken': onClickLeafToken(); break;
@@ -2902,6 +2904,20 @@ export const Game = (props: GameProps) => {
         gearTurn.current.infernoReady[turnSeat] = false; // 撃ったら無料権とカウントをリセット
         gearTurn.current.kinds[turnSeat] = new Set();
     };
+    // 固有スキル 虎落笛（凩の魔女）: 自陣の🍂の枚数ぶん敵のコマ全てにスキルダメージ（🔑ロック中・⚡無敵を除く。氷結中は❄が減るだけ）、
+    // 同時に自陣のコマ全てのライフ+2。クリック不要・手番は続く
+    const mogaribueCost = (player: Player = currentTurnPlayer): number =>
+        calculateCost(costTableFor(seatOf(player)).onClickMogaribue, false, false, player, 'onClickMogaribue');
+    const onClickMogaribue = () => {
+        if (!canMogaribue(currentBoard, currentTurnPlayer)) return;
+        const board = currentBoard.slice();
+        const { damage, hit, boosted } = mogaribue(board, currentTurnPlayer, characters);
+        addLog(`「虎落笛」を使用（敵${hit.length}コマに${damage}ダメージ・自陣${boosted.length}コマのライフ+${MOGARIBUE_LIFE}）`);
+        flashCells(hit);
+        playEffect('autumn', undefined, hit.length > 0 ? hit : boosted, '虎落笛');
+        setCurrentBoard(board);
+        spendMagic(mogaribueCost(), false, true, 'onClickMogaribue');
+    };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
@@ -2947,6 +2963,10 @@ export const Game = (props: GameProps) => {
         // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
         if (characterId === 'pyromancer') {
             return skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
+        }
+        // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
+        if (characterId === 'witch') {
+            return witchCostOf(cost, currentBoard);
         }
         // 毒使い: 毒系スキルは-1、それ以外は+1
         if (characterId === 'poisoner') {
@@ -3057,6 +3077,8 @@ export const Game = (props: GameProps) => {
                 return [{ name: '絶対零度', cost: glacierCost(symbols[seat]) }];
             case 'pyromancer':
                 return [{ name: '業火', cost: infernoCost(symbols[seat]) }];
+            case 'witch':
+                return [{ name: '虎落笛', cost: mogaribueCost(symbols[seat]) }];
             default:
                 return [];
         }
@@ -3674,6 +3696,14 @@ export const Game = (props: GameProps) => {
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
+                    />
+                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                        onClick={onClickMogaribue}
+                        buttonText={`虎落笛-${mogaribueCost()}`}
+                        paragraph={`自陣の🍂の枚数(${mogaribueDamage(currentBoard, currentTurnPlayer)})ぶん、敵のコマ全てにダメージを与えます(🔑ロック中・⚡無敵を除く。氷結中は❄が1つ減るだけ、🔥中は1.5倍)\n同時に自陣のコマ全てのライフが+${MOGARIBUE_LIFE}されます`}
+                        hidden={currentCharacter !== 'witch'}
+                        exclusive
+                        disabled={magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer)}
                     />
                     <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickIgnite}

@@ -2807,5 +2807,44 @@ test('AIは自分のデッキを把握する: 陰陽師はコンボ札(百鬼夜
     assert.strictEqual(digs([0, 2, 3, 5, 6, 8, 10, 12, 72, 73, 53, 1]), 0, '百鬼夜行が無ければ探さない');
 });
 
+// ---- 凩の魔女 ----
+test('凩の魔女: パッシブ。盤面の🍂（敵味方）1枚につきスキルコスト-1（下限1）', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true;
+    const base = e.calculateCost(s, 7, false, false, 'onClickMogaribue');
+    assert.strictEqual(base, 7);
+    s.board[0] = { player: '💙', bind: 4, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🍂' }] };
+    // 敵の🍂は魔女のコストを+1するが、パッシブの-3で相殺されて -3 +1 = 5
+    assert.strictEqual(e.calculateCost(s, 7, false, false, 'onClickMogaribue'), 5);
+    assert.strictEqual(e.calculateCost(s, 2, false, false, 'x'), 1 + 1); // 下限1のあとで敵の🍂の+1
+});
+
+test('凩の魔女: 虎落笛。自陣の🍂の枚数ぶん敵全てにダメージ、自陣はライフ+2、手番は続く', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    s.board[1] = { player: '💙', bind: 0, effects: [] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    s.board[5] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] };
+    const before = s.heartMagic;
+    e.SKILLS.mogaribue(s);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(s.board[4].bind, 3);
+    assert.strictEqual(s.board[5].bind, 4); // 🔑は対象外
+    assert.strictEqual(s.board[0].bind, 5);
+    assert.strictEqual(s.board[1].bind, 2);
+    assert.ok(s.heartMagic < before);
+});
+
+test('凩の魔女: 自陣のコマが無いと虎落笛は不発（魔力も減らない）', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    e.SKILLS.mogaribue(s);
+    assert.strictEqual(s.heartMagic, 20);
+    assert.strictEqual(s.board[4].bind, 5);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

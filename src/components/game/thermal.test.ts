@@ -1,4 +1,11 @@
 import {
+    boardLeaves,
+    witchCostOf,
+    mogaribue,
+    mogaribueDamage,
+    mogaribueTargets,
+    canMogaribue,
+    MOGARIBUE_LIFE,
     isFrozen,
     infernoCostOf,
     FLAME_SKILL_KEYS,
@@ -1130,5 +1137,94 @@ describe('雷のない所に火は立たぬ (thunderFireVictims)', () => {
             expect(r.every((c) => cands.includes(c))).toBe(true);
             expect([...r].sort((a, b) => a - b)).toEqual(r);
         }
+    });
+});
+
+describe('凩の魔女（パッシブ・虎落笛）', () => {
+    const lv = (player: Player | undefined, bind: number, n: number, ...rest: Effect['effect'][]) => sq(player, bind, ...Array<Effect['effect']>(n).fill('🍂'), ...rest);
+    const cs: CharacterId[] = ['witch', 'you'];
+
+    it('パッシブ: 盤面の🍂（敵味方）1枚につきコスト-1。下限1、もともと1以下は変えない、氷結中の🍂は数えない', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 4, 2);
+        b[1] = lv('⭕', 4, 1);
+        b[2] = lv('⭕', 4, 5, '❄'); // 休眠
+        expect(boardLeaves(b)).toBe(3);
+        expect(witchCostOf(7, b)).toBe(4);
+        expect(witchCostOf(3, b)).toBe(1);
+        expect(witchCostOf(1, b)).toBe(1);
+        expect(witchCostOf(0, b)).toBe(0);
+        expect(witchCostOf(7, emptyBoard())).toBe(7);
+    });
+
+    it('虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣は全てライフ+2', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 2); // 自陣🍂×2
+        b[1] = sq('💙', 0);
+        b[4] = sq('⭕', 5);
+        b[5] = sq('⭕', 1);
+        b[6] = lv('⭕', 4, 3); // 敵の🍂は威力に数えない
+        expect(mogaribueDamage(b, '💙')).toBe(2);
+        const r = mogaribue(b, '💙', cs);
+        expect(r.damage).toBe(2);
+        expect(r.hit).toEqual([4, 5, 6]);
+        expect(r.boosted).toEqual([0, 1]);
+        expect(b[4].bind).toBe(3);
+        expect(b[5].bind).toBe(0); // 下限0
+        expect(b[6].bind).toBe(2);
+        expect(b[0].bind).toBe(3 + MOGARIBUE_LIFE);
+        expect(b[1].bind).toBe(MOGARIBUE_LIFE); // ライフ0の自コマにも入る
+    });
+
+    it('虎落笛: 🔑・ライフ0・雷霆の巫の⚡無敵の敵は対象外。氷結は肩代わり、🔥は1.5倍', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 2);
+        b[1] = sq('⭕', 5, '🔑');
+        b[2] = sq('⭕', 0);
+        b[3] = sq('⭕', 5, '❄');
+        b[4] = sq('⭕', 8, '🔥');
+        b[5] = sq('🟩', 5, '⚡');
+        const c3: CharacterId[] = ['witch', 'you', 'electrician'];
+        expect(mogaribueTargets(b, '💙', c3)).toEqual([3, 4]);
+        mogaribue(b, '💙', c3);
+        expect(b[1].bind).toBe(5);
+        expect(b[3].bind).toBe(5); // 氷結が肩代わり（❄が1つ減るだけ）
+        expect(isFrozen(b[3])).toBe(false);
+        expect(b[4].bind).toBe(5); // 2 × 1.5 = 3 ダメージ
+        expect(b[5].bind).toBe(5);
+    });
+
+    it('虎落笛: 🍂が無くても自陣のライフ+2は入る。自陣のコマが無ければ撃てない', () => {
+        const b = emptyBoard();
+        b[4] = sq('⭕', 5);
+        expect(canMogaribue(b, '💙')).toBe(false);
+        b[0] = sq('💙', 2);
+        expect(canMogaribue(b, '💙')).toBe(true);
+        const r = mogaribue(b, '💙', cs);
+        expect(r.damage).toBe(0);
+        expect(r.hit).toEqual([]);
+        expect(b[4].bind).toBe(5);
+        expect(b[0].bind).toBe(2 + MOGARIBUE_LIFE);
+    });
+
+    it('sim/thermal.js との一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[0] = lv('💙', 3, 2);
+            b[1] = sq('💙', 0);
+            b[4] = sq('⭕', 5, '🔑');
+            b[5] = lv('⭕', 1, 1, '🔥');
+            b[6] = sq('⭕', 6, '❄');
+            b[7] = lv('⭕', 4, 4, '❄');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        expect(mogaribue(a, '💙', cs)).toEqual(sim.mogaribue(c, '💙'));
+        expect(a).toEqual(c);
+        expect(witchCostOf(7, mk())).toBe(sim.witchCostOf(7, mk()));
+        expect(boardLeaves(mk())).toBe(sim.boardLeaves(mk()));
     });
 });

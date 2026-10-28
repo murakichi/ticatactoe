@@ -283,6 +283,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['afterglow', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
+    witch: ['lightToken', 'sturdy'], // 🍂トークンが主力(トークンのコスト軽減＋ライフ)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
