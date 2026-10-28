@@ -1,7 +1,8 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 9e6c8d8（コスト計算順の変更 31f7718 を取り込み後の再検証OK）
-- 現在の推奨設定: gears=[lightToken, bindingLock] deck=[5,8,12,28,36,44,53,62,63,64,85,86] AIフラグ=witchNoAnti=1・witchReserve=1（既定）
+- 現在の推奨設定: gears=[lightToken, bindingLock] deck=[5,8,12,28,36,44,53,56,62,63,64,85] AIフラグ=witchNoAnti=1・witchReserve=1（既定）
+- 完了判定の再確認（活力特売の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 81.2%** / 2位 poisoner 61.7%（差19.5pt）、条件2（`--envDeck varied`）**1位 witch 74.7%** / 2位 poisoner 60.5%（差14.2pt）。
 - 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
 - 完了判定の再確認（道連れの鍵ギアの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 76.0%** / 2位 poisoner 63.0%（差13.1pt）、条件2（`--envDeck varied`）**1位 witch 69.6%** / 2位 cryomancer 61.2%（差8.4pt）。
 - 完了判定の再確認（風の落とし子デッキの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 67.0%** / 2位 poisoner 64.3%（差2.7pt）、条件2（`--envDeck varied`）**1位 witch 62.2%** / 2位 poisoner 62.1%（差0.1pt）。デッキ変更前(68.7% / 62.5%)より seed3 では僅かに低い（-1.7pt, ノイズの範囲。seed2/200 では +3.9pt）。
@@ -43,6 +44,9 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 21 | deck | 1枚差し替え30近傍（seed1/60、基準 80.2%）の上位2案がどちらも活力特売(56)を足す案（83.0 / 82.5、z≈1.3）。別シードで再測定: A「落葉の衣(86)→活力特売(56)」、B「ダブルロック(12)→活力特売(56)」 | A: 79.3→**82.7%**（+3.4pt, seed2/200。対巨人 73→84 / 対雷霆 69→77 / 対煉獄 73→78、悪化は対毒使い 72→70 のみ）。B: 81.8（+2.5） | **採用 A**（死に札を割引札に） |
+| 20 | strategy | 🍂トークンの選び方: `leafOrder=1`（安い順）/ `=2`（落葉松の双子優先）、固定する札を木枯らしの使いだけに絞る `witchLock=1`（seed2/200、基準 79.3%） | 79.1 / 79.5（差なし） / 74.9（-4.4pt） | 不採用（ノブは削除） |
+| 19 | joint(gear) | ギア2枠を替える組（seed1/100、基準 80.0%）: reinforce+bindingLock 66.4 / lastStand+bindingLock 75.4 / luckyPurse+bindingLock 71.1 / afterglow+bindingLock 69.7 / sturdy+bindingLock 69.2 / ironLock+bindingLock 67.8 | 全て大きく悪化。lightToken（トークンのコスト-1）が土台 | 不採用 |
 | 18 | strategy | **`witchReserve=1` を採用**（3回目の再検証。bindingLock 採用後の状態）。手札に🍂トークンがあれば、その最安コスト未満になる他スキルの支払いを控える。seed 2 で +1.7pt、さらに seed 4・5 を足して判定 | seed2: 77.6→79.3（+1.7）、seed4: 74.6→77.5（+2.9）、seed5: 74.7→78.1（+3.4）。平均+2.7pt（3×200試合）。対毒使い +5〜8 / 対魔法使い +3〜7 / 対ネクロ +4〜12。悪化した相手なし | **採用**（AI_DEFAULTS.witchReserve=1、AIPlayer.ts にミラー、回帰テスト追加） |
 | 17 | strategy | `cloak=2/3`（落葉の衣は死に札のままデッキにある）を bindingLock 後の状態で再検証（seed2/200） | 77.6→76.7 / 74.7（悪化） | 不採用 |
 | 16 | strategy | `mogaL=1,mogaHits=1`（虎落笛の発動条件を緩める）を再検証（seed2/200） | 77.6→75.4（悪化） | 不採用 |
