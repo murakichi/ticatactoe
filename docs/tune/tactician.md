@@ -4,8 +4,9 @@
 - 現在の推奨設定: gears=[lastStand, priceWreck](sturdy→lastStand に変更, 試行#11) deck=推奨のまま AIフラグ=なし
 - 基準線: 環境勝率 48.5% / 7位(11キャラ中) / 1位 witch 68.1% / 2位 poisoner 62.6%   (--rank --target tactician seed3 games100, master edb9fff, 基本条件)。envDeck varied: 47.2% / 7位 / 1位 witch 64.9%
   - 旧基準線(3bc89db): 61.3% / 3位 / 1位 magician 66.0%
+- 関連 issue: #85 軍師の数値案（魔力律速）/ #124 防壁ギア / #237 収穫+連鎖割引
 - 連続不採用回数: 4(#13, #14, #16, #17。#15は波及確認で数えない)
-- 状態: running(ギア4種追加を受けて再開, master 3bc89db)
+- 状態: blocked(issue #85。2026-10-28 の上限実験で律速が魔力の総量と確定=数値/仕様でしか解けない。追記コメント済み)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
 - 軍師の対キャラ別: magician 40% / giant 49% / 他は58〜75%。
