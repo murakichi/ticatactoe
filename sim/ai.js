@@ -1224,6 +1224,12 @@ function chooseSkills(s, availableSkills) {
 
     // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
     if (character === 'electrician') {
+        // 堪忍袋の緒: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（AIPlayer.ts と同一）
+        const ownBolts = board.reduce((n, sq) => (sq.player === me ? n + chargeStacks(sq) : n), 0);
+        const hittable = board.filter((sq, i) => isEnemy(sq.player, me) && sq.bind > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !shield.has(i)).length;
+        if (availableSkills.includes(79) && ownBolts >= 3 && hittable >= 2 && remaining >= cost(costsOf(s).onClickRelease, false, 'onClickRelease')) {
+            spend(cost(costsOf(s).onClickRelease, false, 'onClickRelease'), 'release');
+        }
         if (availableSkills.includes(77) && s.chargeBuff[s.turn] === 0 && board.filter((sq) => !sq.player).length >= 3
             && remaining >= cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason')) {
             spend(cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason'), 'chargeSeason');
@@ -1366,7 +1372,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 79)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 80)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }

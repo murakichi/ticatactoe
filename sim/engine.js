@@ -240,6 +240,7 @@ const skillCosts = {
     onClickStrip: 4, // 裸の王様(idx 76)
     onClickChargeSeason: 6, // 静電気の季節(idx 77)
     onClickBristle: 5, // 総毛立つ(idx 78)
+    onClickRelease: 5, // 堪忍袋の緒(idx 79)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -2198,6 +2199,34 @@ function onClickBristle(s) {
     checkDischarge(s);
 }
 
+// 堪忍袋の緒 (idx79): 自陣のコマの⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで。ライフ0・ロック・無敵・氷結中は受けない）。⚡が無ければ使えない
+function ownChargeStacks(s) { return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + chargeStacks(sq) : n), 0); }
+function releaseCharges(s) {
+    const me = curPlayer(s);
+    let removed = 0;
+    s.board.forEach((sq, i) => {
+        if (sq.player !== me || chargeStacks(sq) === 0) return;
+        removed += chargeStacks(sq);
+        s.board[i] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '⚡') };
+    });
+    if (removed === 0) return 0;
+    s.board.forEach((sq, i) => {
+        if (!sq.player || sq.player === me || sq.bind <= 0 || thermal.isFrozen(sq) || isGuarded(s, sq)) return;
+        s.board[i] = thermal.applyDamage(sq, removed, 'electric').sq;
+    });
+    return removed;
+}
+function releaseLegal(s) { return ownChargeStacks(s) > 0; }
+function onClickRelease(s) {
+    if (!releaseLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickRelease, false, false, 'onClickRelease');
+    const n = releaseCharges(s);
+    spendMagic(s, pay, 'onClickRelease');
+    bumpMagicCount(s);
+    bumpStat(s, 'release');
+    bumpStat(s, 'releaseBolts', n);
+}
+
 // 裸の王様 (idx76): 自分以外の全席のギアを、その席の次の手番の終わりまで無効にする（ギアを装備していて、まだ無効でない席が対象）。クリック不要
 function stripSeats(s) { return otherSeats(s).filter((seat) => s.gears[seat].length > 0 && !s.gearOff[seat]); }
 function stripLegal(s) { return stripSeats(s).length > 0; }
@@ -2342,6 +2371,7 @@ const SKILLS = {
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,
     bristle: onClickBristle,
+    release: onClickRelease,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2385,7 +2415,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

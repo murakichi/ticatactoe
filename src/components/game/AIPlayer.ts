@@ -10,7 +10,7 @@ import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 79;
+export const SKILL_POOL_SIZE = 80;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1130,6 +1130,12 @@ class AIPlayer {
 
         // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ (sim/ai.js と同一)
         if (this.character === 'electrician') {
+            // 堪忍袋の緒: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（このあとで季節・総毛立つが⚡を付け直す）
+            const ownBolts = board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + chargeStacks(sq) : n), 0);
+            const hittable = board.filter((sq, i) => this.isEnemy(sq.player) && sq.bind > 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !this.shield.has(i)).length;
+            if (availableSkills.includes(79) && ownBolts >= 3 && hittable >= 2) {
+                spend(this.calculateAICost(costs.onClickRelease, false, false, 'onClickRelease'), 'onClickRelease');
+            }
             if (availableSkills.includes(77) && !this.chargeBuffActive && board.filter((sq) => !sq.player).length >= 3) {
                 spend(this.calculateAICost(costs.onClickChargeSeason, false, false, 'onClickChargeSeason'), 'onClickChargeSeason');
             }

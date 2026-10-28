@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -391,5 +391,45 @@ describe('⚡が乗った時点のダメージ（雷霆の巫以外）', () => {
         expect(hit.effects.filter((e) => e.effect === '🔥')).toHaveLength(1);
         expect(landCharge(piece('💙', 4, '⚡'), ['you', 'electrician']).bind).toBe(2);
         expect(landCharge(piece('⭕', 4, '⚡'), ['you', 'electrician']).bind).toBe(4);
+    });
+});
+
+describe('堪忍袋の緒 (releaseCharges)', () => {
+    it('自陣の⚡を全て取り除き、取り除いた数（スタック込み）だけ敵の全コマにダメージ。破壊はせずライフは0まで', () => {
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '⚡' }] };
+        b[1] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        put(b, 2, '💙', 4); // ⚡なしの自陣コマ
+        put(b, 5, '⭕', 5);
+        put(b, 6, '⭕', 2);
+        put(b, 7, '🟩', 9);
+        const r = releaseCharges(b, '💙', ['you', 'you', 'you']);
+        expect(r.removed).toBe(3);
+        expect(r.from).toEqual([0, 1]);
+        expect(r.damaged).toEqual([5, 6, 7]);
+        expect(b[0].effects).toEqual([]);
+        expect(b[1].effects).toEqual([]);
+        expect([b[5].bind, b[6].bind, b[7].bind]).toEqual([2, 0, 6]); // 2のコマは0で止まる（破壊はしない）
+        expect(b[2].bind).toBe(4); // 自陣は無傷
+        expect(b[6].player).toBe('⭕');
+    });
+
+    it('ライフ0・🔑ロック・氷結中・⚡で無敵のコマは受けない。自陣に⚡が無ければ何も起きない', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true);
+        b[4] = { player: '⭕', bind: 0, effects: [] }; // ライフ0
+        b[5] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロック
+        b[6] = { player: '⭕', bind: 5, effects: [{ effect: '❄' }] }; // 氷結中
+        b[7] = { player: '⭕', bind: 5, effects: [{ effect: '⚡' }] }; // 雷霆の巫の⚡マスは無敵
+        b[8] = { player: '⭕', bind: 5, effects: [] };
+        const r = releaseCharges(b, '💙', ['you', 'electrician']);
+        expect(r.removed).toBe(1);
+        expect(r.damaged).toEqual([8]);
+        expect(b[8].bind).toBe(4);
+        expect([b[5].bind, b[6].bind, b[7].bind]).toEqual([5, 5, 5]);
+        const none = emptyBoard();
+        put(none, 5, '⭕', 5);
+        expect(releaseCharges(none, '💙', ['you', 'you'])).toEqual({ removed: 0, from: [], damaged: [] });
+        expect(none[5].bind).toBe(5);
     });
 });

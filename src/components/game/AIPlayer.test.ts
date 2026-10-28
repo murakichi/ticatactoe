@@ -1267,3 +1267,24 @@ describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
         expect(other.makeMove(own3(), 20, costs, 0, 5, [77, 78, 0], false).skills).not.toContain('onClickBristle');
     });
 });
+
+describe('堪忍袋の緒のAI使用', () => {
+    const costs = { onClickRelease: 5, onClickChargeSeason: 6, onClickBristle: 5 } as any;
+    const bolts = (n: number) => {
+        const b = emptyBoard();
+        for (let i = 0; i < n; i++) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        put(b, 14, '⭕', 5);
+        put(b, 15, '⭕', 5);
+        return b;
+    };
+    it('雷霆の巫は、自陣の⚡が3つ以上たまり、ダメージの通る敵のコマが2つ以上あれば撃つ', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕']);
+        expect(ai.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).toContain('onClickRelease');
+        expect(ai.makeMove(bolts(2), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease'); // 溜まりが足りない
+        const one = bolts(3);
+        one[15] = { player: undefined, bind: 0, effects: [] };
+        expect(ai.makeMove(one, 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease'); // 敵が1つだけ
+        const other = new AIPlayer('💙', 'you', ['⭕']);
+        expect(other.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease');
+    });
+});

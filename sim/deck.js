@@ -89,6 +89,7 @@ const SKILL_CATALOG = [
     { idx: 76, name: '裸の王様', icon: '👑', category: 'control' },
     { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge' },
     { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge' },
+    { idx: 79, name: '堪忍袋の緒', icon: '💥', category: 'charge' },
 ];
 
 

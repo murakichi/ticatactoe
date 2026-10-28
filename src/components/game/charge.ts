@@ -63,6 +63,38 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
     return { fired, damaged };
 };
 
+export type ReleaseResult = {
+    /** 取り除いた⚡の数（スタック込み）= 敵の各コマに与えるダメージ */
+    removed: number;
+    /** ⚡を取り除いた自陣のマス */
+    from: number[];
+    /** 実際にダメージを受けた敵のマス */
+    damaged: number[];
+};
+
+/**
+ * 堪忍袋の緒: player の自陣のコマの⚡をすべて取り除き、取り除いた数だけ、敵の全コマにダメージを与える（ライフは0まで。破壊はしない）。
+ * ライフ0のコマ・🔑ロック・⚡の無敵コマ・氷結中のコマ（隣接⚡のダメージと同じく通らない）は受けない。board を直接書き換える。sim/engine.js の releaseCharges と同じ
+ */
+export const releaseCharges = (board: SquareInfo[], player: Player | undefined, chars: PlayerCharacters): ReleaseResult => {
+    const from: number[] = [];
+    let removed = 0;
+    board.forEach((sq, i) => {
+        if (sq.player !== player || chargeStacks(sq) === 0) return;
+        removed += chargeStacks(sq);
+        from.push(i);
+        board[i] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '⚡') };
+    });
+    const damaged: number[] = [];
+    if (removed === 0) return { removed, from, damaged };
+    board.forEach((sq, i) => {
+        if (!sq.player || sq.player === player || sq.bind <= 0 || isFrozen(sq) || isGuarded(sq, chars)) return;
+        board[i] = applyDamage(sq, removed, 'electric').sq;
+        damaged.push(i);
+    });
+    return { removed, from, damaged };
+};
+
 /** 固有スキル: start から、コマのあるマスだけを縦横に辿って届くすべてのマス（start 自身を含む）。空きマスなら [] */
 export const connectedPieces = (board: SquareInfo[], start: number, size: number): number[] => {
     if (!board[start].player) return [];

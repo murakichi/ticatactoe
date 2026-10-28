@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2547,6 +2547,30 @@ test('静電気の季節は3手番で切れる', () => {
     for (let n = 0; n < 3; n++) { s.turn = 0; e.advanceTurn(s); }
     assert.strictEqual(s.chargeBuff[0], 0);
     assert.strictEqual(e.chargeSeasonLegal(s), true); // 切れたら掛け直せる
+});
+
+test('堪忍袋の緒: 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで）。⚡が無ければ使えない。コスト5', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(13) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.releaseLegal(s), false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] };
+    s.board[1] = { player: '💙', bind: 4, effects: [BOLT] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [] };
+    s.board[6] = { player: '⭕', bind: 2, effects: [] };
+    s.board[7] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロックは受けない
+    s.board[8] = { player: '⭕', bind: 5, effects: [FRZ] }; // 氷結中は受けない
+    assert.strictEqual(e.releaseLegal(s), true);
+    const cost = e.calculateCost(s, e.skillCosts.onClickRelease, false, false, 'onClickRelease');
+    assert.strictEqual(cost, 5);
+    e.SKILLS.release(s);
+    assert.strictEqual(s.magic[0], 30 - cost);
+    assert.strictEqual(boltsOn(s.board[0]) + boltsOn(s.board[1]), 0);
+    assert.strictEqual(s.board[5].bind, 2);
+    assert.strictEqual(s.board[6].bind, 0); // 0で止まる
+    assert.strictEqual(s.board[6].player, '⭕'); // 破壊はしない
+    assert.strictEqual(s.board[7].bind, 5);
+    assert.strictEqual(s.board[8].bind, 5);
+    assert.strictEqual(e.releaseLegal(s), false); // もう⚡が無い
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
