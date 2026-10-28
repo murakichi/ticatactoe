@@ -1639,7 +1639,7 @@ export const Game = (props: GameProps) => {
     const CHARGE_SEASON_TURNS = 3;
     const onClickChargeSeason = () => {
         addLog(`「静電気の季節」を使用（今の手番を含む${CHARGE_SEASON_TURNS}ターン、設置する駒に⚡）`);
-        playEffect('zap', undefined, undefined, '静電気の季節');
+        playEffect('staticSeason');
         setChargeBuffAt(turnSeat, CHARGE_SEASON_TURNS);
         spendMagic(calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason'), true, true, 'onClickChargeSeason');
     };
@@ -1651,7 +1651,7 @@ export const Game = (props: GameProps) => {
         if (cells.length === 0) return;
         addLog(`「総毛立つ」を使用（自陣${cells.length}コマに⚡）`);
         flashCells(cells);
-        playEffect('zap', undefined, cells, '総毛立つ');
+        playEffect('bristle', undefined, cells);
         setCurrentBoard(withOverload(withCharge(currentBoard, cells, characters)));
         spendMagic(calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle'), true, true, 'onClickBristle');
     };
@@ -1687,7 +1687,7 @@ export const Game = (props: GameProps) => {
         addLog(`${posName(i)}のコマを破壊し、周囲の敵${picks.length}コマに🔥`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells([i, ...picks]);
-        playEffect('flame', i, picks, '雷のない所に火は立たぬ');
+        playEffect('thunderFire', i, [i, ...picks]);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
     };
@@ -1710,7 +1710,7 @@ export const Game = (props: GameProps) => {
         gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n }; // 軽減札なので「次に打つスキル」を消費せず、足す
         addLog(`${posName(i)}の⚡${n}個を除去（次のスキル-${n}）`);
         flashCells([i]);
-        playEffect('zap', i, [i], '雷神のへそくり');
+        playEffect('stash', i, [i]);
         setUseStash(false);
         setCurrentBoard(board);
     };
@@ -1723,7 +1723,7 @@ export const Game = (props: GameProps) => {
         if (r.removed === 0) return;
         addLog(`「落雷は忘れた頃に」を使用（自陣の⚡${r.removed}個を放出・敵${r.damaged.length}コマに${r.removed}ダメージ）`);
         flashCells(r.damaged);
-        playEffect('zap', undefined, r.damaged, '落雷は忘れた頃に');
+        playEffect('thunderFall', undefined, r.damaged);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease'), true, true, 'onClickRelease');
     };
@@ -1734,7 +1734,7 @@ export const Game = (props: GameProps) => {
         const seats = stripTargets();
         if (seats.length === 0) return;
         addLog(`「裸の王様」を使用（${seats.map((seat) => symbols[seat]).join('・')}のギアが次の手番の終わりまで無効）`);
-        playEffect('silence', undefined, undefined, '裸の王様');
+        playEffect('strip');
         seats.forEach((seat) => setGearOffAt(seat, true));
         spendMagic(calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip'), true, true, 'onClickStrip');
     };
@@ -2201,7 +2201,7 @@ export const Game = (props: GameProps) => {
         addLog(`「一寸先は闇鍋」を使用（${targets.length}コマに合計${granted}個のエフェクト${destroyed.length > 0 ? `・${destroyed.length}コマが燃え尽きた` : ''}）`);
         if (thawedAll.length > 0) addLog(`氷結が溶けた（${thawedAll.map(posName).join('・')}）`);
         flashCells(targets);
-        playEffect('poison', undefined, undefined, '一寸先は闇鍋');
+        playEffect('darkPot', undefined, targets);
         setCurrentBoard(withOverload(board));
         spendMagic(calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot'), true, true, 'onClickDarkPot');
     };
@@ -2214,7 +2214,7 @@ export const Game = (props: GameProps) => {
         if (r.healed.length === 0) return;
         addLog(`「雷を食らわば皿まで」を使用（${r.healed.length}コマのライフを合計+${r.total}）`);
         flashCells(r.healed);
-        playEffect('heal', undefined, r.healed, '雷を食らわば皿まで');
+        playEffect('thunderHeal', undefined, r.healed);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal'), true, true, 'onClickChargeHeal');
         gearTurn.current.chargeBase[turnSeat] = ownCharges(board, currentTurnPlayer); // 条件のリセット
