@@ -1,11 +1,11 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 0c49dd7（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
+- 最後に検証したmaster: e53549e（再検証: 順位変わらず）（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
 - 現在の推奨設定: gears=[lightToken,lastStand] deck=[8,12,28,37,41,43,44,45,46,47,48,73] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2), yyCoverCryo=1, noCapNecro=100, antiSummon=1/antiSummonMax=1, antiFlood=13(すべて既定)
 - 基準線(0c49dd7, seed3/200): 3位 57.4%（1位 witch 77.6 / 2位 poisoner 77.1 / 4位 electrician 56.2 / 5位 necromancer 56.0）。対キャラ別: you 94 / tactician 64 / magician 88 / giant 77 / 陰陽師 61 / ネクロ 48 / 毒使い 29 / 雷霆 58 / 鍛冶師 63 / 魔女 26。旧基準線: 魔力+1・ライフ4 の採用後 環境勝率 約59% / 3位(1位 poisoner 約68%)。対鍛冶師 53%(互角)。対キャラ別(seed3/400): あなた89 / 魔法使い87 / 軍師61 / 巨人66 / 雷霆の巫58 / 毒使い60 / 鍛冶師56 / 陰陽師30 / ネクロ23
 - 連続不採用回数: 0（試行30のjointで採用）
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
-- 状態: blocked(issue #250。master 0c49dd7 で3位 57.4%、1位 witch 77.6% / 2位 poisoner 77.1%。上位2キャラが3位以下から約20pt離れ、番人の調整では覆せない)
+- 状態: blocked(issue #250。master e53549e（seed3/200）で3位 56.4%、1位 witch 80.6% / 2位 poisoner 75.2%。以前 master 0c49dd7 で3位 57.4%、1位 witch 77.6% / 2位 poisoner 77.1%。上位2キャラが3位以下から約20pt離れ、番人の調整では覆せない)
 ## 診断(2026-10-21、新ギア4種を含む master 3bc89db で再開)
 - 勝ち筋: 氷結(ロック置換、コスト2、余韻で1)で敵の単独リーチを毎手番塞ぎ、霜降り・氷結トークンで自陣を守りながら着手で攻める。固有の絶対零度は敵3コマ以上で撃つが使用は9%の試合のみ(対magician)。
 - ファネル(旧master): 氷結(lock)は1試合2.7回、使った試合の勝率36%(対magician)。デッキの氷系8枚のうち5枚は一度も撃たれない死に札。
