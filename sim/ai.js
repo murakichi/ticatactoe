@@ -1062,9 +1062,15 @@ function chooseSkills(s, availableSkills) {
     if (character === 'necromancer') {
         if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
+    // F.witchReserve: 凩の魔女は手札に🍂付きトークンがあるとき、その最安のコスト分を下回る他のスキルの支払いを控える（最初の🍂を作るまで魔力を貯める。🍂が1枚でもあれば以後の全スキルが安い）
+    const WITCH_LEAF_SPEND = ['leafToken', 'twinLeafToken', 'doubleLeafToken', 'leafDrop', 'kindling'];
+    if (F.witchReserve && character === 'witch' && !tokenUsed) {
+        const leafOpts = [{ idx: 64, cost: 'onClickDoubleLeafToken' }, { idx: 63, cost: 'onClickTwinLeafToken' }, { idx: 62, cost: 'onClickLeafToken' }].filter((o) => availableSkills.includes(o.idx));
+        if (leafOpts.length) reserve = Math.min(...leafOpts.map((o) => cost(costsOf(s)[o.cost], true, o.cost)));
+    }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        if (reserve && (RESERVE_SKIP.includes(name) || (F.witchReserve && character === 'witch' && !WITCH_LEAF_SPEND.includes(name))) && remaining - c < reserve) return false;
         // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
         if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
             && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
