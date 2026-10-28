@@ -1,8 +1,9 @@
 # tune-top: giant
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 81ad8ce
+- 最後に検証したmaster: edb9fff（2026-10-28 再検証。順位のみ測定。blocked の前提は変わらず）
 - 現在の推奨設定: gears=[lastStand, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=stompMin=1,stompDef=1,auraSim=1(既定)
-- 基準線: 環境勝率 50.9% / 6位 / 1位 poisoner 70.7%, 2位 magician 56.4%   (--rank seed=3 games=100, master 取り込み後)
+- 基準線: 環境勝率 41.7% / 9位(11キャラ中) / 1位 witch 68.1%, 2位 poisoner 62.6%   (--rank --target giant --gears lastStand,sturdy seed=3 games=100, master edb9fff)
+  - 旧基準線(81ad8ce): 50.9% / 6位 / 1位 poisoner 70.7%
 - 連続不採用回数: 1
 - 状態: blocked(issue #97)。魔力+1とストンプ2の併用で1位になる上限実験の結果あり(台帳#26)。ルール数値の変更なのでオーナー判断待ち。本体には入れていない（#201 を revert 済み）
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
