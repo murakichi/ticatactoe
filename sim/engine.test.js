@@ -574,6 +574,20 @@ test('⚡発火: 帯電マスの隣に置くと、帯電マスの縦横隣接の
     assert.strictEqual(e.chargeStacks(s.board[5]), 0);
 });
 
+test('⚡発火: 帯電していたコマの毒・火炎が、ダメージを受けた敵のマスに1スタック移る(自分のコマには移らない)', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.life = 8;
+    s.board[5] = { player: '⭕', bind: 9, effects: [{ effect: '☠' }, { effect: '🔥' }, { effect: '⚡' }] };
+    s.board[6] = { player: '⭕', bind: 9, effects: [] };              // 帯電コマの持ち主自身のコマ
+    s.board[9] = { player: '💙', bind: 9, effects: [] };              // 敵のコマ(帯電マスの下隣)
+    e.placeMove(s, 4);                                               // 💙が帯電マスの左隣に着手
+    for (const k of [4, 9]) {
+        assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '☠').length, 1, `マス${k}の毒`);
+        assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '🔥').length, 1, `マス${k}の火炎`);
+    }
+    assert.ok(!s.board[6].effects.some((x) => x.effect === '☠' || x.effect === '🔥'), '持ち主のコマには移らない');
+});
+
 test('⚡発火: 着手したコマ自身も帯電マスの隣なら1ダメージを受ける', () => {
     const s = game('you', 'you');
     s.heartTurn = true; s.life = 5;

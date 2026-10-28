@@ -5,7 +5,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
 import { orthoNeighbors } from './boardGeometry';
-import { applyDamage, isFrozen, isDormant } from './thermal';
+import { applyDamage, isFrozen, isDormant, ignite } from './thermal';
 
 export { orthoNeighbors };
 
@@ -41,6 +41,7 @@ export type FireResult = {
  * 着手マス i の隣にある⚡を発火させる（size は盤の一辺。board を直接書き換える）。
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
+ * 帯電マス k にコマがあり、そのコマに☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
  */
 export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = []): FireResult => {
     const fired: number[] = [];
@@ -57,6 +58,12 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
             board[n] = applyDamage(sq, 1, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             damaged.push(n);
+            // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
+            const owner = board[k].player;
+            if (owner && sq.player !== owner) {
+                if (board[k].effects.some((e) => e.effect === '☠')) board[n] = { ...board[n], effects: [...board[n].effects, { effect: '☠' }] };
+                if (board[k].effects.some((e) => e.effect === '🔥')) ignite(board, [n], size);
+            }
         }
         board[k] = { ...board[k], effects: board[k].effects.filter((e) => e.effect !== '⚡') };
     }
