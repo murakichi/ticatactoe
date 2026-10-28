@@ -1377,6 +1377,8 @@ function chooseLocks(s, availableSkills) {
     if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
     if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
+    // 検証用 F.mistLock(issue #237): 収穫ギアなら毒霧(29)・付与割引(54)を手札に固定し続け、mistLoop の周回を毎手番回せるようにする
+    if (F.mistLoop && F.mistLock && hasGear(s.gears[s.turn], 'harvest')) return availableSkills.filter((i) => i === 29 || i === 54);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) {
