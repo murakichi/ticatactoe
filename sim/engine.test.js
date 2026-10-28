@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2908,6 +2908,28 @@ test('枯野の相席: 盤面の全てのコマ（敵味方）に🍂を1つず�
     e.SKILLS.leafAll(t);
     assert.strictEqual(t.heartMagic, 30);
     assert.strictEqual(e.leafAllLegal(t), false);
+});
+
+test('落葉の衣: 自陣のコマ全て（🔑含む）に🍂を1つずつ。敵には付かない。手番は続く', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }, { effect: '🍂' }] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.leafCloak(s);
+    const leaves = (i) => s.board[i].effects.filter((x) => x.effect === '🍂').length;
+    assert.strictEqual(leaves(0), 1);
+    assert.strictEqual(leaves(1), 2);
+    assert.strictEqual(leaves(4), 0);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickLeafCloak);
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    t.board[4] = { player: '⭕', bind: 5, effects: [] };
+    e.SKILLS.leafCloak(t);
+    assert.strictEqual(t.heartMagic, 30);
+    assert.strictEqual(e.leafCloakLegal(t), false);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

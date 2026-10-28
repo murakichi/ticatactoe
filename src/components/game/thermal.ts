@@ -396,6 +396,10 @@ export const leafDrop = (board: SquareInfo[], cell: number): void => {
 export const leafAllTargets = (board: SquareInfo[], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
     board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 
+/** 落葉の衣の対象: 使用者のコマ全て（🔑ロック中も含む。🍂は自陣に不利でないため） */
+export const leafCloakTargets = (board: SquareInfo[], me: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+
 /** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
 export const kindlingTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
     board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);

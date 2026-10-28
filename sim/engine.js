@@ -250,6 +250,7 @@ const skillCosts = {
     onClickChargeHeal: 6, // 雷を食らわば皿まで(idx 83)。この手番に付与した⚡の数だけ軽減（最低1）
     onClickLeafDrop: 1, // 落ち葉の置き土産(idx 84)
     onClickKindling: 5, // 焚きつけ(idx 85)
+    onClickLeafCloak: 3, // 落葉の衣(idx 86)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -1781,6 +1782,18 @@ function onClickLeafDrop(s) {
     bumpMagicCount(s);
     bumpStat(s, 'leafDrop');
 }
+// 落葉の衣 (idx 86): 自陣のコマ全てに🍂を1つずつ付与する。クリック不要・手番は続く。自陣のコマが無ければ使えない
+function leafCloakCells(s) { return thermal.leafCloakTargets(s.board, curPlayer(s)); }
+function leafCloakLegal(s) { return leafCloakCells(s).length > 0; }
+function onClickLeafCloak(s) {
+    const cells = leafCloakCells(s);
+    if (cells.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickLeafCloak, false, false, 'onClickLeafCloak'); // 払うコストは付与する前の盤面で決まる
+    for (const k of cells) thermal.leafDrop(s.board, k);
+    spendMagic(s, pay, 'onClickLeafCloak');
+    bumpMagicCount(s);
+    bumpStat(s, 'leafCloak');
+}
 // 焚きつけ (idx 85): 敵の🍂を全て🔥に変換する（🍂1枚につき🔥1つ。🔑ロック・⚡無敵のコマは除く）。対象が無ければ使えない
 function kindlingCandidates(s) { return thermal.kindlingTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function kindlingLegal(s) { return kindlingCandidates(s).length > 0; }
@@ -2560,6 +2573,7 @@ const SKILLS = {
     chargeHeal: onClickChargeHeal,
     leafDrop: onClickLeafDrop,
     kindling: onClickKindling,
+    leafCloak: onClickLeafCloak,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2604,7 +2618,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

@@ -100,6 +100,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge', costKey: 'onClickBristle', desc: '自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます' },    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge', costKey: 'onClickRelease', desc: '自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）' },    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge', costKey: 'onClickStash', desc: '⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコストを-1します（軽減後は最低1）' },    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge', costKey: 'onClickThunderFire', desc: '⚡のあるコマを1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を付けます（氷結中のコマは❄が1つ減るだけ）' },    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control', costKey: 'onClickDarkPot', desc: '敵味方を問わず全コマに🔥❄⚡☠🌱🍂をランダムに付けます（各エフェクトは最大1。🔑ロック・無敵のコマは除く）。盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます' },    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge', costKey: 'onClickChargeHeal', desc: '⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します。この手番に付与した⚡の数だけコストが下がります（最低1）' },
     { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: '自陣のコマ全てに🍂を1つずつ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

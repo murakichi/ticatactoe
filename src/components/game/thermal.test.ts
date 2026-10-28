@@ -1,4 +1,5 @@
 import {
+    leafCloakTargets,
     leafAllTargets,
     leafDropTargets,
     leafDrop,
@@ -1298,5 +1299,18 @@ describe('枯野の相席', () => {
         const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
         expect(leafAllTargets(b, guard)).toEqual([0, 2]);
         expect(sim.leafAllTargets(b, guard)).toEqual([0, 2]);
+    });
+});
+
+describe('落葉の衣', () => {
+    it('対象は使用者のコマ全て（🔑ロック中も含む）。敵と空きマスは対象外。sim/thermal.js と一致', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('💙', 3, '🔑');
+        b[2] = sq('⭕', 3);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        expect(leafCloakTargets(b, '💙')).toEqual([0, 1]);
+        expect(sim.leafCloakTargets(b, '💙')).toEqual([0, 1]);
     });
 });

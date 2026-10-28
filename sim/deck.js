@@ -96,6 +96,7 @@ const SKILL_CATALOG = [
     { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge' },
     { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds' },
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
 ];
 
 
