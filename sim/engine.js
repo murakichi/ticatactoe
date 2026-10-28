@@ -51,6 +51,7 @@ const { boardSizeFor, geometryOf, geometryForCells, lineCells } = require('./geo
 const gear = require('./gear');
 const deckMod = require('./deck');
 const discountMod = require('./discount');
+const comboMod = require('./comboCost');
 const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
 
@@ -151,7 +152,7 @@ const skillCosts = {
     onClickAddLife: 3,
     onClickDepressionCherry: 1,
     onClickShuffle: 1,
-    onClickBibine: 3,
+    onClickBibine: 4,
     onClickUseLock: 2,
     onClickDoubleLock: 3,
     onClickTripleLock: 4,
@@ -177,13 +178,13 @@ const skillCosts = {
     onClickChargeToken: (config.charge && config.charge.tokenCost) || 3,
     onClickChargeOne: (config.charge && config.charge.oneCost) || 2,
     onClickChargeSpread: (config.charge && config.charge.spreadCost) || 7,
-    onClickDoubleChargeToken: (config.charge && config.charge.doubleTokenCost) || 6,
+    onClickDoubleChargeToken: (config.charge && config.charge.doubleTokenCost) || 5,
     onClickChargeArea: (config.charge && config.charge.areaCost) || 5,
     onClickChargeRandom: (config.charge && config.charge.randomCost) || 3,
     onClickJammer: (config.charge && config.charge.jammerCost) || 4,
     onClickHailMary: 6, // idx 27
     onClickSilence: 5, // idx 28
-    onClickPoisonMist: 7, // idx 29
+    onClickPoisonMist: 6, // idx 29
     // ❄氷結・🔥火炎。氷結/火炎付与は汎用プール(idx 30/31)、氷河期は氷室の番人・フレアバーストは煉獄の鍛冶師の固有スキル
     onClickFreeze: (config.thermal && config.thermal.freezeCost) || 3,
     onClickIgnite: (config.thermal && config.thermal.igniteCost) || 3,
@@ -198,7 +199,7 @@ const skillCosts = {
     onClickWindborne: (config.thermal && config.thermal.windborneCost) || 4,
     // 火炎系の汎用スキル idx 37〜40（対氷結の手段）
     onClickFlameToken: (config.thermal && config.thermal.flameTokenCost) || 3,
-    onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 6,
+    onClickDoubleFlameToken: (config.thermal && config.thermal.flameDoubleTokenCost) || 5,
     onClickSwidden: (config.thermal && config.thermal.swiddenCost) || 3,
     onClickSacrifice: (config.thermal && config.thermal.sacrificeCost) || 5,
     // 氷結スキル群 idx 41〜48
@@ -207,7 +208,7 @@ const skillCosts = {
     onClickRandomFreeze: (config.thermal && config.thermal.randomFreezeCost) || 3,
     onClickFreezeSpread: (config.thermal && config.thermal.freezeSpreadCost) || 7,
     onClickFrostToken: (config.thermal && config.thermal.frostTokenCost) || 3,
-    onClickDoubleFrostToken: (config.thermal && config.thermal.doubleFrostTokenCost) || 6,
+    onClickDoubleFrostToken: (config.thermal && config.thermal.doubleFrostTokenCost) || 5,
     onClickShatter: (config.thermal && config.thermal.shatterCost) || 4,
     onClickFrostfall: (config.thermal && config.thermal.frostfallCost) || 3,
     // 汎用スキル(idx 49-52)。コスト表のキー順をブラウザ版と揃える（sim 側のスキル実装は未対応）
@@ -226,20 +227,20 @@ const skillCosts = {
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。src/components/game/skillCosts.ts と同値
-    onClickLeafToken: 3,
-    onClickTwinLeafToken: 5,
-    onClickDoubleLeafToken: 6,
-    onClickBothLeafToken: 4,
+    onClickLeafToken: 5,
+    onClickTwinLeafToken: 7,
+    onClickDoubleLeafToken: 9,
+    onClickBothLeafToken: 5,
     onClickBonfire: 3,
     onClickMulch: 2,
     onClickAutumn: 4,
     onClickLeafFrost: 3, // 霜枯れ(idx 69)
     onClickSpringWind: 2, // 春一番(idx 70)
-    onClickKimon: 5, // 鬼門封じ(idx 74)
+    onClickKimon: 6, // 鬼門封じ(idx 74)
     onClickFireWheel: 5, // 火の車(idx 75)。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
     onClickStrip: 4, // 裸の王様(idx 76)
-    onClickChargeSeason: 6, // 静電気の季節(idx 77)
-    onClickBristle: 5, // 総毛立つ(idx 78)
+    onClickChargeSeason: 7, // 静電気の季節(idx 77)
+    onClickBristle: 6, // 総毛立つ(idx 78)
     onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
     onClickStash: 1, // 雷神のへそくり(idx 80)
     onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
@@ -601,6 +602,7 @@ function newGame(opts = {}) {
         useKimon: false,
         useStash: false,
         useThunderFire: false,
+        leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -658,7 +660,8 @@ function gearCtx(s, seat) {
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
-    const adjusted = gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key);
+    const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat]) : 0; // 導線（コンボ）による軽減
+    const adjusted = Math.max(0, gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut);
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
@@ -880,6 +883,7 @@ function advanceTurn(s) {
     s.discount[next] = discountMod.emptyDiscount();
     s.oppSkillPrev[next] = s.oppSkilled[next];
     s.fireBase[next] = thermal.fireStacksTotal(s.board);
+    s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
     s.oppSkilled[next] = false;
     s.echoReady[next] = s.echoNext[next];
     s.echoNext[next] = false;
@@ -2032,21 +2036,24 @@ function placeLeafTokens(s, count, leaves) {
         harvestMagic(s, afterTokenPlaced(s, idx));
     }
 }
-function finishLeafToken(s, key, stat) {
-    spendMagic(s, calculateCost(s, costsOf(s)[key], true, false, key), key);
+// 払うコストは置く前の盤面で決める（紅葉狩りの導線が、自分で置いた🍂で成立してしまわないように）
+const leafTokenCost = (s, key) => calculateCost(s, costsOf(s)[key], true, false, key);
+function finishLeafToken(s, key, stat, cost) {
+    spendMagic(s, cost, key);
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
     bumpStat(s, stat);
 }
 // 木枯らしの使い (idx62): 🍂付きトークン
-function onClickLeafToken(s) { placeLeafTokens(s, 1, 1); finishLeafToken(s, 'onClickLeafToken', 'leafToken'); }
+function onClickLeafToken(s) { const cost = leafTokenCost(s, 'onClickLeafToken'); placeLeafTokens(s, 1, 1); finishLeafToken(s, 'onClickLeafToken', 'leafToken', cost); }
 // 落葉松の双子 (idx63): 🍂が2枚付いたトークン
-function onClickTwinLeafToken(s) { placeLeafTokens(s, 1, 2); finishLeafToken(s, 'onClickTwinLeafToken', 'twinLeafToken'); }
+function onClickTwinLeafToken(s) { const cost = leafTokenCost(s, 'onClickTwinLeafToken'); placeLeafTokens(s, 1, 2); finishLeafToken(s, 'onClickTwinLeafToken', 'twinLeafToken', cost); }
 // 紅葉狩り (idx64): 🍂付きのダブルトークン
-function onClickDoubleLeafToken(s) { placeLeafTokens(s, 2, 1); finishLeafToken(s, 'onClickDoubleLeafToken', 'doubleLeafToken'); }
+function onClickDoubleLeafToken(s) { const cost = leafTokenCost(s, 'onClickDoubleLeafToken'); placeLeafTokens(s, 2, 1); finishLeafToken(s, 'onClickDoubleLeafToken', 'doubleLeafToken', cost); }
 // 枯野の相席 (idx65): 両トークン。🍂が付くのは自分のコマだけ（敵のコマに付けると自分のコストが上がるため）
 function onClickBothLeafToken(s) {
+    const cost = leafTokenCost(s, 'onClickBothLeafToken');
     const empties = findEmptyIndexes(s.board);
     const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
     let granted = 0;
@@ -2056,7 +2063,7 @@ function onClickBothLeafToken(s) {
         if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
     });
     harvestMagic(s, granted);
-    finishLeafToken(s, 'onClickBothLeafToken', 'bothLeafToken');
+    finishLeafToken(s, 'onClickBothLeafToken', 'bothLeafToken', cost);
 }
 // 焚き火の唄 (idx66): 敵陣の🍂を全て除去（🔑ロック・❄氷結のマスは対象外）。対象が無ければ使えない
 function bonfireLegal(s) { return thermal.bonfireTargets(s.board, curPlayer(s)).length > 0; }

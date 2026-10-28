@@ -302,7 +302,7 @@ describe('帯電 AI スキル2', () => {
         const ai = new AIPlayer('⭕', 'electrician', ['💙'], ['you', 'electrician']);
         const b = emptyBoard();
         expect(ai.chooseSkills(b, 8, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickDoubleChargeToken']);
-        expect(ai.chooseSkills(b, 5, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickChargeToken']);
+        expect(ai.chooseSkills(b, 4, costsAll, 0, 5, [21, 23], false)).toEqual(['onClickChargeToken']);
         expect(ai.chooseSkills(b, 4, costsAll, 0, 5, [25], true)).toEqual(['onClickChargeRandom']);
         expect(ai.chooseSkills(b, 3, costsAll, 0, 5, [25], true)).toEqual([]); // コスト3ちょうどでは余裕が無いので撃たない
     });
