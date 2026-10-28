@@ -1,5 +1,5 @@
 import React from 'react';
-import { cellPixelsFor } from './boardGeometry';
+import { cellCenterUnits } from './boardGeometry';
 import styles from './BoardEffects.module.css';
 import { isUniqueEffect, renderUniqueEffect } from './UniqueEffects';
 
@@ -85,12 +85,12 @@ type Props = {
     size: number;
 };
 
-// 盤面のセル中心座標 (padding 12 + cell + gap 8。4x4 なら cell 64 → step 72, 中心 44)
+// 盤面のセル中心座標。マス1つの大きさ(--sq。Game の boardArea が決める)に対する比率で指定するので、
+// 画面が狭くてマスが縮んだときも、演出が同じマスの中心に出る
+const sqCalc = (units: number) => `calc(var(--sq, 64px) * ${units})`;
 const cellCenter = (index: number, size: number) => {
-    const cell = cellPixelsFor(size);
-    const col = index % size;
-    const row = Math.floor(index / size);
-    return { left: 12 + cell / 2 + col * (cell + 8), top: 12 + cell / 2 + row * (cell + 8) };
+    const c = cellCenterUnits(index, size);
+    return { left: sqCalc(c.x), top: sqCalc(c.y), ux: c.x, uy: c.y };
 };
 
 // 上昇/落下パーティクルの横位置(%)
@@ -459,7 +459,7 @@ export const BoardEffects: React.FC<Props> = ({ effect, burst, size }) => {
                         {/* 元のマスから移動先へ飛ぶ本体 */}
                         <span
                             className={styles.flyer}
-                            style={{ left: a.left, top: a.top, ['--dx' as string]: `${b.left - a.left}px`, ['--dy' as string]: `${b.top - a.top}px` }}
+                            style={{ left: a.left, top: a.top, ['--dx' as string]: sqCalc(b.ux - a.ux), ['--dy' as string]: sqCalc(b.uy - a.uy) }}
                         >
                             {isDash ? '💨' : '👤'}
                         </span>

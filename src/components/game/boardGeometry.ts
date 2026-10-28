@@ -122,6 +122,26 @@ export const geometryForCells = (cells: number): BoardGeometry => geometryOf(Mat
 export const cellPixelsFor = (size: number): number =>
     size <= 4 ? 64 : size === 5 ? 60 : size === 6 ? 56 : size === 7 ? 52 : size === 8 ? 48 : size === 9 ? 44 : 40;
 
+/**
+ * 盤面の寸法は、マス1つの大きさ(--sq)を1とした比率で持つ。実際のマスの大きさが画面幅や高さで縮んでも、
+ * 隙間・余白・演出の位置が同じ比率で縮むので、演出がずれない。大きい盤(8x8〜)は隙間と余白を詰めて、マスを少しでも大きくする。
+ */
+export const boardLayoutOf = (size: number): { gap: number; pad: number; units: number } => {
+    const gap = size >= 8 ? 0.0625 : 0.125;
+    const pad = size >= 8 ? 0.125 : 0.1875;
+    return { gap, pad, units: size + (size - 1) * gap + 2 * pad };
+};
+
+/** マス index の中心(盤面の左上から、マス1つ分=1とした距離) */
+export const cellCenterUnits = (index: number, size: number): { x: number; y: number } => {
+    const { gap, pad } = boardLayoutOf(size);
+    return { x: pad + (index % size) * (1 + gap) + 0.5, y: pad + Math.floor(index / size) * (1 + gap) + 0.5 };
+};
+
+/** マス1つの大きさ(CSS)。上限は cellPixelsFor、画面の幅と(モバイルは)盤面に使える高さに収める */
+export const boardSqCss = (size: number): string =>
+    `min(${cellPixelsFor(size)}px, calc((100vw - 20px) / ${boardLayoutOf(size).units}), calc(var(--board-h, 9999px) / ${boardLayoutOf(size).units}))`;
+
 /** 縦横に隣接するマス（size x size, index = row*size + col） */
 export const orthoNeighbors = (i: number, size: number): number[] => {
     const r = Math.floor(i / size);
