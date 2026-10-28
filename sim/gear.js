@@ -43,7 +43,7 @@ const P = GEAR_PARAMS;
 const GEAR_IDS = [
     'emptyLock', 'ironLock', 'bindingLock', 'quadMastery', 'afterglow', 'luckyPurse', 'sturdy', 'titanCost', 'reinforce',
     'harvest', 'toxicBloom', 'priceWreck', 'chainDiscount', 'propagate', 'lightToken', 'gambler', 'vengeance',
-    'colorGarden', 'ailmentPact', 'ruinSurge', 'scorchedEarth', 'ashOffering', 'frostRoot', 'lastStand',
+    'colorGarden', 'ailmentPact', 'ruinSurge', 'scorchedEarth', 'ashOffering', 'frostRoot', 'conduction', 'lastStand',
 ];
 
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */

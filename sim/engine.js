@@ -398,6 +398,12 @@ function fireCharges(s, i, mover) {
             board[n] = thermal.applyDamage(sq, FIRE_DAMAGE, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             // 雷霆の巫視点: 雷霆の巫の駒が受けた被害 / それ以外の駒に与えた被害
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
+            // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
+            const owner = board[k].player;
+            if (owner && sq.player !== owner && hasGear(s.gears[seatOf(owner)], 'conduction')) {
+                if (board[k].effects.some((e) => e.effect === '☠')) board[n] = { ...board[n], effects: [...board[n].effects, { effect: '☠' }] };
+                if (board[k].effects.some((e) => e.effect === '🔥')) thermal.ignite(board, [n], s.size);
+            }
         }
         board[k].effects = board[k].effects.filter((e) => e.effect !== '⚡');
     }

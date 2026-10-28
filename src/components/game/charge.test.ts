@@ -35,6 +35,41 @@ describe('帯電 ⚡ helpers', () => {
         expect(chargeStacks(b[5])).toBe(0);
     });
 
+    it('fireCharges: 伝導(ギア)を持つ側の帯電コマの毒・火炎を、ダメージを受けた敵のマスに1スタック移す(自分のコマには移さない)', () => {
+        // 5=⭕の帯電コマ(☠+🔥+⚡)。4に💙が着手 → 5の隣の💙(4と6)がダメージ、⭕の1は自分のコマなので移らない
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '🔥' }, { effect: '⚡' }] };
+        put(b, 4, '💙', 6);
+        put(b, 6, '💙', 6);
+        put(b, 1, '⭕', 6);
+        const r = fireCharges(b, 4, 4, noLanding, [false, true]);
+        expect(r.carried.sort()).toEqual([4, 6]);
+        for (const k of [4, 6]) {
+            expect(b[k].effects.filter((e) => e.effect === '☠')).toHaveLength(1);
+            expect(b[k].effects.filter((e) => e.effect === '🔥')).toHaveLength(1);
+        }
+        expect(b[1].effects).toEqual([]);
+    });
+
+    it('fireCharges: 毒だけ・火炎だけなら、その1種類だけ移す。コマのない帯電マスからは移らない', () => {
+        const b = emptyBoard();
+        b[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '⚡' }] };
+        put(b, 4, '💙', 6);
+        fireCharges(b, 4, 4, noLanding, [false, true]);
+        expect(b[4].effects.map((e) => e.effect)).toEqual(['☠']);
+        const c = emptyBoard();
+        c[5] = { player: undefined, bind: 0, effects: [{ effect: '🔥' }, { effect: '⚡' }] };
+        put(c, 4, '💙', 6);
+        fireCharges(c, 4, 4, noLanding, [false, true]);
+        expect(c[4].effects).toEqual([]);
+        // 伝導(ギア)を持たない側の帯電コマからは移らない
+        const d = emptyBoard();
+        d[5] = { player: '⭕', bind: 4, effects: [{ effect: '☠' }, { effect: '⚡' }] };
+        put(d, 4, '💙', 6);
+        expect(fireCharges(d, 4, 4, noLanding).carried).toEqual([]);
+        expect(d[4].effects).toEqual([]);
+    });
+
     it('fireCharges: 連鎖しない / 帯電マスの隣でなければ何も起きない', () => {
         const b = emptyBoard();
         b[5] = { player: undefined, bind: 0, effects: [{ effect: '⚡' }] };

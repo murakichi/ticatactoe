@@ -1188,11 +1188,12 @@ export const Game = (props: GameProps) => {
         }
 
         // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ（蘇生の吸収より前）
-        const fire = fireCharges(nextBoard, i, geo.size, characters);
+        const fire = fireCharges(nextBoard, i, geo.size, characters, gearsBySeat.map((g) => hasGear(g, 'conduction')));
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
             playEffect('zap', fire.fired[0], undefined, '⚡発火');
+            if (fire.carried.length > 0) gearTrigger('conduction', `毒・火炎が${fire.carried.length}マスに移った`);
         }
 
         // 静電気の季節: 新しく置いた（奪った）自分のコマに⚡を付ける。発火のあとに付けるので、自分では発火しない（補強は設置ではないので対象外）
