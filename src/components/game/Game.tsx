@@ -22,7 +22,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { darkPotRolls } from './darkPot';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -390,6 +390,7 @@ export const Game = (props: GameProps) => {
             case 'onClickDoubleFrostToken': onClickDoubleFrostToken(); break;
             case 'onClickFrostfall': onClickFrostfall(); break;
             case 'onClickIgnite': onClickIgnite(); break;
+            case 'onClickTinder': onClickTinder(); break;
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickMogaribue': onClickMogaribue(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
@@ -975,6 +976,12 @@ export const Game = (props: GameProps) => {
 
         if (useShatter) {
             exeShatter(i);
+            return;
+        }
+
+        if (useTinder) {
+            if (!tinderCandidates().includes(i)) return; // 🌱も🍂も無いコマは選び直せる
+            exeTinder(i);
             return;
         }
 
@@ -2310,11 +2317,20 @@ export const Game = (props: GameProps) => {
     // --- 氷結・火炎（thermal.ts。氷室の番人・煉獄の鍛冶師） ---
     const [useFreeze, setUseFreeze] = useState<boolean>(false);
     const [useIgnite, setUseIgnite] = useState<boolean>(false);
+    const [useTinder, setUseTinder] = useState<boolean>(false);
     // 氷結: 選んだコマに❄を付与する（敵味方どちらでも。付与しただけではダメージは出ない）
     const onClickFreeze = () => {
         addLog('「氷結」を使用（コマを選択）');
         setUseFreeze(true);
         spendMagic(calculateCost(seatCosts.onClickFreeze, false, false, currentTurnPlayer, 'onClickFreeze'), true, true, 'onClickFreeze');
+    };
+    // 火口: 🌱か🍂のある敵コマを1つ選んで🔥を1つ付与する（対象が無ければ使えない）
+    const tinderCandidates = (): number[] => tinderTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    const onClickTinder = () => {
+        if (tinderCandidates().length === 0) return;
+        addLog('「火口」を使用（🌱か🍂のある敵コマを選択）');
+        setUseTinder(true);
+        spendMagic(calculateCost(seatCosts.onClickTinder, false, false, currentTurnPlayer, 'onClickTinder'), true, true, 'onClickTinder');
     };
     // 火遁（旧・火炎付与）: 選んだコマに🔥を1つ付与する。そのマスと縦横隣の氷結は即座に解ける
     const onClickIgnite = () => {
@@ -2987,6 +3003,12 @@ export const Game = (props: GameProps) => {
         playBurst('thaw', thawed);
         setCurrentBoard(board);
     };
+    const exeTinder = (i: number) => {
+        const board = currentBoard.slice();
+        addLog(`${posName(i)}に🔥を付与（火口）`);
+        setUseTinder(false);
+        igniteCells(board, [i]);
+    };
     const exeIgnite = (i: number) => {
         const board = currentBoard.slice();
         addLog(`${posName(i)}に🔥を付与`);
@@ -3274,6 +3296,7 @@ export const Game = (props: GameProps) => {
         setUseJammer(false);
         setUseFreeze(false);
         setUseIgnite(false);
+        setUseTinder(false);
         setGlacierPendingAll(Array(seatCount).fill(false));
         setGlacierChargeAll(Array(seatCount).fill(0));
         setBudGuardAll(Array(seatCount).fill(false));
@@ -3371,12 +3394,13 @@ export const Game = (props: GameProps) => {
         else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
         else if (useIgnite) setPreviewCells([i]);
+        else if (useTinder) setPreviewCells(tinderCandidates().includes(i) ? [i] : []);
         else if (useThunderFire) setPreviewCells(thunderFireTargets().includes(i) ? [i, ...geo.surroundRange(i)] : []);
         else if (useStash) setPreviewCells(stashTargets().includes(i) ? [i] : []);
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useThunderFire || useFreeze || useIgnite || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || useShikigamiBlast || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -3426,6 +3450,8 @@ export const Game = (props: GameProps) => {
         ? '氷結'
         : useIgnite
         ? '火遁'
+        : useTinder
+        ? '火口'
         : null;
     const skillAnnounce = pendingSkillName
         ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
@@ -3535,6 +3561,7 @@ export const Game = (props: GameProps) => {
         { idx: 83, onClick: onClickChargeHeal, buttonText: `雷を食らわば皿まで-${calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal')}`, paragraph: `⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します\nこのターンに付与した⚡の数だけコストが下がります（最低1。使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickChargeHeal, false, false, 'onClickChargeHeal') || chargeHealCells().length === 0 },
         { idx: 84, onClick: onClickLeafDrop, buttonText: `落ち葉の置き土産-${calculateCost(seatCosts.onClickLeafDrop, false, false, currentTurnPlayer, 'onClickLeafDrop')}`, paragraph: `ランダムな敵のコマ1つに🍂を1つ付与します（🔑ロックと⚡無敵のコマは対象外）\n敵の🍂は、その持ち主以外のスキルコストを増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafDrop, false, false) || leafDropCandidates().length === 0 },
         { idx: 85, onClick: onClickKindling, buttonText: `焚きつけ-${calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling')}`, paragraph: `敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）\n氷結中のコマは🔥の代わりに❄が解除されます`, disabled: checkSkillDisable(seatCosts.onClickKindling, false, false) || kindlingCandidates().length === 0 },
+        { idx: 87, onClick: onClickTinder, buttonText: `火口-${calculateCost(seatCosts.onClickTinder, false, false, currentTurnPlayer, 'onClickTinder')}`, paragraph: `🌱バッズか🍂を持つ敵のコマを1つ選び、🔥火炎を1つ付与します\n付与した瞬間に1ダメージ。🔥は🌱・🍂を焼いて消します（🔑ロックと⚡無敵のコマは選べません）\n鍛冶師は🔥付与のスキルが-1`, disabled: checkSkillDisable(seatCosts.onClickTinder) || tinderCandidates().length === 0 },
         { idx: 86, onClick: onClickLeafCloak, buttonText: `落葉の衣-${calculateCost(seatCosts.onClickLeafCloak, false, false, currentTurnPlayer, 'onClickLeafCloak')}`, paragraph: `ランダムな自陣のコマ1つ（🔑ロック中も含む）に🍂を1つ付与します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafCloak) || leafCloakCandidates().length === 0 },
     ];
 

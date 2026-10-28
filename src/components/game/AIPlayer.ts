@@ -5,12 +5,12 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
+import { tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
 import { shouldDecay } from './decay';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..73)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 87;
+export const SKILL_POOL_SIZE = 88;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -232,6 +232,31 @@ class AIPlayer {
             }
         }
         return bestIdx;
+    }
+
+    /** 火口(idx 87)の対象: 🌱か🍂を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (sim/ai.js bestTinderTarget と同一) */
+    private bestTinderTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        const guardedCell = (sq: SquareInfo, i: number) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
+        let best: number | null = null;
+        let bestVal = 0;
+        for (const i of tinderTargets(board, this.playerSymbol, guardedCell)) {
+            const sq = board[i];
+            if (sq.bind <= 0 || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2) build += foes;
+            }
+            const val = sq.bind + (budStacks(sq) + sq.effects.filter((e) => e.effect === '🍂').length) * 3 + build * 2;
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /** 火遁(鍛冶師の固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上・自コマなし)とライフが高いものを優先。
@@ -2174,6 +2199,19 @@ class AIPlayer {
             const necroFoe = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'necromancer');
             // 業火が今撃てるなら、火遁で魔力を使って業火を撃てなくしない
             const blocksInferno = worth && magic >= infernoNow() && magic - igniteCost < infernoNow();
+            // 火口(🌱か🍂のある敵コマ専用。鍛冶師は1コスト)は火遁より先に撃つ。別の種類のスキルなので火遁とも両方撃てる。sim/ai.js の火口と同一
+            const tinderCost = this.calculateAICost(costs.onClickTinder, false, false, 'onClickTinder');
+            if (!necroFoe && availableSkills.includes(87) && !this.skillKinds.has('onClickTinder') && !chargeClicks.some((c) => c.skill === 'onClickTinder') && magic >= tinderCost
+                && !(worth && magic >= infernoNow() && magic - tinderCost < infernoNow())) {
+                const t = this.bestTinderTarget(board);
+                if (t !== null) {
+                    chargeClicks.push({ skill: 'onClickTinder', target: t });
+                    board = board.slice();
+                    ignite(board, [t], this.sizeOf(board), 1);
+                    this.updateShield(board);
+                    magic -= tinderCost;
+                }
+            }
             if (!necroFoe && !blocksInferno && !this.skillKinds.has('onClickIgnite') && !chargeClicks.some((c) => c.skill === 'onClickIgnite') && magic >= igniteCost) {
                 const t = this.bestIgniteTarget(board);
                 if (t !== null) {

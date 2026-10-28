@@ -198,6 +198,26 @@ const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 火遁(固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上)とライフが高いものを優先。
 // mode>=2 のときは、敵が2つ以上並べて自分のコマが無い列の空きマスにも🔥を仕込む（そこに置いた敵コマに🔥が引き継がれる）
+// 火口(idx 87)の対象: 🌱か🍂を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりが最大のもの。なければ null [FAITHFUL] AIPlayer.bestTinderTarget
+function bestTinderTarget(s, me) {
+    const geo = geometryForCells(s.board.length);
+    const enemyAt = (i) => s.board[i].player && s.board[i].player !== me;
+    let best = null, bestVal = 0;
+    for (const i of thermal.tinderTargets(s.board, me, (sq, k) => shield.has(k) || sq.effects.some((e) => e.effect === '🔑'))) {
+        const sq = s.board[i];
+        if (sq.bind <= 0 || thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+        let build = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            const foes = line.filter((j) => enemyAt(j)).length;
+            const mine = line.filter((j) => s.board[j].player === me).length;
+            if (mine === 0 && foes >= 2) build += foes;
+        }
+        const val = sq.bind + (thermal.budStacks(sq) + thermal.leafStacks(sq)) * 3 + build * 2;
+        if (val > bestVal) { bestVal = val; best = i; }
+    }
+    return best;
+}
 function bestIgniteTarget(s, me, mode) {
     const geo = geometryForCells(s.board.length);
     const enemyAt = (i) => s.board[i].player && s.board[i].player !== me;
@@ -1872,6 +1892,15 @@ function faithfulMakeMoveInner(s) {
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 
     // 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる
+    // 火口(🌱か🍂のある敵コマ専用。鍛冶師は1コスト)は火遁より先に撃つ。別の種類のスキルなので火遁とも両方撃てる
+    if (curChar(s) === 'pyromancer' && !s.silenced[s.turn] && availableSkills.includes(87) && !s.skillKinds[s.turn].has('onClickTinder')
+        && !otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder')
+        && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
+            && curMagic(s) - calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder') < infernoCost(s))) {
+        const t = bestTinderTarget(s, me);
+        if (t !== null) { SKILLS.tinder(s); placeMove(s, t); updateShield(s); }
+    }
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
     if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
         && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
