@@ -2910,26 +2910,37 @@ test('枯野の相席: 盤面の全てのコマ（敵味方）に🍂を1つず�
     assert.strictEqual(e.leafAllLegal(t), false);
 });
 
-test('落葉の衣: 自陣のコマ全て（🔑含む）に🍂を1つずつ。敵には付かない。手番は続く', () => {
+test('落葉の衣: ランダムな自陣のコマ1つ（🔑含む）に🍂を1つ。敵には付かない。手番は続く', () => {
     const s = game('you', 'you');
     s.heartTurn = true; s.heartMagic = 30;
     s.board[0] = { player: '💙', bind: 3, effects: [] };
-    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }, { effect: '🍂' }] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
     s.board[4] = { player: '⭕', bind: 5, effects: [] };
     const before = s.heartMagic;
     e.SKILLS.leafCloak(s);
     const leaves = (i) => s.board[i].effects.filter((x) => x.effect === '🍂').length;
-    assert.strictEqual(leaves(0), 1);
-    assert.strictEqual(leaves(1), 2);
+    assert.strictEqual(leaves(0) + leaves(1), 1);
     assert.strictEqual(leaves(4), 0);
     assert.strictEqual(s.heartTurn, true);
     assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickLeafCloak);
+    // 乱数で両方に当たりうる（同じマスに偏らない）
+    const hit = new Set();
+    for (let seed = 1; seed <= 30; seed++) {
+        const g = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        g.heartTurn = true; g.heartMagic = 30;
+        g.board[0] = { player: '💙', bind: 3, effects: [] };
+        g.board[1] = { player: '💙', bind: 3, effects: [] };
+        e.SKILLS.leafCloak(g);
+        hit.add(leaves2(g));
+    }
+    assert.strictEqual(hit.size, 2);
     const t = game('you', 'you');
     t.heartTurn = true; t.heartMagic = 30;
     t.board[4] = { player: '⭕', bind: 5, effects: [] };
     e.SKILLS.leafCloak(t);
     assert.strictEqual(t.heartMagic, 30);
     assert.strictEqual(e.leafCloakLegal(t), false);
+    function leaves2(g) { return g.board.findIndex((q) => q.effects.some((x) => x.effect === '🍂')); }
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

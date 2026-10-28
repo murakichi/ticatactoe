@@ -1782,14 +1782,14 @@ function onClickLeafDrop(s) {
     bumpMagicCount(s);
     bumpStat(s, 'leafDrop');
 }
-// 落葉の衣 (idx 86): 自陣のコマ全てに🍂を1つずつ付与する。クリック不要・手番は続く。自陣のコマが無ければ使えない
+// 落葉の衣 (idx 86): ランダムな自陣のコマ1つに🍂を1つ付与する。クリック不要・手番は続く。自陣のコマが無ければ使えない
 function leafCloakCells(s) { return thermal.leafCloakTargets(s.board, curPlayer(s)); }
 function leafCloakLegal(s) { return leafCloakCells(s).length > 0; }
 function onClickLeafCloak(s) {
     const cells = leafCloakCells(s);
     if (cells.length === 0) return;
     const pay = calculateCost(s, costsOf(s).onClickLeafCloak, false, false, 'onClickLeafCloak'); // 払うコストは付与する前の盤面で決まる
-    for (const k of cells) thermal.leafDrop(s.board, k);
+    thermal.leafDrop(s.board, randomPick(cells, s.rng));
     spendMagic(s, pay, 'onClickLeafCloak');
     bumpMagicCount(s);
     bumpStat(s, 'leafCloak');
