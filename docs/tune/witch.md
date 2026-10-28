@@ -2,6 +2,7 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 9e6c8d8（コスト計算順の変更 31f7718 を取り込み後の再検証OK）
 - 現在の推奨設定: gears=[lightToken, bindingLock] deck=[5,8,12,28,36,44,53,62,63,64,85,86] AIフラグ=witchNoAnti=1・witchReserve=1（既定）
+- 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
 - 完了判定の再確認（道連れの鍵ギアの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 76.0%** / 2位 poisoner 63.0%（差13.1pt）、条件2（`--envDeck varied`）**1位 witch 69.6%** / 2位 cryomancer 61.2%（差8.4pt）。
 - 完了判定の再確認（風の落とし子デッキの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 67.0%** / 2位 poisoner 64.3%（差2.7pt）、条件2（`--envDeck varied`）**1位 witch 62.2%** / 2位 poisoner 62.1%（差0.1pt）。デッキ変更前(68.7% / 62.5%)より seed3 では僅かに低い（-1.7pt, ノイズの範囲。seed2/200 では +3.9pt）。
 - 完了判定（1条件目・基本、氷結拡散の採用後）`--rank --games 200 --seed 3 --target witch`: **1位 witch 68.7%** / 2位 poisoner 64.2% / 3位 electrician 60.1% / 4位 cryomancer 59.9% / 5位 necromancer 58.6%（差4.5pt）。2条件目（`--envDeck varied`、同条件）: **1位 witch 62.5%** / 2位 poisoner 62.4%（差0.1pt）/ 3位 cryomancer 60.4% / 4位 necromancer 59.1% / 5位 electrician 55.3%。**2条件とも1位でトップ到達**（2条件目は僅差）。
