@@ -162,7 +162,7 @@ const RECOMMENDED_GEARS = {
     poisoner: ['lastStand', 'sturdy'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['afterglow', 'lastStand'],
-    pyromancer: ['emptyLock', 'harvest'],
+    pyromancer: ['afterglow', 'harvest'], // 余韻+収穫(tune-top #38: 空蔵+収穫 51.7→58.5%(seed91/300)・51.7→58.4%(seed92/300)。対魔法使い 59→97%)
     witch: ['lightToken', 'priceWreck'], // 🍂トークンのコスト軽減＋価格破壊(魔力が足りない魔女は、🍂トークンが安く引ける試合で伸びる)。tune-top: 環境勝率 21.9→33.8%(seed2/200)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
