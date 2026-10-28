@@ -12,7 +12,7 @@ module.exports = {
         "electrician": 6,
         "cryomancer": 4,
         "pyromancer": 6,
-        "witch": 5,
+        "witch": 4,
         "default": 5
     },
     "lifeStd": 3,

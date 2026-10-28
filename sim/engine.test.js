@@ -2943,5 +2943,16 @@ test('落葉の衣: ランダムな自陣のコマ1つ（🔑含む）に🍂を
     function leaves2(g) { return g.board.findIndex((q) => q.effects.some((x) => x.effect === '🍂')); }
 });
 
+test('凩の魔女: 毎ターンの魔力は+2（基本+1＋キャラ補正+1）。ライフ平均は4', () => {
+    const w = game('witch', 'you');
+    const y = game('you', 'you');
+    const m0 = w.heartMagic;
+    e.placeMove(w, 0); e.placeMove(w, 1); // 💙(魔女)が置き、⭕が置く → 魔女の次の手番の頭
+    e.placeMove(y, 0); e.placeMove(y, 1);
+    assert.strictEqual(w.heartMagic - m0, 2);
+    assert.strictEqual(y.heartMagic - m0, 1);
+    assert.strictEqual(require('./config').lifeMeans.witch, 4);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
