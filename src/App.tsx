@@ -50,7 +50,7 @@ const CHARACTERS: CharacterDef[] = [
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージは受けない。ライフ平均${L.electrician}。固有:帯電拡散`,
+        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージと、⚡が乗った時点の2ダメージ（雷霆以外のコマが受ける）は受けない。ライフ平均${L.electrician}。固有:帯電拡散`,
     },
     {
         id: 'cryomancer',
