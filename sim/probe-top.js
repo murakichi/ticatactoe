@@ -45,6 +45,9 @@ const games = parseInt(args.games || '100', 10);
 const seed0 = parseInt(args.seed || '1', 10);
 const size = args.size ? parseInt(args.size, 10) : undefined;
 const maxTurns = 600;
+// 探索から省く候補（autotune.js が記憶から渡す）。--excludeKnobs k=v,.. / --excludeCards 5,7 / --keepCards 3,4（入れ替えで抜かない） / --skipGears slot:gear,..
+const setOf = (key, num) => new Set((args[key] || '').split(',').filter(Boolean).map((x) => (num ? parseInt(x, 10) : x)));
+const exKnobs = setOf('excludeKnobs'), exCards = setOf('excludeCards', true), keepCards = setOf('keepCards', true), skipGears = setOf('skipGears');
 // --envFile <json>: { <char>: { deck, gears, flags } }。autotune.js が育てた設定を環境(全キャラ)の既定として使う。無いキャラ/項目は推奨のまま
 const ENV = args.envFile ? JSON.parse(require('fs').readFileSync(args.envFile, 'utf8')) : {};
 
@@ -244,7 +247,7 @@ async function main() {
         variants.push({ ...cand, gears: base }); labels.push('base ' + base.join(','));
         for (let slot = 0; slot < base.length; slot++) {
             for (const g of gearMod.GEAR_IDS) {
-                if (base.includes(g)) continue;
+                if (base.includes(g) || skipGears.has(`${slot}:${g}`)) continue;
                 const gs = base.slice(); gs[slot] = g;
                 variants.push({ ...cand, gears: gs }); labels.push(`slot${slot}→${g}  [${gs.join(',')}]`);
             }
@@ -261,8 +264,14 @@ async function main() {
         while (variants.length < n + 1 && guard++ < n * 20) {
             const keep = base.slice();
             const outs = [], ins = [];
-            for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            for (let j = 0; j < k; j++) {
+                const outable = keep.filter((c) => !keepCards.has(c));
+                if (!outable.length) break;
+                const c = outable[Math.floor(rng() * outable.length)];
+                keep.splice(keep.indexOf(c), 1); outs.push(c);
+            }
+            if (outs.length < k) break;
+            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && !exCards.has(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
@@ -286,7 +295,7 @@ async function main() {
             if (typeof dv !== 'number' || (only && !only.includes(k))) continue;
             const v = k in cur ? cur[k] : dv;
             const alts = v === 0 ? [1] : v === 1 ? [0] : [...new Set([Math.round(v / 2), Math.round(v * 2)])].filter((x) => x !== v);
-            for (const a of alts) cands.push([k, a]);
+            for (const a of alts) if (!exKnobs.has(`${k}=${a}`)) cands.push([k, a]);
         }
         for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
         const n = parseInt(args.neighbors || '40', 10);

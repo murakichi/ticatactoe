@@ -43,10 +43,64 @@ const dry = args.dry === 'true';
 const tunedFile = path.resolve(args.tuned || path.join(__dirname, 'tuned.json'));
 const logFile = path.resolve(args.log || path.join(__dirname, 'autotune-log.jsonl'));
 const started = Date.now();
+const memFile = path.resolve(args.memory || path.join(__dirname, 'autotune-memory.json'));
+const notesFile = path.resolve(args.notes || path.join(__dirname, '..', 'docs', 'tune', 'autotune.md'));
+const PILOT_GAMES = parseInt(args['pilot-games'] || '10', 10);
+const BAD_Z = -2;          // 札/ギア/ノブの平均 z がこれ以下(=明らかに悪い)なら以後その候補は探索から外す
+const BAD_MIN_N = 3;       // 外すのに必要な観測数（1回の悪い結果で外さない）
+const BAD_TTL_ROUNDS = 6;  // 悪い候補を外しておく周回数（周りの環境が変わるので期限付き。コードが変われば即失効）
 
 const load = () => (fs.existsSync(tunedFile) ? JSON.parse(fs.readFileSync(tunedFile, 'utf8')) : {});
 const save = (t) => { fs.writeFileSync(tunedFile + '.tmp', JSON.stringify(t, null, 2) + '\n'); fs.renameSync(tunedFile + '.tmp', tunedFile); };
 const log = (o) => fs.appendFileSync(logFile, JSON.stringify({ at: new Date().toISOString(), ...o }) + '\n');
+
+// ---- 記憶: 「効かないもの」を覚えて次回から探索に入れない ----
+//  inert[char]      : AIノブ k=v のうち、基準と全試合の結果が完全一致したもの（そのキャラのAIがそのノブを使わない）。コード(ai.js 等)が変わると失効
+//  cards[char][idx] : デッキ札ごとの観測。入れた時/抜いた時の z の累計。入れて明らかに悪い札は挿入候補から、抜いて明らかに悪い札は入れ替え対象から外す
+//  gears[char]['slot:gear'] / flags[char]['k=v'] : 1回の観測ごとの z。BAD_MIN_N 回以上で平均が BAD_Z 以下なら外す
+//  自分の設定(tuned[char])が変わったらそのキャラの bad 系は破棄する（相互作用が変わるため）
+function codeHash() {
+    const h = require('crypto').createHash('sha1');
+    for (const f of fs.readdirSync(__dirname).filter((x) => x.endsWith('.js') && !/autotune|apply-tuned|probe-|test|cli/.test(x)).sort()) h.update(f + fs.readFileSync(path.join(__dirname, f)));
+    return h.digest('hex').slice(0, 12);
+}
+const HASH = codeHash();
+function loadMem() {
+    const m = fs.existsSync(memFile) ? JSON.parse(fs.readFileSync(memFile, 'utf8')) : {};
+    if (m.codeHash !== HASH) { // コードが変わったら観測は全て無効
+        if (m.codeHash) console.log(`コード変更を検知(${m.codeHash} -> ${HASH})。記憶を破棄します`);
+        return { codeHash: HASH, inert: {}, cards: {}, gears: {}, flags: {} };
+    }
+    return m;
+}
+const mem = loadMem();
+const saveMem = () => { fs.writeFileSync(memFile + '.tmp', JSON.stringify(mem, null, 1) + '\n'); fs.renameSync(memFile + '.tmp', memFile); writeNotes(); };
+const slot = (o, ...ks) => ks.reduce((a, k) => (a[k] = a[k] || {}), o);
+const isBad = (e, round) => e && e.n >= BAD_MIN_N && e.sum / e.n <= BAD_Z && e.max < 0 && round - e.last < BAD_TTL_ROUNDS;
+function observe(o, key, z, round) { const e = o[key] || (o[key] = { n: 0, sum: 0, max: -Infinity, last: round }); e.n++; e.sum += z; e.max = Math.max(e.max, z); e.last = round; }
+function forget(char) { for (const k of ['cards', 'gears', 'flags']) delete mem[k][char]; }
+
+/** 人が読むメモ。docs/tune/autotune.md に毎回書き出す */
+function writeNotes() {
+    const L = ['# autotune 記憶(自動生成)', '', `sim/autotune.js が「効かない/明らかに悪い」と判断して探索から外したもの。コード(sim/*.js)が変わると失効する。コード版: \`${HASH}\``, '',
+        '- **無効ノブ**: そのキャラのAIが使わず、動かしても全試合の結果が基準と完全一致したノブ（pilot / 本探索で判定）',
+        `- **悪い候補**: 観測${BAD_MIN_N}回以上で平均 z ≤ ${BAD_Z} かつ一度も改善しなかったもの（${BAD_TTL_ROUNDS}周回で失効）`, ''];
+    const chars_ = new Set([...Object.keys(mem.inert), ...Object.keys(mem.cards), ...Object.keys(mem.gears), ...Object.keys(mem.flags)]);
+    for (const c of [...chars_].sort()) {
+        L.push(`## ${c}`);
+        if ((mem.inert[c] || []).length) L.push(`- 無効ノブ(${mem.inert[c].length}): ${mem.inert[c].join(', ')}`);
+        const bad = (o) => Object.entries(o || {}).filter(([, e]) => e.n >= BAD_MIN_N && e.sum / e.n <= BAD_Z && e.max < 0).map(([k, e]) => `${k}(z̄${(e.sum / e.n).toFixed(1)}, n=${e.n})`);
+        const bi = Object.entries(mem.cards[c] || {}).filter(([, e]) => e.ins && e.ins.n >= BAD_MIN_N && e.ins.sum / e.ins.n <= BAD_Z && e.ins.max < 0).map(([k, e]) => `${k}(z̄${(e.ins.sum / e.ins.n).toFixed(1)}, n=${e.ins.n})`);
+        const bo = Object.entries(mem.cards[c] || {}).filter(([, e]) => e.out && e.out.n >= BAD_MIN_N && e.out.sum / e.out.n <= BAD_Z && e.out.max < 0).map(([k, e]) => `${k}(z̄${(e.out.sum / e.out.n).toFixed(1)}, n=${e.out.n})`);
+        if (bi.length) L.push(`- 入れると悪い札: ${bi.join(', ')}`);
+        if (bo.length) L.push(`- 抜くと悪い札(必須): ${bo.join(', ')}`);
+        if (bad(mem.gears[c]).length) L.push(`- 悪いギア差し替え(slot:gear): ${bad(mem.gears[c]).join(', ')}`);
+        if (bad(mem.flags[c]).length) L.push(`- 悪いノブ値: ${bad(mem.flags[c]).join(', ')}`);
+        L.push('');
+    }
+    fs.mkdirSync(path.dirname(notesFile), { recursive: true });
+    fs.writeFileSync(notesFile, L.join('\n'));
+}
 
 /** 多重比較の補正（tune-top SKILL の表）。n = 探索で測った候補数 */
 const zThreshold = (n) => (args.zmin ? Number(args.zmin) : n <= 5 ? 2.3 : n <= 15 ? 2.7 : n <= 40 ? 3.0 : 3.3);
@@ -68,12 +122,65 @@ function candArgs(cand) {
     return o;
 }
 
+const tunedOf = (char) => load()[char] || {};
+const curDeck = (char) => tunedOf(char).deck || require('./deck').recommendedDeck(char);
+const curGears = (char) => tunedOf(char).gears || require('./gear').recommendedGears(char);
+
+/** そのキャラのAIが使わないノブを pilot（少数試合）で洗い出す。基準と全試合の結果が完全一致 = 無効。コードが変わるまで再測定しない */
+function pilotInert(char, round) {
+    if (mem.inert[char]) return;
+    const r = probe({ games: PILOT_GAMES, seed: 7777, argv: ['--target', char, '--scan', 'flags', '--neighbors', '9999', '--excludeKnobs', (mem.inertDone || []).join(',')] });
+    const [base, ...rest] = r.rows;
+    mem.inert[char] = rest.filter((x) => x.tally === base.tally).map((x) => x.label);
+    console.log(`  ${char}: pilot(${PILOT_GAMES}試合) 無効ノブ ${mem.inert[char].length}/${rest.length} を除外`);
+    saveMem();
+}
+
+/** 探索結果を記憶に反映する（無効ノブ・悪い候補の学習） */
+function learn(char, axis, base, rest, z, round) {
+    if (axis === 'flags') {
+        // 本探索で基準と完全一致 = 無効（pilot で拾えなかった稀に効くノブも、ここで十分な試合数で判定できる）
+        const inert = new Set(mem.inert[char] || []);
+        for (const r of rest) { if (r.tally === base.tally) inert.add(r.label); else observe(slot(mem.flags, char), r.label, z(r), round); }
+        mem.inert[char] = [...inert];
+    } else if (axis === 'gears') {
+        const bg = curGears(char);
+        for (const r of rest) { const i = r.cand.gears.findIndex((g, j) => g !== bg[j]); observe(slot(mem.gears, char), `${i}:${r.cand.gears[i]}`, z(r), round); }
+    } else {
+        const bd = curDeck(char);
+        for (const r of rest) {
+            const zz = z(r);
+            for (const c of r.cand.deck.filter((x) => !bd.includes(x))) observe(slot(mem.cards, char, c), 'ins', zz, round);
+            for (const c of bd.filter((x) => !r.cand.deck.includes(x))) observe(slot(mem.cards, char, c), 'out', zz, round);
+        }
+    }
+    saveMem();
+}
+
 function step(char, axis, round, stepNo) {
     const seed = seedBase + round * 101 + stepNo;
+    const ex = [];
+    if (axis === 'flags') {
+        pilotInert(char, round);
+        const dead = new Set([...(mem.inert[char] || [])]);
+        for (const [k, e] of Object.entries(slot(mem.flags, char))) if (isBad(e, round)) dead.add(k);
+        if (dead.size) ex.push('--excludeKnobs', [...dead].join(','));
+    } else if (axis === 'deck') {
+        const cs = slot(mem.cards, char);
+        const noIns = Object.entries(cs).filter(([, e]) => isBad(e.ins, round)).map(([k]) => k);
+        const keep = Object.entries(cs).filter(([, e]) => isBad(e.out, round)).map(([k]) => k);
+        if (noIns.length) ex.push('--excludeCards', noIns.join(','));
+        if (keep.length) ex.push('--keepCards', keep.join(','));
+    } else if (axis === 'gears') {
+        const dead = Object.entries(slot(mem.gears, char)).filter(([, e]) => isBad(e, round)).map(([k]) => k);
+        if (dead.length) ex.push('--skipGears', dead.join(','));
+    }
+    if (ex.length) console.log(`  ${char}/${axis}: 記憶により除外 ${ex[1].split(',').length} 件`);
     const scanArgs = { gears: ['--scan', 'gears'], deck: ['--scan', 'deck', '--neighbors', String(neighbors), '--swap', String(swap)], flags: ['--scan', 'flags', '--neighbors', String(neighbors)] }[axis];
-    const scan = probe({ games, seed, argv: ['--target', char, ...scanArgs] });
+    const scan = probe({ games, seed, argv: ['--target', char, ...scanArgs, ...ex] });
     const [base, ...rest] = scan.rows;
     const z = (r) => (r.field - base.field) / Math.sqrt(r.se ** 2 + base.se ** 2);
+    learn(char, axis, base, rest, z, round);
     const best = rest.map((r) => ({ r, z: z(r) })).sort((a, b) => b.z - a.z)[0];
     const rec = { char, axis, round, seed, games, candidates: rest.length, base: base.field, best: best && { label: best.r.label, field: best.r.field, z: +best.z.toFixed(2) } };
     if (!best || best.z < zThreshold(rest.length)) { log({ ...rec, accepted: false, why: 'scan gate' }); return null; }
@@ -105,6 +212,7 @@ function main() {
                 const t = load();
                 t[char] = { ...(t[char] || {}), ...res.cand };
                 save(t);
+                forget(char); saveMem(); // 自分の設定が変わったので、そのキャラの「悪い候補」の記憶は作り直す（無効ノブは残す）
                 accepted++; maxGain = Math.max(maxGain, res.gain);
             }
         }
