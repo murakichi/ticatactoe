@@ -385,6 +385,8 @@ function watch(args) {
     const tty = process.stdout.isTTY;
     const t0 = Date.now();
     let lastDraw = 0, g = 0;
+    // 既定は本番AIと同じ装備。--no-gear でギアなし、--no-skill でスキルを使わない（置くだけ）
+    const runOpts = { deck: !args['no-skill'], gears: !args['no-gear'], skills: !args['no-skill'] };
     const boardN = size != null ? size : engine.boardSizeFor(players);
 
     const render = (final) => {
@@ -392,7 +394,7 @@ function watch(args) {
         const sec = (Date.now() - t0) / 1000;
         const drift = live.maxDrift(stats, conv ? conv.window : 10);
         const out = [];
-        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : 'random'}`);
+        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : 'random'}  スキル=${runOpts.skills ? 'あり' : 'なし'}  ギア=${runOpts.gears ? 'あり' : 'なし'}`);
         out.push(`games=${sm.games}  ${(sm.games / Math.max(sec, 0.001)).toFixed(1)}局/秒  経過 ${sec.toFixed(0)}s  draw ${(sm.drawRate * 100).toFixed(1)}%  avgTurns ${sm.avgTurns.toFixed(1)}`);
         out.push(`勝率の変動幅(直近${conv ? conv.window : 10}回の最大-最小): ${drift == null ? 'n/a' : (drift * 100).toFixed(2) + 'pt'}${conv ? `  (<=${(conv.eps * 100).toFixed(2)}pt かつ ${conv.minGames}局以上で自動停止)` : '  (--forever: 自動停止なし)'}`);
         out.push('');
@@ -438,7 +440,7 @@ function watch(args) {
         while (Date.now() < end && g < maxGames) {
             const chars = pickChars(players, fixed, pickRng);
             const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
-            const r = runGame(chars, rng, mode, size);
+            const r = runGame(chars, rng, mode, size, undefined, runOpts);
             live.record(stats, chars, r);
             g++;
             if (g % ckEvery === 0) live.checkpoint(stats);
@@ -466,7 +468,7 @@ else {
   node sim/cli.js play    [--me 💙|⭕] [--mychar C] [--aichar C] [--mode capture] [--seed N]
   node sim/cli.js sim     [--games 500] [--mode faithful|capture|random] [--seed N] [--pair h,c]
   node sim/cli.js auto    [--hchar C] [--cchar C] [--mode faithful] [--seed N]
-  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
+  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--no-gear] [--no-skill] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
   node sim/cli.js inflation [--players N] [--games 200] [--size N] [--chars ..] [--bucket 50] [--json]   # 魔力インフレ指標
   node sim/cli.js metrics [--games 800] [--mode faithful] [--seed N]   # balance snapshot as JSON
   node sim/cli.js bench   [--games 1500] [--char you] [--seed N]       # AI strength vs random / head-to-head
