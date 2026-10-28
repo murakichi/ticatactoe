@@ -7,7 +7,7 @@
 - 完了判定の再確認（風の落とし子デッキの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 67.0%** / 2位 poisoner 64.3%（差2.7pt）、条件2（`--envDeck varied`）**1位 witch 62.2%** / 2位 poisoner 62.1%（差0.1pt）。デッキ変更前(68.7% / 62.5%)より seed3 では僅かに低い（-1.7pt, ノイズの範囲。seed2/200 では +3.9pt）。
 - 完了判定（1条件目・基本、氷結拡散の採用後）`--rank --games 200 --seed 3 --target witch`: **1位 witch 68.7%** / 2位 poisoner 64.2% / 3位 electrician 60.1% / 4位 cryomancer 59.9% / 5位 necromancer 58.6%（差4.5pt）。2条件目（`--envDeck varied`、同条件）: **1位 witch 62.5%** / 2位 poisoner 62.4%（差0.1pt）/ 3位 cryomancer 60.4% / 4位 necromancer 59.1% / 5位 electrician 55.3%。**2条件とも1位でトップ到達**（2条件目は僅差）。
 - 基準線（完了判定の1条件目(氷結拡散の前) `--rank --games 200 --seed 3 --target witch`: **3位 61.5%**（1位 poisoner 64.9%、2位 electrician 61.5%、4位 cryomancer 61.0%、5位 necromancer 59.3%。差3.4pt）。（その前の順位: witchNoAnti 採用後 `--rank --games 60 --seed 1` **2位 65.3%** / 1位 poisoner 66.7%（差1.4pt）/ 3位 cryomancer 63.1% / 4位 necromancer 58.5% / 5位 electrician 57.2%。`--target witch --games 200 --seed 2` 61.4%）。（その前: 魔力+2/ライフ平均4 変更後 `--target witch --games 100 --seed 1` 51.7% ±2.8、`--rank --games 60 --seed 1` 5位 54.2% / 1位 poisoner 70.2%、2位 necromancer 63.2%、3位 cryomancer 63.1%。以下は旧い値）（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
-- 連続不採用回数: 0
+- 連続不採用回数: 2（joint と strategy。検証用ノブ cloak / mogaL / mogaHits / leafOrder / witchLock は削除済み）
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: refining(トップ到達後の洗練中。2026-10-28 到達。洗練は未実施: 別案ギア/デッキ、F.cloak ノブの整理、焚きつけ(未使用)の見直し)
 
@@ -43,6 +43,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 20 | strategy | 🍂トークンの選び方: `leafOrder=1`（安い順）/ `=2`（落葉松の双子優先）、固定する札を木枯らしの使いだけに絞る `witchLock=1`（seed2/200、基準 79.3%） | 79.1 / 79.5（差なし） / 74.9（-4.4pt） | 不採用（ノブは削除） |
+| 19 | joint(gear) | ギア2枠を替える組（seed1/100、基準 80.0%）: reinforce+bindingLock 66.4 / lastStand+bindingLock 75.4 / luckyPurse+bindingLock 71.1 / afterglow+bindingLock 69.7 / sturdy+bindingLock 69.2 / ironLock+bindingLock 67.8 | 全て大きく悪化。lightToken（トークンのコスト-1）が土台 | 不採用 |
 | 18 | strategy | **`witchReserve=1` を採用**（3回目の再検証。bindingLock 採用後の状態）。手札に🍂トークンがあれば、その最安コスト未満になる他スキルの支払いを控える。seed 2 で +1.7pt、さらに seed 4・5 を足して判定 | seed2: 77.6→79.3（+1.7）、seed4: 74.6→77.5（+2.9）、seed5: 74.7→78.1（+3.4）。平均+2.7pt（3×200試合）。対毒使い +5〜8 / 対魔法使い +3〜7 / 対ネクロ +4〜12。悪化した相手なし | **採用**（AI_DEFAULTS.witchReserve=1、AIPlayer.ts にミラー、回帰テスト追加） |
 | 17 | strategy | `cloak=2/3`（落葉の衣は死に札のままデッキにある）を bindingLock 後の状態で再検証（seed2/200） | 77.6→76.7 / 74.7（悪化） | 不採用 |
 | 16 | strategy | `mogaL=1,mogaHits=1`（虎落笛の発動条件を緩める）を再検証（seed2/200） | 77.6→75.4（悪化） | 不採用 |
