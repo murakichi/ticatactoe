@@ -126,6 +126,8 @@ class AIPlayer {
     gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number;
     /** 盤面にある効力のある🍂の総数（凩の魔女のパッシブ割引。updateShield で更新する） */
     private leafCount = 0;
+    /** 他の席のコマに乗っている効力のある🍂の総数（スキルコストの増加分。updateShield で更新する） */
+    private foeLeaves = 0;
     /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
     placements: number = 0;
     seatCount: number = 2;
@@ -263,6 +265,7 @@ class AIPlayer {
     /** 無敵マス(雷霆の巫の⚡付き自陣)の集合を更新する (sim/ai.js updateShield) */
     updateShield(board: SquareInfo[]): void {
         this.leafCount = boardLeaves(board);
+        this.foeLeaves = leafSurcharge(board, this.playerSymbol);
         this.shield = new Set();
         board.forEach((sq, i) => {
             if (sq.player && this.characterOf(sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq)) this.shield.add(i); // 氷結中は⚡が休眠で無敵でない
@@ -927,9 +930,10 @@ class AIPlayer {
 
     /** AI用コスト計算 (軍師のトークン割引など) */
     calculateAICost(baseCost: number, isToken: boolean = false, isPoison: boolean = false, skillKey?: string): number {
-        let cost = baseCost;
-        if (this.character === 'poisoner') cost = isPoison ? baseCost - 1 : baseCost + 1;
-        else if (this.character === 'tactician') cost = isToken ? baseCost - 1 : baseCost + 2;
+        // 敵の🍂による増加分を先に足す（キャラの減少分・ギア・割引はそのあと。Game.tsx characterCost / gearCost と同じ順）
+        let cost = baseCost + this.foeLeaves;
+        if (this.character === 'poisoner') cost = isPoison ? cost - 1 : cost + 1;
+        else if (this.character === 'tactician') cost = isToken ? cost - 1 : cost + 2;
         else if (this.character === 'pyromancer' && skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1) cost -= 1; // 🔥付与スキルは常に-1
         else if (this.character === 'witch' && cost > 1) cost = Math.max(1, cost - this.leafCount); // 盤面の🍂1枚につき-1（下限1）
         else if (this.character === 'yinYangMaster' && this.yinYangMode === 'yang') cost += 1; // 陽は全スキル+1
