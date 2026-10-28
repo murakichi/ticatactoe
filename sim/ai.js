@@ -2139,7 +2139,8 @@ function faithfulMakeMoveInner(s) {
                 return { move, turnEnded: false };
             }
         }
-        if (ch === 'magician' && magic >= judgeDayCost(s)) {
+        const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
+        if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {
             const target = bestJudgeTarget(s.board, me);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
