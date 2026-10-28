@@ -80,10 +80,12 @@ function lostCells(before, after, player, exclude) {
 }
 
 const budCount = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+/** 焦土の対象: 🔥で燃えて消える🌱と🍂（枯れ葉）の数 */
+const burnableCount = (sq) => sq.effects.filter((e) => e.effect === '🌱' || e.effect === '🍂').length;
 const hasEffect = (sq, effect) => sq.effects.some((e) => e.effect === effect);
 /** 焦土: 手番開始時の記録に対し、holder 以外のコマの🌱が🔥で消えた数 */
 function burnedBudCount(owners, buds, squares, holder) {
-    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - budCount(sq)) : n), 0);
+    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - burnableCount(sq)) : n), 0);
 }
 const scorchGain = (burned) => Math.min(P.scorchCap, burned * P.scorchMagic);
 const flameCount = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
@@ -94,7 +96,7 @@ function ignitedCount(owners, flames, squares, holder) {
 const flameCounts = (squares) => squares.map(flameCount);
 const frozenBudCount = (squares) => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
 const rootGain = (frozenBuds) => frozenBuds * P.rootMagic;
-const budCounts = (squares) => squares.map(budCount);
+const budCounts = (squares) => squares.map(burnableCount);
 
 function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (!gears || gears.length === 0) return cost;
