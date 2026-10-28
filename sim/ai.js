@@ -2151,4 +2151,4 @@ function makeMove(s, mode) {
     return { move: mv, turnEnded: false };
 }
 
-module.exports = { getBestMove, makeMove, chooseSkills, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };
+module.exports = { AI_DEFAULTS, getBestMove, makeMove, chooseSkills, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };

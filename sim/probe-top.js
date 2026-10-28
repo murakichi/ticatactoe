@@ -45,6 +45,8 @@ const games = parseInt(args.games || '100', 10);
 const seed0 = parseInt(args.seed || '1', 10);
 const size = args.size ? parseInt(args.size, 10) : undefined;
 const maxTurns = 600;
+// --envFile <json>: { <char>: { deck, gears, flags } }。autotune.js が育てた設定を環境(全キャラ)の既定として使う。無いキャラ/項目は推奨のまま
+const ENV = args.envFile ? JSON.parse(require('fs').readFileSync(args.envFile, 'utf8')) : {};
 
 /** 1試合。cfg[seat] = { deck, gears, flags, mod }。勝者の席（なければ -1） */
 function play(chars, cfgs, seed) {
@@ -63,7 +65,9 @@ function play(chars, cfgs, seed) {
 /** 環境のキャラ c の標準設定。deckRng が渡れば本番どおり「推奨から3枚入れ替え」 */
 function envCfg(c, mods, rng, varied, oppGears) {
     const gears = oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : oppGears === 'lastStand' ? ['lastStand', ...gearMod.recommendedGears(c).filter((g) => g !== 'lastStand').slice(0, gearMod.gearSlotsFor(c) - 1)] : gearMod.recommendedGears(c);
-    return { deck: varied ? deckMod.variedAIDeck(c, rng) : deckMod.recommendedDeck(c), gears, flags: {}, mod: mods.base };
+    const t = ENV[c] || {};
+    const useTunedGears = oppGears !== 'none' && oppGears !== 'random' && oppGears !== 'lastStand' && t.gears;
+    return { deck: varied ? deckMod.variedAIDeck(c, rng) : (t.deck || deckMod.recommendedDeck(c)), gears: useTunedGears ? t.gears.slice() : gears, flags: { ...(t.flags || {}) }, mod: mods.base };
 }
 
 /** ワーカー: a と b の組を games 試合（席交互）。a の勝ち・負け・引分を返す */
@@ -97,7 +101,7 @@ if (args.worker) {
             if (!isCand) return e;
             if (cand.deck) e.deck = cand.deck;
             if (cand.gears) e.gears = cand.gears;
-            if (cand.flags) e.flags = cand.flags;
+            if (cand.flags) e.flags = { ...e.flags, ...cand.flags };
             e.mod = mods.A;
             return e;
         };
@@ -119,6 +123,7 @@ function simHash() {
     const dir = __dirname;
     for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
     if (args.modA) h.update(require('fs').readFileSync(args.modA));
+    if (args.envFile) h.update(JSON.stringify(ENV));
     return h.digest('hex');
 }
 async function runWorkers(tasks, variants, workers) {
@@ -146,7 +151,7 @@ function runWorkersRaw(tasks, variants, workers) {
     for (let from = 0; from < games; from += per) jobs.push({ from, to: Math.min(games, from + per) });
     return Promise.all(jobs.map((j) => new Promise((resolve, reject) => {
         const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears };
-        const p = spawn(process.execPath, [__filename, '--worker', ...(size ? ['--size', String(size)] : [])], { env: { ...process.env, TOP_JOB: JSON.stringify(job) }, stdio: ['ignore', 'pipe', 'inherit'] });
+        const p = spawn(process.execPath, [__filename, '--worker', ...(size ? ['--size', String(size)] : []), ...(args.envFile ? ['--envFile', args.envFile] : [])], { env: { ...process.env, TOP_JOB: JSON.stringify(job) }, stdio: ['ignore', 'pipe', 'inherit'] });
         let buf = '';
         p.stdout.on('data', (d) => { buf += d; });
         p.on('close', (code) => {
@@ -234,7 +239,7 @@ async function main() {
     let variants = [cand];
     let labels = ['candidate'];
     if (args.scan === 'gears') {
-        const base = cand.gears || gearMod.recommendedGears(target);
+        const base = cand.gears || (ENV[target] && ENV[target].gears) || gearMod.recommendedGears(target);
         variants = []; labels = [];
         variants.push({ ...cand, gears: base }); labels.push('base ' + base.join(','));
         for (let slot = 0; slot < base.length; slot++) {
@@ -245,7 +250,7 @@ async function main() {
             }
         }
     } else if (args.scan === 'deck') {
-        const base = cand.deck || deckMod.recommendedDeck(target);
+        const base = cand.deck || (ENV[target] && ENV[target].deck) || deckMod.recommendedDeck(target);
         const n = parseInt(args.neighbors || '30', 10);
         const rng = engine.makeRng(seed0 * 977 + 5);
         variants = [{ ...cand, deck: base.slice().sort((a, b) => a - b) }]; labels = ['base'];
@@ -268,6 +273,25 @@ async function main() {
             const nm = (i) => `${i}(${deckMod.SKILL_CATALOG[i].name})`;
             labels.push(`-${outs.map(nm).join(',')} +${ins.map(nm).join(',')}  [${d.join(',')}]`);
         }
+    }
+
+    if (args.scan === 'flags') {
+        // AI_DEFAULTS の数値ノブを1つずつ動かす。0/1 は反転、それ以外は半分と2倍。--knobs a,b で絞る、--neighbors N で N 個をランダム抽出
+        const defaults = require('./ai.js').AI_DEFAULTS;
+        const cur = { ...((ENV[target] && ENV[target].flags) || {}), ...(cand.flags || {}) };
+        const only = args.knobs ? args.knobs.split(',') : null;
+        const rng = engine.makeRng(seed0 * 977 + 11);
+        const cands = [];
+        for (const [k, dv] of Object.entries(defaults)) {
+            if (typeof dv !== 'number' || (only && !only.includes(k))) continue;
+            const v = k in cur ? cur[k] : dv;
+            const alts = v === 0 ? [1] : v === 1 ? [0] : [...new Set([Math.round(v / 2), Math.round(v * 2)])].filter((x) => x !== v);
+            for (const a of alts) cands.push([k, a]);
+        }
+        for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+        const n = parseInt(args.neighbors || '40', 10);
+        variants = [{ ...cand }]; labels = ['base'];
+        for (const [k, a] of cands.slice(0, n)) { variants.push({ ...cand, flags: { ...cur, [k]: a } }); labels.push(`${k}=${a}`); }
     }
 
     if (args.scan === 'audit') {

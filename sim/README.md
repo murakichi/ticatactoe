@@ -121,3 +121,14 @@ node sim/probe-top.js --target pyromancer --scan gears --games 60      # ギア�
 デッキのシナジー探索: `node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40`（`--swap` で同時に入れ替える枚数、`--cat` で入れる札のカテゴリを限る）。
 `--oppGears none|random|lastStand` で相手のギアを無し/ランダム/全員土壇場の防壁(1枠目)にして頑健性を測れる（tune-top の完了判定で使う。lastStand は防壁発動後の立ち回りの検証用）。
 札・ギアの寄与と未使用の確認: `node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant`、使用回数は `node sim/probe-usage.js --chars X,you --deck ... --gears ...`。
+
+### 7. 自動チューニング（生成AIなしの自己改善ループ）
+```bash
+node sim/autotune.js --chars giant,pyromancer --axes gears,deck,flags --rounds 3 --games 60 --cache .tune-cache
+node sim/apply-tuned.js            # tuned.json と推奨設定の差分を表示
+node sim/apply-tuned.js --write    # 推奨デッキ・ギアを sim/ と src/components/game/ に書き込む
+```
+- 環境は `sim/tuned.json`（キャラ別の `{deck, gears, flags}`。無い項目は推奨のまま）。各キャラが他キャラを固定してギア→デッキ→AIノブを探索し（`probe-top.js --scan gears|deck|flags`）、ゲート（候補数に応じた z 閾値 → 別シード200試合で +1.5pt かつ +1.96SE → 対キャラ -15pt 以内）を通ったものだけ採用する。
+- 全キャラが1周して採用ゼロなら、この探索空間では収束（近似ナッシュ均衡）。ログは `sim/autotune-log.jsonl`。
+- `flags`（AIノブ）は自動では書かない。`apply-tuned.js` の出力を見て `sim/ai.js` / `AIPlayer.ts` に移植する。
+- `--budget-min N` で時間切れまで回し、`--cache` を付ければ再実行で続きから。`--zmin` は配管確認用でゲートを緩める（本番では使わない）。
