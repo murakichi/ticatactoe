@@ -12,6 +12,7 @@ import {
     mogaribueTargets,
     canMogaribue,
     MOGARIBUE_LIFE,
+    setEffectWard,
     isFrozen,
     infernoCostOf,
     FLAME_SKILL_KEYS,
@@ -1312,5 +1313,27 @@ describe('落葉の衣', () => {
         const sim = require('../../../sim/thermal.js');
         expect(leafCloakTargets(b, '💙')).toEqual([0, 1]);
         expect(sim.leafCloakTargets(b, '💙')).toEqual([0, 1]);
+    });
+});
+
+describe('術中の加護（効果ダメージ無効の述語）', () => {
+    afterEach(() => setEffectWard(() => false));
+
+    it('述語が真のマスは、火炎・毒・帯電のダメージと火炎付与の即時ダメージを受けない', () => {
+        setEffectWard((x) => x.player === '💙');
+        const burning = sq('💙', 9, '🔥', '☠');
+        expect(burnDamageOf(burning, [])).toBe(0);
+        expect(decayTick(burning, []).bind).toBe(8); // 自然減衰の-1だけ
+        expect(applyDamage(burning, 3, 'poison').dealt).toBe(0);
+        expect(applyDamage(burning, 3, 'electric').dealt).toBe(0);
+        expect(applyDamage(burning, 3, 'skill').dealt).toBeGreaterThan(0); // スキルのダメージは通る
+        const board = [sq('💙', 9)];
+        ignite(board, [0], 1);
+        expect(board[0].bind).toBe(9);
+        // 述語が偽の相手のマスには通常どおり
+        expect(burnDamageOf(sq('⭕', 9, '🔥'), [])).toBeGreaterThan(0);
+        const board2 = [sq('⭕', 9)];
+        ignite(board2, [0], 1);
+        expect(board2[0].bind).toBe(8);
     });
 });

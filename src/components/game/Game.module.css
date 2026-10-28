@@ -605,6 +605,7 @@
     .game:not(.detail) {
         /* 盤面の高さは、盤面の領域(.boardWrap)の残り高さから手番表示と操作ボタンの分を引いたもの */
         --board-h: calc(100cqh - 84px);
+        --skill-strip-h: 122px;
         height: 100dvh;
         padding: 6px var(--space-2);
         grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -646,6 +647,9 @@
         min-height: 0;
     }
 
+    /* 「手番」バッジは手番の席にだけ出て、狭い画面だとパネルが折り返して高さが変わる(=盤面が動く)。
+       手番は縁取りと「○のターン」で分かるので、1画面表示では出さない */
+    .game:not(.detail) .turnBadge,
     .game:not(.detail) .more,
     .game:not(.detail) .log,
     .game:not(.detail) .expandAll {
@@ -682,7 +686,69 @@
     }
 
     .game:not(.detail) .skillGrid > * {
-        width: 148px;
+        width: 164px;
+    }
+
+    /* 手札によって高さが変わると、盤面の領域も毎ターン伸び縮みして盤面が動く。高さを固定して、はみ出る分は切る */
+    .game:not(.detail) .skillGrid {
+        height: var(--skill-strip-h);
+        align-items: stretch;
+    }
+
+    .game:not(.detail) .skillGrid > * {
+        height: 100%;
+    }
+
+    .game:not(.detail) .skillGrid button[class*="card"] {
+        overflow: hidden;
+        padding: 6px 8px 6px 10px;
+        gap: 3px;
+    }
+
+    /* 名前は1行(長いときは省略)、種類のタグも1行。2〜3行に折り返して背が伸びないように */
+    .game:not(.detail) .skillGrid [class*="head"] [class*="name"] {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* 3人以上のパネルは、アバター(記号)と魔力だけの細い1行にする。名前・人間/AI・勝利数は「詳細」で見る。
+       全員「あなた」と出るだけの名前に、盤面の高さを譲る価値は無い(8人戦だと盤面が潰れていた) */
+    .game:not(.detail) .seatList .panel {
+        flex-wrap: nowrap;
+        padding: 4px 6px;
+        gap: 6px;
+    }
+
+    .game:not(.detail) .seatList .name,
+    .game:not(.detail) .seatList .tags,
+    .game:not(.detail) .seatList .chip:not(.chipMagic) {
+        display: none;
+    }
+
+    .game:not(.detail) .seatList .chipMagic {
+        font-size: 16px;
+        padding: 0 8px;
+        white-space: nowrap;
+    }
+
+    /* カードの名前が「チャ…」と省略されないよう、アイコンと余白を詰める */
+    .game:not(.detail) .skillGrid [class*="icon"] {
+        font-size: 16px;
+    }
+
+    .game:not(.detail) .skillGrid [class*="head"] {
+        gap: 4px;
+    }
+
+    .game:not(.detail) .skillGrid [class*="head"] [class*="cost"] {
+        padding: 1px 6px;
+        font-size: 12px;
+    }
+
+    .game:not(.detail) .skillGrid [class*="tags"] {
+        flex-wrap: nowrap;
+        overflow: hidden;
     }
 
     .game:not(.detail) .skillGrid button[aria-controls] {

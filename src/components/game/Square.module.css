@@ -118,14 +118,15 @@
 .life {
     position: relative;
     z-index: 1;
-    font-size: 28px;
+    /* マスの大きさに比例(64pxのとき28px)。小さいマスでも2桁が収まる */
+    font-size: calc(var(--sq, 64px) * 0.44);
     font-weight: 800;
     line-height: 1;
     font-family: var(--font-display);
 }
 
 .empty .life {
-    font-size: 16px;
+    font-size: calc(var(--sq, 64px) * 0.25);
     font-weight: 700;
     opacity: 0.6;
 }

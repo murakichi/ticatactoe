@@ -67,11 +67,18 @@ export const lockable = (sq: SquareInfo): boolean => !isFrozen(sq);
  */
 export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): number => {
     const stacks = flameStacks(sq);
-    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
+    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq) || isEffectWarded(sq)) return 0;
     const owner = sq.player ? seatOf(sq.player) : -1;
     const extra = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? PYROMANCER_EXTRA_BURN : 0;
     return stacks * FLAME_BURN_DAMAGE + extra;
 };
+
+// ギア「術中の加護」: 効果(☠🔥⚡)のダメージを受けないマスの述語。Game.tsx / sim/engine.js が手番の状況から差し込む（既定は無し）
+let effectWard: (sq: SquareInfo) => boolean = () => false;
+export const setEffectWard = (fn: (sq: SquareInfo) => boolean): void => {
+    effectWard = fn;
+};
+export const isEffectWarded = (sq: SquareInfo): boolean => !!sq.player && effectWard(sq);
 
 /** pure = 倍率なし・氷結貫通で、通れば🔥が消える（砕氷・絶対零度）。poison は🔥を消さない */
 export type DamageKind = 'skill' | 'electric' | 'poison' | 'pure';
@@ -89,6 +96,7 @@ export type DamageResult = {
  * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。skill は1以上ダメージが通ると🔥が全部消える（poison / electric は🔥を消さない）。
  */
 export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): DamageResult => {
+    if ((kind === 'poison' || kind === 'electric') && isEffectWarded(sq)) return { sq, dealt: 0, blocked: false }; // 術中の加護
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）
     if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
@@ -133,7 +141,7 @@ export const ignite = (
             const guarded = keepBuds?.(board[k]) ?? false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && !hasLock(board[k])) {
+            if (board[k].player && !hasLock(board[k]) && !isEffectWarded(board[k])) {
                 const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
                 // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
                 if (left === 0) {
@@ -271,7 +279,7 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next)) return { player: undefined, bind: 0, effects: [] };
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { player: undefined, bind: 0, effects: [] };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;

@@ -43,10 +43,15 @@ function thawOne(sq) {
 }
 const overwriteBlocked = (sq) => isFrozen(sq);
 
+// ギア「術中の加護」: 効果(☠🔥⚡)のダメージを受けないマスの述語。engine.js が手番の状況から差し込む（既定は無し）。thermal.ts と同じ仕様
+let effectWard = () => false;
+const setEffectWard = (fn) => { effectWard = fn; };
+const isEffectWarded = (sq) => !!sq.player && effectWard(sq);
+
 /** chars = 席ごとのキャラ配列、symbols = 席のシンボル配列（seatOf 用） */
 function burnDamageOf(sq, chars, symbols) {
     const stacks = flameStacks(sq);
-    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
+    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq) || isEffectWarded(sq)) return 0;
     // 煉獄の鍛冶師のパッシブ: 持ち主以外の席に煉獄の鍛冶師が居れば、敵の火炎ダメージが1回につき+1
     const owner = sq.player ? symbols.indexOf(sq.player) : -1;
     const bonus = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? 1 : 0;
@@ -55,6 +60,7 @@ function burnDamageOf(sq, chars, symbols) {
 
 /** kind: 'skill' | 'electric' | 'poison'（🔥を消さない）| 'pure'（倍率なし・氷結貫通・🔥は消える。砕氷・絶対零度） */
 function applyDamage(sq, amount, kind) {
+    if ((kind === 'poison' || kind === 'electric') && isEffectWarded(sq)) return { sq, dealt: 0, blocked: false }; // 術中の加護
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）。毒は貫通する
     if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
@@ -85,7 +91,7 @@ function ignite(board, cells, size, n = 1, keepBuds) {
             const guarded = !!(keepBuds && keepBuds(board[k]));
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && !hasLock(board[k])) {
+            if (board[k].player && !hasLock(board[k]) && !isEffectWarded(board[k])) {
                 const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
                 // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
                 if (left === 0) { board[k] = { player: undefined, bind: 0, effects: [] }; break; }
@@ -411,7 +417,7 @@ module.exports = {
     BURNOUT_FREE_FLAMES, totalFlames, burnoutCostOf, burnoutTargets, burnout,
     FLAME_SKILL_KEYS,
     randomFreezeCandidates, placeFrostToken, shatter, frostfallTargets, swidden, placeFlameToken, sacrificeTargets, sacrificeFlame,
-    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
+    FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, setEffectWard, isEffectWarded, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
     THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, boardLeaves, witchCostOf, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling, MOGARIBUE_LIFE, mogaribueDamage, mogaribueTargets, canMogaribue, mogaribue, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
