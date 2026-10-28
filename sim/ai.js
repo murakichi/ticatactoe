@@ -11,7 +11,7 @@
 
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
+    cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
     freezeBudsReserve: 0,
@@ -54,6 +55,7 @@ const AI_DEFAULTS = {
     auraSim: 1, // 巨人の着手評価にオーラ（周囲の敵コマ破壊+周囲ロック）を反映する（A/B: 環境勝率 53.1→60.2% seed2/200）。0で無効
     stompMin: 1, // 巨人ストンプを撃つ最低の敵駒数。2→1でコスト2のストンプを積極的に撃つ（A/B: 環境勝率 12.4→17.3% seed1/100、stompDefと併せて 14.6→26.2% seed2/200）
     stompDef: 1, // 相手のリーチがあっても、ストンプで脅威が減るなら先に撃つ（A/B: 12.4→19.8% seed1/100）。0で無効
+    witchNoAnti: 1, // 凩の魔女は対策ロック(ANTI_LOCK_VS)を撃たない。魔力を🍂トークンに回す。毎手番2魔力が対策ロックに消えて🍂トークンが撃たれていなかった。tune-top: 環境勝率 51.3→61.4%(seed2/200。対ネクロ13→56/対毒使い10→45/対陰陽師73→95)。0で無効
     elecNoAnti: 1, // 雷霆の巫は対策ロック(ANTI_LOCK_VS)を撃たない。魔力を帯電トークン等に回す。対ネクロ22→57/対毒使い15→41%(seed11/100), 環境 50.3→57.8%。0で無効
     floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
@@ -1024,7 +1026,7 @@ function getEnhancedBestMove(s) {
 // ---- strategic skill selection (mirrors AIPlayer.ts chooseSkills) ----
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。AIPlayer.ts と同値
-const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9 };
+const EXCLUSIVE_MIN_MAGIC = { giant: 6, tactician: 7, magician: 6, yinYangMaster: 5, necromancer: 5, poisoner: 4, electrician: 7, cryomancer: 7, pyromancer: 9, witch: 7 };
 
 function chooseSkills(s, availableSkills) {
     const me = curPlayer(s);
@@ -1064,7 +1066,7 @@ function chooseSkills(s, availableSkills) {
     }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        if (reserve && RESERVE_SKIP.includes(name) && remaining - c < reserve) return false;
+        if (reserve && (RESERVE_SKIP.includes(name)) && remaining - c < reserve) return false;
         // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
         if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
             && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
@@ -1224,6 +1226,22 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // 凩の魔女: 落ち葉の置き土産（1コスト）で敵のコマに🍂を溜め、敵の🍂が3枚以上になったら焚きつけで🔥に変える。敵の🍂は魔女のコストを上げるが、パッシブで相殺される（AIPlayer.ts と同一）
+    if (character === 'witch') {
+        const foeLeaves = board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.leafStacks(sq) : n), 0);
+        const guardedCell = (sq, i) => shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
+        if (availableSkills.includes(85) && foeLeaves >= 3 && thermal.kindlingTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickKindling, false, 'onClickKindling')) {
+            spend(cost(costsOf(s).onClickKindling, false, 'onClickKindling'), 'kindling');
+        } else if (availableSkills.includes(84) && foeLeaves < 3 && thermal.leafDropTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop')) {
+            spend(cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop'), 'leafDrop');
+        }
+        // 落葉の衣: 🍂が増えて実コストが F.cloak 以下になったら撃つ（自陣の🍂は魔女のコストを下げ、相手のコストを上げる）
+        if (F.cloak && availableSkills.includes(86) && thermal.leafCloakTargets(board, me).length > 0) {
+            const cc = cost(costsOf(s).onClickLeafCloak, false, 'onClickLeafCloak');
+            if (cc <= F.cloak && remaining >= cc) spend(cc, 'leafCloak');
+        }
+    }
+
     // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
     if (character === 'electrician') {
         // 落雷は忘れた頃に: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（AIPlayer.ts と同一）
@@ -1355,7 +1373,8 @@ function chooseLocks(s, availableSkills) {
     const enemiesOn = (idxs) => idxs.filter((i) => isEnemy(board[i].player, me) && !thermal.isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
-    const preferred = (idx) => (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
+    const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く
+    const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
@@ -1374,7 +1393,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 84)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 87)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1805,7 +1824,7 @@ function faithfulMakeMoveInner(s) {
     // A/B(自キャラ側の勝率): 対ネクロ 0.448/0.455/0.456 → 0.631/0.613/0.625 (seed3-5)、対陰陽師 +4.5〜+13pt (seed3-5)、
     // 対毒使い +3.4/+4.4/+12.2/-0.8pt (seed3-6)。対照: 敵が「あなた」なら変化なし、敵が巨人なら悪化(0.493→0.403)で効果は敵の特性に由来
     // 対象外: 軍師と毒使いはロックに+2/+1コストが乗り運用と競合して悪化。ネクロ同士は未検証。雷霆の巫は変化なし(+0.6pt)
-    if (!rush && curChar(s) !== 'tactician' && curChar(s) !== 'poisoner' && !(F.elecNoAnti && curChar(s) === 'electrician')
+    if (!rush && curChar(s) !== 'tactician' && curChar(s) !== 'poisoner' && !(F.elecNoAnti && curChar(s) === 'electrician') && !(F.witchNoAnti && curChar(s) === 'witch')
         && otherSeats(s).some((seat) => ANTI_LOCK_VS.includes(s.chars[seat]) && !(s.chars[seat] === 'necromancer' && curChar(s) === 'necromancer'))
         && magic >= calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock')) {
         const target = bestAntiNecroLockTarget(s.board, me);
@@ -1837,6 +1856,12 @@ function faithfulMakeMoveInner(s) {
     if (curChar(s) === 'electrician' && availableSkills.includes(26) && curMagic(s) >= calculateCost(s, costsOf(s).onClickJammer, false, false, 'onClickJammer')) {
         const target = bestJammerTarget(s.board, me);
         if (target !== null) { SKILLS.jammer(s); placeMove(s, target); updateShield(s); }
+    }
+
+    // 凩の魔女: 虎落笛（クリック不要・手番は続く）。自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
+    if (curChar(s) === 'witch' && curMagic(s) >= mogaribueCost(s)) {
+        const hits = thermal.mogaribueTargets(s.board, me, (sq) => isShielded(s, sq)).length;
+        if (thermal.mogaribueDamage(s.board, me) >= 2 && hits >= 2) { SKILLS.mogaribue(s); updateShield(s); }
     }
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を

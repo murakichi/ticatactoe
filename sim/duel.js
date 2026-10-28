@@ -39,7 +39,7 @@ const IDX_SKILL = {
     38: 'doubleFlameToken', 39: 'swidden', 40: 'sacrifice', 41: 'frostArea', 42: 'icicle', 43: 'randomFreeze', 44: 'freezeSpread',
     45: 'frostToken', 46: 'doubleFrostToken', 47: 'shatter', 48: 'frostfall', 53: 'markdown', 54: 'effectDiscount', 55: 'tokenDiscount',
     56: 'vitalMarkdown', 57: 'uniqueDiscount', 58: 'clearance', 60: 'counterMarkdown', 61: 'burnout', 62: 'leafToken',
-    63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'bothLeafToken', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
+    63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'leafAll', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
     77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
 };

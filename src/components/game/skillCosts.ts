@@ -58,6 +58,8 @@ export const skillCosts = {
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。汎用プール(idx 32)
     onClickCleanse: 5,
     onClickInferno: 7,
+    // 凩の魔女の固有スキル 虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣のライフ+2。sim/engine.js の onClickMogaribue と一致させること
+    onClickMogaribue: 7,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
@@ -94,10 +96,10 @@ export const skillCosts = {
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
-    onClickLeafToken: 5, //       木枯らしの使い(idx 62): 🍂付きトークン
+    onClickLeafToken: 3, //       木枯らしの使い(idx 62): 🍂付きトークン
     onClickTwinLeafToken: 7, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
     onClickDoubleLeafToken: 9, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
-    onClickBothLeafToken: 5, //   枯野の相席(idx 65): 🍂付きの両トークン（🍂は自分のコマだけ）
+    onClickLeafAll: 5, //         枯野の相席(idx 65): 盤面の全てのコマ（敵味方）に🍂を1つずつ付与
     onClickBonfire: 3, //         焚き火の唄(idx 66): 敵陣の🍂を全て除去（🔑・❄のマスは対象外）
     onClickMulch: 2, //           腐葉土の目覚め(idx 67): 自陣の🍂1枚を🌱に変える
     onClickAutumn: 4, //          一葉知秋(idx 68): 盤面の🌱をすべて🍂に変える
@@ -113,6 +115,9 @@ export const skillCosts = {
     onClickThunderFire: 7, //     雷のない所に火は立たぬ(idx 81): ⚡のあるコマを1つ破壊し、周囲8マスの敵コマ2〜全部に🔥+1
     onClickDarkPot: 9, //         一寸先は闇鍋(idx 82): 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1）。盤面のエフェクトの数だけ軽減（最低1）
     onClickChargeHeal: 6, //     雷を食らわば皿まで(idx 83): ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。この手番に付与した⚡の数だけ軽減（最低1）
+    onClickLeafDrop: 1, //       落ち葉の置き土産(idx 84): ランダムな敵のコマ1つに🍂を1つ付与。敵の🍂は自分のコストも上げる（魔女は相殺）ので最安
+    onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
+    onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
 };
 
 export type SkillCosts = typeof skillCosts;

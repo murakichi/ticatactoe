@@ -171,6 +171,50 @@ const leafStacks = (sq) => sq.effects.filter((e) => e.effect === '🍂').length;
 const activeLeaves = (sq) => (isDormant(sq) ? 0 : leafStacks(sq));
 /** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数 */
 const leafSurcharge = (board, player) => board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+// ---- 落ち葉の置き土産・焚きつけ。src/components/game/thermal.ts と同じ ----
+const leafDropTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+function leafDrop(board, cell) { board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] }; }
+const leafAllTargets = (board, guarded) => board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+const leafCloakTargets = (board, me) => board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+const kindlingTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 対象マスの🍂を全て取り除き、1枚につき🔥を1つ付ける（ignite の規則どおり）。board を直接書き換える */
+function kindling(board, cells, size, keepBuds) {
+    let leaves = 0;
+    const thawed = [];
+    for (const k of cells) {
+        const n = leafStacks(board[k]);
+        if (n === 0) continue;
+        leaves += n;
+        board[k] = without(board[k], '🍂');
+        thawed.push(...ignite(board, [k], size, n, keepBuds).thawed);
+    }
+    return { leaves, thawed };
+}
+
+// ---- 凩の魔女。src/components/game/thermal.ts と同じ ----
+/** 盤面にある効力のある🍂の総数（敵味方問わず） */
+const boardLeaves = (board) => board.reduce((n, sq) => n + activeLeaves(sq), 0);
+/** 凩の魔女のパッシブ: 盤面の🍂1枚につきスキルコスト-1（下限1。もともと1以下のコストは変えない） */
+const witchCostOf = (cost, board) => (cost > 1 ? Math.max(1, cost - boardLeaves(board)) : cost);
+/** 虎落笛で自陣のコマ全てが得るライフ */
+const MOGARIBUE_LIFE = 2;
+/** 虎落笛が敵に与えるダメージ: 使用者の効力のある🍂の枚数 */
+const mogaribueDamage = (board, me) => board.reduce((n, sq) => (sq.player === me ? n + activeLeaves(sq) : n), 0);
+/** 虎落笛の敵の対象: 使用者以外のコマでライフが残り、🔑でなく、isShielded（雷霆の巫の⚡無敵）でないもの */
+const mogaribueTargets = (board, me, isShielded = () => false) =>
+    board.map((sq, i) => (sq.player && sq.player !== me && sq.bind > 0 && !hasLock(sq) && !isShielded(sq) ? i : -1)).filter((i) => i !== -1);
+const canMogaribue = (board, me) => board.some((sq) => sq.player === me);
+/** 虎落笛: 自陣の🍂の枚数ぶん敵全てにスキルダメージ、自陣のコマ全てのライフ+2。board を直接書き換える */
+function mogaribue(board, me, isShielded = () => false) {
+    const damage = mogaribueDamage(board, me);
+    const hit = damage > 0 ? mogaribueTargets(board, me, isShielded) : [];
+    for (const k of hit) board[k] = applyDamage(board[k], damage, 'skill').sq;
+    const boosted = board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+    for (const k of boosted) board[k] = { ...board[k], bind: board[k].bind + MOGARIBUE_LIFE };
+    return { damage, hit, boosted };
+}
 /** idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
 function placeLeafToken(board, idx, player, bind, n = 1) {
     board[idx] = { player, bind, effects: Array.from({ length: n }, () => ({ effect: '🍂' })) };
@@ -376,5 +420,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, setEffectWard, isEffectWarded, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
-    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, boardLeaves, witchCostOf, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling, MOGARIBUE_LIFE, mogaribueDamage, mogaribueTargets, canMogaribue, mogaribue, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };
