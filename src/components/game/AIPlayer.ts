@@ -61,6 +61,8 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
 ];
 /** 魔法使いが1手番にロックするバッズ駒の最大数。sim/ai.js の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
+/** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (sim/ai.js lockFirstCryo のループ上限) */
+const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (sim/ai.js の EL_MAX / EL_MIN_VALUE / EL_DENY) */
 export const EMPTY_LOCK_MAX = 2;
 const EMPTY_LOCK_MIN_VALUE = 10;
@@ -924,7 +926,9 @@ class AIPlayer {
             (this.character === 'magician' && budsIdx.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (sim/ai.js necroLock=1)
-            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58));
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58)) ||
+            // 鍛冶師: 相手に魔法使いがいるとき、火口(87)を手札に固定して毎手番🌱のコマを燃やす (sim/ai.js の tinderLock=2。対魔法使い 37→58%)
+            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'magician'));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
@@ -2257,7 +2261,25 @@ class AIPlayer {
                     return { move: followup, skills: ['onClickStomp'], stompTarget: target };
                 }
             }
-            if (this.character === 'magician' && magic >= judgeCost) {
+            // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止める。ロック中のコマには❄が付かないので、氷室が相手のときは
+            // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。sim/ai.js lockFirstCryo=2: 対氷室 10→28%, seed32/300）
+            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer')) {
+                const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+                const afford = lockCost > 0 ? Math.floor(magic / lockCost) : CRYO_LOCK_MAX;
+                const cells: number[] = [];
+                const unlocked = (sq: SquareInfo) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && lockable(sq);
+                for (let i = 0; i < board.length && cells.length < Math.min(CRYO_LOCK_MAX, afford); i++) {
+                    if (unlocked(board[i]) && board[i].effects.some((e) => e.effect === '🌱')) cells.push(i);
+                }
+                for (let i = 0; i < board.length && cells.length < Math.min(CRYO_LOCK_MAX, afford); i++) {
+                    if (unlocked(board[i]) && !cells.includes(i)) cells.push(i);
+                }
+                if (cells.length === 1) return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: cells };
+                if (cells.length > 1) return { move: this.getBestMove(board, life), skills: [], chargeClicks: cells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
+            }
+            // 審判の日で壊したコマは墓地になり、ネクロマンサーの蘇生を安く大きくする。ネクロが相手のときは撃たない（sim/ai.js noJudgeNecro: 対ネクロ 17→26%, seed22/300）
+            const judgeFuelsNecro = this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer');
+            if (this.character === 'magician' && !judgeFuelsNecro && magic >= judgeCost) {
                 const target = this.findJudgeTarget(board);
                 if (target !== null) {
                     // 審判の日はそのターゲット着手で手番終了する
