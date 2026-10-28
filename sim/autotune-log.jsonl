@@ -1,0 +1,2 @@
+{"at":"2026-10-28T14:35:13.529Z","char":"giant","axis":"flags","round":0,"seed":1,"games":60,"candidates":8,"base":0.3825,"best":{"label":"stompMin=0","field":0.391,"z":0.34},"accepted":false,"why":"scan gate"}
+{"at":"2026-10-28T15:54:35.794Z","char":"giant","axis":"gears","round":0,"seed":2,"games":60,"candidates":48,"base":0.4226,"best":{"label":"slot1→luckyPurse  [lastStand,luckyPurse]","field":0.4554,"z":1.23},"accepted":false,"why":"scan gate"}
