@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
+    cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
     freezeBudsReserve: 0,
@@ -1232,6 +1233,11 @@ function chooseSkills(s, availableSkills) {
             spend(cost(costsOf(s).onClickKindling, false, 'onClickKindling'), 'kindling');
         } else if (availableSkills.includes(84) && foeLeaves < 3 && thermal.leafDropTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop')) {
             spend(cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop'), 'leafDrop');
+        }
+        // 落葉の衣: 🍂が増えて実コストが F.cloak 以下になったら撃つ（自陣の🍂は魔女のコストを下げ、相手のコストを上げる）
+        if (F.cloak && availableSkills.includes(86) && thermal.leafCloakTargets(board, me).length > 0) {
+            const cc = cost(costsOf(s).onClickLeafCloak, false, 'onClickLeafCloak');
+            if (cc <= F.cloak && remaining >= cc) spend(cc, 'leafCloak');
         }
     }
 
