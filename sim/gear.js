@@ -159,9 +159,9 @@ const RECOMMENDED_GEARS = {
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'afterglow'],
     necromancer: ['vengeance', 'lastStand'],
-    poisoner: ['lastStand', 'sturdy'],
+    poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
-    cryomancer: ['afterglow', 'lastStand'],
+    cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['emptyLock', 'harvest'],
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
