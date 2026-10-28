@@ -1,7 +1,8 @@
 # tune-top: pyromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 2f3dbdf(トップ未達)
+- 最後に検証したmaster: 9e6c8d8(トップ未達。2026-10-28 再開時に取込み)
 - 現在の推奨設定: gears=[emptyLock, harvest] deck=[0,3,5,8,11,12,28,31,53,56,58,61]  (旧: 32浄化→11ダブルトークン) AIフラグ=なし
+- 基準線(master 9e6c8d8, seed3, 200試合, `--rank --target`): 基本 環境勝率 48.0% / **6位** / 1位 witch 68.7%(2位 poisoner 64.2%)。`--envDeck varied` 52.8% / 6位 / 1位 poisoner 62.4%。新キャラ witch が登場(11キャラ)。鍛冶師の対キャラ別(基本): you 94 / tactician 56 / magician 39 / giant 59 / yinYangMaster 39 / necromancer 40 / poisoner 29 / electrician 50 / cryomancer 43 / witch 32。前回 master(3位54.9%)から、witch の追加と他キャラの調整で低下
 - 基準線(master 2f3dbdf + 火炎の即時ダメージ+🔥でライフ0→破壊, seed3, 200試合, `--rank --target`): 環境勝率 54.9% / **3位** / 1位 yinYangMaster 66.2%(2位 poisoner 65.5%)
 - 基準線(master 2f3dbdf + 火炎の即時ダメージのみ, seed3, 200試合): 環境勝率 44.1% / 9位 / 1位 yinYangMaster 66.7%
 - 基準線(master 96fd902, seed3, 200試合): 環境勝率 46.7% / 9位 / 1位 poisoner 70.4%(他キャラの調整で環境が強くなった。対巨人 66→30.5%、対陰陽師 70→51%、対ネクロ 77→47.5%)
@@ -12,8 +13,8 @@
 - 基準線(採用#5後・旧 master): 環境勝率 44.0% / 7位 / 1位 tactician 63.4%  (seed3, 100試合, `--rank --target`; 下は初期基準)
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
-- 連続不採用回数: 7(採用#17のあと deck弱相手 / igniteReserve / 防壁戦略 / 対毒使いデッキ / ギア再走査 / 余韻+火遁先撃ち)
-- 状態: blocked(issue #99 / #124)
+- 連続不採用回数: 0(master 9e6c8d8 で環境が変わったため戻した。直前: #31 採用、#32 デッキ探索・#33 #237 は不採用)
+- 状態: running(トップ未達。issue #99 / #124 のルール変更は反映済み)
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
