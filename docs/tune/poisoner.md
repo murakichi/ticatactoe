@@ -4,7 +4,7 @@
 - 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 77.0% / 1位 / 2位 witch 69.2%（条件1 seed3/200）。条件2（envDeck varied）71.0% / 1位 / 2位 witch 62.0%（master 227a4bd）
 - 連続不採用回数: 0
-- 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索
+- 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
 - 状態: refining(master で witch 追加により一度2位に陥落(64.2% vs witch 68.7%)→ギア spellWard で再びトップ)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
