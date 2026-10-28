@@ -33,9 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
-    witchReserve: 0, // 凩の魔女が🍂トークンの分の魔力を温存する（再検証中）
-    mogaL: 2, mogaHits: 2, // 凩の魔女の虎落笛を撃つ条件: 自陣の🍂がL枚以上かつ、ライフの残った敵コマがHits個以上（検証中）
-    cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
+    witchReserve: 1, // 凩の魔女は手札に🍂付きトークンがあるとき、その最安のコスト未満になる他スキルの支払いを控える（🍂を立てる魔力を残す）。tune-top: 3シード×200試合で +1.7/+2.9/+3.4pt（平均+2.7pt、環境勝率 77.6→79.3 / 74.6→77.5 / 74.7→78.1）。0で無効
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
     freezeBudsReserve: 0,
@@ -63,6 +61,8 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
+AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
@@ -1265,11 +1265,6 @@ function chooseSkills(s, availableSkills) {
         } else if (availableSkills.includes(84) && foeLeaves < 3 && thermal.leafDropTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop')) {
             spend(cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop'), 'leafDrop');
         }
-        // 落葉の衣: 🍂が増えて実コストが F.cloak 以下になったら撃つ（自陣の🍂は魔女のコストを下げ、相手のコストを上げる）
-        if (F.cloak && availableSkills.includes(86) && thermal.leafCloakTargets(board, me).length > 0) {
-            const cc = cost(costsOf(s).onClickLeafCloak, false, 'onClickLeafCloak');
-            if (cc <= F.cloak && remaining >= cc) spend(cc, 'leafCloak');
-        }
     }
 
     // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
@@ -1378,6 +1373,8 @@ function chooseLocks(s, availableSkills) {
     if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
     if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
+    // 検証用 F.mistLock(issue #237): 収穫ギアなら毒霧(29)・付与割引(54)を手札に固定し続け、mistLoop の周回を毎手番回せるようにする
+    if (F.mistLoop && F.mistLock && hasGear(s.gears[s.turn], 'harvest')) return availableSkills.filter((i) => i === 29 || i === 54);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) {
@@ -1892,7 +1889,7 @@ function faithfulMakeMoveInner(s) {
     // 凩の魔女: 虎落笛（クリック不要・手番は続く）。自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
     if (curChar(s) === 'witch' && curMagic(s) >= mogaribueCost(s)) {
         const hits = thermal.mogaribueTargets(s.board, me, (sq) => isShielded(s, sq)).length;
-        if (thermal.mogaribueDamage(s.board, me) >= (F.mogaL ?? 2) && hits >= (F.mogaHits ?? 2)) { SKILLS.mogaribue(s); updateShield(s); }
+        if (thermal.mogaribueDamage(s.board, me) >= 2 && hits >= 2) { SKILLS.mogaribue(s); updateShield(s); }
     }
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
@@ -2107,6 +2104,24 @@ function faithfulMakeMoveInner(s) {
             if (curMagic(s) >= 16) break;
         }
     }
+    // 検証用 F.mistLoop(issue #237): 収穫ギア+付与割引(54)+毒霧(29)の周回で魔力を稼ぐ。F.mistLoop=最大周回数、F.mistCap=この魔力に届いたら止める、F.mistDig=2枚が揃うまで引き直す最大回数(魔力が F.loopMin 以上のとき)
+    if (F.mistLoop && hasGear(s.gears[s.turn], 'harvest') && !s.silenced[s.turn]) {
+        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        const have = () => s.skills.includes(29) && s.skills.includes(54);
+        if (F.mistDig) {
+            for (let k = 0; k < F.mistDig && curMagic(s) >= (F.loopMin || 5) && !have(); k++) E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
+        const cap = F.mistCap || 25;
+        for (let k = 0; k < F.mistLoop && have() && curMagic(s) < cap; k++) {
+            if (curMagic(s) < 1 + cost('onClickPoisonMist')) break;
+            const before = curMagic(s);
+            SKILLS.effectDiscount(s);
+            SKILLS.poisonMist(s);
+            s.loopCycles = (s.loopCycles || 0) + 1;
+            if (k >= 4 && curMagic(s) <= before) break; // 立ち上がり(割引を積む数周)のあとも増えないなら止める
+        }
+    }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
     if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
@@ -2142,15 +2157,20 @@ function faithfulMakeMoveInner(s) {
         }
         // 魔法使い(F.lockFirstCryo): 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力エンジンを止める（ロック中のコマには❄が付かない）。
         // 相手に氷室がいるときは、審判の日より先に🌱付きのコマを全てロックする（2なら🌱の無い自陣コマも）
-        if (F.lockFirstCryo && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer')) {
+        let lockedFirst = 0;
+        const lockFirstLevel = ch !== 'magician' ? 0 : otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer') ? F.lockFirstCryo
+            : otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer') ? (F.lockFirstPyro || 0) : 0; // 鍛冶師の🔥(火遁・火口)も🔑のコマには付かない
+        if (lockFirstLevel) {
             for (let n = 0; n < 12; n++) {
                 const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
                 let cell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
-                if (cell === -1 && F.lockFirstCryo >= 2) cell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (cell === -1 && lockFirstLevel >= 2) cell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
                 if (!(curMagic(s) >= lockCost + (F.lockFirstReserve || 0) && cell !== -1)) break;
                 SKILLS.lock(s);
                 if (!placeMove(s, cell)) { s.useLock = 0; break; }
+                lockedFirst++;
             }
+            if (lockedFirst > 0) return { move: getEnhancedBestMove(s), turnEnded: false }; // 本番(AIPlayer.ts)はロックのあと通常着手で手番を終える
         }
         const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
         if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {

@@ -61,6 +61,8 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
 ];
 /** 魔法使いが1手番にロックするバッズ駒の最大数。sim/ai.js の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
+/** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (sim/ai.js lockFirstCryo のループ上限) */
+const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (sim/ai.js の EL_MAX / EL_MIN_VALUE / EL_DENY) */
 export const EMPTY_LOCK_MAX = 2;
 const EMPTY_LOCK_MIN_VALUE = 10;
@@ -1049,9 +1051,19 @@ class AIPlayer {
         // (sim/ai.js chooseSkills と同一。A/B: ネクロ +2〜6pt。巨人は誤差内、軍師は大幅悪化で対象外)
         let reserve = 0;
         if (this.character === 'necromancer' && necroRemain === 0) reserve = necroCost;
+        // 凩の魔女: 手札に🍂付きトークンがあるとき、その最安のコスト未満になる他スキルの支払いを控える (sim/ai.js witchReserve=1。3シード×200試合で平均+2.7pt)
+        const WITCH_LEAF_SPEND = ['onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak'];
+        if (this.character === 'witch' && !tokenUsed) {
+            const leafOpts = [
+                { idx: 64, key: 'onClickDoubleLeafToken' as const },
+                { idx: 63, key: 'onClickTwinLeafToken' as const },
+                { idx: 62, key: 'onClickLeafToken' as const },
+            ].filter((o) => availableSkills.includes(o.idx));
+            if (leafOpts.length > 0) reserve = Math.min(...leafOpts.map((o) => this.calculateAICost(costs[o.key], true, false, o.key)));
+        }
         const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
-            if (reserve > 0 && RESERVE_SKIP.includes(skill) && remaining - cost < reserve) return false;
+            if (reserve > 0 && (RESERVE_SKIP.includes(skill) || (this.character === 'witch' && !WITCH_LEAF_SPEND.includes(skill))) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
         };
@@ -2258,6 +2270,22 @@ class AIPlayer {
                     const followup = this.getBestMove(postBoard, life);
                     return { move: followup, skills: ['onClickStomp'], stompTarget: target };
                 }
+            }
+            // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止め、鍛冶師の🔥もロック中のコマには付かない。ロックしておけば防げるので、氷室・鍛冶師が相手のときは
+            // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。sim/ai.js lockFirstCryo=2: 対氷室 10→20%, lockFirstPyro=2: 対鍛冶師 33〜37→47〜51%）
+            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer' || this.characters[seatOf(o)] === 'pyromancer')) {
+                const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+                const afford = lockCost > 0 ? Math.floor(magic / lockCost) : CRYO_LOCK_MAX;
+                const cells: number[] = [];
+                const unlocked = (sq: SquareInfo) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && lockable(sq);
+                for (let i = 0; i < board.length && cells.length < Math.min(CRYO_LOCK_MAX, afford); i++) {
+                    if (unlocked(board[i]) && board[i].effects.some((e) => e.effect === '🌱')) cells.push(i);
+                }
+                for (let i = 0; i < board.length && cells.length < Math.min(CRYO_LOCK_MAX, afford); i++) {
+                    if (unlocked(board[i]) && !cells.includes(i)) cells.push(i);
+                }
+                if (cells.length === 1) return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: cells };
+                if (cells.length > 1) return { move: this.getBestMove(board, life), skills: [], chargeClicks: cells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
             }
             // 審判の日で壊したコマは墓地になり、ネクロマンサーの蘇生を安く大きくする。ネクロが相手のときは撃たない（sim/ai.js noJudgeNecro: 対ネクロ 17→26%, seed22/300）
             const judgeFuelsNecro = this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer');
