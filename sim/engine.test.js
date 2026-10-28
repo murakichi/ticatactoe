@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2599,6 +2599,39 @@ test('雷神のへそくり: ⚡のある自陣のコマ(無敵の⚡マスも)�
     e.SKILLS.addLife(s);
     assert.strictEqual(s.discount[0].next, 0);
     assert.strictEqual(slash(), before);
+});
+
+test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲8マスの敵コマ2〜全部に🔥。コスト4。ロック・他人の無敵マスは選べず、氷結中は❄-1だけで燃え移らない', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(21) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.thunderFireLegal(s), false);
+    s.board[5] = { player: '💙', bind: 4, effects: [BOLT] }; // 自分の無敵マスも選べる
+    for (const k of [0, 1, 2, 4, 6]) s.board[k] = { player: '⭕', bind: 4, effects: [] }; // 周囲8マスの敵5コマ
+    s.board[14] = { player: '⭕', bind: 4, effects: [BOLT] }; // 他人の（雷霆の巫ではない）⚡コマは選べる。5 の周囲8マスの外
+    s.board[15] = { player: '💙', bind: 4, effects: [BOLT, { effect: '🔑' }] }; // ロック中は選べない
+    assert.deepStrictEqual(e.thunderFireTargets(s), [5, 14]);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickThunderFire, false, false, 'onClickThunderFire'), 4);
+    e.SKILLS.thunderFire(s);
+    assert.strictEqual(s.magic[0], 30 - 4);
+    assert.strictEqual(e.placeMove(s, 0), false); // ⚡のないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 15), false); // ロック中は選べない
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.useThunderFire, false);
+    assert.strictEqual(s.board[5].player, undefined); // 破壊された
+    const burning = [0, 1, 2, 4, 6].filter((k) => s.board[k].effects.some((x) => x.effect === '🔥'));
+    assert.ok(burning.length >= 2 && burning.length <= 5);
+    for (const k of burning) assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '🔥').length, 1);
+    assert.ok(!s.board[14].effects.some((x) => x.effect === '🔥')); // 周囲8マスの外は燃えない
+    // 氷結中のコマは❄が1つ減るだけで、燃え移らない
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(22) });
+    t.magic[0] = 30;
+    t.board[5] = { player: '💙', bind: 4, effects: [BOLT, FRZ, FRZ] };
+    t.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.thunderFire(t);
+    assert.strictEqual(e.placeMove(t, 5), true);
+    assert.strictEqual(t.board[5].player, '💙');
+    assert.strictEqual(t.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(t.board[6].effects.length, 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

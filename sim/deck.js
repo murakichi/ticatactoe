@@ -91,6 +91,7 @@ const SKILL_CATALOG = [
     { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge' },
     { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge' },
     { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge' },
+    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge' },
 ];
 
 

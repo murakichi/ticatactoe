@@ -1372,7 +1372,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 81)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 82)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1550,7 +1550,7 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);

@@ -242,6 +242,7 @@ const skillCosts = {
     onClickBristle: 5, // 総毛立つ(idx 78)
     onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
     onClickStash: 1, // 雷神のへそくり(idx 80)
+    onClickThunderFire: 4, // 雷のない所に火は立たぬ(idx 81)
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -599,6 +600,7 @@ function newGame(opts = {}) {
         useSacrifice: false,
         useKimon: false,
         useStash: false,
+        useThunderFire: false,
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -897,6 +899,13 @@ function advanceTurn(s) {
  */
 function placeMove(s, i) {
     const board = s.board;
+
+    // 雷のない所に火は立たぬ: ⚡のあるコマを選ぶ。無敵マスでも自分のものは選べる（無敵の早期リターンより前に判定する）
+    if (s.useThunderFire) {
+        if (!exeThunderFire(s, i)) return false; // ⚡のないマス・守られた他人のコマは選び直せる
+        s.useThunderFire = false;
+        return true;
+    }
 
     // 雷神のへそくり: ⚡のある自陣のコマを選ぶ。無敵マスでも自分のものは選べる（雷霆の巫の⚡マスはすべて無敵なので、無敵の早期リターンより前に判定する）
     if (s.useStash) {
@@ -2236,6 +2245,36 @@ function onClickRelease(s) {
     bumpStat(s, 'releaseBolts', n);
 }
 
+// 雷のない所に火は立たぬ (idx81): ⚡のあるコマ（自分の無敵マスは可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊（氷結中なら❄-1だけで火は燃え移らない）し、
+// 周囲8マスの敵コマ（守られていないもの）のうち2〜全部をランダムに選んで🔥+1。⚡のあるコマが無ければ使えない
+function thunderFireTargets(s) {
+    const me = curPlayer(s);
+    return s.board.map((sq, i) => (sq.player && chargeStacks(sq) > 0 && !sq.effects.some((e) => e.effect === '🔑') && (sq.player === me || !isShielded(s, sq)) ? i : -1)).filter((i) => i !== -1);
+}
+function thunderFireLegal(s) { return thunderFireTargets(s).length > 0; }
+function onClickThunderFire(s) {
+    if (!thunderFireLegal(s)) return;
+    s.useThunderFire = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickThunderFire, false, false, 'onClickThunderFire'), 'onClickThunderFire');
+    bumpMagicCount(s);
+    bumpStat(s, 'thunderFire');
+}
+function exeThunderFire(s, i) {
+    if (!thunderFireTargets(s).includes(i)) return false;
+    if (thermal.isFrozen(s.board[i])) {
+        s.board[i] = thermal.thawOne(s.board[i]);
+        return true;
+    }
+    const me = curPlayer(s);
+    s.board[i] = { player: undefined, bind: 0, effects: [] };
+    addCorpses(s, 1);
+    const cands = surroundRange(s, i).filter((j) => s.board[j].player && s.board[j].player !== me && !isGuarded(s, s.board[j]));
+    const picks = thermal.thunderFireVictims(cands, s.rng);
+    thermal.ignite(s.board, picks, s.size, 1, keepBudsOf(s));
+    bumpStat(s, 'thunderFireVictims', picks.length);
+    return true;
+}
+
 // 雷神のへそくり (idx80): ⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコスト-1（軽減札）。⚡のある自陣のコマが無ければ使えない
 function stashTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
 function stashLegal(s) { return stashTargets(s).length > 0; }
@@ -2401,6 +2440,7 @@ const SKILLS = {
     bristle: onClickBristle,
     release: onClickRelease,
     stash: onClickStash,
+    thunderFire: onClickThunderFire,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
     frostArea: onClickFrostArea,
@@ -2444,7 +2484,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal, stashLegal,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

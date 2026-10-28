@@ -110,6 +110,7 @@ export const skillCosts = {
     onClickBristle: 5, //         総毛立つ(idx 78): 自陣の全コマ(ロック中を除く)に⚡
     onClickRelease: 5, //         落雷は忘れた頃に(idx 79): 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ
     onClickStash: 1, //           雷神のへそくり(idx 80): 自陣を1つ選んで⚡を全て除去し、除去したスタック1つにつき次のスキルのコスト-1
+    onClickThunderFire: 4, //     雷のない所に火は立たぬ(idx 81): ⚡のあるコマを1つ破壊し、周囲8マスの敵コマ2〜全部に🔥+1
 };
 
 export type SkillCosts = typeof skillCosts;
