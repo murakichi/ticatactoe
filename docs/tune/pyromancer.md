@@ -18,6 +18,7 @@
 - 初期基準線: 環境勝率 38.9% / 10位(最下位) / 1位 tactician 67.8%   (master 4b849ea, seed 1, games 60, `--rank`)
   - 対キャラ別: tactician 21.7 / electrician 30.0 / magician 26.7 / giant 41.7 / cryomancer 38.3 / you 40.0 / poisoner 48.3 / yinYangMaster 50.0 / necromancer 53.3
 - 連続不採用回数: 0(#41 余韻+呪詛除けを採用)
+- 関連 issue: #99(鍛冶師の調整案。2026-10-28 のコメントで witch/毒使いの数値を相談) / #268(余韻+呪詛除けの追試) / #237(検証済み・実用性なし)
 - 状態: blocked(issue #99 のコメント 2026-10-28。witch/毒使いの数値調整の相談。追試は #268)
 
 ## 診断(追記)
