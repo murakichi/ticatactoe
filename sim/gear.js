@@ -162,7 +162,7 @@ const RECOMMENDED_GEARS = {
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['emptyLock', 'harvest'],
+    pyromancer: ['afterglow', 'harvest'], // 余韻+収穫(tune-top #38: 空蔵+収穫 51.7→58.5%(seed91/300)・51.7→58.4%(seed92/300)。対魔法使い 59→97%)
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
