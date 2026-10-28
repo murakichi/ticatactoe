@@ -135,3 +135,22 @@ describe('ゲーム画面のスキル欄', () => {
         });
     });
 });
+
+describe('モバイルの1画面表示: ターンごとに盤面の大きさが変わらない(行の高さを固定する)', () => {
+    const css = fs.readFileSync(path.join(__dirname, 'Game.module.css'), 'utf8');
+    const compact = css.slice(css.lastIndexOf('/* ===== モバイル: 1画面に収めて'));
+
+    it('スキル欄の高さを固定している(手札の説明の長さで高さが変わると、盤面が毎ターン伸び縮みする)', () => {
+        expect(compact).toMatch(/--skill-strip-h:\s*\d+px/);
+        expect(compact).toMatch(/\.skillGrid \{[^}]*height:\s*var\(--skill-strip-h\)/);
+    });
+
+    it('手番の席にだけ出る「手番」バッジは出さない(折り返してパネルの高さが変わるため)', () => {
+        expect(compact).toMatch(/\.game:not\(\.detail\) \.turnBadge[^{]*\{[^}]*display:\s*none/);
+    });
+
+    it('盤面の大きさは、盤面の領域の高さ(cqh)から決める', () => {
+        expect(compact).toMatch(/--board-h:\s*calc\(100cqh/);
+        expect(compact).toMatch(/container-type:\s*size/);
+    });
+});

@@ -67,11 +67,18 @@ export const lockable = (sq: SquareInfo): boolean => !isFrozen(sq);
  */
 export const burnDamageOf = (sq: SquareInfo, chars: readonly CharacterId[]): number => {
     const stacks = flameStacks(sq);
-    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq)) return 0;
+    if (stacks === 0 || sq.bind <= 0 || isFrozen(sq) || hasLock(sq) || isEffectWarded(sq)) return 0;
     const owner = sq.player ? seatOf(sq.player) : -1;
     const extra = chars.some((c, seat) => c === 'pyromancer' && seat !== owner) ? PYROMANCER_EXTRA_BURN : 0;
     return stacks * FLAME_BURN_DAMAGE + extra;
 };
+
+// ギア「術中の加護」: 効果(☠🔥⚡)のダメージを受けないマスの述語。Game.tsx / sim/engine.js が手番の状況から差し込む（既定は無し）
+let effectWard: (sq: SquareInfo) => boolean = () => false;
+export const setEffectWard = (fn: (sq: SquareInfo) => boolean): void => {
+    effectWard = fn;
+};
+export const isEffectWarded = (sq: SquareInfo): boolean => !!sq.player && effectWard(sq);
 
 /** pure = 倍率なし・氷結貫通で、通れば🔥が消える（砕氷・絶対零度）。poison は🔥を消さない */
 export type DamageKind = 'skill' | 'electric' | 'poison' | 'pure';
@@ -89,6 +96,7 @@ export type DamageResult = {
  * electric は氷結中のマスには無効（氷結は残る）、poison は氷結を貫通する。どちらも倍率はかからない。skill は1以上ダメージが通ると🔥が全部消える（poison / electric は🔥を消さない）。
  */
 export const applyDamage = (sq: SquareInfo, amount: number, kind: DamageKind): DamageResult => {
+    if ((kind === 'poison' || kind === 'electric') && isEffectWarded(sq)) return { sq, dealt: 0, blocked: false }; // 術中の加護
     if (kind === 'skill' && isFrozen(sq)) return { sq: thawOne(sq), dealt: 0, blocked: true };
     // 隣接⚡のダメージは氷結に当たらない（氷結は解除されず、ダメージも無い）
     if (kind === 'electric' && isFrozen(sq)) return { sq, dealt: 0, blocked: false };
@@ -133,7 +141,7 @@ export const ignite = (
             const guarded = keepBuds?.(board[k]) ?? false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
             // 🔥を付与した瞬間に、コマのあるマス(ライフが残り🔑でないもの)へ1ダメージ。ダメージでも🔥は消えない（火炎自身のダメージ）
-            if (board[k].player && !hasLock(board[k])) {
+            if (board[k].player && !hasLock(board[k]) && !isEffectWarded(board[k])) {
                 const left = Math.max(0, board[k].bind - FLAME_INSTANT_DAMAGE);
                 // 🔥でライフが0になった(すでに0だった)コマは破壊され、空きマスになる。破壊したら、そのマスにはそれ以上🔥を付けない
                 if (left === 0) {
@@ -271,7 +279,7 @@ export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): Square
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next)) return { player: undefined, bind: 0, effects: [] };
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { player: undefined, bind: 0, effects: [] };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
     if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
@@ -372,6 +380,96 @@ export const activeLeaves = (sq: SquareInfo): number => (isDormant(sq) ? 0 : lea
 /** player が払うスキルコストの上乗せ: player 以外のコマに乗っている効力のある🍂の総数（全員対象・上限なし） */
 export const leafSurcharge = (board: SquareInfo[], player: SquareInfo['player']): number =>
     board.reduce((n, sq) => (sq.player && sq.player !== player ? n + activeLeaves(sq) : n), 0);
+
+// ---- 凩の魔女（🍂を使うキャラ）----
+
+/** 盤面にある効力のある🍂の総数（敵味方問わず）。凩の魔女のパッシブ: この枚数ぶんスキルコストが下がる（下限1） */
+export const boardLeaves = (board: SquareInfo[]): number => board.reduce((n, sq) => n + activeLeaves(sq), 0);
+
+/** 凩の魔女のパッシブ: 盤面の🍂1枚につきスキルコスト-1（下限1。もともと1以下のコストは変えない） */
+export const witchCostOf = (cost: number, board: SquareInfo[]): number => (cost > 1 ? Math.max(1, cost - boardLeaves(board)) : cost);
+
+// ---- 落ち葉の置き土産・焚きつけ（敵の🍂を使う汎用スキル）----
+
+/** 落ち葉の置き土産の対象: 使用者以外のコマのうち、guarded（🔑ロック・⚡無敵）でないもの（昇順） */
+export const leafDropTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    kimonTargets(board, player, guarded);
+
+/** 落ち葉の置き土産: cell のコマに🍂を1つ付ける（氷結中でも付く。休眠するだけ）。board を直接書き換える */
+export const leafDrop = (board: SquareInfo[], cell: number): void => {
+    board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] };
+};
+
+/** 枯野の相席の対象: 盤面の全てのコマ（敵味方問わず）のうち、guarded（🔑ロック・⚡無敵）でないもの（昇順） */
+export const leafAllTargets = (board: SquareInfo[], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
+/** 落葉の衣の候補: 使用者のコマ全て（🔑ロック中も含む。🍂は自陣に不利でないため）。この中からランダムに1つに🍂を付ける */
+export const leafCloakTargets = (board: SquareInfo[], me: SquareInfo['player']): number[] =>
+    board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+
+/** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
+export const kindlingTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * 焚きつけ: 対象マスの🍂を全て取り除き、取り除いた🍂1枚につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて🔥は残りのスタックぶん、
+ * 付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。変換した🍂の枚数と、解けたマスを返す。board を直接書き換える
+ */
+export const kindling = (board: SquareInfo[], cells: number[], size: number, keepBuds?: (sq: SquareInfo) => boolean): { leaves: number; thawed: number[] } => {
+    let leaves = 0;
+    const thawed: number[] = [];
+    for (const k of cells) {
+        const n = leafStacks(board[k]);
+        if (n === 0) continue;
+        leaves += n;
+        board[k] = without(board[k], '🍂');
+        thawed.push(...ignite(board, [k], size, n, keepBuds).thawed);
+    }
+    return { leaves, thawed };
+};
+
+/** 虎落笛で自陣のコマ全てが得るライフ */
+export const MOGARIBUE_LIFE = 2;
+
+/** 虎落笛が敵に与えるダメージ: 使用者の効力のある🍂の枚数 */
+export const mogaribueDamage = (board: SquareInfo[], me: SquareInfo['player']): number =>
+    board.reduce((n, sq) => (sq.player === me ? n + activeLeaves(sq) : n), 0);
+
+/** 虎落笛の敵の対象: 使用者以外のコマのうち、ライフが残り、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの */
+export const mogaribueTargets = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly (CharacterId | undefined)[]): number[] =>
+    board
+        .map((sq, i) => {
+            if (!sq.player || sq.player === me || sq.bind <= 0 || hasLock(sq)) return -1;
+            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            return i;
+        })
+        .filter((i) => i !== -1);
+
+/** 虎落笛を撃てるか: 自陣のコマが1つでもある（🍂が0枚でも自陣のライフ+2は入る） */
+export const canMogaribue = (board: SquareInfo[], me: SquareInfo['player']): boolean => board.some((sq) => sq.player === me);
+
+export type MogaribueResult = {
+    /** 敵に与えたダメージ（使用者の🍂の枚数） */
+    damage: number;
+    /** ダメージを与えようとした敵マス（氷結が肩代わりしたマスも含む） */
+    hit: number[];
+    /** ライフ+2を受けた自陣のマス */
+    boosted: number[];
+};
+
+/**
+ * 虎落笛（凩の魔女）: 自陣の🍂の枚数ぶん、敵のコマ全てにスキルダメージ（氷結中は❄が1つ減るだけ、🔥中は1.5倍）を与え、
+ * 同時に自陣のコマ全てのライフを+2する。board を直接書き換える
+ */
+export const mogaribue = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly (CharacterId | undefined)[]): MogaribueResult => {
+    const damage = mogaribueDamage(board, me);
+    const hit = damage > 0 ? mogaribueTargets(board, me, chars) : [];
+    for (const k of hit) board[k] = applyDamage(board[k], damage, 'skill').sq;
+    const boosted = board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+    for (const k of boosted) board[k] = { ...board[k], bind: board[k].bind + MOGARIBUE_LIFE };
+    return { damage, hit, boosted };
+};
 
 /** 🍂付きトークン: idx に player の🍂を n 枚持つコマ（ライフ bind）を置く。board を直接書き換える */
 export const placeLeafToken = (board: SquareInfo[], idx: number, player: SquareInfo['player'], bind: number, n: number = 1): void => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Square } from './Square';
-import { cellPixelsFor } from './boardGeometry';
+import { boardLayoutOf } from './boardGeometry';
 import styles from './Board.module.css';
 
 type BoardProps = {
@@ -27,13 +27,20 @@ export const Board: React.FC<BoardProps> = (props: BoardProps) => {
         return undefined;
     };
 
+    const layout = boardLayoutOf(props.size);
     // 3人以上のときは色に加えてコマの記号も表示して見分けやすくする
     const showMark = props.squares.some((sq) => sq.player !== undefined) && props.size > 4;
 
     return (
         <div
             className={styles.board}
-            style={{ ['--turn' as string]: props.turnColor, gridTemplateColumns: `repeat(${props.size}, 1fr)`, ['--sq' as string]: `min(${cellPixelsFor(props.size)}px, calc((100vw - 56px - ${(props.size - 1) * 8}px) / ${props.size}), calc((var(--board-h, 9999px) - ${24 + (props.size - 1) * 8}px) / ${props.size}))` }}
+            style={{
+                ['--turn' as string]: props.turnColor,
+                gridTemplateColumns: `repeat(${props.size}, 1fr)`,
+                // マスの大きさ(--sq)は盤面を囲む要素(Game の boardArea)から受け取る。隙間と余白は --sq に対する比率
+                gap: `calc(var(--sq, 64px) * ${layout.gap})`,
+                padding: `calc(var(--sq, 64px) * ${layout.pad})`,
+            }}
         >
             {props.squares.map((info, i) => (
                 <Square

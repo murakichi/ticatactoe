@@ -1180,6 +1180,23 @@ describe('雷霆の巫は対策ロックを撃たない (sim/ai.js elecNoAnti)',
     });
 });
 
+describe('凩の魔女は対策ロックを撃たない (sim/ai.js witchNoAnti)', () => {
+    const costs = { onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const board = () => {
+        const b = emptyBoard();
+        [0, 1].forEach((i) => put(b, i, '💙', 1));
+        return b;
+    };
+
+    it('敵がネクロ・毒使いでも、低bindの自コマをロックしない（魔力を🍂トークンに回す）', () => {
+        for (const foe of ['necromancer', 'poisoner'] as const) {
+            const ai = new AIPlayer('💙', 'witch', ['⭕'], ['witch', foe]);
+            const r = ai.makeMove(board(), 10, costs, 0, 4, [], false);
+            expect(r.skills ?? []).not.toContain('onClickUseLock');
+        }
+    });
+});
+
 describe('氷室の番人の対ネクロ: 敵コマの奪取を避ける', () => {
     // 💙番人が2に居て、ライフ0の⭕が5にある。奪取(5)は墓地+1になるので、空きマスの手を選ぶ
     const setup = () => {
