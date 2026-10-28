@@ -35,17 +35,20 @@ export type FireResult = {
     fired: number[];
     /** 実際に1ダメージを受けたマス */
     damaged: number[];
+    /** 伝導(ギア)で毒・火炎を移されたマス */
+    carried: number[];
 };
 
 /**
  * 着手マス i の隣にある⚡を発火させる（size は盤の一辺。board を直接書き換える）。
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
- * 帯電マス k にコマがあり、そのコマに☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
+ * ギア「伝導」: conductors[席] が真の席のコマが載った帯電マス k に☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = []): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = []): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
+    const carried: number[] = [];
     for (const k of orthoNeighbors(i, size)) {
         if (chargeStacks(board[k]) === 0 || isDormant(board[k])) continue; // 休眠マスの⚡は発火源にならない（発火せず消えもしない）
         fired.push(k);
@@ -60,14 +63,16 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             damaged.push(n);
             // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
             const owner = board[k].player;
-            if (owner && sq.player !== owner) {
+            if (owner && sq.player !== owner && conductors[seatOf(owner)]) {
+                const before = board[n].effects.length;
                 if (board[k].effects.some((e) => e.effect === '☠')) board[n] = { ...board[n], effects: [...board[n].effects, { effect: '☠' }] };
                 if (board[k].effects.some((e) => e.effect === '🔥')) ignite(board, [n], size);
+                if (board[n].effects.length !== before || !board[n].player) carried.push(n);
             }
         }
         board[k] = { ...board[k], effects: board[k].effects.filter((e) => e.effect !== '⚡') };
     }
-    return { fired, damaged };
+    return { fired, damaged, carried };
 };
 
 /** 固有スキル: start から、コマのあるマスだけを縦横に辿って届くすべてのマス（start 自身を含む）。空きマスなら [] */

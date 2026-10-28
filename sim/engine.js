@@ -390,7 +390,7 @@ function fireCharges(s, i, mover) {
             bumpStat(s, charOfPlayer(s, sq.player) === 'electrician' ? 'dmgToElectrician' : 'dmgToOther');
             // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
             const owner = board[k].player;
-            if (owner && sq.player !== owner) {
+            if (owner && sq.player !== owner && hasGear(s.gears[seatOf(owner)], 'conduction')) {
                 if (board[k].effects.some((e) => e.effect === '☠')) board[n] = { ...board[n], effects: [...board[n].effects, { effect: '☠' }] };
                 if (board[k].effects.some((e) => e.effect === '🔥')) thermal.ignite(board, [n], s.size);
             }
