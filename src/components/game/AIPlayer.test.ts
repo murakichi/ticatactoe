@@ -1426,17 +1426,22 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
         [5, 10, 12, 15].forEach((i) => put(b, i, '⭕', 4));
         return b;
     };
-    const planOf = (foe: 'tactician' | 'cryomancer') => {
+    const planOf = (foe: 'tactician' | 'cryomancer' | 'pyromancer') => {
         const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
         return ai.makeMove(board(), 20, { onClickToken: 4, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
     };
-    const lockTargetsOf = (foe: 'tactician' | 'cryomancer') => {
+    const lockTargetsOf = (foe: 'tactician' | 'cryomancer' | 'pyromancer') => {
         const r = planOf(foe);
         return [...(r.lockTargets ?? []), ...(r.chargeClicks ?? []).map((c) => c.target)];
     };
 
     it('氷室が相手なら、🌱付きのコマを先頭に自陣のコマを全てロックする', () => {
         const targets = lockTargetsOf('cryomancer');
+        expect(targets[0]).toBe(0);
+        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    });
+    it('鍛冶師（🔥はロック中のコマに付かない）が相手のときも同じく全てロックする', () => {
+        const targets = lockTargetsOf('pyromancer');
         expect(targets[0]).toBe(0);
         expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
     });

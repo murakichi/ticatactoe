@@ -63,6 +63,7 @@ const AI_DEFAULTS = {
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
 AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
 AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
