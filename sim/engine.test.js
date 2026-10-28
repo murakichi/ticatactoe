@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2598,6 +2598,49 @@ test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をラン
     assert.ok(seen['⚡'] / pieces > 0.35 && seen['⚡'] / pieces < 0.65, `⚡ ${seen['⚡'] / pieces}`);
     assert.ok(seen['☠'] / pieces > 0.35 && seen['☠'] / pieces < 0.65, `☠ ${seen['☠'] / pieces}`);
     for (const k of Object.keys(seen)) assert.ok(seen[k] > 0, `${k}が一度も乗らない`);
+});
+
+test('雷を食らわば皿まで: ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。⚡のコマが無ければ使えない。コスト6', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(4) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.chargeHealLegal(s), false);
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.magic[0], 30); // 不発
+    const B = { effect: '⚡' };
+    s.board[0] = { player: '💙', bind: 3, effects: [B] };
+    s.board[1] = { player: '💙', bind: 1, effects: [B, B, B] };
+    s.board[2] = { player: '💙', bind: 4, effects: [B, FRZ] };   // 氷結中は⚡が休眠 → 対象外
+    s.board[3] = { player: '⭕', bind: 4, effects: [B] };          // 敵は対象外
+    s.board[4] = { player: '💙', bind: 5, effects: [] };           // ⚡なしは対象外
+    s.chargeBase[0] = 5; // 手番開始時から自陣の⚡が5つ(休眠も数える)なので軽減なし
+    assert.strictEqual(e.chargeHealLegal(s), true);
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.board[0].bind, 5);
+    assert.strictEqual(s.board[1].bind, 7);
+    assert.strictEqual(s.board[2].bind, 4);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[4].bind, 5);
+    assert.strictEqual(s.magic[0], 30 - 6);
+});
+
+test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽減（最低1）。撃つとリセット', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(4) });
+    s.magic[0] = 40;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickChargeHeal, false, false, 'onClickChargeHeal');
+    const B = { effect: '⚡' };
+    s.board[0] = { player: '💙', bind: 3, effects: [B] };
+    s.chargeBase[0] = 1; // 手番開始時から1つ
+    assert.strictEqual(price(), 6);
+    s.board[1] = { player: '💙', bind: 3, effects: [B, B] };
+    s.board[2] = { player: '💙', bind: 3, effects: [B] };
+    assert.strictEqual(price(), 3); // この手番に3つ付与
+    s.board[3] = { player: '💙', bind: 3, effects: [B, B, B, B] };
+    assert.strictEqual(price(), 1); // 軽減しきっても最低1
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.magic[0], 40 - 1);
+    assert.strictEqual(price(), 6); // 撃ったらリセット
+    s.board[5] = { player: '⭕', bind: 3, effects: [B, B] }; // 敵の⚡は数えない
+    assert.strictEqual(price(), 6);
 });
 
 test('一寸先は闇鍋: 1手番に1度だけ（2回目は何も起きず魔力も減らない）。次の手番では使える', () => {

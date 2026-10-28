@@ -6,11 +6,13 @@ const countOwn = (board, player, effect) => board.reduce((n, sq) => (sq.player =
 const boardEffectCount = (board) => board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect !== '📜').length, 0);
 const ownLeaves = (board, player) => countOwn(board, player, '🍂');
 const ownCharges = (board, player) => countOwn(board, player, '⚡');
-const comboCut = (skillKey, board, player, leafBase, kinds) => {
+const comboCut = (skillKey, board, player, leafBase, kinds, chargeBase = 0) => {
     if (skillKey === 'onClickDoubleLeafToken') return ownLeaves(board, player) > leafBase ? COMBO_CUT : 0;
     if (skillKey === 'onClickBristle') return Array.from(kinds).some((k) => CHARGE_GRANT_KEYS.has(k)) ? COMBO_CUT : 0;
     if (skillKey === 'onClickChargeSeason') return ownCharges(board, player) === 0 ? COMBO_CUT : 0;
     if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
+    if (skillKey === 'onClickChargeHeal') return Math.max(0, ownCharges(board, player) - chargeBase);
     return 0;
 };
-module.exports = { COMBO_CUT, CHARGE_GRANT_KEYS, ownLeaves, ownCharges, boardEffectCount, comboCut };
+const comboFloor = (skillKey) => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' ? 1 : 0);
+module.exports = { COMBO_CUT, CHARGE_GRANT_KEYS, ownLeaves, ownCharges, boardEffectCount, comboCut, comboFloor };

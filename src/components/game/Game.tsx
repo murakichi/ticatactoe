@@ -18,8 +18,8 @@ import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTarget
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { comboCut, ownLeaves } from './comboCost';
+import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { darkPotRolls } from './darkPot';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
 import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
@@ -155,6 +155,7 @@ export const Game = (props: GameProps) => {
         fireBase: Array<number>(seatCount).fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件。増えていれば、この手番に敵か自陣へ🔥を付与した）
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
+        chargeBase: Array<number>(seatCount).fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数。増えたぶんがこの手番に付与した⚡
         processedTurn: 1,
     });
     // 手番でない席のコスト表示は「その席の次の手番の頭」の状態で出す
@@ -185,8 +186,8 @@ export const Game = (props: GameProps) => {
     };
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
-        const cut = seat === turnSeat ? comboCut(skillKey, currentBoard, symbols[seat], gearTurn.current.leafBase[seat], gearTurn.current.kinds[seat]) : 0; // 導線（コンボ）による軽減
-        const adjusted = Math.max(skillKey === 'onClickDarkPot' ? 1 : 0, adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // 一寸先は闇鍋は下限1
+        const cut = seat === turnSeat ? comboCut(skillKey, currentBoard, symbols[seat], gearTurn.current.leafBase[seat], gearTurn.current.kinds[seat], gearTurn.current.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
+        const adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // カウント型の導線は下限1
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         if (skillKey === 'onClickFireWheel' && seat === turnSeat && fireStacksTotal(currentBoard) > gearTurn.current.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
@@ -347,6 +348,7 @@ export const Game = (props: GameProps) => {
             case 'onClickStash': onClickStash(); break;
             case 'onClickThunderFire': onClickThunderFire(); break;
             case 'onClickDarkPot': onClickDarkPot(); break;
+            case 'onClickChargeHeal': onClickChargeHeal(); break;
             case 'onClickDoubleChargeToken': onClickDoubleChargeToken(); break;
             case 'onClickChargeArea': onClickChargeArea(); break;
             case 'onClickChargeRandom': onClickChargeRandom(); break;
@@ -732,6 +734,7 @@ export const Game = (props: GameProps) => {
             gearTurn.current.fireBase[nextSeat] = fireStacksTotal(currentBoard);
             gearTurn.current.leafBase[nextSeat] = ownLeaves(currentBoard, nextSymbol);
             gearTurn.current.darkPotUsed[nextSeat] = false;
+            gearTurn.current.chargeBase[nextSeat] = ownCharges(currentBoard, nextSymbol);
             gearTurn.current.freeCast = false;
             gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
             if (gearTurn.current.echoReady[nextSeat] && hasGear(gearsBySeat[nextSeat], 'afterglow')) gearTrigger('afterglow', '1つ目のスキルが安い');
@@ -2189,6 +2192,20 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot'), true, true, 'onClickDarkPot');
     };
 
+    // 雷を食らわば皿まで: ⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2する。この手番に付与した⚡の数だけコスト軽減（撃つとリセット）
+    const chargeHealCells = (): number[] => currentBoard.map((sq, k) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 && !isDormant(sq) ? k : -1)).filter((k) => k !== -1);
+    const onClickChargeHeal = () => {
+        const board = currentBoard.slice();
+        const r = healCharged(board, currentTurnPlayer);
+        if (r.healed.length === 0) return;
+        addLog(`「雷を食らわば皿まで」を使用（${r.healed.length}コマのライフを合計+${r.total}）`);
+        flashCells(r.healed);
+        playEffect('heal', undefined, r.healed, '雷を食らわば皿まで');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal'), true, true, 'onClickChargeHeal');
+        gearTurn.current.chargeBase[turnSeat] = ownCharges(board, currentTurnPlayer); // 条件のリセット
+    };
+
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
@@ -3224,6 +3241,7 @@ export const Game = (props: GameProps) => {
             fireBase: Array<number>(seatCount).fill(0),
             leafBase: Array<number>(seatCount).fill(0),
             darkPotUsed: Array<boolean>(seatCount).fill(false),
+            chargeBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,
         };
         ruinState.current = {
@@ -3438,6 +3456,7 @@ export const Game = (props: GameProps) => {
         { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
         { idx: 81, onClick: onClickThunderFire, buttonText: `雷のない所に火は立たぬ-${calculateCost(seatCosts.onClickThunderFire, false, false, currentTurnPlayer, 'onClickThunderFire')}`, paragraph: `⚡のあるコマ（自分の無敵マスも可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を1つずつ付けます（氷結中のコマは❄が1つ減るだけで、火は燃え移りません）`, disabled: checkSkillDisable(seatCosts.onClickThunderFire) || thunderFireTargets().length === 0 },
         { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || gearTurn.current.darkPotUsed[turnSeat] || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
+        { idx: 83, onClick: onClickChargeHeal, buttonText: `雷を食らわば皿まで-${calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal')}`, paragraph: `⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します\nこのターンに付与した⚡の数だけコストが下がります（最低1。使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickChargeHeal, false, false, 'onClickChargeHeal') || chargeHealCells().length === 0 },
     ];
 
     return (
