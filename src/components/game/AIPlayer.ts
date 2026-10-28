@@ -1051,9 +1051,19 @@ class AIPlayer {
         // (sim/ai.js chooseSkills と同一。A/B: ネクロ +2〜6pt。巨人は誤差内、軍師は大幅悪化で対象外)
         let reserve = 0;
         if (this.character === 'necromancer' && necroRemain === 0) reserve = necroCost;
+        // 凩の魔女: 手札に🍂付きトークンがあるとき、その最安のコスト未満になる他スキルの支払いを控える (sim/ai.js witchReserve=1。3シード×200試合で平均+2.7pt)
+        const WITCH_LEAF_SPEND = ['onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak'];
+        if (this.character === 'witch' && !tokenUsed) {
+            const leafOpts = [
+                { idx: 64, key: 'onClickDoubleLeafToken' as const },
+                { idx: 63, key: 'onClickTwinLeafToken' as const },
+                { idx: 62, key: 'onClickLeafToken' as const },
+            ].filter((o) => availableSkills.includes(o.idx));
+            if (leafOpts.length > 0) reserve = Math.min(...leafOpts.map((o) => this.calculateAICost(costs[o.key], true, false, o.key)));
+        }
         const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
-            if (reserve > 0 && RESERVE_SKIP.includes(skill) && remaining - cost < reserve) return false;
+            if (reserve > 0 && (RESERVE_SKIP.includes(skill) || (this.character === 'witch' && !WITCH_LEAF_SPEND.includes(skill))) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
         };
