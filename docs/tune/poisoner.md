@@ -2,10 +2,10 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 227a4bd
 - 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
-- 基準線: 環境勝率 76.4% / 1位 / 2位 witch 75.8%（条件1 seed3/200、witch の bindingLock 採用後の master）。条件2（envDeck varied）69.9% / 1位 / 2位 witch 69.7%（差0.2pt）
+- 基準線: 環境勝率 76.1% / 2位 / 1位 witch 78.1%（条件1 seed3/200、witch の witchReserve=1 採用後の master）。直前の master（witchReserve 前）では 1位 76.4% vs witch 75.8%
 - 連続不採用回数: 0
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
-- 状態: refining(master で witch 追加により一度2位に陥落(64.2% vs witch 68.7%)→ギア spellWard で再びトップ)
+- 状態: running(spellWard 採用で 65→76% だが、witch が witchReserve 採用で 78.1% になり再び2位。差2.0pt。対 witch 47〜52% / 対巨人 31〜44% が穴)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
