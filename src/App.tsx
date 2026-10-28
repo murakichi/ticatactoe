@@ -21,6 +21,7 @@ import {
     saveDeck,
     variedAIDeck,
 } from './components/game/deck';
+import { SimPanel } from './components/SimPanel';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -76,6 +77,7 @@ export const App = () => {
     // 盤面サイズ: 'auto'=人数に応じた既定(おまかせ) / 数値=人数に関わらずその一辺のマス数
     const [boardSizeChoice, setBoardSizeChoice] = useState<'auto' | number>('auto');
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
+    const [isSimOpen, setIsSimOpen] = useState<boolean>(false);
     // 対戦開始時に確定した席の設定（AIのデッキのランダム入れ替えは開始時に1回だけ決める）
     const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
 
@@ -115,7 +117,14 @@ export const App = () => {
 
     return (
         <div className='App'>
-            {isGameStarted ? (
+            {isSimOpen ? (
+                <SimPanel
+                    names={Object.fromEntries(CHARACTERS.map((c) => [c.id, `${c.icon} ${c.name}`]))}
+                    initialPlayers={playerCount}
+                    initialBoardSize={boardSizeChoice}
+                    onBack={() => setIsSimOpen(false)}
+                />
+            ) : isGameStarted ? (
                 <div className='App-game'>
                     <Game players={startedPlayers} boardSize={boardSize} onBackToSetup={() => setIsGameStarted(false)} />
                 </div>
@@ -203,6 +212,9 @@ export const App = () => {
                         <span className={styles.startSummary}>
                             {playerCount}人で対戦（{players.slice(0, playerCount).filter((p) => !p.isAI).length}人が操作）
                         </span>
+                        <button className={styles.randomBtn} onClick={() => setIsSimOpen(true)}>
+                            📊 シミュレーション
+                        </button>
                         <button
                             className={styles.start}
                             disabled={invalidDeckSeat >= 0}

@@ -23,6 +23,7 @@ const engine = require('./engine');
 const ai = require('./ai');
 const inflationMod = require('./inflation');
 const live = require('./live');
+const { runGame, pickChars } = require('./run');
 const { HEART, CIRCLE, CHARACTERS, SKILLS, SYMBOLS, MAX_PLAYERS } = engine;
 
 function parseArgs(argv) {
@@ -39,28 +40,6 @@ function parseArgs(argv) {
 }
 
 // ---------- batch simulation (balance analysis) ----------
-// 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
-function runGame(chars, rng, modes, size, tracker) {
-    const modeOf = (seat) => (Array.isArray(modes) ? modes[seat] : modes);
-    const s = engine.newGame({ chars, rng, size });
-    const trk = tracker ? tracker(s) : null;
-    let seenTurn = -1;
-    // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
-    const limit = Math.max(400, 200 * chars.length);
-    let guard = 0;
-    while (!s.winner && guard++ < limit) {
-        if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
-        const result = ai.makeMove(s, modeOf(s.turn));
-        if (result.turnEnded) continue;
-        if (result.move === null) break;
-        const before = s.currentTurn;
-        engine.placeMove(s, result.move);
-        if (s.currentTurn === before) break;
-    }
-    if (trk) trk.onTurnChange(s);
-    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn };
-}
-
 // 2人戦用。hmode/cmode let the two sides use different AIs (for AI-strength benchmarking).
 function runOneGame(hchar, cchar, rng, hmode, cmode) {
     if (cmode === undefined) cmode = hmode;
@@ -68,15 +47,6 @@ function runOneGame(hchar, cchar, rng, hmode, cmode) {
 }
 
 // ---------- 多人数バッチ (issue #32) ----------
-// 各ゲームの席ごとのキャラは、--chars で固定するか、未指定ならゲームごとに一様ランダムに引く
-function pickChars(n, fixed, rng) {
-    if (fixed) {
-        if (fixed.length !== n) throw new Error(`--chars needs ${n} characters (got ${fixed.length})`);
-        return fixed;
-    }
-    return Array.from({ length: n }, () => CHARACTERS[Math.floor(rng() * CHARACTERS.length)]);
-}
-
 function computeMultiMetrics(players, games, mode, baseSeed, fixedChars, size) {
     const seatWins = Array(players).fill(0);
     const charAgg = {};
