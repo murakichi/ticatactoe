@@ -997,6 +997,18 @@ describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁�
     });
 });
 
+describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固定する（sim/ai.js の tinderLock=2）', () => {
+    const board = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] } as SquareInfo));
+    const locks = (foe: 'magician' | 'you') => new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]).chooseLocks(board(), 0, 5, [87, 0, 1]);
+
+    it('相手に魔法使いがいれば火口(87)を固定する', () => {
+        expect(locks('magician')).toContain(87);
+    });
+    it('魔法使いがいなければ固定しない', () => {
+        expect(locks('you')).not.toContain(87);
+    });
+});
+
 describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');

@@ -924,7 +924,9 @@ class AIPlayer {
             (this.character === 'magician' && budsIdx.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (sim/ai.js necroLock=1)
-            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58));
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58)) ||
+            // 鍛冶師: 相手に魔法使いがいるとき、火口(87)を手札に固定して毎手番🌱のコマを燃やす (sim/ai.js の tinderLock=2。対魔法使い 37→58%)
+            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'magician'));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
