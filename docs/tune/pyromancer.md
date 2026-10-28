@@ -1,6 +1,6 @@
 # tune-top: pyromancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 9e6c8d8(トップ未達。2026-10-28 再開時に取込み)
+- 最後に検証したmaster: 12192e6(blocked。余韻+呪詛除けを反映済み。2026-10-28)
 - 現在の推奨設定: gears=[afterglow, spellWard](旧: afterglow,harvest。#41) deck=[0,3,5,8,11,12,28,31,53,56,58,87]  (旧: 61バーンアウト→87火口) AIフラグ=tinderLock=2(相手に魔法使いがいるとき火口を固定)  (旧: 32浄化→11ダブルトークン) AIフラグ=なし
 - 基準線(master c29a5b1 + 余韻+呪詛除け, seed3, 200試合, `--rank --target`): 基本 環境勝率 50.1% / **7位**(1位 witch 82.0%、2位 poisoner 73.8%) / `--envDeck varied` 56.7% / **4位**(1位 witch 75.3%、2位 poisoner 67.3%)。対キャラ別(基本): you 100 / tactician 52 / magician 61 / giant 43 / yinYangMaster 44 / necromancer 22 / poisoner 25 / electrician 66 / cryomancer 78 / witch 11。他セッションの調整で witch・毒使いがさらに強くなった(環境の1位は鍛冶師の手の届かない水準)
 - 基準線(master b93ae9f + 余韻+収穫採用, seed3, 200試合, `--rank --target`): 基本 環境勝率 56.9% / **6位**(1位 witch 69.5%、2位 poisoner 64.0%) / `--envDeck varied` 62.3% / **2位**(1位 witch 63.7%、3位 poisoner 62.1%)。対キャラ別(基本): you 100 / tactician 66 / magician 98 / giant 44 / yinYangMaster 49 / necromancer 25 / poisoner 26 / electrician 62 / cryomancer 72 / witch 27。前の基準線(50.9% / 54.8%)から +6.0 / +7.5pt
