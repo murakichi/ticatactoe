@@ -16,6 +16,10 @@ const countOwn = (board: SquareInfo[], player: Player, effect: '🍂' | '⚡'): 
 /** player のコマに乗っている🍂の総数（休眠中も数える） */
 export const ownLeaves = (board: SquareInfo[], player: Player): number => countOwn(board, player, '🍂');
 
+/** 盤面（空きマスも含む）に乗っているエフェクトの総数。式神の印(📜)は数えない */
+export const boardEffectCount = (board: SquareInfo[]): number =>
+    board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect !== '📜').length, 0);
+
 /** player のコマに乗っている⚡の総数 */
 export const ownCharges = (board: SquareInfo[], player: Player): number => countOwn(board, player, '⚡');
 
@@ -24,10 +28,12 @@ export const ownCharges = (board: SquareInfo[], player: Player): number => count
  * - 紅葉狩り: この手番、自陣の🍂が手番開始時（leafBase）より増えていれば
  * - 総毛立つ: この手番に⚡を付与するスキルを使っていれば（kinds=手番内に使ったスキルの種類）
  * - 静電気の季節: 自陣に⚡が1つもなければ
+ * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型。下限1は呼び出し側 gearCost が掛ける）
  */
 export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>): number => {
     if (skillKey === 'onClickDoubleLeafToken') return ownLeaves(board, player) > leafBase ? COMBO_CUT : 0;
     if (skillKey === 'onClickBristle') return Array.from(kinds).some((k) => CHARGE_GRANT_KEYS.has(k)) ? COMBO_CUT : 0;
     if (skillKey === 'onClickChargeSeason') return ownCharges(board, player) === 0 ? COMBO_CUT : 0;
+    if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
     return 0;
 };

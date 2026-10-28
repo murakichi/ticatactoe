@@ -185,7 +185,7 @@ export const Game = (props: GameProps) => {
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
     const gearCost = (cost: number, seat: number = turnSeat, isToken: boolean = false, skillKey?: string): number => {
         const cut = seat === turnSeat ? comboCut(skillKey, currentBoard, symbols[seat], gearTurn.current.leafBase[seat], gearTurn.current.kinds[seat]) : 0; // 導線（コンボ）による軽減
-        const adjusted = Math.max(0, adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut);
+        const adjusted = Math.max(skillKey === 'onClickDarkPot' ? 1 : 0, adjustCostByGear(cost, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // 一寸先は闇鍋は下限1
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         if (skillKey === 'onClickFireWheel' && seat === turnSeat && fireStacksTotal(currentBoard) > gearTurn.current.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
@@ -3432,7 +3432,7 @@ export const Game = (props: GameProps) => {
         { idx: 79, onClick: onClickRelease, buttonText: `落雷は忘れた頃に-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, paragraph: `自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
         { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
         { idx: 81, onClick: onClickThunderFire, buttonText: `雷のない所に火は立たぬ-${calculateCost(seatCosts.onClickThunderFire, false, false, currentTurnPlayer, 'onClickThunderFire')}`, paragraph: `⚡のあるコマ（自分の無敵マスも可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を1つずつ付けます（氷結中のコマは❄が1つ減るだけで、火は燃え移りません）`, disabled: checkSkillDisable(seatCosts.onClickThunderFire) || thunderFireTargets().length === 0 },
-        { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
+        { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n盤面のエフェクトの数だけコストが下がります（最低1）\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
     ];
 
     return (

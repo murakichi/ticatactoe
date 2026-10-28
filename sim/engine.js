@@ -245,7 +245,7 @@ const skillCosts = {
     onClickRelease: 5, // 落雷は忘れた頃に(idx 79)
     onClickStash: 1, // 雷神のへそくり(idx 80)
     onClickThunderFire: 7, // 雷のない所に火は立たぬ(idx 81)
-    onClickDarkPot: 8, // 一寸先は闇鍋(idx 82)
+    onClickDarkPot: 9, // 一寸先は闇鍋(idx 82)。盤面のエフェクトの数だけ軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -663,7 +663,7 @@ function gearCtx(s, seat) {
 /** キャラ補正済みのコストにギアの補正を掛ける */
 function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat]) : 0; // 導線（コンボ）による軽減
-    const adjusted = Math.max(0, gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut);
+    const adjusted = Math.max(key === 'onClickDarkPot' ? 1 : 0, gear.adjustCostByGear(cost, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // 一寸先は闇鍋は下限1
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）

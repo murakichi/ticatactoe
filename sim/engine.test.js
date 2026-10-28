@@ -2567,7 +2567,7 @@ test('導線(コンボ)の軽減: 紅葉狩り=自陣の🍂が手番開始よ�
     assert.strictEqual(price(c, 'onClickChargeSeason'), 5); // 敵の⚡は数えない
 });
 
-test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1・🔥は❄🌱🍂と同居しない）。🔑ロック・空きマスは対象外。コスト8', () => {
+test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1・🔥は❄🌱🍂と同居しない）。🔑ロック・空きマスは対象外。コスト9（盤面のエフェクトの数だけ軽減・最低1）', () => {
     const count = (sq, k) => sq.effects.filter((x) => x.effect === k).length;
     const seen = { '🔥': 0, '❄': 0, '⚡': 0, '☠': 0, '🌱': 0, '🍂': 0 };
     let pieces = 0;
@@ -2580,8 +2580,9 @@ test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をラン
             else if (i < 13) s.board[i] = { player: '⭕', bind: 5, effects: [] };
         }
         s.board[1].effects.push({ effect: '🌱' });
+        assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDarkPot, false, false, 'onClickDarkPot'), 9 - 2); // 🔑と🌱の2つぶん軽減
         e.SKILLS.darkPot(s);
-        assert.strictEqual(s.magic[0], 30 - 8);
+        assert.strictEqual(s.magic[0], 30 - 7);
         assert.deepStrictEqual(s.board[0].effects, [{ effect: '🔑' }]); // ロック中は対象外
         for (let i = 13; i < 16; i++) assert.strictEqual(s.board[i].player, undefined);
         for (const sq of s.board) {
@@ -2597,6 +2598,20 @@ test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をラン
     assert.ok(seen['⚡'] / pieces > 0.35 && seen['⚡'] / pieces < 0.65, `⚡ ${seen['⚡'] / pieces}`);
     assert.ok(seen['☠'] / pieces > 0.35 && seen['☠'] / pieces < 0.65, `☠ ${seen['☠'] / pieces}`);
     for (const k of Object.keys(seen)) assert.ok(seen[k] > 0, `${k}が一度も乗らない`);
+});
+
+test('一寸先は闇鍋: コストは盤面のエフェクトの数だけ下がり、最低1', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(1) });
+    s.magic[0] = 30;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickDarkPot, false, false, 'onClickDarkPot');
+    assert.strictEqual(e.skillCosts.onClickDarkPot, 9);
+    assert.strictEqual(price(), 9);
+    for (let i = 0; i < 4; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 3, effects: [{ effect: '☠' }] };
+    assert.strictEqual(price(), 5);
+    s.board[4] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }, { effect: '❄' }] }; // 空きマスのエフェクトも数える
+    assert.strictEqual(price(), 3);
+    for (let i = 5; i < 16; i++) s.board[i] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }] };
+    assert.strictEqual(price(), 1);
 });
 
 test('一寸先は闇鍋: 雷霆の巫の⚡で無敵のコマは対象外。毒使いの毒はライフ1.5倍', () => {

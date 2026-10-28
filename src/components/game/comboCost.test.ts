@@ -1,4 +1,4 @@
-import { comboCut, ownCharges, ownLeaves, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
+import { comboCut, ownCharges, ownLeaves, boardEffectCount, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
 import { SquareInfo } from '../../types/SquareInfo';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -27,6 +27,12 @@ describe('導線(コンボ)の軽減', () => {
         expect(comboCut('onClickChargeSeason', [sq('⭕', [BOLT])], '💙', 0, new Set())).toBe(COMBO_CUT);
         expect(ownCharges([sq('💙', [BOLT, BOLT])], '💙')).toBe(2);
     });
+    test('一寸先は闇鍋: 盤面のエフェクトの数だけ（空きマス・敵のコマも数え、式神の印は数えない）', () => {
+        const board = [sq('💙', [LEAF, BOLT]), sq('⭕', [BOLT]), sq(undefined, [{ effect: '🔑' as const }]), sq('💙', [{ effect: '📜' as const }])];
+        expect(boardEffectCount(board)).toBe(4);
+        expect(comboCut('onClickDarkPot', board, '💙', 0, new Set())).toBe(4);
+        expect(comboCut('onClickDarkPot', [sq('💙')], '💙', 0, new Set())).toBe(0);
+    });
     test('対象外のスキルは常に0', () => {
         expect(comboCut('onClickToken', [sq('💙')], '💙', 0, new Set(CHARGE_GRANT_KEYS))).toBe(0);
         expect(comboCut(undefined, [sq('💙')], '💙', 0, new Set())).toBe(0);
@@ -35,7 +41,7 @@ describe('導線(コンボ)の軽減', () => {
         expect(simCombo.COMBO_CUT).toBe(COMBO_CUT);
         expect([...simCombo.CHARGE_GRANT_KEYS].sort()).toEqual(Array.from(CHARGE_GRANT_KEYS).sort());
         const boards = [[sq('💙')], [sq('💙', [LEAF, BOLT]), sq('⭕', [LEAF])]];
-        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickToken'];
+        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickDarkPot', 'onClickToken'];
         const kindSets = [new Set<string>(), new Set(['onClickChargeArea']), new Set(['onClickChargeSeason'])];
         for (const b of boards) for (const k of keys) for (const kinds of kindSets) for (const base of [0, 1]) {
             expect(simCombo.comboCut(k, b, '💙', base, kinds)).toBe(comboCut(k, b, '💙', base, kinds));
