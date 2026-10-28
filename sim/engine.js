@@ -626,6 +626,7 @@ function newGame(opts = {}) {
     defineLegacyAliases(state);
     state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], config.lifeStd)));
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
+    armWard(state);
     return state;
 }
 
@@ -680,8 +681,13 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key) {
     // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
     return discounted + thermal.leafSurcharge(s.board, SYMBOLS[seat]);
 }
+// 術中の加護: スキルを使った手番の間、装備した席のコマは効果(☠🔥⚡)のダメージを受けない。thermal の述語を、この試合の状態で差し込む
+function armWard(s) {
+    thermal.setEffectWard((sq) => hasGear(s.gears[SYMBOLS.indexOf(sq.player)], 'spellWard') && s.gearSkills[s.turn] > 0);
+}
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
 function noteSkillUsed(s) {
+    armWard(s);
     s.gearSkills[s.turn]++;
     s.echoNext[s.turn] = true;
     s.echoReady[s.turn] = false;
@@ -916,6 +922,7 @@ function advanceTurn(s) {
  */
 function placeMove(s, i) {
     const board = s.board;
+    armWard(s);
 
     // 雷のない所に火は立たぬ: ⚡のあるコマを選ぶ。無敵マスでも自分のものは選べる（無敵の早期リターンより前に判定する）
     if (s.useThunderFire) {
@@ -1073,12 +1080,12 @@ function placeMove(s, i) {
         const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
         if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
         // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-        if (sq.player && sq.bind === 0 && thermal.flameStacks(sq) > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑')) {
+        if (sq.player && sq.bind === 0 && thermal.flameStacks(sq) > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isEffectWarded(sq)) {
             board[k] = { player: undefined, bind: 0, effects: [] };
             bumpStat(s, 'flameKill');
             continue;
         }
-        const poison = poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）
+        const poison = thermal.isEffectWarded(sq) ? 0 : poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）。術中の加護も同様
         if (poison > 0 && sq.bind > 0) {
             // 毒のダメージでは🔥は消えない
             const hit = thermal.applyDamage(sq, poison, 'poison').sq;

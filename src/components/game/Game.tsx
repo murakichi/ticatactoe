@@ -22,7 +22,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { darkPotRolls } from './darkPot';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey } from './discount';
-import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, POISON_LIFE_MULT, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -195,6 +195,14 @@ export const Game = (props: GameProps) => {
         // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（軽減のあとに足す。上限なし）
         return discounted + leafSurcharge(currentBoard, symbols[seat]);
     };
+
+    // 術中の加護: スキルを使った手番の間、装備した席のコマは効果(☠🔥⚡)のダメージを受けない。thermal.ts の述語を ref 越しに差し込む
+    const wardRef = useRef({ gears: gearsBySeat, turnSeat });
+    wardRef.current = { gears: gearsBySeat, turnSeat };
+    useEffect(() => {
+        setEffectWard((sq) => !!sq.player && hasGear(wardRef.current.gears[seatOf(sq.player)], 'spellWard') && gearTurn.current.skills[wardRef.current.turnSeat] > 0);
+        return () => setEffectWard(() => false);
+    }, []);
 
     const [restartCount, setRestartCount] = useState<number>(0);
     // 連戦時の勝利数 (Restartしてもリセットしない)
@@ -1045,7 +1053,7 @@ export const Game = (props: GameProps) => {
             // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
             const square = decayTick(nextBoard[s], characters);
             nextBoard[s] = square;
-            const poison = square.effects.filter((x) => x.effect === '☠').length;
+            const poison = isEffectWarded(square) ? 0 : square.effects.filter((x) => x.effect === '☠').length; // 術中の加護
             // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
             const expiredLock = square.bind === 0 ? square.effects.find((x) => x.effect === '🔑') : undefined;
             if (square.bind === 0) {
