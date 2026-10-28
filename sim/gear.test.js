@@ -435,6 +435,19 @@ test('焦土: 敵の🌱が🔥で消えると魔力+2(1手番に最大6)', () =
     assert.strictEqual(run([['scorchedEarth'], []]) - run([[], []]), 2);
 });
 
+test('焦土: 敵の🍂(枯れ葉)が🔥で消えても同じく魔力+2', () => {
+    const run = (gears) => {
+        const s = game(gears);
+        s.board[7] = { player: C, bind: 30, effects: [{ effect: '🍂' }] };
+        e.placeMove(s, 0);
+        s.board[7] = { player: C, bind: 30, effects: [{ effect: '🔥' }] }; // 🍂が燃えた
+        const before = s.magic[0];
+        e.placeMove(s, 1);
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(run([['scorchedEarth'], []]) - run([[], []]), 2);
+});
+
 test('焦土: 自分の🌱が燃えても、🔥のない🌱の消失(収穫など)でも発動しない', () => {
     const squares = [{ player: C, effects: [{ effect: '🔥' }] }, { player: H, effects: [{ effect: '🔥' }] }, { player: C, effects: [] }];
     assert.strictEqual(gear.burnedBudCount([C, H, C], [2, 2, 2], squares, H), 2, '⭕の🌱2つだけ');
