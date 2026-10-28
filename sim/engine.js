@@ -251,6 +251,7 @@ const skillCosts = {
     onClickLeafDrop: 1, // 落ち葉の置き土産(idx 84)
     onClickKindling: 5, // 焚きつけ(idx 85)
     onClickLeafCloak: 3, // 落葉の衣(idx 86)
+    onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -623,6 +624,7 @@ function newGame(opts = {}) {
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
         glacierPending: fill(false), // 絶対零度: 次の自分の手番開始時に発動待ちの席
         useIgnite: false,
+        useTinder: false,
         stats: {},
         winner: undefined,
         log: [],
@@ -1023,6 +1025,12 @@ function placeMove(s, i) {
     if (s.useIgnite) {
         thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
         s.useIgnite = false;
+        return true;
+    }
+    if (s.useTinder) {
+        if (!tinderCandidates(s).includes(i)) return false; // 🌱も🍂も無いコマは選び直せる
+        thermal.ignite(board, [i], s.size, 1, keepBudsOf(s));
+        s.useTinder = false;
         return true;
     }
     if (s.useLock > 0) {
@@ -1954,6 +1962,16 @@ function onClickFreeze(s) {
     bumpMagicCount(s);
     bumpStat(s, 'freeze');
 }
+// 火口 (idx 87): 🌱か🍂のある敵コマを1つ選んで🔥を1つ付ける（2段階。対象が無ければ使えない） [FAITHFUL] Game.tsx onClickTinder
+function tinderCandidates(s) { return thermal.tinderTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function tinderLegal(s) { return tinderCandidates(s).length > 0; }
+function onClickTinder(s) {
+    if (!tinderLegal(s)) return;
+    s.useTinder = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder'), 'onClickTinder');
+    bumpMagicCount(s);
+    bumpStat(s, 'tinder');
+}
 function onClickIgnite(s) {
     s.useIgnite = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite'), 'onClickIgnite');
@@ -2583,6 +2601,7 @@ const SKILLS = {
     chargeHeal: onClickChargeHeal,
     leafDrop: onClickLeafDrop,
     kindling: onClickKindling,
+    tinder: onClickTinder,
     leafCloak: onClickLeafCloak,
     doubleFlameToken: onClickDoubleFlameToken,
     swidden: onClickSwidden,
@@ -2628,7 +2647,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

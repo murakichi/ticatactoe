@@ -118,6 +118,7 @@ export const skillCosts = {
     onClickLeafDrop: 1, //       落ち葉の置き土産(idx 84): ランダムな敵のコマ1つに🍂を1つ付与。敵の🍂は自分のコストも上げる（魔女は相殺）ので最安
     onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
     onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
+    onClickTinder: 2, //         火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付与（鍛冶師は🔥付与で-1）
 };
 
 export type SkillCosts = typeof skillCosts;

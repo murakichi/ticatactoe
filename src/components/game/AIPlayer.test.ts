@@ -969,6 +969,34 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の i
     });
 });
 
+describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（sim/ai.js の火口と同一）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 6, effects: [] };
+        b[6] = { player: '⭕', bind: 3, effects: [{ effect: '🌱' }] };
+        return b;
+    };
+    const run = (hand: number[], magic: number, foe: 'you' | 'necromancer' = 'you') => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(board(), magic, skillCosts, 2, 5, hand, false);
+    };
+
+    it('手札に火口があれば🌱のある敵コマに撃ち、そのあと火遁は残りのコマに撃つ', () => {
+        const clicks = run([87], 8).chargeClicks ?? [];
+        expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
+        expect(clicks.find((c) => c.skill === 'onClickIgnite')?.target).toBe(5);
+    });
+    it('手札に火口が無ければ撃たない', () => {
+        expect(run([], 8).chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
+    });
+    it('ネクロマンサーが相手のときは撃たない', () => {
+        expect(run([87], 8, 'necromancer').chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
+    });
+});
+
 describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
