@@ -31,7 +31,11 @@ const matchTone = (rate: number | null) => (rate == null ? '' : rate >= 0.55 ? s
 export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Props) => {
     const [players, setPlayers] = useState<number>(initialPlayers);
     const [boardChoice, setBoardChoice] = useState<'auto' | number>(initialBoardSize);
+    const [useSkills, setUseSkills] = useState<boolean>(true);
+    const [useGears, setUseGears] = useState<boolean>(true);
     const [autoStop, setAutoStop] = useState<boolean>(true);
+    // 実行中の対戦に使った設定（終了後にチェックを触っても表示は変えない）
+    const [ran, setRan] = useState<{ skills: boolean; gears: boolean }>({ skills: true, gears: true });
     const [status, setStatus] = useState<Status>('idle');
     const [snap, setSnap] = useState<Snapshot | null>(null);
     const [error, setError] = useState<string>('');
@@ -83,10 +87,13 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
             mode: 'faithful',
             seed: Math.floor(Math.random() * 1e6),
             fixedChars: null,
+            skills: useSkills,
+            gears: useGears,
             conv: autoStop ? CONV : null,
             checkpoint: CHECKPOINT,
             maxGames: Infinity,
         });
+        setRan({ skills: useSkills, gears: useGears });
         setStatus('running');
     };
     const stop = () => worker.current?.postMessage({ cmd: 'stop' });
@@ -135,6 +142,14 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                         ))}
                     </select>
                 </label>
+                <label className={styles.check} title='外すと魔法スキルを一切使わず、置くだけで戦います（キャラのパッシブは有効）'>
+                    <input type='checkbox' checked={useSkills} disabled={running} onChange={(e) => setUseSkills(e.target.checked)} />
+                    スキルを使う
+                </label>
+                <label className={styles.check} title='外すとギアなしで戦います'>
+                    <input type='checkbox' checked={useGears} disabled={running} onChange={(e) => setUseGears(e.target.checked)} />
+                    ギアを装備する
+                </label>
                 <label className={styles.check}>
                     <input type='checkbox' checked={autoStop} disabled={running} onChange={(e) => setAutoStop(e.target.checked)} />
                     勝率が落ち着いたら自動で止める
@@ -161,7 +176,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                             {status === 'converged' && '勝率が落ち着いたので停止しました'}
                         </strong>
                         <span>
-                            {players}人 {size}x{size}・{s.games.toLocaleString()}局・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
+                            {players}人 {size}x{size}・スキル{ran.skills ? 'あり' : 'なし'}・ギア{ran.gears ? 'あり' : 'なし'}・{s.games.toLocaleString()}局・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
                         </span>
                         <span>
                             勝率の変動幅（直近{CONV.window}回）: {pct(snap!.drift, 2)}

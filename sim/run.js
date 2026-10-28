@@ -5,12 +5,28 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
+const deckMod = require('./deck');
+const gearMod = require('./gear');
 const { CHARACTERS } = engine;
 
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
-function runGame(chars, rng, modes, size, tracker) {
+// 本番のAI席と同じ装備（推奨デッキから3枚入れ替え / 推奨ギア・別案）を席ごとに持たせる。
+// 何も渡さないと全キャラが「デッキ未指定・ギアなし」で戦い、実ゲームや環境順位(probe-top)とかけ離れる（陰陽師が極端に弱くなる）
+function aiLoadout(chars, rng, opts) {
+    const out = {};
+    if (opts.deck) out.decks = chars.map((c) => deckMod.variedAIDeck(c, rng));
+    if (opts.gears) out.gears = chars.map((c) => gearMod.pickRecommendedGears(c, rng));
+    return out;
+}
+
+/**
+ * opts（省略すると従来どおり装備なし・スキルあり）:
+ *   deck/gears: 本番AIと同じデッキ・ギアを持たせる
+ *   skills=false: AIが魔法スキルを一切使わず、置くだけ（キャラのパッシブとギアは有効）
+ */
+function runGame(chars, rng, modes, size, tracker, opts = {}) {
     const modeOf = (seat) => (Array.isArray(modes) ? modes[seat] : modes);
-    const s = engine.newGame({ chars, rng, size });
+    const s = engine.newGame({ chars, rng, size, ...aiLoadout(chars, rng, opts) });
     const trk = tracker ? tracker(s) : null;
     let seenTurn = -1;
     // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
@@ -18,7 +34,7 @@ function runGame(chars, rng, modes, size, tracker) {
     let guard = 0;
     while (!s.winner && guard++ < limit) {
         if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
-        const result = ai.makeMove(s, modeOf(s.turn));
+        const result = opts.skills === false ? { move: ai.getEnhancedBestMove(s), turnEnded: false } : ai.makeMove(s, modeOf(s.turn));
         if (result.turnEnded) continue;
         if (result.move === null) break;
         const before = s.currentTurn;

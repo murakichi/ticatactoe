@@ -969,6 +969,46 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の i
     });
 });
 
+describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（sim/ai.js の火口と同一）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 6, effects: [] };
+        b[6] = { player: '⭕', bind: 3, effects: [{ effect: '🌱' }] };
+        return b;
+    };
+    const run = (hand: number[], magic: number, foe: 'you' | 'necromancer' = 'you') => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(board(), magic, skillCosts, 2, 5, hand, false);
+    };
+
+    it('手札に火口があれば🌱のある敵コマに撃ち、そのあと火遁は残りのコマに撃つ', () => {
+        const clicks = run([87], 8).chargeClicks ?? [];
+        expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
+        expect(clicks.find((c) => c.skill === 'onClickIgnite')?.target).toBe(5);
+    });
+    it('手札に火口が無ければ撃たない', () => {
+        expect(run([], 8).chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
+    });
+    it('ネクロマンサーが相手のときは撃たない', () => {
+        expect(run([87], 8, 'necromancer').chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
+    });
+});
+
+describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固定する（sim/ai.js の tinderLock=2）', () => {
+    const board = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] } as SquareInfo));
+    const locks = (foe: 'magician' | 'you') => new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]).chooseLocks(board(), 0, 5, [87, 0, 1]);
+
+    it('相手に魔法使いがいれば火口(87)を固定する', () => {
+        expect(locks('magician')).toContain(87);
+    });
+    it('魔法使いがいなければ固定しない', () => {
+        expect(locks('you')).not.toContain(87);
+    });
+});
+
 describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
@@ -1197,6 +1237,22 @@ describe('凩の魔女は対策ロックを撃たない (sim/ai.js witchNoAnti)'
     });
 });
 
+describe('凩の魔女は🍂トークンの分の魔力を温存する (sim/ai.js witchReserve)', () => {
+    const costs = { onClickAddLife: 3, onClickLeafToken: 3, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
+    const board = () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 1);
+        return b;
+    };
+
+    it('魔力が🍂トークン1枚ぶんしか無いとき、ライフ3に使わず🍂トークンを撃つ', () => {
+        const ai = new AIPlayer('💙', 'witch', ['⭕'], ['witch', 'you']);
+        const r = ai.makeMove(board(), 4, costs, 0, 1, [0, 62], false);
+        expect(r.skills ?? []).toContain('onClickLeafToken');
+        expect(r.skills ?? []).not.toContain('onClickAddLife');
+    });
+});
+
 describe('コストの計算順: 敵の🍂の増加分を先に足し、魔女のパッシブの減少分をそのあとに引く', () => {
     it('魔女: 敵の🍂3枚だけの盤面で、コスト2は2のまま（以前は下限1のあとに+3で4）', () => {
         const b = emptyBoard();
@@ -1338,5 +1394,59 @@ describe('落雷は忘れた頃にのAI使用', () => {
         expect(ai.makeMove(one, 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease'); // 敵が1つだけ
         const other = new AIPlayer('💙', 'you', ['⭕']);
         expect(other.makeMove(bolts(3), 20, costs, 0, 5, [79, 0, 1], false).skills).not.toContain('onClickRelease');
+    });
+});
+
+describe('魔法使いはネクロマンサー相手に審判の日を撃たない (sim/ai.js noJudgeNecro と同じ)', () => {
+    // 💙(魔法使い)の周りに⭕のコマが固まっていて、審判の日なら2つ以上巻き込める盤面
+    const board = () => {
+        const b = emptyBoard();
+        [5, 6, 9, 10].forEach((i) => put(b, i, '⭕', 4));
+        return b;
+    };
+    const plan = (foe: 'tactician' | 'necromancer') => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(board(), 20, { onClickToken: 4, onClickLock: 2, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+
+    it('ネクロマンサー相手なら審判の日を撃たない', () => {
+        expect(plan('necromancer').skills).not.toContain('onClickJudgeDay');
+    });
+    it('ほかの相手なら審判の日を撃つ', () => {
+        expect(plan('tactician').skills).toContain('onClickJudgeDay');
+    });
+});
+
+describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (sim/ai.js lockFirstCryo と同じ)', () => {
+    // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
+    const board = () => {
+        const b = emptyBoard();
+        [0, 6, 11].forEach((i) => put(b, i, '💙', 4));
+        b[0] = { ...b[0], effects: [{ effect: '🌱' }] };
+        [5, 10, 12, 15].forEach((i) => put(b, i, '⭕', 4));
+        return b;
+    };
+    const planOf = (foe: 'tactician' | 'cryomancer' | 'pyromancer') => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(board(), 20, { onClickToken: 4, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+    const lockTargetsOf = (foe: 'tactician' | 'cryomancer' | 'pyromancer') => {
+        const r = planOf(foe);
+        return [...(r.lockTargets ?? []), ...(r.chargeClicks ?? []).map((c) => c.target)];
+    };
+
+    it('氷室が相手なら、🌱付きのコマを先頭に自陣のコマを全てロックする', () => {
+        const targets = lockTargetsOf('cryomancer');
+        expect(targets[0]).toBe(0);
+        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    });
+    it('鍛冶師（🔥はロック中のコマに付かない）が相手のときも同じく全てロックする', () => {
+        const targets = lockTargetsOf('pyromancer');
+        expect(targets[0]).toBe(0);
+        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    });
+    it('ほかの相手なら従来どおり審判の日を撃つ（ロックを先にしない）', () => {
+        expect(planOf('tactician').skills).toContain('onClickJudgeDay');
+        expect(lockTargetsOf('tactician')).toEqual([]);
     });
 });
