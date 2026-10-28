@@ -2,6 +2,7 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 9e6c8d8(トップ未達。2026-10-28 再開時に取込み)
 - 現在の推奨設定: gears=[emptyLock, harvest] deck=[0,3,5,8,11,12,28,31,53,56,58,87]  (旧: 61バーンアウト→87火口) AIフラグ=tinderLock=2(相手に魔法使いがいるとき火口を固定)  (旧: 32浄化→11ダブルトークン) AIフラグ=なし
+- 基準線(master 9bb72dd[witch調整・火口固定を含む], seed3, 200試合, `--rank --target`): 基本 環境勝率 50.9% / **6位**(1位 witch 68.5%、2位 poisoner 63.6%) / `--envDeck varied` 54.8% / **6位**(1位 witch 62.6%、2位 poisoner 62.4%、3位 cryomancer 61.9%、5位 electrician 54.9%)。対キャラ別(基本): you 94 / tactician 62 / magician 58 / giant 60 / yinYangMaster 39 / necromancer 38 / poisoner 30 / electrician 50 / cryomancer 43 / witch 37
 - 基準線(master 32dbbb1 + 火口採用, seed3, 200試合, `--rank --target`): 基本 環境勝率 51.9% / **6位**(1位 witch 67.5%) / `--envDeck varied` 54.9% / **5位**(1位 witch 62.5%、2位 氷室 62.3%、3位 毒使い 61.8%)。対魔法使い 39→58%。前回(48.0% / 52.8%)から +3.9 / +2.1pt
 - 基準線(master 9e6c8d8, seed3, 200試合, `--rank --target`): 基本 環境勝率 48.0% / **6位** / 1位 witch 68.7%(2位 poisoner 64.2%)。`--envDeck varied` 52.8% / 6位 / 1位 poisoner 62.4%。新キャラ witch が登場(11キャラ)。鍛冶師の対キャラ別(基本): you 94 / tactician 56 / magician 39 / giant 59 / yinYangMaster 39 / necromancer 40 / poisoner 29 / electrician 50 / cryomancer 43 / witch 32。前回 master(3位54.9%)から、witch の追加と他キャラの調整で低下
 - 基準線(master 2f3dbdf + 火炎の即時ダメージ+🔥でライフ0→破壊, seed3, 200試合, `--rank --target`): 環境勝率 54.9% / **3位** / 1位 yinYangMaster 66.2%(2位 poisoner 65.5%)
