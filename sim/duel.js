@@ -25,6 +25,7 @@ const engine = require('./engine');
 const gearMod = require('./gear');
 const deckMod = require('./deck');
 const ai = require('./ai');
+const threat = require('./duel-threat');
 
 const { SKILLS } = engine;
 
@@ -40,6 +41,7 @@ const IDX_SKILL = {
     56: 'vitalMarkdown', 57: 'uniqueDiscount', 58: 'clearance', 60: 'counterMarkdown', 61: 'burnout', 62: 'leafToken',
     63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'bothLeafToken', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
+    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
 };
 
 /** キャラ固有の SKILLS キー */
@@ -151,9 +153,14 @@ function apply(s, cfg, act) {
     const me = cfg.seat;
     if (s.winner) return '既に決着しています';
     if (s.turn !== me) return '自分の手番ではありません';
-    if (cmd === 'p') {
+    if (cmd === 'p' || cmd === 'p!') {
         const i = parseInt(arg, 10);
         if (!(i >= 0 && i < s.board.length)) return `マス番号が範囲外: ${arg}`;
+        // 見落とし防止: 置いた後に相手の勝ち手が残るなら止める（p! N で強行）。対象マスの指定待ち中は対象外
+        if (cmd === 'p' && !pendingOf(s).length) {
+            const w = threat.placeWarning(s, engine.symbolOfSeat(me), engine.symbolOfSeat(1 - me), i);
+            if (w) return `マス${i}に置くと相手の${w.fork ? 'フォーク(勝ち手が複数)' : '勝ち手'}が残ります: マス${w.cells.join(',')}。置き直すか、承知の上なら p! ${i}`;
+        }
         return engine.placeMove(s, i) ? null : 'そのマスには置けません（ロック・氷結・ライフ不足・対象外など）';
     }
     if (cmd === 'h' || cmd === 's') {
@@ -232,6 +239,17 @@ function show(cfg, res) {
     console.log('');
     console.log(engine.renderBoard(s));
     console.log(`ライフ値(次に置くコマ)=${s.life}  魔力 自分:${s.magic[me]} 相手:${s.magic[1 - me]}  直前の相手AI: ${res.lastReply.length ? res.lastReply.join(' / ') : 'なし'}`);
+    {
+        const mySym = sym, opSym = engine.symbolOfSeat(1 - me);
+        const now = threat.winCells(s, s.board, opSym, false).map((o) => o.cell);
+        const later = threat.winCells(s, s.board, opSym, true).map((o) => o.cell).filter((c) => !now.includes(c));
+        const mine = threat.winCells(s, s.board, mySym, false).map((o) => o.cell);
+        if (!s.winner) {
+            if (mine.length) console.log(`✅ 自分の勝ち手: マス${mine.join(',')}`);
+            if (now.length) console.log(`⚠ 相手の勝ち手(今): マス${now.join(',')}${now.length >= 2 ? '  ←複数＝1手では防げない' : ''}`);
+            if (later.length) console.log(`⚠ 相手の勝ち手(あなたが1手指した後の減衰・毒で奪える駒を含む): マス${later.join(',')}`);
+        }
+    }
     if (s.winner) { console.log(`\n*** 決着: ${s.winner}${s.winner === sym ? '（あなたの勝ち）' : '（あなたの負け）'} ***`); return; }
     if (engine.findEmptyIndexes(s.board).length === 0) console.log('\n（着手できるマスなし: charge で手番を終えられる）');
     const pend = pendingOf(s);
