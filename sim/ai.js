@@ -2106,6 +2106,24 @@ function faithfulMakeMoveInner(s) {
             if (curMagic(s) >= 16) break;
         }
     }
+    // 検証用 F.mistLoop(issue #237): 収穫ギア+付与割引(54)+毒霧(29)の周回で魔力を稼ぐ。F.mistLoop=最大周回数、F.mistCap=この魔力に届いたら止める、F.mistDig=2枚が揃うまで引き直す最大回数(魔力が F.loopMin 以上のとき)
+    if (F.mistLoop && hasGear(s.gears[s.turn], 'harvest') && !s.silenced[s.turn]) {
+        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        const have = () => s.skills.includes(29) && s.skills.includes(54);
+        if (F.mistDig) {
+            for (let k = 0; k < F.mistDig && curMagic(s) >= (F.loopMin || 5) && !have(); k++) E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
+        const cap = F.mistCap || 25;
+        for (let k = 0; k < F.mistLoop && have() && curMagic(s) < cap; k++) {
+            if (curMagic(s) < 1 + cost('onClickPoisonMist')) break;
+            const before = curMagic(s);
+            SKILLS.effectDiscount(s);
+            SKILLS.poisonMist(s);
+            s.loopCycles = (s.loopCycles || 0) + 1;
+            if (k >= 4 && curMagic(s) <= before) break; // 立ち上がり(割引を積む数周)のあとも増えないなら止める
+        }
+    }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
     if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
