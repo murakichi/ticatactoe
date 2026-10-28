@@ -3,12 +3,14 @@
 - 最後に検証したmaster: 227a4bd
 - 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
 - 基準線: 環境勝率 76.1% / 2位 / 1位 witch 78.1%（条件1 seed3/200、witch の witchReserve=1 採用後の master）。直前の master（witchReserve 前）では 1位 76.4% vs witch 75.8%
-- 連続不採用回数: 3
+- 連続不採用回数: 5
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
-- 状態: running(spellWard 採用で 65→76% だが、witch が witchReserve 採用で 78.1% になり再び2位。差2.0pt。対 witch 47〜52% / 対巨人 31〜44% が穴)
+- 状態: blocked(issue #250。spellWard で 65→76% まで上げたが、witch(78.1%)が覆せない。対witch は 30% 前後で構造的。gear/deck/synergy/strategy/メタ/joint の6種類を測定済み)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 35 | synergy | 3枚同時入れ替え cat=support 26近傍（seed95/60、基準 74.0%）。最良 ライフ3・氷結トークン・霜降り→浄化・増殖・活力特売 79.9% | +5.9pt, z≈1.4（閾値3.0に届かず） | 不採用 |
+| 34 | joint | 新デッキ・ギア pair: lastStand,bindingLock / spellWard,bindingLock / lastStand,ironLock（seed91/100、基準 76.0%） | 57.6 / 64.8 / 59.7%。すべて大幅に下 | 不採用 |
 | 33 | strategy+deck(対witch) | 実戦（duel seed41）で魔女の🍂が毒使いのコストを +1〜2 上げ、🍂付きトークンは🔑ロックで毒が通らないのを確認。火口(87)で🍂を焼く `tinderLeaf`（毒使いが相手witchのとき bestTinderTarget へ撃つ）+ 氷結札45→87。4通り seed81/300 vs witch | 基準 29.7 / 札のみ 28.7 / ノブのみ 29.7 / 札+ノブ 28.0（SE±5.2） | 不採用（ノブは撤回） |
 | 32 | メタ(対witch) | 対 witch 29.5%（seed72/400）。デッキ1枚40近傍 --opp witch（seed71/120、基準 26.7%）の最良 猛毒化→トークン 41.7%（z≈1.3）を seed72/400 で再測定: 29.5→32.8（+3.3, SE±4.5）、ライフ3→静電気の季節 31.3（+1.8）。氷結札(45/46/48)を ban しても結果が完全一致=AIが使っていない死に札 | すべて誤差内。witch は bindingLock で自陣を🔑ロックし毒が通らないのが負け筋と見られる（未確認） | 不採用 |
 | 31 | deck | 新ギア lastStand,spellWard 下でデッキ1枚差し替え26近傍（seed51/60、基準 76.6%）。最良 ライフ3(0)→トリプルロック(13) 79.5%、次点 氷結トークン→焚き火の唄 77.8% | 最良 +2.9pt, z≈0.7（閾値 n≤40: 3.0 に届かず）。再測定せず | 不採用 |
