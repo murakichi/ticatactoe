@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
+    mogaL: 2, mogaHits: 2, // 凩の魔女の虎落笛を撃つ条件: 自陣の🍂がL枚以上かつ、ライフの残った敵コマがHits個以上（検証中）
     cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
@@ -1861,7 +1862,7 @@ function faithfulMakeMoveInner(s) {
     // 凩の魔女: 虎落笛（クリック不要・手番は続く）。自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
     if (curChar(s) === 'witch' && curMagic(s) >= mogaribueCost(s)) {
         const hits = thermal.mogaribueTargets(s.board, me, (sq) => isShielded(s, sq)).length;
-        if (thermal.mogaribueDamage(s.board, me) >= 2 && hits >= 2) { SKILLS.mogaribue(s); updateShield(s); }
+        if (thermal.mogaribueDamage(s.board, me) >= (F.mogaL ?? 2) && hits >= (F.mogaHits ?? 2)) { SKILLS.mogaribue(s); updateShield(s); }
     }
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
