@@ -101,6 +101,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズか🍂を持つ敵のコマを1つ選んで🔥を1つ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。鍛冶師は🔥付与が-1' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

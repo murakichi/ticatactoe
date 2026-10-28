@@ -177,6 +177,9 @@ const leafDropTargets = (board, player, guarded) =>
 function leafDrop(board, cell) { board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] }; }
 const leafAllTargets = (board, guarded) => board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 const leafCloakTargets = (board, me) => board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
+// 火口の対象: 使用者以外のコマのうち、🌱か🍂を持ち、guarded でないもの（昇順）
+const tinderTargets = (board, player, guarded) =>
+    board.map((sq, i) => (sq.player && sq.player !== player && (budStacks(sq) > 0 || leafStacks(sq) > 0) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 const kindlingTargets = (board, player, guarded) =>
     board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 /** 対象マスの🍂を全て取り除き、1枚につき🔥を1つ付ける（ignite の規則どおり）。board を直接書き換える */
@@ -392,7 +395,7 @@ function sacrificeFlame(board, cell, me, size, isShieldedFn, keepBuds) {
     return { threshold, targets, thawed };
 }
 
-const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
+const FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickTinder', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 
 // バーンアウト（thermal.ts と同じ）
 const BURNOUT_FREE_FLAMES = 4;
@@ -420,5 +423,5 @@ module.exports = {
     FLAME_BURN_DAMAGE, FLAME_SKILL_MULT, setEffectWard, isEffectWarded, isFrozen, frozenStacks, flameStacks, thaw, thawOne, isDormant, overwriteBlocked, burnDamageOf,
     applyDamage, absorbDestroy, zeroOut, ignite, canFreeze, emptyBlocked, freeze, freezeAll, detonate, cleanse, AILMENTS, infernoTargets, canBud, GRAFT_MAX, budStacks, activeBuds, harvestBuds, budReceivers, graft, sowCandidates, sow, SOW_COUNT,
     lockable,
-    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, boardLeaves, witchCostOf, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling, MOGARIBUE_LIFE, mogaribueDamage, mogaribueTargets, canMogaribue, mogaribue, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
+    THUNDER_FIRE_MIN, thunderFireVictims, KIMON_LOCK_TURNS, fireStacksTotal, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thawTargets, thawAll, leafFrostTargets, leafStacks, activeLeaves, leafSurcharge, boardLeaves, witchCostOf, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, tinderTargets, kindling, MOGARIBUE_LIFE, mogaribueDamage, mogaribueTargets, canMogaribue, mogaribue, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn,
 };
