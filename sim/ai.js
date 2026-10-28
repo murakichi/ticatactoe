@@ -61,7 +61,7 @@ const AI_DEFAULTS = {
     floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.mistLoop = 0; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
@@ -1883,6 +1883,13 @@ function faithfulMakeMoveInner(s) {
         if (t !== null) { SKILLS.ignite(s); placeMove(s, t); updateShield(s); }
     }
 
+    // 検証用 F.mistLoop(issue #237): 収穫+連鎖割引で毒霧(29)を連打すると魔力が増え続ける。手札に毒霧があり、場のコマが5個以上なら最大 F.mistLoop 回まで撃つ
+    if (F.mistLoop && curChar(s) === 'pyromancer' && availableSkills.includes(29) && hasGear(s.gears[s.turn], 'harvest') && hasGear(s.gears[s.turn], 'chainDiscount') && !s.silenced[s.turn]) {
+        for (let n = 0; n < F.mistLoop; n++) {
+            if (s.board.filter((sq) => sq.player).length < 5 || curMagic(s) < calculateCost(s, costsOf(s).onClickPoisonMist, false, true, 'onClickPoisonMist')) break;
+            SKILLS.poisonMist(s);
+        }
+    }
     // 煉獄の鍛冶師 業火: 魔力が足り、ライフが残る敵コマが3個以上あれば撃つ（クリック不要・手番は進まない。相手リーチ条件なし）
     if (curChar(s) === 'pyromancer' && curMagic(s) >= infernoCost(s)
         && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3
