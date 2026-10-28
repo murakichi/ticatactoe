@@ -86,6 +86,13 @@ const SKILL_CATALOG = [
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
     { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
+    { idx: 76, name: '裸の王様', icon: '👑', category: 'control' },
+    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge' },
+    { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge' },
+    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge' },
+    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge' },
+    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge' },
+    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control' },
 ];
 
 

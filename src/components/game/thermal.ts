@@ -502,6 +502,26 @@ export const thawAll = (board: SquareInfo[], player: SquareInfo['player']): { st
     return { stacks, cells };
 };
 
+// ---- 雷のない所に火は立たぬ ----
+
+/** 燃え移る敵コマの最小数（周囲の敵コマがこれより少なければ全部） */
+export const THUNDER_FIRE_MIN = 2;
+
+/**
+ * 雷のない所に火は立たぬ: 周囲8マスの敵コマ（cands）から、2〜全部の個数をランダムに決め、その個数だけランダムに選ぶ（昇順）。
+ * rng は [0,1) を返す関数。cands が空なら []。sim/thermal.js の thunderFireVictims と同じ
+ */
+export const thunderFireVictims = (cands: number[], rng: () => number): number[] => {
+    const n = cands.length;
+    if (n === 0) return [];
+    const lo = Math.min(THUNDER_FIRE_MIN, n);
+    const k = lo + Math.floor(rng() * (n - lo + 1));
+    const pool = cands.slice();
+    const out: number[] = [];
+    for (let i = 0; i < k; i++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+    return out.sort((a, b) => a - b);
+};
+
 // ---- 鬼門封じ / 火の車 ----
 
 /** 鬼門封じが空きマスにかけるロックの長さ（ターン数。ロックの bind に入れる） */

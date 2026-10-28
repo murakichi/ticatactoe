@@ -1224,6 +1224,24 @@ function chooseSkills(s, availableSkills) {
         }
     }
 
+    // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
+    if (character === 'electrician') {
+        // 落雷は忘れた頃に: 自陣の⚡が3つ以上たまり、ダメージが通る敵のコマが2つ以上あるとき、全部放出して敵の全コマにダメージ（AIPlayer.ts と同一）
+        const ownBolts = board.reduce((n, sq) => (sq.player === me ? n + chargeStacks(sq) : n), 0);
+        const hittable = board.filter((sq, i) => isEnemy(sq.player, me) && sq.bind > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !shield.has(i)).length;
+        if (availableSkills.includes(79) && ownBolts >= 3 && hittable >= 2 && remaining >= cost(costsOf(s).onClickRelease, false, 'onClickRelease')) {
+            spend(cost(costsOf(s).onClickRelease, false, 'onClickRelease'), 'release');
+        }
+        if (availableSkills.includes(77) && s.chargeBuff[s.turn] === 0 && board.filter((sq) => !sq.player).length >= 3
+            && remaining >= cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason')) {
+            spend(cost(costsOf(s).onClickChargeSeason, false, 'onClickChargeSeason'), 'chargeSeason');
+        }
+        const bare = board.filter((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
+        if (availableSkills.includes(78) && bare >= 3 && remaining >= cost(costsOf(s).onClickBristle, false, 'onClickBristle')) {
+            spend(cost(costsOf(s).onClickBristle, false, 'onClickBristle'), 'bristle');
+        }
+    }
+
     // --- トークン系 ---
     const freeCells = findEmptyIndexes(board).length;
     const frostUse = F.useNew || (F.cryoCards && character === 'cryomancer') || (F.cryoPoison && character === 'poisoner');
@@ -1280,6 +1298,16 @@ function chooseSkills(s, availableSkills) {
     if (character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
         const rc = calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom');
         if (remaining >= rc + RAND_MARGIN) spend(rc, 'chargeRandom');
+    }
+
+    // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる（AIPlayer.ts と同一）
+    if (availableSkills.includes(76)) {
+        const others = otherSeats(s);
+        const oppGears = others.reduce((n, seat) => n + s.gears[seat].length, 0);
+        const oppLastStand = others.some((seat) => hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat]);
+        if (((oppLastStand && countReaches(board, me) > 0) || oppGears >= 2) && remaining >= cost(costsOf(s).onClickStrip, false, 'onClickStrip')) {
+            spend(cost(costsOf(s).onClickStrip, false, 'onClickStrip'), 'strip');
+        }
     }
 
     // 火の車: ランダムな敵マス2つに🔥、その後手札をシャッフルする。手札が変わるので、計画の最後に撃つ（このターン🔥を付与済みなら0コスト。AIPlayer.ts と同一）
@@ -1346,7 +1374,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 76)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 83)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1529,7 +1557,7 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
