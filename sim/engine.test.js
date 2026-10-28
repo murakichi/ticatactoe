@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2974,6 +2974,29 @@ test('コストの計算順: 敵の🍂による増加分を先に足し、魔�
     t.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
     assert.strictEqual(e.calculateCost(t, 3, false, false, 'x'), 3 + 2 + 2);
     assert.strictEqual(e.calculateCost(t, 3, true, false, 'x'), 3 + 2 - 1);
+});
+
+test('火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける。対象が無ければ使えない。鍛冶師は🔥付与で-1、選べるのは🌱🍂のあるコマだけ', () => {
+    const s = game('pyromancer', 'magician');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 5;
+    s.board[5] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[6] = { player: '⭕', bind: 5, effects: [] };
+    s.board[9] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, { effect: '🔑' }] }; // ロック中は選べない（敵の🍂は自分のコストを上げるので🌱で確かめる）
+    assert.deepStrictEqual(e.tinderCandidates(s), [5]);
+    const before = s.magic[s.turn];
+    e.SKILLS.tinder(s);
+    assert.strictEqual(before - s.magic[s.turn], 1, '基本2-1');
+    assert.strictEqual(e.placeMove(s, 6), false, '🌱🍂が無いコマは選び直せる');
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🌱'), '🔥は🌱を焼く');
+    assert.strictEqual(s.board[5].bind, 4, '付与の瞬間に1ダメージ');
+    const t = game('pyromancer', 'magician');
+    t.board[6] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.tinderLegal(t), false);
+    const m0 = t.magic[t.turn];
+    e.SKILLS.tinder(t);
+    assert.strictEqual(t.magic[t.turn], m0, '対象が無ければ何もしない');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -33,6 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
+    witchReserve: 0, // 凩の魔女が🍂トークンの分の魔力を温存する（再検証中）
     mogaL: 2, mogaHits: 2, // 凩の魔女の虎落笛を撃つ条件: 自陣の🍂がL枚以上かつ、ライフの残った敵コマがHits個以上（検証中）
     cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
@@ -61,7 +62,10 @@ const AI_DEFAULTS = {
     floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
+AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
+AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
@@ -198,6 +202,26 @@ const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 // 火遁(固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上)とライフが高いものを優先。
 // mode>=2 のときは、敵が2つ以上並べて自分のコマが無い列の空きマスにも🔥を仕込む（そこに置いた敵コマに🔥が引き継がれる）
+// 火口(idx 87)の対象: 🌱か🍂を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりが最大のもの。なければ null [FAITHFUL] AIPlayer.bestTinderTarget
+function bestTinderTarget(s, me) {
+    const geo = geometryForCells(s.board.length);
+    const enemyAt = (i) => s.board[i].player && s.board[i].player !== me;
+    let best = null, bestVal = 0;
+    for (const i of thermal.tinderTargets(s.board, me, (sq, k) => shield.has(k) || sq.effects.some((e) => e.effect === '🔑'))) {
+        const sq = s.board[i];
+        if (sq.bind <= 0 || thermal.isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+        let build = 0;
+        for (const line of geo.winLines) {
+            if (!line.includes(i)) continue;
+            const foes = line.filter((j) => enemyAt(j)).length;
+            const mine = line.filter((j) => s.board[j].player === me).length;
+            if (mine === 0 && foes >= 2) build += foes;
+        }
+        const val = sq.bind + (thermal.budStacks(sq) + thermal.leafStacks(sq)) * 3 + build * 2;
+        if (val > bestVal) { bestVal = val; best = i; }
+    }
+    return best;
+}
 function bestIgniteTarget(s, me, mode) {
     const geo = geometryForCells(s.board.length);
     const enemyAt = (i) => s.board[i].player && s.board[i].player !== me;
@@ -1065,9 +1089,16 @@ function chooseSkills(s, availableSkills) {
     if (character === 'necromancer') {
         if (!(s.remainNecro[s.turn] > 0)) reserve = s.necroCost[s.turn];
     }
+    // F.witchReserve: 凩の魔女は手札に🍂付きトークンがあるとき、その最安のコスト分を下回る他のスキルの支払いを控える。
+    // 以前(対策ロックが魔力を食っていた時期)は±0で不採用。対策ロック停止後の前提で測り直す
+    const WITCH_LEAF_SPEND = ['leafToken', 'twinLeafToken', 'doubleLeafToken', 'leafDrop', 'kindling', 'leafCloak'];
+    if (F.witchReserve && character === 'witch' && !tokenUsed) {
+        const leafOpts = [{ idx: 64, cost: 'onClickDoubleLeafToken' }, { idx: 63, cost: 'onClickTwinLeafToken' }, { idx: 62, cost: 'onClickLeafToken' }].filter((o) => availableSkills.includes(o.idx));
+        if (leafOpts.length) reserve = Math.min(...leafOpts.map((o) => cost(costsOf(s)[o.cost], true, o.cost)));
+    }
     const RESERVE_SKIP = ['buds', 'addLife', 'token', 'budsToken', 'doubleToken'];
     function spend(c, name) {
-        if (reserve && (RESERVE_SKIP.includes(name)) && remaining - c < reserve) return false;
+        if (reserve && (RESERVE_SKIP.includes(name) || (F.witchReserve && character === 'witch' && !WITCH_LEAF_SPEND.includes(name))) && remaining - c < reserve) return false;
         // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
         if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
             && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
@@ -1377,6 +1408,7 @@ function chooseLocks(s, availableSkills) {
     const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く
     const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
+        || (F.tinderLock && character === 'pyromancer' && idx === 87 && (F.tinderLock < 2 || otherSeats(s).some((seat) => s.chars[seat] === 'magician'))) // 検証用: 火口を手札に固定して毎手番使えるようにする
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
         switch (idx) {
@@ -1394,7 +1426,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 87)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 88)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1872,6 +1904,15 @@ function faithfulMakeMoveInner(s) {
     if (F.pyroChain >= 2) availableSkills = s.skills.slice(); // シャッフルで手札が変わった
 
     // 煉獄の鍛冶師 固有の火遁: 敵コマを燃やす。異なるスキル3種類で業火が無料になるので、その1種類にもなる
+    // 火口(🌱か🍂のある敵コマ専用。鍛冶師は1コスト)は火遁より先に撃つ。別の種類のスキルなので火遁とも両方撃てる
+    if (curChar(s) === 'pyromancer' && !s.silenced[s.turn] && availableSkills.includes(87) && !s.skillKinds[s.turn].has('onClickTinder')
+        && !otherSeats(s).some((seat) => s.chars[seat] === 'necromancer')
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder')
+        && !(s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= 3 && infernoTargets(s).length > 0 && curMagic(s) >= infernoCost(s)
+            && curMagic(s) - calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder') < infernoCost(s))) {
+        const t = bestTinderTarget(s, me);
+        if (t !== null) { SKILLS.tinder(s); placeMove(s, t); updateShield(s); }
+    }
     const igniteSkipChars = F.igniteSkip >= 2 ? ['necromancer', 'poisoner'] : F.igniteSkip === 1 ? ['necromancer'] : [];
     if (F.igniteSig && curChar(s) === 'pyromancer' && !s.silenced[s.turn] && !s.skillKinds[s.turn].has('onClickIgnite')
         && !otherSeats(s).some((seat) => igniteSkipChars.includes(s.chars[seat]))
@@ -2101,7 +2142,25 @@ function faithfulMakeMoveInner(s) {
                 return { move, turnEnded: false };
             }
         }
-        if (ch === 'magician' && magic >= judgeDayCost(s)) {
+        // 魔法使い(F.lockFirstCryo): 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力エンジンを止める（ロック中のコマには❄が付かない）。
+        // 相手に氷室がいるときは、審判の日より先に🌱付きのコマを全てロックする（2なら🌱の無い自陣コマも）
+        let lockedFirst = 0;
+        const lockFirstLevel = ch !== 'magician' ? 0 : otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer') ? F.lockFirstCryo
+            : otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer') ? (F.lockFirstPyro || 0) : 0; // 鍛冶師の🔥(火遁・火口)も🔑のコマには付かない
+        if (lockFirstLevel) {
+            for (let n = 0; n < 12; n++) {
+                const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+                let cell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (cell === -1 && lockFirstLevel >= 2) cell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (!(curMagic(s) >= lockCost + (F.lockFirstReserve || 0) && cell !== -1)) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useLock = 0; break; }
+                lockedFirst++;
+            }
+            if (lockedFirst > 0) return { move: getEnhancedBestMove(s), turnEnded: false }; // 本番(AIPlayer.ts)はロックのあと通常着手で手番を終える
+        }
+        const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
+        if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {
             const target = bestJudgeTarget(s.board, me);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
