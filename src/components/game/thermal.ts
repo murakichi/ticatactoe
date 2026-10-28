@@ -392,6 +392,10 @@ export const leafDrop = (board: SquareInfo[], cell: number): void => {
     board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🍂' }] };
 };
 
+/** 枯野の相席の対象: 盤面の全てのコマ（敵味方問わず）のうち、guarded（🔑ロック・⚡無敵）でないもの（昇順） */
+export const leafAllTargets = (board: SquareInfo[], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
+    board.map((sq, i) => (sq.player && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+
 /** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
 export const kindlingTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
     board.map((sq, i) => (sq.player && sq.player !== player && leafStacks(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);

@@ -232,7 +232,7 @@ const skillCosts = {
     onClickLeafToken: 3,
     onClickTwinLeafToken: 7,
     onClickDoubleLeafToken: 9,
-    onClickBothLeafToken: 5,
+    onClickLeafAll: 5, // 枯野の相席(idx 65): 盤面の全てのコマに🍂
     onClickBonfire: 3,
     onClickMulch: 2,
     onClickAutumn: 4,
@@ -2148,19 +2148,17 @@ function onClickLeafToken(s) { const cost = leafTokenCost(s, 'onClickLeafToken')
 function onClickTwinLeafToken(s) { const cost = leafTokenCost(s, 'onClickTwinLeafToken'); placeLeafTokens(s, 1, 2); finishLeafToken(s, 'onClickTwinLeafToken', 'twinLeafToken', cost); }
 // 紅葉狩り (idx64): 🍂付きのダブルトークン
 function onClickDoubleLeafToken(s) { const cost = leafTokenCost(s, 'onClickDoubleLeafToken'); placeLeafTokens(s, 2, 1); finishLeafToken(s, 'onClickDoubleLeafToken', 'doubleLeafToken', cost); }
-// 枯野の相席 (idx65): 両トークン。🍂が付くのは自分のコマだけ（敵のコマに付けると自分のコストが上がるため）
-function onClickBothLeafToken(s) {
-    const cost = leafTokenCost(s, 'onClickBothLeafToken');
-    const empties = findEmptyIndexes(s.board);
-    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
-    let granted = 0;
-    picks.forEach((idx, seat) => {
-        if (seat === s.turn) thermal.placeLeafToken(s.board, idx, SYMBOLS[seat], calculateTokenBind(s), 1);
-        else s.board[idx] = { player: SYMBOLS[seat], bind: 4, effects: [] };
-        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
-    });
-    harvestMagic(s, granted);
-    finishLeafToken(s, 'onClickBothLeafToken', 'bothLeafToken', cost);
+// 枯野の相席 (idx65): 盤面の全てのコマ（敵味方・🔑ロック中と⚡無敵を除く）に🍂を1つずつ付ける。クリック不要・手番は続く
+function leafAllCells(s) { return thermal.leafAllTargets(s.board, (sq) => isGuarded(s, sq)); }
+function leafAllLegal(s) { return leafAllCells(s).length > 0; }
+function onClickLeafAll(s) {
+    const cells = leafAllCells(s);
+    if (cells.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickLeafAll, false, false, 'onClickLeafAll'); // 払うコストは付与する前の盤面で決まる
+    for (const k of cells) thermal.leafDrop(s.board, k);
+    spendMagic(s, pay, 'onClickLeafAll');
+    bumpMagicCount(s);
+    bumpStat(s, 'leafAll');
 }
 // 焚き火の唄 (idx66): 敵陣の🍂を全て除去（🔑ロック・❄氷結のマスは対象外）。対象が無ければ使えない
 function bonfireLegal(s) { return thermal.bonfireTargets(s.board, curPlayer(s)).length > 0; }
@@ -2544,7 +2542,7 @@ const SKILLS = {
     leafToken: onClickLeafToken,
     twinLeafToken: onClickTwinLeafToken,
     doubleLeafToken: onClickDoubleLeafToken,
-    bothLeafToken: onClickBothLeafToken,
+    leafAll: onClickLeafAll,
     bonfire: onClickBonfire,
     mulch: onClickMulch,
     autumn: onClickAutumn,
@@ -2606,7 +2604,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,

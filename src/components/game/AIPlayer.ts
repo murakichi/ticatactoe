@@ -890,7 +890,7 @@ class AIPlayer {
         // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
         const poisonerTokenIdx = [3, 9, 11, 16];
         const preferred = (idx: number) =>
-            // 凩の魔女: 🍂付きトークン(双子・紅葉狩りを含む。枯野の相席は敵にコマを渡すので除く)を手札に固定して毎手番撒く (sim/ai.js と同一)
+            // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く (sim/ai.js と同一)
             (this.character === 'witch' && (idx === 62 || idx === 63 || idx === 64)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             (this.character === 'magician' && budsIdx.includes(idx)) ||

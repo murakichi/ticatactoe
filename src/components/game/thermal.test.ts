@@ -1,4 +1,5 @@
 import {
+    leafAllTargets,
     leafDropTargets,
     leafDrop,
     kindlingTargets,
@@ -1283,5 +1284,19 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         expect(isFrozen(a[1])).toBe(false);
         expect(flameStacks(a[1])).toBe(1); // 2スタックのうち1つが❄の解除、残り1つが🔥
         expect(leafDropTargets(mk(), '💙', guard)).toEqual(sim.leafDropTargets(mk(), '💙', guard));
+    });
+});
+
+describe('枯野の相席', () => {
+    it('対象は盤面の全てのコマ（敵味方）のうち guarded でないもの。空きマスは対象外', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 3, '🔑');
+        b[2] = sq('⭕', 3);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+        expect(leafAllTargets(b, guard)).toEqual([0, 2]);
+        expect(sim.leafAllTargets(b, guard)).toEqual([0, 2]);
     });
 });

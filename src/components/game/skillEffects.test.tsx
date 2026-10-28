@@ -68,7 +68,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickLeafToken: 'token',
     onClickTwinLeafToken: 'token',
     onClickDoubleLeafToken: 'token',
-    onClickBothLeafToken: 'token',
+    onClickLeafAll: 'autumn',
     onClickBonfire: 'autumn',
     onClickMulch: 'autumn',
     onClickAutumn: 'autumn',
@@ -127,6 +127,7 @@ const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
 // 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
 const OWN_BANNER_LABELS: Record<string, string> = {
     onClickLeafFrost: '霜枯れ',
+    onClickLeafAll: '枯野の相席',
     onClickSpringWind: '春一番',
     onClickKimon: '鬼門封じ',
     onClickFireWheel: '火の車',
