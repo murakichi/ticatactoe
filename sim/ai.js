@@ -1397,7 +1397,7 @@ function chooseLocks(s, availableSkills) {
     const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く
     const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
-        || (F.tinderLock && character === 'pyromancer' && idx === 87) // 検証用: 火口を手札に固定して毎手番使えるようにする
+        || (F.tinderLock && character === 'pyromancer' && idx === 87 && (F.tinderLock < 2 || otherSeats(s).some((seat) => s.chars[seat] === 'magician'))) // 検証用: 火口を手札に固定して毎手番使えるようにする
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
         switch (idx) {
