@@ -36,7 +36,9 @@ node sim/cli.js sim --games 2000 --mode capture           # 捕獲考慮AIで比
 node sim/cli.js watch                          # 2人戦。Ctrl-C か勝率が収束するまで対戦し続ける
 node sim/cli.js watch --players 4 --matrix     # 対面別勝率の表も常時表示
 node sim/cli.js watch --forever --log w.jsonl  # 自動停止なし。停止時の統計をJSONで追記
+node sim/cli.js watch --no-gear                # ギアなし（--no-skill でスキルを使わず置くだけ）
 ```
+既定は**本番のAI席と同じ装備**（推奨デッキから3枚入れ替え＋推奨ギア/別案）。`--no-gear` / `--no-skill` で外せる（画面ではチェックボックス）。
 キャラ別勝率(±95%)・席別勝率・**対面別勝率**（行が列に勝つ割合。多人数では同卓した試合のうち
 どちらかが勝った試合で按分）を1秒ごとに更新。収束判定は「直近 `--window`(10) 回の
 スナップショット(`--checkpoint` 200局ごと)で全キャラの勝率の動きが `--eps`(0.5pt) 以内」かつ

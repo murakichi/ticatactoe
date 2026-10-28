@@ -35,7 +35,7 @@ describe('SimPanel', () => {
         render(<SimPanel names={names} initialPlayers={2} initialBoardSize='auto' onBack={() => {}} />);
         fireEvent.click(screen.getByRole('button', { name: /シミュレート開始/ }));
         const w = FakeWorker.last!;
-        expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'faithful' });
+        expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'faithful', skills: true, gears: true });
         act(() => w.emit({ type: 'progress', summary, matchups, drift: 0.01, elapsed: 2 }));
         expect(screen.getAllByText('👹 巨人', { selector: 'th[scope=row]' })).toHaveLength(2); // キャラ別表と対面表
         expect(screen.getAllByText('67%').length).toBeGreaterThan(0); // 対面表: 巨人→あなた
@@ -57,5 +57,13 @@ describe('SimPanel', () => {
         expect(w2).not.toBe(w);
         unmount();
         expect(w2.terminated).toBe(true);
+    });
+
+    test('スキル・ギアのチェックを外すとWorkerへ伝わる', () => {
+        render(<SimPanel names={names} initialPlayers={2} initialBoardSize='auto' onBack={() => {}} />);
+        fireEvent.click(screen.getByLabelText('スキルを使う'));
+        fireEvent.click(screen.getByLabelText('ギアを装備する'));
+        fireEvent.click(screen.getByRole('button', { name: /シミュレート開始/ }));
+        expect(FakeWorker.last!.posted[0]).toMatchObject({ skills: false, gears: false });
     });
 });
