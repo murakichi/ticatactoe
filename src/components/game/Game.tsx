@@ -450,9 +450,9 @@ export const Game = (props: GameProps) => {
                     return;
                 }
                 if (typeof next === 'string') executeSkillForAI(next);
-                else if (rest.length === 0 && currentAI && (isShielded(currentBoard[next], characters) || emptyBlocked(currentBoard[next]))) {
+                else if (rest.length === 0 && currentAI && !canPlaceAt(next)) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
-                    // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
+                    // 触れない／氷結トークンの自陣コマは上書きできない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
                     const alt = currentAI.getBestMove(currentBoard, life);
                     if (alt !== null) onCellClick(alt);
                     else onClickCharge();

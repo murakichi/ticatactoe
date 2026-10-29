@@ -289,7 +289,8 @@ function bestAntiNecroLockTarget(board, me) {
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
         // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
-        if (sq.player !== me || sq.bind > 3 || shield.has(i) || sq.effects.some(e => e.effect === '🔑')) continue;
+        // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を何十個も重ね、盤面が止まっていた）
+        if (sq.player !== me || sq.bind > 3 || shield.has(i) || thermal.isFrozen(sq) || sq.effects.some(e => e.effect === '🔑')) continue;
         let val = 1;
         for (const line of geo.winLines) {
             if (!line.includes(i)) continue;
@@ -300,6 +301,14 @@ function bestAntiNecroLockTarget(board, me) {
         if (val > bestVal) { bestVal = val; bestIdx = i; }
     }
     return bestIdx;
+}
+
+// 絶対零度を撃つ価値の数: ライフが残り、🔑ロックされていない敵コマ（ロック中は氷結も爆破も効かない）。AIPlayer.ts shouldGlacier と同じ。
+// ロックされた敵コマまで数えていた sim は、何も壊せないのに毎手番撃ち続けて全マスが氷結で埋まり、盤面が止まっていた
+function glacierHits(board, me) {
+    let n = 0;
+    for (const q of board) if (q.player && q.player !== me && q.bind > 0 && !hasKey(q)) n++;
+    return n;
 }
 
 // ---- 帯電（雷霆の巫）AI ----
@@ -1122,11 +1131,11 @@ function chooseSkills(s, availableSkills) {
         if (reserve && (RESERVE_SKIP.includes(name) || (F.witchReserve && character === 'witch' && !WITCH_LEAF_SPEND.includes(name))) && remaining - c < reserve) return false;
         // F.iceComboHold: 範囲氷結/氷柱が手札にあり敵コマが3つ以上のとき、氷結コンボ分(絶対零度+範囲氷結のコスト)を貯めるまで他のスキルに魔力を使わない
         if (F.iceComboHold && character === 'cryomancer' && !s.glacierPending[s.turn] && (availableSkills.includes(41) || availableSkills.includes(42)) && name !== 'frostArea' && name !== 'icicle'
-            && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
+            && glacierHits(board, me) >= (F.glacierMin || 3)
             && remaining - c < glacierCost(s) + 5) return false;
         // F.silGlacier=3: サイレンス+絶対零度のコンボ分(両方のコスト)を貯めるまで、他のスキルに魔力を使わない
         if (F.silGlacier === 3 && character === 'cryomancer' && !s.glacierPending[s.turn] && availableSkills.includes(28) && name !== 'silence'
-            && board.filter((q) => q.player && q.player !== me && q.bind > 0).length >= (F.glacierMin || 3)
+            && glacierHits(board, me) >= (F.glacierMin || 3)
             && remaining - c < glacierCost(s) + calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence')) return false;
         // 防壁を持つ席は発動前に魔力を温存し(F.hoard)、発動後に一気に使う（相手の魔力+4が積み上がる前に盤面を作り直す）
         if (F.hoard && hasGear(s.gears[s.turn], 'lastStand') && !s.lastStandUsed[s.turn] && remaining - c < F.hoard) return false;
@@ -2063,7 +2072,7 @@ function faithfulMakeMoveInner(s) {
     // 氷結コンボ(F.iceCombo): 範囲氷結(41)・氷柱(42)で敵コマに❄を重ね（❄が作られるたび絶対零度のコストが-1）、続けて絶対零度で爆破する。
     // 凍った敵コマは爆破で❄1つにつき3ダメージ。絶対零度の❄(+1)と合わせて2スタックなら6ダメージで多くが壊れる。陰陽師の「コンボ札を揃えて一気に決める」型
     if (F.iceCombo && curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
+        && glacierHits(s.board, me) >= (F.glacierMin || 3)) {
         const geoC = geometryForCells(s.board.length);
         for (let k = 0; k < (F.iceComboMax || 2); k++) {
             const gcNow = glacierCost(s);
@@ -2091,7 +2100,7 @@ function faithfulMakeMoveInner(s) {
     // F.silGlacier: サイレンス(idx28)を先に撃って、凍結中の相手がスキルで解凍・反撃できないようにしてから撃つ。
     // =2: 手札にサイレンスがあれば、両方の魔力が貯まるまで絶対零度を待つ
     if (curChar(s) === 'cryomancer' && !s.glacierPending[s.turn] && !s.silenced[s.turn]
-        && s.board.filter((sq) => sq.player && sq.player !== me && sq.bind > 0).length >= (F.glacierMin || 3)) {
+        && glacierHits(s.board, me) >= (F.glacierMin || 3)) {
         const gc = glacierCost(s);
         const sc = calculateCost(s, costsOf(s).onClickSilence, false, false, 'onClickSilence');
         const hasSil = F.silGlacier && availableSkills.includes(28) && otherSeats(s).some((seat) => !s.silenced[seat]);
@@ -2333,8 +2342,9 @@ function faithfulMakeMoveInner(s) {
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
     updateShield(s); // スキル(ランダム帯電など)で⚡の無敵マスが増えたぶんを反映してから着手を選ぶ
-    // 先に決めた着手が、スキルで無敵(⚡)になったマスなら打てない（手番が進まず止まる）。そのときだけ盤面を見て選び直す
-    const move = staleMove !== undefined && !(staleMove !== null && isShielded(s, s.board[staleMove])) ? staleMove : getEnhancedBestMove(s);
+    // 先に決めた着手が、スキルで打てなくなったマス（無敵(⚡)になった・氷結トークンなどで自分の氷結コマが乗った・氷結で塞がれた）なら打てない（手番が進まず止まる）。
+    // そのときだけ盤面を見て選び直す（Game.tsx の canPlaceAt と同じ判定）
+    const move = staleMove !== undefined && !(staleMove !== null && !placeableNow(s, staleMove)) ? staleMove : getEnhancedBestMove(s);
     // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
     if (move === null) {
         SKILLS.charge(s);
@@ -2371,10 +2381,34 @@ function getBestMove(s, mode) {
 }
 
 /** Unified entry: returns { move, turnEnded } */
+// 今の手番の席が、そのマスに着手できるか（engine.placeMove が受け付ける条件。Game.tsx の canPlaceAt と同じ）
+function placeableNow(s, i) {
+    const sq = s.board[i];
+    const me = curPlayer(s);
+    if (isShielded(s, sq)) return false;
+    if (sq.player && sq.player !== me && sq.bind > 0 && curChar(s) !== 'giant') return false;
+    if (hasKey(sq) && sq.bind > 0) return false;
+    if (thermal.emptyBlocked(sq)) return false;
+    if (sq.player === me && thermal.overwriteBlocked(sq)) return false;
+    return true;
+}
+
+/**
+ * 置ける場所が無い（氷結・ロック・無敵で全マスが塞がれた等）なら、本番(Game.tsx)と同じくパスして手番を終える。
+ * 通常はチャージ（魔力+）で手番を終え、サイレンス中は自動パス（魔力なし）。
+ * これが無いと move=null のまま呼び出し側のループが止まり、本番では続く試合が引き分け扱いになる（氷結で盤面が止まる組で多発していた）
+ */
+function passIfStuck(s, r) {
+    if (r.turnEnded || r.move !== null || s.winner) return r;
+    if (s.silenced[s.turn]) E.advanceTurn(s);
+    else SKILLS.charge(s);
+    return { move: null, turnEnded: true };
+}
+
 function makeMove(s, mode) {
-    if (mode === 'faithful') return faithfulMakeMove(s);
+    if (mode === 'faithful') return passIfStuck(s, faithfulMakeMove(s));
     const mv = getBestMove(s, mode);
     return { move: mv, turnEnded: false };
 }
 
-module.exports = { getBestMove, makeMove, chooseSkills, chooseLocks, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };
+module.exports = { passIfStuck, placeableNow, glacierHits, bestAntiNecroLockTarget, getBestMove, makeMove, chooseSkills, chooseLocks, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };
