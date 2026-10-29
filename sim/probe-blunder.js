@@ -64,12 +64,17 @@ function avoidingMoves(pre, me, exclude) {
         const q = pre.board[i];
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
         if (q.player === me || (q.player && q.bind > 0)) continue;
-        const c = deepClone(pre);
-        c.rng = engine.makeRng(777); // 本体の乱数列を進めない(再現できるように)
-        let ok = false;
-        try { ok = engine.placeMove(c, i) !== false; } catch (e) { ok = false; }
-        if (!ok) continue;
-        if (c.winner === me || (!c.winner && !engine.otherSeats(c).concat([]).some(() => false) && engine.SYMBOLS.every((_, k) => k === engine.seatOf(me) || k >= engine.seatCount(c) || winCells(c, engine.SYMBOLS[k]).length === 0))) out.push(i);
+        // 軍師のパッシブなどランダムなトークンで結果が変わるので、乱数を5通り変えても全て安全な手だけを「回避できた」とする
+        let safeAll = true;
+        for (const seed of [777, 1, 2, 3, 4]) {
+            const c = deepClone(pre);
+            c.rng = engine.makeRng(seed); // 本体の乱数列を進めない(再現できるように)
+            let ok = false;
+            try { ok = engine.placeMove(c, i) !== false; } catch (e) { ok = false; }
+            const safe = ok && (c.winner === me || (!c.winner && engine.SYMBOLS.every((_, k) => k === engine.seatOf(me) || k >= engine.seatCount(c) || winCells(c, engine.SYMBOLS[k]).length === 0)));
+            if (!safe) { safeAll = false; break; }
+        }
+        if (safeAll) out.push(i);
     }
     return out;
 }
