@@ -35,7 +35,7 @@ function winCells(s, player) {
     }
     return out;
 }
-/** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。乱数は共有されるので複製側の着手で本体の乱数列は進む(確認用途のみ) */
+/** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。乱数関数は共有されるので、使う側で c.rng を差し替える */
 function deepClone(x) {
     if (x === null || typeof x !== 'object') return x;
     if (x instanceof Set) return new Set([...x].map(deepClone));
@@ -54,6 +54,7 @@ function avoidingMoves(pre, me, exclude) {
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
         if (q.player === me || (q.player && q.bind > 0)) continue;
         const c = deepClone(pre);
+        c.rng = engine.makeRng(777); // 本体の乱数列を進めない(再現できるように)
         let ok = false;
         try { ok = engine.placeMove(c, i) !== false; } catch (e) { ok = false; }
         if (!ok) continue;
