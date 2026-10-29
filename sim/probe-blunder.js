@@ -7,7 +7,7 @@
  */
 const engine = require('./engine');
 const thermal = require('./shared/thermal');
-const ai = require('./aiSelect'); // 既定は本番AI(SIM_AI=legacy で旧 sim 版)
+const ai = require('./aiDriver'); // 本番AI(AIPlayer.ts の生成物)
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), size = args.size ? parseInt(args.size, 10) : undefined;
@@ -78,7 +78,6 @@ const get = (c) => (stat[c] ||= { turns: 0, missWin: 0, missBlock: 0, avoidable:
 for (const chars of pairs) {
     for (let g = 0; g < games; g++) {
         const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100000 + g), size });
-        if (args.flags) { const fl = {}; for (const kv of args.flags.split(',')) { const [k, v] = kv.split('='); fl[k] = Number(v); } s.aiFlags = engine.SYMBOLS.map(() => fl); } // 両席に同じ AI フラグ(例: --flags safeBlock=0)
         let n = 0;
         while (!s.winner && n++ < 400) {
             const me = engine.curPlayer(s), ch = engine.curChar(s);
@@ -87,7 +86,7 @@ for (const chars of pairs) {
             const ls = (s.gears[s.turn] || []).includes('lastStand') && !s.lastStandUsed[s.turn]; // 土壇場の防壁が未発動なら守りは意図的に捨てる
             const flatPre = [...new Set(oppT.flat())];
             const pre = flatPre.length === 1 && !ls && !myT.length ? deepClone(s) : null; // 手番前の複製(単独リーチのときだけ)
-            const r = ai.makeMove(s, 'faithful');
+            const r = ai.makeMove(s);
             const st = get(ch); st.turns++;
             let placed = false;
             if (!r.turnEnded && r.move != null) { engine.placeMove(s, r.move); placed = true; }

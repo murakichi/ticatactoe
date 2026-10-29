@@ -15,7 +15,7 @@
 // 戦略の無効化は ai.js を読み込む前に環境変数で行う（ai.js は読み込み時に EL_AI を読む）
 if (['gear', 'none'].includes(process.argv[5] || 'none')) { process.env.EL_AI = '0'; process.env.GEAR_AI = '0'; process.env.TK_AI = '0'; }
 const engine = require('./engine');
-const ai = require('./aiSelect');
+const ai = require('./aiDriver');
 
 const gearId = process.argv[2];
 const games = parseInt(process.argv[3] || '300', 10);

@@ -147,7 +147,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
     for (let i = 0; i < plan.clicks.length; i++) {
         if (over()) return;
         const last = i === plan.clicks.length - 1;
-        if (i >= queued && last) {
+        if (i >= queued && last && plan.moveLast) {
             const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i], s.lifeBan[seat]);
             if (cell !== null) click(cell); else E.SKILLS.charge(s);
         } else click(plan.clicks[i]);
