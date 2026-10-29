@@ -116,7 +116,7 @@ const CATALOG_SIZE = SKILL_CATALOG.length;
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
+    tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
     magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],

@@ -471,6 +471,7 @@ export const Game = (props: GameProps) => {
         const aiProliferate = proliferate[turnSeat];
 
         ai.lastStandReady = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
+        ai.tokenFree = gearTurn.current.tokenFree[turnSeat];
         // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
         ai.chargeBuffActive = chargeBuff[turnSeat] > 0;
         ai.oppGearCount = otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0);
