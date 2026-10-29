@@ -62,6 +62,7 @@ const get = (c) => (stat[c] ||= { turns: 0, missWin: 0, missBlock: 0, avoidable:
 for (const chars of pairs) {
     for (let g = 0; g < games; g++) {
         const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100000 + g), size });
+        if (args.flags) { const fl = {}; for (const kv of args.flags.split(',')) { const [k, v] = kv.split('='); fl[k] = Number(v); } s.aiFlags = engine.SYMBOLS.map(() => fl); } // 両席に同じ AI フラグ(例: --flags safeBlock=0)
         let n = 0;
         while (!s.winner && n++ < 400) {
             const me = engine.curPlayer(s), ch = engine.curChar(s);
