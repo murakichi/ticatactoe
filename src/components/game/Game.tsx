@@ -1912,7 +1912,7 @@ export const Game = (props: GameProps) => {
         const targets = shikigamiBless(board, i, currentTurnPlayer);
         addLog(`${posName(i)}の式神を消費（自陣${targets.length}コマのライフ+${SHIKIGAMI_BLESS_LIFE}）`);
         flashCells([i, ...targets]);
-        playEffect('shikigami', i, targets, '式神の加護');
+        playEffect('scrollBless', i, [i, ...targets]);
         setUseShikigamiBless(false);
         setCurrentBoard(board);
     };
@@ -1932,7 +1932,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, targets);
         addLog(`${posName(i)}の式神を消費（敵${targets.length}コマに☠×${SHIKIGAMI_CURSE_STACKS}）`);
         flashCells([i, ...targets]);
-        playEffect('poison', i, targets, '式神の呪詛');
+        playEffect('scrollCurse', i, [i, ...targets]);
         setUseShikigamiCurse(false);
         setCurrentBoard(board);
     };
@@ -1948,7 +1948,7 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         board[victim] = { player: undefined, bind: 0, effects: [] };
         flashCells([victim]);
-        playEffect('shikigamiBlast', victim, undefined, '式神の供犠');
+        playEffect('scrollPurge', victim);
         setCurrentBoard(board);
     };
     const exeShikigamiPurge = (i: number) => {
@@ -1957,7 +1957,7 @@ export const Game = (props: GameProps) => {
         shikigamiPurge(board, i);
         addLog(`${posName(i)}のライフを0に`);
         flashCells([i]);
-        playEffect('shikigamiBlast', i, undefined, '式神の供犠');
+        playEffect('scrollPurge', i);
         setUseShikigamiPurge(false);
         setCurrentBoard(board);
     };
@@ -1968,7 +1968,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickShikigamiDiscount, false, false, currentTurnPlayer, 'onClickShikigamiDiscount'), true, true, 'onClickShikigamiDiscount');
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n };
-        playEffect('discount', undefined, undefined, '式神割引');
+        playEffect('scrollDiscount');
     };
     // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする
     const onClickShikigamiAll = () => {
@@ -2269,7 +2269,7 @@ export const Game = (props: GameProps) => {
         otherSeats(turnSeat).forEach((seat) => setLifeBanAt(seat, true));
         addLog(`「一寸の虫に魂なし」を使用（ライフ3以下の敵コマ${r.destroyed.length}個を破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}。相手は次の手番、ライフ3以下のコマを置けない）`);
         flashCells([...r.destroyed, ...r.blocked]);
-        playEffect('silence', undefined, undefined, '一寸の虫に魂なし');
+        playEffect('smallFry', undefined, [...r.destroyed, ...r.blocked]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry'), true, true, 'onClickSmallFry');
     };
@@ -2291,7 +2291,7 @@ export const Game = (props: GameProps) => {
         }
         addLog(`「初霜」を使用（敵の🍂のあるコマ${frozen.length}個を凍結${index !== undefined ? `・${posName(index)}にバッズトークン` : ''}）`);
         flashCells(frozen);
-        playEffect('freeze', index, frozen, '初霜');
+        playEffect('firstFrost', index, index !== undefined ? [index, ...frozen] : frozen);
         harvestMagic(granted);
         setCurrentBoard(board);
         spendMagic(pay, true, true, 'onClickFirstFrost');
@@ -2307,7 +2307,7 @@ export const Game = (props: GameProps) => {
         const moved = gather(board, index, { player: currentTurnPlayer, bind: calculateTokenBind() }, characters, geo.size, keepBuds);
         const granted = afterTokenPlaced(board, index);
         addLog(`「吹き寄せ」を使用（${posName(index)}にトークンを置き、エフェクト${moved}個を集めた）`);
-        playEffect('token', index, [index], '吹き寄せ');
+        playEffect('gather', index, [index]);
         harvestMagic(granted);
         setCurrentBoard(board);
         spendMagic(pay, true, true, 'onClickGather');
@@ -2332,7 +2332,7 @@ export const Game = (props: GameProps) => {
         }
         addLog(`「山焼き」を使用（敵のエフェクトのあるマス${r.cells.length}個に🔥${index !== undefined ? `・${posName(index)}にロック付きトークン` : ''}）`);
         flashCells(r.cells);
-        playEffect('flame', index, r.cells, '山焼き');
+        playEffect('burnOff', index, index !== undefined ? [index, ...r.cells] : r.cells);
         playBurst('thaw', r.thawed);
         harvestMagic(granted);
         setCurrentBoard(board);
@@ -2345,7 +2345,7 @@ export const Game = (props: GameProps) => {
         const pay = calculateCost(seatCosts.onClickFreeToken, false, false, currentTurnPlayer, 'onClickFreeToken');
         gearTurn.current.tokenFree[turnSeat] = true;
         addLog('「無礼講」を使用（このターン、トークン系スキルのコストが0）');
-        playEffect('token', undefined, undefined, '無礼講');
+        playEffect('freeToken');
         spendMagic(pay, true, true, 'onClickFreeToken');
     };
 
@@ -2980,7 +2980,7 @@ export const Game = (props: GameProps) => {
         leafDrop(board, pick);
         addLog(`「落ち葉の置き土産」を使用（${posName(pick)}に🍂）`);
         flashCells([pick]);
-        playEffect('autumn', undefined, [pick], '落ち葉の置き土産');
+        playEffect('leafDrop', undefined, [pick]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickLeafDrop, false, false, currentTurnPlayer, 'onClickLeafDrop'), true, true, 'onClickLeafDrop');
     };
@@ -2994,7 +2994,7 @@ export const Game = (props: GameProps) => {
         leafDrop(board, pick);
         addLog(`「落葉の衣」を使用（${posName(pick)}に🍂）`);
         flashCells([pick]);
-        playEffect('autumn', undefined, [pick], '落葉の衣');
+        playEffect('leafCloak', undefined, [pick]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickLeafCloak, false, false, currentTurnPlayer, 'onClickLeafCloak'), true, true, 'onClickLeafCloak');
     };
@@ -3008,7 +3008,7 @@ export const Game = (props: GameProps) => {
         addLog(`「焚きつけ」を使用（敵の🍂${leaves}枚を🔥に変換）`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(cands);
-        playEffect('flame', undefined, cands, '焚きつけ');
+        playEffect('kindling', undefined, cands);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
@@ -3131,7 +3131,7 @@ export const Game = (props: GameProps) => {
         const { thawed } = ignite(board, [i], geo.size, 1, keepBuds);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells([i]);
-        playEffect('flame', i, undefined, '火口');
+        playEffect('tinder', i);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
     };

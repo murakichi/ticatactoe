@@ -356,6 +356,109 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(0.9 + i * 0.1), dur: 0.2, gain: 0.2 }));
             return 1.4;
         }
+        case 'tinder': {
+            // 火の粉が舞い降りる上昇音 → ぼっと燃え移る
+            tone(ctx, d, { type: 'triangle', f0: 800, f1: 2400, t: T(0), dur: 0.5, gain: 0.18 });
+            noise(ctx, d, { t: T(0.5), dur: 0.7, gain: 0.45, filter: 'bandpass', f0: 300, f1: 2000, q: 0.6 });
+            tone(ctx, d, { type: 'sawtooth', f0: 90, f1: 220, t: T(0.5), dur: 0.6, gain: 0.3, lowpass: 900 });
+            for (let i = 0; i < 4; i++) noise(ctx, d, { t: T(0.7 + i * 0.08), dur: 0.05, gain: 0.3, filter: 'highpass', f0: 3000 + i * 300 });
+            return 1.3;
+        }
+        case 'scrollBless': {
+            // 札が燃える小さな音 → 金色の光が降り注ぐ上昇アルペジオ
+            noise(ctx, d, { t: T(0), dur: 0.25, gain: 0.25, filter: 'bandpass', f0: 1500, f1: 4000, q: 0.8 });
+            sparkle(ctx, d, T(0.3), [C5, E5, G5, C6, E6, G5 * 2], 0.1, 0.24);
+            for (const f of [C5, G5, C6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(0.9), dur: 0.8, gain: 0.16 });
+            return 1.7;
+        }
+        case 'scrollCurse': {
+            // 低い呪文の唸り(上昇) → 呪いが這い寄る不穏な音階 → ぱちんと刻まれる
+            tone(ctx, d, { type: 'sawtooth', f0: 70, f1: 320, t: T(0), dur: 0.7, gain: 0.22, lowpass: 800 });
+            [220, 233, 261.6, 277, 311].forEach((f, i) => tone(ctx, d, { type: 'sawtooth', f0: f, t: T(0.3 + i * 0.13), dur: 0.35, gain: 0.18, lowpass: 1000 }));
+            noise(ctx, d, { t: T(0.95), dur: 0.3, gain: 0.35, filter: 'highpass', f0: 3500 });
+            tone(ctx, d, { type: 'triangle', f0: 500, f1: 1800, t: T(1.0), dur: 0.5, gain: 0.15 });
+            return 1.6;
+        }
+        case 'scrollDiscount': {
+            // 札が降る軽い音 → 値札がぽんと付く → 小銭
+            noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.2, filter: 'bandpass', f0: 1500, f1: 4500, q: 0.8 });
+            tone(ctx, d, { f0: 600, f1: 1200, t: T(0.3), dur: 0.15, gain: 0.35 });
+            for (let i = 0; i < 5; i++) {
+                tone(ctx, d, { type: 'square', f0: 1760 + i * 60, t: T(0.6 + i * 0.07), dur: 0.05, gain: 0.12, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2349 + i * 60, t: T(0.64 + i * 0.07), dur: 0.1, gain: 0.12, lowpass: 5000 });
+            }
+            return 1.2;
+        }
+        case 'scrollPurge': {
+            // 札が燃え上がる → 黒い光線が走る重い上昇音 → ずしんと命を奪う
+            noise(ctx, d, { t: T(0), dur: 0.5, gain: 0.35, filter: 'bandpass', f0: 400, f1: 2500, q: 0.7 });
+            tone(ctx, d, { type: 'sawtooth', f0: 80, f1: 700, t: T(0.2), dur: 0.5, gain: 0.3, lowpass: 2500 });
+            boom(ctx, d, T(0.65), 0.9);
+            tone(ctx, d, { type: 'triangle', f0: 400, f1: 1500, t: T(0.8), dur: 0.5, gain: 0.15 });
+            return 1.4;
+        }
+        case 'smallFry': {
+            // 虫がちょろちょろ走る(上昇する細かい音) → ぷちっ、ぷちっと潰れる → 魂が昇る
+            for (let i = 0; i < 6; i++) tone(ctx, d, { f0: 1200 + i * 150, f1: 1800 + i * 150, t: T(i * 0.08), dur: 0.05, gain: 0.18 });
+            for (let i = 0; i < 5; i++) {
+                tone(ctx, d, { f0: 150 + i * 30, f1: 350 + i * 40, t: T(0.5 + i * 0.1), dur: 0.1, gain: 0.45 });
+                noise(ctx, d, { t: T(0.5 + i * 0.1), dur: 0.06, gain: 0.3, filter: 'highpass', f0: 2500 + i * 300 });
+            }
+            tone(ctx, d, { type: 'triangle', f0: 500, f1: 2200, t: T(0.95), dur: 0.7, gain: 0.15 });
+            return 1.7;
+        }
+        case 'firstFrost': {
+            // 冷たい風(上昇) → 霜が降りる → 氷が張る澄んだ音
+            noise(ctx, d, { t: T(0), dur: 0.8, gain: 0.25, filter: 'highpass', f0: 3000, f1: 6000 });
+            tone(ctx, d, { type: 'triangle', f0: 400, f1: 2200, t: T(0), dur: 0.7, gain: 0.18 });
+            [2093, 2637, 3136, 4186].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(0.5 + i * 0.1), dur: 0.3, gain: 0.22 }));
+            sparkle(ctx, d, T(1.0), [C5, E5, G5], 0.1, 0.2);
+            return 1.5;
+        }
+        case 'gather': {
+            // 風が吹き抜ける(上昇) → 色々な音が1点へ吸い寄せられて、くるっと渦になる
+            noise(ctx, d, { t: T(0), dur: 0.9, gain: 0.4, filter: 'bandpass', f0: 400, f1: 3500, q: 0.8 });
+            for (let i = 0; i < 8; i++) tone(ctx, d, { f0: 300 + i * 90, f1: 800 + i * 120, t: T(0.25 + i * 0.07), dur: 0.1, gain: 0.3 });
+            tone(ctx, d, { type: 'triangle', f0: 400, f1: 1600, t: T(0.9), dur: 0.5, gain: 0.2 });
+            return 1.5;
+        }
+        case 'burnOff': {
+            // 地を這う炎(上昇) → 火柱が次々と立つ → 焼け跡に杭を打つ
+            tone(ctx, d, { type: 'sawtooth', f0: 50, f1: 280, t: T(0), dur: 0.6, gain: 0.25, lowpass: 700 });
+            noise(ctx, d, { t: T(0.1), dur: 1.1, gain: 0.5, filter: 'bandpass', f0: 300, f1: 2400, q: 0.6 });
+            for (let i = 0; i < 7; i++) noise(ctx, d, { t: T(0.4 + i * 0.09), dur: 0.05, gain: 0.3, filter: 'highpass', f0: 2500 + i * 200 });
+            tone(ctx, d, { f0: 110, f1: 260, t: T(1.0), dur: 0.2, gain: 0.6 });
+            return 1.6;
+        }
+        case 'freeToken': {
+            // クラッカーがパンッ → 宴会のファンファーレ(上昇)
+            noise(ctx, d, { t: T(0), dur: 0.15, gain: 0.6, filter: 'lowpass', f0: 400, f1: 4000 });
+            boom(ctx, d, T(0), 0.6);
+            sparkle(ctx, d, T(0.15), [C5, E5, G5, C6, E6, G5 * 2], 0.07, 0.28);
+            for (const f of [G5, C6, E6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(0.6), dur: 0.7, gain: 0.18 });
+            return 1.4;
+        }
+        case 'leafDrop': {
+            // 木の葉がひらひら舞い降りる小さな上昇音 → そっと積もる
+            noise(ctx, d, { t: T(0), dur: 0.8, gain: 0.25, filter: 'bandpass', f0: 900, f1: 2800, q: 1.1 });
+            [262, 330, 392].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, f1: f * 1.5, t: T(0.15 + i * 0.2), dur: 0.3, gain: 0.2 }));
+            noise(ctx, d, { t: T(1.0), dur: 0.1, gain: 0.25, filter: 'highpass', f0: 3500 });
+            return 1.3;
+        }
+        case 'leafCloak': {
+            // 葉が舞って取り巻く(上昇) → 衣がふわっと包む和音
+            noise(ctx, d, { t: T(0), dur: 0.8, gain: 0.3, filter: 'bandpass', f0: 800, f1: 3000, q: 1.0 });
+            for (let i = 0; i < 6; i++) tone(ctx, d, { type: 'triangle', f0: 330 + i * 60, f1: 600 + i * 90, t: T(i * 0.1), dur: 0.15, gain: 0.2 });
+            for (const f of [C5, G5, C6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(0.8), dur: 0.8, gain: 0.16 });
+            return 1.6;
+        }
+        case 'kindling': {
+            // 枯れ葉に火が移る: ぱちぱちと爆ぜながら炎が大きくなる(上昇)
+            for (let i = 0; i < 9; i++) noise(ctx, d, { t: T(i * 0.08), dur: 0.05, gain: 0.3, filter: 'bandpass', f0: 900 + i * 150, f1: 2200 + i * 150, q: 1 });
+            noise(ctx, d, { t: T(0.3), dur: 0.8, gain: 0.4, filter: 'bandpass', f0: 300, f1: 2000, q: 0.6 });
+            tone(ctx, d, { type: 'sawtooth', f0: 90, f1: 240, t: T(0.3), dur: 0.7, gain: 0.28, lowpass: 900 });
+            return 1.2;
+        }
         case 'cleanse': {
             // 浄化: 澄んだ鐘の上昇アルペジオ
             tone(ctx, d, { f0: C5, t: T(0), dur: 0.6, gain: 0.25 });
