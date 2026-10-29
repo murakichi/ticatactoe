@@ -5,7 +5,7 @@
 - 基準線: 環境勝率 76.1% / 2位 / 1位 witch 78.1%（条件1 seed3/200、witch の witchReserve=1 採用後の master）。直前の master（witchReserve 前）では 1位 76.4% vs witch 75.8%
 - 連続不採用回数: 5
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
-- 状態: blocked(issue #250。spellWard で 65→76% まで上げたが、witch(78.1%)が覆せない。対witch は 30% 前後で構造的。gear/deck/synergy/strategy/メタ/joint の6種類を測定済み)
+- 状態: blocked(issue #250。2026-10-29 ユーザー判断: ルールは変えない。spellWard で 65→76% まで上げたが witch(78.1%)を覆せず2位。対witch 30% 前後は構造的。tune-top の範囲では打てる手が尽きた。witch/spellWard の突出は環境全体の見直しで扱う)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
