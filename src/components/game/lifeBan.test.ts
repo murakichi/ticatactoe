@@ -33,6 +33,9 @@ describe('一寸の虫に魂なし', () => {
         expect(placeBlocked(false, 'onClickToken', 1)).toBe(false);
         expect(placeBlocked(true, 'onClickShikigamiRandom', 6)).toBe(true); // 式神はライフ2
         expect(placeBlocked(true, 'onClickShikigamiFlood', 6)).toBe(true); // 百鬼夜行はライフ0
+        expect(placeBlocked(true, 'onClickNecromancy', 9)).toBe(true); // 蘇生はライフ2のコマを召喚する（トークンのライフに関係なく縛られる）
+        expect(placeBlocked(false, 'onClickNecromancy', 1)).toBe(false);
+        expect(placedLifeOf('onClickNecromancy', 9)).toBe(2);
         expect(placeBlocked(true, 'onClickStomp', 1)).toBe(false);
         expect(placeBlocked(true, undefined, 1)).toBe(false);
         expect(placedLifeOf('onClickShikigamiPlace', 6)).toBe(2);
