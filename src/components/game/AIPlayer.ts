@@ -1741,43 +1741,15 @@ class AIPlayer {
         return clicks.length > 0 ? { clicks, board: b, win: false } : null;
     }
 
-    /** 手札が全て固定されていると、シャッフルは魔力を捨てるだけで札が変わらない（3枠とも固定→引き直し、を防ぐ） */
-    private noFreeSlot(board: SquareInfo[], opponentMagic: number, life: number, availableSkills: number[]): boolean {
-        return availableSkills.length > 0 && this.chooseLocks(board, opponentMagic, life, availableSkills).length >= availableSkills.length;
+    /** 引き直しの前に、手札が全て固定されていれば固定を1つ外して札が入れ替わるようにする（特売(53)など、無くても組める札を優先して外す） */
+    locksForReroll(locks: number[], handSize: number): number[] {
+        if (locks.length < handSize || locks.length === 0) return locks;
+        const drop = locks.includes(53) ? 53 : locks[locks.length - 1];
+        return locks.filter((i) => i !== drop);
     }
 
-    /** メインエントリポイント: スキル選択 + 最善手を返す。手札が全て固定なら引き直しはしない */
+    /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(
-        board: SquareInfo[],
-        magic: number,
-        costs: Record<keyof SkillCosts, number>,
-        opponentMagic: number,
-        life: number,
-        availableSkills: number[],
-        tokenUsed: boolean,
-        necroRemain: number = 0,
-        necroCost: number = 0,
-        judgeCost: number = 99,
-        assaultCost: number = 99,
-        proliferateActive: boolean = false,
-        seatMagic: number[] = [],
-        necroPay: number = necroCost,
-        necroCosts: number[] = []
-    ): AIResult {
-        this.updateShield(board);
-        if (this.rerollsLeft > 0 && this.noFreeSlot(board, opponentMagic, life, availableSkills)) {
-            const saved = this.rerollsLeft;
-            this.rerollsLeft = 0;
-            try {
-                return this.makeMoveCore(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, judgeCost, assaultCost, proliferateActive, seatMagic, necroPay, necroCosts);
-            } finally {
-                this.rerollsLeft = saved;
-            }
-        }
-        return this.makeMoveCore(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, judgeCost, assaultCost, proliferateActive, seatMagic, necroPay, necroCosts);
-    }
-
-    private makeMoveCore(
         board: SquareInfo[],
         magic: number,
         costs: Record<keyof SkillCosts, number>,

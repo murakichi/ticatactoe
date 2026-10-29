@@ -1489,18 +1489,15 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
     });
 
-    it('手札が全て固定されているときは引き直さない（3枠とも固定したままシャッフルすると魔力を捨てるだけ）', () => {
+    it('手札が全て固定されている引き直しは、固定を1つ外してから行う（3枠とも固定したままではシャッフルしても札が変わらない）', () => {
         const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
         ai.rerollsLeft = 8;
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [71, 73, 53])).toHaveLength(3); // 全て固定される手札
-        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 53], false).reroll).toBeUndefined();
-        expect(ai.rerollsLeft).toBe(8); // 一時的に止めるだけで、残り回数は変えない
-        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 2], false).reroll).toBeDefined(); // 空き枠があれば探す
-        // 空き枠が1つでもあれば（軍師は固定が2枚まで）従来どおり探す
-        const tac = mk('tactician', 'witch', [3, 4, 9, 11, 93, 94, 95]);
-        tac.rerollsLeft = 2;
-        expect(tac.chooseLocks(emptyBoard(), 0, 5, [3, 9, 11])).toHaveLength(2);
-        expect(tac.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 53], false).reroll).toBeDefined(); // 92を探す
+        expect(ai.locksForReroll([71, 73, 53], 3)).toEqual([71, 73]); // 無くても組める特売(53)を外す
+        expect(ai.locksForReroll([71, 73, 92], 3)).toEqual([71, 73]); // 特売が無ければ最後の固定を外す
+        expect(ai.locksForReroll([71, 73], 3)).toEqual([71, 73]); // 空き枠があれば外さない
+        expect(ai.locksForReroll([], 3)).toEqual([]);
     });
 
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
