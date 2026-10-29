@@ -43,6 +43,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // シミュレーション用(ハッシュ無し)は古いコードが残らないようネットワーク優先
+    if (url.origin === self.location.origin && /\/(sim\/|simWorker\.js)/.test(url.pathname)) {
+        event.respondWith(fetch(req).then((res) => put(req, res)).catch(() => caches.match(req)));
+        return;
+    }
+
     if (url.origin === self.location.origin) {
         event.respondWith(
             caches.match(req).then((hit) => hit || fetch(req).then((res) => put(req, res)))

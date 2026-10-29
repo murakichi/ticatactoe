@@ -1,4 +1,18 @@
 import {
+    leafCloakTargets,
+    leafAllTargets,
+    leafDropTargets,
+    leafDrop,
+    kindlingTargets,
+    tinderTargets,
+    kindling,
+    boardLeaves,
+    witchCostOf,
+    mogaribue,
+    mogaribueDamage,
+    mogaribueTargets,
+    canMogaribue,
+    MOGARIBUE_LIFE,
     setEffectWard,
     isFrozen,
     infernoCostOf,
@@ -1131,6 +1145,189 @@ describe('雷のない所に火は立たぬ (thunderFireVictims)', () => {
             expect(r.every((c) => cands.includes(c))).toBe(true);
             expect([...r].sort((a, b) => a - b)).toEqual(r);
         }
+    });
+});
+
+describe('凩の魔女（パッシブ・虎落笛）', () => {
+    const lv = (player: Player | undefined, bind: number, n: number, ...rest: Effect['effect'][]) => sq(player, bind, ...Array<Effect['effect']>(n).fill('🍂'), ...rest);
+    const cs: CharacterId[] = ['witch', 'you'];
+
+    it('パッシブ: 盤面の🍂（敵味方）1枚につきコスト-1。下限1、もともと1以下は変えない、氷結中の🍂は数えない', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 4, 2);
+        b[1] = lv('⭕', 4, 1);
+        b[2] = lv('⭕', 4, 5, '❄'); // 休眠
+        expect(boardLeaves(b)).toBe(3);
+        expect(witchCostOf(7, b)).toBe(4);
+        expect(witchCostOf(3, b)).toBe(1);
+        expect(witchCostOf(1, b)).toBe(1);
+        expect(witchCostOf(0, b)).toBe(0);
+        expect(witchCostOf(7, emptyBoard())).toBe(7);
+    });
+
+    it('虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣は全てライフ+2', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 2); // 自陣🍂×2
+        b[1] = sq('💙', 0);
+        b[4] = sq('⭕', 5);
+        b[5] = sq('⭕', 1);
+        b[6] = lv('⭕', 4, 3); // 敵の🍂は威力に数えない
+        expect(mogaribueDamage(b, '💙')).toBe(2);
+        const r = mogaribue(b, '💙', cs);
+        expect(r.damage).toBe(2);
+        expect(r.hit).toEqual([4, 5, 6]);
+        expect(r.boosted).toEqual([0, 1]);
+        expect(b[4].bind).toBe(3);
+        expect(b[5].bind).toBe(0); // 下限0
+        expect(b[6].bind).toBe(2);
+        expect(b[0].bind).toBe(3 + MOGARIBUE_LIFE);
+        expect(b[1].bind).toBe(MOGARIBUE_LIFE); // ライフ0の自コマにも入る
+    });
+
+    it('虎落笛: 🔑・ライフ0・雷霆の巫の⚡無敵の敵は対象外。氷結は肩代わり、🔥は1.5倍', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 2);
+        b[1] = sq('⭕', 5, '🔑');
+        b[2] = sq('⭕', 0);
+        b[3] = sq('⭕', 5, '❄');
+        b[4] = sq('⭕', 8, '🔥');
+        b[5] = sq('🟩', 5, '⚡');
+        const c3: CharacterId[] = ['witch', 'you', 'electrician'];
+        expect(mogaribueTargets(b, '💙', c3)).toEqual([3, 4]);
+        mogaribue(b, '💙', c3);
+        expect(b[1].bind).toBe(5);
+        expect(b[3].bind).toBe(5); // 氷結が肩代わり（❄が1つ減るだけ）
+        expect(isFrozen(b[3])).toBe(false);
+        expect(b[4].bind).toBe(5); // 2 × 1.5 = 3 ダメージ
+        expect(b[5].bind).toBe(5);
+    });
+
+    it('虎落笛: 🍂が無くても自陣のライフ+2は入る。自陣のコマが無ければ撃てない', () => {
+        const b = emptyBoard();
+        b[4] = sq('⭕', 5);
+        expect(canMogaribue(b, '💙')).toBe(false);
+        b[0] = sq('💙', 2);
+        expect(canMogaribue(b, '💙')).toBe(true);
+        const r = mogaribue(b, '💙', cs);
+        expect(r.damage).toBe(0);
+        expect(r.hit).toEqual([]);
+        expect(b[4].bind).toBe(5);
+        expect(b[0].bind).toBe(2 + MOGARIBUE_LIFE);
+    });
+
+    it('sim/thermal.js との一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[0] = lv('💙', 3, 2);
+            b[1] = sq('💙', 0);
+            b[4] = sq('⭕', 5, '🔑');
+            b[5] = lv('⭕', 1, 1, '🔥');
+            b[6] = sq('⭕', 6, '❄');
+            b[7] = lv('⭕', 4, 4, '❄');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        expect(mogaribue(a, '💙', cs)).toEqual(sim.mogaribue(c, '💙'));
+        expect(a).toEqual(c);
+        expect(witchCostOf(7, mk())).toBe(sim.witchCostOf(7, mk()));
+        expect(boardLeaves(mk())).toBe(sim.boardLeaves(mk()));
+    });
+});
+
+describe('落ち葉の置き土産・焚きつけ', () => {
+    const lv = (player: Player | undefined, bind: number, n: number, ...rest: Effect['effect'][]) => sq(player, bind, ...Array<Effect['effect']>(n).fill('🍂'), ...rest);
+    const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+
+    it('落ち葉の置き土産: 対象は使用者以外のコマ（guarded を除く）。🍂が1つ付く', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 3);
+        b[2] = sq('⭕', 3, '🔑');
+        expect(leafDropTargets(b, '💙', guard)).toEqual([1]);
+        leafDrop(b, 1);
+        expect(b[1].effects).toEqual([{ effect: '🍂' }]);
+        expect(b[0].effects).toEqual([]);
+    });
+
+    it('火口: 🌱か🍂を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 1);
+        b[1] = lv('⭕', 8, 1);
+        b[2] = lv('⭕', 8, 1, '🔑');
+        b[3] = sq('⭕', 8);
+        b[4] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }] };
+        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4]);
+        const post = b.map((q) => ({ ...q, effects: [...q.effects] }));
+        ignite(post, [4], 4, 1);
+        expect(post[4].effects.some((e) => e.effect === '🌱')).toBe(false);
+        expect(post[4].effects.some((e) => e.effect === '🔥')).toBe(true);
+    });
+
+    it('焚きつけ: 敵の🍂を全て取り除き、1枚につき🔥を1つ付ける（自陣・🔑は対象外）', () => {
+        const b = emptyBoard();
+        b[0] = lv('💙', 3, 1);
+        b[1] = lv('⭕', 8, 3);
+        b[2] = lv('⭕', 8, 1, '🔑');
+        b[3] = sq('⭕', 8);
+        expect(kindlingTargets(b, '💙', guard)).toEqual([1]);
+        const r = kindling(b, [1], 4);
+        expect(r.leaves).toBe(3);
+        expect(b[1].effects.filter((e) => e.effect === '🍂')).toHaveLength(0);
+        expect(flameStacks(b[1])).toBe(3);
+        expect(b[0].effects).toHaveLength(1);
+        expect(b[2].effects).toHaveLength(2);
+    });
+
+    it('焚きつけ: 氷結中のコマは最初の1スタックが氷結の解除に使われ、🍂は全て消える。sim/thermal.js と一致', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[1] = lv('⭕', 8, 2, '❄');
+            b[5] = lv('⭕', 8, 1);
+            b[6] = sq('⭕', 8, '❄');
+            return b;
+        };
+        const a = mk();
+        const c = mk();
+        const ra = kindling(a, [1, 5], 4);
+        const rc = sim.kindling(c, [1, 5], 4);
+        expect(ra).toEqual(rc);
+        expect(a).toEqual(c);
+        expect(a[1].effects.filter((e) => e.effect === '🍂')).toHaveLength(0);
+        expect(isFrozen(a[1])).toBe(false);
+        expect(flameStacks(a[1])).toBe(1); // 2スタックのうち1つが❄の解除、残り1つが🔥
+        expect(leafDropTargets(mk(), '💙', guard)).toEqual(sim.leafDropTargets(mk(), '💙', guard));
+    });
+});
+
+describe('枯野の相席', () => {
+    it('対象は盤面の全てのコマ（敵味方）のうち guarded でないもの。空きマスは対象外', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('⭕', 3, '🔑');
+        b[2] = sq('⭕', 3);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
+        expect(leafAllTargets(b, guard)).toEqual([0, 2]);
+        expect(sim.leafAllTargets(b, guard)).toEqual([0, 2]);
+    });
+});
+
+describe('落葉の衣', () => {
+    it('対象は使用者のコマ全て（🔑ロック中も含む）。敵と空きマスは対象外。sim/thermal.js と一致', () => {
+        const b = emptyBoard();
+        b[0] = sq('💙', 3);
+        b[1] = sq('💙', 3, '🔑');
+        b[2] = sq('⭕', 3);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sim = require('../../../sim/thermal.js');
+        expect(leafCloakTargets(b, '💙')).toEqual([0, 1]);
+        expect(sim.leafCloakTargets(b, '💙')).toEqual([0, 1]);
     });
 });
 

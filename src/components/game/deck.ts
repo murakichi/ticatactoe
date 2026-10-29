@@ -86,7 +86,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds', costKey: 'onClickLeafToken', desc: '🍂付きの自陣コマをランダムに設置します（ターン1回）。自陣の🍂は相手全員のスキルコストを🍂の数だけ増やします' },
     { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds', costKey: 'onClickTwinLeafToken', desc: '🍂が2枚付いた自陣コマをランダムに設置します（ターン1回）' },
     { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds', costKey: 'onClickDoubleLeafToken', desc: '🍂付きの自陣コマをランダムに2つ設置します（ターン1回）' },
-    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds', costKey: 'onClickBothLeafToken', desc: '空きマスに全プレイヤーのコマを1つずつ置きます。🍂が付くのは自分のコマだけ（ターン1回）' },
+    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds', costKey: 'onClickLeafAll', desc: '盤面の全てのコマ（敵味方）に🍂を1つずつ付与します（🔑ロックと⚡無敵のコマは除く）' },
     { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds', costKey: 'onClickBonfire', desc: '敵陣の🍂をすべて取り除きます（🔑ロックと❄氷結のマスは対象外）' },
     { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds', costKey: 'onClickMulch', desc: '自陣のランダムな🍂を1枚、🌱に変えます' },
     { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds', costKey: 'onClickAutumn', desc: '盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）' },
@@ -98,6 +98,19 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },
     { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付け、その後手札をシャッフルします。このターン敵か自陣に🔥を付与していればコスト0（使うとリセット）' },    { idx: 76, name: '裸の王様', icon: '👑', category: 'control', costKey: 'onClickStrip', desc: '相手全員のギアを、その相手の次の手番の終わりまで無効にします' },    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge', costKey: 'onClickChargeSeason', desc: '今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます' },
     { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge', costKey: 'onClickBristle', desc: '自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます' },    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge', costKey: 'onClickRelease', desc: '自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）' },    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge', costKey: 'onClickStash', desc: '⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコストを-1します（軽減後は最低1）' },    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge', costKey: 'onClickThunderFire', desc: '⚡のあるコマを1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を付けます（氷結中のコマは❄が1つ減るだけ）' },    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control', costKey: 'onClickDarkPot', desc: '敵味方を問わず全コマに🔥❄⚡☠🌱🍂をランダムに付けます（各エフェクトは最大1。🔑ロック・無敵のコマは除く）。盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます' },    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge', costKey: 'onClickChargeHeal', desc: '⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します。この手番に付与した⚡の数だけコストが下がります（最低1）' },
+    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
+    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズか🍂を持つ敵のコマを1つ選んで🔥を1つ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。鍛冶師は🔥付与が-1' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3します' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を2つ付与します（🔑ロック・⚡無敵は除く。対象が無いと使えません）' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）。自陣の式神が3体以上ならコスト0' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）、相手全員は次の手番の終わりまでライフ3以下のコマを置けなくなります（トークン等のスキル、ネクロマンサーの蘇生も含む）。盤面のコマの数だけコストが下がります（最低1）' },
+    { idx: 93, name: '初霜', icon: '🧊', category: 'ice', costKey: 'onClickFirstFrost', desc: 'トークン扱い（ターン1回）。敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置きます。盤面の🍂が3枚以上ならコスト0（対象が無いと使えません）' },
+    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: 'トークン扱い（ターン1回）。自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑ロックと式神の印📜はその場に残ります。🔥は集め終えてから処理）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: 'トークン扱い（ターン1回）。敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置きます。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
+    { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークン系スキルのコストを0にします（手番が終わると切れます）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -111,15 +124,16 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
  */
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
-    magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
+    tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
+    magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
-    electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
-    cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
+    electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],
+    cryomancer: [8, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
+    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
+    witch: [5, 8, 12, 28, 36, 44, 53, 56, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
@@ -157,11 +171,11 @@ export const randomDeck = (rng: () => number = Math.random): number[] => {
     return out.sort((a, b) => a - b);
 };
 
-/** AIが何も指定しないときのランダム入れ替えの枚数（推奨デッキの12枚中） */
+/** variedAIDeck(ストレステスト用)のランダム入れ替えの枚数（推奨デッキの12枚中） */
 export const AI_DECK_SWAPS = 3;
 
 /**
- * キャラの勝ち筋になる「核のカード」。AIの入れ替えデッキ（variedAIDeck）でも入れ替えない。
+ * キャラの勝ち筋になる「核のカード」。ストレステスト用の入れ替えデッキ（variedAIDeck）でも入れ替えない。
  * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
  */
 export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
@@ -169,7 +183,9 @@ export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
 };
 
 /**
- * AIのデッキ: キャラの推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
+ * 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える。
+ * 本番のAI席は pickRecommendedDeck（主案/別案の複数パターンからの選択のみ）を使い、カードをランダムに入れ替えない。
+ * sim の頑健性確認（`probe-top.js --envDeck varied`）で「デッキが多少ずれても環境順位が崩れないか」を見るために残している。
  * 入れ替えで常に有効なデッキ（12枚・重複なし）になる。CORE_CARDS のカードは入れ替えない
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {

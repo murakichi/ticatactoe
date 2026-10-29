@@ -19,8 +19,9 @@ import {
     randomDeck,
     recommendedDeck,
     saveDeck,
-    variedAIDeck,
+    pickRecommendedDeck,
 } from './components/game/deck';
+import { SimPanel } from './components/SimPanel';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -64,6 +65,12 @@ const CHARACTERS: CharacterDef[] = [
         icon: '🔥',
         passive: `🔥を付与するスキルのコスト-1（火遁・火炎トークン・殉火・焼畑）。敵が🔥の継続ダメージを受けるとき追加で1ダメージ（🔥は毎ターン1つにつき2ダメージ・スキル被ダメ1.5倍）。ライフ平均${L.pyromancer}。固有:業火（仮）・火遁（空きマスにも置ける。空きマスの🔥は置かれたコマに引き継がれる）`,
     },
+    {
+        id: 'witch',
+        name: '凩の魔女',
+        icon: '🍂',
+        passive: `毎ターンの魔力+1(計+2)。盤面にある🍂（敵味方問わず）1枚につきスキルのコスト-1（下限1）。自陣の🍂は相手全員のコストを増やし、敵の🍂は魔女のコストを増やす（パッシブで相殺される）。ライフ平均${L.witch}。固有:虎落笛（自陣の🍂の枚数ぶん敵全てにダメージ・自陣のライフ+2）`,
+    },
 ];
 
 const MIN_PLAYERS = 2;
@@ -76,6 +83,7 @@ export const App = () => {
     // 盤面サイズ: 'auto'=人数に応じた既定(おまかせ) / 数値=人数に関わらずその一辺のマス数
     const [boardSizeChoice, setBoardSizeChoice] = useState<'auto' | number>('auto');
     const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
+    const [isSimOpen, setIsSimOpen] = useState<boolean>(false);
     // 対戦開始時に確定した席の設定（AIのデッキのランダム入れ替えは開始時に1回だけ決める）
     const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
 
@@ -102,12 +110,12 @@ export const App = () => {
             })
         );
     // 開始時に席の設定を確定する。ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）。
-    // デッキを指定していない席は推奨デッキ。ただしAI席は推奨デッキをベースに一部をランダムに入れ替える
+    // デッキを指定していない席は推奨デッキ。AI席は推奨デッキの主案と別案(複数パターン)からひとつ選ぶだけで、カードをランダムに入れ替えない
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p) => {
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: pickRecommendedGears(p.character) } : p;
             if (isValidDeck(p.deck)) return withGears;
-            return { ...withGears, deck: p.isAI ? variedAIDeck(p.character) : recommendedDeck(p.character) };
+            return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
     // デッキを自分で組んだ席が不正（12枚でない）なら開始できない
     const invalidDeckSeat = players.slice(0, playerCount).findIndex((p) => p.deck !== undefined && !isValidDeck(p.deck));
@@ -115,7 +123,14 @@ export const App = () => {
 
     return (
         <div className='App'>
-            {isGameStarted ? (
+            {isSimOpen ? (
+                <SimPanel
+                    names={Object.fromEntries(CHARACTERS.map((c) => [c.id, `${c.icon} ${c.name}`]))}
+                    initialPlayers={playerCount}
+                    initialBoardSize={boardSizeChoice}
+                    onBack={() => setIsSimOpen(false)}
+                />
+            ) : isGameStarted ? (
                 <div className='App-game'>
                     <Game players={startedPlayers} boardSize={boardSize} onBackToSetup={() => setIsGameStarted(false)} />
                 </div>
@@ -203,6 +218,9 @@ export const App = () => {
                         <span className={styles.startSummary}>
                             {playerCount}人で対戦（{players.slice(0, playerCount).filter((p) => !p.isAI).length}人が操作）
                         </span>
+                        <button className={styles.randomBtn} onClick={() => setIsSimOpen(true)}>
+                            📊 シミュレーション
+                        </button>
                         <button
                             className={styles.start}
                             disabled={invalidDeckSeat >= 0}

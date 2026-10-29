@@ -68,7 +68,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickLeafToken: 'token',
     onClickTwinLeafToken: 'token',
     onClickDoubleLeafToken: 'token',
-    onClickBothLeafToken: 'token',
+    onClickLeafAll: 'autumn',
     onClickBonfire: 'autumn',
     onClickMulch: 'autumn',
     onClickAutumn: 'autumn',
@@ -76,14 +76,23 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSpringWind: 'discount',
     onClickKimon: 'lock',
     onClickFireWheel: 'flame',
-    onClickStrip: 'silence',
-    onClickChargeSeason: 'zap',
-    onClickBristle: 'zap',
-    onClickRelease: 'zap',
-    onClickStash: 'zap',
-    onClickThunderFire: 'flame',
-    onClickDarkPot: 'poison',
-    onClickChargeHeal: 'heal',
+    onClickStrip: 'strip',
+    onClickChargeSeason: 'staticSeason',
+    onClickBristle: 'bristle',
+    onClickLeafDrop: 'autumn',
+    onClickKindling: 'flame',
+    onClickTinder: 'flame',
+    onClickSmallFry: 'silence',
+    onClickFirstFrost: 'freeze',
+    onClickGather: 'token',
+    onClickBurnOff: 'flame',
+    onClickFreeToken: 'token',
+    onClickLeafCloak: 'autumn',
+    onClickRelease: 'thunderFall',
+    onClickStash: 'stash',
+    onClickThunderFire: 'thunderFire',
+    onClickDarkPot: 'darkPot',
+    onClickChargeHeal: 'thunderHeal',
     onClickBoost: 'rain',
     onClickRelocate: 'dash',
     onClickClone: 'clone',
@@ -91,6 +100,10 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickShikigamiAll: 'shikigami',
     onClickShikigamiRandom: 'shikigami',
     onClickShikigamiFlood: 'shikigami',
+    onClickShikigamiBless: 'shikigami',
+    onClickShikigamiCurse: 'poison',
+    onClickShikigamiPurge: 'shikigamiBlast',
+    onClickShikigamiDiscount: 'discount',
     onClickMarkdown: 'discount',
     onClickEffectDiscount: 'discount',
     onClickTokenDiscount: 'discount',
@@ -125,17 +138,23 @@ const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
 // 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
 const OWN_BANNER_LABELS: Record<string, string> = {
     onClickLeafFrost: '霜枯れ',
+    onClickLeafAll: '枯野の相席',
     onClickSpringWind: '春一番',
     onClickKimon: '鬼門封じ',
     onClickFireWheel: '火の車',
-    onClickStrip: '裸の王様',
-    onClickChargeSeason: '静電気の季節',
-    onClickBristle: '総毛立つ',
-    onClickRelease: '落雷は忘れた頃に',
-    onClickStash: '雷神のへそくり',
-    onClickThunderFire: '雷のない所に火は立たぬ',
-    onClickDarkPot: '一寸先は闇鍋',
-    onClickChargeHeal: '雷を食らわば皿まで',
+    onClickLeafDrop: '落ち葉の置き土産',
+    onClickKindling: '焚きつけ',
+    onClickShikigamiBless: '式神の加護',
+    onClickShikigamiCurse: '式神の呪詛',
+    onClickShikigamiPurge: '式神の供犠',
+    onClickShikigamiDiscount: '式神割引',
+    onClickTinder: '火口',
+    onClickSmallFry: '一寸の虫に魂なし',
+    onClickFirstFrost: '初霜',
+    onClickGather: '吹き寄せ',
+    onClickBurnOff: '山焼き',
+    onClickFreeToken: '無礼講',
+    onClickLeafCloak: '落葉の衣',
     onClickBonfire: '焚き火の唄',
     onClickMulch: '腐葉土の目覚め',
     onClickAutumn: '一葉知秋',
@@ -227,6 +246,22 @@ describe('全スキルに演出がある', () => {
         for (const type of UNIQUE_EFFECT_TYPES) {
             const { container, unmount } = render(<BoardEffects effect={{ type, index: size + 1, indexes: [0, size + 1, size * size - 1], sources: [1], nonce: 1 }} size={size} />);
             expect(container.querySelectorAll('div,span').length).toBeGreaterThan(5);
+            unmount();
+        }
+    });
+
+    // 専用の演出を持つ新作スキルは、バナーの名前がそのままスキル名で、演出も多段(要素が十分ある)であること
+    const DEDICATED: Record<string, string> = {strip: '裸の王様', staticSeason: '静電気の季節', bristle: '総毛立つ', thunderFall: '落雷は忘れた頃に', stash: '雷神のへそくり', thunderFire: '雷のない所に火は立たぬ', darkPot: '一寸先は闇鍋', thunderHeal: '雷を食らわば皿まで'};
+    it.each(Object.entries(DEDICATED))('専用演出 %s のバナーは「%s」', (type, label) => {
+        const { container } = render(<BoardEffects effect={{ type: type as SkillEffectType, index: 5, indexes: [5, 6, 9, 10], nonce: 1 }} size={4} />);
+        expect(container.querySelector('[class*="banner"]')?.textContent).toBe(label);
+        expect(container.querySelectorAll('div,span').length).toBeGreaterThanOrEqual(12);
+    });
+
+    it('マスを指定しない呼び出し(対象が空)でも、専用演出は描画できる', () => {
+        for (const type of Object.keys(DEDICATED)) {
+            const { container, unmount } = render(<BoardEffects effect={{ type: type as SkillEffectType, nonce: 1 }} size={5} />);
+            expect(container.querySelectorAll('div,span').length).toBeGreaterThan(3);
             unmount();
         }
     });

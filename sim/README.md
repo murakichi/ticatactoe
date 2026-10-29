@@ -31,6 +31,26 @@ node sim/cli.js sim --games 2000 --mode capture           # 捕獲考慮AIで比
 ```
 `--seed` で再現可能（mulberry32 のシード固定）。
 
+### 3b. 常駐対戦（watch）
+```bash
+node sim/cli.js watch                          # 2人戦。Ctrl-C か勝率が収束するまで対戦し続ける
+node sim/cli.js watch --players 4 --matrix     # 対面別勝率の表も常時表示
+node sim/cli.js watch --forever --log w.jsonl  # 自動停止なし。停止時の統計をJSONで追記
+node sim/cli.js watch --jobs 2               # 並列数（既定=コア数。worker_threads）
+node sim/cli.js watch --no-gear                # ギアなし（--no-skill でスキルを使わず置くだけ）
+```
+1対1は全キャラの組(席順つき)を線形に1周して繰り返す（ランダムに引かない。先手・後手が同数で、全組の試合数が揃う）。3人以上はランダム。計算は `--jobs`（既定=コア数）の worker_threads で分担し、ゲーム番号 g の結果は g だけで決まるので並列数を変えても結果は同じ。
+既定は**本番のAI席と同じ装備**（推奨デッキから3枚入れ替え＋推奨ギア/別案）。`--no-gear` / `--no-skill` で外せる（画面ではチェックボックス）。
+キャラ別勝率(±95%)・席別勝率・**対面別勝率**（行が列に勝つ割合。多人数では同卓した試合のうち
+どちらかが勝った試合で按分）を1秒ごとに更新。収束判定は「直近 `--window`(10) 回の
+スナップショット(`--checkpoint` 200局ごと)で全キャラの勝率の動きが `--eps`(0.5pt) 以内」かつ
+`--min-games`(2000) 以上。`--max N` で局数上限。停止時（Ctrl-C含む）は必ず最終統計と対面表を出す。
+
+**ブラウザ版**: セットアップ画面の「📊 シミュレーション」から同じ集計を画面で見られる（ユーザーの端末の Web Worker で動く。
+`public/simWorker.js`（計算だけ。端末のコア数-1 個を並列に立てる）が `sim/compute.js` 経由で `sim/` のモジュールを読み、集計・分析は画面側が `public/sim/live.js` を読み込んで行う。`npm start` / `npm run build` の前に `scripts/copy-sim.js` が
+`compute.js` / `live.js` から辿れる `sim/*.js` を `public/sim/` にコピーする（git管理外）。sim のエンジンを直せば
+CLI と画面の両方に反映される。`sim/` に Node 専用 API（fs 等）を足すとブラウザ版が壊れるので注意。
+
 ### 4. 改善ループ用の計測
 ```bash
 node sim/cli.js metrics --games 800 --mode faithful --seed 1   # バランス指標をJSON出力
