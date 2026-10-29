@@ -102,6 +102,13 @@ function writeNotes() {
     fs.writeFileSync(notesFile, L.join('\n'));
 }
 
+// 判定の主指標は tune-top と同じ「対強豪平均(strong)」。強豪リストは .tune-cache/strong.json に固定（無ければ最初に作る）。無ければ field にフォールバック
+const STRONG_FILE = path.resolve(__dirname, '..', '.tune-cache', 'strong.json');
+const hasStrong = () => fs.existsSync(STRONG_FILE);
+const M = (r) => (hasStrong() && r.strong != null ? r.strong : r.field);
+const SE = (r) => (hasStrong() && r.strongSe != null ? r.strongSe : r.se);
+const metricName = () => (hasStrong() ? 'strong' : 'field');
+
 /** 多重比較の補正（tune-top SKILL の表）。n = 探索で測った候補数 */
 const zThreshold = (n) => (args.zmin ? Number(args.zmin) : n <= 5 ? 2.3 : n <= 15 ? 2.7 : n <= 40 ? 3.0 : 3.3);
 
@@ -190,10 +197,10 @@ function step(char, axis, round, stepNo) {
     const scanArgs = { gears: ['--scan', 'gears'], deck: ['--scan', 'deck', '--neighbors', String(neighbors), '--swap', String(swap)], flags: ['--scan', 'flags', '--neighbors', String(neighbors)] }[axis];
     const scan = probe({ games, seed, argv: ['--target', char, ...scanArgs, ...ex] });
     const [base, ...rest] = scan.rows;
-    const z = (r) => (r.field - base.field) / Math.sqrt(r.se ** 2 + base.se ** 2);
+    const z = (r) => (M(r) - M(base)) / Math.sqrt(SE(r) ** 2 + SE(base) ** 2);
     learn(char, axis, base, rest, z, round);
     const best = rest.map((r) => ({ r, z: z(r) })).sort((a, b) => b.z - a.z)[0];
-    const rec = { char, axis, round, seed, games, candidates: rest.length, base: base.field, best: best && { label: best.r.label, field: best.r.field, z: +best.z.toFixed(2) } };
+    const rec = { char, axis, round, seed, games, candidates: rest.length, metric: metricName(), base: M(base), best: best && { label: best.r.label, value: M(best.r), z: +best.z.toFixed(2) } };
     if (!best || best.z < zThreshold(rest.length)) { log({ ...rec, accepted: false, why: 'scan gate' }); return null; }
 
     // 再測定: 別シードで 基準 と 候補 を測る
@@ -201,16 +208,21 @@ function step(char, axis, round, stepNo) {
     const c0 = probe({ games: confirmGames, seed: cseed, argv: ['--target', char] });
     const c1 = probe({ games: confirmGames, seed: cseed, argv: ['--target', char, ...candArgs(best.r.cand)] });
     const r0 = c0.rows[0], r1 = c1.rows[0];
-    const delta = r1.field - r0.field, se = Math.sqrt(r0.se ** 2 + r1.se ** 2);
-    const worst = Math.min(...Object.keys(r0.per).map((o) => r1.per[o] - r0.per[o]));
-    const ok = args.zmin ? delta > 0 : delta >= 0.015 && delta >= 1.96 * se && worst > -0.15; // --zmin は配管の動作確認用（ゲートを緩める）
-    log({ ...rec, confirm: { seed: cseed, games: confirmGames, base: r0.field, cand: r1.field, delta: +delta.toFixed(4), se: +se.toFixed(4), worst: +worst.toFixed(3) }, accepted: ok, cand: best.r.cand });
-    console.log(`  ${char}/${axis}: ${best.r.label}  scan z=${best.z.toFixed(1)}  confirm ${(delta * 100).toFixed(1)}pt ±${(1.96 * se * 100).toFixed(1)} -> ${ok ? '採用' : '不採用'}`);
+    const delta = M(r1) - M(r0), se = Math.sqrt(SE(r0) ** 2 + SE(r1) ** 2);
+    const diffs = Object.keys(r0.per).map((o) => [o, r1.per[o] - r0.per[o]]).sort((a, b) => a[1] - b[1]);
+    const worst = diffs[0][1], worstOpp = diffs[0][0];
+    const passEffect = delta >= 0.015 && delta >= 1.96 * se;
+    const ok = args.zmin ? delta > 0 : passEffect && worst > -0.15;
+    // 効果は十分なのに特定の相手への大幅悪化(-15pt超)だけで落ちた候補は、人が判断できるよう印を付けて残す
+    const blockedBy = !ok && passEffect && worst <= -0.15 ? { worstOpp, worst: +worst.toFixed(3), diffs: Object.fromEntries(diffs.map(([o, d]) => [o, +d.toFixed(3)])) } : undefined; // --zmin は配管の動作確認用（ゲートを緩める）
+    log({ ...rec, confirm: { seed: cseed, games: confirmGames, base: M(r0), cand: M(r1), delta: +delta.toFixed(4), se: +se.toFixed(4), worst: +worst.toFixed(3), field: { base: r0.field, cand: r1.field } }, accepted: ok, blockedBy, cand: best.r.cand });
+    console.log(`  ${char}/${axis}: ${best.r.label}  scan z=${best.z.toFixed(1)}  confirm ${(delta * 100).toFixed(1)}pt ±${(1.96 * se * 100).toFixed(1)} -> ${ok ? '採用' : '不採用'}${blockedBy ? `（${blockedBy.worstOpp} への ${(worst * 100).toFixed(0)}pt 悪化で保留。人の判断待ち）` : ''}`);
     return ok ? { gain: delta, cand: best.r.cand } : null;
 }
 
 function main() {
     if (!fs.existsSync(tunedFile)) save({});
+    if (!hasStrong()) { console.log('強豪リストを作成(--rank --write-strong)'); probe({ games: 60, seed: 1, argv: ['--rank', '--write-strong'] }); }
     // --inert-from <probe-top --scan flags --json の出力> --inert-char <char>: 既に測った pilot を記憶に取り込む（再測定を省く）
     if (args['inert-from'] && args['inert-char']) {
         const o = JSON.parse(fs.readFileSync(args['inert-from'], 'utf8'));
