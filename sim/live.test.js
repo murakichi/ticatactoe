@@ -48,3 +48,77 @@ describe('matchups', () => {
         expect(m.you.you).toBeUndefined();
     });
 });
+
+describe('analyze / verdict', () => {
+    // table[a][b] = [aの勝ち, bの勝ち]。書いてある組だけ2人戦として record する
+    const build = (chars, table) => {
+        const st = live.createStats(chars, 2);
+        for (const a of Object.keys(table)) for (const b of Object.keys(table[a])) {
+            const [wa, wb] = table[a][b];
+            for (let i = 0; i < wa; i++) live.record(st, [a, b], { winnerSeat: 0, turns: 1 });
+            for (let i = 0; i < wb; i++) live.record(st, [a, b], { winnerSeat: 1, turns: 1 });
+        }
+        return st;
+    };
+
+    test('じゃんけん(3すくみ)は均衡が1/3ずつで、突出キャラなし', () => {
+        const st = build(['r', 'p', 's'], { p: { r: [80, 20], s: [20, 80] }, r: { s: [80, 20] } });
+        // p>r, s>p, r>s
+        const an = live.analyze(st);
+        an.rows.forEach((r) => expect(r.eq).toBeCloseTo(1 / 3, 1));
+        an.rows.forEach((r) => expect(r.fieldAvg).toBeCloseTo(0.5, 5));
+        expect(an.exploit).toBeLessThan(0.02);
+        expect(live.verdict(an).headline).toContain('突出したキャラはいません');
+    });
+
+    test('全員に勝ち越すキャラは均衡がほぼ全部そこに集まり、不利対面が無い', () => {
+        const st = build(['w', 'a', 'b'], { w: { a: [70, 30], b: [65, 35] }, a: { b: [80, 20] } });
+        const an = live.analyze(st);
+        const w = an.rows.find((r) => r.id === 'w');
+        expect(w.eq).toBeGreaterThan(0.9);
+        expect(w.unfavorable).toBe(0);
+        expect(w.favorable).toBe(2);
+        expect(w.worst.rate).toBeCloseTo(0.65);
+        expect(an.rows[0].id).toBe('w');
+        expect(live.verdict(an, (x) => x.toUpperCase()).headline).toContain('Wが突出');
+    });
+
+    test('平均勝率1位でもカウンターがいれば、均衡では別キャラが有力になりうる', () => {
+        // x は a,b を大勝するが c に負ける。c は x にだけ強い
+        const st = build(['x', 'a', 'b', 'c'], {
+            x: { a: [95, 5], b: [95, 5], c: [10, 90] }, a: { b: [50, 50], c: [60, 40] }, b: { c: [60, 40] },
+        });
+        const an = live.analyze(st);
+        const x = an.rows.find((r) => r.id === 'x');
+        expect(x.unfavorable).toBe(1);
+        expect(x.worst.id).toBe('c');
+        expect(x.eq).toBeLessThan(0.5);
+    });
+
+    test('対面の試合数が少ないと結論を保留する', () => {
+        const st = build(['a', 'b'], { a: { b: [3, 1] } });
+        expect(live.verdict(live.analyze(st)).headline).toContain('標本が少なく');
+    });
+
+    test('キャラが1つだけなら分析なし', () => {
+        const st = live.createStats(['a', 'b'], 2);
+        live.record(st, ['a', 'a'], { winnerSeat: 0, turns: 1 });
+        expect(live.analyze(st)).toBeNull();
+    });
+
+    test('弱いキャラを大勝するだけの平均勝率は、対強豪平均では評価されない', () => {
+        // pad は a,b,c に大勝される最弱キャラ。a は pad を大勝して平均が高いが、強豪(b,c)にはやや負け越す。
+        // c は pad に普通に勝つが、強豪に安定して強い
+        const st = build(['a', 'b', 'c', 'pad'], {
+            a: { b: [40, 60], c: [40, 60], pad: [100, 0] },
+            b: { c: [50, 50], pad: [60, 40] },
+            c: { pad: [60, 40] },
+        });
+        const an = live.analyze(st);
+        const a = an.rows.find((r) => r.id === 'a'), c = an.rows.find((r) => r.id === 'c');
+        expect(a.fieldAvg).toBeGreaterThan(c.fieldAvg);       // 素朴な平均では a が上
+        expect(c.strongAvg).toBeGreaterThan(a.strongAvg);     // 強豪相手では c が上
+        expect(a.strongAvg).toBeCloseTo(0.4, 5);              // pad は強豪に入らない
+        expect(an.rows[0].id).not.toBe('pad');
+    });
+});

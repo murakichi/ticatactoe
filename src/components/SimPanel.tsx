@@ -8,7 +8,25 @@ import styles from './SimPanel.module.css';
 type CharRow = { id: string; appearances: number; wins: number; winRate: number; ci: number | null; avgTurnsWon: number | null };
 type Summary = { games: number; drawRate: number; avgTurns: number; fair: number; seatWinRate: (number | null)[]; rows: CharRow[] };
 type Matchups = Record<string, Record<string, { meets: number; wins: number; losses: number; winRate: number | null }>>;
-type Snapshot = { summary: Summary; matchups: Matchups; drift: number | null; elapsed: number };
+type Analysis = {
+    rows: {
+        id: string;
+        fieldAvg: number | null;
+        strongAvg: number | null;
+        worst: { id: string; rate: number; decided: number } | null;
+        unfavorable: number;
+        favorable: number;
+        solidOpponents: number;
+        opponents: number;
+        eq: number;
+    }[];
+    exploit: number;
+    minPairDecided: number;
+    minDecided: number;
+    players: number;
+    verdict: { headline: string; points: string[] };
+};
+type Snapshot = { summary: Summary; matchups: Matchups; analysis: Analysis | null; drift: number | null; elapsed: number };
 type Status = 'idle' | 'running' | 'stopped' | 'converged' | 'max' | 'error';
 
 type Props = {
@@ -69,7 +87,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                 terminate();
                 return;
             }
-            setSnap({ summary: m.summary, matchups: m.matchups, drift: m.drift, elapsed: m.elapsed });
+            setSnap({ summary: m.summary, matchups: m.matchups, analysis: m.analysis ?? null, drift: m.drift, elapsed: m.elapsed });
             if (m.type === 'done') {
                 setStatus(m.reason === 'converged' ? 'converged' : m.reason === 'max' ? 'max' : 'stopped');
                 terminate();
@@ -184,6 +202,8 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                         </span>
                     </div>
 
+                    {snap!.analysis && <Conclusion an={snap!.analysis} label={label} />}
+
                     <h3 className={styles.sub}>キャラ別勝率（出場1回あたり・均等なら {pct(s.fair)}）</h3>
                     <div className={styles.scroll}>
                         <table className={styles.table}>
@@ -268,5 +288,88 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                 </>
             )}
         </div>
+    );
+};
+
+/** 「何が強いか」の結論。平均勝率だけでなく、最悪対面・不利対面数・相手を見て選ぶ場合(均衡)で判断する */
+const Conclusion = ({ an, label }: { an: Analysis; label: (id: string) => string }) => {
+    const ready = an.minPairDecided >= an.minDecided;
+    return (
+        <section className={styles.conclusion} aria-label='結論'>
+            <h3 className={styles.sub}>結論: 何が強いか</h3>
+            <p className={`${styles.headline} ${ready ? '' : styles.pending}`}>{an.verdict.headline}</p>
+            <ul className={styles.points}>
+                {an.verdict.points.map((p) => (
+                    <li key={p}>{p}</li>
+                ))}
+            </ul>
+            <div className={`${styles.scroll} ${ready ? '' : styles.dim}`}>
+                <table className={styles.table}>
+                    <thead>
+                        <tr>
+                            <th>キャラ</th>
+                            <th title='相手が全キャラ均等に出る場合の勝率（各対面の勝率の平均）'>対全キャラ平均</th>
+                            <th title='平均勝率の上位半分の相手(自分を除く)だけで平均した勝率。弱いキャラを大勝して平均が上がるのを避けるための指標'>対強豪平均</th>
+                            <th title='勝率が最も低い対面。試合数が少ない対面は除く'>最悪対面</th>
+                            <th title={`勝率の95%区間が50%を下回る対面の数（不利）/ 上回る対面の数（有利）。${an.minDecided}試合未満の対面は数えない`}>不利 / 有利</th>
+                            <th title='相手も最適にキャラを選ぶと仮定したときの、このキャラが選ばれる確率（ナッシュ均衡）'>均衡で選ばれる確率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {an.rows.map((r) => (
+                            <tr key={r.id}>
+                                <th scope='row'>{label(r.id)}</th>
+                                <td>{pct(r.fieldAvg)}</td>
+                                <td>{pct(r.strongAvg)}</td>
+                                <td className={r.worst ? matchTone(r.worst.rate) : ''}>
+                                    {r.worst ? (
+                                        <>
+                                            {pct(r.worst.rate)}
+                                            <small>（対{label(r.worst.id)}）</small>
+                                        </>
+                                    ) : (
+                                        '—'
+                                    )}
+                                </td>
+                                <td>
+                                    <span className={r.unfavorable === 0 && r.solidOpponents > 0 ? styles.hi : ''}>{r.unfavorable}</span> / {r.favorable}
+                                </td>
+                                <td className={r.eq >= 0.2 ? styles.hi : ''}>{pct(r.eq)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <details className={styles.explain}>
+                <summary>この結論の計算方法</summary>
+                <ol>
+                    <li>
+                        <strong>対面表</strong>: 同じ試合に出た2キャラについて「Aが勝った ÷ (Aが勝った + Bが勝った)」を出します。引き分けと、第三者が勝った試合は含めません。
+                    </li>
+                    <li>
+                        <strong>対全キャラ平均</strong>: 対面表の行の平均です。相手が全キャラ均等に出るときの勝率で、環境順位(probe-top)の環境勝率と同じ意味です。
+                    </li>
+                    <li>
+                        <strong>対強豪平均</strong>: 対全キャラ平均は、環境下位(例: 「あなた」)を大勝するだけで上がります。そこで、平均勝率の上位半分の相手(自分は除く)だけで平均した勝率を、
+                        順位の判断に使います。下位への勝ちは評価に入りません(対全キャラ平均は参考として併記)。
+                    </li>
+                    <li>
+                        <strong>最悪対面 / 不利・有利</strong>: 平均だけでは「1体のカウンターがいるだけで選ばれなくなる」ことを見落とします。そこで最も負ける対面と、
+                        勝率の95%区間(Wilson)が50%を有意に下回る対面の数を並べます。{an.minDecided}試合未満の対面は誤差が大きいので数えません。
+                    </li>
+                    <li>
+                        <strong>均衡で選ばれる確率</strong>: 相手を見てキャラを選べる場合の強さです。対面表を2人ゼロ和ゲームとみなしてナッシュ均衡を求めます
+                        (乗法的重み更新。最良応答の利得が0に近いほど収束。今は {(an.exploit * 100).toFixed(2)}pt)。試合数が少ない対面は50%寄りに補正してノイズでの偏りを抑えています。
+                        1キャラに集中すれば「そのキャラを出せば済む」、分散していれば「相性次第で選ぶ余地がある」状態です。
+                    </li>
+                    <li>
+                        <strong>結論の出し方</strong>: 全対面が{an.minDecided}試合に届くまで保留します。届いたら、対強豪平均・最悪対面・均衡のすべてで1位かつ有意な不利対面なしなら「突出」、均衡の50%以上が1キャラなら「実質最強」、それ以外は「突出なし」または「平均と均衡で1位が違う」と判定します。
+                    </li>
+                    <li>
+                        <strong>注意</strong>: 3人以上では第三者が勝つ試合が混ざり、均衡の前提(2人の直接対決)が崩れるので参考値です。「あなた」のように極端に弱いキャラが混ざると対全キャラ平均が見かけ上押し上げられるため、対強豪平均・最悪対面・均衡も併せて見てください。
+                    </li>
+                </ol>
+            </details>
+        </section>
     );
 };
