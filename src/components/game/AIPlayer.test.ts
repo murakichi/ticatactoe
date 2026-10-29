@@ -609,7 +609,7 @@ describe('AIPlayer cryomancer frost cards (旧sim AI F.cryoCards と同一)', ()
 describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直し（旧sim AI の discountPlan>=2）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
-    const mk = (character: 'magician' | 'giant' = 'magician') => {
+    const mk = (character: 'magician' | 'giant' | 'poisoner' = 'magician') => {
         const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you']);
         ai.rerollsLeft = 2;
         return ai;
