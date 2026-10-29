@@ -1518,3 +1518,21 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
     });
 });
+
+describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダメージを受けない）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const tac = () => new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'poisoner']);
+
+    it('軍師も氷結トークン(45)・氷結ダブルトークン(46)を撃つ', () => {
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
+    });
+    it('氷結トークンを手札に固定する（毎手番撃てるように）', () => {
+        expect(tac().chooseLocks(emptyBoard(), 0, 5, [45, 46, 3, 28])).toEqual(expect.arrayContaining([45]));
+    });
+    it('氷結札を使うのは軍師・氷室・毒使いだけ（巨人は撃たない）', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'poisoner']);
+        expect(giant.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
+    });
+});
