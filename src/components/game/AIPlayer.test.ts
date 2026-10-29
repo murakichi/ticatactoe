@@ -1639,3 +1639,29 @@ describe('毒使い: 魔力が有り余るときの連打', () => {
         expect(poisoner().makeMove(b, 12, skillCosts, 2, 5, [19], false).chargeClicks ?? []).toEqual([]);
     });
 });
+
+describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () => {
+    const { skillCosts } = require('./skillCosts');
+
+    it('電気技師: 列の足りないマスがライフ0の敵コマと最後の空き1マスだけなら、追い剥ぎを連打して着手で揃える', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'you']);
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        b[1] = { player: '⭕', bind: 0, effects: [] };
+        b[2] = { player: '⭕', bind: 0, effects: [] };
+        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [52], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickPlunder', target: 1 }, { skill: 'onClickPlunder', target: 2 }]);
+        expect(r.move).toBe(3);
+        expect(ai.makeMove(b, 12, skillCosts, 2, 5, [], false).chargeClicks ?? []).toEqual([]);
+    });
+
+    it('氷室の番人: 氷結を重ねてから砕氷で敵コマを壊す', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        const b = emptyBoard();
+        [0, 1].forEach((i) => { b[i] = { player: '⭕', bind: 3, effects: [] }; });
+        const r = ai.makeMove(b, 22, skillCosts, 2, 5, [47], false);
+        const names = (r.chargeClicks ?? []).map((c) => c.skill);
+        expect(names).toContain('onClickShatter');
+        expect(names.indexOf('onClickUseLock')).toBeLessThan(names.indexOf('onClickShatter'));
+    });
+});

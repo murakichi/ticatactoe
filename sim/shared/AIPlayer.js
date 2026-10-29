@@ -11,6 +11,7 @@ const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const blast_1 = require("./blast");
+const generic_1 = require("./generic");
 const turn_1 = require("./turn");
 const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
@@ -30,6 +31,12 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 /** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
 const RICH_MAGIC = 14;
+/** 氷室の番人の砕氷: 1手番に壊す敵コマの数・氷結を重ねる回数の上限・撃ったあとに残す魔力 */
+const SHATTER_MAX_PER_TURN = 2;
+const SHATTER_MAX_FREEZES = 3;
+const SHATTER_RESERVE = 10;
+/** 追い剥ぎを1手番に連打する回数の上限 */
+const PLUNDER_CHAIN_MAX = 3;
 /** 巨人がストンプを1手番に連打する回数の上限 */
 const STOMP_CHAIN_MAX = 4;
 /** 毒使いが パンデミック/猛毒化 を撃ったあとに残しておく魔力（毒の連打で空にしない） */
@@ -515,6 +522,38 @@ class AIPlayer {
      * ジャマーの対象(⚡マス)。縦横隣接の敵コマ(ライフ>0・ロックなし)を⚡のスタック数でライフ0にできる数が2以上、
      * 敵のリーチ列の要をライフ0にできる、または与ダメージ合計が JAMMER_MIN_DMG 以上なら撃つ。他人の無敵マスは選べない (sim/ai.js bestJammerTarget と同一)
      */
+    /**
+     * 砕氷で壊す敵コマ。氷結を重ねて ❄×3 ≥ ライフ にできるもの（重ねる回数は SHATTER_MAX_FREEZES まで）のうち、敵の列づくりに効くもの・ライフの低いものを優先。
+     * 🔑ロック・🔥・無敵は凍らせられない。なければ null
+     */
+    bestShatterTarget(board, freezeCost) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = -Infinity;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || sq.bind <= 0 || this.shield.has(i) || !(0, thermal_1.canFreeze)(sq))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            const freezes = Math.max(stacks > 0 ? 0 : 1, Math.ceil(sq.bind / 3) - stacks);
+            if (freezes > SHATTER_MAX_FREEZES)
+                return;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2)
+                    build += foes;
+            }
+            const val = build * 3 - freezes * freezeCost;
+            if (val > bestVal) {
+                bestVal = val;
+                best = { cell: i, freezes };
+            }
+        });
+        return best;
+    }
     /** パンデミックの中心: 3×3で毒が付く敵コマが多く(自陣の巻き込みは1つ1点減点)、合計が PANDEMIC_MIN_SCORE 以上のマス */
     bestPandemicTarget(board) {
         let best = null;
@@ -1605,6 +1644,24 @@ class AIPlayer {
         }
         return best;
     }
+    /** 追い剥ぎの連打で1列を揃える計画。列の自陣でないマスは、追い剥ぎできる(ライフ0の敵)か、最後の着手に使う空きマス1つだけ */
+    planPlunderWin(board, maxCasts) {
+        const cap = Math.min(maxCasts, PLUNDER_CHAIN_MAX);
+        const targets = new Set((0, generic_1.plunderTargets)(board, this.playerSymbol, this.characters));
+        let best = null;
+        for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+            const need = line.filter((c) => board[c].player !== this.playerSymbol);
+            const rob = need.filter((c) => targets.has(c));
+            const rest = need.filter((c) => !targets.has(c));
+            if (rob.length === 0 || rob.length > cap || rest.length !== 1)
+                continue;
+            const sq = board[rest[0]];
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑' || e.effect === '❄') || (best && rob.length >= best.cells.length))
+                continue;
+            best = { cells: rob, move: rest[0] };
+        }
+        return best;
+    }
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board, i, player, life) {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
@@ -1997,6 +2054,14 @@ class AIPlayer {
                 return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })), win: true };
             }
         }
+        // 追い剥ぎ(52): ライフ0の敵コマを自陣にする。手番は続くので、列の足りないマスがライフ0の敵コマ（と、最後の1マスの空き）だけなら、連打して着手で揃えて勝つ
+        if (availableSkills.includes(52)) {
+            const plunderCost = this.calculateAICost(costs.onClickPlunder, false, false, 'onClickPlunder');
+            const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : PLUNDER_CHAIN_MAX);
+            if (win !== null) {
+                return { move: win.move, skills: [], chargeClicks: win.cells.map((c) => ({ skill: 'onClickPlunder', target: c })), win: true };
+            }
+        }
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
         // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（sim/ai.js の noDig53=8）
@@ -2381,6 +2446,25 @@ class AIPlayer {
                 board = board.slice();
                 (0, thermal_1.freezeAll)(board);
                 magic -= cost;
+            }
+        }
+        // 氷室の番人×魔力が有り余るとき: 氷結を重ねて砕氷（❄1つにつき3ダメージ）で敵コマを壊す。壊すとネクロの墓地が増えるので、ネクロが相手のときは撃たない
+        if (this.character === 'cryomancer' && availableSkills.includes(47) && !this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'necromancer')) {
+            const freezeCost = this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze');
+            const shatterCost = this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter');
+            for (let n = 0; n < SHATTER_MAX_PER_TURN; n++) {
+                const plan = this.bestShatterTarget(board, freezeCost);
+                if (plan === null || magic - plan.freezes * freezeCost - shatterCost < SHATTER_RESERVE)
+                    break;
+                for (let k = 0; k < plan.freezes; k++)
+                    chargeClicks.push({ skill: 'onClickUseLock', target: plan.cell });
+                chargeClicks.push({ skill: 'onClickShatter', target: plan.cell });
+                board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                for (let k = 0; k < plan.freezes; k++)
+                    (0, thermal_1.freeze)(board, [plan.cell]);
+                (0, thermal_1.shatter)(board, plan.cell);
+                this.updateShield(board);
+                magic -= plan.freezes * freezeCost + shatterCost;
             }
         }
         // 凩の魔女の虎落笛（クリック不要・手番は続く）: 自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ

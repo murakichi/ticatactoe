@@ -62,6 +62,7 @@ const turnMod = require('./shared/turn');
 const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
+const genericMod = require('./shared/generic');
 const giantAuraMod = require('./shared/giantAura');
 const giantTurnMod = require('./shared/giantTurn');
 // 巨人が何ラウンドに1回動くか。A/B検証用に config.giantActEvery で上書きできる（未設定なら本番の GIANT_ACT_EVERY）
@@ -423,6 +424,7 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        usePlunder: false,
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
@@ -623,7 +625,7 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.useLock = 0;
@@ -807,6 +809,13 @@ function placeMove(s, i) {
     if (s.useSwidden) {
         if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
         s.useSwidden = false;
+        return true;
+    }
+    if (s.usePlunder) {
+        if (!genericMod.plunderTargets(s.board, curPlayer(s), s.chars).includes(i)) return false; // 対象外は選び直せる
+        genericMod.plunder(s.board, i, curPlayer(s));
+        addCorpses(s, 1);
+        s.usePlunder = false;
         return true;
     }
     if (s.useKimon) {
@@ -2233,6 +2242,14 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
+// 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
+function onClickPlunder(s) {
+    if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
+    s.usePlunder = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPlunder, false, false, 'onClickPlunder'), 'onClickPlunder');
+    bumpMagicCount(s);
+    bumpStat(s, 'plunder');
+}
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function onClickKimon(s) {
@@ -2504,6 +2521,7 @@ const SKILLS = {
     leafFrost: onClickLeafFrost,
     springWind: onClickSpringWind,
     kimon: onClickKimon,
+    plunder: onClickPlunder,
     fireWheel: onClickFireWheel,
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,
