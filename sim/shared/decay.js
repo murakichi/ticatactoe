@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/decay.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
+exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -65,3 +65,9 @@ const decayBoard = (board, moveCell, chars, symbols, crowded = false) => {
     return res;
 };
 exports.decayBoard = decayBoard;
+/**
+ * ライフの残った敵コマに着手（攻撃）できるか。巨人はいつでも。満杯の盤面(isCrowded)では誰でも
+ * （誰もライフの残ったコマを殴れず全員が動けなくなる膠着を崩す）
+ */
+const canHitBound = (character, board, seatCount) => character === 'giant' || (0, exports.isCrowded)(board, seatCount);
+exports.canHitBound = canHitBound;

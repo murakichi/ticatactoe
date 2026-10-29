@@ -23,7 +23,7 @@ describe('shouldDecay (issue #30)', () => {
 
 describe('満杯の盤面の追加減衰', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { isCrowded, crowdedDecay } = require('./decay');
+    const { isCrowded, crowdedDecay, canHitBound } = require('./decay');
     const sq = (player?: string, bind = 0, effects: { effect: string }[] = []) => ({ player, bind, effects });
 
     it('置ける空きマスが1つ以下で3人以上のときだけ満杯とみなす', () => {
@@ -41,5 +41,13 @@ describe('満杯の盤面の追加減衰', () => {
         expect(crowdedDecay(sq('💙', 0)).bind).toBe(0);
         expect(crowdedDecay(sq('💙', 3, [{ effect: '❄' }])).bind).toBe(3);
         expect(crowdedDecay(sq()).bind).toBe(0);
+    });
+
+    it('満杯の盤面では誰でもライフの残った敵コマを殴れる。そうでなければ巨人だけ', () => {
+        const cells = (empty: number) => Array.from({ length: 36 }, (_, i) => (i < empty ? sq() : sq('💙', 3)));
+        expect(canHitBound('magician', cells(6), 3)).toBe(true);
+        expect(canHitBound('magician', cells(7), 3)).toBe(false);
+        expect(canHitBound('giant', cells(7), 3)).toBe(true);
+        expect(canHitBound('magician', cells(0), 2)).toBe(false); // 2人戦は対象外
     });
 });

@@ -79,3 +79,10 @@ export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonl
     }
     return res;
 };
+
+/**
+ * ライフの残った敵コマに着手（攻撃）できるか。巨人はいつでも。満杯の盤面(isCrowded)では誰でも
+ * （誰もライフの残ったコマを殴れず全員が動けなくなる膠着を崩す）
+ */
+export const canHitBound = (character: CharacterId | undefined, board: SquareInfo[], seatCount: number): boolean =>
+    character === 'giant' || isCrowded(board, seatCount);

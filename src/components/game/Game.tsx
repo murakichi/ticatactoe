@@ -21,7 +21,7 @@ import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
-import { decayBoard, shouldDecay, isCrowded } from './decay';
+import { decayBoard, shouldDecay, isCrowded, canHitBound } from './decay';
 import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
@@ -1054,7 +1054,7 @@ export const Game = (props: GameProps) => {
         } else if (moveBlocked(lifeBan[turnSeat], life)) {
             return; // ライフ3以下のコマは置けない（ライフを上げるか、チャージで手番を終える）
         } else if (currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer) {
-            if (currentBoard[i].bind > 0 && currentCharacter !== 'giant') {
+            if (currentBoard[i].bind > 0 && !canHitBound(currentCharacter, currentBoard, seatCount)) {
                 return;
             }
         }
@@ -3042,7 +3042,7 @@ export const Game = (props: GameProps) => {
     const canPlaceAt = (i: number): boolean => {
         const sq = currentBoard[i];
         if (isShielded(sq, characters)) return false;
-        if (sq.player && sq.player !== currentTurnPlayer && sq.bind > 0 && currentCharacter !== 'giant') return false;
+        if (sq.player && sq.player !== currentTurnPlayer && sq.bind > 0 && !canHitBound(currentCharacter, currentBoard, seatCount)) return false;
         if (sq.effects.some((x) => x.effect === '🔑') && sq.bind > 0) return false;
         if (emptyBlocked(sq)) return false;
         if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
