@@ -153,7 +153,7 @@ function randomGears(slots, rng = Math.random) {
 
 /** AI が席のキャラに合わせて選ぶギア。src/components/game/gear.ts の RECOMMENDED_GEARS の複製 */
 const RECOMMENDED_GEARS = {
-    you: ['luckyPurse', 'titanCost', 'sturdy'],
+    you: ['luckyPurse', 'emptyLock', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
     giant: ['lastStand', 'sturdy'],

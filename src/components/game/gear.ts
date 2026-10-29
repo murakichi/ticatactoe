@@ -276,7 +276,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
-    you: ['luckyPurse', 'titanCost', 'sturdy'],
+    you: ['luckyPurse', 'emptyLock', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['lastStand', 'ironLock'],
     giant: ['lastStand', 'sturdy'],

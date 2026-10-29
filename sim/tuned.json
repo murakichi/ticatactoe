@@ -1,1 +1,9 @@
-{}
+{
+  "you": {
+    "gears": [
+      "luckyPurse",
+      "emptyLock",
+      "sturdy"
+    ]
+  }
+}
