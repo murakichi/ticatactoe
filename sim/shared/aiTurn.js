@@ -61,6 +61,16 @@ const planAITurn = (ai, input, pickHailMary) => {
         result.skills = result.skills.filter((sk) => !(0, lifeBan_1.placeBlocked)(true, sk, input.tokenBind));
         if ((0, lifeBan_1.moveBlocked)(true, life))
             result.move = null;
+        // 帯電拡散→帯電付与などの『スキル→対象クリック』も、置くスキルは撃てない。対象クリックも一緒に外す
+        if (result.chargeClicks) {
+            const kept = [];
+            for (const c of result.chargeClicks) {
+                if ((0, lifeBan_1.placeBlocked)(true, c.skill, input.tokenBind))
+                    continue;
+                kept.push(c);
+            }
+            result.chargeClicks = kept;
+        }
     }
     // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）
     const locks = ai.chooseLocks(board, oppMagic, life, input.hand);
@@ -79,7 +89,7 @@ const planAITurn = (ai, input, pickHailMary) => {
         const steps = [`onClickHailMary:${picked}`];
         if (plan.target !== null)
             steps.push(plan.target);
-        if (plan.move !== null)
+        if (plan.move !== null && !(0, lifeBan_1.moveBlocked)(input.lifeBan, life))
             steps.push(plan.move);
         return { kind: 'queue', steps: endsTurn(steps), locks };
     }
@@ -133,7 +143,9 @@ exports.canPlaceAt = canPlaceAt;
  * ⚡付き自陣コマが無敵で触れない、などで着手できなくなると、クリックが無視されて手番が進まず止まる。
  * 打てるならそのまま cell を、打てなければ今の盤面で打ち直した手を返す。打てる手が無ければ null（呼び出し側はチャージでパスする）。
  */
-const resolveMoveCell = (ai, board, characters, life, cell) => {
+const resolveMoveCell = (ai, board, characters, life, cell, lifeBan = false) => {
+    if ((0, lifeBan_1.moveBlocked)(lifeBan, life))
+        return null; // ライフ3以下のコマを置けない縛り: 打てる手は無いのでチャージでパスする
     if ((0, exports.canPlaceAt)(board, cell, ai.playerSymbol, ai.character, characters))
         return cell;
     ai.updateShield(board);

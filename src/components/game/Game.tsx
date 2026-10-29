@@ -463,7 +463,7 @@ export const Game = (props: GameProps) => {
                 else if (rest.length === 0 && currentAI) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
                     // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
-                    const cell = resolveMoveCell(currentAI, currentBoard, characters, life, next);
+                    const cell = resolveMoveCell(currentAI, currentBoard, characters, life, next, lifeBan[turnSeat]);
                     if (cell !== null) onCellClick(cell);
                     else onClickCharge();
                 } else onCellClick(next);

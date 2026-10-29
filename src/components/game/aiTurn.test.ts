@@ -43,6 +43,24 @@ describe('canPlaceAt / resolveMoveCell', () => {
     });
 });
 
+describe('一寸の虫に魂なし（ライフ3以下のコマを置けない）', () => {
+    it('置けないときは着手せず、置くスキルも撃たず、チャージでパスする', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], chars);
+        const p = planAITurn(ai, input(emptyBoard(), { lifeBan: true, life: 3, hand: [0, 1, 2] }), () => 'ストンプ');
+        expect(p.kind).toBe('direct');
+        if (p.kind === 'direct') {
+            expect(p.clicks).toEqual([]);
+            expect(p.skills.includes('onClickCharge') || p.chargeWhenEmpty).toBe(true);
+            expect(p.skills.some((sk) => /Token$/.test(sk))).toBe(false);
+        }
+    });
+    it('着手予定のマスの打ち直しでも、縛られていれば null（チャージでパス）。ライフが4以上なら打てる', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], chars);
+        expect(resolveMoveCell(ai, emptyBoard(), chars, 3, 5, true)).toBeNull();
+        expect(resolveMoveCell(ai, emptyBoard(), chars, 4, 5, true)).toBe(5);
+    });
+});
+
 describe('planAITurn', () => {
     it('サイレンス中は通常の着手だけ。縛り(ライフ3以下)で打てなければチャージでパス', () => {
         const b = emptyBoard();

@@ -11,6 +11,7 @@ const E = require('./engine');
 const AIPlayerMod = require('./shared/AIPlayer');
 const aiTurn = require('./shared/aiTurn');
 const { hasGear } = require('./shared/gear');
+const lifeBanMod = require('./shared/lifeBan');
 
 const AIPlayer = AIPlayerMod.default;
 const { SYMBOLS } = E;
@@ -84,6 +85,7 @@ function inputOf(s, reroll) {
 function runSkill(s, name) {
     if (name.startsWith('onClickHailMary:')) return E.onClickHailMary(s, name.slice('onClickHailMary:'.length));
     if (name === 'onClickShuffle') return E.shuffleHand(s);
+    if (lifeBanMod.placeBlocked(s.lifeBan[s.turn], name, E.calculateTokenBind(s))) return; // 一寸の虫に魂なし: 置くスキルは撃てない(Game.executeSkillForAI と同じ)
     const key = keyOf(name);
     const fn = E.SKILLS[key];
     if (!fn) throw new Error(`aiDriver: AIPlayer returned a skill that engine cannot run: ${name} (${key})`);
@@ -129,7 +131,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
             if (typeof step === 'string') { runSkill(s, step); continue; }
             if (i === plan.steps.length - 1) {
                 // 着手マスはスキル実行前の盤面で決めてある。埋まっていたら今の盤面で打ち直し、無ければチャージでパスする
-                const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, step);
+                const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, step, s.lifeBan[seat]);
                 if (cell !== null) click(cell); else E.SKILLS.charge(s);
             } else click(step);
         }
@@ -146,7 +148,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
         if (over()) return;
         const last = i === plan.clicks.length - 1;
         if (i >= queued && last) {
-            const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i]);
+            const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i], s.lifeBan[seat]);
             if (cell !== null) click(cell); else E.SKILLS.charge(s);
         } else click(plan.clicks[i]);
     }
