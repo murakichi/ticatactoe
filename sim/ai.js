@@ -1381,7 +1381,10 @@ function chooseLocks(s, availableSkills) {
     if (character0 === 'yinYangMaster' && F.floodLock) {
         // 特売(53)は 71 と 73 が両方揃ってから固定する（先に固定すると手札の空きが1枠になり、足りない札を引きにくい）
         const both = availableSkills.includes(71) && availableSkills.includes(73);
-        return availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53 && (!F.lock53Late || both)));
+        const combo = availableSkills.filter((i) => i === 71 || i === 73 || (F.comboDiscount && i === 53 && (!F.lock53Late || both)));
+        // 魔女戦: 一寸の虫に魂なし(92)を最優先で固定する（AIPlayer.ts と同一）
+        const vsWitch = s.chars.some((c, seat) => seat !== s.turn && c === 'witch');
+        return vsWitch && availableSkills.includes(92) ? [92, ...combo].slice(0, 2) : combo;
     }
     // トークン系スキル(ポイズントークン等)を手札でロックして、毎手番トークンを撃てるようにする(毒使いのみ)。ギアとは無関係の通常のAI改善。
     // A/B(ギアなし、全キャラ総当たり56組×100試合): 毒使い 0.341→0.402。魔法使いは +0.3pt、巨人 +0.5pt、陰陽師 -2.7pt で対象外。
