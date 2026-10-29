@@ -1506,3 +1506,33 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
     });
 });
+
+describe('氷室の番人の対魔女: 一寸の虫に魂なし(92)を探して固定する', () => {
+    const mk = (opp: string) => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', opp] as any, undefined, false, false, [92, 12, 28, 45, 46, 48, 41, 44, 47, 43, 37, 73]);
+    const costs = { onClickShuffle: 1, onClickSmallFry: 6, onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+
+    it('魔女が相手のときだけ、手札の92を固定する', () => {
+        expect(mk('witch').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).toEqual([92]);
+        expect(mk('giant').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).not.toEqual([92]);
+    });
+
+    it('魔女戦で手札に92が無く、壊せる敵コマが2個以上あれば引き直して探す', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('witch');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeDefined();
+    });
+
+    it('魔女以外が相手なら探さない', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('giant');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeUndefined();
+    });
+});

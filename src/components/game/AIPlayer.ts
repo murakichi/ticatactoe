@@ -920,6 +920,11 @@ class AIPlayer {
             const vsWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch');
             return vsWitch && availableSkills.includes(92) ? [92, ...combo].slice(0, 2) : combo;
         }
+        // 氷室の番人: 魔女が相手のときだけ、一寸の虫に魂なし(92)を手札に固定して壊せる敵コマが揃うまで持ち続ける（sim/ai.js F.fryDig=2。対魔女 22〜26→58〜61%。魔女以外では固定が邪魔になり対巨人 72→61%、対鍛冶師 23→15%）
+        if (this.character === 'cryomancer' && availableSkills.includes(92)
+            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch')) {
+            return [92];
+        }
         if (this.character === 'giant' || this.character === 'magician') {
             return [];
         }
@@ -1801,6 +1806,13 @@ class AIPlayer {
         // （見つけた札は引き直しのたびに chooseLocks が固定し直す。sim/ai.js の witchDig=2, digMargin=3）
         if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
+        }
+        // 氷室の番人 対魔女: デッキに一寸の虫に魂なし(92)があり手札に無く、壊せる敵コマが2個以上あって、シャッフルと92の分の魔力があれば、1コストで引き直して探す
+        // （見つけた92は chooseLocks が固定する。sim/ai.js の fryDig=2）
+        if (facesWitch && this.character === 'cryomancer' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
+            && smallFryTargets(board, this.playerSymbol, this.characters).length >= 2
+            && magic >= costs.onClickShuffle + this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
             return { move: null, skills: [], reroll: {} };
         }
         if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
