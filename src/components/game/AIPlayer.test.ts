@@ -1441,6 +1441,25 @@ describe('魔法使いは相手リーチを全て崩せる審判の日なら、�
     });
 });
 
+describe('魔法使いは軍師が相手のとき、純増2の審判の日は撃たず純増3から撃つ', () => {
+    const board = (n: number) => {
+        const b = emptyBoard();
+        [5, 6, 9, 10].slice(0, n).forEach((i) => put(b, i, '⭕', 4));
+        return b;
+    };
+    const plan = (foe: 'tactician' | 'giant', n: number) => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(board(n), 20, { onClickToken: 4, onClickLock: 2, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+    it('軍師相手: 純増2は撃たない／純増3は撃つ', () => {
+        expect(plan('tactician', 2).skills).not.toContain('onClickJudgeDay');
+        expect(plan('tactician', 3).skills).toContain('onClickJudgeDay');
+    });
+    it('ほかの相手なら純増2でも撃つ', () => {
+        expect(plan('giant', 2).skills).toContain('onClickJudgeDay');
+    });
+});
+
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
     // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
     const board = () => {
