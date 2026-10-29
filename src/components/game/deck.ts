@@ -121,7 +121,7 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
     tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
-    magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
+    magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
