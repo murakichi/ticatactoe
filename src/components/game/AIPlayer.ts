@@ -843,25 +843,36 @@ class AIPlayer {
         }
 
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
+        let candidates = allMoves;
         for (const opp of this.lastStandReady ? [] : this.opponents) {
             const oppMoves = this.getMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);
                 if (calculateWinner(lineSymbols(sim)) === opp) {
-                    if (allMoves.includes(i)) return i;
+                    if (!allMoves.includes(i)) continue;
+                    // 塞いだ後の減衰で別のコマが 0 になって奪われ、相手に別の勝ち手ができることがある。
+                    // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ。sim/ai.js の safeBlock）
+                    const safe = allMoves.filter((m) => {
+                        const after = this.simulatePlace(board, m, this.playerSymbol, life, 0);
+                        return this.opponents.every((q) => !this.getMovesFor(after, q, life).some((j) => calculateWinner(lineSymbols(this.simulatePlace(after, j, q, life))) === q));
+                    });
+                    if (safe.length === 0) return i;
+                    candidates = safe;
+                    break;
                 }
             }
+            if (candidates !== allMoves) break;
         }
 
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
-        let bestMove = allMoves[0];
+        let bestMove = candidates[0];
         // 雷霆の巫: 相手に陰陽師がいると、百鬼夜行→式神一括で空きマスが全部相手のコマになる。自分のコマが1つも無い線があると
         // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（sim/ai.js F.floodCover と同じ。対陰陽師 11→28%）
         const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
         const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
 
-        for (const i of allMoves) {
+        for (const i of candidates) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
             if (this.character === 'giant' && simBoard[i].player === this.playerSymbol) this.applyAuraSim(simBoard, i);
             let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);

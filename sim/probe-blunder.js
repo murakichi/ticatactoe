@@ -31,8 +31,34 @@ function winCells(s, player) {
     }
     return out;
 }
+/** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。乱数は共有されるので複製側の着手で本体の乱数列は進む(確認用途のみ) */
+function deepClone(x) {
+    if (x === null || typeof x !== 'object') return x;
+    if (x instanceof Set) return new Set([...x].map(deepClone));
+    if (x instanceof Map) return new Map([...x].map(([k, v]) => [k, deepClone(v)]));
+    if (Array.isArray(x)) return x.map(deepClone);
+    const o = {};
+    for (const k of Object.keys(x)) o[k] = deepClone(x[k]);
+    return o;
+}
+/** 複製した手番前の状態で、置き直せば相手の勝ち手を残さずに済んだ着手を探す */
+function avoidingMoves(pre, me, exclude) {
+    const out = [];
+    for (let i = 0; i < pre.board.length; i++) {
+        if (i === exclude) continue;
+        const q = pre.board[i];
+        if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
+        if (q.player === me || (q.player && q.bind > 0)) continue;
+        const c = deepClone(pre);
+        let ok = false;
+        try { ok = engine.placeMove(c, i) !== false; } catch (e) { ok = false; }
+        if (!ok) continue;
+        if (c.winner === me || (!c.winner && !engine.otherSeats(c).concat([]).some(() => false) && engine.SYMBOLS.every((_, k) => k === engine.seatOf(me) || k >= engine.seatCount(c) || winCells(c, engine.SYMBOLS[k]).length === 0))) out.push(i);
+    }
+    return out;
+}
 const stat = {};
-const get = (c) => (stat[c] ||= { turns: 0, missWin: 0, missBlock: 0, samples: [] });
+const get = (c) => (stat[c] ||= { turns: 0, missWin: 0, missBlock: 0, avoidable: 0, samples: [] });
 for (const chars of pairs) {
     for (let g = 0; g < games; g++) {
         const s = engine.newGame({ chars, rng: engine.makeRng(seed0 * 100000 + g), size });
@@ -42,6 +68,8 @@ for (const chars of pairs) {
             const myT = winCells(s, me);
             const oppT = engine.otherSeats(s).map((k) => winCells(s, engine.SYMBOLS[k]));
             const ls = (s.gears[s.turn] || []).includes('lastStand') && !s.lastStandUsed[s.turn]; // 土壇場の防壁が未発動なら守りは意図的に捨てる
+            const flatPre = [...new Set(oppT.flat())];
+            const pre = flatPre.length === 1 && !ls && !myT.length ? deepClone(s) : null; // 手番前の複製(単独リーチのときだけ)
             const r = ai.makeMove(s, 'faithful');
             const st = get(ch); st.turns++;
             let placed = false;
@@ -56,12 +84,16 @@ for (const chars of pairs) {
                     const after = engine.otherSeats(s).length; // dummy to keep lint quiet
                     const prevSeat = engine.seatOf(me);
                     const still = engine.SYMBOLS.map((_, k) => k).filter((k) => k !== prevSeat && k < engine.seatCount(s)).some((k) => winCells(s, engine.SYMBOLS[k]).length > 0);
-                    if (still) { st.missBlock++; if (st.samples.length < 12) st.samples.push({ kind: 'block', chars, g, n, threat: flat, move: r.move, skills: r.skills || r.used, placed }); }
+                    if (still) {
+                        st.missBlock++;
+                        const alt = pre ? avoidingMoves(pre, me, r.move) : [];
+                        if (alt.length) { st.avoidable++; if (st.samples.length < 12) st.samples.push({ kind: 'block', chars, g, n, threat: flat, move: r.move, avoid: alt, skills: r.skills || r.used, placed }); }
+                    }
                 }
             }
         }
     }
 }
-let tt = 0, tw = 0, tb = 0;
-for (const [c, v] of Object.entries(stat)) { tt += v.turns; tw += v.missWin; tb += v.missBlock; console.log(c.padEnd(14), 'turns', v.turns, 'missWin', v.missWin, 'missBlock', v.missBlock); for (const x of v.samples) console.log('   ', JSON.stringify(x)); }
-console.log('TOTAL turns', tt, 'missWin', tw, 'missBlock', tb);
+let tt = 0, tw = 0, tb = 0, ta = 0;
+for (const [c, v] of Object.entries(stat)) { tt += v.turns; tw += v.missWin; tb += v.missBlock; ta += v.avoidable; console.log(c.padEnd(14), 'turns', v.turns, 'missWin', v.missWin, 'missBlock', v.missBlock, 'avoidable', v.avoidable); for (const x of v.samples) console.log('   ', JSON.stringify(x)); }
+console.log('TOTAL turns', tt, 'missWin', tw, 'missBlock', tb, 'avoidable', ta);
