@@ -8,7 +8,7 @@ exports.skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 2,
     onClickShikigamiBlast: 4,
-    onClickShikigamiAll: 3,
+    onClickShikigamiAll: 2,
     onClickShikigamiRandom: 2,
     onClickShikigamiFlood: 7,
     onClickShikigamiBless: 5,
