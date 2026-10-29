@@ -4,7 +4,7 @@ const LIFE_BAN_MAX = 3;
 const LIFE_BAN_PLACING_KEYS = new Set([
     'onClickToken', 'onClickDoubleToken', 'onClickBothToken', 'onClickBudsToken', 'onClickPoisonToken',
     'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickFlameToken', 'onClickDoubleFlameToken',
-    'onClickFrostToken', 'onClickDoubleFrostToken',
+    'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
     'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken',
     'onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood',
 ]);

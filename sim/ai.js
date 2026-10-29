@@ -65,6 +65,8 @@ AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも�
 AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
+// 対魔女の新スキル（初霜93・吹き寄せ94・山焼き95・無礼講96）: 引いたら先に固定し(lockNew)、手札に無ければ魔力に余裕があるとき1コストで引き直して探す(witchDig=回数, digMargin=シャッフルのあとに残す魔力)。無礼講(freeTok)は高いトークンの前に撃つ
+AI_DEFAULTS.smallFryMin = 2; AI_DEFAULTS.lockNew = 1; AI_DEFAULTS.witchDig = 2; AI_DEFAULTS.digMargin = 3; AI_DEFAULTS.freeTok = 1;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1306,7 +1308,37 @@ function chooseSkills(s, availableSkills) {
         }
         return null;
     }
-    if (leafToken && spend(leafToken.cost, leafToken.key)) {
+    // 一寸の虫に魂なし: ライフ3以下の敵コマを全て壊し、相手は次の手番ライフ3以下を置けない。壊せる敵コマが F.smallFryMin 個以上のとき撃つ（軽量トークンの魔女など、低ライフのコマを撒く相手に効く）
+    if (F.smallFryMin && availableSkills.includes(92) && E.smallFryTargets(s).length >= F.smallFryMin) {
+        const sfc = cost(costsOf(s).onClickSmallFry, false, 'onClickSmallFry');
+        if (remaining >= sfc) spend(sfc, 'smallFry');
+    }
+    // 無礼講: このターン撃つ予定の高いトークン（初霜・吹き寄せ・山焼き・ダブルトークン）が無礼講(4)より高いなら先に撃って、そのトークンを0コストにする
+    let freeTok = false;
+    if (F.freeTok && !tokenUsed && !s.tokenFree[s.turn] && availableSkills.includes(96)) {
+        const raw = (idx, legal, key) => (availableSkills.includes(idx) && legal ? cost(costsOf(s)[key], true, key) : 0);
+        const best = Math.max(
+            raw(93, E.firstFrostLegal(s), 'onClickFirstFrost'),
+            raw(94, E.gatherLegal(s) && foeLeavesNowOf(s, me) >= (F.gatherMin || 2), 'onClickGather'),
+            raw(95, E.burnOffTargets(s).length >= (F.burnOffMin || 2) && !tokenUsed, 'onClickBurnOff'));
+        const freeCost = cost(costsOf(s).onClickFreeToken, false, 'onClickFreeToken');
+        if (best > freeCost && remaining >= freeCost && spend(freeCost, 'freeToken')) freeTok = true;
+    }
+    const tokCost = (c) => (freeTok ? 0 : c);
+    // 初霜: 敵の🍂のあるコマを凍結し(🍂が休眠してコスト差が消える)、自陣にバッズトークンを置く。トークン扱い。魔女の🍂が盤面に4枚以上ならコスト0
+    const firstFrostCost = !tokenUsed && availableSkills.includes(93) && E.firstFrostLegal(s) ? tokCost(cost(costsOf(s).onClickFirstFrost, true, 'onClickFirstFrost')) : null;
+    // 山焼き: 敵のエフェクト付きのコマが F.burnOffMin 個以上あるとき、全部に🔥を付けてロック付きトークンを置く(🍂は燃えて消える)。トークン扱い
+    const burnOffCost = !tokenUsed && availableSkills.includes(95) && E.burnOffTargets(s).length >= (F.burnOffMin || 2) ? tokCost(cost(costsOf(s).onClickBurnOff, true, 'onClickBurnOff')) : null;
+    // 吹き寄せ: 敵の🍂が F.gatherMin 枚以上のとき、トークンを置いて盤面のエフェクト（敵の🍂を含む）を全部そのマスに集める。自陣に集まった🍂は自分のコスト増を消す
+    const foeLeavesNow = s.board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.leafStacks(sq) : n), 0);
+    const gatherCost = !tokenUsed && availableSkills.includes(94) && E.gatherLegal(s) && foeLeavesNow >= (F.gatherMin || 2) ? tokCost(cost(costsOf(s).onClickGather, true, 'onClickGather')) : null;
+    if (gatherCost !== null && remaining >= gatherCost && spend(gatherCost, 'gather')) {
+        // 吹き寄せを撃った（トークンはターンに1回）
+    } else if (burnOffCost !== null && remaining >= burnOffCost && spend(burnOffCost, 'burnOff')) {
+        // 山焼きを撃った（トークンはターンに1回）
+    } else if (firstFrostCost !== null && remaining >= firstFrostCost && spend(firstFrostCost, 'firstFrost')) {
+        // 初霜を撃った（トークンはターンに1回）
+    } else if (leafToken && spend(leafToken.cost, leafToken.key)) {
         // 🍂付きのトークンを撃った（トークンはターンに1回）
     } else if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
@@ -1405,7 +1437,7 @@ function chooseLocks(s, availableSkills) {
     const tokenIdx = [3, 4, 9, 11], budsIdx = [2, 10];
     const gearTokenIdx = [3, 9, 11, 16, 21, 23]; // 両トークン(4)は相手にもコマを渡すので除く
     const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く
-    const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
+    const preferred = (idx) => (F.lockNew && (idx === 95 || idx === 93 || idx === 94) && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) || (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
         || (F.tinderLock && character === 'pyromancer' && idx === 87 && (F.tinderLock < 2 || otherSeats(s).some((seat) => s.chars[seat] === 'magician'))) // 検証用: 火口を手札に固定して毎手番使えるようにする
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
@@ -1425,7 +1457,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 93)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 97)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1658,6 +1690,8 @@ function faithfulMakeMove(s) {
     if (!r.turnEnded) clearPending(s);
     return r;
 }
+const character0 = (s) => s.chars[s.turn];
+const foeLeavesNowOf = (s, me) => s.board.reduce((n, sq) => (sq.player && sq.player !== me ? n + thermal.leafStacks(sq) : n), 0);
 function faithfulMakeMoveInner(s) {
     loadFlags(s);
     const me = curPlayer(s);
@@ -1679,6 +1713,19 @@ function faithfulMakeMoveInner(s) {
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
     s.lockedSkills[s.turn] = locks;
+
+    // 対魔女の新スキルを探す: 手札に初霜/吹き寄せ/山焼きが無く、デッキにあって、魔力に余裕があるなら、1コストで引き直す（見つけた札は引き直しのたびに固定し直す）
+    if (F.witchDig && character0(s) !== 'witch' && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) {
+        const want = [93, 94, 95];
+        const hasWant = () => want.some((i) => s.skills.includes(i));
+        const inDeckWant = want.some((i) => inDeck(s, i));
+        for (let k = 0; k < F.witchDig && inDeckWant && !hasWant() && curMagic(s) >= costsOf(s).onClickShuffle + F.digMargin; k++) {
+            s.lockedSkills[s.turn] = chooseLocks(s, s.skills.slice());
+            E.shuffleHand(s);
+        }
+        availableSkills = s.skills.slice();
+        s.lockedSkills[s.turn] = chooseLocks(s, availableSkills);
+    }
 
     // 対氷結(B): 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火炎付与で隣のコマを燃やして解凍し、同じ手番で完成させる
     if (F.unblock && availableSkills.includes(31) && curMagic(s) >= calculateCost(s, costsOf(s).onClickIgnite, false, false, 'onClickIgnite')) {
