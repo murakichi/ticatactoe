@@ -546,6 +546,27 @@ test('式神一括(1体あたりコスト3): 自分の式神を全て通常の�
     assert.strictEqual(s.magic[0], 14);
 });
 
+test('陰陽師のパッシブ: 式神を置くとその手番の以降の全スキルのコスト-1（下限1）。置いたスキル自身は安くならず、手番が変わると戻る', () => {
+    const s = game('yinYangMaster', 'you');
+    s.magic[0] = 30;
+    e.SKILLS.shikigamiPlace(s); // 設置(2): まだ置いていないので割引なし
+    assert.strictEqual(s.magic[0], 28);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.shikiPlaced[0], true);
+    const m = s.magic[0];
+    e.SKILLS.shikigamiPlace(s); // 2-1=1
+    assert.strictEqual(m - s.magic[0], 1);
+    e.placeMove(s, 6);
+    const m2 = s.magic[0];
+    e.SKILLS.toggleYY(s); // 陰陽転化(1)は下限1のまま
+    assert.strictEqual(m2 - s.magic[0], 1);
+    e.SKILLS.shikigamiBlast(s); // 爆破 4-1 = 3
+    assert.strictEqual(m2 - 1 - s.magic[0], 3);
+    e.advanceTurn(s);
+    e.advanceTurn(s);
+    assert.strictEqual(s.shikiPlaced[0], false);
+});
+
 test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
@@ -553,7 +574,7 @@ test('式神一括は式神の数に比例して高くなる（盤面を埋め�
     e.SKILLS.shikigamiFlood(s); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(before - s.magic[0], 3 * 16);
+    assert.strictEqual(before - s.magic[0], 3 * 16 - 1); // 式神を置いた手番は全スキル-1
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {

@@ -634,6 +634,7 @@ function newGame(opts = {}) {
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
+        shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -696,7 +697,9 @@ function gearCtx(s, seat) {
 function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true) {
     const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
-    const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    let adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    // 陰陽師のパッシブ: 式神を置いた手番は、以降の全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。Game.tsx gearCost と同値
+    if (seat === s.turn && s.chars[seat] === 'yinYangMaster' && s.shikiPlaced[seat] && adjusted > 1) adjusted -= 1;
     if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (isToken && seat === s.turn && s.tokenFree[seat]) return 0; // 無礼講: この手番、トークン系スキルのコストは0
@@ -931,6 +934,7 @@ function advanceTurn(s) {
     s.discount[next] = discountMod.emptyDiscount();
     s.oppSkillPrev[next] = s.oppSkilled[next];
     s.fireBase[next] = thermal.fireStacksTotal(s.board);
+    s.shikiPlaced[next] = false;
     s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
     s.darkPotUsed[next] = false;
     s.chargeBase[next] = comboMod.ownCharges(s.board, SYMBOLS[next]);
@@ -1076,6 +1080,7 @@ function placeMove(s, i) {
         // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中の空きマスは選び直せる
         if (board[i].player || thermal.emptyBlocked(board[i])) return false;
         board[i] = newShikigami(curPlayer(s));
+        s.shikiPlaced[s.turn] = true;
         s.useShikigamiPlace = false;
         return true;
     }
@@ -1577,12 +1582,14 @@ function onClickShikigamiAll(s) {
 // 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
 function onClickShikigamiFlood(s) {
     const cur = curPlayer(s);
+    let placed = 0;
     for (let k = 0; k < s.board.length; k++) {
         const sq = s.board[k];
-        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
+        if (!sq.player && !thermal.emptyBlocked(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);
+    if (placed > 0) s.shikiPlaced[s.turn] = true; // 置いたあとのスキルから-1
 }
 // 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
 function onClickShikigamiRandom(s) {
@@ -1597,6 +1604,7 @@ function onClickShikigamiRandom(s) {
     harvestMagic(s, granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
     bumpMagicCount(s);
+    if (empties.length) s.shikiPlaced[s.turn] = true;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
