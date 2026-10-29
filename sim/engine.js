@@ -59,6 +59,9 @@ const poisonMod = require('./shared/poison');
 const blastMod = require('./shared/blast');
 const shikiMod = require('./shared/shikigami');
 const turnMod = require('./shared/turn');
+const gearTurnMod = require('./shared/gearTurn');
+const placementMod = require('./shared/placement');
+const proliferateMod = require('./shared/proliferate');
 const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
@@ -195,11 +198,9 @@ function chargeSpreadCost(s) {
 // ⚡を増やす操作の直後に呼ぶ。全マスに⚡があれば全⚡と🔑を取り除き、全マスのライフを0にする
 function checkDischarge(s) {
     if (!DISCHARGE) return false;
-    if (!s.board.every((sq) => chargeStacks(sq) > 0 && !thermal.isDormant(sq))) return false; // 休眠マスの⚡は⚡なし扱い
-    for (const sq of s.board) {
-        sq.effects = sq.effects.filter((e) => e.effect !== '⚡' && e.effect !== '🔑');
-        sq.bind = 0;
-    }
+    const next = chargeMod.applyOverload(s.board); // 全マスが⚡（休眠マスは⚡なし扱い）なら、全⚡と🔑を取り除き全マスのライフを0に（本番 charge.ts）
+    if (next === s.board) return false;
+    next.forEach((sq, k) => { s.board[k] = sq; });
     bumpStat(s, 'discharge');
     return true;
 }
@@ -586,16 +587,21 @@ function judgeNextIsHeart(s) {
 }
 
 // 廃墟の底力: 手番中にスキルかエフェクトで自陣のコマが盤から無くなった（持ち主が変わった）席を記録する
-function ruinDetect(s) {
-    if (!s.snapOwners) return;
-    const after = s.board.map((sq) => sq.player);
-    s.gears.forEach((g, seat) => {
-        if (!hasGear(g, 'ruinSurge')) return;
-        if (gear.lostCells(s.snapOwners, after, SYMBOLS[seat], s.lastMoveCell).length > 0) {
-            s.ruinPending[seat] = true;
-            bumpStat(s, 'ruinTriggered');
-        }
-    });
+// gearTurn.ts が書き換える席ごとの状態の見え方。配列は spendMagic などで作り直されるので、呼ぶたびに作る
+function gearTurnView(s) {
+    const g = {
+        skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
+        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase,
+        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, chargeBase: s.chargeBase,
+    };
+    const r = {
+        active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
+        get snap() { return s.snapOwners; }, set snap(v) { s.snapOwners = v; },
+        get snapBuds() { return s.snapBuds; }, set snapBuds(v) { s.snapBuds = v; },
+        get snapFlames() { return s.snapFlames; }, set snapFlames(v) { s.snapFlames = v; },
+        get lastMove() { return s.lastMoveCell; }, set lastMove(v) { s.lastMoveCell = v; },
+    };
+    return [g, r];
 }
 // 土壇場の防壁: seat 以外の誰かが使用済みなら有効（seat は「発動した側の相手」）
 function lastStandActiveAgainst(s, seat) {
@@ -653,31 +659,17 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
-    ruinDetect(s);
-    // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
+    // 席ごとのギア・導線・廃墟の状態の更新は本番(gearTurn.ts)の生成物。魔力などは戻り値を見て足す
+    const change = gearTurnMod.advanceGearState(...gearTurnView(s), { board: s.board, symbols: SYMBOLS.slice(0, seatCount(s)), gears: s.gears, endSeat: s.turn, nextSeat: next });
     let scorchForNext = 0;
-    if (s.snapOwners && s.snapBuds) {
-        s.gears.forEach((g, seat) => {
-            if (!hasGear(g, 'scorchedEarth')) return;
-            const gain = gear.scorchGain(gear.burnedBudCount(s.snapOwners, s.snapBuds, s.board, SYMBOLS[seat]));
-            if (gain <= 0) return;
-            if (seat === next) scorchForNext = gain;
-            else s.magic[seat] += gain;
-            bumpStat(s, 'scorchedEarth', gain);
-        });
-    }
-    // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引。終わる席の割引はここで切れる
-    if (s.snapOwners && s.snapFlames && hasGear(s.gears[s.turn], 'ashOffering')) {
-        const n = gear.ignitedCount(s.snapOwners, s.snapFlames, s.board, SYMBOLS[s.turn]);
-        if (n > 0) { s.ashPending[s.turn] += n; bumpStat(s, 'ashOffering', n); }
-    }
-    s.ashActive[s.turn] = 0;
-    s.ashActive[next] = s.ashPending[next];
-    s.ashPending[next] = 0;
-    s.ruinActive[s.turn] = false;
-    s.ruinActive[next] = s.ruinPending[next];
-    s.ruinPending[next] = false;
+    change.scorch.forEach((gain, seat) => {
+        if (gain <= 0) return;
+        if (seat === next) scorchForNext = gain;
+        else s.magic[seat] += gain;
+        bumpStat(s, 'scorchedEarth', gain);
+    });
+    if (change.ashGained > 0) bumpStat(s, 'ashOffering', change.ashGained);
+    change.ruinTriggered.forEach(() => bumpStat(s, 'ruinTriggered'));
     // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
     const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
     if (root > 0) bumpStat(s, 'frostRoot', root);
@@ -712,23 +704,6 @@ function advanceTurn(s) {
     s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
-    // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ
-    s.gearSkills[next] = 0;
-    s.skillKinds[next] = new Set();
-    s.discount[next] = discountMod.emptyDiscount();
-    s.oppSkillPrev[next] = s.oppSkilled[next];
-    s.fireBase[next] = thermal.fireStacksTotal(s.board);
-    s.shikiPlaced[next] = false;
-    s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
-    s.darkPotUsed[next] = false;
-    s.chargeBase[next] = comboMod.ownCharges(s.board, SYMBOLS[next]);
-    s.oppSkilled[next] = false;
-    s.echoReady[next] = s.echoNext[next];
-    s.echoNext[next] = false;
-    s.snapOwners = s.board.map((sq) => sq.player);
-    s.snapBuds = gear.budCounts(s.board);
-    s.snapFlames = gear.flameCounts(s.board);
-    s.lastMoveCell = null;
     s.turn = next;
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
     s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
@@ -914,88 +889,32 @@ function placeMove(s, i) {
     const decayNow = shouldDecay(s.placements, seatCount(s));
     s.placements += 1;
     const spreadOrigins = [];
-    for (let k = 0; decayNow && k < board.length; k++) {
-        const sq = board[k];
-        // ❄氷結中のマスはターン進行でライフが減らない（自然減衰・🔥の継続ダメージとも）
-        if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !thermal.isFrozen(sq)) sq.bind--;
-        // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）
-        const burn = thermal.burnDamageOf(sq, s.chars, SYMBOLS);
-        if (burn > 0) sq.bind = Math.max(0, sq.bind - burn);
-        // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-        if (sq.player && sq.bind === 0 && thermal.flameStacks(sq) > 0 && !thermal.isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isEffectWarded(sq)) {
-            board[k] = { player: undefined, bind: 0, effects: [] };
-            bumpStat(s, 'flameKill');
-            continue;
-        }
-        const poison = thermal.isEffectWarded(sq) ? 0 : poisonStacks(sq); // 氷結中のマスの☠は休眠（継続ダメージなし・消滅もしない）。術中の加護も同様
-        if (poison > 0 && sq.bind > 0) {
-            // 毒のダメージでは🔥は消えない
-            const hit = thermal.applyDamage(sq, poison, 'poison').sq;
-            sq.bind = hit.bind;
-            sq.effects = hit.effects;
-        }
-        // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
-        const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
-        if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
-        if (expiredLock && expiredLock.value != null && !sq.player) {
-            board[k] = { player: SYMBOLS[expiredLock.value - 1], bind: GP.emptyLockLife, effects: [] };
-            bumpStat(s, 'emptyLockSpawn');
-            continue;
-        }
-        // 毒持ちでライフが0のマスは消える（空きマスに戻る）。毒使い側は空いたマス1つにつき魔力+1。
-        // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
-        if (poison > 0 && sq.bind === 0 && sq.player && k !== i) {
+    if (decayNow) {
+        // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は本番(decay.ts)の生成物
+        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS);
+        if (d.flameKills > 0) bumpStat(s, 'flameKill', d.flameKills);
+        if (d.emptyLockSpawns.length > 0) bumpStat(s, 'emptyLockSpawn', d.emptyLockSpawns.length);
+        for (const k of d.spreadOrigins) {
             spreadOrigins.push(k);
-            board[k] = { player: undefined, bind: 0, effects: [] };
-            s.chars.forEach((c, seat) => { if (c === 'poisoner') s.magic[seat] += 1; });
+            s.chars.forEach((c, seat) => { if (c === 'poisoner') s.magic[seat] += 1; }); // 毒使い側は空いたマス1つにつき魔力+1
         }
     }
-    const hadPoisonAtTarget = poisonStacks(board[i]) > 0;
-
     const cur = curPlayer(s);
     const life = s.life;
-    const placedNew = board[i].player !== cur; // 静電気の季節: 補強は設置ではない
-    let newBind, newEffects, newPlayer;
-    let capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
-    const shikigamiHere = isShikigami(board[i]);
-    if (board[i].player === cur) {
-        newPlayer = board[i].player;
-        newBind = board[i].bind + life + 1;
-        newEffects = board[i].effects;
-        // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
-        if (shikigamiHere) newEffects = newEffects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]);
-    } else if (board[i].player) {
-        const calc = board[i].bind - life + (board[i].bind > 0 ? 1 : 0);
-        if (calc < 0) {
-            newPlayer = cur;
-            newBind = calc * -1;
-            capturedFrom = board[i].player;
-        } else if (calc === 0) {
-            newPlayer = undefined;
-            newBind = 0;
-        } else {
-            newPlayer = board[i].player;
-            newBind = calc;
-        }
-        // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
-        if (calc <= 0 && hadPoisonAtTarget) spreadOrigins.push(i);
-        newEffects = [];
-        // 式神は乗っ取られると空きマスになる（コマは置かれない）
-        if (shikigamiHere && calc < 0) { newPlayer = undefined; newBind = 0; capturedFrom = undefined; }
-        // 敵味方問わずコマが奪われる/消えるたびに墓地+1
-        if (calc <= 0) addCorpses(s, 1);
-    } else {
-        newPlayer = cur;
-        newBind = life;
-        newEffects = board[i].effects.filter((e) => e.effect === '🔥'); // 空きマスに置かれた🔥は、そこに置かれたコマ(誰のコマでも)に引き継がれる
-    }
-
+    // 着手の結果（強化・奪取・破壊・攻撃・新規）は本番(placement.ts)の生成物
+    const placed = placementMod.resolvePlacement(board[i], cur, life);
+    const placedNew = !placed.reinforced; // 静電気の季節: 補強は設置ではない
+    const capturedFrom = placed.capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
+    if (placed.poisonSpread) spreadOrigins.push(i); // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
+    if (placed.corpse) addCorpses(s, 1); // 敵味方問わずコマが奪われる/消えるたびに墓地+1
+    const newPlayer = placed.square.player;
+    const newEffects = placed.square.effects;
     if (newPlayer === cur && s.useBuds[0]) {
         for (let k = 0; k < s.useBuds[1]; k++) newEffects.push({ effect: '🌱' });
         s.useBuds = [false, 0];
     }
 
-    board[i] = { player: newPlayer, bind: newBind, effects: newEffects };
+    board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects };
 
     // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
     const vengeanceGained = {};
@@ -1042,15 +961,9 @@ function placeMove(s, i) {
 
     // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
     if (necroActive) {
-        let absorbed = 0;
-        for (let k = 0; k < board.length; k++) {
-            const sq = board[k];
-            if (sq.player && sq.player !== cur && sq.bind === 0 && !sq.effects.some((e) => e.effect === '🔑')) {
-                vengeanceGain(s, seatOf(sq.player), vengeanceGained);
-                board[k] = { player: cur, bind: necromancyReviveLife, effects: [] };
-                absorbed++;
-            }
-        }
+        const absorbedCells = placementMod.absorbDefeated(board, cur);
+        absorbedCells.forEach((c) => vengeanceGain(s, seatOf(c.from), vengeanceGained));
+        const absorbed = absorbedCells.length;
         // 吸収した敵の数だけ墓地+
         if (absorbed > 0) addCorpses(s, absorbed);
     }
@@ -1406,26 +1319,9 @@ function proliferateUpkeep(count) {
 }
 // 1ループ分を盤面に適用。奇数回=コマ(キャラ)、偶数回=アイテム。追加できなければ false（回数を進めない）
 function applyProliferate(s, step) {
-    const me = curPlayer(s);
-    if (step % 2 === 1) {
-        const empties = findEmptyIndexes(s.board);
-        if (!empties.length) return false;
-        s.board[randomPick(empties, s.rng)] = { player: me, bind: PROLIFERATE.tokenLife, effects: [] };
-        return true;
-    }
-    // 毒使いだけは敵コマへの毒がアイテムになる (毒拡散パッシブとつながる)
-    const isPoisoner = curChar(s) === 'poisoner';
-    const targets = [];
-    for (let i = 0; i < s.board.length; i++) {
-        const sq = s.board[i];
-        if (sq.effects.some((e) => e.effect === '🔑')) continue;
-        if (isPoisoner ? sq.player && sq.player !== me : sq.player === me) targets.push(i);
-    }
-    if (!targets.length) return false;
-    const pickIdx = randomPick(targets, s.rng);
-    const pick = s.board[pickIdx];
-    pick.effects.push({ effect: isPoisoner ? '☠' : '🌱' });
-    if (isPoisoner) { poisonStrike(s, pick); toxicBloom(s, [pickIdx]); }
+    const r = proliferateMod.proliferateStep(s.board, step, curPlayer(s), curChar(s), s.chars, s.rng, PROLIFERATE.tokenLife);
+    if (!r) return false;
+    if (r.added === '☠') toxicBloom(s, [r.cell]);
     return true;
 }
 function onClickProliferate(s) {
@@ -1581,7 +1477,7 @@ function chargeHealLegal(s) { return chargeHealCells(s).length > 0; }
 function onClickChargeHeal(s) {
     const cells = chargeHealCells(s);
     if (cells.length === 0) return;
-    for (const k of cells) s.board[k] = { ...s.board[k], bind: s.board[k].bind + chargeStacks(s.board[k]) * CHARGE_HEAL };
+    chargeMod.healCharged(s.board, curPlayer(s));
     spendMagic(s, calculateCost(s, costsOf(s).onClickChargeHeal, false, false, 'onClickChargeHeal'), 'onClickChargeHeal');
     bumpMagicCount(s);
     bumpStat(s, 'chargeHeal');
@@ -1801,10 +1697,7 @@ function exeChargeArea(s, i) {
 }
 // ランダム帯電: ランダムな1〜4マスに⚡（空きマス可。無敵マス・ロック中のマスは除く）
 function onClickChargeRandom(s) {
-    const cands = [];
-    for (let k = 0; k < s.board.length; k++) {
-        if (!isShielded(s, s.board[k]) && !s.board[k].effects.some((e) => e.effect === '🔑')) cands.push(k);
-    }
+    const cands = chargeMod.randomChargeCandidates(s.board, s.chars);
     const n = Math.min(cands.length, 1 + Math.floor(s.rng() * 4));
     for (const k of randomAnyPick(cands, n, s.rng)) addCharge(s, k);
     spendMagic(s, calculateCost(s, costsOf(s).onClickChargeRandom, false, false, 'onClickChargeRandom'), 'onClickChargeRandom');
@@ -1820,18 +1713,10 @@ function onClickJammer(s) {
     bumpStat(s, 'jammer');
 }
 function exeJammer(s, i) {
-    const cur = curPlayer(s);
-    const stacks = chargeStacks(s.board[i]);
-    for (const j of orthoNeighbors(i, s.size)) {
-        const sq = s.board[j];
-        if (!sq.player || sq.player === cur || sq.bind <= 0) continue;
-        if (sq.effects.some((e) => e.effect === '🔑') || thermal.isFrozen(sq)) continue; // ロックは貫通しない・氷結中は電気を受けない
-        const before = sq.bind;
-        s.board[j] = thermal.applyDamage(sq, stacks, 'electric').sq; // ジャマーの電気も氷結を貫通する
-        bumpStat(s, 'jammerDmg', before - s.board[j].bind);
-        if (s.board[j].bind === 0) bumpStat(s, 'jammerZeroed');
-    }
-    s.board[i].effects = s.board[i].effects.filter((e) => e.effect !== '⚡');
+    const before = s.board.map((sq) => sq.bind);
+    const { damaged, zeroed } = chargeMod.applyJammer(s.board, i, s.size, curPlayer(s)); // 縦横隣接の敵に⚡のスタック数だけダメージ（本番 charge.ts）
+    for (const j of damaged) bumpStat(s, 'jammerDmg', before[j] - s.board[j].bind);
+    if (zeroed.length) bumpStat(s, 'jammerZeroed', zeroed.length);
     s.useJammer = false;
 }
 
@@ -2273,19 +2158,7 @@ function onClickBristle(s) {
 // 落雷は忘れた頃に (idx79): 自陣のコマの⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで。ライフ0・ロック・無敵・氷結中は受けない）。⚡が無ければ使えない
 function ownChargeStacks(s) { return s.board.reduce((n, sq) => (sq.player === curPlayer(s) ? n + chargeStacks(sq) : n), 0); }
 function releaseCharges(s) {
-    const me = curPlayer(s);
-    let removed = 0;
-    s.board.forEach((sq, i) => {
-        if (sq.player !== me || chargeStacks(sq) === 0) return;
-        removed += chargeStacks(sq);
-        s.board[i] = { ...sq, effects: sq.effects.filter((e) => e.effect !== '⚡') };
-    });
-    if (removed === 0) return 0;
-    s.board.forEach((sq, i) => {
-        if (!sq.player || sq.player === me || sq.bind <= 0 || thermal.isFrozen(sq) || isGuarded(s, sq)) return;
-        s.board[i] = thermal.applyDamage(sq, removed, 'electric').sq;
-    });
-    return removed;
+    return chargeMod.releaseCharges(s.board, curPlayer(s), s.chars).removed;
 }
 function releaseLegal(s) { return ownChargeStacks(s) > 0; }
 function onClickRelease(s) {

@@ -7,6 +7,7 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
+import { advanceGearState } from './gearTurn';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -19,7 +20,9 @@ import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
-import { shouldDecay } from './decay';
+import { decayBoard, shouldDecay } from './decay';
+import { proliferateStep } from './proliferate';
+import { absorbDefeated, resolvePlacement } from './placement';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
@@ -763,58 +766,19 @@ export const Game = (props: GameProps) => {
         let scorchForNext = 0;
         if (gearTurn.current.processedTurn !== currentTurn) {
             gearTurn.current.processedTurn = currentTurn;
-            // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力（次の手番の席なら下で足す）
-            if (ruinState.current.snap && ruinState.current.snapBuds) {
-                symbols.forEach((sym, seat) => {
-                    if (!hasGear(gearsBySeat[seat], 'scorchedEarth')) return;
-                    const gain = scorchGain(burnedBudCount(ruinState.current.snap!, ruinState.current.snapBuds!, currentBoard, sym));
-                    if (gain <= 0) return;
-                    if (seat === nextSeat) scorchForNext = gain;
-                    else setMagicAt(seat, (m) => m + gain);
-                    gearTrigger('scorchedEarth', `魔力+${gain}`);
-                });
-            }
-            // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
-            const ruin = ruinState.current;
-            // 灰の供物: この手番に敵のマスへ🔥を付与した数だけ、次の自分の手番の終わりまで割引（重複する）
-            if (ruin.snap && ruin.snapFlames && hasGear(gearsBySeat[turnSeat], 'ashOffering')) {
-                const n = ignitedCount(ruin.snap, ruin.snapFlames, currentBoard, symbols[turnSeat]);
-                if (n > 0) ruin.ashPending[turnSeat] += n;
-            }
-            ruin.ashActive[turnSeat] = 0;
-            ruin.ashActive[nextSeat] = ruin.ashPending[nextSeat];
-            if (ruin.ashActive[nextSeat] > 0 && hasGear(gearsBySeat[nextSeat], 'ashOffering')) gearTrigger('ashOffering', `スキルのコスト-${ruin.ashActive[nextSeat] * GEAR_PARAMS.ashDiscount}`);
-            ruin.ashPending[nextSeat] = 0;
-            if (ruin.snap) {
-                const after = currentBoard.map((sq) => sq.player);
-                symbols.forEach((sym, seat) => {
-                    if (hasGear(gearsBySeat[seat], 'ruinSurge') && lostCells(ruin.snap!, after, sym, ruin.lastMove).length > 0) ruin.pending[seat] = true;
-                });
-            }
-            ruin.active[turnSeat] = false;
-            ruin.active[nextSeat] = ruin.pending[nextSeat];
-            if (ruin.active[nextSeat]) gearTrigger('ruinSurge', `スキルのコスト-${GEAR_PARAMS.ruinDiscount}`);
-            ruin.pending[nextSeat] = false;
-            ruin.snap = currentBoard.map((sq) => sq.player);
-            ruin.snapBuds = budCounts(currentBoard);
-            ruin.snapFlames = flameCounts(currentBoard);
-            ruin.lastMove = null;
-            gearTurn.current.skills[nextSeat] = 0;
-            gearTurn.current.kinds[nextSeat] = new Set();
-            gearTurn.current.discount[nextSeat] = emptyDiscount();
-            gearTurn.current.oppSkillPrev[nextSeat] = gearTurn.current.oppSkilled[nextSeat];
-            gearTurn.current.oppSkilled[nextSeat] = false;
-            gearTurn.current.fireBase[nextSeat] = fireStacksTotal(currentBoard);
-            gearTurn.current.shikiPlaced[nextSeat] = false;
-            gearTurn.current.leafBase[nextSeat] = ownLeaves(currentBoard, nextSymbol);
-            gearTurn.current.darkPotUsed[nextSeat] = false;
-            gearTurn.current.tokenFree[turnSeat] = false; // 無礼講は手番が終わると切れる
-            gearTurn.current.tokenFree[nextSeat] = false;
-            gearTurn.current.chargeBase[nextSeat] = ownCharges(currentBoard, nextSymbol);
+            // 席ごとのギア・導線・廃墟の状態の更新は gearTurn.ts で sim と共有。魔力や演出は戻り値を見て行う
+            const change = advanceGearState(gearTurn.current, ruinState.current, { board: currentBoard, symbols, gears: gearsBySeat, endSeat: turnSeat, nextSeat });
+            change.scorch.forEach((gain, seat) => {
+                if (gain <= 0) return;
+                // 焦土: 次の手番の席の分は、下の手番開始の魔力に足す
+                if (seat === nextSeat) scorchForNext = gain;
+                else setMagicAt(seat, (m) => m + gain);
+                gearTrigger('scorchedEarth', `魔力+${gain}`);
+            });
+            if (change.ashNext > 0 && hasGear(gearsBySeat[nextSeat], 'ashOffering')) gearTrigger('ashOffering', `スキルのコスト-${change.ashNext * GEAR_PARAMS.ashDiscount}`);
+            if (change.ruinNext) gearTrigger('ruinSurge', `スキルのコスト-${GEAR_PARAMS.ruinDiscount}`);
             gearTurn.current.freeCast = false;
-            gearTurn.current.echoReady[nextSeat] = gearTurn.current.echoNext[nextSeat];
-            if (gearTurn.current.echoReady[nextSeat] && hasGear(gearsBySeat[nextSeat], 'afterglow')) gearTrigger('afterglow', '1つ目のスキルが安い');
-            gearTurn.current.echoNext[nextSeat] = false;
+            if (change.echoNext && hasGear(gearsBySeat[nextSeat], 'afterglow')) gearTrigger('afterglow', '1つ目のスキルが安い');
             if (budGuard[nextSeat]) setBudGuardAt(nextSeat, false);
             // 絶対零度: 使用者の手番開始時に、他の席の氷結マスへ❄×3のダメージを与えて氷結を解除する
             if (glacierPending[nextSeat]) {
@@ -1124,33 +1088,18 @@ export const Game = (props: GameProps) => {
         // 3人以上は手番が1周するごとに1回だけ減衰させる (issue #30)
         ruinState.current.lastMove = i;
         const decayNow = shouldDecay(placements, seatCount);
-        const burnCells: number[] = [];
         setPlacements(placements + 1);
-        for (let s = 0; decayNow && s < nextBoard.length; s++) {
-            if (burnDamageOf(nextBoard[s], characters) > 0) burnCells.push(s);
-            // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
-            // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
-            const square = decayTick(nextBoard[s], characters);
-            nextBoard[s] = square;
-            const poison = isEffectWarded(square) ? 0 : square.effects.filter((x) => x.effect === '☠').length; // 術中の加護
-            // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
-            const expiredLock = square.bind === 0 ? square.effects.find((x) => x.effect === '🔑') : undefined;
-            if (square.bind === 0) {
-                square.effects = square.effects.filter((x) => x.effect !== '🔑');
-            }
-            if (expiredLock?.value != null && !square.player) {
-                nextBoard[s] = { player: symbols[expiredLock.value - 1], bind: GEAR_PARAMS.emptyLockLife, effects: [] };
-                addLog(`空蔵: ${posName(s)}が${symbols[expiredLock.value - 1]}のコマになった`);
+        // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は decay.ts で sim と共有
+        const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols) : null;
+        const burnCells = decayed?.burnCells ?? [];
+        if (decayed) {
+            spreadOrigins.push(...decayed.spreadOrigins);
+            poisonVanished = decayed.spreadOrigins.length;
+            for (const s of decayed.emptyLockSpawns) {
+                const owner = nextBoard[s].player;
+                addLog(`空蔵: ${posName(s)}が${owner}のコマになった`);
                 gearTrigger('emptyLock', `${posName(s)}にコマ`);
                 playBurst('gearEmpty', [s]);
-                continue;
-            }
-            // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。
-            // 「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
-            if (poison > 0 && square.bind === 0 && square.player && s !== i) {
-                spreadOrigins.push(s);
-                nextBoard[s] = { player: undefined, bind: 0, effects: [] };
-                poisonVanished++;
             }
         }
         // 🔥の継続ダメージを受けたマスに炎の小演出
@@ -1163,60 +1112,19 @@ export const Game = (props: GameProps) => {
             addLog(`毒でマスが${poisonVanished}個消えた${poisonerInPlay ? '（毒使いの魔力+' + poisonVanished + '）' : ''}`);
         }
 
-        let newBind: number;
-        let newEffects: Effect[];
-        let newPlayer: Player | undefined;
-        let capturedFrom: Player | undefined; // 通常の攻撃で奪取した相手（復讐の刃）
-        if (nextBoard[i].player === currentTurnPlayer) {
-            newPlayer = nextBoard[i].player;
-            newBind = nextBoard[i].bind + life + 1;
-            newEffects = nextBoard[i].effects;
-            // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
-            if (isShikigami(nextBoard[i])) newEffects = [...newEffects.filter((e) => e.effect !== '📜'), { effect: '🌱' }];
-        } else if (nextBoard[i].player) {
-            const calculatedBind = nextBoard[i].bind - life + (nextBoard[i].bind > 0 ? 1 : 0);
-            if (calculatedBind < 0) {
-                newPlayer = currentTurnPlayer;
-                newBind = calculatedBind * -1;
-                capturedFrom = nextBoard[i].player;
-            } else if (calculatedBind === 0) {
-                newPlayer = undefined;
-                newBind = 0;
-            } else {
-                newPlayer = nextBoard[i].player;
-                newBind = calculatedBind;
-            }
-            // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
-            if (calculatedBind <= 0 && nextBoard[i].effects.some((e) => e.effect === '☠')) {
-                spreadOrigins.push(i);
-            }
-            newEffects = [];
-            // 式神は乗っ取られると空きマスになる（コマは置かれない）
-            if (isShikigami(nextBoard[i]) && calculatedBind < 0) {
-                newPlayer = undefined;
-                newBind = 0;
-                capturedFrom = undefined;
-            }
-            // 敵味方問わずコマが奪われる/消えるたびに墓地+1
-            if (calculatedBind <= 0) {
-                addCorpses(1);
-            }
-        } else {
-            newPlayer = currentTurnPlayer;
-            newBind = life;
-            newEffects = nextBoard[i].effects.filter((e) => e.effect === '🔥'); // 空きマスに置かれた🔥は、そこに置かれたコマ(誰のコマでも)に引き継がれる
-        }
-
+        // 着手の結果（強化・奪取・破壊・攻撃・新規）は placement.ts で sim と共有
+        const placed = resolvePlacement(nextBoard[i], currentTurnPlayer, life);
+        const capturedFrom = placed.capturedFrom; // 通常の攻撃で奪取した相手（復讐の刃）
+        if (placed.poisonSpread) spreadOrigins.push(i); // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
+        if (placed.corpse) addCorpses(1); // 敵味方問わずコマが奪われる/消えるたびに墓地+1
+        const newPlayer = placed.square.player;
+        const newEffects = placed.square.effects;
         if (newPlayer === currentTurnPlayer && useBuds[0]) {
             newEffects.push(...Array<Effect>(useBuds[1]).fill({ effect: '🌱' }));
             setUseBuds([false, 0]);
         }
 
-        nextBoard[i] = {
-            player: newPlayer,
-            bind: newBind,
-            effects: newEffects,
-        };
+        nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects };
 
         // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
         const vengeanceGained: Record<number, number> = {};
@@ -1302,15 +1210,9 @@ export const Game = (props: GameProps) => {
 
         // 蘇生発動中: ライフが0になった敵コマを自動で自陣に吸収する
         if (necroActive) {
-            let absorbed = 0;
-            for (let k = 0; k < nextBoard.length; k++) {
-                const sq = nextBoard[k];
-                if (sq.player && sq.player !== currentTurnPlayer && sq.bind === 0 && !sq.effects.some((x) => x.effect === '🔑')) {
-                    vengeanceGain(seatOf(sq.player));
-                    nextBoard[k] = { player: currentTurnPlayer, bind: necromancyReviveLife, effects: [] };
-                    absorbed++;
-                }
-            }
+            const absorbedCells = absorbDefeated(nextBoard, currentTurnPlayer);
+            absorbedCells.forEach((c) => vengeanceGain(seatOf(c.from)));
+            const absorbed = absorbedCells.length;
             if (absorbed > 0) {
                 addLog(`蘇生発動中: ライフ0の敵コマ${absorbed}個を自陣に吸収`);
                 addCorpses(absorbed);
@@ -1655,32 +1557,11 @@ export const Game = (props: GameProps) => {
     // 増殖の1ループ分を盤面に適用する。奇数回=コマ(キャラ)、偶数回=アイテムを追加。
     // 何も追加できなかった場合は null を返し、ループ回数を進めない（維持コストを不当に上げないため）
     const applyProliferate = (board: SquareInfo[], step: number): string | null => {
-        const me = currentTurnPlayer;
-        if (step % 2 === 1) {
-            const empties = findEmptyIndexes(board);
-            if (empties.length === 0) return null;
-            const index = randomPick(empties);
-            board[index] = { player: me, bind: proliferateTokenLife, effects: [] };
-            return `${posName(index)}にライフ${proliferateTokenLife}のコマを追加`;
-        }
-        // 毒使いだけは敵コマへの毒がアイテムになる（毒拡散パッシブとつながる）
-        const isPoisoner = currentCharacter === 'poisoner';
-        const item: Effect = isPoisoner ? { effect: '☠' } : { effect: '🌱' };
-        const targets = board
-            .map((_, idx) => idx)
-            .filter((idx) => {
-                const sq = board[idx];
-                if (sq.effects.some((e) => e.effect === '🔑')) return false;
-                return isPoisoner ? !!sq.player && sq.player !== me : sq.player === me;
-            });
-        if (targets.length === 0) return null;
-        const index = randomPick(targets);
-        board[index] = { ...board[index], effects: [...board[index].effects, item] };
-        if (isPoisoner) {
-            board[index] = poisonStrike(board[index]);
-            toxicBloom(board, [index]);
-        }
-        return `${posName(index)}に${item.effect}を追加`;
+        const r = proliferateStep(board, step, currentTurnPlayer, currentCharacter, characters);
+        if (!r) return null;
+        if (r.added === 'piece') return `${posName(r.cell)}にライフ${proliferateTokenLife}のコマを追加`;
+        if (r.added === '☠') toxicBloom(board, [r.cell]);
+        return `${posName(r.cell)}に${r.added}を追加`;
     };
 
     // 静電気の季節: 今の手番を含む3ターンの間、自分が設置する駒（着手・トークン・全軍突撃のトークン）に⚡を付ける。雷霆の巫以外は乗った時点でダメージを受ける

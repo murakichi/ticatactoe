@@ -25,7 +25,7 @@ const OUT = path.join(ROOT, 'sim', 'shared');
 const ENTRIES = [
     'boardGeometry', 'skillCosts', 'gear', 'deck', 'discount', 'comboCost', 'lifeBan', 'darkPot', 'generic', 'thermal',
     'charge', 'tokenSkills', 'giantAura', 'giantTurn', 'decay', 'lateMagic', '../../util',
-    'AIPlayer', 'aiTurn', 'turn', 'cost', 'poison', 'blast', 'shikigami', 'deadlock',
+    'AIPlayer', 'aiTurn', 'turn', 'cost', 'poison', 'blast', 'shikigami', 'deadlock', 'gearTurn', 'placement', 'proliferate',
 ];
 
 const resolveTs = (from, spec) => {
