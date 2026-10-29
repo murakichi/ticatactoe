@@ -959,6 +959,7 @@ function coveredLines(board, me, cells) {
     return n;
 }
 function getEnhancedBestMove(s) {
+    updateShield(s); // 同じ手番にスキルで⚡を付けた直後でも、無敵になったマスを着手の候補にしない
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const opp = opps[0];
@@ -1421,7 +1422,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 88)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 89)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1609,6 +1610,13 @@ function clearPending(s) {
 function faithfulMakeMove(s) {
     clearPending(s);
     const r = faithfulMakeMoveInner(s);
+    // 着手を先に決めたあとにトークンがランダムにそのマスへ落ち、⚡で無敵になった自コマになることがある。そのときは選び直す
+    if (!r.turnEnded && r.move != null) {
+        updateShield(s);
+        if (shield.has(r.move)) r.move = getEnhancedBestMove(s);
+    }
+    // 山椒は小粒でも許さない: ライフ3以下のコマは置けないので着手をやめる（呼び出し側がチャージで手番を終える）
+    if (!r.turnEnded && r.move != null && s.lifeBan[s.turn] && s.life <= 3) r.move = null;
     if (!r.turnEnded) clearPending(s);
     return r;
 }

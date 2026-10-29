@@ -119,6 +119,7 @@ export const skillCosts = {
     onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
     onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
     onClickTinder: 2, //         火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付与（鍛冶師は🔥付与で-1）
+    onClickSmallFry: 10, //      山椒は小粒でも許さない(idx 88): 敵のライフ3以下のコマを全て破壊し、相手は次の手番の終わりまでライフ3以下のコマを置けない。盤面のコマの数だけ軽減（最低1）
 };
 
 export type SkillCosts = typeof skillCosts;

@@ -2042,7 +2042,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2633,6 +2633,78 @@ test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽
     assert.strictEqual(price(), 6); // 撃ったらリセット
     s.board[5] = { player: '⭕', bind: 3, effects: [B, B] }; // 敵の⚡は数えない
     assert.strictEqual(price(), 6);
+});
+
+test('山椒は小粒でも許さない: 敵のライフ3以下のコマを全て破壊（🔑ロック・無敵は除き、氷結中は❄-1だけ）。自陣と、ライフ4以上の敵は残る', () => {
+    const s = e.newGame({ chars: ['electrician', 'you', 'you'], rng: e.makeRng(6) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };            // 壊れる
+    s.board[1] = { player: '⭕', bind: 0, effects: [] };            // ライフ0も壊れる
+    s.board[2] = { player: '🟩', bind: 2, effects: [] };           // 別の敵(3人戦)も壊れる
+    s.board[3] = { player: '⭕', bind: 4, effects: [] };            // ライフ4は残る
+    s.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // ロック中は残る
+    s.board[5] = { player: '⭕', bind: 3, effects: [FRZ, FRZ] };    // 氷結は身代わり(❄-1)
+    s.board[6] = { player: '💙', bind: 1, effects: [] };            // 自陣は残る
+    s.board[7] = { player: '🟩', bind: 3, effects: [] };
+    const before = e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
+    assert.strictEqual(before, Math.max(1, 10 - 8)); // 盤面のコマ8個ぶん軽減
+    e.SKILLS.smallFry(s);
+    for (const i of [0, 1, 2, 7]) assert.strictEqual(s.board[i].player, undefined);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[4].player, '⭕');
+    assert.strictEqual(s.board[5].player, '⭕');
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.board[6].player, '💙');
+    assert.strictEqual(s.magic[0], 30 - before);
+    assert.deepStrictEqual(s.lifeBan, [false, true, true]);
+});
+
+test('山椒は小粒でも許さない: 雷霆の巫の⚡で無敵のコマは壊れない', () => {
+    const s = e.newGame({ chars: ['you', 'electrician'], rng: e.makeRng(6) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '⭕', bind: 2, effects: [{ effect: '⚡' }] };
+    e.SKILLS.smallFry(s);
+    assert.strictEqual(s.board[0].player, '⭕');
+});
+
+test('山椒は小粒でも許さない: コストは盤面のコマの数だけ軽減（最低1）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(6) });
+    const price = () => e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
+    assert.strictEqual(e.skillCosts.onClickSmallFry, 10);
+    assert.strictEqual(price(), 10);
+    for (let i = 0; i < 4; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 5, effects: [] };
+    assert.strictEqual(price(), 6);
+    for (let i = 4; i < 16; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(price(), 1);
+});
+
+test('山椒は小粒でも許さない: 縛られた席はライフ3以下のコマを置けない（着手・置くスキル）。その席の手番が終わると解除', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(8) });
+    s.magic[0] = 30; s.magic[1] = 30;
+    e.SKILLS.smallFry(s);                    // 席1が縛られる
+    assert.deepStrictEqual(s.lifeBan, [false, true]);
+    s.board[5] = { player: '💙', bind: 4, effects: [] };
+    s.currentTurn += 1; e.advanceTurn(s);    // 席1の手番へ
+    assert.strictEqual(s.turn, 1);
+    s.life = 3;
+    assert.strictEqual(e.placeMove(s, 0), false); // ライフ3の着手はできない
+    assert.strictEqual(s.board[0].player, undefined);
+    const magicBefore = s.magic[1];
+    e.SKILLS.shikigamiRandom(s);             // 式神はライフ2 → 置けない（魔力も減らない）
+    assert.strictEqual(s.magic[1], magicBefore);
+    assert.strictEqual(s.board.filter((sq) => sq.effects.some((x) => x.effect === '📜')).length, 0);
+    s.life = 4;
+    assert.strictEqual(e.placeMove(s, 0), true); // ライフ4なら置ける
+    assert.strictEqual(s.lifeBan[1], false);     // 手番が終わったので解除
+});
+
+test('山椒は小粒でも許さない: AIは縛られてライフ3以下なら着手せず（チャージで手番を終える）、置くスキルも使わない', () => {
+    const ai = require('./ai');
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(9) });
+    s.turn = 1; s.life = 3; s.lifeBan[1] = true; s.magic[1] = 30;
+    s.skills = [2, 3, 5];
+    const r = ai.makeMove(s, 'faithful');
+    assert.ok(r.turnEnded || r.move === null);
 });
 
 test('一寸先は闇鍋: 1手番に1度だけ（2回目は何も起きず魔力も減らない）。次の手番では使える', () => {
