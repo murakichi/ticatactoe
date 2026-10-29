@@ -1306,7 +1306,11 @@ function chooseSkills(s, availableSkills) {
         }
         return null;
     }
-    if (leafToken && spend(leafToken.cost, leafToken.key)) {
+    // 初霜: 敵の🍂のあるコマを凍結し(🍂が休眠してコスト差が消える)、自陣にバッズトークンを置く。トークン扱い。魔女の🍂が盤面に4枚以上ならコスト0
+    const firstFrostCost = !tokenUsed && availableSkills.includes(93) && E.firstFrostLegal(s) ? cost(costsOf(s).onClickFirstFrost, true, 'onClickFirstFrost') : null;
+    if (firstFrostCost !== null && remaining >= firstFrostCost && spend(firstFrostCost, 'firstFrost')) {
+        // 初霜を撃った（トークンはターンに1回）
+    } else if (leafToken && spend(leafToken.cost, leafToken.key)) {
         // 🍂付きのトークンを撃った（トークンはターンに1回）
     } else if (!tokenUsed) {
         const poisonTokenCost = calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken');
@@ -1422,7 +1426,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 93)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 95)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
