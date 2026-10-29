@@ -2126,7 +2126,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -3153,6 +3153,130 @@ test('火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける�
     const m0 = t.magic[t.turn];
     e.SKILLS.tinder(t);
     assert.strictEqual(t.magic[t.turn], m0, '対象が無ければ何もしない');
+});
+
+
+// ---- 初霜・吹き寄せ・山焼き・無礼講(idx 93〜96) ----
+const fx = (...kinds) => kinds.map((k) => ({ effect: k }));
+const cnt = (sq, k) => sq.effects.filter((x) => x.effect === k).length;
+test('初霜: 敵の🍂があるコマを全て凍結し、自陣にバッズトークンを置く。🔑・氷結を付けられない(🔥)コマは対象外。トークン扱い。コストは凍結前の盤面で決まる', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[4] = { player: '⭕', bind: 5, effects: fx('🍂') };
+    s.board[5] = { player: '⭕', bind: 5, effects: fx('🍂', '🔑') };
+    s.board[6] = { player: '⭕', bind: 5, effects: [] };
+    s.board[7] = { player: '⭕', bind: 5, effects: fx('🍂', '🔥') };
+    assert.strictEqual(e.firstFrostLegal(s), true);
+    const before = s.heartMagic;
+    e.SKILLS.firstFrost(s);
+    assert.strictEqual(cnt(s.board[4], '❄'), 1);
+    assert.strictEqual(cnt(s.board[5], '❄') + cnt(s.board[6], '❄') + cnt(s.board[7], '❄'), 0);
+    const buds = s.board.filter((sq, i) => sq.player === '💙' && i !== 0 && cnt(sq, '🌱') === 1);
+    assert.strictEqual(buds.length, 1, '自陣にバッズトークンが1つ増える');
+    // 盤面の🍂は(4:1, 5:1, 7:1)=3枚 → 3枚以上なのでコスト0
+    assert.strictEqual(before - s.heartMagic, 0);
+    assert.strictEqual(s.usedTokenThisTurn, true);
+    assert.strictEqual(e.firstFrostLegal(s), false, 'トークンはターンに1回');
+});
+
+test('初霜: 盤面の🍂が2枚ならコストは 6+敵の🍂2枚ぶん=8（3枚以上で0）。対象が無ければ使えない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[4] = { player: '⭕', bind: 5, effects: fx('🍂') };
+    s.board[5] = { player: '⭕', bind: 5, effects: fx('🍂') };
+    const before = s.heartMagic;
+    e.SKILLS.firstFrost(s);
+    assert.strictEqual(before - s.heartMagic, 8);
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    t.board[4] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.firstFrostLegal(t), false);
+    e.SKILLS.firstFrost(t);
+    assert.strictEqual(t.heartMagic, 30);
+});
+
+test('吹き寄せ: 空きマスにトークンを置き、盤面のエフェクトを全部集める。🔑と📜は残り、氷結のマスは動かさない。🔥は集め終えてから処理（🌱🍂が燃える）', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: fx('🌱') };
+    s.board[1] = { player: '⭕', bind: 5, effects: fx('🍂', '☠') };
+    s.board[2] = { player: '⭕', bind: 5, effects: fx('❄', '🌱') };
+    s.board[3] = { player: '💙', bind: 5, effects: fx('🔑', '⚡') };
+    s.board[5] = { player: '⭕', bind: 5, effects: fx('🔥', '🌱') };
+    const emptyBefore = new Set(s.board.map((sq, i) => (!sq.player ? i : -1)).filter((i) => i !== -1));
+    e.SKILLS.gather(s);
+    const tok = s.board.findIndex((sq, i) => emptyBefore.has(i) && sq.player === '💙');
+    assert.ok(tok >= 0, '空きマスに自陣のトークンが置かれる');
+    // 集まったのは 🌱(0) 🍂☠(1) ⚡(3) 🌱(5) と 🔥(5)。🔥の処理で 🌱🌱🍂 は燃える
+    assert.deepStrictEqual(s.board[tok].effects.map((x) => x.effect).sort(), ['☠', '⚡', '🔥'].sort());
+    assert.deepStrictEqual(s.board[0].effects, []);
+    assert.deepStrictEqual(s.board[1].effects, []);
+    assert.deepStrictEqual(s.board[2].effects.map((x) => x.effect), ['❄', '🌱'], '氷結のマスは動かさない');
+    assert.deepStrictEqual(s.board[3].effects.map((x) => x.effect), ['🔑'], '🔑はその場に残り、他のエフェクトは動く');
+    assert.deepStrictEqual(s.board[5].effects, []);
+    assert.strictEqual(s.usedTokenThisTurn, true);
+});
+
+test('吹き寄せ: コストは 8+敵の🍂 に対し、エフェクト1つにつき2軽減（氷結のマスは❄だけ・🔑自体は数えない）。最低1。軽減は🍂の増加分のあと', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[1] = { player: '⭕', bind: 5, effects: fx('🍂', '☠') };
+    const base = e.calculateCost(s, e.skillCosts.onClickGather, true, false, 'onClickGather');
+    assert.strictEqual(base, 8 + 1 - 2 * 2); // 敵の🍂1枚で+1 → 9、エフェクト2つで-4
+    s.board[2] = { player: '⭕', bind: 5, effects: fx('❄', '🌱', '☠') };
+    s.board[3] = { player: '💙', bind: 5, effects: fx('🔑', '🌱') };
+    // 数えるのは 1:🍂☠(2) 2:❄だけ(1) 3:🌱だけ(1)=4個 → 8+1-8 = 1
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickGather, true, false, 'onClickGather'), 1);
+    s.board[4] = { player: '⭕', bind: 5, effects: fx('🌱', '🌱', '🌱') };
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickGather, true, false, 'onClickGather'), 1, '最低1');
+});
+
+test('山焼き: 敵のエフェクトがあるマス（氷結・⚡無敵を除く。🔑ロックのマスの他のエフェクトは対象）に🔥を1つ付け、自陣にロック付きトークンを置く', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: fx('🌱') };
+    s.board[4] = { player: '⭕', bind: 5, effects: fx('🍂') };
+    s.board[5] = { player: '⭕', bind: 5, effects: fx('🌱', '🔑') };
+    s.board[15] = { player: '⭕', bind: 5, effects: fx('❄', '🌱') }; // 炎の隣でない氷結のマス（隣り合うと🔥の熱で氷結が溶ける）
+    s.board[7] = { player: '⭕', bind: 5, effects: [] };
+    const emptyBefore = new Set(s.board.map((sq, i) => (!sq.player ? i : -1)).filter((i) => i !== -1));
+    assert.deepStrictEqual(e.burnOffTargets(s), [4, 5]);
+    e.SKILLS.burnOff(s);
+    assert.deepStrictEqual(s.board[4].effects.map((x) => x.effect), ['🔥'], '🍂は燃えて🔥が付く');
+    assert.ok(cnt(s.board[5], '🔥') === 1 && cnt(s.board[5], '🔑') === 1 && cnt(s.board[5], '🌱') === 0, 'ロックのマスも燃える（ロックは残る）');
+    assert.deepStrictEqual(s.board[15].effects.map((x) => x.effect), ['❄', '🌱'], '氷結のマスは対象外');
+    assert.deepStrictEqual(s.board[7].effects, []);
+    const tok = s.board.findIndex((sq, i) => emptyBefore.has(i) && sq.player === '💙');
+    assert.ok(tok >= 0 && cnt(s.board[tok], '🔑') === 1, 'ロック付きトークンが置かれる');
+    assert.strictEqual(s.usedTokenThisTurn, true);
+});
+
+test('山焼き: コストは 9+敵の🍂 に対し、エフェクト1つにつき3軽減（氷結のマスは❄だけ・🔑自体は数えない）。最低1', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[4] = { player: '⭕', bind: 5, effects: fx('🍂') };
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBurnOff, true, false, 'onClickBurnOff'), 9 + 1 - 3);
+    s.board[5] = { player: '⭕', bind: 5, effects: fx('🌱', '🔑') };
+    s.board[6] = { player: '⭕', bind: 5, effects: fx('❄', '🌱') };
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBurnOff, true, false, 'onClickBurnOff'), 9 + 1 - 3 * 3); // 数えるのは 🍂, 🌱, ❄ の3個
+    s.board[7] = { player: '⭕', bind: 5, effects: fx('🌱', '🌱') };
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBurnOff, true, false, 'onClickBurnOff'), 1, '最低1');
+});
+
+test('無礼講: このターン、トークン系スキルのコストが0になる。トークン以外は変わらない。手番が終わると切れる。二重には撃てない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBudsToken, true, false, 'onClickBudsToken'), e.skillCosts.onClickBudsToken);
+    const before = s.heartMagic;
+    e.SKILLS.freeToken(s);
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickFreeToken);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBudsToken, true, false, 'onClickBudsToken'), 0);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry') > 0, true, 'トークン以外は変わらない');
+    assert.strictEqual(e.freeTokenLegal(s), false);
+    const m = s.heartMagic;
+    e.SKILLS.freeToken(s);
+    assert.strictEqual(s.heartMagic, m, '二重には撃てない');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
