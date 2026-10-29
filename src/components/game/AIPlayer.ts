@@ -1746,6 +1746,13 @@ class AIPlayer {
         return clicks.length > 0 ? { clicks, board: b, win: false } : null;
     }
 
+    /** 引き直しの前に、手札が全て固定されていれば固定を1つ外して札が入れ替わるようにする（特売(53)など、無くても組める札を優先して外す） */
+    locksForReroll(locks: number[], handSize: number): number[] {
+        if (locks.length < handSize || locks.length === 0) return locks;
+        const drop = locks.includes(53) ? 53 : locks[locks.length - 1];
+        return locks.filter((i) => i !== drop);
+    }
+
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(
         board: SquareInfo[],

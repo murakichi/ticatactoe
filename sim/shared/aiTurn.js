@@ -80,7 +80,7 @@ const planAITurn = (ai, input, pickHailMary) => {
         if (result.reroll.discount)
             steps.push(result.reroll.discount);
         steps.push('onClickShuffle', 'aiReplan');
-        return { kind: 'reroll', steps, locks };
+        return { kind: 'reroll', steps, locks: ai.locksForReroll(locks, input.hand.length) };
     }
     // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選ぶ
     if (result.hailMary) {
