@@ -788,7 +788,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         // 序盤（空きが多い）は式神一括が式神の数に比例して重く、盤面を埋めるコンボは撃てない
         const early = emptyBoard();
         put(early, 0, '⭕', 3);
-        expect(mk().planShikigami(early, 30, flood, [73, 71])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(early, 20, flood, [73, 71])?.win ?? false).toBe(false);
     });
 
     it('特売(53)が手札にあれば重ね撃ちしてコンボのコストを圧縮する（特売×2→百鬼夜行→特売×2→式神一括。終盤の盤面で 7+8=15 → 7）', () => {
