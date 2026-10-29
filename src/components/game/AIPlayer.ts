@@ -813,6 +813,15 @@ class AIPlayer {
     }
 
     /** 最善手を選択: 即勝ち→即ブロック→Minimax+フォーク評価 */
+    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
+    winningMove(board: SquareInfo[], life: number): number | null {
+        const moves = Array.from(new Set([...findEmptyIndexes(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
+        for (const i of moves) {
+            if (calculateWinner(lineSymbols(this.simulatePlace(board, i, this.playerSymbol, life))) === this.playerSymbol) return i;
+        }
+        return null;
+    }
+
     getBestMove(board: SquareInfo[], life: number): number | null {
         const empty = findEmptyIndexes(board);
         const validMoves = this.getValidMoves(board, life);
@@ -827,25 +836,36 @@ class AIPlayer {
         }
 
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
+        let candidates = allMoves;
         for (const opp of this.lastStandReady ? [] : this.opponents) {
             const oppMoves = this.getMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);
                 if (calculateWinner(lineSymbols(sim)) === opp) {
-                    if (allMoves.includes(i)) return i;
+                    if (!allMoves.includes(i)) continue;
+                    // 塞いだ後の減衰で別のコマが 0 になって奪われ、相手に別の勝ち手ができることがある。
+                    // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ。sim/ai.js の safeBlock）
+                    const safe = allMoves.filter((m) => {
+                        const after = this.simulatePlace(board, m, this.playerSymbol, life, 0);
+                        return this.opponents.every((q) => !this.getMovesFor(after, q, life).some((j) => calculateWinner(lineSymbols(this.simulatePlace(after, j, q, life))) === q));
+                    });
+                    if (safe.length === 0) return i;
+                    candidates = safe;
+                    break;
                 }
             }
+            if (candidates !== allMoves) break;
         }
 
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
-        let bestMove = allMoves[0];
+        let bestMove = candidates[0];
         // 雷霆の巫: 相手に陰陽師がいると、百鬼夜行→式神一括で空きマスが全部相手のコマになる。自分のコマが1つも無い線があると
         // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（sim/ai.js F.floodCover と同じ。対陰陽師 11→28%）
         const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
         const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
 
-        for (const i of allMoves) {
+        for (const i of candidates) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
             if (this.character === 'giant' && simBoard[i].player === this.playerSymbol) this.applyAuraSim(simBoard, i);
             let score = this.minimax(simBoard, this.searchDepth(board), false, -Infinity, Infinity, life);
@@ -1773,6 +1793,11 @@ class AIPlayer {
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+
+        // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（sim/ai.js の winFirst）
+        // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われるので先にギアを剥がす等の判断に任せる
+        const winNow = this.oppLastStand ? null : this.winningMove(board, life);
+        if (winNow !== null) return { move: winNow, skills: [] };
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ

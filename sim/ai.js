@@ -67,6 +67,8 @@ AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手の
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 // 対魔女の新スキル（初霜93・吹き寄せ94・山焼き95・無礼講96）: 引いたら先に固定し(lockNew)、手札に無ければ魔力に余裕があるとき1コストで引き直して探す(witchDig=回数, digMargin=シャッフルのあとに残す魔力)。無礼講(freeTok)は高いトークンの前に撃つ
 AI_DEFAULTS.yinDig = 8; AI_DEFAULTS.taFrost = 1; AI_DEFAULTS.taFrostLock = 1; AI_DEFAULTS.smallFryMin = 2; AI_DEFAULTS.lockNew = 1; AI_DEFAULTS.witchDig = 2; AI_DEFAULTS.digMargin = 3; AI_DEFAULTS.freeTok = 1; AI_DEFAULTS.fryDig = 2; // 氷室の番人: 魔女戦で一寸の虫に魂なし(92)を探して固定する（対魔女 22〜26→58〜61%、seed11-13 で環境勝率 +4〜5pt）
+AI_DEFAULTS.safeBlock = 1; // 相手の勝ち手を塞ぐとき、減衰後に別の勝ち手が残らない着手を選ぶ（二重脅威を見落とさない）
+AI_DEFAULTS.winFirst = 1; // 即勝ちできる着手があれば、スキルを撃たずに勝つ（審判の日などの手番終了スキルで勝ちを逃していた）
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -989,6 +991,15 @@ function coveredLines(board, me, cells) {
     for (const line of geometryForCells(cells).winLines) if (line.some((idx) => board[idx].player === me)) n++;
     return n;
 }
+/** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null。getEnhancedBestMove の「即勝ち」と同じ判定 */
+function winningMove(s) {
+    updateShield(s);
+    const me = curPlayer(s), life = s.life, board = s.board;
+    decayCtx = { chars: s.chars, placements: s.placements, n: seatCount(s) };
+    const moves = new Set([...findEmptyIndexes(board), ...getValidMoves(board, me, curChar(s)), ...reinforceMoves(board, me, opponentsOf(s), life)]);
+    for (const i of moves) if (calculateWinner(lineSyms(simulatePlace(board, i, me, life))) === me) return i;
+    return null;
+}
 function getEnhancedBestMove(s) {
     updateShield(s); // 同じ手番にスキルで⚡を付けた直後でも、無敵になったマスを着手の候補にしない
     const me = curPlayer(s);
@@ -1027,13 +1038,25 @@ function getEnhancedBestMove(s) {
         return bi;
     }
     // block opponent win (including captures)
+    let candidates = allMoves;
     for (const o of lsFree ? [] : opps) {
         const oppMoves = getMovesFor(board, o, life);
         for (const i of oppMoves) {
             if (calculateWinner(lineSyms(simulatePlace(board, i, o, life))) === o) {
-                if (seen[i]) return i;
+                if (!seen[i]) continue;
+                if (!F.safeBlock) return i;
+                // 塞いだ後の減衰で別のコマが 0 になって奪われ、相手に別の勝ち手ができることがある。
+                // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ）
+                const safe = allMoves.filter((m) => {
+                    const after = simulatePlace(board, m, me, life, 0);
+                    return opps.every((q) => !getMovesFor(after, q, life).some((j) => calculateWinner(lineSyms(simulatePlace(after, j, q, life))) === q));
+                });
+                if (safe.length === 0) return i;
+                candidates = safe;
+                break;
             }
         }
+        if (candidates !== allMoves) break;
     }
 
     // 防壁の発動後(F.spam): 自駒は全部消えて相手の魔力+4・ライフ+2。守りに回っても追いつけないので、相手の即勝ちだけ止めて自分のライン作りに専念する
@@ -1053,8 +1076,8 @@ function getEnhancedBestMove(s) {
     const floodCover = character === 'electrician' ? (F.floodCover || 0) : 0; // 雷霆の巫のみ
     const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
     let bestScore = -Infinity;
-    let bestMove = allMoves[0];
-    for (const i of allMoves) {
+    let bestMove = candidates[0];
+    for (const i of candidates) {
         const sim = simulatePlace(board, i, me, life, 0);
         if (F.auraSim && character === 'giant' && sim[i].player === me) applyAuraSim(sim, i, me);
         let score = minimax(sim, searchDepth(board), false, -Infinity, Infinity, me, opp, life);
@@ -1735,6 +1758,11 @@ function faithfulMakeMoveInner(s) {
     const opps = opponentsOf(s);
     const magic = curMagic(s);
     updateShield(s);
+
+    // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ(F.winFirst)
+    // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われて自駒が消えるので、先にギアを剥がす等の判断(chooseSkills)に任せる
+    const foeLastStand = otherSeats(s).some((seat) => hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat]);
+    if (F.winFirst && !foeLastStand) { const w = winningMove(s); if (w !== null) return { move: w, turnEnded: false }; }
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
