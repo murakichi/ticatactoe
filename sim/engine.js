@@ -807,8 +807,8 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useShikigamiPlace) {
-        // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中の空きマスは選び直せる
-        if (board[i].player || thermal.emptyBlocked(board[i])) return false;
+        // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中/ロック中の空きマスは選び直せる
+        if (!shikiMod.shikigamiLandable(board[i])) return false;
         board[i] = newShikigami(curPlayer(s));
         s.shikiPlaced[s.turn] = true;
         s.useShikigamiPlace = false;
@@ -1221,7 +1221,7 @@ function onClickShikigamiFlood(s) {
     let placed = 0;
     for (let k = 0; k < s.board.length; k++) {
         const sq = s.board[k];
-        if (!sq.player && !thermal.emptyBlocked(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
+        if (shikiMod.shikigamiLandable(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);

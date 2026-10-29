@@ -593,6 +593,46 @@ test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ
     assert.ok(placed.every((sq) => sq.player === '💙' && sq.bind === 0));
 });
 
+test('百鬼夜行・式神設置・爆破: 🔑ロック中の空きマスには式神を置かない（ロックを貫通しない）', () => {
+    const lock = { effect: '🔑' };
+    const s = game('yinYangMaster', 'you');
+    s.board[2] = { player: undefined, bind: 6, effects: [lock] };
+    s.magic[0] = 40;
+    e.SKILLS.shikigamiFlood(s);
+    assert.deepStrictEqual(s.board[2], { player: undefined, bind: 6, effects: [lock] }); // ロック中の空きマスは変わらない
+    assert.ok(e.isShikigami(s.board[3]));
+    const t = game('yinYangMaster', 'you');
+    t.board[2] = { player: undefined, bind: 6, effects: [lock] };
+    t.magic[0] = 40;
+    e.SKILLS.shikigamiPlace(t);
+    assert.strictEqual(e.placeMove(t, 2), false); // 選び直せる
+    assert.strictEqual(e.placeMove(t, 3), true);
+    const u = game('yinYangMaster', 'you');
+    u.board[5] = e.newShikigami('💙');
+    u.board[6] = { player: undefined, bind: 6, effects: [lock] };
+    u.magic[0] = 40;
+    e.SKILLS.shikigamiBlast(u);
+    e.placeMove(u, 5);
+    assert.deepStrictEqual(u.board[6], { player: undefined, bind: 6, effects: [lock] }); // 爆破の跡もロックを貫通しない
+});
+
+test('式神ランダム設置: 🔑ロック中・氷結中の空きマスは抽選に入らない', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+        const s = e.newGame({ heartChar: 'yinYangMaster', circleChar: 'you', rng: e.makeRng(seed) });
+        for (let i = 0; i < 16; i++) s.board[i] = { player: '⭕', bind: 3, effects: [] };
+        const lock = { player: undefined, bind: 6, effects: [{ effect: '🔑' }] };
+        const frozen = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+        s.board[4] = lock;
+        s.board[9] = frozen;
+        s.board[7] = { player: undefined, bind: 0, effects: [] }; // 置けるのはここだけ
+        s.magic[0] = 20;
+        e.SKILLS.shikigamiRandom(s);
+        assert.deepStrictEqual(s.board[4], lock);
+        assert.deepStrictEqual(s.board[9], frozen);
+        assert.ok(e.isShikigami(s.board[7]));
+    }
+});
+
 test('百鬼夜行→式神一括: 空きマスが全て自コマになり、敵の入っていない列が完成して勝つ', () => {
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
