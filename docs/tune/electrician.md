@@ -19,6 +19,11 @@
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
 - 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
+## 診断(2026-10-29, master bb03be8, seed3/200, sim/ai.js 廃止後=本番AI)
+- 対強豪平均: 1 yinYangMaster 58.9 / 2 witch 54.4 / 3 tactician 52.7 / 4 cryomancer 45.1 / **5 electrician 45.0** (field 50.2) / 6 pyromancer 43.9。1位との差 13.9pt。
+- 雷霆の対面: pyromancer 31%(最悪) / cryomancer 44.5 / tactician 45 / giant 45 / poisoner 45.5 / witch 50 / yinYang 54.5。
+- 以前(sim/ai.js 時代)の witch 突出は本番AI基準では消え、witch は2位 54.4%。次の軸は pyromancer 戦(31%)の原因調査。
+
 ## 診断(master 81ad8ce, seed50/300, --target)
 - 基本: 4位 54.1%(1位 poisoner 75.0 / magician 59.7 / necromancer 54.9)、envDeck varied: 7位 50.6%(1位 poisoner 66.3)。1位 poisoner との差は 21pt/16pt と大きい。
 - 律速は **対毒使い 21%(envDeck varied 25%)**。他は対 necromancer 39%、対 magician 43% が弱い。ほか(対あなた78・対巨人65・対氷室65)は強い。→ 次は対毒使いの原因を調べる(毒でライフが削られる中、⚡の盾が働くか・毒札が多い試合の手数)。
