@@ -240,6 +240,8 @@ export const Game = (props: GameProps) => {
     const [previewCells, setPreviewCells] = useState<number[]>([]);
     // スキル発動時の盤面エフェクト
     const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
+    // 巨人の着手の揺れ(0=まだ揺れていない)。奇数/偶数で別名のアニメーションにして、連続でも再生し直す
+    const [giantShake, setGiantShake] = useState<number>(0);
     const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string, extra?: { variant?: string; sources?: number[] }) => {
         playSfx(type);
         setBoardEffect((prev) => ({ type, index, indexes, label, ...extra, nonce: (prev?.nonce ?? 0) + 1 }));
@@ -1116,6 +1118,8 @@ export const Game = (props: GameProps) => {
 
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
         playSfx('place');
+        // 巨人は普通に置いただけでも、盤面が軽く揺れる(重さの表現)。毎回再生し直すため、A/B の2種を交互に使う
+        if (currentCharacter === 'giant') setGiantShake((n) => n + 1);
 
         // 毒で bind が 0 になったマス（拡散パッシブの起点）
         const spreadOrigins: number[] = [];
@@ -3701,7 +3705,7 @@ export const Game = (props: GameProps) => {
                         </div>
                     )}
                     <div
-                        className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : ''}`}
+                        className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : giantShake > 0 ? ` ${giantShake % 2 ? styles.shakeLightA : styles.shakeLightB}` : ''}`}
                         style={{ ['--sq' as string]: boardSqCss(geo.size) }}
                     >
                         <Board
