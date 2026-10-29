@@ -5,8 +5,8 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const deckMod = require('./deck');
-const gearMod = require('./gear');
+const deckMod = require('./shared/deck');
+const gearMod = require('./shared/gear');
 const { CHARACTERS } = engine;
 
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）

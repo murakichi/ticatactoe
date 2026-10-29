@@ -6,7 +6,6 @@ import { geometryForCells } from './components/game/boardGeometry';
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
  * ここが唯一の出典で、キャラ選択画面の説明文もこの値を参照する（説明文と実装のズレ防止 / issue #13）。
- * バランス調整時は sim/config.js の lifeMeans も同じ値に揃えること。
  */
 export const LIFE_MEANS = {
     magician: 4,
@@ -32,8 +31,8 @@ const lifeMeanOf = (characterId: CharacterId, yingYangMode?: YingYangMode): numb
 };
 
 /** std はギア(賭博師の骰子)でばらつきを変えるときに渡す。省略時は LIFE_STD */
-const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0, std: number = LIFE_STD): number => {
-    return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std));
+const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode | undefined, lifeBonus: number = 0, std: number = LIFE_STD, rng: () => number = Math.random): number => {
+    return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std, rng));
 };
 
 /** 式神(📜)は列の並びに数えない */
@@ -67,14 +66,15 @@ const randomAnyPick = <T>(ary: T[], n: number) => {
  * 正規分布乱数関数 参考:http://d.hatena.ne.jp/iroiro123/20111210/1323515616
  * @param number m 平均μ
  * @param number s 分散σ^2
+ * @param rng [0,1) の乱数。sim が種付きの乱数を渡す。省略時は Math.random
  * @return number ランダムに生成された値
  */
-const normRand = (m: number, s: number): number => {
-    const c = Math.sqrt(-2 * Math.log(Math.random()));
-    if (0.5 - Math.random() > 0) {
-        return c * Math.sin(Math.PI * 2 * Math.random()) * s + m;
+const normRand = (m: number, s: number, rng: () => number = Math.random): number => {
+    const c = Math.sqrt(-2 * Math.log(rng()));
+    if (0.5 - rng() > 0) {
+        return c * Math.sin(Math.PI * 2 * rng()) * s + m;
     } else {
-        return c * Math.cos(Math.PI * 2 * Math.random()) * s + m;
+        return c * Math.cos(Math.PI * 2 * rng()) * s + m;
     }
 };
 

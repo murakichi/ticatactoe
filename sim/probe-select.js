@@ -14,7 +14,7 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 const char = process.argv[2];
 const g1 = parseInt(process.argv[3] || '150', 10);

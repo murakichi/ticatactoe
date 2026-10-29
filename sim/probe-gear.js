@@ -13,7 +13,7 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 const games = parseInt(process.argv[2] || '200', 10);
 const seed = parseInt(process.argv[3] || '1', 10);

@@ -263,7 +263,8 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
     board
         .map((sq, i) => {
             if (!sq.player || sq.player === me || hasLock(sq)) return -1;
-            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            // 氷結中のコマは⚡が休眠して無敵も働かない（charge.ts の isShielded と同じ）
+            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !isDormant(sq)) return -1;
             return i;
         })
         .filter((i) => i !== -1);

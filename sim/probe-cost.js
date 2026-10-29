@@ -7,8 +7,8 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const deckMod = require('./deck');
-const gearMod = require('./gear');
+const deckMod = require('./shared/deck');
+const gearMod = require('./shared/gear');
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].slice(2)] = process.argv[i + 1];
 const idx = parseInt(args.skill, 10);

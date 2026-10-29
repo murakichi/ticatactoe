@@ -24,8 +24,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const engine = require('./engine');
-const gearMod = require('./gear');
-const deckMod = require('./deck');
+const gearMod = require('./shared/gear');
+const deckMod = require('./shared/deck');
 
 const args = {};
 for (let i = 2; i < process.argv.length; i++) {

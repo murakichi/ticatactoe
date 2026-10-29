@@ -13,7 +13,7 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 if (process.argv[2] === '--merge') {
     const files = process.argv.slice(3);

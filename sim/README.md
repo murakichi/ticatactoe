@@ -75,9 +75,9 @@ node sim/cli.js auto    --chars you,giant,poisoner --seed 1     # 1試合を観�
 ```
 - 盤面は既定では人数で決まる（2=4x4 / 3〜4=5x5 / 5〜6=6x6 / 7〜8=7x7）。`--size N`（4〜10）で人数と無関係に指定できる（sim/metrics/auto）。勝利は全サイズで4連続
 - 席0が先手。**均等なら各席 1/人数**。席別勝率で先手有利、キャラ別勝率（出場1回あたり）でキャラ間の差を見る
-- ライフ減衰は3人以上で「手番1周ごとに1回」（issue #30。`config.js` の `decayPerRoundMinPlayers`）。
+- ライフ減衰は3人以上で「手番1周ごとに1回」（issue #30。本番の `decay.ts` の規則をそのまま使う）。
   A/B は環境変数で: `DECAY_PER_ROUND_MIN_PLAYERS=99 node sim/cli.js sim --players 4`（全人数で着手ごと）
-- 50ターンごとに手番開始時の魔力が全員+1ずつ増える（2人戦も対象）（`config.js` の `lateGameMagicInterval` / `lateGameMagicMinPlayers`）。
+- 50ターンごとに手番開始時の魔力が全員+1ずつ増える（2人戦も対象）（本番の `lateMagic.ts` の規則をそのまま使う）。
   A/B は `LATE_MAGIC_INTERVAL=0 node sim/cli.js sim --players 4`（無効化）
 - 速度の目安: faithful AI は 3人戦で約0.35秒/試合、8人戦で約5秒/試合（深さを 3/2/1 に落としている）
 - 2人戦の結果は多人数対応の前後で（同じseedなら）完全に一致する（capture/faithful とも確認済み）

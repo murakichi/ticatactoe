@@ -7,7 +7,7 @@
  * 使い方: node sim/probe-parity.js <キャラ> <試合数> <出力.json>
  * 注意: 魔法使い・ネクロマンサーなど AI が追加の状態(降霊の残数・割引計画など)を使うキャラは、入力が足りず一致しない(本物のずれではない)。
  */
-const engine = require('./engine'), ai = require('./ai'), deckMod = require('./deck');
+const engine = require('./engine'), ai = require('./ai'), deckMod = require('./shared/deck');
 const [, , opp = 'tactician', gamesArg = '30', out] = process.argv;
 if (!out) { console.error('使い方: node sim/probe-parity.js <キャラ> <試合数> <出力.json>'); process.exit(1); }
 const G = parseInt(gamesArg, 10);
