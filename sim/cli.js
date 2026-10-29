@@ -374,17 +374,19 @@ function watch(args) {
     const fixed = args.chars ? args.chars.split(',') : null;
     const maxGames = args.max ? parseInt(args.max, 10) : Infinity;
     const everyMs = parseFloat(args.interval || '1') * 1000;       // 画面更新の間隔
-    const ckEvery = parseInt(args.checkpoint || '200', 10);        // 勝率スナップショットを積む間隔(ゲーム数)
+    // 勝率スナップショットを積む間隔(ゲーム数)。1対1は全組を1周する長さ(110)の倍数にして、周回の途中に偏らないようにする
+    const ckEvery = parseInt(args.checkpoint || (players === 2 && !args.chars ? '220' : '200'), 10);
     const conv = args.forever ? null : {
         window: parseInt(args.window || '10', 10),                 // 直近何スナップショットを見るか
         eps: parseFloat(args.eps || '0.5') / 100,                  // その間の勝率の動きの許容幅(pt)
         minGames: parseInt(args['min-games'] || '2000', 10),
     };
-    const stats = live.createStats(CHARACTERS, players);
-    const pickRng = engine.makeRng(baseSeed * 2654435 + players);
+    const jobs = Math.max(1, parseInt(args.jobs || String(require('os').cpus().length), 10)); // 並列数（worker_threads）
+    const agg = live.createAggregator(CHARACTERS, players, ckEvery);
+    let stats = live.aggregate(agg, []);
     const tty = process.stdout.isTTY;
     const t0 = Date.now();
-    let lastDraw = 0, g = 0;
+    let lastDraw = 0;
     // 既定は本番AIと同じ装備。--no-gear でギアなし、--no-skill でスキルを使わない（置くだけ）
     const runOpts = { deck: !args['no-skill'], gears: !args['no-gear'], skills: !args['no-skill'] };
     const boardN = size != null ? size : engine.boardSizeFor(players);
@@ -394,7 +396,7 @@ function watch(args) {
         const sec = (Date.now() - t0) / 1000;
         const drift = live.maxDrift(stats, conv ? conv.window : 10);
         const out = [];
-        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : 'random'}  スキル=${runOpts.skills ? 'あり' : 'なし'}  ギア=${runOpts.gears ? 'あり' : 'なし'}`);
+        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : players === 2 ? '全組を順に' : 'random'}  並列=${jobs}  スキル=${runOpts.skills ? 'あり' : 'なし'}  ギア=${runOpts.gears ? 'あり' : 'なし'}`);
         out.push(`games=${sm.games}  ${(sm.games / Math.max(sec, 0.001)).toFixed(1)}局/秒  経過 ${sec.toFixed(0)}s  draw ${(sm.drawRate * 100).toFixed(1)}%  avgTurns ${sm.avgTurns.toFixed(1)}`);
         out.push(`勝率の変動幅(直近${conv ? conv.window : 10}回の最大-最小): ${drift == null ? 'n/a' : (drift * 100).toFixed(2) + 'pt'}${conv ? `  (<=${(conv.eps * 100).toFixed(2)}pt かつ ${conv.minGames}局以上で自動停止)` : '  (--forever: 自動停止なし)'}`);
         out.push('');
@@ -433,12 +435,20 @@ function watch(args) {
         console.log(out.join('\n'));
     };
 
+    const workers = [];
+    const latest = new Array(jobs).fill(null);
+    const finals = new Array(jobs).fill(false);
+    let finished = false;
     const finish = (why) => {
+        if (finished) return;
+        finished = true;
+        stats = live.aggregate(agg, latest);
+        workers.forEach((w) => w.terminate());
         render(true);
         console.log(`\n停止: ${why}`);
         if (args.log) {
             const sm = live.summarize(stats);
-            require('fs').appendFileSync(args.log, JSON.stringify({ players, mode, seed: baseSeed, stopReason: why, ...sm, matchups: live.matchups(stats) }) + '\n');
+            require('fs').appendFileSync(args.log, JSON.stringify({ players, mode, seed: baseSeed, stopReason: why, ...sm, matchups: live.matchups(stats), analysis: live.analyze(stats) }) + '\n');
             console.error(`(appended to ${args.log})`);
         }
         process.exit(0);
@@ -446,23 +456,22 @@ function watch(args) {
     process.on('SIGINT', () => finish('ユーザー操作 (Ctrl-C)'));
     process.on('SIGTERM', () => finish('SIGTERM'));
 
-    // イベントループを塞がないよう 50ms 分ずつ回して setImmediate で譲る
-    const tick = () => {
-        const end = Date.now() + 50;
-        while (Date.now() < end && g < maxGames) {
-            const chars = pickChars(players, fixed, pickRng);
-            const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
-            const r = runGame(chars, rng, mode, size, undefined, runOpts);
-            live.record(stats, chars, r);
-            g++;
-            if (g % ckEvery === 0) live.checkpoint(stats);
-        }
-        if (g >= maxGames) return finish(`--max ${maxGames} 局に到達`);
+    // ゲーム番号 g を worker k が k, k+jobs, ... の順に担当する（結果は g だけで決まるので並列数に依らない）
+    const { Worker } = require('worker_threads');
+    for (let k = 0; k < jobs; k++) {
+        const w = new Worker(require('path').join(__dirname, 'watch-worker.js'), {
+            workerData: { players, size, mode, seed: baseSeed, fixedChars: fixed, skills: runOpts.skills, gears: runOpts.gears, offset: k, stride: jobs, maxGames: Number.isFinite(maxGames) ? maxGames : null },
+        });
+        w.on('message', (m) => { latest[k] = m.stats; if (m.type === 'final') finals[k] = true; });
+        w.on('error', (e) => { console.error(e); process.exit(1); });
+        workers.push(w);
+    }
+    setInterval(() => {
+        stats = live.aggregate(agg, latest);
+        if (finals.every(Boolean)) return finish(`--max ${maxGames} 局に到達`);
         if (conv && live.converged(stats, conv)) return finish('勝率が収束');
         if (Date.now() - lastDraw >= everyMs) { lastDraw = Date.now(); if (tty || everyMs >= 1000) render(false); }
-        setImmediate(tick);
-    };
-    tick();
+    }, 100);
 }
 
 // ---------- dispatch ----------
@@ -480,7 +489,7 @@ else {
   node sim/cli.js play    [--me 💙|⭕] [--mychar C] [--aichar C] [--mode capture] [--seed N]
   node sim/cli.js sim     [--games 500] [--mode faithful|capture|random] [--seed N] [--pair h,c]
   node sim/cli.js auto    [--hchar C] [--cchar C] [--mode faithful] [--seed N]
-  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--no-gear] [--no-skill] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
+  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--no-gear] [--no-skill] [--jobs N] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
   node sim/cli.js inflation [--players N] [--games 200] [--size N] [--chars ..] [--bucket 50] [--json]   # 魔力インフレ指標
   node sim/cli.js metrics [--games 800] [--mode faithful] [--seed N]   # balance snapshot as JSON
   node sim/cli.js bench   [--games 1500] [--char you] [--seed N]       # AI strength vs random / head-to-head

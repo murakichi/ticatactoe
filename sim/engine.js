@@ -107,18 +107,24 @@ function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0, std = confi
 
 // [FAITHFUL] util.ts calculateWinner — purely by player symbol。盤サイズは配列長から決まる
 function calculateWinner(symbols) {
-    for (const line of geometryForCells(symbols.length).winLines) {
+    const lines = geometryForCells(symbols.length).winLines;
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l];
         const first = symbols[line[0]];
-        if (first && line.every((idx) => symbols[idx] === first)) return first;
+        if (!first) continue;
+        let all = true;
+        for (let k = 1; k < line.length; k++) if (symbols[line[k]] !== first) { all = false; break; }
+        if (all) return first;
     }
     return undefined;
 }
 
+const hasKeyEffect = (sq) => { const ef = sq.effects; for (let i = 0; i < ef.length; i++) if (ef[i].effect === '🔑') return true; return false; };
 function findEmptyIndexes(board) {
     const out = [];
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
-        if (sq.player === undefined && sq.effects.filter((e) => e.effect === '🔑').length === 0 && !thermal.emptyBlocked(sq)) out.push(i);
+        if (sq.player === undefined && !hasKeyEffect(sq) && !thermal.emptyBlocked(sq)) out.push(i);
     }
     return out;
 }
@@ -665,7 +671,7 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
 }
 
 // 式神(📜)は列の並びに数えない
-const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
+const isShikigami = (sq) => { const ef = sq.effects; for (let i = 0; i < ef.length; i++) if (ef[i].effect === '📜') return true; return false; };
 const newShikigami = (player, bind = SHIKIGAMI_LIFE) => ({ player, bind, effects: [{ effect: '📜' }] });
 const symbolsOf = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
 const seatCount = (s) => s.chars.length;

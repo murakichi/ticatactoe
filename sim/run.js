@@ -32,10 +32,15 @@ function runGame(chars, rng, modes, size, tracker, opts = {}) {
     // 着手ごとにスキルを使う手番もあるので、人数に比例して上限を広げる
     const limit = Math.max(400, 200 * chars.length);
     let guard = 0;
+    // 誰も着手しないままターン終了(チャージ等のパス)が続く＝盤面が構造的に動かない膠着（氷結で空きマスが全部塞がり、自コマはロックで上書きされない、など）。
+    // 魔力が貯まっても AI は解消しないので、打ち切って引き分けにする（そのまま回すと上限までパスを数百回繰り返す）
+    let passes = 0;
+    const STALEMATE_PASSES = 20;
     while (!s.winner && guard++ < limit) {
         if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
-        const result = opts.skills === false ? { move: ai.getEnhancedBestMove(s), turnEnded: false } : ai.makeMove(s, modeOf(s.turn));
-        if (result.turnEnded) continue;
+        const result = opts.skills === false ? ai.passIfStuck(s, { move: ai.getEnhancedBestMove(s), turnEnded: false }) : ai.makeMove(s, modeOf(s.turn));
+        if (result.turnEnded) { if (++passes >= STALEMATE_PASSES) break; continue; }
+        passes = 0;
         if (result.move === null) break;
         const before = s.currentTurn;
         engine.placeMove(s, result.move);

@@ -1437,7 +1437,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;

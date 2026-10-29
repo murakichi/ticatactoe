@@ -24,12 +24,13 @@ function orthoNeighbors(i, size) {
     return out;
 }
 
-const frozenStacks = (sq) => sq.effects.filter((e) => e.effect === '❄').length;
+const countEffect = (sq, kind) => { let n = 0; const ef = sq.effects; for (let i = 0; i < ef.length; i++) if (ef[i].effect === kind) n++; return n; };
+const frozenStacks = (sq) => countEffect(sq, '❄');
 const isFrozen = (sq) => frozenStacks(sq) > 0;
 /** 休眠マス: 氷結中または火炎中。そのマスの🌱 / ⚡ / ☠ は消えないが効力を発揮しない（氷結と火炎は共存しない） */
 const isDormant = (sq) => isFrozen(sq); // 休眠は氷結のみ（火炎中のマスは🌱が消え、⚡☠は重複して働く）
-const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
-const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+const flameStacks = (sq) => countEffect(sq, '🔥');
+const hasLock = (sq) => countEffect(sq, '🔑') > 0;
 /** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき） */
 const FLAME_INSTANT_DAMAGE = 1;
 const without = (sq, ...kinds) => ({ ...sq, effects: sq.effects.filter((e) => !kinds.includes(e.effect)) });
@@ -127,7 +128,7 @@ const freezeAll = (board) => freeze(board, board.map((_, i) => i));
 // ---- 🌱バッズ操作（刈り入れ前夜 / ひこばえ / 風の落とし子） ----
 /** 新しく🌱を持てるコマ: コマがあり、氷結も火炎もしていない */
 const canBud = (sq) => !!sq.player && !isFrozen(sq) && flameStacks(sq) === 0;
-const budStacks = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+const budStacks = (sq) => countEffect(sq, '🌱');
 /** 効力を発揮している🌱の数。休眠マス（氷結・火炎中）の🌱は消えないが休眠する（魔力ボーナスに数えない）。guarded=冬至の種子で🌱だけは休眠しない */
 const activeBuds = (sq, guarded = false) => (guarded || !isDormant(sq) ? budStacks(sq) : 0);
 /** player のコマの🌱を全除去し、除去した🌱の総数を返す（休眠マスの🌱には触れない。guarded なら休眠マスの🌱も対象）。board を直接書き換える */

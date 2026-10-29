@@ -1519,6 +1519,25 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
     });
 });
 
+describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', () => {
+    const ai = new AIPlayer('💙', 'cryomancer', ['⭕']);
+    it('対策ロックは氷結中の自コマを対象にしない（氷室はロック=氷結で、同じコマを毎手番凍らせ続けていた）', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 2, effects: [{ effect: '❄' }] };
+        b[6] = { player: '💙', bind: 3, effects: [] };
+        expect(ai.findAntiNecroLockTarget(b)).toBe(6);
+        b[6] = { player: '💙', bind: 3, effects: [{ effect: '❄' }] };
+        expect(ai.findAntiNecroLockTarget(b)).toBeNull();
+    });
+    it('絶対零度は🔑ロック中の敵コマを数えない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] }; });
+        expect(ai.shouldGlacier(b)).toBe(false);
+        [3, 4, 5].forEach((i) => put(b, i, '⭕', 4));
+        expect(ai.shouldGlacier(b)).toBe(true);
+    });
+});
+
 describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダメージを受けない）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');

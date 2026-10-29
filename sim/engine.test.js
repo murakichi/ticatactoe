@@ -3318,5 +3318,68 @@ test('無礼講: このターン、トークン系スキルのコストが0に�
     assert.strictEqual(s.heartMagic, m, '二重には撃てない');
 });
 
+
+// ---- 膠着（引き分け多発 #300）の修正 ----
+test('対策ロック: 氷結中の自コマは対象にしない（氷室の番人はロック=氷結で、同じコマを毎手番凍らせ続けていた）', () => {
+    const ai = require('./ai');
+    const board = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    board[5] = { player: '💙', bind: 2, effects: fx('❄') };
+    board[6] = { player: '💙', bind: 3, effects: [] };
+    assert.strictEqual(ai.bestAntiNecroLockTarget(board, '💙'), 6, '氷結していない低ライフのコマを選ぶ');
+    board[6] = { player: '💙', bind: 3, effects: fx('❄') };
+    assert.strictEqual(ai.bestAntiNecroLockTarget(board, '💙'), null, 'すべて氷結中なら対象なし');
+});
+
+test('絶対零度: 🔑ロック中の敵コマは数えない（氷結も爆破も効かないのに撃ち続けて盤面が氷結で埋まっていた）', () => {
+    const ai = require('./ai');
+    const board = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    for (const i of [0, 1, 2]) board[i] = { player: '⭕', bind: 4, effects: fx('🔑') };
+    assert.strictEqual(ai.glacierHits(board, '💙'), 0);
+    board[3] = { player: '⭕', bind: 4, effects: [] };
+    assert.strictEqual(ai.glacierHits(board, '💙'), 1);
+    board[4] = { player: '💙', bind: 4, effects: [] };
+    assert.strictEqual(ai.glacierHits(board, '💙'), 1, '自コマは数えない');
+});
+
+test('placeableNow: 氷結トークンで自分の氷結コマが乗ったマス・氷結の空きマス・ライフのある敵コマは打てない', () => {
+    const ai = require('./ai');
+    const s = game('cryomancer', 'you');
+    s.board[1] = { player: '💙', bind: 3, effects: fx('❄') };      // 自分の氷結コマ（上書き不可）
+    s.board[2] = { player: undefined, bind: 0, effects: fx('❄') }; // 氷結の空きマス
+    s.board[3] = { player: '⭕', bind: 2, effects: [] };           // ライフのある敵コマ
+    s.board[4] = { player: '💙', bind: 3, effects: [] };           // 自分の通常コマ（補強できる）
+    assert.strictEqual(ai.placeableNow(s, 0), true);
+    assert.strictEqual(ai.placeableNow(s, 1), false);
+    assert.strictEqual(ai.placeableNow(s, 2), false);
+    assert.strictEqual(ai.placeableNow(s, 3), false);
+    assert.strictEqual(ai.placeableNow(s, 4), true);
+    s.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(ai.placeableNow(s, 3), true, 'ライフ0の敵コマは奪える');
+});
+
+test('置ける場所が無いとき makeMove はチャージでパスして手番を終える（move=null のまま止めない）', () => {
+    const ai = require('./ai');
+    const s = game('you', 'you');
+    for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: fx('❄') }; // 全マス氷結の空き
+    const turn = s.currentTurn;
+    const r = ai.makeMove(s, 'faithful');
+    assert.strictEqual(r.turnEnded, true);
+    assert.strictEqual(r.move, null);
+    assert.ok(s.currentTurn > turn, '手番が進む');
+});
+
+test('runGame: 誰も着手しないままパスが続く膠着は、上限まで回さず打ち切って引き分けにする', () => {
+    const { runGame } = require('./run');
+    const ai = require('./ai');
+    const orig = ai.makeMove;
+    let calls = 0;
+    ai.makeMove = (s) => { calls++; e.SKILLS.charge(s); return { move: null, turnEnded: true }; };
+    try {
+        const r = runGame(['you', 'you'], e.makeRng(1), 'faithful');
+        assert.strictEqual(r.winnerSeat, -1);
+        assert.ok(calls <= 20, `パス20回で打ち切る（${calls}回）`);
+    } finally { ai.makeMove = orig; }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

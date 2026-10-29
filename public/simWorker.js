@@ -1,9 +1,9 @@
-/* ブラウザ内の対戦シミュレーション用 Web Worker。
+/* ブラウザ内の対戦シミュレーション用 Web Worker（計算だけ。集計・分析は画面側）。
  * sim/ の CommonJS モジュール(public/sim/ にコピーされたもの)を同期XHRで読み、require を自前で用意して動かす。
- * メインスレッドとのやりとり:
- *   -> { cmd: 'start', players, size, mode, seed, fixedChars, skills(既定true), gears(既定true), conv: {window, eps, minGames} | null, maxGames }
+ * 画面は端末のコア数ぶんこの Worker を立て、ゲーム番号 g = offset, offset+stride, ... を分担させる。
+ *   -> { cmd: 'start', players, size, mode, seed, fixedChars, skills, gears, offset, stride, maxGames }
  *   -> { cmd: 'stop' }
- *   <- { type: 'progress' | 'done', reason?, summary, matchups, drift, elapsed }
+ *   <- { type: 'raw', stats }（累計の統計を一定間隔で。停止・完了時は type: 'final'）/ { type: 'error', message }
  */
 'use strict';
 const base = new URL('sim/', self.location.href).href;
@@ -26,47 +26,20 @@ self.onmessage = (e) => {
     const m = e.data;
     if (m.cmd === 'stop') { running = false; return; }
     if (m.cmd !== 'start') return;
-    try { start(m); } catch (err) { self.postMessage({ type: 'error', message: String(err && err.message || err) }); }
+    try { start(m); } catch (err) { self.postMessage({ type: 'error', message: String((err && err.message) || err) }); }
 };
 
 function start(o) {
-    const engine = load('engine');
-    const { runGame, pickChars } = load('run');
-    const live = load('live');
-    const stats = live.createStats(engine.CHARACTERS, o.players);
-    const pickRng = engine.makeRng(o.seed * 2654435 + o.players);
-    const t0 = Date.now();
-    const window_ = o.conv ? o.conv.window : 10;
-    let g = 0, lastPost = 0;
+    const job = load('compute').createJob(o);
+    let lastPost = 0;
     running = true;
-
-    const analysisOf = () => {
-        const an = live.analyze(stats);
-        return an ? { ...an, verdict: live.verdict(an) } : null;
-    };
-    const post = (type, reason) => self.postMessage({
-        type, reason,
-        summary: live.summarize(stats),
-        matchups: live.matchups(stats),
-        analysis: analysisOf(),
-        drift: live.maxDrift(stats, window_),
-        elapsed: (Date.now() - t0) / 1000,
-    });
-
+    const post = (type) => self.postMessage({ type, stats: job.stats });
     // メッセージ(stop)を受け取れるよう、50msぶん回すごとにイベントループへ戻る
     const tick = () => {
-        if (!running) return post('done', 'stopped');
-        const end = Date.now() + 50;
-        while (Date.now() < end && g < o.maxGames) {
-            const chars = pickChars(o.players, o.fixedChars, pickRng);
-            const rng = engine.makeRng(o.seed * 1000003 + g * 7919 + o.players);
-            live.record(stats, chars, runGame(chars, rng, o.mode, o.size, undefined, { deck: o.skills !== false, gears: o.gears !== false, skills: o.skills !== false }));
-            g++;
-            if (g % o.checkpoint === 0) live.checkpoint(stats);
-        }
-        if (g >= o.maxGames) { running = false; return post('done', 'max'); }
-        if (o.conv && live.converged(stats, o.conv)) { running = false; return post('done', 'converged'); }
-        if (Date.now() - lastPost >= 500) { lastPost = Date.now(); post('progress'); }
+        if (!running) return post('final');
+        job.run(50);
+        if (job.done) { running = false; return post('final'); }
+        if (Date.now() - lastPost >= 300) { lastPost = Date.now(); post('raw'); }
         setTimeout(tick, 0);
     };
     tick();
