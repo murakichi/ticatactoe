@@ -5,7 +5,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Game, PlayerConfig } from './Game';
 import AIPlayer from './AIPlayer';
 import { pickRecommendedGears } from './gear';
-import { variedAIDeck } from './deck';
+import { pickRecommendedDeck } from './deck';
 
 const run = process.env.AI_MATCH ? describe : describe.skip;
 
@@ -31,8 +31,8 @@ run('AI同士の実戦（本番TS版）', () => {
         }) : null;
         for (let g = 0; g < games; g++) {
             const yinFirst = g % 2 === 0;
-            // App.tsx と同じ条件: AI席は推奨ギア（主案/別案）と、推奨から3枚入れ替えたデッキ（核のカードは外さない）
-            const seat = (character: string): PlayerConfig => ({ character: character as never, isAI: true, gears: character === hero && process.env.AI_MATCH_HGEARS ? (process.env.AI_MATCH_HGEARS === 'none' ? [] : process.env.AI_MATCH_HGEARS.split(',') as never) : character !== hero && process.env.AI_MATCH_OGEARS ? (process.env.AI_MATCH_OGEARS === 'none' ? [] : process.env.AI_MATCH_OGEARS.split(',') as never) : pickRecommendedGears(character as never), deck: character === hero && process.env.AI_MATCH_HDECK ? process.env.AI_MATCH_HDECK.split(',').map(Number) : character !== hero && process.env.AI_MATCH_ODECK ? process.env.AI_MATCH_ODECK.split(',').map(Number) : variedAIDeck(character as never) });
+            // App.tsx と同じ条件: AI席は推奨ギア・推奨デッキ（どちらも主案/別案からの選択。カードのランダム入れ替えはしない）
+            const seat = (character: string): PlayerConfig => ({ character: character as never, isAI: true, gears: character === hero && process.env.AI_MATCH_HGEARS ? (process.env.AI_MATCH_HGEARS === 'none' ? [] : process.env.AI_MATCH_HGEARS.split(',') as never) : character !== hero && process.env.AI_MATCH_OGEARS ? (process.env.AI_MATCH_OGEARS === 'none' ? [] : process.env.AI_MATCH_OGEARS.split(',') as never) : pickRecommendedGears(character as never), deck: character === hero && process.env.AI_MATCH_HDECK ? process.env.AI_MATCH_HDECK.split(',').map(Number) : character !== hero && process.env.AI_MATCH_ODECK ? process.env.AI_MATCH_ODECK.split(',').map(Number) : pickRecommendedDeck(character as never) });
             const players: PlayerConfig[] = yinFirst
                 ? [seat(hero), seat(opp as string)]
                 : [seat(opp as string), seat(hero)];
