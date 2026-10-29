@@ -187,4 +187,4 @@ function makeMove(s) {
     return { move: null, turnEnded: true };
 }
 
-module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf };
+module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf, aiFor };
