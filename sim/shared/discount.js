@@ -25,12 +25,12 @@ const isReducerSkill = (key) => (0, exports.isDiscountSkill)(key) || key === exp
 exports.isReducerSkill = isReducerSkill;
 /** 軽減札のコストキー → 効果 */
 exports.DISCOUNT_SKILLS = {
-    onClickMarkdown: { next: 3 }, //                      特売: 次に打つスキル-3
-    onClickEffectDiscount: { effect: 1 }, //              付与割引: このターン、エフェクト付与スキル-1
-    onClickTokenDiscount: { token: 1 }, //                トークン割引: このターン、トークン付与スキル-1
-    onClickVitalMarkdown: { next: 4, life: 1 }, //        活力特売: 次に打つスキル-4、ライフ+1
-    onClickUniqueDiscount: { unique: 6, life: -1 }, //    固有割引: このターン、固有スキル-6（1ターンに一度、ライフ-1）
-    onClickClearance: { next: 7 }, //                     大特価: 次に打つスキル-7
+    onClickMarkdown: { next: 3 },
+    onClickEffectDiscount: { effect: 1 },
+    onClickTokenDiscount: { token: 1 },
+    onClickVitalMarkdown: { next: 4, life: 1 },
+    onClickUniqueDiscount: { unique: 6, life: -1 },
+    onClickClearance: { next: 7 },
     onClickCounterMarkdown: { next: 3, life: 1 }, //      返し特売: 次に打つスキル-3、ライフ+1（直前の相手の手番に相手がスキルを使っていれば0コスト）
 };
 const isDiscountSkill = (key) => key in exports.DISCOUNT_SKILLS;

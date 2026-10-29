@@ -6,15 +6,15 @@ exports.skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickShikigamiPlace: 2, // 陰: 任意の空きマスに式神を置く
-    onClickShikigamiBlast: 4, // 陽: 自分の式神を1つ選んで爆破
-    onClickShikigamiAll: 2, // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり（3→2: 本番AI 全相手 55→76%。ウェブ測定 対強豪平均 60.5%・最悪対面 39.2%）
-    onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
-    onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
-    onClickShikigamiBless: 5, // 汎用(idx 88 式神の加護): 自分の式神を1体消費して、自陣のコマ全てのライフ+3
-    onClickShikigamiPurge: 5, // 汎用(idx 91 式神の供犠): 自陣の式神が3体以上なら0コスト。自陣の式神をランダムに1体壊し、敵のコマ1体のライフを0にする
-    onClickShikigamiCurse: 5, // 汎用(idx 89 式神の呪詛): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全てに☠を2つ
-    onClickShikigamiDiscount: 2, // 汎用(idx 90 式神割引): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減
+    onClickShikigamiPlace: 2,
+    onClickShikigamiBlast: 4,
+    onClickShikigamiAll: 2,
+    onClickShikigamiRandom: 2,
+    onClickShikigamiFlood: 7,
+    onClickShikigamiBless: 5,
+    onClickShikigamiPurge: 5,
+    onClickShikigamiCurse: 5,
+    onClickShikigamiDiscount: 2,
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -100,37 +100,37 @@ exports.skillCosts = {
     onClickVitalMarkdown: 2,
     onClickUniqueDiscount: 3,
     onClickClearance: 4,
-    onClickRandomCast: 2, // 福引き(idx 59)
-    onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
-    onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
+    onClickRandomCast: 2,
+    onClickCounterMarkdown: 2,
+    onClickBurnout: 5,
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
-    onClickLeafToken: 3, //       木枯らしの使い(idx 62): 🍂付きトークン
-    onClickTwinLeafToken: 7, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
-    onClickDoubleLeafToken: 9, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
-    onClickLeafAll: 5, //         枯野の相席(idx 65): 盤面の全てのコマ（敵味方）に🍂を1つずつ付与
-    onClickBonfire: 3, //         焚き火の唄(idx 66): 敵陣の🍂を全て除去（🔑・❄のマスは対象外）
-    onClickMulch: 2, //           腐葉土の目覚め(idx 67): 自陣の🍂1枚を🌱に変える
-    onClickAutumn: 4, //          一葉知秋(idx 68): 盤面の🌱をすべて🍂に変える
-    onClickLeafFrost: 3, //       霜枯れ(idx 69): 自陣の🍂マスに❄を付ける（氷結中は🍂が休眠する）
-    onClickSpringWind: 2, //      春一番(idx 70): 自陣の❄を全て解除し、解除した数だけこのターンに打つスキルを軽減する
-    onClickKimon: 6, //           鬼門封じ(idx 74): 敵コマを1つ破壊（氷結中は❄-1）し、空きマスになれば3ターンロック
-    onClickFireWheel: 5, //       火の車(idx 75): ランダムな敵マス2つに🔥、その後手札をシャッフル。このターン敵か自陣に🔥を付与していれば0（撃つとリセット）
-    onClickStrip: 4, //           裸の王様(idx 76): 相手全員のギアを、その席の次の手番の終わりまで無効にする
-    onClickChargeSeason: 7, //    静電気の季節(idx 77): 今の手番を含む3ターン、設置する駒に⚡
-    onClickBristle: 6, //         総毛立つ(idx 78): 自陣の全コマ(ロック中を除く)に⚡
-    onClickRelease: 5, //         落雷は忘れた頃に(idx 79): 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ
-    onClickStash: 1, //           雷神のへそくり(idx 80): 自陣を1つ選んで⚡を全て除去し、除去したスタック1つにつき次のスキルのコスト-1
-    onClickThunderFire: 7, //     雷のない所に火は立たぬ(idx 81): ⚡のあるコマを1つ破壊し、周囲8マスの敵コマ2〜全部に🔥+1
-    onClickDarkPot: 9, //         一寸先は闇鍋(idx 82): 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1）。盤面のエフェクトの数だけ軽減（最低1）
-    onClickChargeHeal: 6, //     雷を食らわば皿まで(idx 83): ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。この手番に付与した⚡の数だけ軽減（最低1）
-    onClickLeafDrop: 1, //       落ち葉の置き土産(idx 84): ランダムな敵のコマ1つに🍂を1つ付与。敵の🍂は自分のコストも上げる（魔女は相殺）ので最安
-    onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
-    onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
-    onClickTinder: 2, //         火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付与（鍛冶師は🔥付与で-1）
-    onClickSmallFry: 10, //      一寸の虫に魂なし(idx 92): 敵のライフ3以下のコマを全て破壊し、相手は次の手番の終わりまでライフ3以下のコマを置けない（トークン等・ネクロの蘇生も）。盤面のコマの数だけ軽減（最低1）
-    onClickFirstFrost: 6, //     初霜(idx 93): トークン扱い。敵の🍂があるコマを全て凍結し、自陣にバッズトークンを置く。盤面の🍂（効力のあるもの）が3枚以上なら0
-    onClickGather: 8, //         吹き寄せ(idx 94): トークン扱い。自陣にトークンを置き、盤面のエフェクトを全てそのマスに集める（氷結・⚡無敵のマスは動かさない）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）
-    onClickBurnOff: 9, //        山焼き(idx 95): トークン扱い。敵のエフェクトがあるマス（氷結・⚡無敵を除く）全てに🔥を1つ付け、自陣にロック付きトークンを置く。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）
+    onClickLeafToken: 3,
+    onClickTwinLeafToken: 7,
+    onClickDoubleLeafToken: 9,
+    onClickLeafAll: 5,
+    onClickBonfire: 3,
+    onClickMulch: 2,
+    onClickAutumn: 4,
+    onClickLeafFrost: 3,
+    onClickSpringWind: 2,
+    onClickKimon: 6,
+    onClickFireWheel: 5,
+    onClickStrip: 4,
+    onClickChargeSeason: 7,
+    onClickBristle: 6,
+    onClickRelease: 5,
+    onClickStash: 1,
+    onClickThunderFire: 7,
+    onClickDarkPot: 9,
+    onClickChargeHeal: 6,
+    onClickLeafDrop: 1,
+    onClickKindling: 5,
+    onClickLeafCloak: 3,
+    onClickTinder: 2,
+    onClickSmallFry: 10,
+    onClickFirstFrost: 6,
+    onClickGather: 8,
+    onClickBurnOff: 9,
     onClickFreeToken: 4, //      無礼講(idx 96): このターン、トークン系スキルのコストを0にする
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
