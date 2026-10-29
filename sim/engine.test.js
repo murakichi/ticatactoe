@@ -448,6 +448,90 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
 });
 
+test('式神の加護(idx 88): 自分の式神を1体消費して、自陣のコマ全て（式神を除く）のライフ+3。自陣のコマか式神が無いと使えない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('💙');
+    s.board[2] = { player: '💙', bind: 2, effects: [] };
+    s.board[3] = { player: '⭕', bind: 2, effects: [] };
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiBless(s);
+    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(e.placeMove(s, 2), false); // 式神でないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.deepStrictEqual(s.board[0], { player: undefined, bind: 0, effects: [] }); // 消費された
+    assert.strictEqual(e.isShikigami(s.board[1]), true); // 他の式神は残る（ライフも変わらない）
+    assert.strictEqual(s.board[1].bind, 2);
+    assert.strictEqual(s.board[2].bind, 5);
+    assert.strictEqual(s.board[3].bind, 2); // 敵は変わらない
+    const t = gameN('you', 'you'); // 式神だけで自陣のコマが無い → 使えない
+    t.board[0] = e.newShikigami('💙');
+    t.magic[0] = 10;
+    e.SKILLS.shikigamiBless(t);
+    assert.strictEqual(t.magic[0], 10);
+});
+
+test('式神の呪詛(idx 89): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全て（🔑ロック除く）に☠を2つ。対象が無いと使えない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[2] = { player: '⭕', bind: 5, effects: [] }; // エフェクト無し
+    s.board[3] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロック中
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiCurse(s);
+    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(e.placeMove(s, 1), false); // 自分の式神でないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.deepStrictEqual(s.board[0], { player: undefined, bind: 0, effects: [] });
+    assert.strictEqual(s.board[1].effects.filter((x) => x.effect === '☠').length, 2);
+    assert.strictEqual(s.board[2].effects.length, 0);
+    assert.strictEqual(s.board[3].effects.filter((x) => x.effect === '☠').length, 0);
+    const t = gameN('you', 'you'); // 対象（エフェクト持ちの敵）が無い
+    t.board[0] = e.newShikigami('💙');
+    t.board[1] = { player: '⭕', bind: 5, effects: [] };
+    t.magic[0] = 10;
+    e.SKILLS.shikigamiCurse(t);
+    assert.strictEqual(t.magic[0], 10);
+});
+
+test('式神割引(idx 90): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減する。軽減札なので「次に打つスキル」を消費しない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('⭕'); // 敵の式神も数える
+    s.magic[0] = 20;
+    e.SKILLS.shikigamiDiscount(s);
+    assert.strictEqual(s.magic[0], 18);
+    assert.strictEqual(s.discount[0].next, 4); // 2 + 式神2体
+    e.SKILLS.shikigamiDiscount(s); // 軽減札どうしは足し算（このターンの軽減は消費されない）
+    assert.strictEqual(s.discount[0].next, 8);
+});
+
+test('式神の供犠(idx 91): 自陣の式神をランダムに1体壊し、選んだ敵コマのライフを0にする。式神3体以上なら0コスト。式神・🔑ロックは選べない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('💙');
+    s.board[2] = e.newShikigami('💙');
+    s.board[5] = { player: '⭕', bind: 6, effects: [] };
+    s.board[6] = { player: '⭕', bind: 6, effects: [{ effect: '🔑' }] };
+    s.board[7] = e.newShikigami('⭕');
+    s.magic[0] = 3;
+    e.SKILLS.shikigamiPurge(s);
+    assert.strictEqual(s.magic[0], 3); // 式神3体なので0コスト
+    assert.strictEqual([0, 1, 2].filter((i) => e.isShikigami(s.board[i])).length, 2); // ランダムに1体壊れた
+    assert.strictEqual(e.placeMove(s, 6), false); // ロック中は選び直せる
+    assert.strictEqual(e.placeMove(s, 7), false); // 式神は選べない
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].bind, 0);
+    assert.strictEqual(s.board[5].player, '⭕');
+    const u = gameN('you', 'you'); // 式神2体 → コスト5
+    u.board[0] = e.newShikigami('💙');
+    u.board[1] = e.newShikigami('💙');
+    u.board[5] = { player: '⭕', bind: 6, effects: [] };
+    u.magic[0] = 8;
+    e.SKILLS.shikigamiPurge(u);
+    assert.strictEqual(u.magic[0], 3);
+});
+
 test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');

@@ -11,7 +11,7 @@
 
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces, blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -60,7 +60,7 @@ const AI_DEFAULTS = {
     floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3; AI_DEFAULTS.staleMove = 1; // 本番(AIPlayer.ts)は着手をスキルの前の盤面で決める。sim もそれに合わせる(issue #180)
+AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3; AI_DEFAULTS.shSpecials = 1; AI_DEFAULTS.staleMove = 1; // 本番(AIPlayer.ts)は着手をスキルの前の盤面で決める。sim もそれに合わせる(issue #180)
 AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
 AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
@@ -1521,6 +1521,40 @@ function floodComboWins(s, me) {
     return calculateWinner(lineSyms(nb)) === me;
 }
 // 陰陽師の1手番の式神運用。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。何か撃ったら true
+// 陰陽師の式神スキル(88 加護 / 89 呪詛 / 91 供犠)の使いどき。消費する式神は爆破価値の低いものから。AIPlayer.ts planShikigami と同一
+const SH_BLESS_WEAK = 2; // 加護: ライフがこの値以下の自陣コマが2つ以上
+const SH_CURSE_MIN = 2; // 呪詛: エフェクトが乗っている敵コマの最低数
+function shikigamiSpecials(s, me) {
+    if (!F.shSpecials) return false;
+    const mine = ownShikigami(s, me);
+    if (mine.length === 0) return false;
+    const cheapest = () => mine.map((i) => ({ i, v: blastValue(s, i, me) })).sort((a, b) => a.v - b.v)[0].i;
+    // 供犠: 式神が3体以上なら0コスト。最もライフの高い敵コマを0にする（そのあと奪える）
+    if (s.skills.includes(91) && mine.length >= SHIKIGAMI_PURGE_FREE) {
+        const ts = purgeTargets(s);
+        if (ts.length > 0) {
+            const t = ts.map((i) => ({ i, b: s.board[i].bind })).sort((a, b) => b.b - a.b || a.i - b.i)[0].i;
+            SKILLS.shikigamiPurge(s);
+            placeMove(s, t);
+            return true;
+        }
+    }
+    const cost = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
+    if (s.skills.includes(89) && curseTargets(s).length >= SH_CURSE_MIN && curMagic(s) >= cost('onClickShikigamiCurse')) {
+        SKILLS.shikigamiCurse(s);
+        placeMove(s, cheapest());
+        return true;
+    }
+    if (s.skills.includes(88) && curMagic(s) >= cost('onClickShikigamiBless')) {
+        const own = blessTargets(s);
+        if (own.length >= 3 && own.filter((i) => s.board[i].bind <= SH_BLESS_WEAK).length >= 2) {
+            SKILLS.shikigamiBless(s);
+            placeMove(s, cheapest());
+            return true;
+        }
+    }
+    return false;
+}
 function shikigamiTurn(s, me) {
     let acted = false;
     const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
@@ -1588,6 +1622,7 @@ function shikigamiTurn(s, me) {
             break;
         }
         if (worth) break; // 爆破できる式神があるなら、魔力を貯めて爆破に備える
+        if (shikigamiSpecials(s, me)) { acted = true; break; } // 壊す式神がランダムなので、このターンの式神運用はここまで（AIPlayer.ts と同一）
         if (mode === 'ying' && mine.length < F.shMax && curMagic(s) >= costOf('onClickShikigamiPlace') + F.shReserve) {
             const cell = bestShikigamiCell(s, me);
             if (cell === null) break;
@@ -1604,7 +1639,7 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useShikigamiBless = false; s.useShikigamiCurse = false; s.useShikigamiPurge = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
@@ -2208,7 +2243,8 @@ function faithfulMakeMoveInner(s) {
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
     updateShield(s); // スキル(ランダム帯電など)で⚡の無敵マスが増えたぶんを反映してから着手を選ぶ
-    const move = staleMove !== undefined ? staleMove : getEnhancedBestMove(s);
+    // 先に決めた着手が、スキルで無敵(⚡)になったマスなら打てない（手番が進まず止まる）。そのときだけ盤面を見て選び直す
+    const move = staleMove !== undefined && !(staleMove !== null && isShielded(s, s.board[staleMove])) ? staleMove : getEnhancedBestMove(s);
     // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
     if (move === null) {
         SKILLS.charge(s);
