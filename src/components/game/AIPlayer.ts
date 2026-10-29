@@ -7,6 +7,7 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
 import { shouldDecay } from './decay';
+import { smallFry } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..92)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -36,6 +37,7 @@ const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
 const SH_BLESS_WEAK = 2; // 加護: ライフがこの値以下の自陣コマが2つ以上のとき使う (sim/ai.js SH_BLESS_WEAK)
 const SH_CURSE_MIN = 2; // 呪詛: エフェクトが乗っている敵コマの最低数 (sim/ai.js SH_CURSE_MIN)
 const SH_PURGE_FREE = 3; // 供犠: 自陣の式神がこの数以上なら0コスト (Game.tsx SHIKIGAMI_PURGE_FREE)
+const SH_SMALL_FRY_MIN = 1; // 一寸の虫に魂なし(92)を撃つ最低の破壊数 (sim/ai.js F.smallFry)
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
 const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
 const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
@@ -902,7 +904,12 @@ class AIPlayer {
         // A/B検証の結果、固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが柔軟性を削いで不利だったため無効化。
         // 有益だったキャラ(軍師=トークン固定 / あなた / ネクロ=中立)のみロックする。
         // 陰陽師は百鬼夜行(73)+式神一括(71)のコンボ札だけを手札に固定して、揃うまで持ち続ける（sim/ai.js の floodLock=1）
-        if (this.character === 'yinYangMaster') return availableSkills.filter((i) => i === 71 || i === 73 || i === 53); // 特売(53)もコンボの圧縮に使うので固定
+        if (this.character === 'yinYangMaster') {
+            const combo = availableSkills.filter((i) => i === 71 || i === 73 || i === 53); // 特売(53)もコンボの圧縮に使うので固定
+            // 魔女戦: 一寸の虫に魂なし(92)を最優先で固定する（sim/ai.js と同一。本番AI 対魔女 28→51%(51/182→92/179)。相手が魔女以外だと固定が裏目: 対毒使い 26/54→10/39、対軍師 21/55→6/37）
+            const vsWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch');
+            return vsWitch && availableSkills.includes(92) ? [92, ...combo].slice(0, 2) : combo;
+        }
         if (this.character === 'giant' || this.character === 'magician') {
             return [];
         }
@@ -1774,6 +1781,18 @@ class AIPlayer {
         // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
         const holdFlood = !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
             && magic < this.comboPlan(board, costs, availableSkills).total;
+        // 陰陽師: 一寸の虫に魂なし(92)で壊せる敵コマがあれば撃つ（盤面のコマの数だけ安い。sim/ai.js の smallFry と同一。
+        // 本番AI 対魔女 22→45%(13/59→29/65、デッキの12を92に差し替え)、全相手 52.7→54.2% #276）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(92)) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            const r = smallFry(post, this.playerSymbol, this.characters);
+            if (r.destroyed.length >= SH_SMALL_FRY_MIN && magic >= this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                this.updateShield(board);
+                return { move: followup, skills: ['onClickSmallFry'] };
+            }
+        }
         // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
         if (this.character === 'yinYangMaster' && !holdFlood) {
             const plan = this.planShikigami(board, magic, costs, availableSkills);
