@@ -8,11 +8,10 @@ const BURN_OFF_CUT = 3;
 const CHARGE_GRANT_KEYS = new Set(['onClickChargeToken', 'onClickDoubleChargeToken', 'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom', 'onClickChargeSpread']);
 const countOwn = (board, player, effect) => board.reduce((n, sq) => (sq.player === player ? n + sq.effects.filter((e) => e.effect === effect).length : n), 0);
 const boardEffectCount = (board) => board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect !== '📜').length, 0);
-/** 吹き寄せ・山焼きの軽減に数えるエフェクトの数。氷結(❄)のあるマスは❄の数だけ（他のエフェクトは数えない）、🔑ロックのあるマスは無視（🔑も数えない）。式神の印📜は数えない */
+/** 吹き寄せ・山焼きの軽減に数えるエフェクトの数。氷結(❄)のあるマスは❄の数だけ（同じマスの他のエフェクトは数えない）。それ以外のマスはエフェクトを全部数えるが、🔑ロック自体と式神の印📜は数えない（ロックのマスの他のエフェクトは数える） */
 const reduceCount = (board) => board.reduce((n, sq) => {
     if (sq.effects.some((e) => e.effect === '❄')) return n + sq.effects.filter((e) => e.effect === '❄').length;
-    if (sq.effects.some((e) => e.effect === '🔑')) return n;
-    return n + sq.effects.filter((e) => e.effect !== '📜').length;
+    return n + sq.effects.filter((e) => e.effect !== '📜' && e.effect !== '🔑').length;
 }, 0);
 const boardPieceCount = (board) => board.filter((sq) => !!sq.player).length;
 const ownLeaves = (board, player) => countOwn(board, player, '🍂');

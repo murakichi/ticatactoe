@@ -1950,11 +1950,11 @@ function onClickFirstFrost(s) {
     bumpStat(s, 'firstFrostFrozen', frozen.length);
 }
 
-// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・🔑ロック・⚡無敵のマスは無視）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
-// エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・ロックのマスは数えない） [FAITHFUL] Game.tsx onClickBurnOff
+// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・⚡無敵のマスは無視。🔑ロック自体は数えないが、ロックのマスの他のエフェクトは対象）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
+// エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickBurnOff
 function burnOffTargets(s) {
     const me = curPlayer(s);
-    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜') && !sq.effects.some((e) => e.effect === '❄' || e.effect === '🔑') && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜' && e.effect !== '🔑') && !sq.effects.some((e) => e.effect === '❄') && !isShielded(s, sq) ? i : -1)).filter((i) => i !== -1);
 }
 function burnOffLegal(s) { return !s.usedTokenThisTurn && (burnOffTargets(s).length > 0 || findEmptyIndexes(s.board).length > 0); }
 function onClickBurnOff(s) {
@@ -1986,7 +1986,7 @@ function onClickBurnOff(s) {
 }
 
 // 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
-// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・ロックのマスは数えない） [FAITHFUL] Game.tsx onClickGather
+// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {
     if (!gatherLegal(s)) return;
@@ -1995,10 +1995,10 @@ function onClickGather(s) {
     const moved = [];
     let flames = 0;
     s.board.forEach((sq, k) => {
-        if (isGuarded(s, sq) || sq.effects.some((e) => e.effect === '🔑' || e.effect === '❄')) return; // 氷結のあるマスとロックのマスは無視する
+        if (isShielded(s, sq) || sq.effects.some((e) => e.effect === '❄')) return; // 氷結のあるマスと⚡無敵のマスは無視する（🔑ロック自体は動かさないが、ロックのマスの他のエフェクトは動かす）
         const keep = [];
         for (const e of sq.effects) {
-            if (e.effect === '📜') keep.push(e);
+            if (e.effect === '📜' || e.effect === '🔑') keep.push(e);
             else if (e.effect === '🔥') flames++;
             else moved.push(e);
         }
