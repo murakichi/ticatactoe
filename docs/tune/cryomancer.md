@@ -1,8 +1,8 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 04c8796（再検証: 3位 58.6% のまま。上の順位は 1位 witch 78.7 / 2位 poisoner 69.0）（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
+- 最後に検証したmaster: f5cc3b2（再検証: 3位 58.6% のまま。上の順位は 1位 witch 78.7 / 2位 poisoner 69.0）（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
 - 現在の推奨設定: gears=[lightToken,lastStand] deck=[8,12,28,37,41,43,44,45,46,47,48,73] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2), yyCoverCryo=1, noCapNecro=100, antiSummon=1/antiSummonMax=1, antiFlood=13(すべて既定)
-- 基準線(0c49dd7, seed3/200): 3位 57.4%（1位 witch 77.6 / 2位 poisoner 77.1 / 4位 electrician 56.2 / 5位 necromancer 56.0）。対キャラ別: you 94 / tactician 64 / magician 88 / giant 77 / 陰陽師 61 / ネクロ 48 / 毒使い 29 / 雷霆 58 / 鍛冶師 63 / 魔女 26。旧基準線: 魔力+1・ライフ4 の採用後 環境勝率 約59% / 3位(1位 poisoner 約68%)。対鍛冶師 53%(互角)。対キャラ別(seed3/400): あなた89 / 魔法使い87 / 軍師61 / 巨人66 / 雷霆の巫58 / 毒使い60 / 鍛冶師56 / 陰陽師30 / ネクロ23
+- 基準線(f5cc3b2, `--rank --target cryomancer --games 200 --seed 3`): **4位 55.1%**（1位 witch 70.3 / 2位 poisoner 67.8 / 3位 necromancer 55.6 / 5位 electrician 53.8 / 6位 pyromancer 52.3）。旧基準線(0c49dd7, seed3/200): 3位 57.4%（1位 witch 77.6 / 2位 poisoner 77.1 / 4位 electrician 56.2 / 5位 necromancer 56.0）。対キャラ別: you 94 / tactician 64 / magician 88 / giant 77 / 陰陽師 61 / ネクロ 48 / 毒使い 29 / 雷霆 58 / 鍛冶師 63 / 魔女 26。旧基準線: 魔力+1・ライフ4 の採用後 環境勝率 約59% / 3位(1位 poisoner 約68%)。対鍛冶師 53%(互角)。対キャラ別(seed3/400): あなた89 / 魔法使い87 / 軍師61 / 巨人66 / 雷霆の巫58 / 毒使い60 / 鍛冶師56 / 陰陽師30 / ネクロ23
 - 連続不採用回数: 0（試行30のjointで採用）
 - PR #86 を master にマージ済み(ae193e7)。マージ前の再検証(seed3/200, 基本条件): 1位 magician 67.3 / 2位 cryomancer 62.5 / 3位 tactician 60.3。魔法使いの死に札入替(#90)で陥落。
 - 状態: blocked(issue #250。master e53549e（seed3/200）で3位 56.4%、1位 witch 80.6% / 2位 poisoner 75.2%。以前 master 0c49dd7 で3位 57.4%、1位 witch 77.6% / 2位 poisoner 77.1%。上位2キャラが3位以下から約20pt離れ、番人の調整では覆せない)
@@ -31,6 +31,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 34 | deck | 撃たれない札を撃たれる札に替える（新基準の最優先。sim の probe-usage で、現デッキの8,37,41,43,44,47,73 は0回/試合、撃たれるのは 氷結トークン45・46、霜降り48、サイレンス28、固有の氷結。浄化32は番人自身の❄も剥がすので逆効果）。4案を seed11/300 で比較（基準=現デッキ 57.5） | [3,12,28,45,46,48,53,56,57,58,41,44] 56.4 / **[3,12,28,45,46,48,53,56,16,31,57,58] 59.2（+1.7）** / [3,12,28,45,46,48,53,56,57,58,13,30] 56.8。最良でも +1.7pt（+1.96×SE 未満）。対鍛冶師 17→25、対ネクロ 61→59、対陰陽師 40→54 | 不採用（保留: 59.2 の案は別seedで追試する余地） |
 | 33 | gear | 最新 master（鍛冶師が afterglow+spellWard に、連続手番のAI修正など）で再検証。ギア5通り（seed5/300）→ sturdy+lastStand だけ別seed再測定（seed6/400） | 現行 lightToken+lastStand 58.0 / spellWard+lastStand 58.6 / afterglow+lastStand 56.4 / **sturdy+lastStand 61.0** / lightToken+spellWard 55.2。再測定 seed6/400: 現行 60.1 vs sturdy+lastStand 60.0（差なし）。対鍛冶師は 63→20〜22% に急落（鍛冶師の新ギアで火遁連打が強化）、対 witch 25%、対毒使い 36〜38% | 不採用（現行維持。新しい弱点: 対鍛冶師） |
 | 32 | synergy | 3枚同時入れ替え26近傍（採用デッキ、seed92/80） | 最良 63.2（写し身・総毛立つ・式神一括を足す）、62.4、61.2（基準 56.6）。上位2つを seed93/300 で再測定: 60.8 / 58.2 vs 基準 59.1（+1.7 / -0.9。+1.96×SE に届かず） | 不採用（探索の6種類を一巡: gear/deck/synergy/strategy/meta/joint） |
 | 31 | gear | spellWard を番人にも（#250: 毒使いの突出の原因）。spellWard+lastStand / lightToken+spellWard（seed5/200、base lightToken+lastStand 62.5） | 57.1 / 56.9。対毒使いは 30→44 / 32 に戻るが、環境勝率が下がる（対鍛冶師・電気・巨人が落ちる） | 不採用 |
