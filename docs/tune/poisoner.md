@@ -1,8 +1,8 @@
 # tune-top: poisoner
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 227a4bd
+- 最後に検証したmaster: e1281c6（条件1: 2位 73.8% / 1位 witch 82.0%、差8.2pt。witch が他セッションの調整でさらに上がった）
 - 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
-- 基準線: 環境勝率 76.1% / 2位 / 1位 witch 78.1%（条件1 seed3/200、witch の witchReserve=1 採用後の master）。直前の master（witchReserve 前）では 1位 76.4% vs witch 75.8%
+- 基準線: 環境勝率 73.8% / 2位 / 1位 witch 82.0%（条件1 seed3/200, master e1281c6）
 - 連続不採用回数: 5
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
 - 状態: blocked(issue #250。2026-10-29 ユーザー判断: ルールは変えない。spellWard で 65→76% まで上げたが witch(78.1%)を覆せず2位。対witch 30% 前後は構造的。tune-top の範囲では打てる手が尽きた。witch/spellWard の突出は環境全体の見直しで扱う)
