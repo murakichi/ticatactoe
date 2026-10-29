@@ -1437,7 +1437,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
@@ -1807,6 +1808,12 @@ class AIPlayer {
         // 対魔女: 初霜・吹き寄せ・山焼きが手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで手札を引き直して探す
         // （見つけた札は引き直しのたびに chooseLocks が固定し直す。sim/ai.js の witchDig=2, digMargin=3）
         if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
+            && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
+        }
+        // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
+        // （見つけた92は chooseLocks が魔女戦で固定する。sim/ai.js の yinDig。本番AI 対魔女 55%(124/227) → 66%(109/166)）
+        if (facesWitch && this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }
