@@ -1,6 +1,6 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 9e6c8d8（コスト計算順の変更 31f7718 を取り込み後の再検証OK）
+- 最後に検証したmaster: 9908ab4
 - 現在の推奨設定: gears=[lightToken, bindingLock] deck=[5,8,12,28,44,53,56,62,63,64,85,92] AIフラグ=witchNoAnti=1・witchReserve=1（既定）
 - 完了判定の再確認（活力特売の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 81.2%** / 2位 poisoner 61.7%（差19.5pt）、条件2（`--envDeck varied`）**1位 witch 74.7%** / 2位 poisoner 60.5%（差14.2pt）。
 - 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
@@ -9,6 +9,7 @@
 - 完了判定（1条件目・基本、氷結拡散の採用後）`--rank --games 200 --seed 3 --target witch`: **1位 witch 68.7%** / 2位 poisoner 64.2% / 3位 electrician 60.1% / 4位 cryomancer 59.9% / 5位 necromancer 58.6%（差4.5pt）。2条件目（`--envDeck varied`、同条件）: **1位 witch 62.5%** / 2位 poisoner 62.4%（差0.1pt）/ 3位 cryomancer 60.4% / 4位 necromancer 59.1% / 5位 electrician 55.3%。**2条件とも1位でトップ到達**（2条件目は僅差）。
 - 基準線（完了判定の1条件目(氷結拡散の前) `--rank --games 200 --seed 3 --target witch`: **3位 61.5%**（1位 poisoner 64.9%、2位 electrician 61.5%、4位 cryomancer 61.0%、5位 necromancer 59.3%。差3.4pt）。（その前の順位: witchNoAnti 採用後 `--rank --games 60 --seed 1` **2位 65.3%** / 1位 poisoner 66.7%（差1.4pt）/ 3位 cryomancer 63.1% / 4位 necromancer 58.5% / 5位 electrician 57.2%。`--target witch --games 200 --seed 2` 61.4%）。（その前: 魔力+2/ライフ平均4 変更後 `--target witch --games 100 --seed 1` 51.7% ±2.8、`--rank --games 60 --seed 1` 5位 54.2% / 1位 poisoner 70.2%、2位 necromancer 63.2%、3位 cryomancer 63.1%。以下は旧い値）（※木枯らしの使いのコストを5→3に変更するユーザー指示(2026-10-28)の前の値。変更後は取り直し）: 環境勝率 33.8% ±2.0（`--target witch --games 200 --seed 2`、gears 採用後）。採用前は 21.9%（同条件）/ 順位 10位・23.3%（`--rank --games 60 --seed 1`）、1位 poisoner 70.1%
 - 基準線(master 9908ab4・対強豪平均基準): `--rank --games 60 --seed 1 --write-strong` **2位 witch 57.0%**(field 66.2%) / 1位 yinYangMaster 64.7%(差7.7pt)。強豪=yinYangMaster,witch,cryomancer,tactician,pyromancer,electrician。不利対面: 対tactician 35%・対electrician 42%・対yinYangMaster 47%。以前の「1位」(field基準)は無効。ギア走査は#22で不採用。次は deck(撃たれない札の入れ替え)→ strategy(対陰陽師・軍師・電気使いのメタ)。
+- 完了判定(deck #23 採用後、master 9908ab4、`--rank --games 200 --seed 3 --target witch`): 条件1 **1位 witch 60.4%** / 2位 yinYangMaster 59.2%(差1.2pt)、条件2(`--envDeck pick --oppGears pick`) **1位 witch 60.8%** / 2位 yinYangMaster 59.7%(差1.1pt)。2条件とも1位でトップ到達(僅差)。
 - 連続不採用回数: 0
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: refining(トップ到達後の洗練中。2026-10-28 到達。洗練は未実施: 別案ギア/デッキ、F.cloak ノブの整理、焚きつけ(未使用)の見直し)
