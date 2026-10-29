@@ -1811,6 +1811,12 @@ class AIPlayer {
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }
+        // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
+        // （見つけた92は chooseLocks が魔女戦で固定する。sim/ai.js の yinDig。本番AI 対魔女 55%(124/227) → 66%(109/166)）
+        if (facesWitch && this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
+            && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
+        }
         if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
             const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
             if (plan.length === 0) return { move: null, skills: [], reroll: {} };

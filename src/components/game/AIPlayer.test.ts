@@ -1477,6 +1477,18 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeUndefined();
     });
 
+    it('陰陽師が魔女と戦うとき、一寸の虫に魂なし(92)が手札に無くデッキにあり、魔力に余裕があれば引き直す。手札にあれば固定する', () => {
+        const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
+        ai.rerollsLeft = 8;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 3, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined(); // シャッフルのあとに魔力3が残らない
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 92], false).reroll).toBeUndefined(); // 手札にある
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 92, 71])).toEqual([92, 71]);
+        const noCard = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 71, 72, 73, 53, 12]); // デッキに92が無ければ探さない
+        noCard.rerollsLeft = 8;
+        expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
+    });
+
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
