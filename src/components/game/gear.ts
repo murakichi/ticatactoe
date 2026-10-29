@@ -298,7 +298,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
-    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+    electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
