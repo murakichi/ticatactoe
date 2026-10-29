@@ -259,7 +259,7 @@ const skillCosts = {
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
     onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
     onClickFirstFrost: 6, // 初霜(idx 93)。トークン扱い。盤面の🍂（効力のあるもの）が4枚以上なら0
-    onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。盤面のエフェクト1つにつき3軽減（最低1）
+    onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。盤面の氷結(❄)1つにつき3軽減（最低1）
     onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。盤面の氷結(❄)1つにつき2軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
@@ -1950,11 +1950,11 @@ function onClickFirstFrost(s) {
     bumpStat(s, 'firstFrostFrozen', frozen.length);
 }
 
-// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで🔑ロック・⚡無敵でないもの）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
-// 盤面のエフェクト1つにつき3軽減（最低1） [FAITHFUL] Game.tsx onClickBurnOff
+// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・🔑ロック・⚡無敵のマスは無視）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
+// 盤面の氷結(❄)1つにつき3軽減（最低1。氷結分だけ数える） [FAITHFUL] Game.tsx onClickBurnOff
 function burnOffTargets(s) {
     const me = curPlayer(s);
-    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜') && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜') && !sq.effects.some((e) => e.effect === '❄' || e.effect === '🔑') && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
 }
 function burnOffLegal(s) { return !s.usedTokenThisTurn && (burnOffTargets(s).length > 0 || findEmptyIndexes(s.board).length > 0); }
 function onClickBurnOff(s) {

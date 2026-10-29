@@ -3,7 +3,7 @@
 const COMBO_CUT = 2;
 /** 吹き寄せ: 盤面のエフェクト1つにつきの軽減額 */
 const GATHER_CUT = 2;
-/** 山焼き: 盤面のエフェクト1つにつきの軽減額 */
+/** 山焼き: 盤面の氷結(❄)1つにつきの軽減額 */
 const BURN_OFF_CUT = 3;
 const CHARGE_GRANT_KEYS = new Set(['onClickChargeToken', 'onClickDoubleChargeToken', 'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom', 'onClickChargeSpread']);
 const countOwn = (board, player, effect) => board.reduce((n, sq) => (sq.player === player ? n + sq.effects.filter((e) => e.effect === effect).length : n), 0);
@@ -20,7 +20,7 @@ const comboCut = (skillKey, board, player, leafBase, kinds, chargeBase = 0) => {
     if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
     if (skillKey === 'onClickSmallFry') return boardPieceCount(board);
     if (skillKey === 'onClickGather') return GATHER_CUT * freezeCount(board);
-    if (skillKey === 'onClickBurnOff') return BURN_OFF_CUT * boardEffectCount(board);
+    if (skillKey === 'onClickBurnOff') return BURN_OFF_CUT * freezeCount(board);
     if (skillKey === 'onClickChargeHeal') return Math.max(0, ownCharges(board, player) - chargeBase);
     return 0;
 };
