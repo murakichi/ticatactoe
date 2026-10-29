@@ -820,6 +820,15 @@ class AIPlayer {
     }
 
     /** 最善手を選択: 即勝ち→即ブロック→Minimax+フォーク評価 */
+    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
+    winningMove(board: SquareInfo[], life: number): number | null {
+        const moves = Array.from(new Set([...findEmptyIndexes(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
+        for (const i of moves) {
+            if (calculateWinner(lineSymbols(this.simulatePlace(board, i, this.playerSymbol, life))) === this.playerSymbol) return i;
+        }
+        return null;
+    }
+
     getBestMove(board: SquareInfo[], life: number): number | null {
         const empty = findEmptyIndexes(board);
         const validMoves = this.getValidMoves(board, life);
@@ -1782,6 +1791,10 @@ class AIPlayer {
     ): AIResult {
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+
+        // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（sim/ai.js の winFirst）
+        const winNow = this.winningMove(board, life);
+        if (winNow !== null) return { move: winNow, skills: [] };
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ

@@ -67,6 +67,7 @@ AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手の
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 // 対魔女の新スキル（初霜93・吹き寄せ94・山焼き95・無礼講96）: 引いたら先に固定し(lockNew)、手札に無ければ魔力に余裕があるとき1コストで引き直して探す(witchDig=回数, digMargin=シャッフルのあとに残す魔力)。無礼講(freeTok)は高いトークンの前に撃つ
 AI_DEFAULTS.taFrost = 1; AI_DEFAULTS.taFrostLock = 1; AI_DEFAULTS.smallFryMin = 2; AI_DEFAULTS.lockNew = 1; AI_DEFAULTS.witchDig = 2; AI_DEFAULTS.digMargin = 3; AI_DEFAULTS.freeTok = 1;
+AI_DEFAULTS.winFirst = 1; // 即勝ちできる着手があれば、スキルを撃たずに勝つ（審判の日などの手番終了スキルで勝ちを逃していた）
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -960,6 +961,15 @@ function coveredLines(board, me, cells) {
     for (const line of geometryForCells(cells).winLines) if (line.some((idx) => board[idx].player === me)) n++;
     return n;
 }
+/** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null。getEnhancedBestMove の「即勝ち」と同じ判定 */
+function winningMove(s) {
+    updateShield(s);
+    const me = curPlayer(s), life = s.life, board = s.board;
+    decayCtx = { chars: s.chars, placements: s.placements, n: seatCount(s) };
+    const moves = new Set([...findEmptyIndexes(board), ...getValidMoves(board, me, curChar(s)), ...reinforceMoves(board, me, opponentsOf(s), life)]);
+    for (const i of moves) if (calculateWinner(lineSyms(simulatePlace(board, i, me, life))) === me) return i;
+    return null;
+}
 function getEnhancedBestMove(s) {
     updateShield(s); // 同じ手番にスキルで⚡を付けた直後でも、無敵になったマスを着手の候補にしない
     const me = curPlayer(s);
@@ -1704,6 +1714,9 @@ function faithfulMakeMoveInner(s) {
     const opps = opponentsOf(s);
     const magic = curMagic(s);
     updateShield(s);
+
+    // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ(F.winFirst)
+    if (F.winFirst) { const w = winningMove(s); if (w !== null) return { move: w, turnEnded: false }; }
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };
