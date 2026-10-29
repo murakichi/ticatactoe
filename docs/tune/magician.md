@@ -174,3 +174,7 @@ swap3 80近傍・swap2 80近傍（対 poisoner seed2/100）。最良は swap3 �
 
 ## 試行25採用後の順位(master 44e294f, seed1/60)
 1 witch 70.7 / 2 poisoner 62.7 / 3 yinYangMaster 53.8 / **4 magician 53.6**(旧10位37.8) / 5 cryomancer 52.5。1位との差 17.1pt。状態: running。次: 新設定を基準に対魔女・毒使いで deck/gear を再スキャン(joint)。
+
+## 試行27採用後の順位(master 44e294f + 試行25/27, 基本条件 seed3/200)
+1 witch 68.8 / 2 poisoner 65.0 / **3 magician 57.4**(旧10位37.8) / 4 necromancer 55.0 / 5 cryomancer 53.7。1位との差 11.4pt。状態: running。2条件目(envDeck pick)は未測定(基本で1位でないため)。
+残る弱点(seed2/100 全相手): 氷室~20 / 陰陽師~25 / ネクロ~20 / 魔女~38 / 毒使い~42。次: 対魔女・毒使い(環境上位)のstrategy診断を続ける。
