@@ -2235,6 +2235,14 @@ function faithfulMakeMoveInner(s) {
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 一寸の虫に魂なし(92)で壊せる敵コマがあれば撃つ（盤面のコマの数だけ安い。AIPlayer.ts と同一）
+    // 雷霆の巫(F.elecFry=壊せる敵コマの最低数): 一寸の虫に魂なし(92)を撃つ。縛られた相手はライフ3以下を置けず、ネクロの蘇生も封じられる
+    if (F.elecFry && curChar(s) === 'electrician' && !s.silenced[s.turn] && s.skills.includes(92)
+        && smallFryDestroyable(s) >= F.elecFry
+        && curMagic(s) >= calculateCost(s, costsOf(s).onClickSmallFry, false, false, 'onClickSmallFry')) {
+        SKILLS.smallFry(s);
+        updateShield(s);
+        return { move: getEnhancedBestMove(s), turnEnded: false };
+    }
     if (F.smallFry && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && s.skills.includes(92) && smallFryDestroyable(s) >= F.smallFry
         && curMagic(s) >= calculateCost(s, costsOf(s).onClickSmallFry, false, false, 'onClickSmallFry')) {
         SKILLS.smallFry(s);
