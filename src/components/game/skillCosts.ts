@@ -7,6 +7,10 @@ export const skillCosts = {
     onClickShikigamiAll: 3, // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
+    onClickShikigamiBless: 5, // 汎用(idx 88 式神の加護): 自分の式神を1体消費して、自陣のコマ全てのライフ+3
+    onClickShikigamiPurge: 5, // 汎用(idx 91 式神の供犠): 自陣の式神が3体以上なら0コスト。自陣の式神をランダムに1体壊し、敵のコマ1体のライフを0にする
+    onClickShikigamiCurse: 5, // 汎用(idx 89 式神の呪詛): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全てに☠を2つ
+    onClickShikigamiDiscount: 2, // 汎用(idx 90 式神割引): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,

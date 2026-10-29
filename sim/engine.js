@@ -147,6 +147,10 @@ const skillCosts = {
     onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
+    onClickShikigamiBless: 5, // 汎用(idx 88 式神の加護): 自分の式神を1体消費して、自陣のコマ全てのライフ+3
+    onClickShikigamiPurge: 5, // 汎用(idx 91 式神の供犠): 自陣の式神が3体以上なら0コスト。自陣の式神をランダムに1体壊し、敵のコマ1体のライフを0にする
+    onClickShikigamiCurse: 5, // 汎用(idx 89 式神の呪詛): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全てに☠を2つ
+    onClickShikigamiDiscount: 2, // 汎用(idx 90 式神割引): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -606,6 +610,9 @@ function newGame(opts = {}) {
         useSucker: false,
         useShikigamiPlace: false,
         useShikigamiBlast: false,
+        useShikigamiBless: false,
+        useShikigamiCurse: false,
+        useShikigamiPurge: false,
         useSwidden: false,
         useFrostArea: false,
         useIcicle: false,
@@ -682,6 +689,7 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true)
     const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
     const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
@@ -1062,6 +1070,21 @@ function placeMove(s, i) {
     if (s.useShikigamiBlast) {
         if (!exeShikigamiBlast(s, i)) return false; // 自分の式神でなければ選び直せる
         s.useShikigamiBlast = false;
+        return true;
+    }
+    if (s.useShikigamiBless) {
+        if (!exeShikigamiBless(s, i)) return false; // 自分の式神でなければ選び直せる
+        s.useShikigamiBless = false;
+        return true;
+    }
+    if (s.useShikigamiCurse) {
+        if (!exeShikigamiCurse(s, i)) return false; // 自分の式神でなければ選び直せる
+        s.useShikigamiCurse = false;
+        return true;
+    }
+    if (s.useShikigamiPurge) {
+        if (!exeShikigamiPurge(s, i)) return false; // 対象でない敵コマなら選び直せる
+        s.useShikigamiPurge = false;
         return true;
     }
     if (s.useStomp) {
@@ -1465,6 +1488,68 @@ function exeShikigamiBlast(s, i) {
     }
     addCorpses(s, destroyed);
     return true;
+}
+// 汎用(idx 88 式神の加護・コスト5): 自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3する。自陣のコマが無いと使えない [FAITHFUL] Game.tsx exeShikigamiBless
+const SHIKIGAMI_BLESS_LIFE = 3;
+const ownShikigamiCells = (s) => s.board.map((sq, i) => (sq.player === curPlayer(s) && isShikigami(sq) ? i : -1)).filter((i) => i !== -1);
+const blessTargets = (s) => s.board.map((sq, i) => (sq.player === curPlayer(s) && !isShikigami(sq) ? i : -1)).filter((i) => i !== -1);
+function shikigamiBlessLegal(s) { return ownShikigamiCells(s).length > 0 && blessTargets(s).length > 0; }
+function onClickShikigamiBless(s) {
+    if (!shikigamiBlessLegal(s)) return;
+    s.useShikigamiBless = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiBless, false, false, 'onClickShikigamiBless'), 'onClickShikigamiBless');
+    bumpMagicCount(s);
+}
+function exeShikigamiBless(s, i) {
+    if (!ownShikigamiCells(s).includes(i)) return false;
+    s.board[i] = { player: undefined, bind: 0, effects: [] };
+    for (const k of blessTargets(s)) s.board[k] = { ...s.board[k], bind: s.board[k].bind + SHIKIGAMI_BLESS_LIFE };
+    return true;
+}
+// 汎用(idx 89 式神の呪詛・コスト5): 自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全て（🔑ロック・無敵を除く）に☠を2つ付与する。対象が無いと使えない [FAITHFUL] Game.tsx exeShikigamiCurse
+const SHIKIGAMI_CURSE_STACKS = 2;
+const curseTargets = (s) => s.board.map((sq, i) => (sq.player && sq.player !== curPlayer(s) && !isShikigami(sq) && sq.effects.length > 0 && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+function shikigamiCurseLegal(s) { return ownShikigamiCells(s).length > 0 && curseTargets(s).length > 0; }
+function onClickShikigamiCurse(s) {
+    if (!shikigamiCurseLegal(s)) return;
+    s.useShikigamiCurse = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiCurse, false, false, 'onClickShikigamiCurse'), 'onClickShikigamiCurse');
+    bumpMagicCount(s);
+}
+function exeShikigamiCurse(s, i) {
+    if (!ownShikigamiCells(s).includes(i)) return false;
+    const targets = curseTargets(s); // 消費する式神は自陣なので、対象は消費の前後で変わらない
+    s.board[i] = { player: undefined, bind: 0, effects: [] };
+    for (const k of targets) {
+        for (let n = 0; n < SHIKIGAMI_CURSE_STACKS; n++) { s.board[k].effects.push({ effect: '☠' }); poisonStrike(s, s.board[k]); }
+    }
+    harvestMagic(s, targets.length * SHIKIGAMI_CURSE_STACKS);
+    toxicBloom(s, targets);
+    return true;
+}
+// 汎用(idx 91 式神の供犠・コスト5、自陣の式神3体以上で0): 自陣の式神をランダムに1体壊し、続けて選んだ敵のコマ1体（式神を除く・🔑ロック/無敵を除く）のライフを0にする [FAITHFUL] Game.tsx exeShikigamiPurge
+const SHIKIGAMI_PURGE_FREE = 3;
+const purgeTargets = (s) => s.board.map((sq, i) => (sq.player && sq.player !== curPlayer(s) && !isShikigami(sq) && sq.bind > 0 && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+function shikigamiPurgeLegal(s) { return ownShikigamiCells(s).length > 0 && purgeTargets(s).length > 0; }
+function onClickShikigamiPurge(s) {
+    if (!shikigamiPurgeLegal(s)) return;
+    s.useShikigamiPurge = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiPurge, false, false, 'onClickShikigamiPurge'), 'onClickShikigamiPurge');
+    bumpMagicCount(s);
+    const mine = ownShikigamiCells(s);
+    s.board[randomPick(mine, s.rng)] = { player: undefined, bind: 0, effects: [] }; // 先に1体壊す（コストは壊す前の式神の数で決まる）
+}
+function exeShikigamiPurge(s, i) {
+    if (!purgeTargets(s).includes(i)) return false;
+    s.board[i] = { ...s.board[i], bind: 0 };
+    return true;
+}
+// 汎用(idx 90 式神割引・コスト2): 次に打つスキルのコストを 2＋盤面にある式神の数 だけ軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
+function onClickShikigamiDiscount(s) {
+    const n = discountMod.SHIKIGAMI_DISCOUNT_BASE + s.board.filter((sq) => isShikigami(sq)).length;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiDiscount, false, false, 'onClickShikigamiDiscount'), 'onClickShikigamiDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { next: s.discount[s.turn].next + n });
+    bumpMagicCount(s);
 }
 // 汎用(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。式神がいなければ何もしない
 const shikigamiAllBase = (s) => costsOf(s).onClickShikigamiAll * s.board.filter((sq) => sq.player === curPlayer(s) && isShikigami(sq)).length;
@@ -2560,6 +2645,10 @@ const SKILLS = {
     shikigamiAll: onClickShikigamiAll,
     shikigamiRandom: onClickShikigamiRandom,
     shikigamiFlood: onClickShikigamiFlood,
+    shikigamiBless: onClickShikigamiBless,
+    shikigamiCurse: onClickShikigamiCurse,
+    shikigamiPurge: onClickShikigamiPurge,
+    shikigamiDiscount: onClickShikigamiDiscount,
     stomp: onClickStomp,
     judgeDay: onClickJudgeDay,
     totalAssault: onClickTotalAssault,
@@ -2650,6 +2739,7 @@ module.exports = {
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
+    blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
