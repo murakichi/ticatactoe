@@ -62,6 +62,12 @@ const SH_SMALL_FRY_MIN = 1; // 一寸の虫に魂なし(92)を撃つ最低の破
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
 const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
 const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
+/** トークン扱いのスキル（1手番に1回） */
+const TOKEN_SKILL_KEYS = new Set([
+    'onClickToken', 'onClickDoubleToken', 'onClickBudsToken', 'onClickBothToken', 'onClickPoisonToken', 'onClickFlameToken', 'onClickDoubleFlameToken',
+    'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
+    'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
+]);
 exports.TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
 // 魔法使いの引き直しに使う軽減札（撃つ優先順。sim/ai.js の DISCOUNT_REDUCERS と同順）。cut は次に打つスキルの軽減量
 const REROLL_REDUCERS = [
@@ -1938,13 +1944,31 @@ class AIPlayer {
         const magic = args[1];
         if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS)
             return result;
-        if (this.character === 'magician' || this.character === 'yinYangMaster')
-            return result;
+        if (this.character === 'yinYangMaster')
+            return result; // コンボ待ちの温存があるため別ロジック
         if (result.skills.some((sk) => exports.TURN_ENDING_SKILLS.includes(sk)))
             return result;
-        if (this.plannedSpend(result, args[2]) >= Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4))))
+        const goal = Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
+        if (this.plannedSpend(result, args[2]) >= goal)
             return result;
+        // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す
+        const extended = this.extendPlan(result, args);
+        if (this.plannedSpend(extended, args[2]) >= goal)
+            return extended;
         return { move: null, skills: [], reroll: {} };
+    }
+    /** 計画 result に、残りの魔力で撃てる手札のスキル（対象の要らないもの。トークンは未使用のときだけ）を足す */
+    extendPlan(result, args) {
+        var _a;
+        const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
+        const planned = [...result.skills, ...((_a = result.chargeClicks) !== null && _a !== void 0 ? _a : []).map((c) => c.skill)];
+        const left = magic - this.plannedSpend(result, costs);
+        const usedToken = tokenUsed || planned.some((sk) => TOKEN_SKILL_KEYS.has(sk));
+        const extra = this.chooseSkills(board, left, costs, opponentMagic, life, availableSkills, usedToken, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)
+            .filter((sk) => !planned.includes(sk) && !exports.TURN_ENDING_SKILLS.includes(sk));
+        if (extra.length === 0)
+            return result;
+        return { ...result, skills: [...result.skills, ...extra] };
     }
     /** 計画で払う魔力のおおよその額（スキル名からコスト表を引く。割引・特殊な軽減は見ない） */
     plannedSpend(result, costs) {
