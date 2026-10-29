@@ -10,7 +10,10 @@
  * 使い方: node sim/probe-oracle.js --chars you,you --games 20 --seed 1 --depth 4
  */
 const engine = require('./engine');
-const driver = require('./aiDriver');
+const U = require('./shared/util');
+const args0 = {};
+for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args0[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
+const driver = require('./' + (args0.mod || 'aiDriver.js')); // --mod aiDriver.old.js で別版のAIを測る
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const [c1, c2] = (args.chars || 'you,you').split(',');
@@ -56,7 +59,8 @@ for (let g = 0; g < games; g++) {
         const board = s.board, life = s.life;
         ai.updateShield(board);
         stat.turns++;
-        const cand = Array.from(new Set([...board.map((_, i) => i).filter((i) => !board[i].player), ...ai.getValidMoves(board, life), ...ai.reinforceMoves(board, life)]));
+        // 置ける手だけ(ロック・氷結中の空きマスなどを含めない)。AI の getBestMove の候補と同じ定義
+        const cand = Array.from(new Set([...U.findEmptyIndexes(board), ...ai.getValidMoves(board, life), ...ai.reinforceMoves(board, life)]));
         const chosen = ai.getBestMove(board, life);
         if (chosen !== null && cand.length > 1) {
             /** me の視点の値。mover が手番、ply は着手の通し番号(減衰の文脈)、depth は残りの手数 */
