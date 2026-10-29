@@ -86,6 +86,18 @@ const SKILL_CATALOG = [
     { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami' },
     { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control' },
     { idx: 75, name: '火の車', icon: '🛞', category: 'fire' },
+    { idx: 76, name: '裸の王様', icon: '👑', category: 'control' },
+    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge' },
+    { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge' },
+    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge' },
+    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge' },
+    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge' },
+    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control' },
+    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge' },
+    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds' },
+    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire' },
 ];
 
 
@@ -95,15 +107,16 @@ const CATALOG_SIZE = SKILL_CATALOG.length;
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
+    tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
-    necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28, 32],
-    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 39, 45, 46, 48],
+    necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
-    cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
+    cryomancer: [8, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
+    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
+    witch: [5, 8, 12, 28, 36, 44, 53, 56, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

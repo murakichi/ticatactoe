@@ -15,7 +15,9 @@ export const emptyDiscount = (): Discount => ({ next: 0, effect: 0, token: 0, un
 /** 春一番: 氷結を解除した数だけ、このターンに打つ全スキルを軽減する。軽減量が可変なので DISCOUNT_SKILLS の表には入れず、軽減札として別に扱う */
 export const SPRING_WIND_KEY = 'onClickSpringWind';
 /** 軽減札か（DISCOUNT_SKILLS の7種＋春一番）。軽減札どうしは軽減されず、「次に打つスキル」も消費しない */
-export const isReducerSkill = (key: string): boolean => isDiscountSkill(key) || key === SPRING_WIND_KEY;
+/** 雷神のへそくり: 取り除いた⚡のスタック数だけ、次に打つスキルを軽減する。軽減量が可変なので、春一番と同じく表には入れず軽減札として別に扱う */
+export const STASH_KEY = 'onClickStash';
+export const isReducerSkill = (key: string): boolean => isDiscountSkill(key) || key === SPRING_WIND_KEY || key === STASH_KEY;
 
 /** 軽減札のコストキー → 効果 */
 export const DISCOUNT_SKILLS = {
@@ -36,7 +38,7 @@ export const EFFECT_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickInjection', 'onClickIntensify', 'onClickPandemic', 'onClickPoisonMist',
     'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom',
     'onClickFreeze', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostfall',
-    'onClickIgnite', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne',
+    'onClickIgnite', 'onClickTinder', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
 ]);
 /** 各キャラの固有スキル（コストキー） */
 export const UNIQUE_SKILL_KEYS: ReadonlySet<string> = new Set([
@@ -58,7 +60,7 @@ export const applyDiscount = (cost: number, amount: number): number => (cost <= 
 
 /** スキルを打ったあとの状態。軽減札なら効果を足し、それ以外なら「次に打つスキル」の軽減を消費する */
 export const afterSkill = (d: Discount, key: string): Discount => {
-    if (key === SPRING_WIND_KEY) return d; // 軽減量は解除した氷結の数で決まるので、呼び出し側が turn に足す
+    if (key === SPRING_WIND_KEY || key === STASH_KEY) return d; // 軽減量は解除した氷結／除去した⚡の数で決まるので、呼び出し側が turn / next に足す
     if (isDiscountSkill(key)) {
         const e: Partial<Record<'next' | 'effect' | 'token' | 'unique' | 'life', number>> = DISCOUNT_SKILLS[key];
         return {

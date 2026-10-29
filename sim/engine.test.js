@@ -148,16 +148,16 @@ test('毒霧: 🔑ロック中のコマは対象外。毒使いの駒はライ�
     assert.strictEqual(stacks(s.board[2]), 0);
 });
 
-test('毒霧: 毒使いは毒系の割引(-1)を受けて6、他キャラは7', () => {
+test('毒霧: 毒使いは毒系の割引(-1)を受けて5、他キャラは6', () => {
     const a = game('poisoner', 'you');
     a.heartTurn = true;
     a.heartMagic = 20;
     e.SKILLS.poisonMist(a);
-    assert.strictEqual(20 - a.heartMagic, 6);
+    assert.strictEqual(20 - a.heartMagic, 5);
     const b = game('you', 'you');
     b.heartTurn = true; b.heartMagic = 20;
     e.SKILLS.poisonMist(b);
-    assert.strictEqual(20 - b.heartMagic, 7);
+    assert.strictEqual(20 - b.heartMagic, 6);
 });
 
 test('毒トークンは毒使いが置くとライフが1.5倍になる', () => {
@@ -448,16 +448,28 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
 });
 
-test('式神一括(コスト6): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま', () => {
+test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');
     s.board[1] = e.newShikigami('💙');
     s.board[2] = e.newShikigami('⭕');
-    s.magic[0] = 10;
+    s.magic[0] = 20;
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(s.magic[0], 4 + (e.calculateCost(s, 6, false, false, 'onClickShikigamiAll') - 6));
+    assert.strictEqual(s.magic[0], 20 - 3 * 2); // 自分の式神2体 × 3
     assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
     assert.strictEqual(e.isShikigami(s.board[2]), true);
+    e.SKILLS.shikigamiAll(s); // 式神がもういない
+    assert.strictEqual(s.magic[0], 14);
+});
+
+test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
+    const s = game('yinYangMaster', 'you');
+    for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
+    s.magic[0] = 80;
+    e.SKILLS.shikigamiFlood(s); // 16マス全て式神
+    const before = s.magic[0];
+    e.SKILLS.shikigamiAll(s);
+    assert.strictEqual(before - s.magic[0], 3 * 16);
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
@@ -672,7 +684,7 @@ test('帯電ダブルトークン: ⚡付きのコマを2つ設置し、ダメ�
     assert.strictEqual(s.usedTokenThisTurn, true);
 });
 
-test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出ない', () => {
+test('範囲帯電: 選んだマスを中心に3x3へ⚡。雷霆の巫以外のコマは乗った時点で2ダメージ', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.heartMagic = 20;
     s.board[6] = { player: '⭕', bind: 4, effects: [] };
@@ -682,7 +694,7 @@ test('範囲帯電: 選んだマスを中心に3x3へ⚡、ダメージは出な
     const cells = [0, 1, 2, 4, 5, 6, 8, 9, 10];
     assert.ok(cells.every((i) => e.chargeStacks(s.board[i]) === 1));
     assert.strictEqual(e.chargeStacks(s.board[3]), 0);
-    assert.strictEqual(s.board[6].bind, 4);
+    assert.strictEqual(s.board[6].bind, 2); // あなた(雷霆の巫以外)のコマ: 4 → 2
 });
 
 test('ランダム帯電: 1〜4マスに⚡。ロック中・無敵マスは対象外', () => {
@@ -989,7 +1001,7 @@ test('氷結中のマスにはロックが掛からない（ロック系スキ�
     assert.strictEqual(s.useLock, 1);
 });
 
-test('氷室の番人: ライフ平均は5で、自陣の❄によるライフ加算は無い', () => {
+test('氷室の番人: ライフ平均は4で、自陣の❄によるライフ加算は無い', () => {
     const mean = (board) => {
         let sum = 0;
         for (let k = 0; k < 200; k++) {
@@ -1004,9 +1016,9 @@ test('氷室の番人: ライフ平均は5で、自陣の❄によるライフ�
     };
     const plain = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
     const icy = plain.map((x, k) => (k < 6 ? { player: '⭕', bind: 3, effects: [FRZ, FRZ, FRZ, FRZ] } : x));
-    assert.ok(Math.abs(mean(plain) - 5) < 1, 'plain ' + mean(plain));
-    assert.ok(Math.abs(mean(icy) - 5) < 1, 'icy ' + mean(icy)); // ❄24個でも加算なし
-    assert.strictEqual(require('./config').lifeMeans.cryomancer, 5);
+    assert.ok(Math.abs(mean(plain) - 4) < 1, 'plain ' + mean(plain));
+    assert.ok(Math.abs(mean(icy) - 4) < 1, 'icy ' + mean(icy)); // ❄24個でも加算なし
+    assert.strictEqual(require('./config').lifeMeans.cryomancer, 4);
 });
 
 test('氷結は🔥のあるマスには付かない（空きマス・氷結済みへの重ね掛けは可）。freezeAll も🔥マスを飛ばす', () => {
@@ -1164,22 +1176,22 @@ test('後から火炎が付くと🌱は消える（冬至の種子のガード�
     assert.strictEqual(budsOn(g.board[1]), 1);
 });
 
-test('🔥中のマス: 毒・⚡は休眠せず働く。🔥はダメージで消える', () => {
+test('🔥中のマス: 毒・⚡は休眠せず働く。🔥は毒・電気のダメージでは消えない', () => {
     const s = game();
     s.heartTurn = true; s.life = 3;
     s.board[5] = { player: '⭕', bind: 6, effects: [FLM, { effect: '☠' }] };
     e.placeMove(s, 0);
-    // 🔥中でも毒は働く。ダメージが通るので🔥は消え、毒は残る
+    // 🔥中でも毒は働く。毒のダメージでは🔥は消えず、毒も残る
     assert.ok(s.board[5].bind < 6);
-    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
     assert.ok(s.board[5].effects.some((x) => x.effect === '☠'));
-    // 電気のダメージを受けると🔥は消える
+    // 電気のダメージを受けても🔥は消えない
     const t = game();
     t.heartTurn = true; t.life = 3;
     t.board[5] = { player: '⭕', bind: 8, effects: [{ effect: '⚡' }] };
     t.board[6] = { player: '⭕', bind: 8, effects: [FLM] };
     e.placeMove(t, 4);
-    assert.ok(!t.board[6].effects.some((x) => x.effect === '🔥'));
+    assert.ok(t.board[6].effects.some((x) => x.effect === '🔥'));
     // 🔥中のマスの⚡も働く: 巫の無敵が効き、盤面の⚡数にも数える
     const u = game('electrician', 'you');
     u.heartTurn = true; u.life = 3;
@@ -1250,7 +1262,7 @@ test('ひこばえ: 🌱を持つ自陣コマを選ぶと縦横隣の自陣コ�
     assert.strictEqual(th.GRAFT_MAX, 2);
 });
 
-test('風の落とし子: canBud の自陣コマに重複を許してランダムに3回🌱を足す（コスト3）。候補が無ければ不可', () => {
+test('風の落とし子: canBud の自陣コマに重複なしでランダムに2つ🌱を足す（コスト4）。候補が無ければ不可', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     s.board[1] = { player: '💙', bind: 3, effects: [] };
@@ -1258,14 +1270,23 @@ test('風の落とし子: canBud の自陣コマに重複を許してランダ�
     s.board[3] = { player: '⭕', bind: 3, effects: [] };
     const before = s.heartMagic;
     e.SKILLS.windborne(s);
-    assert.strictEqual(s.heartMagic, before - 3);
-    assert.strictEqual(budsOn(s.board[1]), 3); // 候補が1つだけなので3回とも同じコマ
+    assert.strictEqual(s.heartMagic, before - 4);
+    assert.strictEqual(budsOn(s.board[1]), 1); // 候補が1つだけなので1つだけ（1マスに1つまで）
     assert.strictEqual(budsOn(s.board[2]) + budsOn(s.board[3]), 0);
     assert.strictEqual(s.heartTurn, true);
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     e.SKILLS.windborne(t);
     assert.strictEqual(t.heartMagic, 20);
+    // 候補が複数あれば、異なる2マスに1つずつ
+    for (let seed = 1; seed <= 20; seed++) {
+        const u = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        u.heartTurn = true; u.heartMagic = 20;
+        [1, 2, 3, 4].forEach((i) => { u.board[i] = { player: '💙', bind: 3, effects: [] }; });
+        e.SKILLS.windborne(u);
+        const counts = [1, 2, 3, 4].map((i) => budsOn(u.board[i]));
+        assert.deepStrictEqual(counts.slice().sort(), [0, 0, 1, 1]);
+    }
 });
 
 test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () => {
@@ -1279,7 +1300,7 @@ test('新スキル4種のコスト: 毒使い+1・軍師+2の通常補正', () =
     assert.strictEqual(e.skillCosts.onClickHarvestEve, 2);
     assert.strictEqual(e.skillCosts.onClickSolstice, 4);
     assert.strictEqual(e.skillCosts.onClickSucker, 4);
-    assert.strictEqual(e.skillCosts.onClickWindborne, 3);
+    assert.strictEqual(e.skillCosts.onClickWindborne, 4);
 });
 
 test('火炎: ターン進行で1スタックにつき2ダメージ（スタック2なら4）。継続ダメージでは消えない', () => {
@@ -1546,7 +1567,8 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     assert.strictEqual(s.heartTurn, true);
     const fl = (i) => s.board[i].effects.filter((x) => x.effect === '🔥').length;
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
-    assert.strictEqual(fl(5), 2); assert.strictEqual(fl(6), 2);
+    assert.strictEqual(fl(5), 2); assert.strictEqual(s.board[5].bind, 1); // ライフ3: 付与のたびに1ダメージで 3→1
+    assert.strictEqual(s.board[6].player, undefined); assert.strictEqual(fl(6), 0); // ライフ0のコマは🔥で破壊され空きマスになる
     assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
     assert.strictEqual(fr(8), 0); assert.strictEqual(fl(8), 1); // 1つ目で氷結が全解除、2つ目が🔥
     assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
@@ -1575,7 +1597,7 @@ test('氷室の番人・煉獄の鍛冶師・新スキル(idx30/31)が登録さ�
     assert.strictEqual(e.skillCosts.onClickFreeze, 3);
     assert.strictEqual(e.skillCosts.onClickIgnite, 3);
     const mean = (c, bonus = 0) => Array.from({ length: 400 }, (_, k) => e.calculateLife(c, undefined, e.makeRng(k + 1), bonus)).reduce((a, b) => a + b, 0) / 400;
-    assert.ok(Math.abs(mean('cryomancer') - 5) < 1);
+    assert.ok(Math.abs(mean('cryomancer') - 4) < 1);
     assert.ok(Math.abs(mean('pyromancer') - 6) < 1);
 });
 
@@ -1731,11 +1753,11 @@ test('火炎トークン: 空きマスに自陣のコマを置き🔥を1つ付�
     assert.ok(t.board.every((sq) => flames(sq) === 0));
 });
 
-test('火炎ダブルトークン: 空きマス2つに置いてそれぞれ🔥を1つ。コスト6、トークン扱い', () => {
+test('火炎ダブルトークン: 空きマス2つに置いてそれぞれ🔥を1つ。コスト5、トークン扱い', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     e.SKILLS.doubleFlameToken(s);
-    assert.strictEqual(s.heartMagic, 14);
+    assert.strictEqual(s.heartMagic, 15);
     const mine = s.board.filter((sq) => sq.player === '💙');
     assert.strictEqual(mine.length, 2);
     assert.ok(mine.every((sq) => flames(sq) === 1));
@@ -1793,7 +1815,7 @@ test('殉火: 自コマのライフをゼロにして、ライフがそれ以下
     assert.strictEqual(s.board[5].bind, 0);
     assert.strictEqual(flames(s.board[5]), 0);                                 // 自コマの🔥は消える
     assert.strictEqual(flames(s.board[0]), 1);
-    assert.strictEqual(flames(s.board[1]), 1);
+    assert.strictEqual(s.board[1].player, undefined); assert.strictEqual(flames(s.board[1]), 0); // ライフ0の敵コマは🔥で破壊される
     assert.strictEqual(flames(s.board[2]), 0);
     assert.strictEqual(flames(s.board[3]), 0);
     assert.strictEqual(flames(s.board[4]), 0);
@@ -1824,7 +1846,7 @@ test('火炎トークン/火炎ダブルトークン/焼畑/殉火のコスト�
     e.SKILLS.flameToken(t);
     assert.strictEqual(t.heartMagic, 30 - 2);
     assert.strictEqual(e.skillCosts.onClickFlameToken, 3);
-    assert.strictEqual(e.skillCosts.onClickDoubleFlameToken, 6);
+    assert.strictEqual(e.skillCosts.onClickDoubleFlameToken, 5);
     assert.strictEqual(e.skillCosts.onClickSwidden, 3);
     assert.strictEqual(e.skillCosts.onClickSacrifice, 5);
 });
@@ -1936,7 +1958,7 @@ test('氷結拡散: コマを選ぶと、コマだけを縦横に辿って届く
     assert.deepStrictEqual(chargeOf(s), [4, 4]);
 });
 
-test('氷結トークン/氷結ダブルトークン: 空きマスに❄付きの自陣コマを置く（トークン扱い）。コスト3/6、カウンタは1個ずつ', () => {
+test('氷結トークン/氷結ダブルトークン: 空きマスに❄付きの自陣コマを置く（トークン扱い）。コスト3/5、カウンタは1個ずつ', () => {
     const s = game();
     s.heartTurn = true; s.heartMagic = 20;
     const th = require('./thermal');
@@ -1955,7 +1977,7 @@ test('氷結トークン/氷結ダブルトークン: 空きマスに❄付き�
     const t = game();
     t.heartTurn = true; t.heartMagic = 20;
     e.SKILLS.doubleFrostToken(t);
-    assert.strictEqual(t.heartMagic, 14);
+    assert.strictEqual(t.heartMagic, 15);
     assert.strictEqual(t.board.filter((sq) => sq.player === '💙' && sq.effects.some((x) => x.effect === '❄')).length, 2);
     assert.deepStrictEqual(chargeOf(t), [2, 2]);
     const tac = game('tactician', 'you'); tac.heartTurn = true; tac.heartMagic = 20;
@@ -2018,9 +2040,9 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 });
 
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
-    assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 6, 4, 3]);
+    assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2240,7 +2262,7 @@ test('🍂落ち葉: 他の席の🍂の枚数ぶんスキルコストが上が�
     assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3 + 10);
 });
 
-test('🍂落ち葉トークン4種: 自陣のコマに🍂を付けて置く（コスト3/5/6/4・トークンはターン1回）', () => {
+test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト3/7/9・トークンはターン1回）', () => {
     const run = (key, pre) => {
         const s = game(); s.heartTurn = true; s.heartMagic = 30;
         e.SKILLS[key](s);
@@ -2251,20 +2273,12 @@ test('🍂落ち葉トークン4種: 自陣のコマに🍂を付けて置く（
     assert.strictEqual(s.heartMagic, 30 - 3);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1]);
     s = run('twinLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 5);
+    assert.strictEqual(s.heartMagic, 30 - 7);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [2]);
     s = run('doubleLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 6);
+    assert.strictEqual(s.heartMagic, 30 - 9);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1, 1]);
     assert.strictEqual(s.board.filter((q) => q.player === '💙').length, 2);
-    s = run('bothLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 4);
-    const mine = s.board.filter((q) => q.player === '💙');
-    const theirs = s.board.filter((q) => q.player === '⭕');
-    assert.strictEqual(mine.length, 1);
-    assert.strictEqual(leavesOn(mine[0]), 1);
-    assert.strictEqual(theirs.length, 1);
-    assert.strictEqual(leavesOn(theirs[0]), 0); // 🍂が付くのは自分のコマだけ
 });
 
 test('焚き火の唄 / 腐葉土の目覚め / 一葉知秋: 効果とコスト', () => {
@@ -2350,7 +2364,7 @@ test('春一番: 自陣の❄を全て解除し、解除した数だけこのタ
     assert.strictEqual(s.discount[0].turn, 0);
 });
 
-test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は❄-1だけ）。守られた敵・自陣は選べない。コスト5', () => {
+test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は❄-1だけ）。守られた敵・自陣は選べない。コスト6', () => {
     const s = game(); s.heartTurn = true; s.heartMagic = 30;
     assert.strictEqual(e.kimonCandidates(s).length, 0);
     s.board[0] = { player: '⭕', bind: 3, effects: [] };
@@ -2359,9 +2373,9 @@ test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は�
     s.board[3] = { player: '💙', bind: 3, effects: [] };
     assert.deepStrictEqual(e.kimonCandidates(s), [0, 2]);
     const cost = e.calculateCost(s, e.skillCosts.onClickKimon, false, false, 'onClickKimon');
-    assert.strictEqual(cost, 5);
+    assert.strictEqual(cost, 6);
     e.SKILLS.kimon(s);
-    assert.strictEqual(s.heartMagic, 30 - 5);
+    assert.strictEqual(s.heartMagic, 30 - 6);
     assert.strictEqual(e.placeMove(s, 3), false); // 自陣は選べない（待ちが続く）
     assert.strictEqual(e.placeMove(s, 2), true); // 氷結中: ❄が1つ減るだけ
     assert.strictEqual(s.board[2].player, '⭕');
@@ -2402,6 +2416,587 @@ test('火の車: ランダムな敵2マスに🔥、手札をシャッフル。�
     // 次の手番の頭で基準が取り直される
     e.advanceTurn(s);
     assert.strictEqual(s.fireBase[s.turn], flames());
+});
+
+test('氷室の番人: 毎ターンの魔力は魔法使いと同じ基本分+1（合計+2。バッズ経済は魔法使いのみ）', () => {
+    // 手番が回ってきた席の魔力増分（チャージで手番を渡す）を、氷室の番人とあなたで比べる
+    const gain = (char) => {
+        const g = game('you', char);
+        const before = g.magic[1];
+        e.SKILLS.charge(g); // 席0の手番を終えて席1へ
+        return g.magic[1] - before;
+    };
+    assert.strictEqual(gain('cryomancer') - gain('you'), 1, `氷室の番人 +${gain('cryomancer')} / あなた +${gain('you')}`);
+});
+
+test('毒使い: 推奨デッキに火遁(31)があり、氷結で塞がれた4つ目を火遁で解凍して完成させる（対氷室の番人の千日手を崩す）', () => {
+    const ai = require('./ai');
+    assert.ok(require('./deck').recommendedDeck('poisoner').includes(31), '毒使いの推奨デッキに火遁(31)');
+    const s = game('poisoner', 'cryomancer');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 5;
+    s.skills = [31, 0, 16];
+    const mine = { player: '💙', bind: 5, effects: [] };
+    for (const i of [4, 6, 7]) s.board[i] = { ...mine, effects: [] };
+    s.board[1] = { player: '⭕', bind: 5, effects: [] };
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+    const r = ai.makeMove(s, 'faithful');
+    if (!r.turnEnded && r.move != null) e.placeMove(s, r.move);
+    assert.strictEqual(s.board[5].player, '💙', '解凍して5に着手できた');
+});
+
+test('裸の王様: 相手のギアを、その席の次の手番の終わりまで無効にする（コスト4・ギアのある相手だけが対象）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], gears: [[], ['luckyPurse', 'quadMastery']], rng: e.makeRng(7) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.stripLegal(s), true);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickStrip, false, false, 'onClickStrip'), 4);
+    e.SKILLS.strip(s);
+    assert.strictEqual(s.magic[0], 30 - 4);
+    assert.deepStrictEqual(s.gears[1], []);
+    assert.deepStrictEqual(s.gearHeld[1], ['luckyPurse', 'quadMastery']);
+    assert.strictEqual(s.gearOff[1], true);
+    assert.strictEqual(e.stripLegal(s), false); // もう無効なので撃てない
+    // 相手の手番が終わるまで無効のまま。相手の手番が終わると装備が戻る
+    s.currentTurn = 2; // 最初の手番(currentTurn<=1)は常に席0に戻る仕様なので、2手目以降として進める
+    e.advanceTurn(s); // 席0の手番が終わる → 席1の手番へ
+    assert.strictEqual(s.turn, 1);
+    assert.deepStrictEqual(s.gears[1], []);
+    e.advanceTurn(s); // 席1の手番が終わる
+    assert.deepStrictEqual(s.gears[1], ['luckyPurse', 'quadMastery']);
+    assert.strictEqual(s.gearOff[1], false);
+    assert.strictEqual(s.gearHeld[1], null);
+});
+
+test('裸の王様: 価格破壊も無効になる（無効の間は基礎のコスト表）。ギアが無い相手には撃てない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], gears: [[], ['priceWreck']], rng: e.makeRng(3) });
+    const wreck = e.costsOf(s, 1);
+    assert.notStrictEqual(wreck, e.skillCosts);
+    s.magic[0] = 30;
+    e.SKILLS.strip(s);
+    assert.strictEqual(e.costsOf(s, 1), e.skillCosts);
+    const none = e.newGame({ chars: ['you', 'you'], gears: [[], []], rng: e.makeRng(3) });
+    assert.strictEqual(e.stripLegal(none), false);
+});
+
+const BOLT = { effect: '⚡' };
+const boltsOn = (sq) => sq.effects.filter((x) => x.effect === '⚡').length;
+
+test('総毛立つ: 自陣の全コマ（🔑ロック中を除く）に⚡を1つずつ。雷霆の巫以外は乗った時点でダメージ。コスト6（このターンに⚡を付与するスキルを使っていれば-2）', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(5) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.bristleLegal(s), false);
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [] };
+    assert.strictEqual(e.bristleLegal(s), true);
+    const cost = e.calculateCost(s, e.skillCosts.onClickBristle, false, false, 'onClickBristle');
+    assert.strictEqual(cost, 6);
+    e.SKILLS.bristle(s);
+    assert.strictEqual(s.magic[0], 30 - cost);
+    assert.strictEqual(boltsOn(s.board[0]), 1);
+    assert.strictEqual(s.board[0].bind, 3); // 雷霆の巫は乗った時点のダメージを受けない
+    assert.strictEqual(boltsOn(s.board[1]), 0); // ロック中は対象外
+    assert.strictEqual(boltsOn(s.board[2]), 0); // 敵のコマには付かない
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(5) });
+    t.magic[0] = 30;
+    t.board[0] = { player: '💙', bind: 4, effects: [] };
+    e.SKILLS.bristle(t);
+    assert.ok(t.board[0].bind < 4); // 雷霆の巫以外は乗った時点でダメージ
+});
+
+test('静電気の季節: 今の手番を含む3ターン、着手・トークン・全軍突撃のトークンに⚡が付く（補強は対象外）。掛け直しは不可。コスト7（自陣に⚡が無ければ-2）', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(9) });
+    s.magic[0] = 40; s.life = 3;
+    assert.strictEqual(e.chargeSeasonLegal(s), true);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickChargeSeason, false, false, 'onClickChargeSeason'), 5); // 自陣に⚡が無いので-2
+    e.SKILLS.chargeSeason(s);
+    assert.strictEqual(s.magic[0], 40 - 5);
+    assert.strictEqual(s.chargeBuff[0], 3);
+    assert.strictEqual(e.chargeSeasonLegal(s), false);
+    // 着手したコマに⚡（空きマスに置く）
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(boltsOn(s.board[5]), 1);
+    assert.strictEqual(s.chargeBuff[0], 2); // 手番が終わるたびに1減る
+    // 相手の手番を挟んで、次の自分の手番: 今度はトークンにも付く
+    s.currentTurn = 3;
+    e.placeMove(s, 10); // 相手(席1)の着手
+    assert.strictEqual(s.turn, 0);
+    assert.strictEqual(boltsOn(s.board[10]), 0); // 相手のコマには付かない
+    e.SKILLS.token(s);
+    const tokenCell = s.board.findIndex((sq, i) => sq.player === '💙' && i !== 5);
+    assert.strictEqual(boltsOn(s.board[tokenCell]), 1);
+    // 自分のコマを補強しても⚡は増えない
+    const before = boltsOn(s.board[5]);
+    s.usedTokenThisTurn = false;
+    e.placeMove(s, 5);
+    assert.strictEqual(boltsOn(s.board[5]), before);
+});
+
+test('導線(コンボ)の軽減: 紅葉狩り=自陣の🍂が手番開始より増えていれば-2 / 総毛立つ=⚡付与スキルを使っていれば-2 / 静電気の季節=自陣に⚡が無ければ-2', () => {
+    const price = (s, key) => e.calculateCost(s, e.skillCosts[key], key === 'onClickDoubleLeafToken', false, key);
+    // 紅葉狩り
+    const a = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(3) });
+    a.magic[0] = 30; a.leafBase[0] = 0;
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9);
+    a.board[0] = { player: '💙', bind: 3, effects: [LEAF] };
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 7); // 手番開始より🍂が増えた（一葉知秋など）
+    a.leafBase[0] = 1;
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9); // 元からあった🍂では成立しない
+    // 総毛立つ
+    const b = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(3) });
+    b.magic[0] = 30;
+    assert.strictEqual(price(b, 'onClickBristle'), 6);
+    b.skillKinds[0].add('onClickChargeSpread');
+    assert.strictEqual(price(b, 'onClickBristle'), 4);
+    b.skillKinds[0] = new Set(['onClickChargeSeason']);
+    assert.strictEqual(price(b, 'onClickBristle'), 6); // 静電気の季節は⚡を付与するスキルに数えない
+    // 静電気の季節
+    const c = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(3) });
+    c.magic[0] = 30;
+    assert.strictEqual(price(c, 'onClickChargeSeason'), 5);
+    c.board[0] = { player: '💙', bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(price(c, 'onClickChargeSeason'), 7);
+    c.board[0] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(price(c, 'onClickChargeSeason'), 5); // 敵の⚡は数えない
+});
+
+test('一寸先は闇鍋: 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1・🔥は❄🌱🍂と同居しない）。🔑ロック・空きマスは対象外。コスト9（盤面のエフェクトの数だけ軽減・最低1）', () => {
+    const count = (sq, k) => sq.effects.filter((x) => x.effect === k).length;
+    const seen = { '🔥': 0, '❄': 0, '⚡': 0, '☠': 0, '🌱': 0, '🍂': 0 };
+    let pieces = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+        const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(seed) });
+        s.magic[0] = 30;
+        for (let i = 0; i < 16; i++) {
+            if (i === 0) s.board[i] = { player: '💙', bind: 5, effects: [{ effect: '🔑' }] };
+            else if (i < 7) s.board[i] = { player: '💙', bind: 5, effects: [] };
+            else if (i < 13) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+        }
+        s.board[1].effects.push({ effect: '🌱' });
+        assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDarkPot, false, false, 'onClickDarkPot'), 9 - 2); // 🔑と🌱の2つぶん軽減
+        e.SKILLS.darkPot(s);
+        assert.strictEqual(s.magic[0], 30 - 7);
+        assert.deepStrictEqual(s.board[0].effects, [{ effect: '🔑' }]); // ロック中は対象外
+        for (let i = 13; i < 16; i++) assert.strictEqual(s.board[i].player, undefined);
+        for (const sq of s.board) {
+            if (!sq.player) { assert.strictEqual(sq.effects.length, 0); continue; }
+            for (const k of Object.keys(seen)) assert.ok(count(sq, k) <= 1, `${k}が重なった`);
+            if (count(sq, '🔥') === 1) assert.strictEqual(count(sq, '❄') + count(sq, '🌱') + count(sq, '🍂'), 0);
+            if (sq.effects.some((x) => x.effect === '🔑')) continue;
+            pieces++;
+            for (const k of Object.keys(seen)) seen[k] += count(sq, k);
+        }
+    }
+    // どの種類もおおむね半々で乗る（🔥・❄・🌱・🍂は同居の衝突で減る、⚡・☠は素直に半々）
+    assert.ok(seen['⚡'] / pieces > 0.35 && seen['⚡'] / pieces < 0.65, `⚡ ${seen['⚡'] / pieces}`);
+    assert.ok(seen['☠'] / pieces > 0.35 && seen['☠'] / pieces < 0.65, `☠ ${seen['☠'] / pieces}`);
+    for (const k of Object.keys(seen)) assert.ok(seen[k] > 0, `${k}が一度も乗らない`);
+});
+
+test('雷を食らわば皿まで: ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。⚡のコマが無ければ使えない。コスト6', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(4) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.chargeHealLegal(s), false);
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.magic[0], 30); // 不発
+    const B = { effect: '⚡' };
+    s.board[0] = { player: '💙', bind: 3, effects: [B] };
+    s.board[1] = { player: '💙', bind: 1, effects: [B, B, B] };
+    s.board[2] = { player: '💙', bind: 4, effects: [B, FRZ] };   // 氷結中は⚡が休眠 → 対象外
+    s.board[3] = { player: '⭕', bind: 4, effects: [B] };          // 敵は対象外
+    s.board[4] = { player: '💙', bind: 5, effects: [] };           // ⚡なしは対象外
+    s.chargeBase[0] = 5; // 手番開始時から自陣の⚡が5つ(休眠も数える)なので軽減なし
+    assert.strictEqual(e.chargeHealLegal(s), true);
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.board[0].bind, 5);
+    assert.strictEqual(s.board[1].bind, 7);
+    assert.strictEqual(s.board[2].bind, 4);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[4].bind, 5);
+    assert.strictEqual(s.magic[0], 30 - 6);
+});
+
+test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽減（最低1）。撃つとリセット', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(4) });
+    s.magic[0] = 40;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickChargeHeal, false, false, 'onClickChargeHeal');
+    const B = { effect: '⚡' };
+    s.board[0] = { player: '💙', bind: 3, effects: [B] };
+    s.chargeBase[0] = 1; // 手番開始時から1つ
+    assert.strictEqual(price(), 6);
+    s.board[1] = { player: '💙', bind: 3, effects: [B, B] };
+    s.board[2] = { player: '💙', bind: 3, effects: [B] };
+    assert.strictEqual(price(), 3); // この手番に3つ付与
+    s.board[3] = { player: '💙', bind: 3, effects: [B, B, B, B] };
+    assert.strictEqual(price(), 1); // 軽減しきっても最低1
+    e.SKILLS.chargeHeal(s);
+    assert.strictEqual(s.magic[0], 40 - 1);
+    assert.strictEqual(price(), 6); // 撃ったらリセット
+    s.board[5] = { player: '⭕', bind: 3, effects: [B, B] }; // 敵の⚡は数えない
+    assert.strictEqual(price(), 6);
+});
+
+test('一寸先は闇鍋: 1手番に1度だけ（2回目は何も起きず魔力も減らない）。次の手番では使える', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(2) });
+    s.magic[0] = 40; s.magic[1] = 40;
+    s.board[0] = { player: '💙', bind: 4, effects: [] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.darkPot(s);
+    const left = s.magic[0];
+    assert.ok(left < 40);
+    const snapshot = JSON.stringify(s.board);
+    e.SKILLS.darkPot(s);
+    assert.strictEqual(s.magic[0], left);
+    assert.strictEqual(JSON.stringify(s.board), snapshot);
+    e.advanceTurn(s); // 相手の手番
+    e.advanceTurn(s); // 自分の手番に戻る
+    assert.strictEqual(s.turn, 0);
+    s.magic[0] = 40;
+    e.SKILLS.darkPot(s);
+    assert.ok(s.magic[0] < 40);
+});
+
+test('一寸先は闇鍋: コストは盤面のエフェクトの数だけ下がり、最低1', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(1) });
+    s.magic[0] = 30;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickDarkPot, false, false, 'onClickDarkPot');
+    assert.strictEqual(e.skillCosts.onClickDarkPot, 9);
+    assert.strictEqual(price(), 9);
+    for (let i = 0; i < 4; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 3, effects: [{ effect: '☠' }] };
+    assert.strictEqual(price(), 5);
+    s.board[4] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }, { effect: '❄' }] }; // 空きマスのエフェクトも数える
+    assert.strictEqual(price(), 3);
+    for (let i = 5; i < 16; i++) s.board[i] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }, { effect: '🌱' }] };
+    assert.strictEqual(price(), 1);
+});
+
+test('一寸先は闇鍋: 雷霆の巫の⚡で無敵のコマは対象外。毒使いの毒はライフ1.5倍', () => {
+    const s = e.newGame({ chars: ['electrician', 'poisoner'], rng: e.makeRng(7) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] }; // 雷霆の巫の無敵
+    s.board[1] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.darkPot(s);
+    assert.deepStrictEqual(s.board[0].effects, [{ effect: '⚡' }]);
+    assert.strictEqual(s.board[0].bind, 5);
+    const sq = s.board[1];
+    if (sq.effects.some((x) => x.effect === '☠') && !sq.effects.some((x) => x.effect === '🔥') && !sq.effects.some((x) => x.effect === '⚡')) assert.strictEqual(sq.bind, 6);
+});
+
+test('静電気の季節は3手番で切れる', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(11) });
+    s.magic[0] = 40;
+    e.SKILLS.chargeSeason(s);
+    s.currentTurn = 5;
+    for (let n = 0; n < 3; n++) { s.turn = 0; e.advanceTurn(s); }
+    assert.strictEqual(s.chargeBuff[0], 0);
+    assert.strictEqual(e.chargeSeasonLegal(s), true); // 切れたら掛け直せる
+});
+
+test('落雷は忘れた頃に: 自陣の⚡を全て取り除き、取り除いた数だけ敵の全コマにダメージ（ライフは0まで）。⚡が無ければ使えない。コスト5', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(13) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.releaseLegal(s), false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] };
+    s.board[1] = { player: '💙', bind: 4, effects: [BOLT] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [] };
+    s.board[6] = { player: '⭕', bind: 2, effects: [] };
+    s.board[7] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロックは受けない
+    s.board[8] = { player: '⭕', bind: 5, effects: [FRZ] }; // 氷結中は受けない
+    assert.strictEqual(e.releaseLegal(s), true);
+    const cost = e.calculateCost(s, e.skillCosts.onClickRelease, false, false, 'onClickRelease');
+    assert.strictEqual(cost, 5);
+    e.SKILLS.release(s);
+    assert.strictEqual(s.magic[0], 30 - cost);
+    assert.strictEqual(boltsOn(s.board[0]) + boltsOn(s.board[1]), 0);
+    assert.strictEqual(s.board[5].bind, 2);
+    assert.strictEqual(s.board[6].bind, 0); // 0で止まる
+    assert.strictEqual(s.board[6].player, '⭕'); // 破壊はしない
+    assert.strictEqual(s.board[7].bind, 5);
+    assert.strictEqual(s.board[8].bind, 5);
+    assert.strictEqual(e.releaseLegal(s), false); // もう⚡が無い
+});
+
+test('雷神のへそくり: ⚡のある自陣のコマ(無敵の⚡マスも)を選んで⚡を全て除去し、スタック1つにつき次のスキルを-1。コスト1。軽減札なので「次のスキル」を消費しない', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.stashLegal(s), false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT, BOLT] }; // 雷霆の巫の⚡マスは無敵だが、自分のものは選べる
+    s.board[1] = { player: '💙', bind: 4, effects: [] };
+    s.board[2] = { player: '⭕', bind: 4, effects: [BOLT] };
+    assert.strictEqual(e.stashLegal(s), true);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickStash, false, false, 'onClickStash'), 1);
+    const slash = () => e.calculateCost(s, 6, false, false, 'onClickSlash');
+    const before = slash();
+    e.SKILLS.stash(s);
+    assert.strictEqual(s.magic[0], 29);
+    assert.strictEqual(s.useStash, true);
+    assert.strictEqual(e.placeMove(s, 1), false); // ⚡のない自陣は選び直せる
+    assert.strictEqual(e.placeMove(s, 2), false); // 敵のコマは選べない
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(s.useStash, false);
+    assert.strictEqual(boltsOn(s.board[0]), 0);
+    assert.strictEqual(boltsOn(s.board[2]), 1); // 敵の⚡はそのまま
+    assert.strictEqual(s.discount[0].next, 3);
+    assert.strictEqual(slash(), before - 3);
+    // 次に打つスキルでだけ消費される
+    e.SKILLS.addLife(s);
+    assert.strictEqual(s.discount[0].next, 0);
+    assert.strictEqual(slash(), before);
+});
+
+test('雷のない所に火は立たぬ: ⚡のあるコマを破壊し、周囲8マスの敵コマ2〜全部に🔥。コスト7。ロック・他人の無敵マスは選べず、氷結中は❄-1だけで燃え移らない', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(21) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.thunderFireLegal(s), false);
+    s.board[5] = { player: '💙', bind: 4, effects: [BOLT] }; // 自分の無敵マスも選べる
+    for (const k of [0, 1, 2, 4, 6]) s.board[k] = { player: '⭕', bind: 4, effects: [] }; // 周囲8マスの敵5コマ
+    s.board[14] = { player: '⭕', bind: 4, effects: [BOLT] }; // 他人の（雷霆の巫ではない）⚡コマは選べる。5 の周囲8マスの外
+    s.board[15] = { player: '💙', bind: 4, effects: [BOLT, { effect: '🔑' }] }; // ロック中は選べない
+    assert.deepStrictEqual(e.thunderFireTargets(s), [5, 14]);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickThunderFire, false, false, 'onClickThunderFire'), 7);
+    e.SKILLS.thunderFire(s);
+    assert.strictEqual(s.magic[0], 30 - 7);
+    assert.strictEqual(e.placeMove(s, 0), false); // ⚡のないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 15), false); // ロック中は選べない
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.useThunderFire, false);
+    assert.strictEqual(s.board[5].player, undefined); // 破壊された
+    const burning = [0, 1, 2, 4, 6].filter((k) => s.board[k].effects.some((x) => x.effect === '🔥'));
+    assert.ok(burning.length >= 2 && burning.length <= 5);
+    for (const k of burning) assert.strictEqual(s.board[k].effects.filter((x) => x.effect === '🔥').length, 1);
+    assert.ok(!s.board[14].effects.some((x) => x.effect === '🔥')); // 周囲8マスの外は燃えない
+    // 氷結中のコマは❄が1つ減るだけで、燃え移らない
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(22) });
+    t.magic[0] = 30;
+    t.board[5] = { player: '💙', bind: 4, effects: [BOLT, FRZ, FRZ] };
+    t.board[6] = { player: '⭕', bind: 4, effects: [] };
+    e.SKILLS.thunderFire(t);
+    assert.strictEqual(e.placeMove(t, 5), true);
+    assert.strictEqual(t.board[5].player, '💙');
+    assert.strictEqual(t.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(t.board[6].effects.length, 0);
+});
+
+test('AIは自分のデッキを把握する: 陰陽師はコンボ札(百鬼夜行71)がデッキに無ければ、引き直して探さない', () => {
+    const e = require('./engine');
+    const ai = require('./ai');
+    const deckMod = require('./deck');
+    const digs = (deck) => {
+        let n = 0;
+        for (let g = 0; g < 4; g++) {
+            const chars = ['yinYangMaster', 'magician'];
+            const s = e.newGame({ chars, rng: e.makeRng(900 + g), decks: [deck, deckMod.recommendedDeck('magician')] });
+            s.aiFlags = chars.map(() => ({}));
+            for (let t = 0; t < 120 && !s.winner; t++) {
+                const r = ai.makeMove(s, 'faithful');
+                if (!r.turnEnded && r.move != null) e.placeMove(s, r.move);
+                else if (!r.turnEnded) e.SKILLS.charge(s);
+            }
+            n += s.digShuffles || 0;
+        }
+        return n;
+    };
+    assert.ok(digs(deckMod.recommendedDeck('yinYangMaster')) > 0, '推奨デッキでは探す');
+    assert.strictEqual(digs([0, 2, 3, 5, 6, 8, 10, 12, 72, 73, 53, 1]), 0, '百鬼夜行が無ければ探さない');
+});
+
+// ---- 凩の魔女 ----
+test('凩の魔女: パッシブ。盤面の🍂（敵味方）1枚につきスキルコスト-1（下限1）', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true;
+    const base = e.calculateCost(s, 7, false, false, 'onClickMogaribue');
+    assert.strictEqual(base, 7);
+    s.board[0] = { player: '💙', bind: 4, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🍂' }] };
+    // 敵の🍂は魔女のコストを+1するが、パッシブの-3で相殺されて -3 +1 = 5
+    assert.strictEqual(e.calculateCost(s, 7, false, false, 'onClickMogaribue'), 5);
+    // 増加分（敵の🍂+1）を先に足してから減少分（パッシブ-3）を引く: 2+1-3=0 → 下限1。以前は下限1のあとに+1して2になっていた
+    assert.strictEqual(e.calculateCost(s, 2, false, false, 'x'), 1);
+});
+
+test('凩の魔女: 虎落笛。自陣の🍂の枚数ぶん敵全てにダメージ、自陣はライフ+2、手番は続く', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    s.board[1] = { player: '💙', bind: 0, effects: [] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    s.board[5] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] };
+    const before = s.heartMagic;
+    e.SKILLS.mogaribue(s);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(s.board[4].bind, 3);
+    assert.strictEqual(s.board[5].bind, 4); // 🔑は対象外
+    assert.strictEqual(s.board[0].bind, 5);
+    assert.strictEqual(s.board[1].bind, 2);
+    assert.ok(s.heartMagic < before);
+});
+
+test('凩の魔女: 自陣のコマが無いと虎落笛は不発（魔力も減らない）', () => {
+    const s = game('witch', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    e.SKILLS.mogaribue(s);
+    assert.strictEqual(s.heartMagic, 20);
+    assert.strictEqual(s.board[4].bind, 5);
+});
+
+// ---- 落ち葉の置き土産・焚きつけ ----
+test('落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ。🔑・⚡無敵・自陣は対象外。手番は続く', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.leafDrop(s);
+    const leaves = (i) => s.board[i].effects.filter((x) => x.effect === '🍂').length;
+    assert.strictEqual(leaves(5), 1);
+    assert.strictEqual(leaves(4), 0);
+    assert.strictEqual(leaves(0), 0);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickLeafDrop);
+    assert.strictEqual(e.leafDropLegal(s), true);
+    // 対象が無ければ不発（魔力も減らない）
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 20;
+    t.board[0] = { player: '💙', bind: 3, effects: [] };
+    e.SKILLS.leafDrop(t);
+    assert.strictEqual(t.heartMagic, 20);
+    assert.strictEqual(e.leafDropLegal(t), false);
+});
+
+test('焚きつけ: 敵の🍂を全て🔥に変換（1枚につき🔥1つ）。🔑・自陣の🍂は対象外', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 20;
+    const LF = { effect: '🍂' };
+    s.board[0] = { player: '💙', bind: 3, effects: [LF] }; // 自陣の🍂は残る
+    s.board[4] = { player: '⭕', bind: 8, effects: [LF, LF] };
+    s.board[5] = { player: '⭕', bind: 8, effects: [LF, { effect: '🔑' }] };
+    s.board[6] = { player: '⭕', bind: 8, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.kindling(s);
+    const count = (i, k) => s.board[i].effects.filter((x) => x.effect === k).length;
+    assert.strictEqual(count(4, '🍂'), 0);
+    assert.strictEqual(count(4, '🔥'), 2);
+    assert.strictEqual(count(5, '🍂'), 1); // 🔑は対象外
+    assert.strictEqual(count(5, '🔥'), 0);
+    assert.strictEqual(count(0, '🍂'), 1);
+    assert.strictEqual(count(6, '🔥'), 0);
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickKindling + 3); // 払うコストは変換前の盤面で決まる: 敵の🍂3枚ぶん高い
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(e.kindlingLegal(s), false);
+});
+
+test('枯野の相席: 盤面の全てのコマ（敵味方）に🍂を1つずつ。🔑ロック中は除く。手番は続く。コストは付与前の盤面で決まる', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+    s.board[5] = { player: '⭕', bind: 5, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.leafAll(s);
+    const leaves = (i) => s.board[i].effects.filter((x) => x.effect === '🍂').length;
+    assert.strictEqual(leaves(0), 1);
+    assert.strictEqual(leaves(1), 0); // 🔑は対象外
+    assert.strictEqual(leaves(4), 2);
+    assert.strictEqual(leaves(5), 1);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(s.usedTokenThisTurn, false); // トークンではない
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickLeafAll + 1); // 敵の🍂1枚ぶん高い（付与前の盤面）
+    // 盤面にコマが無ければ不発
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    e.SKILLS.leafAll(t);
+    assert.strictEqual(t.heartMagic, 30);
+    assert.strictEqual(e.leafAllLegal(t), false);
+});
+
+test('落葉の衣: ランダムな自陣のコマ1つ（🔑含む）に🍂を1つ。敵には付かない。手番は続く', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[4] = { player: '⭕', bind: 5, effects: [] };
+    const before = s.heartMagic;
+    e.SKILLS.leafCloak(s);
+    const leaves = (i) => s.board[i].effects.filter((x) => x.effect === '🍂').length;
+    assert.strictEqual(leaves(0) + leaves(1), 1);
+    assert.strictEqual(leaves(4), 0);
+    assert.strictEqual(s.heartTurn, true);
+    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickLeafCloak);
+    // 乱数で両方に当たりうる（同じマスに偏らない）
+    const hit = new Set();
+    for (let seed = 1; seed <= 30; seed++) {
+        const g = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(seed) });
+        g.heartTurn = true; g.heartMagic = 30;
+        g.board[0] = { player: '💙', bind: 3, effects: [] };
+        g.board[1] = { player: '💙', bind: 3, effects: [] };
+        e.SKILLS.leafCloak(g);
+        hit.add(leaves2(g));
+    }
+    assert.strictEqual(hit.size, 2);
+    const t = game('you', 'you');
+    t.heartTurn = true; t.heartMagic = 30;
+    t.board[4] = { player: '⭕', bind: 5, effects: [] };
+    e.SKILLS.leafCloak(t);
+    assert.strictEqual(t.heartMagic, 30);
+    assert.strictEqual(e.leafCloakLegal(t), false);
+    function leaves2(g) { return g.board.findIndex((q) => q.effects.some((x) => x.effect === '🍂')); }
+});
+
+test('凩の魔女: 毎ターンの魔力は+2（基本+1＋キャラ補正+1）。ライフ平均は4', () => {
+    const w = game('witch', 'you');
+    const y = game('you', 'you');
+    const m0 = w.heartMagic;
+    e.placeMove(w, 0); e.placeMove(w, 1); // 💙(魔女)が置き、⭕が置く → 魔女の次の手番の頭
+    e.placeMove(y, 0); e.placeMove(y, 1);
+    assert.strictEqual(w.heartMagic - m0, 2);
+    assert.strictEqual(y.heartMagic - m0, 1);
+    assert.strictEqual(require('./config').lifeMeans.witch, 4);
+});
+
+test('コストの計算順: 敵の🍂による増加分を先に足し、魔女のパッシブ・ギア・割引の減少分をそのあとに引く', () => {
+    // 魔女: 盤面に敵の🍂だけが3枚。7+3-3=7（以前は 7-3=4 のあとに+3 で7、下限1が絡むと差が出る）
+    const w = game('witch', 'you');
+    w.heartTurn = true;
+    w.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(w, 7, false, false, 'x'), 7);
+    assert.strictEqual(e.calculateCost(w, 2, false, false, 'x'), 2); // 2+3-3=2（以前は max(1,2-3)=1 のあとに+3 で4）
+    assert.strictEqual(e.calculateCost(w, 1, false, false, 'x'), 1);
+    // 魔女以外: 敵の🍂の増加分は従来どおりそのまま乗る
+    const y = game('you', 'you');
+    y.heartTurn = true;
+    y.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(y, 3, false, false, 'x'), 5);
+    // 軍師: 非トークンは+2。増加分(+2, 🍂+2)を足してから。トークンは-1が増加分のあと
+    const t = game('tactician', 'you');
+    t.heartTurn = true;
+    t.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
+    assert.strictEqual(e.calculateCost(t, 3, false, false, 'x'), 3 + 2 + 2);
+    assert.strictEqual(e.calculateCost(t, 3, true, false, 'x'), 3 + 2 - 1);
+});
+
+test('火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける。対象が無ければ使えない。鍛冶師は🔥付与で-1、選べるのは🌱🍂のあるコマだけ', () => {
+    const s = game('pyromancer', 'magician');
+    s.heartTurn = true; s.heartMagic = 10; s.life = 5;
+    s.board[5] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[6] = { player: '⭕', bind: 5, effects: [] };
+    s.board[9] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, { effect: '🔑' }] }; // ロック中は選べない（敵の🍂は自分のコストを上げるので🌱で確かめる）
+    assert.deepStrictEqual(e.tinderCandidates(s), [5]);
+    const before = s.magic[s.turn];
+    e.SKILLS.tinder(s);
+    assert.strictEqual(before - s.magic[s.turn], 1, '基本2-1');
+    assert.strictEqual(e.placeMove(s, 6), false, '🌱🍂が無いコマは選び直せる');
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.ok(s.board[5].effects.some((x) => x.effect === '🔥'));
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🌱'), '🔥は🌱を焼く');
+    assert.strictEqual(s.board[5].bind, 4, '付与の瞬間に1ダメージ');
+    const t = game('pyromancer', 'magician');
+    t.board[6] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(e.tinderLegal(t), false);
+    const m0 = t.magic[t.turn];
+    e.SKILLS.tinder(t);
+    assert.strictEqual(t.magic[t.turn], m0, '対象が無ければ何もしない');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -43,7 +43,7 @@ const P = GEAR_PARAMS;
 const GEAR_IDS = [
     'emptyLock', 'ironLock', 'bindingLock', 'quadMastery', 'afterglow', 'luckyPurse', 'sturdy', 'titanCost', 'reinforce',
     'harvest', 'toxicBloom', 'priceWreck', 'chainDiscount', 'propagate', 'lightToken', 'gambler', 'vengeance',
-    'colorGarden', 'ailmentPact', 'ruinSurge', 'scorchedEarth', 'ashOffering', 'frostRoot', 'lastStand',
+    'colorGarden', 'ailmentPact', 'ruinSurge', 'scorchedEarth', 'ashOffering', 'frostRoot', 'conduction', 'spellWard', 'lastStand',
 ];
 
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
@@ -80,10 +80,12 @@ function lostCells(before, after, player, exclude) {
 }
 
 const budCount = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+/** 焦土の対象: 🔥で燃えて消える🌱と🍂（枯れ葉）の数 */
+const burnableCount = (sq) => sq.effects.filter((e) => e.effect === '🌱' || e.effect === '🍂').length;
 const hasEffect = (sq, effect) => sq.effects.some((e) => e.effect === effect);
 /** 焦土: 手番開始時の記録に対し、holder 以外のコマの🌱が🔥で消えた数 */
 function burnedBudCount(owners, buds, squares, holder) {
-    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - budCount(sq)) : n), 0);
+    return squares.reduce((n, sq, i) => (owners[i] && owners[i] !== holder && sq.player === owners[i] && hasEffect(sq, '🔥') ? n + Math.max(0, buds[i] - burnableCount(sq)) : n), 0);
 }
 const scorchGain = (burned) => Math.min(P.scorchCap, burned * P.scorchMagic);
 const flameCount = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
@@ -94,7 +96,7 @@ function ignitedCount(owners, flames, squares, holder) {
 const flameCounts = (squares) => squares.map(flameCount);
 const frozenBudCount = (squares) => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
 const rootGain = (frozenBuds) => frozenBuds * P.rootMagic;
-const budCounts = (squares) => squares.map(budCount);
+const budCounts = (squares) => squares.map(burnableCount);
 
 function adjustCostByGear(cost, gears, ctx, isToken = false, skillKey) {
     if (!gears || gears.length === 0) return cost;
@@ -157,10 +159,11 @@ const RECOMMENDED_GEARS = {
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'afterglow'],
     necromancer: ['vengeance', 'lastStand'],
-    poisoner: ['lastStand', 'sturdy'],
+    poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
-    cryomancer: ['afterglow', 'sturdy'],
-    pyromancer: ['emptyLock', 'harvest'],
+    cryomancer: ['lightToken', 'lastStand'],
+    pyromancer: ['afterglow', 'spellWard'], // 余韻+呪詛除け(tune-top #41: 余韻+収穫 から。4seed(各300〜400試合)で +1.7〜+2.6pt、対毒使い 6→25%。対ネクロ -6 / 対陰陽師 -6)
+    witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => (RECOMMENDED_GEARS[character] || ['sturdy']).slice(0, gearSlotsFor(character));
 

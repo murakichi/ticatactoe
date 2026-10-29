@@ -1,4 +1,4 @@
-import { boardSizeFor, clampBoardSize, geometryOf, MAX_BOARD_SIZE, MIN_BOARD_SIZE, WIN_LENGTH } from './boardGeometry';
+import { boardSizeFor, clampBoardSize, geometryOf, MAX_BOARD_SIZE, MIN_BOARD_SIZE, WIN_LENGTH, boardLayoutOf, cellCenterUnits, boardSqCss } from './boardGeometry';
 import { calculateWinner } from '../../util';
 import { Player } from '../../types/Player';
 
@@ -140,5 +140,40 @@ describe('盤面サイズの選択 (4〜10)', () => {
         expect(g.stompRange(0)).toHaveLength(4);
         expect(g.stompRange(55)).toHaveLength(9);
         expect(g.judgeRange(55).every((i) => i >= 0 && i < 100)).toBe(true);
+    });
+});
+
+describe('盤面の寸法はマス1つを1とした比率で持つ(画面が狭くてマスが縮んでも、演出がずれない)', () => {
+    it.each([4, 5, 7, 8, 10])('%i x %i: マスの中心は、盤面の端から等間隔で、盤面の中に収まる', (size) => {
+        const { gap, pad, units } = boardLayoutOf(size);
+        expect(units).toBeCloseTo(size + (size - 1) * gap + 2 * pad, 10);
+        const first = cellCenterUnits(0, size);
+        const last = cellCenterUnits(size * size - 1, size);
+        // 左上のマスの中心は、余白+半マス。右下は、左上と盤面の中心について対称
+        expect(first.x).toBeCloseTo(pad + 0.5, 10);
+        expect(first.x + last.x).toBeCloseTo(units, 10);
+        expect(first.y + last.y).toBeCloseTo(units, 10);
+        // 隣のマスとは、1マス+隙間だけ離れている
+        expect(cellCenterUnits(1, size).x - first.x).toBeCloseTo(1 + gap, 10);
+        expect(cellCenterUnits(size, size).y - first.y).toBeCloseTo(1 + gap, 10);
+    });
+
+    it('4x4 は従来と同じ見た目(マス64px・余白12px・隙間8px → 幅304px)', () => {
+        const { gap, pad, units } = boardLayoutOf(4);
+        expect(gap * 64).toBe(8);
+        expect(pad * 64).toBe(12);
+        expect(units * 64).toBe(304);
+    });
+
+    it('大きい盤(8x8〜)は、隙間と余白を詰めて、マスを少しでも大きくする', () => {
+        expect(boardLayoutOf(8).gap).toBeLessThan(boardLayoutOf(7).gap);
+        expect(boardLayoutOf(10).pad).toBeLessThan(boardLayoutOf(7).pad);
+    });
+
+    it('マスの大きさ(CSS)は、上限・画面幅・盤面に使える高さの最小値', () => {
+        const css = boardSqCss(6);
+        expect(css).toMatch(/^min\(56px, /);
+        expect(css).toContain('100vw');
+        expect(css).toContain('var(--board-h');
     });
 });

@@ -154,6 +154,9 @@ describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根�
     it('焦土: 敵の🌱が🔥で消えた数×2、上限6。自分の🌱や🔥のないマスは数えない', () => {
         const board = [sq('⭕', '🔥'), sq('💙', '🔥'), sq('⭕')];
         expect(burnedBudCount(['⭕', '💙', '⭕'], [2, 2, 2], board, '💙')).toBe(2);
+        // 🍂（枯れ葉）も🌱と同じく燃えて消えれば数える
+        expect(burnedBudCount(['⭕', '⭕'], [2, 1], [sq('⭕', '🔥'), sq('⭕', '🔥', '🍂')], '💙')).toBe(2);
+        expect(budCounts([sq('⭕', '🌱', '🍂', '🍂')])).toEqual([3]);
         expect(scorchGain(2)).toBe(4);
         expect(scorchGain(10)).toBe(6);
     });

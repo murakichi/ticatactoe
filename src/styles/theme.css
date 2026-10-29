@@ -88,6 +88,7 @@
 
     /* --- タイポグラフィ --- */
     --font-base: 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
     --font-num: 'Noto Sans JP', system-ui, sans-serif;
 
     /* --- モーション --- */

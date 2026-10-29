@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A tactical tic-tac-toe variant built with React 18 + TypeScript. 2–8 players compete on a grid (2 players = 4x4, up to 7x7 for 7–8 players) with fantasy characters (軍師, 魔法使い, 巨人, 陰陽師, ネクロマンサー), each having unique passive abilities and exclusive magic skills. Features an AI opponent.
+A tactical 4-in-a-row game (title: 戦術四目並べ; repo name ticatactoe is historical) built with React 18 + TypeScript. 2–8 players compete on a grid (2 players = 4x4, up to 7x7 for 7–8 players) with fantasy characters (軍師, 魔法使い, 巨人, 陰陽師, ネクロマンサー), each having unique passive abilities and exclusive magic skills. Features an AI opponent.
 
 ## Commands
 
@@ -20,6 +20,8 @@ npm test     # Jest in watch mode
 
 **Board model:** Linear `size*size` array (`SquareInfo[]`), index = row * size + col. Size defaults from player count (`boardSizeFor` in `boardGeometry.ts`: 2→4, 3–4→5, 5–6→6, 7–8→7) but can be chosen freely 4–10 regardless of player count (`Game`'s `boardSize` prop, setup screen's マス数, `sim --size N`). Win condition is always 4 in a row (rows, columns, diagonals; any 4-cell window). Win lines and skill ranges (stomp / judge-day / diagonals) are generated per size by `geometryOf(size)` — don't hardcode 4x4 indexes. `sim/` (headless) supports 2–8 players too (`node sim/cli.js sim --players N`); its `geometry.js` duplicates `boardGeometry.ts` and a jest test keeps them equal. From turn 50 every 50 turns, all games add +1 to the magic gained at turn start (`lateMagic.ts`, mirrored in `sim/engine.js`). Life decay runs once per round (every N placements) for 3+ players, per placement for 2 (`decay.ts`, mirrored in `sim/engine.js`).
 
+**スキルのコスト:** スキルを新規に作る・コストを変えるときは、必ず `docs/skill-cost-rules.md` の基準（単価・複数付与の割引式・派手さと導線）で値を出す。基準から外すなら理由を日記に書く。
+
 **ギア:** キャラ選択時に席ごとに装備する追加パッシブ(通常2枠、「あなた」だけ3枠)。定義と純粋関数は `src/components/game/gear.ts`(`GEAR_PARAMS` が数値の唯一の出典。説明文もここから描画)、ヘッドレス版は `sim/gear.js` に複製(`gear.test.ts` が一致を確認)。`PlayerConfig.gears` で `Game` に渡し、`Game.tsx` では `gearCost`(コスト補正) / `spendMagic`(幸運の財布・スキル使用数) / `applyLock` / `afterTokenPlaced` などが、`sim/engine.js` では `gearCost` / `spendMagic` / `applyLock` / `afterTokenPlaced` / `costsOf` が対応する。コスト表は席ごとに `costTableFor(seat)`(価格破壊で引き直す)から引き、`skillCosts` を直接参照しない。手番内のスキル使用数は `Game.tsx` では ref(`gearTurn`)、sim では `s.gearSkills` で持つ。ギアなしの試合は乱数を消費しないので従来と同じ結果になる。
 
 **Data flow:**
@@ -27,6 +29,7 @@ npm test     # Jest in watch mode
 - `Game.tsx` — Core game logic, state management, skill execution (~1000 lines)
 - `Board.tsx` / `Square.tsx` — Grid rendering, click delegation
 - `AIPlayer.ts` — Simple AI: checks win/block moves first, then uses skills, then random. Takes all other seats as `opponents`; search depth shrinks with board size (3/2/1)
+  - AI は自分のデッキを把握する: `AIPlayer` のコンストラクタ `deck`(`Game.tsx` が `deckBySeat[seat]` を渡す)、sim は `s.decks[seat]`。`inDeck(idx)`/`comboReachable()`(sim/ai.js と同名)で『引き直し・温存が報われるか』を判定し、陰陽師はコンボ札(71/73)がデッキに無ければ探索・温存しない。特売(53)が無ければコンボ計画は『特売が引ける前提』にしない。デッキ未指定は従来どおり全て引ける扱い
 
 **Magic system:** Players gain magic per turn, spend it on skills. Skill costs are defined in `src/types/skillCosts.ts`. Cost modifiers apply per character (e.g., Tactician gets -2 on token skills). Only 3 random skills available at a time (shuffleable for 1 cost).
 
