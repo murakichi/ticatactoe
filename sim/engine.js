@@ -2038,6 +2038,8 @@ function smallFryTargets(s) {
     const me = curPlayer(s);
     return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.bind <= lifeBanMod.LIFE_BAN_MAX && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
 }
+// 実際に壊れる敵コマの数（氷結中は❄が減るだけ）
+const smallFryDestroyable = (s) => smallFryTargets(s).filter((k) => !thermal.absorbDestroy(s.board[k]).blocked).length;
 function onClickSmallFry(s) {
     const cost = calculateCost(s, costsOf(s).onClickSmallFry, false, false, 'onClickSmallFry');
     let destroyed = 0;
@@ -2899,7 +2901,7 @@ module.exports = {
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
-    blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE,
+    blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE, smallFryDestroyable,
     newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,

@@ -13,7 +13,7 @@
 > **採用**: シャッフルでコンボ札(71/73/53)を探す shuffleDig=8(特売が引ける前提で、魔力 6+1 から探す)。発動率53→75%、環境勝率 67.0→75.3%(seed3/150)・66.4→73.9%(seed8/250)。本番は rerollBudget(陰陽師は8回)+AIPlayer の reroll。
 > 次: 90%に向けて、未発動(25%)の内訳(盤面が勝てない/魔力/札)を再分解。
 > **2026-10-22 トップ到達(式神リワーク後)**: 4条件すべてで1位(rank seed3/200 --target yinYangMaster)。基本 66.3%(2位 poisoner 65.2%)/ envDeck varied 68.3%(2位 poisoner 59.4%)/ oppGears none 74.2%(2位 magician 66.1%)/ oppGears random 71.3%(2位 magician 64.2%)。
-> 最終設定: gears=[lastStand, afterglow]、deck=[0,2,3,5,6,8,10,12,71,72,73,53]、AI=コンボ札(71/73/53)をロック固定+魔力温存(floodLock=1/floodHold=2)+特売の重ね撃ちでコンボ6魔力(comboDiscount=1)。
+> 最終設定: gears=[lastStand, afterglow]、deck=[0,2,3,5,6,8,10,92,71,72,73,53]、AI=コンボ札(71/73/53)をロック固定+魔力温存(floodLock=1/floodHold=2)+特売の重ね撃ちでコンボ6魔力(comboDiscount=1)。
 > 効いた順: 特売の重ね撃ちでコンボを13→6魔力に(+15pt) > コンボ札の固定と魔力温存(31→60%) > ギア afterglow(+6〜7pt)。効かなかった: 周回(issue #160)・シャッフル探索(shuffleDig +2pt)・単独の札/群での相手デッキ妨害(ツナミ・サイレンス・🍂系・氷結等はいずれも誤差内)。
 > 落とし穴: `--envDeck varied` は**自分のAI席のデッキも**3枚入れ替える。核のカード(特売/式神一括/百鬼夜行)が抜けると 49%まで落ちる → deck の CORE_CARDS で入れ替え対象から外した(sim/deck.js と deck.ts)。
 > 状態: refining(次はデッキ最適化。ユーザー見立て: 勝率90%近くまで伸びる余地)。強さの一部は相手AIが式神入りの列を脅威と見ない点に依存(人間相手は未確認)。
@@ -27,7 +27,7 @@
 > 式神AIのノブ: shMax=3 / shBlastMin=3 / shReserve=9 / shComboReal=1(sim/ai.js AI_DEFAULTS、本番は AIPlayer.ts の SH_* 定数)。次は式神前提の診断(爆破・コンボ・一括の発動ファネル)から。
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: aac2bab560d4128d8a8c06c810f6bc614b326fc1(本番AIの総当たりで6位。sim の rank は #180 のずれのため参考値)
-- 現在の推奨設定: gears=[lastStand,afterglow] deck=[0,2,3,5,6,8,10,12,71,72,73,53](核 53/71/73 は AI の入れ替えデッキでも外さない) AI=コンボ札の固定+魔力温存(floodLock/floodHold)+特売の重ね撃ち(comboDiscount)+シャッフル探索(shuffleDig=8, digRelock)+チャージ待ち(chargeWait=1)+53探しの往復をやめる(noDig53=8)
+- 現在の推奨設定: gears=[lastStand,afterglow] deck=[0,2,3,5,6,8,10,92,71,72,73,53](核 53/71/73 は AI の入れ替えデッキでも外さない) AI=コンボ札の固定+魔力温存(floodLock/floodHold)+特売の重ね撃ち(comboDiscount)+シャッフル探索(shuffleDig=8, digRelock)+チャージ待ち(chargeWait=1)+53探しの往復をやめる(noDig53=8)
 - 基準線: 環境勝率 90.6% / 1位 / 2位 poisoner 64.6%(rank seed3/100、基本)。4条件すべて1位(varied 90.7 / ギアなし 92.2 / ギアランダム 91.1)。本番AI実測 84.6%(456/539)
 - 連続不採用回数: 14(陥落後。sim 9回 + 本番 luckyPurse/sturdy/chainDiscount/デッキ2案の5回)。6種類(gear/deck/synergy/strategy/メタ/joint)は各1回以上測定済み
 - 関連 issue: #12(closed)、#44、#120(舞時代の調整案。式神リワークで前提が変わった)、#143(式神リワーク)、#160(周回。不採用)、#168(本番と sim の差・コンボの強さ)
