@@ -404,6 +404,18 @@ function watch(args) {
         }
         out.push('');
         out.push(`席別勝率(引き分け除く, 均等=${(sm.fair * 100).toFixed(1)}%): ` + sm.seatWinRate.map((p, i) => `${SYMBOLS[i]}${p == null ? 'n/a' : (p * 100).toFixed(1) + '%'}`).join('  '));
+        const an = live.analyze(stats);
+        if (an) {
+            const v = live.verdict(an);
+            out.push('\n## 結論: 何が強いか');
+            out.push(v.headline);
+            v.points.forEach((x) => out.push(`  - ${x}`));
+            out.push(`${pad('キャラ', 14)} ${pad('対全平均', 9)} ${pad('対強豪', 8)} ${pad('最悪対面', 20)} ${pad('不利/有利', 10)} 均衡で選ばれる確率`);
+            for (const r of an.rows) {
+                out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.strongAvg == null ? 'n/a' : (r.strongAvg * 100).toFixed(1) + '%', 8)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
+            }
+            out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(平均の上位半分の相手だけ)で見る。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合。${an.minDecided}試合未満の対面は数えない)`);
+        }
         if (final || args.matrix) {
             const mu = live.matchups(stats);
             const ids = sm.rows.map((r) => r.id);
