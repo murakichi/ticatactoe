@@ -13,6 +13,20 @@ const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1
 const pairs = [];
 if (args.chars) pairs.push(args.chars.split(','));
 else for (const a of engine.CHARACTERS) for (const b of engine.CHARACTERS) pairs.push([a, b]);
+/** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取)。氷結・無敵は見ない簡易版 */
+function winCells(s, player) {
+    const out = [];
+    const syms = s.board.map((q) => q.player);
+    for (let i = 0; i < s.board.length; i++) {
+        const q = s.board[i];
+        if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
+        if (q.player && (q.player === player || q.bind > 0)) continue;
+        const keep = syms[i]; syms[i] = player;
+        if (engine.calculateWinner(syms) === player) out.push(i);
+        syms[i] = keep;
+    }
+    return out;
+}
 const stat = {};
 const get = (c) => (stat[c] ||= { turns: 0, missWin: 0, missBlock: 0, samples: [] });
 for (const chars of pairs) {
@@ -21,9 +35,9 @@ for (const chars of pairs) {
         let n = 0;
         while (!s.winner && n++ < 400) {
             const me = engine.curPlayer(s), ch = engine.curChar(s);
-            const myT = ai.findThreatSquares(s.board, me);
-            const oppT = engine.otherSeats(s).map((k) => ai.findThreatSquares(s.board, engine.SYMBOLS[k]));
-            const before = JSON.stringify(s.board.map((q) => q.player));
+            const myT = winCells(s, me);
+            const oppT = engine.otherSeats(s).map((k) => winCells(s, engine.SYMBOLS[k]));
+            const ls = (s.gears[s.turn] || []).includes('lastStand') && !s.lastStandUsed[s.turn]; // 土壇場の防壁が未発動なら守りは意図的に捨てる
             const r = ai.makeMove(s, 'faithful');
             const st = get(ch); st.turns++;
             let placed = false;
@@ -33,10 +47,10 @@ for (const chars of pairs) {
             else if (!s.winner) {
                 // 単独リーチ(相手1人・脅威マス1つ)を、着手後も残している
                 const flat = [...new Set(oppT.flat())];
-                if (flat.length === 1) {
+                if (flat.length === 1 && !ls) {
                     const after = engine.otherSeats(s).length; // dummy to keep lint quiet
                     const prevSeat = engine.seatOf(me);
-                    const still = engine.SYMBOLS.map((_, k) => k).filter((k) => k !== prevSeat && k < engine.seatCount(s)).some((k) => ai.findThreatSquares(s.board, engine.SYMBOLS[k]).includes(flat[0]));
+                    const still = engine.SYMBOLS.map((_, k) => k).filter((k) => k !== prevSeat && k < engine.seatCount(s)).some((k) => winCells(s, engine.SYMBOLS[k]).length > 0);
                     if (still) { st.missBlock++; if (st.samples.length < 4) st.samples.push({ kind: 'block', chars, g, n, threat: flat, move: r.move, skills: r.skills || r.used, placed }); }
                 }
             }
