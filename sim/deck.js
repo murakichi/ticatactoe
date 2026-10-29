@@ -98,7 +98,7 @@ const SKILL_CATALOG = [
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
     { idx: 87, name: '火口', icon: '🔥', category: 'fire' },
-    { idx: 88, name: '山椒は小粒でも許さない', icon: '🌶️', category: 'attack' },
+    { idx: 88, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
 ];
 
 

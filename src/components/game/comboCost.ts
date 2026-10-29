@@ -32,7 +32,7 @@ export const ownCharges = (board: SquareInfo[], player: Player): number => count
  * - 総毛立つ: この手番に⚡を付与するスキルを使っていれば（kinds=手番内に使ったスキルの種類）
  * - 静電気の季節: 自陣に⚡が1つもなければ
  * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型）
- * - 山椒は小粒でも許さない: 盤面のコマの数だけ（敵味方とも。カウント型）
+ * - 一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも。カウント型）
  * - 雷を食らわば皿まで: この手番に付与した⚡の数だけ（自陣の⚡が手番開始時 chargeBase より増えたぶん。撃つと基準がリセットされる）
  */
 export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>, chargeBase: number = 0): number => {

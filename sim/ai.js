@@ -1615,7 +1615,7 @@ function faithfulMakeMove(s) {
         updateShield(s);
         if (shield.has(r.move)) r.move = getEnhancedBestMove(s);
     }
-    // 山椒は小粒でも許さない: ライフ3以下のコマは置けないので着手をやめる（呼び出し側がチャージで手番を終える）
+    // 一寸の虫に魂なし: ライフ3以下のコマは置けないので着手をやめる（呼び出し側がチャージで手番を終える）
     if (!r.turnEnded && r.move != null && s.lifeBan[s.turn] && s.life <= 3) r.move = null;
     if (!r.turnEnded) clearPending(s);
     return r;

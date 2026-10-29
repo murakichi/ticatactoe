@@ -253,7 +253,7 @@ const skillCosts = {
     onClickKindling: 5, // 焚きつけ(idx 85)
     onClickLeafCloak: 3, // 落葉の衣(idx 86)
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
-    onClickSmallFry: 10, // 山椒は小粒でも許さない(idx 88)。盤面のコマの数だけ軽減（最低1）
+    onClickSmallFry: 10, // 一寸の虫に魂なし(idx 88)。盤面のコマの数だけ軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -564,7 +564,7 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
-        lifeBan: fill(false), // 山椒は小粒でも許さない: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
+        lifeBan: fill(false), // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
         chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
         gearHeld: fill(null),
@@ -1831,7 +1831,7 @@ function onClickKindling(s) {
     bumpStat(s, 'kindlingLeaves', r.leaves);
 }
 
-// 山椒は小粒でも許さない (idx 88): 敵のライフ3以下のコマを全て破壊し（氷結中は❄-1だけ・🔑ロックと無敵は除く）、相手全員を次の手番の終わりまで「ライフ3以下のコマを置けない」縛りにする。
+// 一寸の虫に魂なし (idx 88): 敵のライフ3以下のコマを全て破壊し（氷結中は❄-1だけ・🔑ロックと無敵は除く）、相手全員を次の手番の終わりまで「ライフ3以下のコマを置けない」縛りにする。
 // コストは盤面のコマの数だけ軽減（最低1） [FAITHFUL] Game.tsx onClickSmallFry
 function smallFryTargets(s) {
     const me = curPlayer(s);
@@ -2657,7 +2657,7 @@ const SKILLS = {
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
     smallFry: onClickSmallFry,
 };
-// 山椒は小粒でも許さない: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
+// 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
     const name = key.replace(/^onClick/, '').replace(/^./, (c) => c.toLowerCase());
     const orig = SKILLS[name];

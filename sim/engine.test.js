@@ -2635,7 +2635,7 @@ test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽
     assert.strictEqual(price(), 6);
 });
 
-test('山椒は小粒でも許さない: 敵のライフ3以下のコマを全て破壊（🔑ロック・無敵は除き、氷結中は❄-1だけ）。自陣と、ライフ4以上の敵は残る', () => {
+test('一寸の虫に魂なし: 敵のライフ3以下のコマを全て破壊（🔑ロック・無敵は除き、氷結中は❄-1だけ）。自陣と、ライフ4以上の敵は残る', () => {
     const s = e.newGame({ chars: ['electrician', 'you', 'you'], rng: e.makeRng(6) });
     s.magic[0] = 30;
     s.board[0] = { player: '⭕', bind: 3, effects: [] };            // 壊れる
@@ -2659,7 +2659,7 @@ test('山椒は小粒でも許さない: 敵のライフ3以下のコマを全�
     assert.deepStrictEqual(s.lifeBan, [false, true, true]);
 });
 
-test('山椒は小粒でも許さない: 雷霆の巫の⚡で無敵のコマは壊れない', () => {
+test('一寸の虫に魂なし: 雷霆の巫の⚡で無敵のコマは壊れない', () => {
     const s = e.newGame({ chars: ['you', 'electrician'], rng: e.makeRng(6) });
     s.magic[0] = 30;
     s.board[0] = { player: '⭕', bind: 2, effects: [{ effect: '⚡' }] };
@@ -2667,7 +2667,7 @@ test('山椒は小粒でも許さない: 雷霆の巫の⚡で無敵のコマは
     assert.strictEqual(s.board[0].player, '⭕');
 });
 
-test('山椒は小粒でも許さない: コストは盤面のコマの数だけ軽減（最低1）', () => {
+test('一寸の虫に魂なし: コストは盤面のコマの数だけ軽減（最低1）', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(6) });
     const price = () => e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
     assert.strictEqual(e.skillCosts.onClickSmallFry, 10);
@@ -2678,7 +2678,7 @@ test('山椒は小粒でも許さない: コストは盤面のコマの数だけ
     assert.strictEqual(price(), 1);
 });
 
-test('山椒は小粒でも許さない: 縛られた席はライフ3以下のコマを置けない（着手・置くスキル）。その席の手番が終わると解除', () => {
+test('一寸の虫に魂なし: 縛られた席はライフ3以下のコマを置けない（着手・置くスキル）。その席の手番が終わると解除', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(8) });
     s.magic[0] = 30; s.magic[1] = 30;
     e.SKILLS.smallFry(s);                    // 席1が縛られる
@@ -2698,7 +2698,7 @@ test('山椒は小粒でも許さない: 縛られた席はライフ3以下の�
     assert.strictEqual(s.lifeBan[1], false);     // 手番が終わったので解除
 });
 
-test('山椒は小粒でも許さない: AIは縛られてライフ3以下なら着手せず（チャージで手番を終える）、置くスキルも使わない', () => {
+test('一寸の虫に魂なし: AIは縛られてライフ3以下なら着手せず（チャージで手番を終える）、置くスキルも使わない', () => {
     const ai = require('./ai');
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(9) });
     s.turn = 1; s.life = 3; s.lifeBan[1] = true; s.magic[1] = 30;

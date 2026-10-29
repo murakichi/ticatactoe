@@ -137,7 +137,7 @@ const OWN_BANNER_LABELS: Record<string, string> = {
     onClickLeafDrop: '落ち葉の置き土産',
     onClickKindling: '焚きつけ',
     onClickTinder: '火口',
-    onClickSmallFry: '山椒は小粒でも許さない',
+    onClickSmallFry: '一寸の虫に魂なし',
     onClickLeafCloak: '落葉の衣',
     onClickBonfire: '焚き火の唄',
     onClickMulch: '腐葉土の目覚め',

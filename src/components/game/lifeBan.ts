@@ -1,4 +1,4 @@
-// 山椒は小粒でも許さない: ライフ3以下の敵コマの破壊と、「ライフ3以下のコマを置けない」縛りの純粋ロジック。
+// 一寸の虫に魂なし: ライフ3以下の敵コマの破壊と、「ライフ3以下のコマを置けない」縛りの純粋ロジック。
 // sim/lifeBan.js と同じ仕様（lifeBan.test.ts が一致を確認する）。
 import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';

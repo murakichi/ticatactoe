@@ -42,7 +42,7 @@ describe('導線(コンボ)の軽減', () => {
         expect(comboFloor('onClickDarkPot')).toBe(1);
         expect(comboFloor('onClickBristle')).toBe(0);
     });
-    test('山椒は小粒でも許さない: 盤面のコマの数だけ（敵味方とも）。下限1', () => {
+    test('一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも）。下限1', () => {
         const board = [sq('💙'), sq('⭕'), sq(undefined, [BOLT]), sq('⭕', [BOLT])];
         expect(boardPieceCount(board)).toBe(3);
         expect(comboCut('onClickSmallFry', board, '💙', 0, new Set())).toBe(3);

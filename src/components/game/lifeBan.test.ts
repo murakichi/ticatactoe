@@ -8,7 +8,7 @@ const sim = require('../../../sim/lifeBan');
 const sq = (player: SquareInfo['player'], bind: number, effects: SquareInfo['effects'] = []): SquareInfo => ({ player, bind, effects });
 const chars: CharacterId[] = ['you', 'electrician'];
 
-describe('山椒は小粒でも許さない', () => {
+describe('一寸の虫に魂なし', () => {
     it('敵のライフ3以下のコマが対象。🔑ロック・無敵・自陣・ライフ4以上は対象外', () => {
         const board = [
             sq('⭕', 3), sq('⭕', 0), sq('⭕', 4), sq('💙', 1),
