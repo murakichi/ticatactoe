@@ -259,6 +259,7 @@ const skillCosts = {
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
     onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
     onClickFirstFrost: 6, // 初霜(idx 93)。トークン扱い。盤面の🍂（効力のあるもの）が3枚以上なら0
+    onClickFreeToken: 4, // 無礼講(idx 96)。このターン、トークン系スキルのコストを0にする
     onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。エフェクト1つにつき3軽減（氷結のマスは❄だけ・ロックのマスは数えない。最低1）
     onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。エフェクト1つにつき2軽減（氷結のマスは❄だけ・ロックのマスは数えない。最低1）
 };
@@ -630,6 +631,7 @@ function newGame(opts = {}) {
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
+        tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
@@ -697,6 +699,7 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true)
     const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
     if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (isToken && seat === s.turn && s.tokenFree[seat]) return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (key === 'onClickFirstFrost' && seat === s.turn && thermal.boardLeaves(s.board) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
@@ -846,6 +849,7 @@ function settleWinner(s) {
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
     s.lifeBan[s.turn] = false;
     // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
     s.chargeBuff[s.turn] = Math.max(0, s.chargeBuff[s.turn] - 1);
@@ -1950,6 +1954,17 @@ function onClickFirstFrost(s) {
     bumpStat(s, 'firstFrostFrozen', frozen.length);
 }
 
+// 無礼講 (idx 96): このターン、トークン系スキルのコストを0にする。すでに効いているときは撃てない [FAITHFUL] Game.tsx onClickFreeToken
+function freeTokenLegal(s) { return !s.tokenFree[s.turn]; }
+function onClickFreeToken(s) {
+    if (!freeTokenLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickFreeToken, false, false, 'onClickFreeToken');
+    s.tokenFree[s.turn] = true;
+    spendMagic(s, pay, 'onClickFreeToken');
+    bumpMagicCount(s);
+    bumpStat(s, 'freeToken');
+}
+
 // 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・⚡無敵のマスは無視。🔑ロック自体は数えないが、ロックのマスの他のエフェクトは対象）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
 // エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickBurnOff
 function burnOffTargets(s) {
@@ -2849,6 +2864,7 @@ const SKILLS = {
     firstFrost: onClickFirstFrost,
     gather: onClickGather,
     burnOff: onClickBurnOff,
+    freeToken: onClickFreeToken,
 };
 // 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
@@ -2879,7 +2895,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets,
+    firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
