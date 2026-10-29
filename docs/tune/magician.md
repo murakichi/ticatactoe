@@ -1,6 +1,6 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 4f58cf0(基本: 1位 poisoner 75.6 / 2位 cryomancer 62.1 / 3位 magician 61.2。陥落)
+- 最後に検証したmaster: b27068b(PR #310 マージ後)。旧記載: 4f58cf0(基本: 1位 poisoner 75.6 / 2位 cryomancer 62.1 / 3位 magician 61.2。陥落)
 - 現在の推奨設定(2026-10-29 更新): gears=[spellWard, ironLock] deck=[2,9,10,11,13,35,47,53,56,60,78,92](ダブルロック12→一寸の虫に魂なし92)。旧: gears=[lastStand, ironLock] deck=[..12..](死に札のオピウム8・刈り入れ前夜33・冬至の種子34→両トークン4・バッズトークン9・返し特売60) AIフラグ=なし
 - 基準線(旧デッキY時): 環境勝率 65.0% / 1位 / 2位 tactician 62.2%(基本, seed3/200)。envDeck varied 63.6%(2位 electrician 61.7)、oppGears none 76.1%(2位 56.3)、oppGears random 71.6%(2位 56.8)=4条件すべて1位。デッキ単体の測定は65.2%±1.5(seed3/400) / 順位表は未取得(採用前 4位 56.3% / 1位 tactician 67.8%, seed1/60試合)   (seed 3, games 400, master edf73fb)
 - 関連 issue: #116 新ギア4種の勝率計測（魔法使いでの結果をコメント済み予定）
@@ -178,3 +178,8 @@ swap3 80近傍・swap2 80近傍（対 poisoner seed2/100）。最良は swap3 �
 ## 試行27採用後の順位(master 44e294f + 試行25/27, 基本条件 seed3/200)
 1 witch 68.8 / 2 poisoner 65.0 / **3 magician 57.4**(旧10位37.8) / 4 necromancer 55.0 / 5 cryomancer 53.7。1位との差 11.4pt。状態: running。2条件目(envDeck pick)は未測定(基本で1位でないため)。
 残る弱点(seed2/100 全相手): 氷室~20 / 陰陽師~25 / ネクロ~20 / 魔女~38 / 毒使い~42。次: 対魔女・毒使い(環境上位)のstrategy診断を続ける。
+
+## PR #310 マージ後・新 sim(本番AIを直接使う構成, #289)での順位 (master b27068b, seed3/100)
+指標が『対強豪平均(強豪=陰陽師・氷室・軍師・魔女・毒使い・電気技師)』に変わった。1 cryomancer 62.4 / 2 tactician 57.0 / 3 yinYangMaster 54.8 / 4 witch 45.2 / … / **9 magician 29.0**(field 43.8) / 10 necromancer 25.8。
+新 sim での A/B(seed4/100, field): 新設定 43.1 / 旧設定(lastStand+12入りデッキ) 32.9(+10.2) / 旧ギアのみ 37.8 / 旧デッキのみ 38.8 → 試行25の採用は新 sim でも有効。
+魔法使いの弱点(新 sim): 対軍師12・陰陽師13・毒使い23・氷室29・魔女38。状態: running(トップ未達。連続不採用 0)。次: 強豪(氷室・軍師・陰陽師)への対策を、対強豪平均を主指標にして探索(`--rank --write-strong` で強豪集合を先に決める)。
