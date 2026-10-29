@@ -2782,7 +2782,7 @@ test('AIは自分のデッキを把握する: 陰陽師はコンボ札(百鬼夜
     const deckMod = require('./deck');
     const digs = (deck) => {
         let n = 0;
-        for (let g = 0; g < 4; g++) {
+        for (let g = 0; g < 16; g++) {
             const chars = ['yinYangMaster', 'magician'];
             const s = e.newGame({ chars, rng: e.makeRng(900 + g), decks: [deck, deckMod.recommendedDeck('magician')] });
             s.aiFlags = chars.map(() => ({}));
