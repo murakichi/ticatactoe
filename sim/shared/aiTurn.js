@@ -7,9 +7,10 @@ const lifeBan_1 = require("./lifeBan");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
 /** ステップ列が手番を終えない（最後が着手でもターン終了スキルでもない）なら、チャージでパスするステップを足す */
-const endsTurn = (steps) => {
+const endsTurn = (steps, hasMove) => {
     const last = steps[steps.length - 1];
-    const ends = typeof last === 'number' || (typeof last === 'string' && AIPlayer_1.TURN_ENDING_SKILLS.includes(last));
+    // 最後の数値が着手マスのときだけ手番が終わる。ロック・インジェクションなどの対象クリックで終わる列は、チャージでパスする
+    const ends = (hasMove && typeof last === 'number') || (typeof last === 'string' && AIPlayer_1.TURN_ENDING_SKILLS.includes(last));
     return ends ? steps : [...steps, 'onClickCharge'];
 };
 /** 全員の魔力のうち、自分以外で最大の値（敵が複数いても最も魔力の多い相手を基準にする） */
@@ -91,7 +92,7 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(plan.target);
         if (plan.move !== null && !(0, lifeBan_1.moveBlocked)(input.lifeBan, life))
             steps.push(plan.move);
-        return { kind: 'queue', steps: endsTurn(steps), locks };
+        return { kind: 'queue', steps: endsTurn(steps, plan.move !== null && !(0, lifeBan_1.moveBlocked)(input.lifeBan, life)), locks };
     }
     // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも盤面への反映順を保つため同じ列に積む
     if (result.chargeClicks && result.chargeClicks.length > 0) {
@@ -108,7 +109,7 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(result.stompTarget);
         if (result.move !== null)
             steps.push(result.move);
-        return { kind: 'queue', steps: endsTurn(steps), locks };
+        return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
     }
     const clicks = [];
     if (result.lockTargets)
@@ -119,7 +120,7 @@ const planAITurn = (ai, input, pickHailMary) => {
         clicks.push(result.move);
     // 着手もターンを終えるスキルも無いまま終わると、手番が進まずAIが止まる（置けるマスが無い・全マスが氷結/ロックなど）。そのときはチャージでパスする
     const ends = result.move !== null || result.skills.some((sk) => AIPlayer_1.TURN_ENDING_SKILLS.includes(sk));
-    return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends };
+    return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends, moveLast: result.move !== null };
 };
 exports.planAITurn = planAITurn;
 /** player が今の盤面で cell に通常の着手をできるか（Game.onCellClick / sim の placeMove が弾く条件。人数・ライフ縛りは含めない） */
