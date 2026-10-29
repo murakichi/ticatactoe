@@ -1501,6 +1501,18 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeUndefined();
     });
 
+    it('陰陽師が魔女と戦うとき、一寸の虫に魂なし(92)が手札に無くデッキにあり、魔力に余裕があれば引き直す。手札にあれば固定する', () => {
+        const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
+        ai.rerollsLeft = 8;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 3, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined(); // シャッフルのあとに魔力3が残らない
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 92], false).reroll).toBeUndefined(); // 手札にある
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 92, 71])).toEqual([92, 71]);
+        const noCard = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 71, 72, 73, 53, 12]); // デッキに92が無ければ探さない
+        noCard.rerollsLeft = 8;
+        expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
+    });
+
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
@@ -1528,5 +1540,72 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
         b[5] = { player: '⭕', bind: 6, effects: [] };
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
+    });
+});
+
+describe('氷室の番人の対魔女: 一寸の虫に魂なし(92)を探して固定する', () => {
+    const mk = (opp: string) => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', opp] as any, undefined, false, false, [92, 12, 28, 45, 46, 48, 41, 44, 47, 43, 37, 73]);
+    const costs = { onClickShuffle: 1, onClickSmallFry: 6, onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+
+    it('魔女が相手のときだけ、手札の92を固定する', () => {
+        expect(mk('witch').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).toEqual([92]);
+        expect(mk('giant').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).not.toEqual([92]);
+    });
+
+    it('魔女戦で手札に92が無く、壊せる敵コマが2個以上あれば引き直して探す', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('witch');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeDefined();
+    });
+
+    it('魔女以外が相手なら探さない', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('giant');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeUndefined();
+    });
+});
+
+describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', () => {
+    const ai = new AIPlayer('💙', 'cryomancer', ['⭕']);
+    it('対策ロックは氷結中の自コマを対象にしない（氷室はロック=氷結で、同じコマを毎手番凍らせ続けていた）', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 2, effects: [{ effect: '❄' }] };
+        b[6] = { player: '💙', bind: 3, effects: [] };
+        expect(ai.findAntiNecroLockTarget(b)).toBe(6);
+        b[6] = { player: '💙', bind: 3, effects: [{ effect: '❄' }] };
+        expect(ai.findAntiNecroLockTarget(b)).toBeNull();
+    });
+    it('絶対零度は🔑ロック中の敵コマを数えない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] }; });
+        expect(ai.shouldGlacier(b)).toBe(false);
+        [3, 4, 5].forEach((i) => put(b, i, '⭕', 4));
+        expect(ai.shouldGlacier(b)).toBe(true);
+    });
+});
+
+describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダメージを受けない）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const tac = () => new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'poisoner']);
+
+    it('軍師も氷結トークン(45)・氷結ダブルトークン(46)を撃つ', () => {
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
+    });
+    it('氷結トークンを手札に固定する（毎手番撃てるように）', () => {
+        expect(tac().chooseLocks(emptyBoard(), 0, 5, [45, 46, 3, 28])).toEqual(expect.arrayContaining([45]));
+    });
+    it('氷結札を使うのは軍師・氷室・毒使いだけ（巨人は撃たない）', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'poisoner']);
+        expect(giant.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
     });
 });

@@ -21,7 +21,7 @@
  */
 
 const engine = require('./engine');
-const ai = require('./ai');
+const ai = require('./aiSelect');
 
 const N = parseInt(process.argv[2] || '60', 10);
 const MAX = engine.PROLIFERATE.maxStacks;

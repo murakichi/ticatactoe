@@ -21,7 +21,7 @@ node sim/cli.js auto --hchar giant --cchar you --seed 1
 
 - 各ターンの着手（`turn N: 💙 -> 5`）と、最終盤面・勝敗を表示する。
 - `--seed` を固定すれば**完全に同じ試合**を再現できる。
-- 省略時の既定: `--hchar you --cchar you --seed 1 --mode faithful`。
+- 省略時の既定: `--hchar you --cchar you --seed 1 --mode prod`。
 
 盤面の見方: `5:💙 6` = マス5に💙、bind（ライフ）6。`・` は空きマス。
 
@@ -58,7 +58,7 @@ node sim/cli.js sim --games 3000 --pair giant,you         # giant先手 vs you�
 | `--pair h,c` | 1マッチアップ指定（sim用） | なし=総当たり |
 | `--games N` | 1組あたりの試行数（sim用） | `500` |
 | `--seed N` | 乱数シード（再現用, mulberry32） | `1` |
-| `--mode` | AIの賢さ（下記） | `faithful`(sim/auto) |
+| `--mode` | AIの種類（下記） | `prod`(sim/auto) |
 
 キャラ一覧: `you, tactician, magician, giant, yinYangMaster, necromancer`
 
@@ -66,7 +66,8 @@ node sim/cli.js sim --games 3000 --pair giant,you         # giant先手 vs you�
 
 ## `--mode` の違い（重要）
 
-- **`faithful`** … 実装（`AIPlayer.ts`）と**完全に同一**のAI。
+- **`prod`**（既定）… 本番の `AIPlayer.ts` そのもの（`sim/shared/AIPlayer.js` は生成物）。スキル・ギア・デッキも本番どおりに使う。実ゲームの挙動を測りたいときはこれ。
+- **`faithful`** … 旧 sim 版AI（`ai.js`。廃止予定）。以下は初期の説明で、今の挙動とは異なる:
   - 着手は「勝てる空きマス → 相手の勝ちをブロックする空きマス → ランダム空きマス」。
   - スキルは**マジックを消費するだけで効果を発動しない**（実ゲームのバグを再現）。
   - 占有マスの**捕獲は一切しない**。
