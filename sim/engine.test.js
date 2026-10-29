@@ -532,18 +532,18 @@ test('式神の供犠(idx 91): 自陣の式神をランダムに1体壊し、選
     assert.strictEqual(u.magic[0], 3);
 });
 
-test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
+test('式神一括(1体あたりコスト2): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
     const s = game('yinYangMaster', 'you');
     s.board[0] = e.newShikigami('💙');
     s.board[1] = e.newShikigami('💙');
     s.board[2] = e.newShikigami('⭕');
     s.magic[0] = 20;
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(s.magic[0], 20 - 3 * 2); // 自分の式神2体 × 3
+    assert.strictEqual(s.magic[0], 20 - 2 * 2); // 自分の式神2体 × 2
     assert.deepStrictEqual(s.board[0], { player: '💙', bind: 2, effects: [] });
     assert.strictEqual(e.isShikigami(s.board[2]), true);
     e.SKILLS.shikigamiAll(s); // 式神がもういない
-    assert.strictEqual(s.magic[0], 14);
+    assert.strictEqual(s.magic[0], 16);
 });
 
 test('陰陽師のパッシブ: 式神を置く手番は全スキルのコスト-1（下限1）。置くスキル自身も-1。手番が変わると戻る', () => {
@@ -574,7 +574,7 @@ test('式神一括は式神の数に比例して高くなる（盤面を埋め�
     e.SKILLS.shikigamiFlood(s); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(before - s.magic[0], 3 * 16 - 1); // 式神を置いた手番は全スキル-1
+    assert.strictEqual(before - s.magic[0], 2 * 16 - 1); // 式神を置いた手番は全スキル-1
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
