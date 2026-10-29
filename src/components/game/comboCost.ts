@@ -20,6 +20,9 @@ export const ownLeaves = (board: SquareInfo[], player: Player): number => countO
 export const boardEffectCount = (board: SquareInfo[]): number =>
     board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect !== '📜').length, 0);
 
+/** 盤面にあるコマの数（敵味方とも） */
+export const boardPieceCount = (board: SquareInfo[]): number => board.filter((sq) => !!sq.player).length;
+
 /** player のコマに乗っている⚡の総数 */
 export const ownCharges = (board: SquareInfo[], player: Player): number => countOwn(board, player, '⚡');
 
@@ -29,6 +32,7 @@ export const ownCharges = (board: SquareInfo[], player: Player): number => count
  * - 総毛立つ: この手番に⚡を付与するスキルを使っていれば（kinds=手番内に使ったスキルの種類）
  * - 静電気の季節: 自陣に⚡が1つもなければ
  * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型）
+ * - 一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも。カウント型）
  * - 雷を食らわば皿まで: この手番に付与した⚡の数だけ（自陣の⚡が手番開始時 chargeBase より増えたぶん。撃つと基準がリセットされる）
  */
 export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>, chargeBase: number = 0): number => {
@@ -36,9 +40,10 @@ export const comboCut = (skillKey: string | undefined, board: SquareInfo[], play
     if (skillKey === 'onClickBristle') return Array.from(kinds).some((k) => CHARGE_GRANT_KEYS.has(k)) ? COMBO_CUT : 0;
     if (skillKey === 'onClickChargeSeason') return ownCharges(board, player) === 0 ? COMBO_CUT : 0;
     if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
+    if (skillKey === 'onClickSmallFry') return boardPieceCount(board);
     if (skillKey === 'onClickChargeHeal') return Math.max(0, ownCharges(board, player) - chargeBase);
     return 0;
 };
 
 /** 軽減の下限が1のスキル（カウント型で、軽減しきると0円になってしまうもの） */
-export const comboFloor = (skillKey: string | undefined): number => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' ? 1 : 0);
+export const comboFloor = (skillKey: string | undefined): number => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' || skillKey === 'onClickSmallFry' ? 1 : 0);

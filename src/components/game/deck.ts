@@ -102,6 +102,11 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
     { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズか🍂を持つ敵のコマを1つ選んで🔥を1つ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。鍛冶師は🔥付与が-1' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3します' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を2つ付与します（🔑ロック・⚡無敵は除く。対象が無いと使えません）' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）。自陣の式神が3体以上ならコスト0' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）、相手全員は次の手番の終わりまでライフ3以下のコマを置けなくなります（トークン等のスキルも含む）。盤面のコマの数だけコストが下がります（最低1）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -116,12 +121,12 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
     tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
-    magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
+    magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
-    electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
+    electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],
     cryomancer: [8, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
     witch: [5, 8, 12, 28, 36, 44, 53, 56, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
@@ -162,11 +167,11 @@ export const randomDeck = (rng: () => number = Math.random): number[] => {
     return out.sort((a, b) => a - b);
 };
 
-/** AIが何も指定しないときのランダム入れ替えの枚数（推奨デッキの12枚中） */
+/** variedAIDeck(ストレステスト用)のランダム入れ替えの枚数（推奨デッキの12枚中） */
 export const AI_DECK_SWAPS = 3;
 
 /**
- * キャラの勝ち筋になる「核のカード」。AIの入れ替えデッキ（variedAIDeck）でも入れ替えない。
+ * キャラの勝ち筋になる「核のカード」。ストレステスト用の入れ替えデッキ（variedAIDeck）でも入れ替えない。
  * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
  */
 export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
@@ -174,7 +179,9 @@ export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
 };
 
 /**
- * AIのデッキ: キャラの推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える（毎試合少し違う顔ぶれになる）。
+ * 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える。
+ * 本番のAI席は pickRecommendedDeck（主案/別案の複数パターンからの選択のみ）を使い、カードをランダムに入れ替えない。
+ * sim の頑健性確認（`probe-top.js --envDeck varied`）で「デッキが多少ずれても環境順位が崩れないか」を見るために残している。
  * 入れ替えで常に有効なデッキ（12枚・重複なし）になる。CORE_CARDS のカードは入れ替えない
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {

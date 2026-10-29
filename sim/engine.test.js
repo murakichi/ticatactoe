@@ -384,12 +384,12 @@ test('両トークン: 参加者全員のコマが1つずつ置かれる', () =>
     assert.deepStrictEqual(placed, e.SYMBOLS.slice(0, 5).slice().sort());
 });
 
-test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト3。埋まったマスは選び直せる', () => {
+test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト2。埋まったマスは選び直せる', () => {
     const s = gameN('yinYangMaster', 'you', 'you');
     s.board[1] = { player: '⭕', bind: 5, effects: [] };
     s.magic[0] = 10;
     e.SKILLS.shikigamiPlace(s);
-    assert.strictEqual(s.magic[0], 7);
+    assert.strictEqual(s.magic[0], 8);
     assert.strictEqual(e.placeMove(s, 1), false); // 埋まっている
     assert.strictEqual(s.useShikigamiPlace, true);
     assert.strictEqual(e.placeMove(s, 6), true);
@@ -437,7 +437,7 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     s.board[15] = { player: '⭕', bind: 3, effects: [] }; // 範囲外
     s.magic[0] = 10;
     e.SKILLS.shikigamiBlast(s);
-    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(s.magic[0], 6);
     assert.strictEqual(e.placeMove(s, 2), false); // 式神でないマスは選び直せる
     assert.strictEqual(e.placeMove(s, 5), true);
     assert.deepStrictEqual(s.board[5], { player: undefined, bind: 0, effects: [] });
@@ -446,6 +446,90 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     assert.strictEqual(s.board[2].bind, 3);
     assert.strictEqual(s.board[15].bind, 3);
     for (const j of [4, 6, 8, 9, 10]) assert.deepStrictEqual(s.board[j], e.newShikigami('💙'));
+});
+
+test('式神の加護(idx 88): 自分の式神を1体消費して、自陣のコマ全て（式神を除く）のライフ+3。自陣のコマか式神が無いと使えない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('💙');
+    s.board[2] = { player: '💙', bind: 2, effects: [] };
+    s.board[3] = { player: '⭕', bind: 2, effects: [] };
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiBless(s);
+    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(e.placeMove(s, 2), false); // 式神でないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.deepStrictEqual(s.board[0], { player: undefined, bind: 0, effects: [] }); // 消費された
+    assert.strictEqual(e.isShikigami(s.board[1]), true); // 他の式神は残る（ライフも変わらない）
+    assert.strictEqual(s.board[1].bind, 2);
+    assert.strictEqual(s.board[2].bind, 5);
+    assert.strictEqual(s.board[3].bind, 2); // 敵は変わらない
+    const t = gameN('you', 'you'); // 式神だけで自陣のコマが無い → 使えない
+    t.board[0] = e.newShikigami('💙');
+    t.magic[0] = 10;
+    e.SKILLS.shikigamiBless(t);
+    assert.strictEqual(t.magic[0], 10);
+});
+
+test('式神の呪詛(idx 89): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全て（🔑ロック除く）に☠を2つ。対象が無いと使えない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[2] = { player: '⭕', bind: 5, effects: [] }; // エフェクト無し
+    s.board[3] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] }; // ロック中
+    s.magic[0] = 10;
+    e.SKILLS.shikigamiCurse(s);
+    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(e.placeMove(s, 1), false); // 自分の式神でないマスは選び直せる
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.deepStrictEqual(s.board[0], { player: undefined, bind: 0, effects: [] });
+    assert.strictEqual(s.board[1].effects.filter((x) => x.effect === '☠').length, 2);
+    assert.strictEqual(s.board[2].effects.length, 0);
+    assert.strictEqual(s.board[3].effects.filter((x) => x.effect === '☠').length, 0);
+    const t = gameN('you', 'you'); // 対象（エフェクト持ちの敵）が無い
+    t.board[0] = e.newShikigami('💙');
+    t.board[1] = { player: '⭕', bind: 5, effects: [] };
+    t.magic[0] = 10;
+    e.SKILLS.shikigamiCurse(t);
+    assert.strictEqual(t.magic[0], 10);
+});
+
+test('式神割引(idx 90): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減する。軽減札なので「次に打つスキル」を消費しない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('⭕'); // 敵の式神も数える
+    s.magic[0] = 20;
+    e.SKILLS.shikigamiDiscount(s);
+    assert.strictEqual(s.magic[0], 18);
+    assert.strictEqual(s.discount[0].next, 4); // 2 + 式神2体
+    e.SKILLS.shikigamiDiscount(s); // 軽減札どうしは足し算（このターンの軽減は消費されない）
+    assert.strictEqual(s.discount[0].next, 8);
+});
+
+test('式神の供犠(idx 91): 自陣の式神をランダムに1体壊し、選んだ敵コマのライフを0にする。式神3体以上なら0コスト。式神・🔑ロックは選べない', () => {
+    const s = gameN('you', 'you');
+    s.board[0] = e.newShikigami('💙');
+    s.board[1] = e.newShikigami('💙');
+    s.board[2] = e.newShikigami('💙');
+    s.board[5] = { player: '⭕', bind: 6, effects: [] };
+    s.board[6] = { player: '⭕', bind: 6, effects: [{ effect: '🔑' }] };
+    s.board[7] = e.newShikigami('⭕');
+    s.magic[0] = 3;
+    e.SKILLS.shikigamiPurge(s);
+    assert.strictEqual(s.magic[0], 3); // 式神3体なので0コスト
+    assert.strictEqual([0, 1, 2].filter((i) => e.isShikigami(s.board[i])).length, 2); // ランダムに1体壊れた
+    assert.strictEqual(e.placeMove(s, 6), false); // ロック中は選び直せる
+    assert.strictEqual(e.placeMove(s, 7), false); // 式神は選べない
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].bind, 0);
+    assert.strictEqual(s.board[5].player, '⭕');
+    const u = gameN('you', 'you'); // 式神2体 → コスト5
+    u.board[0] = e.newShikigami('💙');
+    u.board[1] = e.newShikigami('💙');
+    u.board[5] = { player: '⭕', bind: 6, effects: [] };
+    u.magic[0] = 8;
+    e.SKILLS.shikigamiPurge(u);
+    assert.strictEqual(u.magic[0], 3);
 });
 
 test('式神一括(1体あたりコスト3): 自分の式神を全て通常の自陣コマにする。相手の式神はそのまま。式神がいなければ何もしない', () => {
@@ -2042,7 +2126,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）、AIが新しい手札idxで壊れない', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry']);
     // 手札に新スキル(idx41〜48)があっても AI は落ちず手を返す
     const s = game('cryomancer', 'you');
     s.heartTurn = true; s.heartMagic = 20; s.life = 4;
@@ -2635,6 +2719,78 @@ test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽
     assert.strictEqual(price(), 6);
 });
 
+test('一寸の虫に魂なし: 敵のライフ3以下のコマを全て破壊（🔑ロック・無敵は除き、氷結中は❄-1だけ）。自陣と、ライフ4以上の敵は残る', () => {
+    const s = e.newGame({ chars: ['electrician', 'you', 'you'], rng: e.makeRng(6) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '⭕', bind: 3, effects: [] };            // 壊れる
+    s.board[1] = { player: '⭕', bind: 0, effects: [] };            // ライフ0も壊れる
+    s.board[2] = { player: '🟩', bind: 2, effects: [] };           // 別の敵(3人戦)も壊れる
+    s.board[3] = { player: '⭕', bind: 4, effects: [] };            // ライフ4は残る
+    s.board[4] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // ロック中は残る
+    s.board[5] = { player: '⭕', bind: 3, effects: [FRZ, FRZ] };    // 氷結は身代わり(❄-1)
+    s.board[6] = { player: '💙', bind: 1, effects: [] };            // 自陣は残る
+    s.board[7] = { player: '🟩', bind: 3, effects: [] };
+    const before = e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
+    assert.strictEqual(before, Math.max(1, 10 - 8)); // 盤面のコマ8個ぶん軽減
+    e.SKILLS.smallFry(s);
+    for (const i of [0, 1, 2, 7]) assert.strictEqual(s.board[i].player, undefined);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[4].player, '⭕');
+    assert.strictEqual(s.board[5].player, '⭕');
+    assert.strictEqual(s.board[5].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.board[6].player, '💙');
+    assert.strictEqual(s.magic[0], 30 - before);
+    assert.deepStrictEqual(s.lifeBan, [false, true, true]);
+});
+
+test('一寸の虫に魂なし: 雷霆の巫の⚡で無敵のコマは壊れない', () => {
+    const s = e.newGame({ chars: ['you', 'electrician'], rng: e.makeRng(6) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '⭕', bind: 2, effects: [{ effect: '⚡' }] };
+    e.SKILLS.smallFry(s);
+    assert.strictEqual(s.board[0].player, '⭕');
+});
+
+test('一寸の虫に魂なし: コストは盤面のコマの数だけ軽減（最低1）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(6) });
+    const price = () => e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
+    assert.strictEqual(e.skillCosts.onClickSmallFry, 10);
+    assert.strictEqual(price(), 10);
+    for (let i = 0; i < 4; i++) s.board[i] = { player: i % 2 ? '⭕' : '💙', bind: 5, effects: [] };
+    assert.strictEqual(price(), 6);
+    for (let i = 4; i < 16; i++) s.board[i] = { player: '⭕', bind: 5, effects: [] };
+    assert.strictEqual(price(), 1);
+});
+
+test('一寸の虫に魂なし: 縛られた席はライフ3以下のコマを置けない（着手・置くスキル）。その席の手番が終わると解除', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(8) });
+    s.magic[0] = 30; s.magic[1] = 30;
+    e.SKILLS.smallFry(s);                    // 席1が縛られる
+    assert.deepStrictEqual(s.lifeBan, [false, true]);
+    s.board[5] = { player: '💙', bind: 4, effects: [] };
+    s.currentTurn += 1; e.advanceTurn(s);    // 席1の手番へ
+    assert.strictEqual(s.turn, 1);
+    s.life = 3;
+    assert.strictEqual(e.placeMove(s, 0), false); // ライフ3の着手はできない
+    assert.strictEqual(s.board[0].player, undefined);
+    const magicBefore = s.magic[1];
+    e.SKILLS.shikigamiRandom(s);             // 式神はライフ2 → 置けない（魔力も減らない）
+    assert.strictEqual(s.magic[1], magicBefore);
+    assert.strictEqual(s.board.filter((sq) => sq.effects.some((x) => x.effect === '📜')).length, 0);
+    s.life = 4;
+    assert.strictEqual(e.placeMove(s, 0), true); // ライフ4なら置ける
+    assert.strictEqual(s.lifeBan[1], false);     // 手番が終わったので解除
+});
+
+test('一寸の虫に魂なし: AIは縛られてライフ3以下なら着手せず（チャージで手番を終える）、置くスキルも使わない', () => {
+    const ai = require('./ai');
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(9) });
+    s.turn = 1; s.life = 3; s.lifeBan[1] = true; s.magic[1] = 30;
+    s.skills = [2, 3, 5];
+    const r = ai.makeMove(s, 'faithful');
+    assert.ok(r.turnEnded || r.move === null);
+});
+
 test('一寸先は闇鍋: 1手番に1度だけ（2回目は何も起きず魔力も減らない）。次の手番では使える', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(2) });
     s.magic[0] = 40; s.magic[1] = 40;
@@ -2782,7 +2938,7 @@ test('AIは自分のデッキを把握する: 陰陽師はコンボ札(百鬼夜
     const deckMod = require('./deck');
     const digs = (deck) => {
         let n = 0;
-        for (let g = 0; g < 4; g++) {
+        for (let g = 0; g < 16; g++) {
             const chars = ['yinYangMaster', 'magician'];
             const s = e.newGame({ chars, rng: e.makeRng(900 + g), decks: [deck, deckMod.recommendedDeck('magician')] });
             s.aiFlags = chars.map(() => ({}));

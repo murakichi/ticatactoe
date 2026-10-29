@@ -1,13 +1,14 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: edb9fff
-- 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,49,50,51,52,53,58] AIフラグ=なし
+- 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,50,51,52,53,58,60] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
-- 連続不採用回数: 7(2026-10-28 の play-learn/tune-top の試行 28〜33 と elecNoAnti 後の deck/gear 再探索。採用は elecNoAnti(PR #198)が最後)
+- 連続不採用回数: 0(2026-10-28 に返し特売の採用で戻した)
 - 2026-10-27(play-learn A1): 対策ロックを撃たない(elecNoAnti)で環境 50.3→57.8%、rank seed12/100 で3位 59.8%(1位 poisoner 68.0)。状態は blocked を維持（1位との差 約8pt）
-- 状態: blocked(issue #44。魔力が律速=手番開始時の魔力+1で60→77%。AI/ギア/デッキ側は2026-10-28に出し切り、連続不採用6超。ルール側の魔力補正の判断待ち。再開: master が動いた/#44 に決定が出たら running に戻す)
+- 状態: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
+- 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ
@@ -32,6 +33,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 35 | deck(返し特売の頑健性) | 60 を入れる死に札を 49/50/51 で比べる(envDeck varied seed103/300) | 49→60: 62.3→64.6 / 50→60 と 51→60 も 64.6(sim では 49〜51 はどれも撃てない死に札で差なし) | 慈雨(49)を外す(過去2回『効果なし』と測った札) |
+| 34 | deck(全札の単発スキャン) | デッキ外の全76種を 49 と1枚ずつ入れ替え(seed101/100) | 実質の対照(未使用札で入れ替え)62.0 に対し 返し特売(60) 66.7 のみ突出。バッズ(2) 50.6・トークン(3) 54.5・増殖 57.0 などは悪化。基準と完全一致の20種+62.0の約35種は AI が撃たない札。再測定 seed102/300: 59.2→63.6(+4.4) | **採用**(返し特売(60)を 49 と入れ替え。sim/deck.js・deck.ts にミラー。本番AIでは未計測) |
 | 33 | strategy(issue #237) | 収穫ギアの付与割引(54)→毒霧(29)周回で魔力+3/周。手札に2枚が揃ったら周回(F.mistLoop。固定 F.mistLock、上限実験 F.mistForce) | 周回なし 51.7 / 固定+周回 38.4 / 固定のみ 39.3 / 固定なし 51.7(発動0回) / 手札に常に2枚(上限) 51.7(周回4回)・48.8(2回)(tactician,giant,magician,cryomancer seed91/150) | 不採用(魔力は増えるが使い道が無く勝率に乗らない・2枚を揃える手段が無い。コード削除済み。issue #237 にコメント) |
 | 32 | strategy | 序盤(〜6手番)で魔力が閾値以下・リーチ無しなら駒を置かずチャージ(F.elecCharge=2/3) | 60.0 → 58.3/58.4(seed71/200) | 不採用(ノブ削除) |
 | 31 | deck | 魔力の元のバッズ系(2,10,9,14)を死に札(49〜52)と入れ替え | 63.2 → 49〜51(seed81/200) | 不採用(-12〜-14) |

@@ -1,4 +1,4 @@
-import { comboCut, comboFloor, ownCharges, ownLeaves, boardEffectCount, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
+import { comboCut, comboFloor, ownCharges, ownLeaves, boardEffectCount, boardPieceCount, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
 import { SquareInfo } from '../../types/SquareInfo';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -42,6 +42,12 @@ describe('導線(コンボ)の軽減', () => {
         expect(comboFloor('onClickDarkPot')).toBe(1);
         expect(comboFloor('onClickBristle')).toBe(0);
     });
+    test('一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも）。下限1', () => {
+        const board = [sq('💙'), sq('⭕'), sq(undefined, [BOLT]), sq('⭕', [BOLT])];
+        expect(boardPieceCount(board)).toBe(3);
+        expect(comboCut('onClickSmallFry', board, '💙', 0, new Set())).toBe(3);
+        expect(comboFloor('onClickSmallFry')).toBe(1);
+    });
     test('対象外のスキルは常に0', () => {
         expect(comboCut('onClickToken', [sq('💙')], '💙', 0, new Set(CHARGE_GRANT_KEYS))).toBe(0);
         expect(comboCut(undefined, [sq('💙')], '💙', 0, new Set())).toBe(0);
@@ -50,7 +56,7 @@ describe('導線(コンボ)の軽減', () => {
         expect(simCombo.COMBO_CUT).toBe(COMBO_CUT);
         expect([...simCombo.CHARGE_GRANT_KEYS].sort()).toEqual(Array.from(CHARGE_GRANT_KEYS).sort());
         const boards = [[sq('💙')], [sq('💙', [LEAF, BOLT]), sq('⭕', [LEAF])]];
-        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickDarkPot', 'onClickChargeHeal', 'onClickToken'];
+        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickDarkPot', 'onClickChargeHeal', 'onClickSmallFry', 'onClickToken'];
         const kindSets = [new Set<string>(), new Set(['onClickChargeArea']), new Set(['onClickChargeSeason'])];
         for (const b of boards) for (const k of keys) for (const kinds of kindSets) for (const base of [0, 1]) {
             expect(simCombo.comboCut(k, b, '💙', base, kinds, base)).toBe(comboCut(k, b, '💙', base, kinds, base));
