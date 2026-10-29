@@ -113,3 +113,29 @@ describe('ギアの手番状態 advanceGearState', () => {
         expect(r.active[0]).toBe(true);
     });
 });
+
+describe('トークン後のギア効果 tokenAfter', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { applyLockAt, propagate } = require('./tokenAfter');
+    it('ロック: 氷結中は掛からない。空きマスには空蔵の持ち主を記録し、堅牢の鍵でライフが延びる', () => {
+        const b = board();
+        expect(applyLockAt(b, 0, ['emptyLock'], 1)).toBe(true);
+        expect(b[0].effects).toEqual([{ effect: '🔑', value: 2 }]);
+        expect(b[0].bind).toBe(6);
+        b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+        expect(applyLockAt(b, 1, [], 0)).toBe(false);
+        const c = board();
+        applyLockAt(c, 0, ['ironLock'], 0);
+        expect(c[0].bind).toBe(9);
+    });
+    it('伝播: 周囲のコマのうち種類に合うものへ同じエフェクト（バッズは自陣、毒は敵）', () => {
+        const b = board();
+        b[5] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }] };
+        b[6] = { player: '⭕', bind: 3, effects: [] };
+        b[9] = { player: '💙', bind: 3, effects: [] };
+        expect(propagate(b, 5, '🌱', '💙', chars, () => 0)).toBe(9);
+        expect(b[9].effects).toEqual([{ effect: '🌱' }]);
+        expect(propagate(b, 5, '☠', '💙', chars, () => 0)).toBe(6);
+        expect(propagate(board(), 5, '☠', '💙', chars, () => 0)).toBeNull();
+    });
+});

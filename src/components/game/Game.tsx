@@ -8,6 +8,7 @@ import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPla
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
+import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -1259,12 +1260,7 @@ export const Game = (props: GameProps) => {
     // --- ギアのエフェクト系ヘルパー（sim/engine.js の同名関数と同じ規則） ---
     // ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
     const applyLock = (board: SquareInfo[], idx: number) => {
-        const sq = board[idx];
-        if (!lockable(sq)) return;
-        const owner = hasGear(turnGears, 'emptyLock') && !sq.player ? turnSeat + 1 : undefined;
-        const lockBind = gearLockBind(turnGears);
-        const lock: Effect = owner ? { effect: '🔑', value: owner } : { effect: '🔑' };
-        board[idx] = { ...sq, effects: [...sq.effects, lock], bind: sq.bind < lockBind ? lockBind : sq.bind };
+        applyLockAt(board, idx, turnGears, turnSeat);
     };
     // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
     // 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
@@ -1292,18 +1288,8 @@ export const Game = (props: GameProps) => {
             playBurst('gearKey', [idx]);
         }
         if (effect && hasGear(turnGears, 'propagate')) {
-            // 周囲8マスのコマのうち、ロックされておらず、エフェクトの種類に合うもの（バッズ=自陣 / 毒=敵 / ⚡=誰でも）
-            const cands = geo.surroundRange(idx).filter((j) => {
-                const sq = board[j];
-                if (!sq.player || isGuarded(sq, characters)) return false;
-                if (effect === '🌱') return sq.player === currentTurnPlayer;
-                if (effect === '☠') return sq.player !== currentTurnPlayer;
-                return true;
-            });
-            if (cands.length > 0) {
-                const j = randomPick(cands);
-                const spread = { ...board[j], effects: [...board[j].effects, { effect }] };
-                board[j] = effect === '☠' ? poisonStrike(spread) : spread;
+            const j = propagateEffect(board, idx, effect, currentTurnPlayer, characters);
+            if (j !== null) {
                 granted += 1;
                 addLog(`伝播: ${posName(j)}に${effect}が広がった`);
                 gearTrigger('propagate', `${effect}が広がった`);

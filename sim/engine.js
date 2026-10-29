@@ -62,6 +62,7 @@ const turnMod = require('./shared/turn');
 const gearTurnMod = require('./shared/gearTurn');
 const placementMod = require('./shared/placement');
 const proliferateMod = require('./shared/proliferate');
+const tokenAfterMod = require('./shared/tokenAfter');
 const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
@@ -236,13 +237,7 @@ const connectedPieces = chargeMod.connectedPieces;
 // ---- ギアのエフェクト系ヘルパー ----
 // ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
 function applyLock(s, idx) {
-    const sq = s.board[idx];
-    if (thermal.isFrozen(sq)) return; // 氷結中のマスにはロックが掛からない
-    const g = s.gears[s.turn];
-    const owner = hasGear(g, 'emptyLock') && !sq.player ? s.turn + 1 : undefined;
-    sq.effects.push(owner ? { effect: '🔑', value: owner } : { effect: '🔑' });
-    const bind = gear.gearLockBind(g);
-    if (sq.bind < bind) sq.bind = bind;
+    tokenAfterMod.applyLockAt(s.board, idx, s.gears[s.turn], s.turn);
 }
 // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
 // 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）
@@ -267,19 +262,7 @@ function afterTokenPlaced(s, idx, effect) {
         bumpStat(s, 'bindingLock');
     }
     if (effect && hasGear(g, 'propagate')) {
-        const me = curPlayer(s);
-        // 周囲8マスのコマのうち、ロックされておらず、エフェクトの種類に合うもの（バッズ=自陣 / 毒=敵 / ⚡=誰でも）
-        const cands = surroundRange(s, idx).filter((j) => {
-            const sq = s.board[j];
-            if (!sq.player || isGuarded(s, sq)) return false;
-            if (effect === '🌱') return sq.player === me;
-            if (effect === '☠') return sq.player !== me;
-            return true;
-        });
-        if (cands.length) {
-            const j = randomPick(cands, s.rng);
-            s.board[j].effects.push({ effect });
-            if (effect === '☠') poisonStrike(s, s.board[j]);
+        if (tokenAfterMod.propagate(s.board, idx, effect, curPlayer(s), s.chars, s.rng) !== null) {
             granted += 1;
             bumpStat(s, 'propagate');
         }
