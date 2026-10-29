@@ -1683,7 +1683,9 @@ function faithfulMakeMove(s) {
     // 着手を先に決めたあとにトークンがランダムにそのマスへ落ち、⚡で無敵になった自コマになることがある。そのときは選び直す
     if (!r.turnEnded && r.move != null) {
         updateShield(s);
-        if (shield.has(r.move)) r.move = getEnhancedBestMove(s);
+        // 着手マスにトークンが落ちて、氷結中・ロック中の自コマになり、重ねて置けなくなったときも選び直す（氷結トークンなど）
+        const landed = s.board[r.move];
+        if (shield.has(r.move) || (landed.player === curPlayer(s) && (thermal.overwriteBlocked(landed) || (landed.effects.some((e) => e.effect === '🔑') && landed.bind > 0)))) r.move = getEnhancedBestMove(s);
     }
     // 一寸の虫に魂なし: ライフ3以下のコマは置けないので着手をやめる（呼び出し側がチャージで手番を終える）
     if (!r.turnEnded && r.move != null && s.lifeBan[s.turn] && s.life <= 3) r.move = null;

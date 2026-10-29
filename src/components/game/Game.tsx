@@ -444,7 +444,8 @@ export const Game = (props: GameProps) => {
                     return;
                 }
                 if (typeof next === 'string') executeSkillForAI(next);
-                else if (rest.length === 0 && currentAI && (isShielded(currentBoard[next], characters) || emptyBlocked(currentBoard[next]))) {
+                else if (rest.length === 0 && currentAI && (isShielded(currentBoard[next], characters) || emptyBlocked(currentBoard[next])
+                    || (currentBoard[next].player === currentTurnPlayer && (overwriteBlocked(currentBoard[next]) || (currentBoard[next].effects.some((e) => e.effect === '🔑') && currentBoard[next].bind > 0))))) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
                     // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
                     const alt = currentAI.getBestMove(currentBoard, life);
