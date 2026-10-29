@@ -609,7 +609,7 @@ describe('AIPlayer cryomancer frost cards (旧sim AI F.cryoCards と同一)', ()
 describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直し（旧sim AI の discountPlan>=2）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
-    const mk = (character: 'magician' | 'giant' = 'magician') => {
+    const mk = (character: 'magician' | 'giant' | 'poisoner' = 'magician') => {
         const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you']);
         ai.rerollsLeft = 2;
         return ai;
@@ -635,12 +635,12 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
     });
     it('魔法使い以外も、魔力が有り余っていて撃てるスキルが無ければ、軽減札を使わずシャッフルだけ行う', () => {
-        const r = run(mk('giant'), 12, [53]);
+        const r = run(mk('poisoner'), 12, [53]);
         expect(r.reroll).toEqual({});
         expect(r.skills).toEqual([]);
     });
     it('魔法使い以外が有り余っていても、引き直しの回数が残っていなければ引き直さない', () => {
-        const ai = mk('giant');
+        const ai = mk('poisoner');
         ai.rerollsLeft = 0;
         expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
@@ -788,7 +788,7 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
         // 序盤（空きが多い）は式神一括が式神の数に比例して重く、盤面を埋めるコンボは撃てない
         const early = emptyBoard();
         put(early, 0, '⭕', 3);
-        expect(mk().planShikigami(early, 30, flood, [73, 71])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(early, 20, flood, [73, 71])?.win ?? false).toBe(false);
     });
 
     it('特売(53)が手札にあれば重ね撃ちしてコンボのコストを圧縮する（特売×2→百鬼夜行→特売×2→式神一括。終盤の盤面で 7+8=15 → 7）', () => {
@@ -1544,32 +1544,32 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
     });
 
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
-        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
-        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
         const one = emptyBoard();
         one[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
-        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
-        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
+        expect(mk('you', 'witch').makeMove(one, 22, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
+        expect(mk('you', 'witch').makeMove(one, 22, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
     });
 
     it('高いトークンを撃つ予定なら、先に無礼講を撃つ（トークンが無礼講より安いときは撃たない）', () => {
-        const r = mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills;
+        const r = mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [95, 96], false).skills;
         expect(r.indexOf('onClickFreeToken')).toBeGreaterThanOrEqual(0);
         expect(r.indexOf('onClickFreeToken')).toBeLessThan(r.indexOf('onClickBurnOff'));
         const cheap = mk('you', 'witch');
-        expect(cheap.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
+        expect(cheap.makeMove(emptyBoard(), 22, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
         const active = mk('you', 'witch');
         active.tokenFree = true;
-        expect(active.makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
+        expect(active.makeMove(leafBoard(), 22, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
     });
 
     it('一寸の虫に魂なし: 壊せる（ライフ3以下の）敵コマが2個以上のとき撃つ', () => {
         const b = emptyBoard();
         b[4] = { player: '⭕', bind: 3, effects: [] };
         b[5] = { player: '⭕', bind: 2, effects: [] };
-        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
+        expect(mk('you', 'witch').makeMove(b, 22, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
         b[5] = { player: '⭕', bind: 6, effects: [] };
-        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
+        expect(mk('you', 'witch').makeMove(b, 22, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
     });
 });
 
@@ -1628,14 +1628,145 @@ describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダ
     const tac = () => new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'poisoner']);
 
     it('軍師も氷結トークン(45)・氷結ダブルトークン(46)を撃つ', () => {
-        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
-        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
+        expect(tac().makeMove(emptyBoard(), 22, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
+        expect(tac().makeMove(emptyBoard(), 22, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
     });
     it('氷結トークンを手札に固定する（毎手番撃てるように）', () => {
         expect(tac().chooseLocks(emptyBoard(), 0, 5, [45, 46, 3, 28])).toEqual(expect.arrayContaining([45]));
     });
     it('氷結札を使うのは軍師・氷室・毒使いだけ（巨人は撃たない）', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'poisoner']);
-        expect(giant.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
+        expect(giant.makeMove(emptyBoard(), 22, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
+    });
+});
+
+describe('魔力が有り余るとき（多人数戦・防壁で長引いた試合）', () => {
+    const { skillCosts } = require('./skillCosts');
+    const you = () => new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'poisoner', 'witch']);
+
+    it('魔力に余裕があればライフ+3とバイバインで置くコマを厚くする。余裕が無ければ撃たない', () => {
+        const rich = you().makeMove(emptyBoard(), 20, skillCosts, 2, 5, [0, 1], false).skills;
+        expect(rich).toEqual(['onClickAddLife', 'onClickBibine']);
+        expect(you().makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 1], false).skills).toEqual([]);
+    });
+
+    it('魔力が大きく余り、使う額が少ない手札なら、引き直し回数を使い切っても引き直す', () => {
+        const ai = you();
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(emptyBoard(), 40, skillCosts, 2, 5, [3], false).reroll).toBeDefined();
+        const spent = you();
+        spent.rerollsLeft = 0;
+        expect(spent.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [3], false).reroll).toBeUndefined();
+        const deep = you();
+        deep.rerollsLeft = -8;
+        expect(deep.makeMove(emptyBoard(), 40, skillCosts, 2, 5, [], false).reroll).toBeUndefined();
+    });
+
+    it('魔力が有り余るときは、劣勢でなくても斜めの敵コマを一掃するスラッシュを撃つ', () => {
+        const geo = geometryForCells(16);
+        const b = emptyBoard();
+        geo.antiDiagonal.slice(0, 2).forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [] }; });
+        expect(you().makeMove(b, 22, skillCosts, 2, 5, [5], false).skills).toContain('onClickSlash');
+        expect(you().makeMove(b, 8, skillCosts, 2, 5, [5], false).skills).not.toContain('onClickSlash');
+    });
+
+    it('魔力が有り余るとき、敵コマが多ければオピウムを撃つ', () => {
+        const b = emptyBoard();
+        [0, 2, 5, 7, 10].forEach((i) => { b[i] = { player: i % 2 ? '🟩' : '⭕', bind: 4, effects: [] }; });
+        expect(you().makeMove(b, 30, skillCosts, 2, 5, [8], false).skills).toContain('onClickOpium');
+        expect(you().makeMove(b, 10, skillCosts, 2, 5, [8], false).skills).not.toContain('onClickOpium');
+    });
+});
+
+describe('巨人のストンプ連打（1手番で4つ並べる）', () => {
+    const { skillCosts } = require('./skillCosts');
+    const giant = () => new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
+
+    it('魔力が足りれば、ストンプを連打して1列を自陣にして勝つ。足りなければ連打しない', () => {
+        const b = emptyBoard();
+        const r = giant().makeMove(b, 12, skillCosts, 2, 5, [], false);
+        const clicks = r.chargeClicks ?? [];
+        expect(clicks.length).toBe(4);
+        expect(clicks.every((c) => c.skill === 'onClickStomp' && c.target !== undefined)).toBe(true);
+        const none = giant().makeMove(b, 6, skillCosts, 2, 5, [], false);
+        expect(none.chargeClicks ?? []).toEqual([]);
+    });
+
+    it('今すぐ着手で勝てるならストンプは撃たない。2つ並びなら残り2マスをストンプ2回で揃える', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => { b[i] = { player: '💙', bind: 6, effects: [] }; });
+        const direct = giant().makeMove(b, 3, skillCosts, 2, 5, [], false);
+        expect(direct.chargeClicks ?? []).toEqual([]);
+        expect(direct.move).toBe(3);
+        const two = emptyBoard();
+        [0, 1].forEach((i) => { two[i] = { player: '💙', bind: 6, effects: [] }; });
+        const r = giant().makeMove(two, 6, skillCosts, 2, 5, [], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickStomp', target: 2 }, { skill: 'onClickStomp', target: 3 }]);
+    });
+});
+
+describe('毒使い: 魔力が有り余るときの連打', () => {
+    const { skillCosts } = require('./skillCosts');
+    const poisoner = () => new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', 'you']);
+    const ring = (): SquareInfo[] => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 6, effects: [] };
+        [0, 1, 4, 6].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [] }; });
+        return b;
+    };
+
+    it('毒霧→ミアズマを連打する（魔力に余裕があるときだけ）', () => {
+        expect(poisoner().makeMove(ring(), 40, skillCosts, 2, 5, [29], false).skills).toEqual(['onClickPoisonMist', 'onClickMiasma']);
+        expect(poisoner().makeMove(ring(), 9, skillCosts, 2, 5, [29], false).skills).not.toContain('onClickMiasma');
+    });
+
+    it('パンデミック→猛毒化: 敵が集まる3×3に毒を撒き、その毒を倍にする', () => {
+        const b = ring();
+        b[5] = { player: undefined, bind: 0, effects: [] };
+        const r = poisoner().makeMove(b, 23, skillCosts, 2, 5, [19], false);
+        expect(r.chargeClicks?.[0]).toEqual({ skill: 'onClickPandemic', target: expect.any(Number) });
+        expect(poisoner().makeMove(b, 12, skillCosts, 2, 5, [19], false).chargeClicks ?? []).toEqual([]);
+    });
+});
+
+describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () => {
+    const { skillCosts } = require('./skillCosts');
+
+    it('電気技師: 列の足りないマスがライフ0の敵コマと最後の空き1マスだけなら、追い剥ぎを連打して着手で揃える', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'you']);
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        b[1] = { player: '⭕', bind: 0, effects: [] };
+        b[2] = { player: '⭕', bind: 0, effects: [] };
+        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [52], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickPlunder', target: 1 }, { skill: 'onClickPlunder', target: 2 }]);
+        expect(r.move).toBe(3);
+        expect(ai.makeMove(b, 12, skillCosts, 2, 5, [], false).chargeClicks ?? []).toEqual([]);
+    });
+
+    it('氷室の番人: 氷結を重ねてから砕氷で敵コマを壊す', () => {
+        const ai = new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', 'you']);
+        const b = emptyBoard();
+        [0, 1].forEach((i) => { b[i] = { player: '⭕', bind: 3, effects: [] }; });
+        const r = ai.makeMove(b, 22, skillCosts, 2, 5, [47], false);
+        const names = (r.chargeClicks ?? []).map((c) => c.skill);
+        expect(names).toContain('onClickShatter');
+        expect(names.indexOf('onClickUseLock')).toBeLessThan(names.indexOf('onClickShatter'));
+    });
+});
+
+describe('縮地の連打', () => {
+    const { skillCosts } = require('./skillCosts');
+    it('列の足りないマスが空きだけなら、列の外の自陣コマを動かして最後の1マスを着手で揃える', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        b[1] = { player: '💙', bind: 5, effects: [] };
+        b[12] = { player: '💙', bind: 2, effects: [] };
+        b[13] = { player: '💙', bind: 3, effects: [] };
+        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [50], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickRelocate', target: 12, target2: 2 }]);
+        expect(r.move).toBe(3);
+        expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
     });
 });

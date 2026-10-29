@@ -21,7 +21,7 @@ import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
-import { decayBoard, shouldDecay } from './decay';
+import { decayBoard, shouldDecay, isCrowded } from './decay';
 import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
@@ -370,9 +370,14 @@ export const Game = (props: GameProps) => {
             case 'onClickUseDoubleLock': onClickUseDoubleLock(); break;
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
+            case 'onClickPlunder': onClickPlunder(); break;
+            case 'onClickRelocate': onClickRelocate(); break;
+            case 'onClickShatter': onClickShatter(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
+            case 'onClickIntensify': onClickIntensify(); break;
+            case 'onClickPandemic': onClickPandemic(); break;
             case 'onClickInjection': onClickInjection(); break;
             case 'onClickMiasma': onClickMiasma(); break;
             case 'onClickChargeToken': onClickChargeToken(); break;
@@ -1079,7 +1084,7 @@ export const Game = (props: GameProps) => {
         const decayNow = shouldDecay(placements, seatCount);
         setPlacements(placements + 1);
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は decay.ts で sim と共有
-        const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols) : null;
+        const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols, isCrowded(nextBoard, seatCount)) : null; // 満杯の盤面は自然減衰がもう1回
         const burnCells = decayed?.burnCells ?? [];
         if (decayed) {
             spreadOrigins.push(...decayed.spreadOrigins);
