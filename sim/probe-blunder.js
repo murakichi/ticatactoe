@@ -6,7 +6,8 @@
  * 数えるのは空きマスで完成するライン(findThreatSquares)のみ。捕獲での勝ち・スキルで盤面が変わる手番は「疑い」として出す。
  */
 const engine = require('./engine');
-const ai = require('./ai');
+const thermal = require('./shared/thermal');
+const ai = require('./aiSelect'); // 既定は本番AI(SIM_AI=legacy で旧 sim 版)
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), size = args.size ? parseInt(args.size, 10) : undefined;
@@ -17,14 +18,17 @@ else {
     const skip = (args.skip || '').split(',');
     for (const a of engine.CHARACTERS) for (const b of engine.CHARACTERS) if (!skip.includes(a) && !skip.includes(b)) pairs.push([a, b]);
 }
-/** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取)。氷結・無敵は見ない簡易版 */
+/** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取。巨人は bind>0 の敵も)。式神のライン・氷結中の空きマス・⚡無敵のコマは engine と同じく勝ちに数えない */
 function winCells(s, player) {
     const out = [];
-    const syms = s.board.map((q) => q.player);
+    const syms = engine.symbolsOf(s.board); // 式神は undefined 扱い
+    const giant = s.chars[engine.seatOf(player)] === 'giant';
     for (let i = 0; i < s.board.length; i++) {
         const q = s.board[i];
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
-        if (q.player && (q.player === player || q.bind > 0)) continue;
+        if (thermal.emptyBlocked(q)) continue;
+        if (q.player && (q.player === player || (q.bind > 0 && !giant))) continue;
+        if (q.player && engine.isShielded(s, q)) continue;
         const keep = syms[i]; syms[i] = player;
         if (engine.calculateWinner(syms) === player) out.push(i);
         syms[i] = keep;
