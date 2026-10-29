@@ -10,7 +10,7 @@ import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf } from './poison';
 import { stomp as stompOf } from './blast';
 import { NECROMANCY } from './turn';
-import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast } from './shikigami';
+import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
@@ -1633,7 +1633,7 @@ class AIPlayer {
         };
         const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
         // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
-        const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
+        const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || shikigamiLandable(sq)).length;
         // 百鬼夜行で式神を置くと、以降のスキルは-1（陰陽師のパッシブ。旧sim AI comboPlan と同一）
         const a = best(Math.max(1, this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll') - 1));
         return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
@@ -1642,7 +1642,7 @@ class AIPlayer {
     /** 百鬼夜行→式神一括で（手札と魔力に関わらず）自分が勝つ盤面か (旧sim AI floodComboWins) */
     floodComboWins(board: SquareInfo[]): boolean {
         const me = this.playerSymbol;
-        const nb = board.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+        const nb = board.map((sq) => (shikigamiLandable(sq) ? { player: me, bind: 0, effects: [] }
             : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))) as SquareInfo[];
         return calculateWinner(lineSymbols(nb)) === me;
     }
@@ -1653,7 +1653,7 @@ class AIPlayer {
         let v = 0;
         for (const j of geo.surroundRange(i)) {
             const sq = board[j];
-            if (!sq.player) { if (!emptyBlocked(sq)) v += 0.5; continue; }
+            if (!sq.player) { if (shikigamiLandable(sq)) v += 0.5; continue; }
             if (sq.player === this.playerSymbol || isGuarded(sq, this.characters)) continue;
             if (isFrozen(sq)) { v += 0.2; continue; }
             v += sq.bind <= SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
@@ -1664,7 +1664,7 @@ class AIPlayer {
     private bestShikigamiCell(board: SquareInfo[]): number | null {
         let best: number | null = null, bestV = -1;
         board.forEach((sq, i) => {
-            if (sq.player || emptyBlocked(sq) || this.shield.has(i)) return;
+            if (!shikigamiLandable(sq) || this.shield.has(i)) return;
             const v = this.blastValue(board, i);
             if (v > bestV) { bestV = v; best = i; }
         });
@@ -1698,7 +1698,7 @@ class AIPlayer {
                 this.yinYangMode = mode;
                 const combo = this.comboPlan(b, costs, availableSkills);
                 if (m >= combo.total) {
-                    const nb: SquareInfo[] = b.map((sq) => (!sq.player && !emptyBlocked(sq) ? { player: me, bind: 0, effects: [] }
+                    const nb: SquareInfo[] = b.map((sq) => (shikigamiLandable(sq) ? { player: me, bind: 0, effects: [] }
                         : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
                     if (calculateWinner(lineSymbols(nb)) === me) {
                         // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ

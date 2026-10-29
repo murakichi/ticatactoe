@@ -6,7 +6,8 @@
  * 数えるのは空きマスで完成するライン(findThreatSquares)のみ。捕獲での勝ち・スキルで盤面が変わる手番は「疑い」として出す。
  */
 const engine = require('./engine');
-const ai = require('./aiDriver');
+const thermal = require('./shared/thermal');
+const ai = require('./aiDriver'); // 本番AI(AIPlayer.ts の生成物)
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), size = args.size ? parseInt(args.size, 10) : undefined;
@@ -17,21 +18,26 @@ else {
     const skip = (args.skip || '').split(',');
     for (const a of engine.CHARACTERS) for (const b of engine.CHARACTERS) if (!skip.includes(a) && !skip.includes(b)) pairs.push([a, b]);
 }
-/** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取)。氷結・無敵は見ない簡易版 */
+/** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取。巨人は bind>0 の敵も)。式神のライン・氷結中の空きマス・⚡無敵のコマは engine と同じく勝ちに数えない */
 function winCells(s, player) {
     const out = [];
-    const syms = s.board.map((q) => q.player);
+    const syms = engine.symbolsOf(s.board); // 式神は undefined 扱い
+    const giant = s.chars[engine.seatOf(player)] === 'giant';
     for (let i = 0; i < s.board.length; i++) {
         const q = s.board[i];
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
-        if (q.player && (q.player === player || q.bind > 0)) continue;
+        if (thermal.emptyBlocked(q)) continue;
+        if (q.player && engine.isShikigami(q) && q.player !== player) continue; // 式神は奪うと空きマスになるだけ(自コマにならない)
+        // 奪えるのは bind0 の敵コマ。巨人は自分のライフが bind+1 を超えれば bind>0 の敵コマも奪える(simulatePlace の calc<0)
+        if (q.player && (q.player === player || (q.bind > 0 && !(giant && q.bind - s.life + 1 < 0)))) continue;
+        if (q.player && engine.isShielded(s, q)) continue;
         const keep = syms[i]; syms[i] = player;
         if (engine.calculateWinner(syms) === player) out.push(i);
         syms[i] = keep;
     }
     return out;
 }
-/** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。乱数は共有されるので複製側の着手で本体の乱数列は進む(確認用途のみ) */
+/** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。乱数関数は共有されるので、使う側で c.rng を差し替える */
 function deepClone(x) {
     if (x === null || typeof x !== 'object') return x;
     if (x instanceof Set) return new Set([...x].map(deepClone));
@@ -40,6 +46,15 @@ function deepClone(x) {
     const o = {};
     for (const k of Object.keys(x)) o[k] = deepClone(x[k]);
     return o;
+}
+/** 簡易判定の候補マスのうち、実際に置くと勝つもの(着手後の減衰・炎・毒を含む)。乱数は別のものを使う */
+function exactWinCells(s, me, cands) {
+    return cands.filter((i) => {
+        const c = deepClone(s);
+        c.rng = engine.makeRng(777);
+        try { engine.placeMove(c, i); } catch (e) { return false; }
+        return c.winner === me;
+    });
 }
 /** 複製した手番前の状態で、置き直せば相手の勝ち手を残さずに済んだ着手を探す */
 function avoidingMoves(pre, me, exclude) {
@@ -50,6 +65,7 @@ function avoidingMoves(pre, me, exclude) {
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
         if (q.player === me || (q.player && q.bind > 0)) continue;
         const c = deepClone(pre);
+        c.rng = engine.makeRng(777); // 本体の乱数列を進めない(再現できるように)
         let ok = false;
         try { ok = engine.placeMove(c, i) !== false; } catch (e) { ok = false; }
         if (!ok) continue;
@@ -65,7 +81,7 @@ for (const chars of pairs) {
         let n = 0;
         while (!s.winner && n++ < 400) {
             const me = engine.curPlayer(s), ch = engine.curChar(s);
-            const myT = winCells(s, me);
+            const myT = exactWinCells(s, me, winCells(s, me)); // 簡易判定で勝てそうなマスを、複製して実際に置いて確かめる(減衰・炎・毒で列が崩れるものを除く)
             const oppT = engine.otherSeats(s).map((k) => winCells(s, engine.SYMBOLS[k]));
             const ls = (s.gears[s.turn] || []).includes('lastStand') && !s.lastStandUsed[s.turn]; // 土壇場の防壁が未発動なら守りは意図的に捨てる
             const flatPre = [...new Set(oppT.flat())];
