@@ -1582,6 +1582,67 @@ class AIPlayer {
         }
         return bestNet >= 2 ? bestIdx : null;
     }
+    /** 魔法使い: 相手にリーチがあるとき、敵の3つ揃いの列を全て崩せる審判の日の中心（純増1以上）。なければ null。sim/ai.js の judgeBreakingReach（judgeUnderThreat） */
+    findJudgeBreakingReach(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const me = this.playerSymbol;
+        const reachLines = [];
+        for (const line of geo.winLines) {
+            let owner, op = 0, other = 0, empty = 0, blocked = false;
+            for (const idx of line) {
+                const pl = board[idx].player;
+                if (!pl) {
+                    empty++;
+                    if ((0, thermal_1.emptyBlocked)(board[idx]))
+                        blocked = true;
+                    continue;
+                }
+                if (pl === me) {
+                    other++;
+                    continue;
+                }
+                if (owner === undefined)
+                    owner = pl;
+                if (pl === owner)
+                    op++;
+                else
+                    other++;
+            }
+            if (op === 3 && other === 0 && empty === 1 && !blocked)
+                reachLines.push(line);
+        }
+        if (reachLines.length === 0)
+            return null;
+        let bestIdx = null, bestNet = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            let enemy = 0, mine = 0;
+            const gone = new Set();
+            for (const idx of geo.judgeRange(i)) {
+                const sq = board[idx];
+                const locked = sq.effects.some(e => e.effect === '🔑');
+                const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
+                if (locked && protectedBud)
+                    continue;
+                if ((0, thermal_1.isFrozen)(sq))
+                    continue;
+                if (this.isEnemy(sq.player)) {
+                    enemy++;
+                    gone.add(idx);
+                }
+                else if (sq.player === me)
+                    mine++;
+            }
+            if (!reachLines.every((line) => line.some((idx) => gone.has(idx))))
+                continue;
+            if (enemy - mine > bestNet) {
+                bestNet = enemy - mine;
+                bestIdx = i;
+            }
+        }
+        return bestNet >= 1 ? bestIdx : null;
+    }
     /** ヘイルメアリー用: 範囲破壊(ストンプ/審判の日)後に敵の脅威マスが最も減る中心。同点なら壊せる敵が多い方 */
     findRescueCenter(board, kind) {
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
@@ -2496,6 +2557,13 @@ class AIPlayer {
             }
         }
         let chargeResult = chargeClicks.length > 0 ? chargeClicks : undefined;
+        // 魔法使い: 相手にリーチがあっても、敵のリーチを全て崩せる審判の日は撃つ（sim/ai.js judgeUnderThreat: 対魔女・毒使い 40.5→45.3% seed8/300、全相手 49.6→55.3% seed9/150）
+        if (this.character === 'magician' && magic >= judgeCost && !this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer')
+            && !this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const breakTarget = this.findJudgeBreakingReach(board);
+            if (breakTarget !== null)
+                return { move: breakTarget, skills: ['onClickJudgeDay'] };
+        }
         // 巨人ストンプ / 魔法使い審判の日 (相手リーチが無いとき)
         if (this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             if (this.character === 'giant' && magic >= this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp')) {

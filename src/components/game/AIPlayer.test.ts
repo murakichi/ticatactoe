@@ -1417,6 +1417,30 @@ describe('魔法使いはネクロマンサー相手に審判の日を撃たな�
     });
 });
 
+describe('魔法使いは相手リーチを全て崩せる審判の日なら、リーチがあっても撃つ (旧sim AI judgeUnderThreat と同じ)', () => {
+    // ⭕が上段 0,1,2 の3つ揃い(3が空き=リーチ)。中心1の審判の日で 0,1,2 が壊れて列が崩れる
+    const board = (extraReach = false) => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 4));
+        if (extraReach) [8, 9, 10].forEach((i) => put(b, i, '⭕', 4)); // 別の列にもリーチ=1回では崩せない
+        return b;
+    };
+    const plan = (b: SquareInfo[], foe: 'tactician' | 'necromancer' = 'tactician') => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(b, 20, { onClickToken: 4, onClickLock: 2, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+
+    it('リーチの列を全て崩せるなら審判の日を撃つ', () => {
+        expect(plan(board()).skills).toContain('onClickJudgeDay');
+    });
+    it('1回で全てのリーチを崩せないなら撃たない', () => {
+        expect(plan(board(true)).skills).not.toContain('onClickJudgeDay');
+    });
+    it('ネクロマンサー相手なら撃たない', () => {
+        expect(plan(board(), 'necromancer').skills).not.toContain('onClickJudgeDay');
+    });
+});
+
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
     // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
     const board = () => {
