@@ -40,10 +40,15 @@ function start(o) {
     let g = 0, lastPost = 0;
     running = true;
 
+    const analysisOf = () => {
+        const an = live.analyze(stats);
+        return an ? { ...an, verdict: live.verdict(an) } : null;
+    };
     const post = (type, reason) => self.postMessage({
         type, reason,
         summary: live.summarize(stats),
         matchups: live.matchups(stats),
+        analysis: analysisOf(),
         drift: live.maxDrift(stats, window_),
         elapsed: (Date.now() - t0) / 1000,
     });
