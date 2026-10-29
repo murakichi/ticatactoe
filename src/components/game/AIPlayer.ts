@@ -1565,7 +1565,9 @@ class AIPlayer {
             const net = enemy - mine;
             if (net > bestNet) { bestNet = net; bestIdx = i; }
         }
-        return bestNet >= 2 ? bestIdx : null;
+        // 軍師は駒を並べ直して取り返すので、純増2では割に合わない（対軍師 20〜22→27〜31%, 純増3）
+        const minNet = this.opponents.some((o) => this.characterOf(o) === 'tactician') ? 3 : 2;
+        return bestNet >= minNet ? bestIdx : null;
     }
 
     /** 魔法使い: 相手にリーチがあるとき、敵の3つ揃いの列を全て崩せる審判の日の中心（純増1以上）。なければ null。sim/ai.js の judgeBreakingReach（judgeUnderThreat） */
