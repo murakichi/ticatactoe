@@ -854,6 +854,10 @@ class AIPlayer {
         }
     }
     /** 最善手を選択: 即勝ち→即ブロック→Minimax+フォーク評価 */
+    /** 相手のどれかに、今すぐ勝てる着手（空きマスで完成・bind0 のコマの奪取で完成）があるか。countReaches は空きマスで完成するリーチしか数えない */
+    oppCanWinNow(board, life) {
+        return this.opponents.some((o) => this.getMovesFor(board, o, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, j, o, life))) === o));
+    }
     /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
     winningMove(board, life) {
         const moves = Array.from(new Set([...(0, util_1.findEmptyIndexes)(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
@@ -1971,7 +1975,7 @@ class AIPlayer {
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （旧sim AI の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
         const facesWitch = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
-        if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0) && !this.oppCanWinNow(board, life)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
