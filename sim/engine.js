@@ -935,8 +935,10 @@ function placeMove(s, i) {
     const decayNow = shouldDecay(s.placements, seatCount(s));
     s.placements += 1;
     const spreadOrigins = [];
+    const crowdedNow = decayNow && decayMod.isCrowded(board, seatCount(s)); // 満杯の盤面は自然減衰がもう1回
     for (let k = 0; decayNow && k < board.length; k++) {
         const sq = board[k];
+        if (crowdedNow) { const c = decayMod.crowdedDecay(sq); sq.bind = c.bind; }
         // ❄氷結中のマスはターン進行でライフが減らない（自然減衰・🔥の継続ダメージとも）
         if ((sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !thermal.isFrozen(sq)) sq.bind--;
         // 🔥火炎: スタック×2の継続ダメージ（🔥自体は消えない）

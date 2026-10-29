@@ -19,7 +19,7 @@ import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
-import { shouldDecay } from './decay';
+import { shouldDecay, isCrowded, crowdedDecay } from './decay';
 import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
 import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
@@ -1129,12 +1129,13 @@ export const Game = (props: GameProps) => {
         ruinState.current.lastMove = i;
         const decayNow = shouldDecay(placements, seatCount);
         const burnCells: number[] = [];
+        const crowdedNow = decayNow && isCrowded(nextBoard, seatCount); // 満杯の盤面は自然減衰がもう1回
         setPlacements(placements + 1);
         for (let s = 0; decayNow && s < nextBoard.length; s++) {
             if (burnDamageOf(nextBoard[s], characters) > 0) burnCells.push(s);
             // ライフの減衰（自然減衰・🔥の継続ダメージ・毒。氷結の扱いは thermal.ts の decayTick）。
             // 履歴の盤面と共有しないよう、新しいマスを作って差し替える
-            const square = decayTick(nextBoard[s], characters);
+            const square = decayTick(crowdedNow ? crowdedDecay(nextBoard[s]) : nextBoard[s], characters);
             nextBoard[s] = square;
             const poison = isEffectWarded(square) ? 0 : square.effects.filter((x) => x.effect === '☠').length; // 術中の加護
             // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる

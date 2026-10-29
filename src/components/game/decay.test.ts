@@ -20,3 +20,25 @@ describe('shouldDecay (issue #30)', () => {
         expect(shouldDecay(1, DECAY_PER_ROUND_MIN_PLAYERS)).toBe(false);
     });
 });
+
+describe('満杯の盤面の追加減衰', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { isCrowded, crowdedDecay } = require('./decay');
+    const sq = (player?: string, bind = 0, effects: { effect: string }[] = []) => ({ player, bind, effects });
+
+    it('置ける空きマスが1つ以下で3人以上のときだけ満杯とみなす', () => {
+        const full = [sq('💙', 3), sq('⭕', 3), sq('🟩', 3), sq()];
+        expect(isCrowded(full, 3)).toBe(true);
+        expect(isCrowded(full, 2)).toBe(false);
+        expect(isCrowded([...full, sq()], 3)).toBe(false);
+        // 氷結で塞がれた空きマスは数えない
+        expect(isCrowded([sq('💙', 3), sq(undefined, 0, [{ effect: '❄' }]), sq(undefined, 0, [{ effect: '❄' }])], 3)).toBe(true);
+    });
+
+    it('追加減衰はライフの残ったコマを1減らす。氷結中・ライフ0は変えない', () => {
+        expect(crowdedDecay(sq('💙', 3)).bind).toBe(2);
+        expect(crowdedDecay(sq('💙', 0)).bind).toBe(0);
+        expect(crowdedDecay(sq('💙', 3, [{ effect: '❄' }])).bind).toBe(3);
+        expect(crowdedDecay(sq()).bind).toBe(0);
+    });
+});
