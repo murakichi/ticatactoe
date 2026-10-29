@@ -102,6 +102,11 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
     { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズか🍂を持つ敵のコマを1つ選んで🔥を1つ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。鍛冶師は🔥付与が-1' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3します' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を2つ付与します（🔑ロック・⚡無敵は除く。対象が無いと使えません）' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）。自陣の式神が3体以上ならコスト0' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）、相手全員は次の手番の終わりまでライフ3以下のコマを置けなくなります（トークン等のスキルも含む）。盤面のコマの数だけコストが下がります（最低1）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -115,16 +120,16 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
  */
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
+    tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
     magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],
-    cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
-    witch: [5, 8, 12, 28, 36, 44, 53, 62, 63, 64, 85, 86], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)は置き土産(84)より強い(61.4→65.0%)。ライフ3(0)・トークン(3)を抜き、風の落とし子(36)を足す(64.8→68.7%, seed2/200)。ライフ3は入れておくだけで悪化する(AIが魔力を使ってしまう)。落葉の衣(86)はAIが撃たない
+    cryomancer: [8, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
+    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
+    witch: [5, 8, 12, 28, 36, 44, 53, 56, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

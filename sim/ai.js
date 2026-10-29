@@ -11,7 +11,7 @@
 
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
-        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces } = require('./engine');
+        miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces, blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE } = require('./engine');
 const { geometryForCells } = require('./geometry');
 const thermal = require('./thermal');
 const E = require('./engine');
@@ -33,9 +33,7 @@ const TURN_ENDING = ['charge', 'opium', 'tsunami'];
 // ban='33|36' はそのスキルidxを手札にあっても使わない（スキル単体の寄与を測る用）。
 const SURPLUS_MAGIC = 12; // AIPlayer.ts と同じ
 const AI_DEFAULTS = {
-    witchReserve: 0, // 凩の魔女が🍂トークンの分の魔力を温存する（再検証中）
-    mogaL: 2, mogaHits: 2, // 凩の魔女の虎落笛を撃つ条件: 自陣の🍂がL枚以上かつ、ライフの残った敵コマがHits個以上（検証中）
-    cloak: 0, // 凩の魔女が落葉の衣(idx 86)を、実コストがこの値以下のときに撃つ（0=撃たない。検証中）
+    witchReserve: 1, // 凩の魔女は手札に🍂付きトークンがあるとき、その最安のコスト未満になる他スキルの支払いを控える（🍂を立てる魔力を残す）。tune-top: 3シード×200試合で +1.7/+2.9/+3.4pt（平均+2.7pt、環境勝率 77.6→79.3 / 74.6→77.5 / 74.7→78.1）。0で無効
     frzBlock: 1, // 氷室の番人が単独の脅威を氷結で塞ぐ（A/B採用）
     freezeBuds: 1, // 氷室の番人が、魔法使いの🌱付きでロックされていないコマを凍らせて魔力エンジンを止める（対魔法使い 25→68%、環境勝率 seed2/200 で +4.4pt）
     freezeBudsReserve: 0,
@@ -62,7 +60,10 @@ const AI_DEFAULTS = {
     floodCover: 150, // 雷霆の巫のAIが、相手に陰陽師がいるとき、自分のコマが1つも無い勝ち筋の線の数×この値を着手ごとに減点（百鬼夜行→式神一括で空きが全部相手になっても列が完成しないよう、全ての線に自コマを置く。tune-top 雷霆の巫: 対陰陽師 11→28%(seed81/82×300)。重み150〜1000は同等。0で無効）
     unblock: 2,  // 自分のリーチを塞ぐ氷結空きマスを、火遁(idx31)で隣のコマ（敵優先・無ければ自陣）を燃やして解凍し同じ手番で完成させる（A/B採用）
 };
-AI_DEFAULTS.tinderLock = 0; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3;
+AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3; AI_DEFAULTS.shSpecials = 1; AI_DEFAULTS.staleMove = 1; // 本番(AIPlayer.ts)は着手をスキルの前の盤面で決める。sim もそれに合わせる(issue #180)
+AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
+AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
+AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 let F = AI_DEFAULTS;
 function loadFlags(s) {
@@ -958,6 +959,7 @@ function coveredLines(board, me, cells) {
     return n;
 }
 function getEnhancedBestMove(s) {
+    updateShield(s); // 同じ手番にスキルで⚡を付けた直後でも、無敵になったマスを着手の候補にしない
     const me = curPlayer(s);
     const opps = opponentsOf(s);
     const opp = opps[0];
@@ -1264,11 +1266,6 @@ function chooseSkills(s, availableSkills) {
         } else if (availableSkills.includes(84) && foeLeaves < 3 && thermal.leafDropTargets(board, me, guardedCell).length > 0 && remaining >= cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop')) {
             spend(cost(costsOf(s).onClickLeafDrop, false, 'onClickLeafDrop'), 'leafDrop');
         }
-        // 落葉の衣: 🍂が増えて実コストが F.cloak 以下になったら撃つ（自陣の🍂は魔女のコストを下げ、相手のコストを上げる）
-        if (F.cloak && availableSkills.includes(86) && thermal.leafCloakTargets(board, me).length > 0) {
-            const cc = cost(costsOf(s).onClickLeafCloak, false, 'onClickLeafCloak');
-            if (cc <= F.cloak && remaining >= cc) spend(cc, 'leafCloak');
-        }
     }
 
     // 雷霆の巫: 静電気の季節（3ターン設置する駒に⚡）と総毛立つ（自陣の⚡なしのコマが3つ以上のとき全てに⚡）。トークンより先に撃つ（AIPlayer.ts と同一）
@@ -1377,6 +1374,8 @@ function chooseLocks(s, availableSkills) {
     if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
     if (character0 === 'cryomancer' && F.iceComboLock) return availableSkills.filter((i) => i === 41 || i === 42).slice(0, 2);
+    // 検証用 F.mistLock(issue #237): 収穫ギアなら毒霧(29)・付与割引(54)を手札に固定し続け、mistLoop の周回を毎手番回せるようにする
+    if (F.mistLoop && F.mistLock && hasGear(s.gears[s.turn], 'harvest')) return availableSkills.filter((i) => i === 29 || i === 54);
     // 陰陽師: 百鬼夜行+式神一括のコンボ札を手札に固定して、揃うまで持ち続ける
     if (character0 === 'yinYangMaster' && F.bloomLoop && curMagic(s) < 14 && (availableSkills.includes(33) || availableSkills.includes(36))) return [36, 33].filter((i) => availableSkills.includes(i)); // 固定の優先順は 風の落とし子 > 刈り入れ前夜
     if (character0 === 'yinYangMaster' && F.floodLock) {
@@ -1405,7 +1404,7 @@ function chooseLocks(s, availableSkills) {
     const witchLeafIdx = [62, 63, 64]; // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く
     const preferred = (idx) => (character === 'witch' && witchLeafIdx.includes(idx)) || (character === 'tactician' && tokenIdx.includes(idx)) || (character === 'magician' && budsIdx.includes(idx)) || (F.pyroLock && character === 'pyromancer' && PYRO_LOCK.includes(idx))
         || (tokenLockAi && gearTokenIdx.includes(idx))
-        || (F.tinderLock && character === 'pyromancer' && idx === 87) // 検証用: 火口を手札に固定して毎手番使えるようにする
+        || (F.tinderLock && character === 'pyromancer' && idx === 87 && (F.tinderLock < 2 || otherSeats(s).some((seat) => s.chars[seat] === 'magician'))) // 検証用: 火口を手札に固定して毎手番使えるようにする
         || (F.necroLock && character === 'necromancer' && (idx === 57 || idx === 58 || idx === 53)); // 降霊を割引札で圧縮するため、割引札を手札に固定する(陰陽師の戦略)
     const valued = (idx) => {
         switch (idx) {
@@ -1423,7 +1422,7 @@ function chooseLocks(s, availableSkills) {
         }
     };
     const locks = [];
-    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 88)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
+    for (const idx of availableSkills) { if (idx < 0 || idx >= Math.max(POOL_SIZE, 93)) continue; if (preferred(idx) || valued(idx)) locks.push(idx); }
     locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
     return locks.slice(0, 2);
 }
@@ -1523,6 +1522,40 @@ function floodComboWins(s, me) {
     return calculateWinner(lineSyms(nb)) === me;
 }
 // 陰陽師の1手番の式神運用。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。何か撃ったら true
+// 陰陽師の式神スキル(88 加護 / 89 呪詛 / 91 供犠)の使いどき。消費する式神は爆破価値の低いものから。AIPlayer.ts planShikigami と同一
+const SH_BLESS_WEAK = 2; // 加護: ライフがこの値以下の自陣コマが2つ以上
+const SH_CURSE_MIN = 2; // 呪詛: エフェクトが乗っている敵コマの最低数
+function shikigamiSpecials(s, me) {
+    if (!F.shSpecials) return false;
+    const mine = ownShikigami(s, me);
+    if (mine.length === 0) return false;
+    const cheapest = () => mine.map((i) => ({ i, v: blastValue(s, i, me) })).sort((a, b) => a.v - b.v)[0].i;
+    // 供犠: 式神が3体以上なら0コスト。最もライフの高い敵コマを0にする（そのあと奪える）
+    if (s.skills.includes(91) && mine.length >= SHIKIGAMI_PURGE_FREE) {
+        const ts = purgeTargets(s);
+        if (ts.length > 0) {
+            const t = ts.map((i) => ({ i, b: s.board[i].bind })).sort((a, b) => b.b - a.b || a.i - b.i)[0].i;
+            SKILLS.shikigamiPurge(s);
+            placeMove(s, t);
+            return true;
+        }
+    }
+    const cost = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
+    if (s.skills.includes(89) && curseTargets(s).length >= SH_CURSE_MIN && curMagic(s) >= cost('onClickShikigamiCurse')) {
+        SKILLS.shikigamiCurse(s);
+        placeMove(s, cheapest());
+        return true;
+    }
+    if (s.skills.includes(88) && curMagic(s) >= cost('onClickShikigamiBless')) {
+        const own = blessTargets(s);
+        if (own.length >= 3 && own.filter((i) => s.board[i].bind <= SH_BLESS_WEAK).length >= 2) {
+            SKILLS.shikigamiBless(s);
+            placeMove(s, cheapest());
+            return true;
+        }
+    }
+    return false;
+}
 function shikigamiTurn(s, me) {
     let acted = false;
     const costOf = (key) => calculateCost(s, costsOf(s)[key], false, false, key);
@@ -1590,6 +1623,7 @@ function shikigamiTurn(s, me) {
             break;
         }
         if (worth) break; // 爆破できる式神があるなら、魔力を貯めて爆破に備える
+        if (shikigamiSpecials(s, me)) { acted = true; break; } // 壊す式神がランダムなので、このターンの式神運用はここまで（AIPlayer.ts と同一）
         if (mode === 'ying' && mine.length < F.shMax && curMagic(s) >= costOf('onClickShikigamiPlace') + F.shReserve) {
             const cell = bestShikigamiCell(s, me);
             if (cell === null) break;
@@ -1606,11 +1640,18 @@ function shikigamiTurn(s, me) {
 /** New faithful mode: enhanced AI with skills + minimax (mirrors current AIPlayer.ts) */
 // 対象選択に失敗したスキルの待ち状態（氷結・ロック・ひこばえ・火炎付与）が次の着手を塞がないよう、手を返す前に必ず解く
 function clearPending(s) {
-    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
+    s.useShikigamiPlace = false; s.useShikigamiBlast = false; s.useShikigamiBless = false; s.useShikigamiCurse = false; s.useShikigamiPurge = false; s.useFreeze = false; s.useLock = 0; s.useSucker = false; s.useIgnite = false; s.useSwidden = false; s.useSacrifice = false; s.useKimon = false; s.useStash = false; s.useThunderFire = false; s.useFrostArea = false; s.useIcicle = false; s.useFrostSpread = false; s.useShatter = false;
 }
 function faithfulMakeMove(s) {
     clearPending(s);
     const r = faithfulMakeMoveInner(s);
+    // 着手を先に決めたあとにトークンがランダムにそのマスへ落ち、⚡で無敵になった自コマになることがある。そのときは選び直す
+    if (!r.turnEnded && r.move != null) {
+        updateShield(s);
+        if (shield.has(r.move)) r.move = getEnhancedBestMove(s);
+    }
+    // 一寸の虫に魂なし: ライフ3以下のコマは置けないので着手をやめる（呼び出し側がチャージで手番を終える）
+    if (!r.turnEnded && r.move != null && s.lifeBan[s.turn] && s.life <= 3) r.move = null;
     if (!r.turnEnded) clearPending(s);
     return r;
 }
@@ -1891,7 +1932,7 @@ function faithfulMakeMoveInner(s) {
     // 凩の魔女: 虎落笛（クリック不要・手番は続く）。自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
     if (curChar(s) === 'witch' && curMagic(s) >= mogaribueCost(s)) {
         const hits = thermal.mogaribueTargets(s.board, me, (sq) => isShielded(s, sq)).length;
-        if (thermal.mogaribueDamage(s.board, me) >= (F.mogaL ?? 2) && hits >= (F.mogaHits ?? 2)) { SKILLS.mogaribue(s); updateShield(s); }
+        if (thermal.mogaribueDamage(s.board, me) >= 2 && hits >= 2) { SKILLS.mogaribue(s); updateShield(s); }
     }
 
     // 煉獄の鍛冶師: 業火は前回の業火から3回スキルを使うと無料。手札のクリック不要の軽いスキル（ライフ3・バイバイン・風の落とし子・冬至の種子・浄化・刈り入れ前夜）を
@@ -2106,8 +2147,27 @@ function faithfulMakeMoveInner(s) {
             if (curMagic(s) >= 16) break;
         }
     }
+    // 検証用 F.mistLoop(issue #237): 収穫ギア+付与割引(54)+毒霧(29)の周回で魔力を稼ぐ。F.mistLoop=最大周回数、F.mistCap=この魔力に届いたら止める、F.mistDig=2枚が揃うまで引き直す最大回数(魔力が F.loopMin 以上のとき)
+    if (F.mistLoop && hasGear(s.gears[s.turn], 'harvest') && !s.silenced[s.turn]) {
+        const cost = (k) => calculateCost(s, costsOf(s)[k], false, false, k);
+        const have = () => s.skills.includes(29) && s.skills.includes(54);
+        if (F.mistDig) {
+            for (let k = 0; k < F.mistDig && curMagic(s) >= (F.loopMin || 5) && !have(); k++) E.shuffleHand(s);
+            availableSkills = s.skills.slice();
+        }
+        const cap = F.mistCap || 25;
+        for (let k = 0; k < F.mistLoop && have() && curMagic(s) < cap; k++) {
+            if (curMagic(s) < 1 + cost('onClickPoisonMist')) break;
+            const before = curMagic(s);
+            SKILLS.effectDiscount(s);
+            SKILLS.poisonMist(s);
+            s.loopCycles = (s.loopCycles || 0) + 1;
+            if (k >= 4 && curMagic(s) <= before) break; // 立ち上がり(割引を積む数周)のあとも増えないなら止める
+        }
+    }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
-    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
+    const facesWitch = s.chars.some((c, seat) => seat !== s.turn && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。AIPlayer.ts と同一)
+    if (F.chargeWait && !facesWitch && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
             || (F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53 && curMagic(s) < comboPlan(s).total))
         && !(F.chargeSafe && oppCanFork(s, opps))) {
@@ -2115,7 +2175,7 @@ function faithfulMakeMoveInner(s) {
         return { move: null, turnEnded: true };
     }
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
-    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
+    const holdFlood = !facesWitch && curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 式神の設置・転化・爆破
@@ -2139,7 +2199,25 @@ function faithfulMakeMoveInner(s) {
                 return { move, turnEnded: false };
             }
         }
-        if (ch === 'magician' && magic >= judgeDayCost(s)) {
+        // 魔法使い(F.lockFirstCryo): 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力エンジンを止める（ロック中のコマには❄が付かない）。
+        // 相手に氷室がいるときは、審判の日より先に🌱付きのコマを全てロックする（2なら🌱の無い自陣コマも）
+        let lockedFirst = 0;
+        const lockFirstLevel = ch !== 'magician' ? 0 : otherSeats(s).some((seat) => s.chars[seat] === 'cryomancer') ? F.lockFirstCryo
+            : otherSeats(s).some((seat) => s.chars[seat] === 'pyromancer') ? (F.lockFirstPyro || 0) : 0; // 鍛冶師の🔥(火遁・火口)も🔑のコマには付かない
+        if (lockFirstLevel) {
+            for (let n = 0; n < 12; n++) {
+                const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+                let cell = s.board.findIndex((sq) => sq.player === me && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (cell === -1 && lockFirstLevel >= 2) cell = s.board.findIndex((sq) => sq.player === me && !sq.effects.some((e) => e.effect === '🔑') && !thermal.isFrozen(sq));
+                if (!(curMagic(s) >= lockCost + (F.lockFirstReserve || 0) && cell !== -1)) break;
+                SKILLS.lock(s);
+                if (!placeMove(s, cell)) { s.useLock = 0; break; }
+                lockedFirst++;
+            }
+            if (lockedFirst > 0) return { move: getEnhancedBestMove(s), turnEnded: false }; // 本番(AIPlayer.ts)はロックのあと通常着手で手番を終える
+        }
+        const judgeFuelsNecro = F.noJudgeNecro && ch === 'magician' && otherSeats(s).some((seat) => s.chars[seat] === 'necromancer'); // 審判で壊したコマは墓地になり、ネクロの蘇生を安く大きくする
+        if (ch === 'magician' && !judgeFuelsNecro && magic >= judgeDayCost(s)) {
             const target = bestJudgeTarget(s.board, me);
             if (target !== null) {
                 SKILLS.judgeDay(s);     // useJudgeDay=true
@@ -2167,12 +2245,15 @@ function faithfulMakeMoveInner(s) {
     }
 
     const skills = holdFlood && (oppReaches === 0 || F.holdAlways) ? [] : chooseSkills(s, availableSkills);
+    // F.staleMove: 本番(AIPlayer.ts makeMove の最後)は、着手をスキルを撃つ前の盤面で決める。トークンが置くコマ・奪取・ロックなどを見ないまま着手する
+    const staleMove = F.staleMove && skills.length > 0 ? getEnhancedBestMove(s) : undefined;
     for (const sk of skills) {
         SKILLS[sk](s);
         if (TURN_ENDING.includes(sk)) return { move: null, turnEnded: true };
     }
     updateShield(s); // スキル(ランダム帯電など)で⚡の無敵マスが増えたぶんを反映してから着手を選ぶ
-    const move = getEnhancedBestMove(s);
+    // 先に決めた着手が、スキルで無敵(⚡)になったマスなら打てない（手番が進まず止まる）。そのときだけ盤面を見て選び直す
+    const move = staleMove !== undefined && !(staleMove !== null && isShielded(s, s.board[staleMove])) ? staleMove : getEnhancedBestMove(s);
     // 打てるマスが無い（無敵の⚡マスだらけ・全部ロックなど）ときはチャージでパスする。放置すると手番が進まず止まる
     if (move === null) {
         SKILLS.charge(s);
@@ -2215,4 +2296,4 @@ function makeMove(s, mode) {
     return { move: mv, turnEnded: false };
 }
 
-module.exports = { getBestMove, makeMove, chooseSkills, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };
+module.exports = { getBestMove, makeMove, chooseSkills, chooseLocks, getEnhancedBestMove, countReaches, evaluateBoard, findThreatSquares, bestStompTarget, bestJudgeTarget, bestRescueCenter };

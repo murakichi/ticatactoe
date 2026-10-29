@@ -2,11 +2,15 @@ export const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
-    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiPlace: 2, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 4, // 陽: 自分の式神を1つ選んで爆破
     onClickShikigamiAll: 3, // 汎用(idx 71): 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(idx 63・トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(idx 64 百鬼夜行): 全ての空きマスにライフ0の式神を置く
+    onClickShikigamiBless: 5, // 汎用(idx 88 式神の加護): 自分の式神を1体消費して、自陣のコマ全てのライフ+3
+    onClickShikigamiPurge: 5, // 汎用(idx 91 式神の供犠): 自陣の式神が3体以上なら0コスト。自陣の式神をランダムに1体壊し、敵のコマ1体のライフを0にする
+    onClickShikigamiCurse: 5, // 汎用(idx 89 式神の呪詛): 自分の式神を1体消費して、エフェクトが乗っている敵のコマ全てに☠を2つ
+    onClickShikigamiDiscount: 2, // 汎用(idx 90 式神割引): 次に打つスキルのコストを 2＋盤面の式神の数 だけ軽減
     onClickStomp: 3,
     onClickJudgeDay: 11,
     onClickCharge: 3,
@@ -119,6 +123,7 @@ export const skillCosts = {
     onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
     onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
     onClickTinder: 2, //         火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付与（鍛冶師は🔥付与で-1）
+    onClickSmallFry: 10, //      一寸の虫に魂なし(idx 92): 敵のライフ3以下のコマを全て破壊し、相手は次の手番の終わりまでライフ3以下のコマを置けない。盤面のコマの数だけ軽減（最低1）
 };
 
 export type SkillCosts = typeof skillCosts;
