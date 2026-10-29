@@ -5,13 +5,14 @@ import { isDiscountSkill } from './discount';
 import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
-import { tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
+import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
 import { shouldDecay } from './decay';
-import { smallFry } from './lifeBan';
+import { firstFrostTargets, burnOffTargets } from './tokenSkills';
+import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..92)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 93;
+// 汎用スキルプールの大きさ (idx 0..96)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 97;
 
 // 帯電付与の採用しきい値 (sim/ai.js の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -76,6 +77,8 @@ const IGNITE_BUD_WEIGHT = 6;
 const EMPTY_LOCK_DENY = 2;
 /** 引き直しの最大回数（手番ごと）。sim/ai.js の discountPlan>=2 と同じ */
 export const MAX_REROLLS = 2;
+/** 対魔女の新スキル探しで、シャッフルのあとに残す魔力。sim/ai.js の digMargin */
+const WITCH_DIG_MARGIN = 3;
 /** 1手番に引き直せる回数の上限。陰陽師はコンボ札(71/73/53)を探すので多め（sim/ai.js の shuffleDig=8） */
 /** 雷霆の巫が陰陽師の一撃(百鬼夜行→式神一括)に備えて、自コマの無い線1本ごとに引く点（sim/ai.js AI_DEFAULTS.floodCover） */
 export const FLOOD_COVER_WEIGHT = 150;
@@ -106,6 +109,8 @@ class AIPlayer {
     glacierPending: boolean = false;
     /** 土壇場の防壁を装備していて未発動（Game が手番ごとに設定する）。真なら相手の1回目の勝ちは防壁が受けるので止めに行かず攻める。sim/ai.js の AI_DEFAULTS.lsAggro と同じ */
     lastStandReady: boolean = false;
+    /** 無礼講が効いている（Game が手番ごとに設定する）。コストは Game の gearCost が0にするので、AIは無礼講を重ねて撃たない */
+    tokenFree: boolean = false;
     /** 裸の王様の判断材料: 相手全員の有効なギアの数 / 使える土壇場の防壁を持つ相手がいるか（Game.tsx runAIMove が毎手番入れる） */
     chargeBuffActive: boolean = false; // 静電気の季節が自分に掛かっている
     oppGearCount: number = 0;
@@ -895,6 +900,11 @@ class AIPlayer {
      * 盤面・キャラに応じて固定（ロック）したいスキルを返す。[要検証]
      * 守備のために1枠は空けておけるよう最大2つまで。キャラ専用シナジーを優先。
      */
+    /** 自分以外の席に凩の魔女がいる（魔女自身は含めない） */
+    facesWitchNow(): boolean {
+        return this.character !== 'witch' && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch');
+    }
+
     chooseLocks(
         board: SquareInfo[],
         opponentMagic: number,
@@ -932,6 +942,8 @@ class AIPlayer {
         const preferred = (idx: number) =>
             // 凩の魔女: 🍂付きトークン(木枯らしの使い・双子・紅葉狩り)を手札に固定して毎手番撒く (sim/ai.js と同一)
             (this.character === 'witch' && (idx === 62 || idx === 63 || idx === 64)) ||
+            // 対魔女の新スキル(初霜93・吹き寄せ94・山焼き95)は、引いたら先に手札に固定する (sim/ai.js の lockNew=1)
+            (this.facesWitchNow() && (idx === 93 || idx === 94 || idx === 95)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             (this.character === 'magician' && budsIdx.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
@@ -1242,9 +1254,40 @@ class AIPlayer {
         ) {
             spend(this.calculateAICost(costs.onClickLeafFrost, false, false, 'onClickLeafFrost'), 'onClickLeafFrost');
         }
+        // 一寸の虫に魂なし: 壊せる（ライフ3以下の）敵コマが2個以上のとき撃つ。軽量トークンの魔女など低ライフのコマを撒く相手に効く (sim/ai.js の smallFryMin=2)
+        if (availableSkills.includes(92) && smallFryTargets(board, this.playerSymbol, this.characters).length >= 2) {
+            spend(this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry'), 'onClickSmallFry');
+        }
+        // 対魔女の新スキル（トークン扱い）。sim/ai.js の初霜・吹き寄せ・山焼き・無礼講と同じ判断
+        const foeLeaves = board.reduce((n, sq) => (sq.player && sq.player !== this.playerSymbol ? n + leafStacks(sq) : n), 0);
+        const canFirstFrost = availableSkills.includes(93) && firstFrostTargets(board, this.playerSymbol, this.characters).length > 0;
+        const canGather = availableSkills.includes(94) && freeCells > 0 && foeLeaves >= 2;
+        const canBurnOff = availableSkills.includes(95) && burnOffTargets(board, this.playerSymbol, this.characters).length >= 2;
+        let freeTok = false;
+        if (!tokenUsed && !this.tokenFree && availableSkills.includes(96)) {
+            const best = Math.max(
+                canFirstFrost ? this.calculateAICost(costs.onClickFirstFrost, true, false, 'onClickFirstFrost') : 0,
+                canGather ? this.calculateAICost(costs.onClickGather, true, false, 'onClickGather') : 0,
+                canBurnOff ? this.calculateAICost(costs.onClickBurnOff, true, false, 'onClickBurnOff') : 0
+            );
+            const freeCost = this.calculateAICost(costs.onClickFreeToken, false, false, 'onClickFreeToken');
+            if (best > freeCost && remaining >= freeCost && spend(freeCost, 'onClickFreeToken')) freeTok = true;
+        }
+        const tokCost = (c: number): number => (freeTok ? 0 : c);
+        let newToken = false;
+        if (!tokenUsed) {
+            const gc = tokCost(this.calculateAICost(costs.onClickGather, true, false, 'onClickGather'));
+            const bc = tokCost(this.calculateAICost(costs.onClickBurnOff, true, false, 'onClickBurnOff'));
+            const fc = tokCost(this.calculateAICost(costs.onClickFirstFrost, true, false, 'onClickFirstFrost'));
+            if (canGather && remaining >= gc && spend(gc, 'onClickGather')) newToken = true;
+            else if (canBurnOff && remaining >= bc && spend(bc, 'onClickBurnOff')) newToken = true;
+            else if (canFirstFrost && remaining >= fc && spend(fc, 'onClickFirstFrost')) newToken = true;
+        }
         // 🍂落ち葉トークン: 自陣の🍂は相手全員のスキルコストを上げる。固有のトークン札を持つキャラ以外は、普通のトークンより先に撃つ
-        const leafToken = !tokenUsed && !cryo && this.character !== 'electrician' ? this.pickLeafToken(availableSkills, freeCells, remaining, costs) : null;
-        if (leafToken && spend(leafToken.cost, leafToken.skill)) {
+        const leafToken = !tokenUsed && !newToken && !cryo && this.character !== 'electrician' ? this.pickLeafToken(availableSkills, freeCells, remaining, costs) : null;
+        if (newToken) {
+            // 新スキルのトークンを撃った（トークンはターンに1回）
+        } else if (leafToken && spend(leafToken.cost, leafToken.skill)) {
             // 🍂付きのトークンを撃った（トークンはターンに1回）
         } else if (!tokenUsed) {
             if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
@@ -1538,7 +1581,8 @@ class AIPlayer {
         const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
         // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
         const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
-        const a = best(this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
+        // 百鬼夜行で式神を置くと、以降のスキルは-1（陰陽師のパッシブ。sim/ai.js comboPlan と同一）
+        const a = best(Math.max(1, this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll') - 1));
         return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
     }
 
@@ -1640,7 +1684,10 @@ class AIPlayer {
                         else empties.push(idx);
                     }
                     if (bad || real < SH_COMBO_REAL || shiki + empties.length === 0) continue;
-                    const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+                    // 式神を置く手番は全スキル-1（陰陽師のパッシブ）: 設置は各1安く、式神一括も1安い
+                    const placeSum = empties.length * placeCost; // 設置自身も-1（calculateAICost が含む）
+                    const allSum = empties.length > 0 ? Math.max(1, allCostFor(ownShiki + empties.length) - 1) : allCostFor(ownShiki + empties.length);
+                    const total = placeSum + allSum + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
                     if (m < total) continue;
                     if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
                 }
@@ -1753,6 +1800,12 @@ class AIPlayer {
         if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
+        }
+        // 対魔女: 初霜・吹き寄せ・山焼きが手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで手札を引き直して探す
+        // （見つけた札は引き直しのたびに chooseLocks が固定し直す。sim/ai.js の witchDig=2, digMargin=3）
+        if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
+            && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
         }
         if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
             const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);

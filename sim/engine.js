@@ -258,6 +258,10 @@ const skillCosts = {
     onClickLeafCloak: 3, // 落葉の衣(idx 86)
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
     onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
+    onClickFirstFrost: 6, // 初霜(idx 93)。トークン扱い。盤面の🍂（効力のあるもの）が3枚以上なら0
+    onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。エフェクト1つにつき2軽減（氷結のマスは❄だけ・ロックのマスは数えない。最低1）
+    onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。エフェクト1つにつき3軽減（氷結のマスは❄だけ・ロックのマスは数えない。最低1）
+    onClickFreeToken: 4, // 無礼講(idx 96)。このターン、トークン系スキルのコストを0にする
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -627,8 +631,10 @@ function newGame(opts = {}) {
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
+        tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
+        shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
         fireBase: fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件）
         budGuard: fill(false), // 冬至の種子: 🌱ガード中の席（その席の次の手番開始時に解除）
         glacierCharge: fill(0), // 絶対零度の軽減カウンタ: 氷結スキルで❄が作られるたび全席+1、撃った席だけ0に戻る
@@ -688,12 +694,18 @@ function gearCtx(s, seat) {
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 // withLeaf: 敵の🍂の増加分を、ギアの補正・割引より先に足す（増加分→減少分の順）。calculateCost は characterCost の中で足し済みなので false で呼ぶ
+// 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い）
+const SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
 function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true) {
     const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
-    const adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    let adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
+    // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1。Game.tsx gearCost と同値
+    if (seat === s.turn && s.chars[seat] === 'yinYangMaster' && (s.shikiPlaced[seat] || SHIKIGAMI_PLACING_KEYS.has(key)) && adjusted > 1) adjusted -= 1;
     if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (isToken && seat === s.turn && s.tokenFree[seat]) return 0; // 無礼講: この手番、トークン系スキルのコストは0
+    if (key === 'onClickFirstFrost' && seat === s.turn && thermal.boardLeaves(s.board) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
     if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
     const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
@@ -842,6 +854,7 @@ function settleWinner(s) {
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
     s.lifeBan[s.turn] = false;
     // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
     s.chargeBuff[s.turn] = Math.max(0, s.chargeBuff[s.turn] - 1);
@@ -923,6 +936,7 @@ function advanceTurn(s) {
     s.discount[next] = discountMod.emptyDiscount();
     s.oppSkillPrev[next] = s.oppSkilled[next];
     s.fireBase[next] = thermal.fireStacksTotal(s.board);
+    s.shikiPlaced[next] = false;
     s.leafBase[next] = comboMod.ownLeaves(s.board, SYMBOLS[next]);
     s.darkPotUsed[next] = false;
     s.chargeBase[next] = comboMod.ownCharges(s.board, SYMBOLS[next]);
@@ -1068,6 +1082,7 @@ function placeMove(s, i) {
         // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中の空きマスは選び直せる
         if (board[i].player || thermal.emptyBlocked(board[i])) return false;
         board[i] = newShikigami(curPlayer(s));
+        s.shikiPlaced[s.turn] = true;
         s.useShikigamiPlace = false;
         return true;
     }
@@ -1569,12 +1584,14 @@ function onClickShikigamiAll(s) {
 // 汎用(百鬼夜行・コスト7): 着手できる全ての空きマスにライフ0の式神を置く
 function onClickShikigamiFlood(s) {
     const cur = curPlayer(s);
+    let placed = 0;
     for (let k = 0; k < s.board.length; k++) {
         const sq = s.board[k];
-        if (!sq.player && !thermal.emptyBlocked(sq)) s.board[k] = newShikigami(cur, 0);
+        if (!sq.player && !thermal.emptyBlocked(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);
+    if (placed > 0) s.shikiPlaced[s.turn] = true; // 置いたあとのスキルから-1
 }
 // 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
 function onClickShikigamiRandom(s) {
@@ -1589,6 +1606,7 @@ function onClickShikigamiRandom(s) {
     harvestMagic(s, granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
     bumpMagicCount(s);
+    if (empties.length) s.shikiPlaced[s.turn] = true;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
@@ -1914,6 +1932,114 @@ function onClickKindling(s) {
     bumpMagicCount(s);
     bumpStat(s, 'kindling');
     bumpStat(s, 'kindlingLeaves', r.leaves);
+}
+
+
+// 初霜 (idx 93): 敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置く。トークン扱い（1手番に1度）。
+// 盤面の🍂（効力のあるもの）が3枚以上ならコスト0 [FAITHFUL] Game.tsx onClickFirstFrost
+const FIRST_FROST_FREE_LEAVES = 3;
+function firstFrostTargets(s) {
+    const me = curPlayer(s);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && thermal.leafStacks(sq) > 0 && !isGuarded(s, sq) && thermal.canFreeze(sq) ? i : -1)).filter((i) => i !== -1);
+}
+function firstFrostLegal(s) { return !s.usedTokenThisTurn && firstFrostTargets(s).length > 0; }
+function onClickFirstFrost(s) {
+    if (!firstFrostLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickFirstFrost, true, false, 'onClickFirstFrost'); // 凍結で🍂が休眠する前のコストで払う
+    const frozen = thermal.freeze(s.board, firstFrostTargets(s));
+    chargeGlacier(s, frozen.length);
+    const empties = findEmptyIndexes(s.board);
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
+        granted = afterTokenPlaced(s, idx, '🌱');
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, pay, 'onClickFirstFrost');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'firstFrost');
+    bumpStat(s, 'firstFrostFrozen', frozen.length);
+}
+
+// 無礼講 (idx 96): このターン、トークン系スキルのコストを0にする。すでに効いているときは撃てない [FAITHFUL] Game.tsx onClickFreeToken
+function freeTokenLegal(s) { return !s.tokenFree[s.turn]; }
+function onClickFreeToken(s) {
+    if (!freeTokenLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickFreeToken, false, false, 'onClickFreeToken');
+    s.tokenFree[s.turn] = true;
+    spendMagic(s, pay, 'onClickFreeToken');
+    bumpMagicCount(s);
+    bumpStat(s, 'freeToken');
+}
+
+// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・⚡無敵のマスは無視。🔑ロック自体は数えないが、ロックのマスの他のエフェクトは対象）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
+// エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickBurnOff
+function burnOffTargets(s) {
+    const me = curPlayer(s);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜' && e.effect !== '🔑') && !sq.effects.some((e) => e.effect === '❄') && !isShielded(s, sq) ? i : -1)).filter((i) => i !== -1);
+}
+function burnOffLegal(s) { return !s.usedTokenThisTurn && (burnOffTargets(s).length > 0 || findEmptyIndexes(s.board).length > 0); }
+function onClickBurnOff(s) {
+    if (!burnOffLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickBurnOff, true, false, 'onClickBurnOff'); // 燃やす前のエフェクトの数で軽減する
+    const cells = burnOffTargets(s);
+    const owners = s.board.map((sq) => sq.player);
+    const before = cells.reduce((n, k) => n + thermal.flameStacks(s.board[k]), 0);
+    thermal.ignite(s.board, cells, s.size, 1, keepBudsOf(s));
+    const lit = cells.reduce((n, k) => n + thermal.flameStacks(s.board[k]), 0) - before;
+    const destroyed = cells.filter((k) => owners[k] && !s.board[k].player).length;
+    if (destroyed > 0) addCorpses(s, destroyed);
+    const empties = findEmptyIndexes(s.board);
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
+        applyLock(s, idx);
+        granted = afterTokenPlaced(s, idx, undefined);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, pay, 'onClickBurnOff');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'burnOff');
+    bumpStat(s, 'burnOffCells', cells.length);
+    bumpStat(s, 'burnOffFlames', lit);
+}
+
+// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
+// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickGather
+function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
+function onClickGather(s) {
+    if (!gatherLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickGather, true, false, 'onClickGather'); // 移す前のエフェクトの数で軽減する
+    const idx = randomPick(findEmptyIndexes(s.board), s.rng);
+    const moved = [];
+    let flames = 0;
+    s.board.forEach((sq, k) => {
+        if (isShielded(s, sq) || sq.effects.some((e) => e.effect === '❄')) return; // 氷結のあるマスと⚡無敵のマスは無視する（🔑ロック自体は動かさないが、ロックのマスの他のエフェクトは動かす）
+        const keep = [];
+        for (const e of sq.effects) {
+            if (e.effect === '📜' || e.effect === '🔑') keep.push(e);
+            else if (e.effect === '🔥') flames++;
+            else moved.push(e);
+        }
+        if (keep.length !== sq.effects.length) s.board[k] = { ...sq, effects: keep };
+    });
+    s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: moved };
+    if (flames > 0) thermal.ignite(s.board, [idx], s.size, flames, keepBudsOf(s));
+    const granted = afterTokenPlaced(s, idx, undefined);
+    harvestMagic(s, granted);
+    spendMagic(s, pay, 'onClickGather');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'gather');
+    bumpStat(s, 'gatherEffects', moved.length + flames);
+    checkDischarge(s);
 }
 
 // 一寸の虫に魂なし (idx 92): 敵のライフ3以下のコマを全て破壊し（氷結中は❄-1だけ・🔑ロックと無敵は除く）、相手全員を次の手番の終わりまで「ライフ3以下のコマを置けない」縛りにする。
@@ -2747,6 +2873,10 @@ const SKILLS = {
     counterMarkdown: (s) => useDiscountSkill(s, 'onClickCounterMarkdown'),
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
     smallFry: onClickSmallFry,
+    firstFrost: onClickFirstFrost,
+    gather: onClickGather,
+    burnOff: onClickBurnOff,
+    freeToken: onClickFreeToken,
 };
 // 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
@@ -2777,6 +2907,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
+    smallFryTargets, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

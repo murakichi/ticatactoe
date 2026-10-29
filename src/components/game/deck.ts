@@ -107,6 +107,10 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
     { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）。自陣の式神が3体以上ならコスト0' },
     { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）、相手全員は次の手番の終わりまでライフ3以下のコマを置けなくなります（トークン等のスキル、ネクロマンサーの蘇生も含む）。盤面のコマの数だけコストが下がります（最低1）' },
+    { idx: 93, name: '初霜', icon: '🧊', category: 'ice', costKey: 'onClickFirstFrost', desc: 'トークン扱い（ターン1回）。敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置きます。盤面の🍂が3枚以上ならコスト0（対象が無いと使えません）' },
+    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: 'トークン扱い（ターン1回）。自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑ロックと式神の印📜はその場に残ります。🔥は集め終えてから処理）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: 'トークン扱い（ターン1回）。敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置きます。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
+    { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークン系スキルのコストを0にします（手番が終わると切れます）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -120,7 +124,7 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
  */
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
+    tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
     magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
