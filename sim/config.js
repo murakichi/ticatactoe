@@ -10,11 +10,6 @@ module.exports = {
         // 全マスが⚡で埋まると、全⚡と🔑を取り除いて全マスのライフを0にする（過負荷）。false で無効
         "discharge": true
     },
-    // 増殖（ループ召喚）の調整ノブ。既定値は Game.tsx の定数と一致させること
-    "proliferate": {
-        "cost": 6,
-        "tokenLife": 2,
-        "upkeepStep": 1,
-        "maxStacks": 8
-    }
+    // 増殖（ループ召喚）の A/B 検証用ノブ。空なら本番の turn.ts の PROLIFERATE（cost / tokenLife / upkeepStep / maxStacks）のまま
+    "proliferate": {}
 };

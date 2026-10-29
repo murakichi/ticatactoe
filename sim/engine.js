@@ -55,6 +55,10 @@ const comboMod = require('./shared/comboCost');
 const lifeBanMod = require('./shared/lifeBan');
 const darkPotMod = require('./shared/darkPot');
 const thermal = require('./shared/thermal');
+const poisonMod = require('./shared/poison');
+const blastMod = require('./shared/blast');
+const shikiMod = require('./shared/shikigami');
+const turnMod = require('./shared/turn');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
 const giantAuraMod = require('./shared/giantAura');
@@ -78,11 +82,10 @@ const shouldDecay = (placements, n) => decayMod.shouldDecay(placements, n, DECAY
 const lateMagicBonus = (turn, n) => lateMagicMod.lateMagicBonus(turn, n, LATE_MAGIC_INTERVAL);
 
 // [FAITHFUL] Game.tsx 増殖(ループ召喚)の定数。config.js のノブで上書きできる
-const PROLIFERATE = Object.assign({ cost: 6, tokenLife: 2, upkeepStep: 1, maxStacks: 8 }, config.proliferate || {});
+const PROLIFERATE = Object.assign({}, turnMod.PROLIFERATE, config.proliferate || {});
 
 // 汎用スキルプールの大きさ (idx 0..POOL_SIZE-1)。#39 で 21 -> 23、#40 で 23 -> 27、ヘイルメアリー/サイレンスで 27 -> 29、毒霧で 29 -> 30
-const SHIKIGAMI_LIFE = 2;
-const SHIKIGAMI_BLAST_DAMAGE = 4; // 式神のライフ
+const { SHIKIGAMI_LIFE, SHIKIGAMI_BLAST_DAMAGE, newShikigami } = shikiMod;
 const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; // SIM_POOL_SIZE: A/B検証用の上書き
 
 // ---- util.ts（本番の生成物。乱数は rng を渡す） ---------------------------------
@@ -123,10 +126,10 @@ const DISCHARGE = process.env.CHG_DISCHARGE != null ? process.env.CHG_DISCHARGE 
 const CHARGE_MIN_COST = (config.charge && config.charge.minCost) || 1;
 
 // [FAITHFUL] Game.tsx necromancer constants
-const baseNecromancyCost = 10;
-const necromancyDuration = 4;
-const necromancyReviveLife = 2;
-const necromancySummonCap = 5;
+const baseNecromancyCost = turnMod.NECROMANCY.baseCost;
+const necromancyDuration = turnMod.NECROMANCY.duration;
+const necromancyReviveLife = turnMod.NECROMANCY.reviveLife;
+const necromancySummonCap = turnMod.NECROMANCY.summonCap;
 
 // 盤上で駒が消える/奪われるたびに墓地を貯める＝ネクロの蘇生コストを軽減 (敵味方問わず)
 function addCorpses(s, n) {
@@ -138,28 +141,15 @@ function addCorpses(s, n) {
 
 // ---- 毒（毒使い）ヘルパー --------------------------------------------------
 // 効力のある毒の数。休眠マス（氷結・火炎中）の☠は消えないが休眠する（継続ダメージ・毒数に依存する処理に数えない）
-function poisonStacks(sq) {
-    return thermal.isDormant(sq) ? 0 : sq.effects.filter((e) => e.effect === '☠').length;
-}
-function boardPoisonCount(board) {
-    let n = 0;
-    for (const sq of board) n += poisonStacks(sq);
-    return n;
-}
-function poisonCountFor(board, player) {
-    let n = 0;
-    for (const sq of board) if (sq.player === player) n += poisonStacks(sq);
-    return n;
-}
+const poisonStacks = poisonMod.activePoison;
+const boardPoisonCount = poisonMod.boardPoisonCount;
+const poisonCountFor = poisonMod.poisonCountFor;
 function poisonerInPlay(s) {
     return s.chars.includes('poisoner');
 }
-// 毒使いの駒に毒が付いた瞬間、そのマスのライフが1.5倍（四捨五入）になる。Game.tsx の POISON_LIFE_MULT と同値
-const POISON_MULT = 1.5;
 function poisonStrike(s, sq) {
     if (!s || !sq.player) return;
-    const ch = s.chars[seatOf(sq.player)];
-    if (ch === 'poisoner') sq.bind = Math.round(sq.bind * POISON_MULT);
+    sq.bind = poisonMod.poisonStrike(sq, s.chars).bind; // 毒使いの駒に毒が付いた瞬間、そのマスのライフが1.5倍（本番 poison.ts）
 }
 // 周囲1マス（クリックしたマスを除く8近傍）。盤サイズは s.size
 function surroundRange(s, i) {
@@ -231,7 +221,7 @@ function fireCharges(s, i, mover) {
     const conductors = s.gears.map((g) => hasGear(g, 'conduction'));
     const owners = s.board.map((sq) => sq.player);
     const { fired, damaged } = chargeMod.fireCharges(s.board, i, s.size, s.chars, conductors, FIRE_DAMAGE);
-    for (const _ of fired) {
+    for (let n = 0; n < fired.length; n++) {
         bumpStat(s, 'fires');
         bumpStat(s, charOfPlayer(s, mover) === 'electrician' ? 'firesByElectrician' : 'firesByOther');
     }
@@ -470,13 +460,11 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
 
 // 式神(📜)は列の並びに数えない
 const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
-const newShikigami = (player, bind = SHIKIGAMI_LIFE) => ({ player, bind, effects: [{ effect: '📜' }] });
 const symbolsOf = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
 const curChar = (s) => s.chars[s.turn];
-const curYY = (s) => s.yy[s.turn];
 const curMagic = (s) => s.magic[s.turn];
 /** 自分以外の席番号 */
 const otherSeats = (s, seat = s.turn) => s.chars.map((_, i) => i).filter((i) => i !== seat);
@@ -496,24 +484,31 @@ function gearCtx(s, seat) {
         ash: hasGear(s.gears[seat], 'ashOffering') ? s.ashActive[seat] : 0,
     };
 }
-/** キャラ補正済みのコストにギアの補正を掛ける */
-// withLeaf: 敵の🍂の増加分を、ギアの補正・割引より先に足す（増加分→減少分の順）。calculateCost は characterCost の中で足し済みなので false で呼ぶ
-// 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い）
-const SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
+// 実コスト(キャラ補正 → ギア補正 → 導線 → 軽減スキル)の計算は本番(cost.ts)の生成物。ここは席の状況を詰めるだけ
+const costMod = require('./shared/cost');
+function costEnv(s, seat) {
+    return {
+        board: s.board,
+        seat,
+        player: SYMBOLS[seat],
+        turnSeat: s.turn,
+        characters: s.chars,
+        yinYangMode: s.yy[seat],
+        gears: s.gears[seat],
+        ctx: gearCtx(s, seat),
+        leafBase: s.leafBase[seat],
+        kinds: s.skillKinds[seat],
+        chargeBase: s.chargeBase[seat],
+        shikiPlaced: s.shikiPlaced[seat],
+        tokenFree: s.tokenFree[seat],
+        oppSkillPrev: s.oppSkillPrev[seat],
+        fireBase: s.fireBase[seat],
+        discount: s.discount[seat],
+    };
+}
+// withLeaf: 敵の🍂の増加分を、ギアの補正・割引より先に足す（増加分→減少分の順）。calculateCost は characterCostOf の中で足し済みなので false で呼ぶ
 function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true) {
-    const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
-    const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
-    let adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
-    // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1。Game.tsx gearCost と同値
-    if (seat === s.turn && s.chars[seat] === 'yinYangMaster' && (s.shikiPlaced[seat] || SHIKIGAMI_PLACING_KEYS.has(key)) && adjusted > 1) adjusted -= 1;
-    if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
-    if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
-    if (isToken && seat === s.turn && s.tokenFree[seat]) return 0; // 無礼講: この手番、トークン系スキルのコストは0
-    if (key === 'onClickFirstFrost' && seat === s.turn && thermal.boardLeaves(s.board) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
-    if (key === 'onClickFireWheel' && seat === s.turn && thermal.fireStacksTotal(s.board) > s.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
-    // コスト軽減スキル（手番内だけ有効なので手番でない席には掛けない）
-    const discounted = seat === s.turn ? discountMod.applyDiscount(adjusted, discountMod.discountAmount(s.discount[seat], key, isToken)) : adjusted;
-    return discounted;
+    return costMod.gearCostOf(costEnv(s, seat), cost, isToken, key, withLeaf);
 }
 // 術中の加護: スキルを使った手番の間、装備した席のコマは効果(☠🔥⚡)のダメージを受けない。thermal の述語を、この試合の状態で差し込む
 function armWard(s) {
@@ -562,30 +557,12 @@ function bumpMagicCount(s) {
     s.useMagicCount[s.turn]++;
 }
 
-// [FAITHFUL] Game.tsx calculateCost
-function characterCost(s, baseCost, isToken, isPoison, key) {
-    const c = curChar(s);
-    // 敵の🍂による増加分を先に足す（キャラの減少分・割引はそのあと）
-    const cost = baseCost + thermal.leafSurcharge(s.board, curPlayer(s));
-    // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
-    if (c === 'pyromancer') return key && thermal.FLAME_SKILL_KEYS.has(key) && cost > 1 ? cost - 1 : cost;
-    // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
-    if (c === 'witch') return thermal.witchCostOf(cost, s.board);
-    // 毒使い: 毒系スキルは-1、それ以外は+1
-    if (c === 'poisoner') return isPoison ? cost - 1 : cost + 1;
-    if (c === 'tactician') return isToken ? cost - 1 : cost + 2;
-    if (c === 'yinYangMaster' && curYY(s) === 'yang') return cost + 1;
-    return cost;
-}
 function calculateCost(s, cost, isToken = false, isPoison = false, key) {
-    return gearCost(s, characterCost(s, cost, isToken, isPoison, key), isToken, s.turn, key, false);
+    return costMod.calculateCostOf(costEnv(s, s.turn), cost, isToken, isPoison, key);
 }
 
-// [FAITHFUL] Game.tsx calculateTokenBind
 function calculateTokenBind(s) {
-    const base = curChar(s) === 'tactician' ? 6 : 4;
-    const delta = gear.gearTokenBindDelta(s.gears[s.turn]);
-    return delta === 0 ? base : Math.max(1, base + delta);
+    return costMod.tokenBindOf(curChar(s), s.gears[s.turn]);
 }
 
 // 魔力ボーナスに数える🌱（休眠マスの🌱は数えない。guarded=冬至の種子で🌱だけは休眠しない）
@@ -669,7 +646,6 @@ function advanceTurn(s) {
     const next = judgeNextSeat(s);
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
-    const magicCharacter = ['magician', 'cryomancer', 'witch']; // 凩の魔女も+1（魔力が律速。ユーザー指示。ライフ平均-1とセット）。 氷室の番人も+1（issue #94。tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）
     // 廃墟の底力: 終わる手番の間に自陣が破壊されていたら、次の自分の手番から割引。終わる席の割引はここで切れる
     ruinDetect(s);
     // 焦土: 終わる手番の間に敵の🌱が🔥で消えていたら魔力
@@ -695,22 +671,21 @@ function advanceTurn(s) {
     s.ruinActive[s.turn] = false;
     s.ruinActive[next] = s.ruinPending[next];
     s.ruinPending[next] = false;
-    // Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
-    let nextMagic = s.magic[next] + 1 + lateMagicBonus(s.currentTurn, seatCount(s)) + budsCount(s.board, sym, s.budGuard[next]);
-    if (magicCharacter.includes(ch)) nextMagic++;
-    if (ch === 'yinYangMaster' && s.yy[next] === 'ying') nextMagic++;
-    // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準+1に追加+2)
-    if (ch === 'magician') nextMagic += budsCount(s.board, sym, s.budGuard[next]) * 2;
-    // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1。土壇場の防壁: 発動後は相手の手番開始時に+2
-    if (hasGear(s.gears[next], 'colorGarden')) nextMagic += gear.countVarietySquares(s.board, sym) * GP.varietyMagic;
-    if (lastStandActiveAgainst(s, next)) nextMagic += GP.lastStandMagic;
-    // 焦土(上で計算)と凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
-    nextMagic += scorchForNext;
-    if (hasGear(s.gears[next], 'frostRoot')) {
-        const root = gear.rootGain(gear.frozenBudCount(s.board));
-        nextMagic += root;
-        if (root > 0) bumpStat(s, 'frostRoot', root);
-    }
+    // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
+    const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
+    if (root > 0) bumpStat(s, 'frostRoot', root);
+    let nextMagic = turnMod.turnStartMagic({
+        magic: s.magic[next],
+        turn: s.currentTurn,
+        seatCount: seatCount(s),
+        character: ch,
+        yinYangMode: s.yy[next],
+        buds: budsCount(s.board, sym, s.budGuard[next]),
+        garden: hasGear(s.gears[next], 'colorGarden') ? gear.countVarietySquares(s.board, sym) * GP.varietyMagic : 0, // 彩りの庭: エフェクトが2種類以上あるマス1つにつき+1
+        standBonus: lastStandActiveAgainst(s, next), // 土壇場の防壁: 発動後は相手の手番開始時に+2
+        scorch: scorchForNext, // 焦土(上で計算)
+        root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+    });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
         const upkeep = proliferateUpkeep(s.proliferateCount[next]);
@@ -1275,31 +1250,17 @@ function onClickShikigamiBlast(s) {
     s.useShikigamiBlast = true;
     spendMagic(s, gearCost(s, costsOf(s).onClickShikigamiBlast, false, s.turn, 'onClickShikigamiBlast'), 'onClickShikigamiBlast');
 }
-// 自分の式神 i を爆破: 式神は消え、周囲8マスの敵陣に4ダメージ(0になったら破壊)、空きマスは式神になる
+// 自分の式神 i を爆破: 式神は消え、周囲8マスの敵陣に4ダメージ(0になったら破壊)、空きマスは式神になる（本番 shikigami.ts）
 function exeShikigamiBlast(s, i) {
     const cur = curPlayer(s);
     if (s.board[i].player !== cur || !isShikigami(s.board[i])) return false;
-    s.board[i] = { player: undefined, bind: 0, effects: [] };
-    let destroyed = 0;
-    for (const j of surroundRange(s, i)) {
-        const sq = s.board[j];
-        if (!sq.player) {
-            if (!thermal.emptyBlocked(sq)) s.board[j] = newShikigami(cur);
-            continue;
-        }
-        if (sq.player === cur || isGuarded(s, sq)) continue;
-        const hit = thermal.applyDamage(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill'); // 氷結なら解除だけ、🔥なら1.5倍
-        if (hit.blocked) { s.board[j] = hit.sq; continue; }
-        if (hit.sq.bind < 1) { s.board[j] = { player: undefined, bind: 0, effects: [] }; destroyed++; }
-        else s.board[j] = hit.sq;
-    }
+    const { destroyed } = shikiMod.blast(s.board, i, cur, s.chars);
     addCorpses(s, destroyed);
     return true;
 }
 // 汎用(idx 88 式神の加護・コスト5): 自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3する。自陣のコマが無いと使えない [FAITHFUL] Game.tsx exeShikigamiBless
-const SHIKIGAMI_BLESS_LIFE = 3;
-const ownShikigamiCells = (s) => s.board.map((sq, i) => (sq.player === curPlayer(s) && isShikigami(sq) ? i : -1)).filter((i) => i !== -1);
-const blessTargets = (s) => s.board.map((sq, i) => (sq.player === curPlayer(s) && !isShikigami(sq) ? i : -1)).filter((i) => i !== -1);
+const ownShikigamiCells = (s) => shikiMod.ownShikigamiCells(s.board, curPlayer(s));
+const blessTargets = (s) => shikiMod.blessTargets(s.board, curPlayer(s));
 function shikigamiBlessLegal(s) { return ownShikigamiCells(s).length > 0 && blessTargets(s).length > 0; }
 function onClickShikigamiBless(s) {
     if (!shikigamiBlessLegal(s)) return;
@@ -1309,13 +1270,12 @@ function onClickShikigamiBless(s) {
 }
 function exeShikigamiBless(s, i) {
     if (!ownShikigamiCells(s).includes(i)) return false;
-    s.board[i] = { player: undefined, bind: 0, effects: [] };
-    for (const k of blessTargets(s)) s.board[k] = { ...s.board[k], bind: s.board[k].bind + SHIKIGAMI_BLESS_LIFE };
+    shikiMod.bless(s.board, i, curPlayer(s));
     return true;
 }
 // 汎用(idx 89 式神の呪詛・コスト5): 自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全て（🔑ロック・無敵を除く）に☠を2つ付与する。対象が無いと使えない [FAITHFUL] Game.tsx exeShikigamiCurse
-const SHIKIGAMI_CURSE_STACKS = 2;
-const curseTargets = (s) => s.board.map((sq, i) => (sq.player && sq.player !== curPlayer(s) && !isShikigami(sq) && sq.effects.length > 0 && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+const SHIKIGAMI_CURSE_STACKS = shikiMod.SHIKIGAMI_CURSE_STACKS;
+const curseTargets = (s) => shikiMod.curseTargets(s.board, curPlayer(s), s.chars);
 function shikigamiCurseLegal(s) { return ownShikigamiCells(s).length > 0 && curseTargets(s).length > 0; }
 function onClickShikigamiCurse(s) {
     if (!shikigamiCurseLegal(s)) return;
@@ -1325,18 +1285,14 @@ function onClickShikigamiCurse(s) {
 }
 function exeShikigamiCurse(s, i) {
     if (!ownShikigamiCells(s).includes(i)) return false;
-    const targets = curseTargets(s); // 消費する式神は自陣なので、対象は消費の前後で変わらない
-    s.board[i] = { player: undefined, bind: 0, effects: [] };
-    for (const k of targets) {
-        for (let n = 0; n < SHIKIGAMI_CURSE_STACKS; n++) { s.board[k].effects.push({ effect: '☠' }); poisonStrike(s, s.board[k]); }
-    }
+    const targets = shikiMod.curse(s.board, i, curPlayer(s), s.chars);
     harvestMagic(s, targets.length * SHIKIGAMI_CURSE_STACKS);
     toxicBloom(s, targets);
     return true;
 }
 // 汎用(idx 91 式神の供犠・コスト5、自陣の式神3体以上で0): 自陣の式神をランダムに1体壊し、続けて選んだ敵のコマ1体（式神を除く・🔑ロック/無敵を除く）のライフを0にする [FAITHFUL] Game.tsx exeShikigamiPurge
-const SHIKIGAMI_PURGE_FREE = 3;
-const purgeTargets = (s) => s.board.map((sq, i) => (sq.player && sq.player !== curPlayer(s) && !isShikigami(sq) && sq.bind > 0 && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+const SHIKIGAMI_PURGE_FREE = costMod.SHIKIGAMI_PURGE_FREE;
+const purgeTargets = (s) => shikiMod.purgeTargets(s.board, curPlayer(s), s.chars);
 function shikigamiPurgeLegal(s) { return ownShikigamiCells(s).length > 0 && purgeTargets(s).length > 0; }
 function onClickShikigamiPurge(s) {
     if (!shikigamiPurgeLegal(s)) return;
@@ -1348,7 +1304,7 @@ function onClickShikigamiPurge(s) {
 }
 function exeShikigamiPurge(s, i) {
     if (!purgeTargets(s).includes(i)) return false;
-    s.board[i] = { ...s.board[i], bind: 0 };
+    shikiMod.purge(s.board, i);
     return true;
 }
 // 汎用(idx 90 式神割引・コスト2): 次に打つスキルのコストを 2＋盤面にある式神の数 だけ軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
@@ -1404,27 +1360,14 @@ function onClickStomp(s) {
     spendMagic(s, gearCost(s, costsOf(s).onClickStomp, false, s.turn, 'onClickStomp'), 'onClickStomp');
 }
 function exeStomp(s, i) {
-    const cur = curPlayer(s);
-    let destroyed = 0;
-    for (const idx of geometryOf(s.size).stompRange(i)) {
-        if (s.board[idx].player === cur) s.board[idx] = thermal.applyDamage(s.board[idx], 5, 'skill').sq; // 自陣は-5（氷結なら解除だけ・🔥は1.5倍）
-        else {
-            const guard = thermal.absorbDestroy(s.board[idx]);
-            if (guard.blocked) { s.board[idx] = guard.sq; continue; } // 氷結が身代わりになる
-            if (s.board[idx].player) destroyed++;
-            s.board[idx] = { player: undefined, bind: 0, effects: [] };
-        }
-    }
+    const { destroyed } = blastMod.stomp(s.board, i, curPlayer(s), s.life);
     addCorpses(s, destroyed);
-    if (s.board[i].player === undefined && !thermal.emptyBlocked(s.board[i])) s.board[i] = { player: cur, bind: s.life, effects: [] };
     s.useStomp = false;
 }
 
 // magician judge day
 function judgeDayCost(s) {
-    const used = s.useMagicCount[s.turn];
-    const base = used < costsOf(s).onClickJudgeDay ? costsOf(s).onClickJudgeDay - used : 0;
-    return gearCost(s, base, false, s.turn, 'onClickJudgeDay');
+    return gearCost(s, costMod.judgeDayBase(costsOf(s).onClickJudgeDay, s.useMagicCount[s.turn]), false, s.turn, 'onClickJudgeDay');
 }
 function onClickJudgeDay(s) {
     spendMagic(s, judgeDayCost(s), 'onClickJudgeDay');
@@ -1432,30 +1375,15 @@ function onClickJudgeDay(s) {
     s.useJudgeDay = true;
 }
 function exeJudgeDay(s, i) {
-    const cur = curPlayer(s);
-    let destroyed = 0;
-    let centerSurvived = false;
-    for (const idx of geometryOf(s.size).judgeRange(i)) {
-        const sq = s.board[idx];
-        const locked = sq.effects.some((e) => e.effect === '🔑');
-        const protectedBud = sq.player === cur && sq.effects.some((e) => e.effect === '🌱');
-        if (!locked || !protectedBud) {
-            const guard = thermal.absorbDestroy(sq);
-            if (guard.blocked) { s.board[idx] = guard.sq; if (idx === i) centerSurvived = true; continue; } // 氷結が身代わりになる
-            if (s.board[idx].player) destroyed++;
-            s.board[idx] = { player: undefined, bind: 0, effects: [] };
-        }
-    }
+    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s));
     addCorpses(s, destroyed);
     s.useMagicCount[s.turn] = 0;
-    // 中心は自分のコマになる。ただし氷結が身代わりになって残った敵コマは奪えない
-    if (!centerSurvived) s.board[i] = { player: cur, bind: 2, effects: [{ effect: '🌱' }] };
     s.useJudgeDay = false;
     endTurn(s);
 }
 
 function totalAssaultCost(s) {
-    return gearCost(s, costsOf(s).onClickTotalAssault - s.useTokenCount[s.turn] * 2, false, s.turn, 'onClickTotalAssault');
+    return gearCost(s, costMod.totalAssaultBase(costsOf(s).onClickTotalAssault, s.useTokenCount[s.turn]), false, s.turn, 'onClickTotalAssault');
 }
 function onClickTotalAssault(s) {
     s.useAssault[s.turn] = 3;
@@ -1467,7 +1395,7 @@ function onClickTotalAssault(s) {
 // ---- 増殖 (ループ召喚) ----
 // [FAITHFUL] Game.tsx proliferateUpkeep / applyProliferate / onClickProliferate
 function proliferateUpkeep(count) {
-    return count * PROLIFERATE.upkeepStep;
+    return turnMod.proliferateUpkeep(count, PROLIFERATE.upkeepStep);
 }
 // 1ループ分を盤面に適用。奇数回=コマ(キャラ)、偶数回=アイテム。追加できなければ false（回数を進めない）
 function applyProliferate(s, step) {
@@ -1531,30 +1459,15 @@ const MIASMA_MIN_COST = 1; // Game.tsx / skillCosts.ts と同値
 function miasmaCost(s) {
     return Math.max(MIASMA_MIN_COST, calculateCost(s, costsOf(s).onClickMiasma - poisonCountFor(s.board, curPlayer(s)), false, true, 'onClickMiasma'));
 }
-// 自陣の毒が乗っているマスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与する毒の数。
-// 毒マスごとに1つずつ付与する（重複あり: 毒マスが隣り合うほど同じ敵マスに積み上がる）
+// 自陣の毒が乗っているマスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与する毒の数（本番 poison.ts）
 function miasmaPlan(s, me = curPlayer(s)) {
-    const plan = new Map();
-    s.board.forEach((sq, i) => {
-        if (sq.player !== me || poisonStacks(sq) === 0) return; // 氷結中の毒は数えない
-        for (const j of surroundRange(s, i)) {
-            const t = s.board[j];
-            if (t.player && t.player !== me && !isGuarded(s, t)) plan.set(j, (plan.get(j) || 0) + 1);
-        }
-    });
-    return plan;
+    return poisonMod.miasmaPlan(s.board, me, s.chars);
 }
 // 効果: 上の plan どおりに敵マスへ毒を付与し、自陣の毒はすべて消える。対象選択は無い
 function exeMiasma(s) {
-    const me = curPlayer(s);
-    const plan = miasmaPlan(s, me);
-    for (const [j, n] of plan) {
-        for (let k = 0; k < n; k++) s.board[j].effects.push({ effect: '☠' });
-        poisonStrike(s, s.board[j]);
-    }
-    for (const sq of s.board) if (sq.player === me && !thermal.isFrozen(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
-    harvestMagic(s, plan.size);
-    toxicBloom(s, Array.from(plan.keys()));
+    const { targets } = poisonMod.miasma(s.board, curPlayer(s), s.chars);
+    harvestMagic(s, targets.length);
+    toxicBloom(s, targets);
 }
 function onClickMiasma(s) {
     spendMagic(s, miasmaCost(s), 'onClickMiasma');
@@ -1570,7 +1483,7 @@ function onClickPoisonToken(s) {
     let granted = 0;
     if (empties.length) {
         const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: Math.round(calculateTokenBind(s) * (curChar(s) === 'poisoner' ? POISON_MULT : 1)), effects: [{ effect: '☠' }] };
+        s.board[idx] = poisonMod.poisonStrike({ player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '☠' }] }, s.chars);
         granted = afterTokenPlaced(s, idx, '☠');
         toxicBloom(s, [idx]);
     }
@@ -1581,22 +1494,14 @@ function onClickPoisonToken(s) {
     s.useTokenCount[s.turn]++;
 }
 function onClickSerum(s) {
-    const cur = curPlayer(s);
-    for (const sq of s.board) if (sq.player === cur) sq.effects = sq.effects.filter((e) => e.effect !== '☠');
+    poisonMod.clearOwnPoison(s.board, curPlayer(s));
     spendMagic(s, calculateCost(s, costsOf(s).onClickSerum, false, true, 'onClickSerum'), 'onClickSerum');
     bumpMagicCount(s);
 }
 function onClickIntensify(s) {
-    let added = 0;
-    const poisoned = [];
-    s.board.forEach((sq, idx) => {
-        const p = sq.effects.filter((e) => e.effect === '☠').length; // 氷結中の毒も倍にできる（付与は従来どおり）
-        for (let k = 0; k < p; k++) sq.effects.push({ effect: '☠' });
-        if (p > 0) { poisonStrike(s, sq); poisoned.push(idx); }
-        added += p;
-    });
+    const { affected, added } = poisonMod.intensify(s.board, s.chars); // 氷結中の毒も倍にできる
     harvestMagic(s, added);
-    toxicBloom(s, poisoned);
+    toxicBloom(s, affected);
     spendMagic(s, calculateCost(s, costsOf(s).onClickIntensify, false, true, 'onClickIntensify'), 'onClickIntensify');
     bumpMagicCount(s);
 }
@@ -1606,8 +1511,8 @@ function onClickPandemic(s) {
     bumpMagicCount(s);
 }
 function exePandemic(s, i) {
-    const targets = geometryOf(s.size).stompRange(i).filter((j) => s.board[j].player && !isGuarded(s, s.board[j]));
-    for (const t of targets) { s.board[t].effects.push({ effect: '☠' }); poisonStrike(s, s.board[t]); }
+    const targets = poisonMod.pandemicTargets(s.board, i, s.chars);
+    poisonMod.addPoison(s.board, targets, s.chars);
     harvestMagic(s, targets.length);
     toxicBloom(s, targets);
     s.usePandemic = false;
@@ -1617,16 +1522,9 @@ function exePandemic(s, i) {
 function onClickPoisonMist(s) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonMist, false, true, 'onClickPoisonMist'), 'onClickPoisonMist');
     bumpMagicCount(s);
-    let n = 0;
-    const poisoned = [];
-    s.board.forEach((sq, idx) => {
-        if (!sq.player || isGuarded(s, sq)) return;
-        sq.effects.push({ effect: '☠' });
-        poisonStrike(s, sq);
-        poisoned.push(idx);
-        n++;
-    });
-    harvestMagic(s, n);
+    const poisoned = poisonMod.poisonMistTargets(s.board, s.chars);
+    poisonMod.addPoison(s.board, poisoned, s.chars);
+    harvestMagic(s, poisoned.length);
     toxicBloom(s, poisoned);
 }
 
@@ -1724,7 +1622,6 @@ function onClickKindling(s) {
 
 // 初霜 (idx 93): 敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置く。トークン扱い（1手番に1度）。
 // 盤面の🍂（効力のあるもの）が3枚以上ならコスト0 [FAITHFUL] Game.tsx onClickFirstFrost
-const FIRST_FROST_FREE_LEAVES = 3;
 function firstFrostTargets(s) {
     return tokenSkillsMod.firstFrostTargets(s.board, curPlayer(s), s.chars);
 }

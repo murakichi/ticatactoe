@@ -9,6 +9,10 @@ const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
+const poison_1 = require("./poison");
+const blast_1 = require("./blast");
+const turn_1 = require("./turn");
+const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
@@ -25,8 +29,6 @@ const CHARGE_RANDOM_MARGIN = 1;
 /** この魔力以上あって撃てるスキルが手札に無いとき、魔法使い以外も1コストで手札を引き直す（防壁発動後の魔力の使い道） */
 const SURPLUS_MAGIC = 12;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
-const SHIKIGAMI_LIFE = 2;
-const SHIKIGAMI_BLAST_DAMAGE = 4;
 /** 氷室の番人が対ネクロで敵コマの奪取に付ける減点 (sim/ai.js noCapNecro) */
 const NO_CAP_NECRO_WEIGHT = 100;
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (sim/ai.js yyCover) */
@@ -423,21 +425,9 @@ class AIPlayer {
                 n += sq.effects.filter((e) => e.effect === '☠').length;
         return n;
     }
-    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数 (sim/engine.js miasmaPlan と同一) */
+    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数（Game・sim と共有の poison.ts） */
     miasmaPlan(board) {
-        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
-        const plan = new Map();
-        board.forEach((sq, i) => {
-            var _a;
-            if (sq.player !== this.playerSymbol || !sq.effects.some((e) => e.effect === '☠'))
-                return;
-            for (const j of geo.surroundRange(i)) {
-                const t = board[j];
-                if (t.player && t.player !== this.playerSymbol && !(0, charge_1.isGuarded)(t, this.characters))
-                    plan.set(j, ((_a = plan.get(j)) !== null && _a !== void 0 ? _a : 0) + 1);
-            }
-        });
-        return plan;
+        return (0, poison_1.miasmaPlan)(board, this.playerSymbol, this.characters);
     }
     /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (sim/ai.js miasmaScore と同一) */
     miasmaScore(board) {
@@ -1123,7 +1113,7 @@ class AIPlayer {
         if (oppReaches === 0) {
             // ネクロマンサー蘇生: 墓地が貯まり召喚が見込める or 吸収対象が複数いるなら発動
             if (this.character === 'necromancer' && necroRemain === 0 && remaining >= necroPay) {
-                const corpses = 10 - necroCost; // baseNecromancyCost=10。軽減量=墓地の死体数=召喚数
+                const corpses = turn_1.NECROMANCY.baseCost - necroCost; // 軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
                     if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑'))
@@ -1529,20 +1519,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board, i, player, life) {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        for (const idx of (0, boardGeometry_1.geometryForCells)(board.length).stompRange(i)) {
-            if (nb[idx].player === player) {
-                nb[idx] = (0, thermal_1.applyDamage)(nb[idx], 5, 'skill').sq;
-                continue;
-            }
-            const guard = (0, thermal_1.absorbDestroy)(nb[idx]);
-            if (guard.blocked) {
-                nb[idx] = guard.sq;
-                continue;
-            } // 氷結は❄1つが身代わりになる
-            nb[idx] = { player: undefined, bind: 0, effects: [] };
-        }
-        if (nb[i].player === undefined && !(0, thermal_1.emptyBlocked)(nb[i]))
-            nb[i] = { player, bind: life, effects: [] };
+        (0, blast_1.stomp)(nb, i, player, life);
         return nb;
     }
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
@@ -1698,7 +1675,7 @@ class AIPlayer {
                 v += 0.2;
                 continue;
             }
-            v += sq.bind <= SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
+            v += sq.bind <= shikigami_1.SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
         }
         return v;
     }
@@ -1717,24 +1694,7 @@ class AIPlayer {
     }
     /** 爆破の盤面反映（Game.tsx exeShikigamiBlast と同じ） */
     applyShikigamiBlast(board, i) {
-        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
-        board[i] = { player: undefined, bind: 0, effects: [] };
-        for (const j of geo.surroundRange(i)) {
-            const sq = board[j];
-            if (!sq.player) {
-                if (!(0, thermal_1.emptyBlocked)(sq))
-                    board[j] = { player: this.playerSymbol, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
-                continue;
-            }
-            if (sq.player === this.playerSymbol || (0, charge_1.isGuarded)(sq, this.characters))
-                continue;
-            const hit = (0, thermal_1.applyDamage)(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill');
-            if (hit.blocked) {
-                board[j] = hit.sq;
-                continue;
-            }
-            board[j] = hit.sq.bind < 1 ? { player: undefined, bind: 0, effects: [] } : hit.sq;
-        }
+        (0, shikigami_1.blast)(board, i, this.playerSymbol, this.characters);
     }
     /**
      * 陰陽師の1手番の式神運用 (sim/ai.js shikigamiTurn と同一)。陽で爆破できるなら転化して爆破、陰なら式神を置いて貯める。
@@ -1874,7 +1834,7 @@ class AIPlayer {
                         break;
                     clicks.push({ skill: 'onClickShikigamiPlace', target: cell });
                     m -= placeCost;
-                    b[cell] = { player: me, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
+                    b[cell] = { player: me, bind: shikigami_1.SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
                     continue;
                 }
                 break;

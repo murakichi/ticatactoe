@@ -129,7 +129,7 @@ export const gearDefOf = (id: GearId): GearDef => GEARS.find((g) => g.id === id)
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
 export const gearSlotsFor = (character: CharacterId): number => (character === 'you' ? 3 : 2);
 
-type Gears = readonly GearId[] | undefined;
+export type Gears = readonly GearId[] | undefined;
 export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.includes(id);
 
 /** ライフ平均への加算（頑健 / 剛腕の代償） */

@@ -8,10 +8,10 @@
 
 | 何を | どこで | sim 側 |
 |---|---|---|
-| 純粋ロジック（gear / deck / discount / comboCost / lifeBan / darkPot / generic / thermal / charge / tokenSkills / giantAura / giantTurn / decay / lateMagic / skillCosts / boardGeometry / util） | `src/` のTS | `scripts/gen-sim-shared.js` が `sim/shared/*.js`（CommonJS）に変換。**コミットする**。TS を直したら `node scripts/gen-sim-shared.js`（`npm start/build` の前にも自動で走る）。古いと `simShared.test.ts` が落ちる |
+| 純粋ロジック（gear / deck / discount / comboCost / lifeBan / darkPot / generic / thermal / charge / tokenSkills / giantAura / giantTurn / decay / lateMagic / skillCosts / boardGeometry / util / **cost**=実コスト / **turn**=手番開始の魔力・増殖・蘇生の定数 / **poison** / **blast**=ストンプ・審判の日 / **shikigami**） | `src/` のTS | `scripts/gen-sim-shared.js` が `sim/shared/*.js`（CommonJS）に変換。**コミットする**。TS を直したら `node scripts/gen-sim-shared.js`（`npm start/build` の前にも自動で走る）。古いと `simShared.test.ts` が落ちる |
 | AI本体（`AIPlayer`） | `AIPlayer.ts` | `sim/shared/AIPlayer.js`（上と同じ生成物） |
 | AIの1手番の計画（AIに何の状態を渡し、返った結果をどの順に実行するか） | `aiTurn.ts` の `planAITurn` / `resolveMoveCell` | `sim/shared/aiTurn.js`。`Game.tsx` の `runAIMove` も同じ関数を呼ぶ |
-| ゲーム進行（手番・スキルの副作用・ライフ減衰・魔力） | `Game.tsx`（React の state） | `engine.js`（手書きの移植。ここだけが二重実装として残っている） |
+| ゲーム進行（手番の切り替え・スキルの支払いと状態の更新・乱数の引き方） | `Game.tsx`（React の state） | `engine.js`（手書きの移植。盤面に効く計算は上の共有関数に出したので、残る二重実装は「状態の持ち方と順序」だけ） |
 | 計画の実行 | `Game.tsx`（タイマー付きキュー） | `aiDriver.js`（engine のスキル・着手を同期実行） |
 
 つまり **AIの判断は本番と sim で同一**。sim の結果と本番の差が出るなら、原因は `engine.js` と `Game.tsx` のルールの差だけ。
