@@ -7,10 +7,11 @@ const LIFE_BAN_PLACING_KEYS = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
     'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken',
     'onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood',
+    'onClickNecromancy',
 ]);
 const placedLifeOf = (key, tokenBind) => {
     if (key === 'onClickShikigamiFlood') return 0;
-    if (key === 'onClickShikigamiPlace' || key === 'onClickShikigamiRandom') return 2;
+    if (key === 'onClickShikigamiPlace' || key === 'onClickShikigamiRandom' || key === 'onClickNecromancy') return 2;
     return tokenBind;
 };
 const placeBlocked = (banned, key, tokenBind) => banned && !!key && LIFE_BAN_PLACING_KEYS.has(key) && placedLifeOf(key, tokenBind) <= LIFE_BAN_MAX;
