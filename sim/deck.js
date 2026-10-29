@@ -113,9 +113,9 @@ const CATALOG_SIZE = SKILL_CATALOG.length;
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
     tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
-    magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
+    magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],
@@ -154,10 +154,10 @@ function randomDeck(rng = Math.random) {
     return out.sort((a, b) => a - b);
 }
 
-/** AIが何も指定しないときのランダム入れ替えの枚数（推奨デッキの12枚中） */
+/** variedAIDeck(ストレステスト用)のランダム入れ替えの枚数（推奨デッキの12枚中） */
 const AI_DECK_SWAPS = 3;
 
-/** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ）。本番のAI席は pickRecommendedDeck（主案/別案の選択のみ） */
 /** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
 const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
 

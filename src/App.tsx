@@ -19,7 +19,7 @@ import {
     randomDeck,
     recommendedDeck,
     saveDeck,
-    variedAIDeck,
+    pickRecommendedDeck,
 } from './components/game/deck';
 import { SimPanel } from './components/SimPanel';
 import styles from './App.module.css';
@@ -110,12 +110,12 @@ export const App = () => {
             })
         );
     // 開始時に席の設定を確定する。ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）。
-    // デッキを指定していない席は推奨デッキ。ただしAI席は推奨デッキをベースに一部をランダムに入れ替える
+    // デッキを指定していない席は推奨デッキ。AI席は推奨デッキの主案と別案(複数パターン)からひとつ選ぶだけで、カードをランダムに入れ替えない
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p) => {
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: pickRecommendedGears(p.character) } : p;
             if (isValidDeck(p.deck)) return withGears;
-            return { ...withGears, deck: p.isAI ? variedAIDeck(p.character) : recommendedDeck(p.character) };
+            return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
     // デッキを自分で組んだ席が不正（12枚でない）なら開始できない
     const invalidDeckSeat = players.slice(0, playerCount).findIndex((p) => p.deck !== undefined && !isValidDeck(p.deck));

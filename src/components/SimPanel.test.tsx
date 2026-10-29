@@ -23,6 +23,14 @@ const summary = {
         { id: 'you', appearances: 6, wins: 2, winRate: 1 / 3, ci: 0.3, avgTurnsWon: 20 },
     ],
 };
+const analysis = {
+    rows: [
+        { id: 'giant', fieldAvg: 0.7, strongAvg: 0.6, worst: { id: 'you', rate: 0.6, decided: 30 }, unfavorable: 0, favorable: 1, solidOpponents: 1, opponents: 1, eq: 0.97 },
+        { id: 'you', fieldAvg: 0.3, strongAvg: 0.4, worst: { id: 'giant', rate: 0.2, decided: 30 }, unfavorable: 1, favorable: 0, solidOpponents: 1, opponents: 1, eq: 0.03 },
+    ],
+    exploit: 0.004, minPairDecided: 30, minDecided: 20, players: 2,
+    verdict: { headline: 'giantが突出しています', points: ['平均勝率の1位: giant'] },
+};
 const matchups = {
     giant: { you: { meets: 6, wins: 4, losses: 2, winRate: 2 / 3 } },
     you: { giant: { meets: 6, wins: 2, losses: 4, winRate: 1 / 3 } },
@@ -36,8 +44,9 @@ describe('SimPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: /シミュレート開始/ }));
         const w = FakeWorker.last!;
         expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'faithful', skills: true, gears: true });
-        act(() => w.emit({ type: 'progress', summary, matchups, drift: 0.01, elapsed: 2 }));
-        expect(screen.getAllByText('👹 巨人', { selector: 'th[scope=row]' })).toHaveLength(2); // キャラ別表と対面表
+        act(() => w.emit({ type: 'progress', summary, matchups, analysis, drift: 0.01, elapsed: 2 }));
+        expect(screen.getByText('giantが突出しています')).toBeTruthy(); // 結論
+        expect(screen.getAllByText('👹 巨人', { selector: 'th[scope=row]' })).toHaveLength(3); // 結論表・キャラ別表・対面表
         expect(screen.getAllByText('67%').length).toBeGreaterThan(0); // 対面表: 巨人→あなた
         fireEvent.click(screen.getByRole('button', { name: /停止/ }));
         expect(w.posted[1]).toEqual({ cmd: 'stop' });
