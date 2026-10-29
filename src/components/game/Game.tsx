@@ -2129,6 +2129,7 @@ export const Game = (props: GameProps) => {
     };
 
     const onClickNecromancy = () => {
+        if (placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())) return; // 一寸の虫に魂なし: ライフ2のコマを召喚できない
         const curCost = necroCost[turnSeat];
         summonCorpses(baseNecromancyCost - curCost);
         spendMagic(gearCost(curCost, turnSeat, false, 'onClickNecromancy'), true, true, 'onClickNecromancy');
@@ -4019,7 +4020,7 @@ export const Game = (props: GameProps) => {
                         paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
                         hidden={currentCharacter !== 'necromancer'}
                         exclusive
-                        disabled={checkSkillDisable(currentNecroCost)}
+                        disabled={checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())}
                     />
                     <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMiasma}

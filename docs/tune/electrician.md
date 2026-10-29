@@ -1,6 +1,6 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: edb9fff
+- 最後に検証したmaster: c224b45
 - 現在の推奨設定: gears=[lightToken,harvest](別案 [afterglow,harvest]) deck=[21,22,23,24,26,28,50,51,52,53,58,60] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
@@ -9,6 +9,7 @@
 - 状態: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
 - 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
+- 基準線(master c224b45 = 返し特売採用後に他キャラの調整を取り込み, seed3/200): 基本 5位 54.2% / 1位 witch 78.4%・2位 poisoner 68.2%・3位 cryomancer 57.9%(差24.2pt)。envDeck varied 7位 50.0% / 1位 witch 69.3%・2位 poisoner 63.6%。採用前(62.6%/56.4%)からの低下は他キャラ(witch 68→78、poisoner 63→68)の強化による。
 - 基準線(gear変更後, master 837a29b, seed3/200): 3位 59.9% / 1位 magician 63.9%(差4.0pt)・cryomancer 61.2%・tactician 59.2%
 - 基準線(gear+deck変更後, seed3/200): 2位 63.0% / 1位 magician 63.4%(差0.4pt)・cryomancer 60.7%
 - 4条件(seed4/300, --target electrician 付き。付け忘れの旧結果は無効): 基本 1位 64.8 vs magician 63.4 / envDeck varied 2位 60.2 vs magician 61.8(-1.6) / oppGears none 1位 75.3 vs 64.4 / oppGears random 1位 72.6 vs 62.6 → 未達はenvDeck variedのみ

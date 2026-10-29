@@ -2803,6 +2803,24 @@ test('一寸の虫に魂なし: 縛られた席はライフ3以下のコマを�
     assert.strictEqual(s.lifeBan[1], false);     // 手番が終わったので解除
 });
 
+test('一寸の虫に魂なし: 縛られたネクロマンサーは蘇生（ライフ2のコマの召喚）を使えない（魔力も墓地も減らない）。縛られていなければ使える', () => {
+    const mk = () => {
+        const s = e.newGame({ chars: ['you', 'necromancer'], rng: e.makeRng(8) });
+        s.turn = 1; s.magic[1] = 40; s.necroCost[1] = 2; // 墓地が貯まっていて安い
+        return s;
+    };
+    const banned = mk(); banned.lifeBan[1] = true;
+    const magicBefore = banned.magic[1];
+    e.SKILLS.necromancy(banned);
+    assert.strictEqual(banned.magic[1], magicBefore);
+    assert.strictEqual(banned.board.filter((sq) => sq.player).length, 0);
+    assert.strictEqual(banned.remainNecro[1], 0);
+    const free = mk();
+    e.SKILLS.necromancy(free);
+    assert.ok(free.magic[1] < 40);
+    assert.ok(free.board.filter((sq) => sq.player).length > 0);
+});
+
 test('一寸の虫に魂なし: AIは縛られてライフ3以下なら着手せず（チャージで手番を終える）、置くスキルも使わない', () => {
     const ai = require('./ai');
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(9) });
