@@ -12,12 +12,12 @@
 const { SYMBOLS, settleWinner, isShikigami, isGuarded, SHIKIGAMI_BLAST_DAMAGE, calculateWinner, findEmptyIndexes, costsOf, gearCost, necromancyPay, SKILLS,
         curPlayer, curChar, curMagic, calculateCost, placeMove, judgeDayCost, totalAssaultCost,
         miasmaCost, miasmaPlan, poisonCountFor, otherSeats, seatCount, POOL_SIZE, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, INFERNO_FREE_SKILLS, FIRE_DAMAGE, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, connectedPieces, blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE, smallFryDestroyable } = require('./engine');
-const { geometryForCells } = require('./geometry');
-const thermal = require('./thermal');
+const { geometryForCells } = require('./shared/boardGeometry');
+const thermal = require('./shared/thermal');
 const E = require('./engine');
-const discountMod = require('./discount');
-const { lineCells } = require('./geometry');
-const { hasGear } = require('./gear');
+const discountMod = require('./shared/discount');
+const { lineCells } = require('./shared/boardGeometry');
+const { hasGear } = require('./shared/gear');
 
 // 多人数対応: 盤上のコマは参加者のものだけなので、自分以外のコマ = 敵。敵が複数いるときは
 // 探索木では先頭の敵を「相手役」に代表させ、深さは盤サイズで制限する (AIPlayer.ts と同じ)
@@ -539,7 +539,7 @@ function forceTable(s, me) {
         37: { key: 'flameToken', cost: 'onClickFlameToken', token: true, legal: empties },
         38: { key: 'doubleFlameToken', cost: 'onClickDoubleFlameToken', token: true, legal: empties },
         39: { key: 'swidden', cost: 'onClickSwidden', cands: () => E.swiddenTargets(s), apply: (b, c) => thermal.swidden(b, c, size) },
-        40: { key: 'sacrifice', cost: 'onClickSacrifice', cands: () => E.sacrificeCandidates(s), apply: (b, c) => thermal.sacrificeFlame(b, c, me, size, null) },
+        40: { key: 'sacrifice', cost: 'onClickSacrifice', cands: () => E.sacrificeCandidates(s), apply: (b, c) => thermal.sacrificeFlame(b, c, me, s.chars, size) },
         41: { key: 'frostArea', cost: 'onClickFrostArea', cands: () => allCells(s), apply: (b, c) => thermal.freeze(b, geo.stompRange(c)) },
         42: { key: 'icicle', cost: 'onClickIcicle', cands: () => { const o = []; for (const c of allCells(s)) for (const d of ['row', 'col', 'diag', 'anti']) o.push({ c, d }); return o; }, apply: (b, x) => thermal.freeze(b, lineCells(size, x.c, x.d)), place: (x) => { s.icicleDir = x.d; return x.c; } },
         43: { key: 'randomFreeze', cost: 'onClickRandomFreeze', legal: () => thermal.randomFreezeCandidates(s.board).length > 0 },

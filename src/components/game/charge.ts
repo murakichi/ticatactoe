@@ -39,13 +39,16 @@ export type FireResult = {
     carried: number[];
 };
 
+/** 発火で隣のコマが受けるダメージ。sim は A/B 検証用に fireCharges の damage 引数で上書きする（CHG_FIRE_DMG） */
+export const FIRE_DAMAGE = 1;
+
 /**
  * 着手マス i の隣にある⚡を発火させる（size は盤の一辺。board を直接書き換える）。
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
  * ギア「伝導」: conductors[席] が真の席のコマが載った帯電マス k に☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = []): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = [], damage: number = FIRE_DAMAGE): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
     const carried: number[] = [];
@@ -59,7 +62,7 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             if (isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
-            board[n] = applyDamage(sq, 1, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
+            board[n] = applyDamage(sq, damage, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             damaged.push(n);
             // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
             const owner = board[k].player;

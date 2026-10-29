@@ -5,6 +5,11 @@ description: Iteratively strengthen the game AI (AIPlayer.ts / sim/ai.js). Phase
 
 # ai-improve
 
+> **2026-10 更新 (#289)**: sim の既定AIは本番の `AIPlayer.ts` そのもの（`sim/shared/` の生成物を `sim/aiDriver.js` が動かす）。
+> AIを直すのは `AIPlayer.ts`（と、手番の流れなら `aiTurn.ts`）だけでよく、ts を直したら `node scripts/gen-sim-shared.js` を実行する。
+> 旧 sim 版AI（`sim/ai.js` の `F.xxx` ノブ・`--mode faithful/capture`・`probe-ai.js`・`SIM_AI=legacy`）は廃止予定で、「sim で測ってから本番へ移植」の手順は不要。
+> 改修前後の比較は `git stash` / 別ブランチで同一seedの `probe-top.js` などを回す。以下に `sim/ai.js` 前提の記述が残っていたら、上の方針で読み替える。
+
 Two-phase AI improvement loop for the tactical tic-tac-toe variant.
 Uses the headless sim (`sim/`) to detect weaknesses, fix them, then push
 win rate higher through optimization.
@@ -35,10 +40,11 @@ node sim/probe-usage.js --chars magician,cryomancer --games 400 --size 4       #
 ```
 4 コアなら `xargs -P4` で seed を変えた複数ジョブを並列に回し、`probe-sum.js` に流すと合算の勝率と 95%CI が出る。
 
-## AI source files (keep in sync)
+## AI source files
 
-| sim (headless) | src (React) |
-|---|---|
+AI の実装は `src/components/game/AIPlayer.ts`（と手番の流れの `aiTurn.ts`）が唯一。`sim/` はその生成物（`sim/shared/AIPlayer.js`）を `sim/aiDriver.js` で動かすので、二重に書かない（旧 `sim/ai.js` は廃止予定）。
+
+---|---|
 | `sim/ai.js` — `getEnhancedBestMove`, `chooseSkills`, `minimax`, `faithfulMakeMove` | `src/components/game/AIPlayer.ts` — `getBestMove`, `chooseSkills`, `minimax`, `makeMove` |
 
 Any fix to one MUST be mirrored to the other.

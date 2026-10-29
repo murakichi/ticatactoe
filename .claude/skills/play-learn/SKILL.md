@@ -5,6 +5,11 @@ description: Claude 自身が sim で既定AIと実際に対局し(ギア・デ�
 
 # play-learn
 
+> **2026-10 更新 (#289)**: sim の既定AIは本番の `AIPlayer.ts` そのもの（`sim/shared/` の生成物を `sim/aiDriver.js` が動かす）。
+> AIを直すのは `AIPlayer.ts`（と、手番の流れなら `aiTurn.ts`）だけでよく、ts を直したら `node scripts/gen-sim-shared.js` を実行する。
+> 旧 sim 版AI（`sim/ai.js` の `F.xxx` ノブ・`--mode faithful/capture`・`probe-ai.js`・`SIM_AI=legacy`）は廃止予定で、「sim で測ってから本番へ移植」の手順は不要。
+> 改修前後の比較は `git stash` / 別ブランチで同一seedの `probe-top.js` などを回す。以下に `sim/ai.js` 前提の記述が残っていたら、上の方針で読み替える。
+
 **自分で指す → 気づく → ルール化 → 検証 → 採用/撤回** のループ。
 **軸は「Claude が `duel.js` で実際に指すこと」。** AI 同士の大量対戦でキャラを強くする作業（環境順位・ギア/デッキ探索・AI フラグの掃引）は **`tune-top` の領分**で、ここでは行わない。このスキルが出すのは「実戦で気づいた仮説」で、検証にだけ tune-top と同じ計測器（`probe-top`）を使う。
 - 仮説を立てて実装・検証に進む前に、必ず自分が指す。測定やコード読みだけで仮説を作らない。

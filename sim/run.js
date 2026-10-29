@@ -5,8 +5,9 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
-const deckMod = require('./deck');
-const gearMod = require('./gear');
+const aiDriver = require('./aiDriver');
+const deckMod = require('./shared/deck');
+const gearMod = require('./shared/gear');
 const { CHARACTERS } = engine;
 
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
@@ -38,6 +39,14 @@ function runGame(chars, rng, modes, size, tracker, opts = {}) {
     const STALEMATE_PASSES = 20;
     while (!s.winner && guard++ < limit) {
         if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
+        // mode 'prod' は本番のAI(AIPlayer.ts の生成物)で1手番を最後まで進める。それ以外は sim 版AI(ai.js)
+        if (modeOf(s.turn) === 'prod') {
+            const placed = s.placements;
+            if (opts.skills === false) aiDriver.playPlaceOnly(s); else aiDriver.playTurn(s);
+            // パスだけが続く膠着は打ち切る(引き分け)。着手があれば数え直す。氷結・ロックの膠着は deadlock.ts が先に解くので、ここに来るのは別の膠着
+            if (s.placements !== placed) passes = 0; else if (++passes >= STALEMATE_PASSES) break;
+            continue;
+        }
         const result = opts.skills === false ? ai.passIfStuck(s, { move: ai.getEnhancedBestMove(s), turnEnded: false }) : ai.makeMove(s, modeOf(s.turn));
         if (result.turnEnded) { if (++passes >= STALEMATE_PASSES) break; continue; }
         passes = 0;
@@ -47,7 +56,7 @@ function runGame(chars, rng, modes, size, tracker, opts = {}) {
         if (s.currentTurn === before) break;
     }
     if (trk) trk.onTurnChange(s);
-    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn };
+    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn, stats: s.stats };
 }
 
 
