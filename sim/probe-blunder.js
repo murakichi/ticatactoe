@@ -27,7 +27,9 @@ function winCells(s, player) {
         const q = s.board[i];
         if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
         if (thermal.emptyBlocked(q)) continue;
-        if (q.player && (q.player === player || (q.bind > 0 && !giant))) continue;
+        if (q.player && engine.isShikigami(q) && q.player !== player) continue; // 式神は奪うと空きマスになるだけ(自コマにならない)
+        // 奪えるのは bind0 の敵コマ。巨人は自分のライフが bind+1 を超えれば bind>0 の敵コマも奪える(simulatePlace の calc<0)
+        if (q.player && (q.player === player || (q.bind > 0 && !(giant && q.bind - s.life + 1 < 0)))) continue;
         if (q.player && engine.isShielded(s, q)) continue;
         const keep = syms[i]; syms[i] = player;
         if (engine.calculateWinner(syms) === player) out.push(i);
