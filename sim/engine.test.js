@@ -384,12 +384,12 @@ test('両トークン: 参加者全員のコマが1つずつ置かれる', () =>
     assert.deepStrictEqual(placed, e.SYMBOLS.slice(0, 5).slice().sort());
 });
 
-test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト3。埋まったマスは選び直せる', () => {
+test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト2。埋まったマスは選び直せる', () => {
     const s = gameN('yinYangMaster', 'you', 'you');
     s.board[1] = { player: '⭕', bind: 5, effects: [] };
     s.magic[0] = 10;
     e.SKILLS.shikigamiPlace(s);
-    assert.strictEqual(s.magic[0], 7);
+    assert.strictEqual(s.magic[0], 8);
     assert.strictEqual(e.placeMove(s, 1), false); // 埋まっている
     assert.strictEqual(s.useShikigamiPlace, true);
     assert.strictEqual(e.placeMove(s, 6), true);
@@ -437,7 +437,7 @@ test('式神(陽): 爆破で自分の式神が消え、周囲8マスの敵に4�
     s.board[15] = { player: '⭕', bind: 3, effects: [] }; // 範囲外
     s.magic[0] = 10;
     e.SKILLS.shikigamiBlast(s);
-    assert.strictEqual(s.magic[0], 5);
+    assert.strictEqual(s.magic[0], 6);
     assert.strictEqual(e.placeMove(s, 2), false); // 式神でないマスは選び直せる
     assert.strictEqual(e.placeMove(s, 5), true);
     assert.deepStrictEqual(s.board[5], { player: undefined, bind: 0, effects: [] });
