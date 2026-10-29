@@ -259,6 +259,7 @@ const skillCosts = {
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
     onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
     onClickFirstFrost: 6, // 初霜(idx 93)。トークン扱い。盤面の🍂（効力のあるもの）が4枚以上なら0
+    onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。盤面のエフェクト1つにつき3軽減（最低1）
     onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。盤面のエフェクト1つにつき2軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
@@ -1949,8 +1950,43 @@ function onClickFirstFrost(s) {
     bumpStat(s, 'firstFrostFrozen', frozen.length);
 }
 
-// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（🔑ロックと式神の印📜は除く。⚡無敵・ロック中のマスは動かさない）をそのマスに移す。
-// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。盤面のエフェクト1つにつき2軽減（最低1） [FAITHFUL] Game.tsx onClickGather
+// 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで🔑ロック・⚡無敵でないもの）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
+// 盤面のエフェクト1つにつき3軽減（最低1） [FAITHFUL] Game.tsx onClickBurnOff
+function burnOffTargets(s) {
+    const me = curPlayer(s);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.effects.some((e) => e.effect !== '📜') && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+}
+function burnOffLegal(s) { return !s.usedTokenThisTurn && (burnOffTargets(s).length > 0 || findEmptyIndexes(s.board).length > 0); }
+function onClickBurnOff(s) {
+    if (!burnOffLegal(s)) return;
+    const pay = calculateCost(s, costsOf(s).onClickBurnOff, true, false, 'onClickBurnOff'); // 燃やす前のエフェクトの数で軽減する
+    const cells = burnOffTargets(s);
+    const owners = s.board.map((sq) => sq.player);
+    const before = cells.reduce((n, k) => n + thermal.flameStacks(s.board[k]), 0);
+    thermal.ignite(s.board, cells, s.size, 1, keepBudsOf(s));
+    const lit = cells.reduce((n, k) => n + thermal.flameStacks(s.board[k]), 0) - before;
+    const destroyed = cells.filter((k) => owners[k] && !s.board[k].player).length;
+    if (destroyed > 0) addCorpses(s, destroyed);
+    const empties = findEmptyIndexes(s.board);
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
+        applyLock(s, idx);
+        granted = afterTokenPlaced(s, idx, undefined);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, pay, 'onClickBurnOff');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'burnOff');
+    bumpStat(s, 'burnOffCells', cells.length);
+    bumpStat(s, 'burnOffFlames', lit);
+}
+
+// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
+// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。動かせるエフェクト（氷結・ロックのマスを除く）1つにつき2軽減（最低1） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {
     if (!gatherLegal(s)) return;
@@ -1959,7 +1995,7 @@ function onClickGather(s) {
     const moved = [];
     let flames = 0;
     s.board.forEach((sq, k) => {
-        if (isGuarded(s, sq) || sq.effects.some((e) => e.effect === '🔑')) return;
+        if (isGuarded(s, sq) || sq.effects.some((e) => e.effect === '🔑' || e.effect === '❄')) return; // 氷結のあるマスとロックのマスは無視する
         const keep = [];
         for (const e of sq.effects) {
             if (e.effect === '📜') keep.push(e);
@@ -2812,6 +2848,7 @@ const SKILLS = {
     smallFry: onClickSmallFry,
     firstFrost: onClickFirstFrost,
     gather: onClickGather,
+    burnOff: onClickBurnOff,
 };
 // 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
@@ -2842,7 +2879,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    firstFrostLegal, firstFrostTargets, gatherLegal,
+    firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

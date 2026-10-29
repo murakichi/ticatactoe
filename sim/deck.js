@@ -105,6 +105,7 @@ const SKILL_CATALOG = [
     { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
     { idx: 93, name: '初霜', icon: '🧊', category: 'ice' },
     { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire' },
 ];
 
 
