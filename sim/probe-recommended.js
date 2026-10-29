@@ -12,8 +12,8 @@
  *   node sim/probe-recommended.js --merge a.jsonl b.jsonl ...
  */
 const engine = require('./engine');
-const ai = require('./ai');
-const gear = require('./gear');
+const ai = require('./aiSelect');
+const gear = require('./shared/gear');
 
 if (process.argv[2] === '--merge') {
     const files = process.argv.slice(3);

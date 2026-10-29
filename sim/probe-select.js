@@ -13,8 +13,8 @@
  *   --with-sturdy: 頑健も候補に入れる（頑健を含む組との比較用）
  */
 const engine = require('./engine');
-const ai = require('./ai');
-const gear = require('./gear');
+const ai = require('./aiSelect');
+const gear = require('./shared/gear');
 
 const char = process.argv[2];
 const g1 = parseInt(process.argv[3] || '150', 10);
