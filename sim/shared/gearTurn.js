@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.advanceGearState = void 0;
+exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
@@ -70,3 +70,31 @@ const advanceGearState = (g, r, input) => {
     return change;
 };
 exports.advanceGearState = advanceGearState;
+/**
+ * ギア補正（adjustCostByGear）の入力。手番の席は今の手番内の状態、手番でない席（パネルで非手番側のコストを出すとき）は『その席の次の手番の頭』の状態で出す。
+ * @param ailments 病炎の契りの入力（自陣にある毒・火炎の種類数。ギア未装備なら 0）
+ */
+const gearCostContext = (g, r, seat, turnSeat, ailments) => seat === turnSeat
+    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat] }
+    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat] };
+exports.gearCostContext = gearCostContext;
+/**
+ * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
+ * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
+ */
+const noteSkillUsed = (g, seat, skillId) => {
+    g.skills[seat] += 1;
+    if (skillId) {
+        g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
+        g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
+        if (skillId !== 'onClickInferno') {
+            g.kinds[seat].add(skillId);
+            if (g.kinds[seat].size >= thermal_1.INFERNO_FREE_SKILLS)
+                g.infernoReady[seat] = true;
+        }
+    }
+    g.echoNext[seat] = true;
+    g.echoReady[seat] = false;
+};
+exports.noteSkillUsed = noteSkillUsed;

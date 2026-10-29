@@ -467,7 +467,7 @@ test('灰の供物: 敵のマスに🔥を付与すると、付与したマス1�
     s.board[6].effects.push({ effect: '🔥' });
     s.board[8] = { player: H, bind: 30, effects: [{ effect: '🔥' }] }; // 自分のマスの🔥は数えない
     e.placeMove(s, 2); // 💙の手番終了 → ⭕の手番
-    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '相手の手番中は⭕の側のコストを見る(💙の次の手番まで保留)');
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '手番でない席のコストは、その席の次の手番の頭の状態で出す(Game のパネルと同じ)');
     e.placeMove(s, 3); // ⭕の手番終了 → 💙の手番
     assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '2マスぶん重複して-2');
     assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');

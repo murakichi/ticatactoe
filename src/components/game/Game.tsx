@@ -7,7 +7,7 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
-import { advanceGearState } from './gearTurn';
+import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -198,9 +198,7 @@ export const Game = (props: GameProps) => {
         gearsBySeat.findIndex((g, seat) => hasGear(g, 'lastStand') && !lastStandUsed.current[seat] && symbols[seat] !== w);
     const gearCtxFor = (seat: number): CostContext => {
         const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
-        return seat === turnSeat
-            ? { skillsThisTurn: gearTurn.current.skills[seat], echoReady: gearTurn.current.echoReady[seat], ailments, ruin: ruinState.current.active[seat], ash: ruinState.current.ashActive[seat] }
-            : { skillsThisTurn: 0, echoReady: gearTurn.current.echoNext[seat], ailments, ruin: ruinState.current.pending[seat], ash: ruinState.current.ashPending[seat] };
+        return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments);
     };
     /** コストを払う席の状況（実コストの計算は cost.ts で sim と共有） */
     const costEnvFor = (seat: number): CostEnv => ({
@@ -618,19 +616,9 @@ export const Game = (props: GameProps) => {
                 addLog('幸運の財布でコストが0になった');
                 gearTrigger('luckyPurse', 'コスト0');
             }
-            gearTurn.current.skills[turnSeat] += 1;
+            noteSkillUsed(gearTurn.current, turnSeat, skillId);
             // 四連の極意: この回数に達したので、次のスキルは無料
             if (hasGear(turnGears, 'quadMastery') && gearTurn.current.skills[turnSeat] === GEAR_PARAMS.quadCount) gearTrigger('quadMastery', '次のスキルが無料');
-            if (skillId) {
-                gearTurn.current.discount[turnSeat] = afterDiscount(gearTurn.current.discount[turnSeat], skillId);
-                gearTurn.current.oppSkilled = gearTurn.current.oppSkilled.map((v, i) => (i === turnSeat ? v : true));
-            }
-            if (skillId && skillId !== 'onClickInferno') {
-                gearTurn.current.kinds[turnSeat].add(skillId);
-                if (gearTurn.current.kinds[turnSeat].size >= INFERNO_FREE_SKILLS) gearTurn.current.infernoReady[turnSeat] = true;
-            }
-            gearTurn.current.echoNext[turnSeat] = true;
-            gearTurn.current.echoReady[turnSeat] = false;
         }
         setMagicAt(turnSeat, (m) => m - pay);
         if (bumpCount) setUseMagicCountAt(turnSeat, (c) => c + 1);

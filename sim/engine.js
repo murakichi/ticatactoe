@@ -478,13 +478,9 @@ function costsOf(s, seat = s.turn) {
     return s.priceTables[seat] || skillCosts;
 }
 function gearCtx(s, seat) {
-    return {
-        skillsThisTurn: s.gearSkills[seat],
-        echoReady: s.echoReady[seat],
-        ailments: hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0,
-        ruin: s.ruinActive[seat],
-        ash: hasGear(s.gears[seat], 'ashOffering') ? s.ashActive[seat] : 0,
-    };
+    const ailments = hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0;
+    const [g, r] = gearTurnView(s);
+    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments);
 }
 // 実コスト(キャラ補正 → ギア補正 → 導線 → 軽減スキル)の計算は本番(cost.ts)の生成物。ここは席の状況を詰めるだけ
 const costMod = require('./shared/cost');
@@ -517,11 +513,12 @@ function armWard(s) {
     thermal.setEffectWard((sq) => hasGear(s.gears[SYMBOLS.indexOf(sq.player)], 'spellWard') && s.gearSkills[s.turn] > 0);
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
-function noteSkillUsed(s) {
+function noteSkillUsed(s, skillId) {
     armWard(s);
-    s.gearSkills[s.turn]++;
-    s.echoNext[s.turn] = true;
-    s.echoReady[s.turn] = false;
+    const [g] = gearTurnView(s);
+    g.infernoReady = s.infernoReady;
+    gearTurnMod.noteSkillUsed(g, s.turn, skillId);
+    s.oppSkilled = g.oppSkilled; // 作り直された配列を戻す
 }
 /** 収穫: エフェクトをn個付与したぶん魔力を得る（上限あり） */
 function harvestMagic(s, n) {
@@ -538,16 +535,7 @@ function spendMagic(s, amount, skillId) {
         bumpStat(s, 'luckyFree');
     }
     s.magic[s.turn] -= amount;
-    noteSkillUsed(s);
-    if (skillId) {
-        s.discount[s.turn] = discountMod.afterSkill(s.discount[s.turn], skillId);
-        s.oppSkilled = s.oppSkilled.map((v, i) => (i === s.turn ? v : true));
-    }
-    // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
-    if (skillId && skillId !== 'onClickInferno') {
-        s.skillKinds[s.turn].add(skillId);
-        if (s.skillKinds[s.turn].size >= INFERNO_FREE_SKILLS) s.infernoReady[s.turn] = true;
-    }
+    noteSkillUsed(s, skillId);
 }
 // シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
 function shuffleHand(s) {

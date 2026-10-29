@@ -2,9 +2,9 @@
 // 状態は席ごとの配列（と盤面のスナップショット）で、関数が直接書き換える。魔力など状態の外に効くものは戻り値で返す。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { Discount, emptyDiscount } from './discount';
-import { Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
-import { fireStacksTotal } from './thermal';
+import { Discount, afterSkill, emptyDiscount } from './discount';
+import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
+import { INFERNO_FREE_SKILLS, fireStacksTotal } from './thermal';
 import { ownCharges, ownLeaves } from './comboCost';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
@@ -118,4 +118,32 @@ export const advanceGearState = (
     change.echoNext = g.echoReady[nextSeat];
     g.echoNext[nextSeat] = false;
     return change;
+};
+
+/**
+ * ギア補正（adjustCostByGear）の入力。手番の席は今の手番内の状態、手番でない席（パネルで非手番側のコストを出すとき）は『その席の次の手番の頭』の状態で出す。
+ * @param ailments 病炎の契りの入力（自陣にある毒・火炎の種類数。ギア未装備なら 0）
+ */
+export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, turnSeat: number, ailments: number): CostContext =>
+    seat === turnSeat
+        ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat] }
+        : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat] };
+
+/**
+ * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
+ * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
+ */
+export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, seat: number, skillId?: string): void => {
+    g.skills[seat] += 1;
+    if (skillId) {
+        g.discount[seat] = afterSkill(g.discount[seat], skillId);
+        g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
+        if (skillId !== 'onClickInferno') {
+            g.kinds[seat].add(skillId);
+            if (g.kinds[seat].size >= INFERNO_FREE_SKILLS) g.infernoReady[seat] = true;
+        }
+    }
+    g.echoNext[seat] = true;
+    g.echoReady[seat] = false;
 };
