@@ -30,13 +30,20 @@ export const FLAME_SKILL_MULT = 1.5;
 /** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき。sim/thermal.js と同値） */
 export const FLAME_INSTANT_DAMAGE = 1;
 
-export const frozenStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '❄').length;
-export const isFrozen = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '❄');
-export const flameStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🔥').length;
+/** 指定エフェクトの個数（配列を作らない数え方。シミュレーションで大量に呼ぶので速さのため） */
+const countEffect = (sq: SquareInfo, kind: Effect['effect']): number => {
+    let n = 0;
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++) if (ef[i].effect === kind) n++;
+    return n;
+};
+export const frozenStacks = (sq: SquareInfo): number => countEffect(sq, '❄');
+export const isFrozen = (sq: SquareInfo): boolean => frozenStacks(sq) > 0;
+export const flameStacks = (sq: SquareInfo): number => countEffect(sq, '🔥');
 /** 休眠マス: 氷結中。マスの他のエフェクト（🌱⚡☠）は消えないが効力を発揮しない（火炎中のマスは休眠しない: 🌱は消え、⚡☠は重複して働く） */
 export const isDormant = (sq: SquareInfo): boolean => isFrozen(sq);
 
-const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
+const hasLock = (sq: SquareInfo): boolean => countEffect(sq, '🔑') > 0;
 
 const without = (sq: SquareInfo, ...kinds: string[]): SquareInfo => ({
     ...sq,
@@ -263,7 +270,8 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
     board
         .map((sq, i) => {
             if (!sq.player || sq.player === me || hasLock(sq)) return -1;
-            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡')) return -1;
+            // 氷結中のコマは⚡が休眠して無敵も働かない（charge.ts の isShielded と同じ）
+            if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !isDormant(sq)) return -1;
             return i;
         })
         .filter((i) => i !== -1);
@@ -318,7 +326,7 @@ export const burnout = (board: SquareInfo[], cells: number[]): number => {
 // 冬至の種子の「🌱ガード」は、activeBuds / harvestBuds の guarded 引数（氷結中でも🌱が働く）と、ignite の keepBuds 述語（🔥が付いても🌱が消えない）として渡す。
 
 /** マスの🌱の数 */
-export const budStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '🌱').length;
+export const budStacks = (sq: SquareInfo): number => countEffect(sq, '🌱');
 
 /** 効力を発揮している🌱の数。氷結中のマスの🌱は消えないが魔力ボーナスに数えない。guarded（冬至の種子）なら休眠しない */
 export const activeBuds = (sq: SquareInfo, guarded: boolean = false): number => (!guarded && isDormant(sq) ? 0 : budStacks(sq));

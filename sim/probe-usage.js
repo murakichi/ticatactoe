@@ -7,7 +7,7 @@
  * 席0/席1を交互に先手にし、キャラ構成 chars[0]=テスト席。skill 名は engine.SKILLS のキー。
  */
 const engine = require('./engine');
-const ai = require('./ai');
+const ai = require('./aiSelect');
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].slice(2)] = process.argv[i + 1];
 const [c1, c2] = (args.chars || 'you,you').split(',');
@@ -39,7 +39,7 @@ for (let g = 0; g < games; g++) {
     const opts = { chars, rng: engine.makeRng(seed0 * 100003 + g), size: args.size ? parseInt(args.size, 10) : undefined };
     if (args.deck || args.gears) {
         // テスト席にだけ指定のデッキ/ギア、相手は推奨（デッキを使う試合ではデッキ方式の手札になる）
-        const deckMod = require('./deck'), gearMod = require('./gear');
+        const deckMod = require('./shared/deck'), gearMod = require('./shared/gear');
         opts.decks = chars.map((c, seat) => (seat === test && args.deck ? args.deck.split(',').map(Number) : deckMod.recommendedDeck(c)));
         opts.gears = chars.map((c, seat) => (seat === test && args.gears ? (args.gears === 'none' ? [] : args.gears.split(',')) : gearMod.recommendedGears(c)));
     }

@@ -775,7 +775,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const plan = mk().planShikigami(b, 15, costs, [71, 0]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 14, costs, [71, 0])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 11, costs, [71, 0])?.win ?? false).toBe(false); // 式神を置くパッシブ（2体目以降の設置と一括が各-1）で総額が3安く、最低魔力は12
     });
 
     it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
@@ -784,7 +784,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const plan = mk().planShikigami(b, 15, flood, [73, 71]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 14, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
+        expect(mk().planShikigami(b, 13, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
         // 序盤（空きが多い）は式神一括が式神の数に比例して重く、盤面を埋めるコンボは撃てない
         const early = emptyBoard();
         put(early, 0, '⭕', 3);
@@ -799,9 +799,9 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(plan?.clicks.map((c) => c.skill)).toEqual([
             'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
         ]);
-        // 6魔力では足りない。特売が無ければ 7+8=15 必要
-        expect(mk().planShikigami(b, 6, withMd, [73, 71, 53])?.win ?? false).toBe(false);
-        expect(mk().planShikigami(b, 14, withMd, [73, 71])?.win ?? false).toBe(false);
+        // 5魔力では足りない。特売が無ければ（式神を置くパッシブで-1して）7+7=14 必要
+        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 13, withMd, [73, 71])?.win ?? false).toBe(false);
     });
 
     it('シャッフル探索: 勝てる盤面でコンボ札が揃わず、魔力が足りるなら引き直す。揃っているか魔力が足りなければ引き直さない', () => {
@@ -810,7 +810,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const ai = mk();
         ai.rerollsLeft = 8;
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、7+1 以上ある
-        expect(ai.makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
+        expect(ai.makeMove(b, 6, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
         expect(ai.makeMove(b, 8, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
         ai.rerollsLeft = 0;
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
@@ -1477,6 +1477,18 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeUndefined();
     });
 
+    it('陰陽師が魔女と戦うとき、一寸の虫に魂なし(92)が手札に無くデッキにあり、魔力に余裕があれば引き直す。手札にあれば固定する', () => {
+        const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
+        ai.rerollsLeft = 8;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 3, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined(); // シャッフルのあとに魔力3が残らない
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 92], false).reroll).toBeUndefined(); // 手札にある
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [0, 92, 71])).toEqual([92, 71]);
+        const noCard = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 71, 72, 73, 53, 12]); // デッキに92が無ければ探さない
+        noCard.rerollsLeft = 8;
+        expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
+    });
+
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
@@ -1534,5 +1546,42 @@ describe('氷室の番人の対魔女: 一寸の虫に魂なし(92)を探して�
         ai.rerollsLeft = 3;
         const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
         expect(r.reroll).toBeUndefined();
+    });
+});
+
+describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', () => {
+    const ai = new AIPlayer('💙', 'cryomancer', ['⭕']);
+    it('対策ロックは氷結中の自コマを対象にしない（氷室はロック=氷結で、同じコマを毎手番凍らせ続けていた）', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 2, effects: [{ effect: '❄' }] };
+        b[6] = { player: '💙', bind: 3, effects: [] };
+        expect(ai.findAntiNecroLockTarget(b)).toBe(6);
+        b[6] = { player: '💙', bind: 3, effects: [{ effect: '❄' }] };
+        expect(ai.findAntiNecroLockTarget(b)).toBeNull();
+    });
+    it('絶対零度は🔑ロック中の敵コマを数えない', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] }; });
+        expect(ai.shouldGlacier(b)).toBe(false);
+        [3, 4, 5].forEach((i) => put(b, i, '⭕', 4));
+        expect(ai.shouldGlacier(b)).toBe(true);
+    });
+});
+
+describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダメージを受けない）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const tac = () => new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'poisoner']);
+
+    it('軍師も氷結トークン(45)・氷結ダブルトークン(46)を撃つ', () => {
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
+        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
+    });
+    it('氷結トークンを手札に固定する（毎手番撃てるように）', () => {
+        expect(tac().chooseLocks(emptyBoard(), 0, 5, [45, 46, 3, 28])).toEqual(expect.arrayContaining([45]));
+    });
+    it('氷結札を使うのは軍師・氷室・毒使いだけ（巨人は撃たない）', () => {
+        const giant = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'poisoner']);
+        expect(giant.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
     });
 });

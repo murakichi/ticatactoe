@@ -7,8 +7,8 @@
  *   decayed=true: 自分の着手の直後の減衰(ライフ-1)と毒(1スタック=-1)を織り込む。置いた直後に相手が奪えるコマを拾う。
  */
 const engine = require('./engine');
-const thermal = require('./thermal');
-const { geometryForCells } = require('./geometry');
+const thermal = require('./shared/thermal');
+const { geometryForCells } = require('./shared/boardGeometry');
 
 const hasEff = (sq, e) => sq.effects.some((x) => x.effect === e);
 

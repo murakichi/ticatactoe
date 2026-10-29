@@ -3,7 +3,7 @@
 // ギア (sim/gear.js + engine.js) のテスト。実行: node sim/gear.test.js
 const assert = require('assert');
 const e = require('./engine');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -548,7 +548,7 @@ test('術中の加護: 帯電の発火も、🔥を付けた瞬間のダメー�
         const s = game([[], g]);
         s.board[6] = { player: C, bind: 9, effects: [] };
         e.spendMagic(s, 0, 'onClickAddLife');
-        const thermal = require('./thermal');
+        const thermal = require('./shared/thermal');
         thermal.ignite(s.board, [6], s.size);
         return s.board[6].bind;
     }

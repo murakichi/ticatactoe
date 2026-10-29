@@ -7,6 +7,10 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets } from './thermal';
 import { shouldDecay } from './decay';
+import { miasmaPlan as miasmaPlanOf } from './poison';
+import { stomp as stompOf } from './blast';
+import { NECROMANCY } from './turn';
+import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
@@ -26,8 +30,6 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
-const SHIKIGAMI_LIFE = 2;
-const SHIKIGAMI_BLAST_DAMAGE = 4;
 /** 氷室の番人が対ネクロで敵コマの奪取に付ける減点 (sim/ai.js noCapNecro) */
 const NO_CAP_NECRO_WEIGHT = 100;
 
@@ -426,18 +428,9 @@ class AIPlayer {
         return n;
     }
 
-    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数 (sim/engine.js miasmaPlan と同一) */
+    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数（Game・sim と共有の poison.ts） */
     private miasmaPlan(board: SquareInfo[]): Map<number, number> {
-        const geo = geometryForCells(board.length);
-        const plan = new Map<number, number>();
-        board.forEach((sq, i) => {
-            if (sq.player !== this.playerSymbol || !sq.effects.some((e) => e.effect === '☠')) return;
-            for (const j of geo.surroundRange(i)) {
-                const t = board[j];
-                if (t.player && t.player !== this.playerSymbol && !isGuarded(t, this.characters)) plan.set(j, (plan.get(j) ?? 0) + 1);
-            }
-        });
-        return plan;
+        return miasmaPlanOf(board, this.playerSymbol, this.characters);
     }
 
     /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (sim/ai.js miasmaScore と同一) */
@@ -940,7 +933,8 @@ class AIPlayer {
             idxs.filter((i) => this.isEnemy(board[i].player) && !isFrozen(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
 
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
-        const tokenIdx = [3, 4, 9, 11];
+        // 軍師は氷結トークン(45/46)も固定する: 凍ったコマは☠🔥のダメージを受けない (sim/ai.js の taFrostLock=1。全相手 61→66%)
+        const tokenIdx = [3, 4, 9, 11, 45, 46];
         const budsIdx = [2, 10];
         // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
         const poisonerTokenIdx = [3, 9, 11, 16];
@@ -1100,7 +1094,7 @@ class AIPlayer {
         if (oppReaches === 0) {
             // ネクロマンサー蘇生: 墓地が貯まり召喚が見込める or 吸収対象が複数いるなら発動
             if (this.character === 'necromancer' && necroRemain === 0 && remaining >= necroPay) {
-                const corpses = 10 - necroCost; // baseNecromancyCost=10。軽減量=墓地の死体数=召喚数
+                const corpses = NECROMANCY.baseCost - necroCost; // 軽減量=墓地の死体数=召喚数
                 let absorbable = 0;
                 for (const sq of board) {
                     if (this.isEnemy(sq.player) && sq.bind >= 1 && sq.bind <= 4 && !sq.effects.some(e => e.effect === '🔑')) absorbable++;
@@ -1248,7 +1242,9 @@ class AIPlayer {
         // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
         const freeCells = findEmptyIndexes(board).length;
         const cryo = this.character === 'cryomancer' || this.character === 'poisoner'; // 毒使いも氷結札を使う(自陣の毒マスを凍らせる。sim F.cryoPoison)
-        if (cryo && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
+        // 軍師も氷結札(霜降り・氷結トークン)を使う: 凍ったコマは☠🔥のダメージを受けず、毒使い・鍛冶師に強くなる (sim/ai.js の taFrost=1。全相手 49.4→60.8%)
+        const frostUse = cryo || this.character === 'tactician';
+        if (frostUse && availableSkills.includes(48) && frostfallTargets(board, this.playerSymbol).length >= 2) {
             spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
         }
         // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。sim/ai.js と同一）
@@ -1301,9 +1297,9 @@ class AIPlayer {
                 && board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length < SH_MAX
                 && remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + SH_RESERVE) {
                 spend(this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
-            } else if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
+            } else if (frostUse && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
-            } else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
+            } else if (frostUse && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
                 spend(this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken'), 'onClickFrostToken');
             } else if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
@@ -1439,7 +1435,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
@@ -1478,13 +1475,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        for (const idx of geometryForCells(board.length).stompRange(i)) {
-            if (nb[idx].player === player) { nb[idx] = applyDamage(nb[idx], 5, 'skill').sq; continue; }
-            const guard = absorbDestroy(nb[idx]);
-            if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
-            nb[idx] = { player: undefined, bind: 0, effects: [] };
-        }
-        if (nb[i].player === undefined && !emptyBlocked(nb[i])) nb[i] = { player, bind: life, effects: [] };
+        stompOf(nb, i, player, life);
         return nb;
     }
 
@@ -1586,7 +1577,8 @@ class AIPlayer {
         const f = best(this.calculateAICost(costs.onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'));
         // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
         const nAfterFlood = board.filter((sq) => (sq.player === this.playerSymbol && isShikigami(sq)) || (!sq.player && !emptyBlocked(sq))).length;
-        const a = best(this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
+        // 百鬼夜行で式神を置くと、以降のスキルは-1（陰陽師のパッシブ。sim/ai.js comboPlan と同一）
+        const a = best(Math.max(1, this.calculateAICost(costs.onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll') - 1));
         return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
     }
 
@@ -1624,16 +1616,7 @@ class AIPlayer {
 
     /** 爆破の盤面反映（Game.tsx exeShikigamiBlast と同じ） */
     private applyShikigamiBlast(board: SquareInfo[], i: number): void {
-        const geo = geometryForCells(board.length);
-        board[i] = { player: undefined, bind: 0, effects: [] };
-        for (const j of geo.surroundRange(i)) {
-            const sq = board[j];
-            if (!sq.player) { if (!emptyBlocked(sq)) board[j] = { player: this.playerSymbol, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] }; continue; }
-            if (sq.player === this.playerSymbol || isGuarded(sq, this.characters)) continue;
-            const hit = applyDamage(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill');
-            if (hit.blocked) { board[j] = hit.sq; continue; }
-            board[j] = hit.sq.bind < 1 ? { player: undefined, bind: 0, effects: [] } : hit.sq;
-        }
+        shikigamiBlast(board, i, this.playerSymbol, this.characters);
     }
 
     /**
@@ -1688,7 +1671,10 @@ class AIPlayer {
                         else empties.push(idx);
                     }
                     if (bad || real < SH_COMBO_REAL || shiki + empties.length === 0) continue;
-                    const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+                    // 式神を置く手番は全スキル-1（陰陽師のパッシブ）: 設置は各1安く、式神一括も1安い
+                    const placeSum = empties.length * placeCost; // 設置自身も-1（calculateAICost が含む）
+                    const allSum = empties.length > 0 ? Math.max(1, allCostFor(ownShiki + empties.length) - 1) : allCostFor(ownShiki + empties.length);
+                    const total = placeSum + allSum + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
                     if (m < total) continue;
                     if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
                 }
@@ -1813,6 +1799,12 @@ class AIPlayer {
         if (facesWitch && this.character === 'cryomancer' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
             && smallFryTargets(board, this.playerSymbol, this.characters).length >= 2
             && magic >= costs.onClickShuffle + this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
+            return { move: null, skills: [], reroll: {} };
+        }
+        // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
+        // （見つけた92は chooseLocks が魔女戦で固定する。sim/ai.js の yinDig。本番AI 対魔女 55%(124/227) → 66%(109/166)）
+        if (facesWitch && this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
+            && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }
         if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
