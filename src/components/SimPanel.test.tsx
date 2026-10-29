@@ -43,7 +43,7 @@ describe('SimPanel', () => {
         render(<SimPanel names={names} initialPlayers={2} initialBoardSize='auto' onBack={() => {}} />);
         fireEvent.click(screen.getByRole('button', { name: /シミュレート開始/ }));
         const w = FakeWorker.last!;
-        expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'faithful', skills: true, gears: true });
+        expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'prod', skills: true, gears: true });
         act(() => w.emit({ type: 'progress', summary, matchups, analysis, drift: 0.01, elapsed: 2 }));
         expect(screen.getByText('giantが突出しています')).toBeTruthy(); // 結論
         expect(screen.getAllByText('👹 巨人', { selector: 'th[scope=row]' })).toHaveLength(3); // 結論表・キャラ別表・対面表

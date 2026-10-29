@@ -5,6 +5,7 @@
  */
 const engine = require('./engine');
 const ai = require('./ai');
+const aiDriver = require('./aiDriver');
 const deckMod = require('./shared/deck');
 const gearMod = require('./shared/gear');
 const { CHARACTERS } = engine;
@@ -34,6 +35,8 @@ function runGame(chars, rng, modes, size, tracker, opts = {}) {
     let guard = 0;
     while (!s.winner && guard++ < limit) {
         if (trk && s.currentTurn !== seenTurn) { seenTurn = s.currentTurn; trk.onTurnChange(s); }
+        // mode 'prod' は本番のAI(AIPlayer.ts の生成物)で1手番を最後まで進める。それ以外は sim 版AI(ai.js)
+        if (modeOf(s.turn) === 'prod') { if (opts.skills === false) aiDriver.playPlaceOnly(s); else aiDriver.playTurn(s); continue; }
         const result = opts.skills === false ? { move: ai.getEnhancedBestMove(s), turnEnded: false } : ai.makeMove(s, modeOf(s.turn));
         if (result.turnEnded) continue;
         if (result.move === null) break;
@@ -42,7 +45,7 @@ function runGame(chars, rng, modes, size, tracker, opts = {}) {
         if (s.currentTurn === before) break;
     }
     if (trk) trk.onTurnChange(s);
-    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn };
+    return { winner: s.winner, winnerSeat: s.winner ? engine.seatOf(s.winner) : -1, turns: s.currentTurn, stats: s.stats };
 }
 
 

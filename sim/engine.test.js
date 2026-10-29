@@ -661,6 +661,18 @@ test('多人数: AIだけで3〜8人の試合が最後まで進む', () => {
     }
 });
 
+test('本番のAI(aiDriver): 2〜4人戦が最後まで進み、手番が止まらない（行き詰まりチャージが出ない）', () => {
+    const aiDriver = require('./aiDriver');
+    const { runGame } = require('./run');
+    const cases = [['witch', 'giant'], ['poisoner', 'magician'], ['you', 'tactician', 'electrician'], ['cryomancer', 'pyromancer', 'yinYangMaster', 'necromancer']];
+    cases.forEach((chars, k) => {
+        const r = runGame(chars, e.makeRng(100 + k), 'prod', undefined, null, { deck: true, gears: true });
+        assert.ok(r.turns > 3, chars.join('/') + ' が進んだ');
+        assert.ok(!(r.stats.aiStall > 0), `${chars.join('/')}: 行き詰まり ${r.stats.aiStall}`);
+    });
+    assert.strictEqual(typeof aiDriver.playTurn, 'function');
+});
+
 // ---- 帯電 ⚡ (雷霆の巫, #39) ----
 const zap = () => ({ player: undefined, bind: 0, effects: [{ effect: '⚡' }] });
 

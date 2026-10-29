@@ -5,6 +5,7 @@ import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
+import { planAITurn, resolveMoveCell } from './aiTurn';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
 import { isUniqueEffect } from './UniqueEffects';
@@ -450,11 +451,11 @@ export const Game = (props: GameProps) => {
                     return;
                 }
                 if (typeof next === 'string') executeSkillForAI(next);
-                else if (rest.length === 0 && currentAI && (isShielded(currentBoard[next], characters) || emptyBlocked(currentBoard[next]))) {
+                else if (rest.length === 0 && currentAI) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
                     // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
-                    const alt = currentAI.getBestMove(currentBoard, life);
-                    if (alt !== null) onCellClick(alt);
+                    const cell = resolveMoveCell(currentAI, currentBoard, characters, life, next);
+                    if (cell !== null) onCellClick(cell);
                     else onClickCharge();
                 } else onCellClick(next);
                 setPendingAIMove(rest.length > 0 ? rest : null);
@@ -465,113 +466,76 @@ export const Game = (props: GameProps) => {
 
     const runAIMove = () => {
         const ai = currentAI!;
-        const currentMagic = magic[turnSeat];
-        // 敵が複数いるときは最も魔力の多い相手を基準にする（2人戦なら従来どおり相手の魔力）
-        const oppMagic = Math.max(...otherSeats(turnSeat).map((i) => magic[i]));
-        const currentSkills = skills;
-        ai.placements = placements;
-        ai.seatCount = seatCount;
+        // 状態をAIに渡して手番の計画を作る部分は aiTurn.ts（sim と共有）。ここはその計画を React の状態とタイマー付きキューで実行する
+        const plan = planAITurn(
+            ai,
+            {
+                board: currentBoard,
+                characters,
+                seat: turnSeat,
+                magic,
+                costs: seatCosts,
+                hand: skills,
+                life,
+                tokenUsed: useToken,
+                necroRemain: remainNecro[turnSeat],
+                necroCosts: necroCost,
+                necroPay: gearCost(necroCost[turnSeat]),
+                judgeDayCost,
+                totalAssaultCost,
+                proliferate: proliferate[turnSeat],
+                placements,
+                seatCount,
+                lastStandReady: hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat],
+                tokenFree: gearTurn.current.tokenFree[turnSeat],
+                chargeBuffActive: chargeBuff[turnSeat] > 0,
+                oppGearCount: otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0),
+                oppLastStand: otherSeats(turnSeat).some((seat) => hasGear(gearsBySeat[seat], 'lastStand') && !lastStandUsed.current[seat]),
+                yinYangMode: currentYinYangMode === 'yang' ? 'yang' : 'ying',
+                silenced: silenced[turnSeat],
+                glacierPending: glacierPending[turnSeat],
+                glacierCharge: glacierCharge[turnSeat],
+                budGuard: budGuard[turnSeat],
+                infernoReady: gearTurn.current.infernoReady[turnSeat],
+                skillKinds: gearTurn.current.kinds[turnSeat],
+                rerollsLeft: aiReroll.current.left,
+                discountActive: aiReroll.current.started,
+                lifeBan: lifeBan[turnSeat],
+                tokenBind: calculateTokenBind(),
+            },
+            () => randomPick(hailMaryChoices).name
+        );
 
-        const aiNecroRemain = remainNecro[turnSeat];
-        const aiNecroCost = necroCost[turnSeat];
-        const aiProliferate = proliferate[turnSeat];
-
-        ai.lastStandReady = hasGear(gearsBySeat[turnSeat], 'lastStand') && !lastStandUsed.current[turnSeat];
-        ai.tokenFree = gearTurn.current.tokenFree[turnSeat];
-        // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
-        ai.chargeBuffActive = chargeBuff[turnSeat] > 0;
-        ai.oppGearCount = otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0);
-        ai.oppLastStand = otherSeats(turnSeat).some((seat) => hasGear(gearsBySeat[seat], 'lastStand') && !lastStandUsed.current[seat]);
-        ai.yinYangMode = currentYinYangMode === 'yang' ? 'yang' : 'ying';
-        // サイレンス中はスキルを使えない: 通常の着手だけ行う
-        if (silenced[turnSeat]) {
-            ai.updateShield(currentBoard);
-            const move = ai.getBestMove(currentBoard, life);
-            if (move !== null && !moveBlocked(lifeBan[turnSeat], life)) onCellClick(move);
-            else if (moveBlocked(lifeBan[turnSeat], life)) onClickCharge();
+        if (plan.kind === 'silenced') {
+            if (plan.move !== null) onCellClick(plan.move);
+            else if (plan.charge) onClickCharge();
             return;
         }
-        ai.glacierPending = glacierPending[turnSeat];
-        ai.glacierCharge = glacierCharge[turnSeat];
-        ai.budGuard = budGuard[turnSeat];
-        ai.infernoReady = gearTurn.current.infernoReady[turnSeat];
-        ai.skillKinds = gearTurn.current.kinds[turnSeat];
-        ai.rerollsLeft = aiReroll.current.left;
-        ai.discountActive = aiReroll.current.started;
-        const result = ai.makeMove(currentBoard, currentMagic, seatCosts, oppMagic, life, currentSkills, useToken, aiNecroRemain, aiNecroCost, judgeDayCost, totalAssaultCost, aiProliferate, magic, gearCost(aiNecroCost), necroCost);
+        setLockedSkillsAt(turnSeat, plan.locks);
 
-        // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
-        // （氷室の番人はロックの代わりに氷結を撃つので、氷結が付けられるかで見る）
-        const canMark = (t: number) => (currentCharacter === 'cryomancer' ? canFreeze(currentBoard[t]) : lockable(currentBoard[t]));
-        if (result.lockTargets?.some((t) => !canMark(t))) {
-            result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
-            result.lockTargets = undefined;
-        }
-
-        // 一寸の虫に魂なし: ライフ3以下のコマは置けないので、通常の着手と置くスキルをやめる（残りが無ければ下でチャージ）
-        if (lifeBan[turnSeat]) {
-            result.skills = result.skills.filter((sk) => !placeBlocked(true, sk, calculateTokenBind()));
-            if (moveBlocked(true, life)) result.move = null;
-        }
-
-        // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）[要検証]
-        const aiLocks = ai.chooseLocks(currentBoard, oppMagic, life, currentSkills);
-        setLockedSkillsAt(turnSeat, aiLocks);
-
-        // 魔法使い: 撃てるスキルが無いので、軽減札を撃ってから1コストで手札を引き直し、新しい手札で計画し直す
-        if (result.reroll) {
+        if (plan.kind === 'reroll') {
             aiReroll.current = { left: aiReroll.current.left - 1, started: true };
-            const steps: string[] = [];
-            if (result.reroll.discount) steps.push(result.reroll.discount);
-            steps.push('onClickShuffle', 'aiReplan');
-            setPendingAIMove(steps);
+            setPendingAIMove(plan.steps);
+            return;
+        }
+        if (plan.kind === 'queue') {
+            setPendingAIMove(plan.steps);
             return;
         }
 
-        // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選んでキューに積む
-        if (result.hailMary) {
-            const picked = randomPick(hailMaryChoices);
-            const plan = ai.planHailMary(currentBoard, picked.name, life);
-            const steps: (number | string)[] = [`onClickHailMary:${picked.name}`];
-            if (plan.target !== null) steps.push(plan.target);
-            if (plan.move !== null) steps.push(plan.move);
-            setPendingAIMove(steps);
-            return;
-        }
-
-        // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも
-        // 盤面への反映順を保つため同じキューに積む (sim/ai.js の faithfulMakeMove と同じ順序)
-        if (result.chargeClicks && result.chargeClicks.length > 0) {
-            const steps: (number | string)[] = [];
-            for (const c of result.chargeClicks) {
-                steps.push(c.skill);
-                if (c.target !== undefined) steps.push(c.target);
-            }
-            steps.push(...result.skills);
-            if (result.lockTargets) steps.push(...result.lockTargets);
-            if (result.stompTarget !== undefined) steps.push(result.stompTarget);
-            if (result.move !== null) steps.push(result.move);
-            setPendingAIMove(steps);
-            return;
-        }
-
-        for (const sk of result.skills) {
+        for (const sk of plan.skills) {
             executeSkillForAI(sk);
         }
 
-        const pendingClicks: number[] = [];
-        if (result.lockTargets) pendingClicks.push(...result.lockTargets);
-        if (result.stompTarget !== undefined) pendingClicks.push(result.stompTarget);
-        if (result.move !== null) pendingClicks.push(result.move);
-
+        const pendingClicks = plan.clicks;
         if (pendingClicks.length > 0) {
-            if (result.skills.length > 0) {
+            if (plan.skills.length > 0) {
                 setPendingAIMove(pendingClicks);
             } else {
                 onCellClick(pendingClicks[0]);
                 if (pendingClicks.length > 1) setPendingAIMove(pendingClicks.slice(1));
             }
-        } else if (result.skills.length === 0) {
+        } else if (plan.chargeWhenEmpty) {
             // 置ける場所もスキルもなければチャージで手番を終える（何もしないと進行不能になる）
             onClickCharge();
         }
@@ -741,6 +705,25 @@ export const Game = (props: GameProps) => {
         const nextSeat = judgeNextSeat();
         const nextCharacter = characters[nextSeat];
         const nextSymbol = symbols[nextSeat];
+        // 「次のクリックで対象を選ぶ」待ち状態は手番をまたがない（ターン終了スキルで手番が終わったとき、次の席の最初のクリックが前の席のスキルの対象にならないように）
+        setUseLock(0);
+        setUseFreeze(false);
+        setUseSucker(false);
+        setUseIgnite(false);
+        setUseSwidden(false);
+        setUseSacrifice(false);
+        setUseKimon(false);
+        setUseStash(false);
+        setUseThunderFire(false);
+        setUseFrostArea(false);
+        setUseIcicle(false);
+        setUseFreezeSpread(false);
+        setUseShatter(false);
+        setUseShikigamiPlace(false);
+        setUseShikigamiBlast(false);
+        setUseShikigamiBless(false);
+        setUseShikigamiCurse(false);
+        setUseShikigamiPurge(false);
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
         let scorchForNext = 0;
         if (gearTurn.current.processedTurn !== currentTurn) {

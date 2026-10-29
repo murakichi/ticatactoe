@@ -643,7 +643,15 @@ function settleWinner(s) {
 }
 
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
+// 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
+// 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+function clearPendingTargets(s) {
+    for (const k of PENDING_TARGET_FLAGS) s[k] = false;
+    s.useLock = 0;
+}
 function advanceTurn(s) {
+    clearPendingTargets(s);
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
     s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
@@ -1925,21 +1933,25 @@ function exeJammer(s, i) {
 
 // ヘイルメアリー (idx 27): 陰陽転化を除く固有スキルを追加コストなしでランダム発動 [FAITHFUL] Game.tsx onClickHailMary
 // 対象選択が要るもの(ストンプ/審判の日/帯電拡散)は use* フラグを立てるだけ。ミアズマは対象選択が無いのでその場で発動。対象クリックは呼び出し側(AI)の責任
-function onClickHailMary(s) {
+// 当選するスキル。名前と順序は Game.tsx の hailMaryChoices と同じ（AI が当選に合わせて対象を決める aiTurn.ts が名前で指定する）
+const HAIL_MARY_CHOICES = [
+    ['全軍突撃', (s) => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; }],
+    ['ストンプ', (s) => { s.useStomp = true; }],
+    ['審判の日', (s) => { s.useJudgeDay = true; }],
+    ['式神設置', (s) => { s.useShikigamiPlace = true; }],
+    ['蘇生', (s) => {
+        summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
+        if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
+    }],
+    ['ミアズマ', (s) => exeMiasma(s)],
+    ['帯電拡散', (s) => { s.useChargeSpread = true; }],
+];
+const HAIL_MARY_NAMES = HAIL_MARY_CHOICES.map(([name]) => name);
+// forcedName: AI が事前に対象を決めた当選スキル。省略時は rng で選ぶ
+function onClickHailMary(s, forcedName) {
     spendMagic(s, calculateCost(s, costsOf(s).onClickHailMary, false, false, 'onClickHailMary'), 'onClickHailMary');
-    const choices = [
-        () => { s.useAssault[s.turn] = 3; s.useTokenCount[s.turn] = 0; },
-        () => { s.useStomp = true; },
-        () => { s.useJudgeDay = true; },
-        () => { s.useShikigamiPlace = true; },
-        () => {
-            summonCorpses(s, Math.max(...s.necroCost.map((c) => baseNecromancyCost - c)));
-            if (curChar(s) === 'necromancer') { s.remainNecro[s.turn] = necromancyDuration; s.necroCost[s.turn] = baseNecromancyCost; }
-        },
-        () => exeMiasma(s),
-        () => { s.useChargeSpread = true; },
-    ];
-    choices[Math.floor(s.rng() * choices.length)]();
+    const forced = HAIL_MARY_CHOICES.find(([name]) => name === forcedName);
+    (forced || HAIL_MARY_CHOICES[Math.floor(s.rng() * HAIL_MARY_CHOICES.length)])[1](s);
 }
 
 // サイレンス (idx 28): 自分以外の全席を次の手番スキル禁止にする [FAITHFUL] Game.tsx onClickSilence
@@ -2665,7 +2677,7 @@ module.exports = {
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE, smallFryDestroyable,
-    newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
+    HAIL_MARY_NAMES, onClickHailMary, bumpStat, calculateTokenBind, newGame, placeMove, advanceTurn, judgeNextSeat, judgeNextIsHeart, shouldDecay, lateMagicBonus, renderBoard,
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,

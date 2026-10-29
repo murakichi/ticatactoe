@@ -102,7 +102,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
             cmd: 'start',
             players,
             size: boardChoice === 'auto' ? undefined : boardChoice,
-            mode: 'faithful',
+            mode: 'prod',
             seed: Math.floor(Math.random() * 1e6),
             fixedChars: null,
             skills: useSkills,

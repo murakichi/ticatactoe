@@ -90,7 +90,7 @@ function pairTally(a, b, cfgA, cfgB, mods, from, to, seedBase) {
 // ---- ワーカー（子プロセス）----
 if (args.worker) {
     const job = JSON.parse(process.env.TOP_JOB || '{}');
-    const base = require(path.resolve(__dirname, 'ai.js'));
+    const base = require(path.resolve(__dirname, 'aiSelect.js'));
     const mods = { base, A: job.modA ? require(path.resolve(__dirname, job.modA)) : base };
     const out = [];
     for (const t of job.tasks) {

@@ -6,7 +6,7 @@
  * 使い方: node sim/probe-cost.js --skill 62 --name leafToken --char you --opp giant --games 300 --seed 1
  */
 const engine = require('./engine');
-const ai = require('./ai');
+const ai = require('./aiSelect');
 const deckMod = require('./shared/deck');
 const gearMod = require('./shared/gear');
 const args = {};
