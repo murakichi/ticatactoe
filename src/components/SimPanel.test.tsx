@@ -71,7 +71,7 @@ describe('SimPanel', () => {
         await clickStart();
         const ws = FakeWorker.all;
         expect(ws.length).toBeGreaterThanOrEqual(1);
-        ws.forEach((w, k) => expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'faithful', skills: true, gears: true, offset: k, stride: ws.length }));
+        ws.forEach((w, k) => expect(w.posted[0]).toMatchObject({ cmd: 'start', players: 2, mode: 'prod', skills: true, gears: true, offset: k, stride: ws.length }));
         act(() => ws.forEach((w) => w.emit({ type: 'raw', stats: rawStats })));
         act(() => { jest.advanceTimersByTime(500); });
         expect(aggregateCalls[0].parts).toHaveLength(ws.length);

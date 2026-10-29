@@ -28,8 +28,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const engine = require('./engine');
-const gearMod = require('./gear');
-const deckMod = require('./deck');
+const gearMod = require('./shared/gear');
+const deckMod = require('./shared/deck');
 const live = require('./live');
 
 const args = {};
@@ -95,7 +95,7 @@ function pairTally(a, b, cfgA, cfgB, mods, from, to, seedBase) {
 // ---- ワーカー（子プロセス）----
 if (args.worker) {
     const job = JSON.parse(process.env.TOP_JOB || '{}');
-    const base = require(path.resolve(__dirname, 'ai.js'));
+    const base = require(path.resolve(__dirname, 'aiSelect.js'));
     const mods = { base, A: job.modA ? require(path.resolve(__dirname, job.modA)) : base };
     const out = [];
     for (const t of job.tasks) {

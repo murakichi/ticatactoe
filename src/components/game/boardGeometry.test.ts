@@ -103,27 +103,6 @@ describe('可変サイズの範囲スキル', () => {
     });
 });
 
-describe('sim/geometry.js（ヘッドレス版の複製）と一致する', () => {
-    // sim は依存ゼロの素のNodeで import できないため生成式を複製している。ずれたらここで落ちる
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const simGeo = require('../../../sim/geometry');
-    it.each([4, 5, 6, 7, 8, 9, 10])('%ix%i', (size) => {
-        const a = geometryOf(size);
-        const b = simGeo.geometryOf(size);
-        expect(b.winLines).toEqual(a.winLines);
-        expect(b.antiDiagonal).toEqual(a.antiDiagonal);
-        expect(b.mainDiagonal).toEqual(a.mainDiagonal);
-        for (let i = 0; i < size * size; i++) {
-            expect(sorted(b.stompRange(i))).toEqual(sorted(a.stompRange(i)));
-            expect(sorted(b.judgeRange(i))).toEqual(sorted(a.judgeRange(i)));
-            expect(sorted(b.surroundRange(i))).toEqual(sorted(a.surroundRange(i)));
-        }
-    });
-    it.each([2, 3, 4, 5, 6, 7, 8])('boardSizeFor(%i)', (n) => {
-        expect(simGeo.boardSizeFor(n)).toBe(boardSizeFor(n));
-    });
-});
-
 describe('盤面サイズの選択 (4〜10)', () => {
     it('範囲は4〜10で、範囲外は丸める', () => {
         expect(MIN_BOARD_SIZE).toBe(4);
