@@ -55,6 +55,9 @@ import { Status } from './Status';
 import styles from './Game.module.css';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
+/** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
+const SHIKIGAMI_PLACING_KEYS: ReadonlySet<string> = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
+
 /** 式神の供犠: 自陣の式神がこの数以上なら0コスト（sim/engine.js の SHIKIGAMI_PURGE_FREE と同値） */
 const SHIKIGAMI_PURGE_FREE = 3;
 
@@ -201,8 +204,8 @@ export const Game = (props: GameProps) => {
         const leafAdd = withLeaf ? leafSurcharge(currentBoard, symbols[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
         const cut = seat === turnSeat ? comboCut(skillKey, currentBoard, symbols[seat], gearTurn.current.leafBase[seat], gearTurn.current.kinds[seat], gearTurn.current.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
         let adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost + leafAdd, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // カウント型の導線は下限1
-        // 陰陽師のパッシブ: 式神を置いた手番は、以降の全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。sim/engine.js gearCost と同値
-        if (seat === turnSeat && characters[seat] === 'yinYangMaster' && gearTurn.current.shikiPlaced[seat] && adjusted > 1) adjusted -= 1;
+        // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1。sim/engine.js gearCost と同値
+        if (seat === turnSeat && characters[seat] === 'yinYangMaster' && (gearTurn.current.shikiPlaced[seat] || (!!skillKey && SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1) adjusted -= 1;
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         if (skillKey === 'onClickFireWheel' && seat === turnSeat && fireStacksTotal(currentBoard) > gearTurn.current.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0

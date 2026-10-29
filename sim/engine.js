@@ -694,12 +694,14 @@ function gearCtx(s, seat) {
 }
 /** キャラ補正済みのコストにギアの補正を掛ける */
 // withLeaf: 敵の🍂の増加分を、ギアの補正・割引より先に足す（増加分→減少分の順）。calculateCost は characterCost の中で足し済みなので false で呼ぶ
+// 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い）
+const SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
 function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true) {
     const leafAdd = withLeaf ? thermal.leafSurcharge(s.board, SYMBOLS[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = seat === s.turn ? comboMod.comboCut(key, s.board, SYMBOLS[seat], s.leafBase[seat], s.skillKinds[seat], s.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
     let adjusted = Math.max(comboMod.comboFloor(key), gear.adjustCostByGear(cost + leafAdd, s.gears[seat], gearCtx(s, seat), isToken, key) - cut); // カウント型の導線は下限1
-    // 陰陽師のパッシブ: 式神を置いた手番は、以降の全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。Game.tsx gearCost と同値
-    if (seat === s.turn && s.chars[seat] === 'yinYangMaster' && s.shikiPlaced[seat] && adjusted > 1) adjusted -= 1;
+    // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1。Game.tsx gearCost と同値
+    if (seat === s.turn && s.chars[seat] === 'yinYangMaster' && (s.shikiPlaced[seat] || SHIKIGAMI_PLACING_KEYS.has(key)) && adjusted > 1) adjusted -= 1;
     if (key === 'onClickShikigamiPurge' && seat === s.turn && ownShikigamiCells(s).length >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (key === 'onClickCounterMarkdown' && s.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (isToken && seat === s.turn && s.tokenFree[seat]) return 0; // 無礼講: この手番、トークン系スキルのコストは0
