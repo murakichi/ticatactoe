@@ -103,6 +103,10 @@ const SKILL_CATALOG = [
     { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami' },
     { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami' },
     { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
+    { idx: 93, name: '初霜', icon: '🧊', category: 'ice' },
+    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire' },
+    { idx: 96, name: '無礼講', icon: '🎉', category: 'support' },
 ];
 
 
@@ -112,10 +116,10 @@ const CATALOG_SIZE = SKILL_CATALOG.length;
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 9, 11, 12, 16, 23, 28, 37, 45, 46, 55, 64],
+    tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
     magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
     electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],

@@ -10,19 +10,20 @@ import { absorbDestroy } from './thermal';
 export const LIFE_BAN_MAX = 3;
 
 /** コマを新しく置くスキル（コストキー）。縛られた席は、置くコマのライフが LIFE_BAN_MAX 以下なら使えない。
- *  蘇生・全軍突撃・写し身など、ほかの手段で置かれるコマは対象外 */
+ *  ネクロマンサーの蘇生（ライフ2のコマを召喚）も対象。全軍突撃・写し身など、ほかの手段で置かれるコマは対象外 */
 export const LIFE_BAN_PLACING_KEYS: ReadonlySet<string> = new Set([
     'onClickToken', 'onClickDoubleToken', 'onClickBothToken', 'onClickBudsToken', 'onClickPoisonToken',
     'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickFlameToken', 'onClickDoubleFlameToken',
-    'onClickFrostToken', 'onClickDoubleFrostToken',
+    'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
     'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken',
     'onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood',
+    'onClickNecromancy',
 ]);
 
-/** そのスキルが置くコマのライフ。式神は固定（設置・ランダム=2、百鬼夜行=0）、それ以外はトークンのライフ */
+/** そのスキルが置くコマのライフ。式神は固定（設置・ランダム=2、百鬼夜行=0）、蘇生は召喚するコマのライフ2、それ以外はトークンのライフ */
 export const placedLifeOf = (key: string, tokenBind: number): number => {
     if (key === 'onClickShikigamiFlood') return 0;
-    if (key === 'onClickShikigamiPlace' || key === 'onClickShikigamiRandom') return 2;
+    if (key === 'onClickShikigamiPlace' || key === 'onClickShikigamiRandom' || key === 'onClickNecromancy') return 2;
     return tokenBind;
 };
 

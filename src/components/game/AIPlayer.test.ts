@@ -775,7 +775,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const plan = mk().planShikigami(b, 15, costs, [71, 0]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiPlace', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 14, costs, [71, 0])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 11, costs, [71, 0])?.win ?? false).toBe(false); // 式神を置くパッシブ（2体目以降の設置と一括が各-1）で総額が3安く、最低魔力は12
     });
 
     it('百鬼夜行+式神一括: 空きマスを全て自コマにして列が完成するなら一手番でコンボを撃つ', () => {
@@ -784,7 +784,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const plan = mk().planShikigami(b, 15, flood, [73, 71]);
         expect(plan?.win).toBe(true);
         expect(plan?.clicks.map((c) => c.skill)).toEqual(['onClickShikigamiFlood', 'onClickShikigamiAll']);
-        expect(mk().planShikigami(b, 14, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
+        expect(mk().planShikigami(b, 13, flood, [73, 71])?.win ?? false).toBe(false); // 魔力が足りない
         // 序盤（空きが多い）は式神一括が式神の数に比例して重く、盤面を埋めるコンボは撃てない
         const early = emptyBoard();
         put(early, 0, '⭕', 3);
@@ -799,9 +799,9 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         expect(plan?.clicks.map((c) => c.skill)).toEqual([
             'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiFlood', 'onClickMarkdown', 'onClickMarkdown', 'onClickShikigamiAll',
         ]);
-        // 6魔力では足りない。特売が無ければ 7+8=15 必要
-        expect(mk().planShikigami(b, 6, withMd, [73, 71, 53])?.win ?? false).toBe(false);
-        expect(mk().planShikigami(b, 14, withMd, [73, 71])?.win ?? false).toBe(false);
+        // 5魔力では足りない。特売が無ければ（式神を置くパッシブで-1して）7+7=14 必要
+        expect(mk().planShikigami(b, 5, withMd, [73, 71, 53])?.win ?? false).toBe(false);
+        expect(mk().planShikigami(b, 13, withMd, [73, 71])?.win ?? false).toBe(false);
     });
 
     it('シャッフル探索: 勝てる盤面でコンボ札が揃わず、魔力が足りるなら引き直す。揃っているか魔力が足りなければ引き直さない', () => {
@@ -810,7 +810,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
         const ai = mk();
         ai.rerollsLeft = 8;
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeDefined(); // 札が無く、7+1 以上ある
-        expect(ai.makeMove(b, 7, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
+        expect(ai.makeMove(b, 6, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 魔力が足りない
         expect(ai.makeMove(b, 8, dig, 3, 2, [71, 73, 53], false).reroll).toBeUndefined(); // 揃っている
         ai.rerollsLeft = 0;
         expect(ai.makeMove(b, 8, dig, 3, 2, [2, 0, 3], false).reroll).toBeUndefined(); // 引き直しの回数切れ
@@ -1448,5 +1448,61 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
     it('ほかの相手なら従来どおり審判の日を撃つ（ロックを先にしない）', () => {
         expect(planOf('tactician').skills).toContain('onClickJudgeDay');
         expect(lockTargetsOf('tactician')).toEqual([]);
+    });
+});
+
+describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・無礼講・一寸の虫に魂なし)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const mk = (me: string, foe: string, deck?: number[]) => new AIPlayer('💙', me as 'you', ['⭕'], [me, foe] as never, undefined, false, false, deck);
+    const leafBoard = (): SquareInfo[] => {
+        const b = emptyBoard();
+        b[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        return b;
+    };
+
+    it('魔女が相手のとき、初霜/吹き寄せ/山焼きを手札に固定する。魔女以外が相手なら固定しない', () => {
+        const hand = [93, 94, 95, 3];
+        expect(mk('you', 'witch').chooseLocks(emptyBoard(), 0, 5, hand)).toEqual(expect.arrayContaining([93, 94]));
+        expect(mk('you', 'giant').chooseLocks(emptyBoard(), 0, 5, hand)).not.toContain(93);
+    });
+
+    it('魔女が相手で、新スキルが手札に無くデッキにあり、魔力に余裕があれば引き直す。手札にあれば引き直さない', () => {
+        const ai = mk('tactician', 'witch', [3, 9, 93, 94, 95]);
+        ai.rerollsLeft = 2;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 93, 11], false).reroll).toBeUndefined();
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeUndefined();
+    });
+
+    it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
+        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
+        const one = emptyBoard();
+        one[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
+        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
+    });
+
+    it('高いトークンを撃つ予定なら、先に無礼講を撃つ（トークンが無礼講より安いときは撃たない）', () => {
+        const r = mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills;
+        expect(r.indexOf('onClickFreeToken')).toBeGreaterThanOrEqual(0);
+        expect(r.indexOf('onClickFreeToken')).toBeLessThan(r.indexOf('onClickBurnOff'));
+        const cheap = mk('you', 'witch');
+        expect(cheap.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
+        const active = mk('you', 'witch');
+        active.tokenFree = true;
+        expect(active.makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
+    });
+
+    it('一寸の虫に魂なし: 壊せる（ライフ3以下の）敵コマが2個以上のとき撃つ', () => {
+        const b = emptyBoard();
+        b[4] = { player: '⭕', bind: 3, effects: [] };
+        b[5] = { player: '⭕', bind: 2, effects: [] };
+        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
+        b[5] = { player: '⭕', bind: 6, effects: [] };
+        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
     });
 });

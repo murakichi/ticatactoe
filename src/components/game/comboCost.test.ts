@@ -1,4 +1,4 @@
-import { comboCut, comboFloor, ownCharges, ownLeaves, boardEffectCount, boardPieceCount, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
+import { comboCut, comboFloor, ownCharges, ownLeaves, boardEffectCount, boardPieceCount, reduceCount, GATHER_CUT, BURN_OFF_CUT, COMBO_CUT, CHARGE_GRANT_KEYS } from './comboCost';
 import { SquareInfo } from '../../types/SquareInfo';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -7,6 +7,8 @@ const simCombo = require('../../../sim/comboCost');
 const sq = (player: SquareInfo['player'], effects: SquareInfo['effects'] = []): SquareInfo => ({ bind: 3, player, effects });
 const LEAF = { effect: '🍂' as const };
 const BOLT = { effect: '⚡' as const };
+const FREEZE = { effect: '❄' as const };
+const LOCK = { effect: '🔑' as const };
 
 describe('導線(コンボ)の軽減', () => {
     test('紅葉狩り: 自陣の🍂が手番開始より増えていれば-2', () => {
@@ -55,12 +57,23 @@ describe('導線(コンボ)の軽減', () => {
     test('sim/comboCost.js と一致する', () => {
         expect(simCombo.COMBO_CUT).toBe(COMBO_CUT);
         expect([...simCombo.CHARGE_GRANT_KEYS].sort()).toEqual(Array.from(CHARGE_GRANT_KEYS).sort());
-        const boards = [[sq('💙')], [sq('💙', [LEAF, BOLT]), sq('⭕', [LEAF])]];
-        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickDarkPot', 'onClickChargeHeal', 'onClickSmallFry', 'onClickToken'];
+        const boards = [[sq('💙')], [sq('💙', [LEAF, BOLT]), sq('⭕', [LEAF])], [sq('💙', [FREEZE, LEAF, BOLT]), sq('⭕', [LOCK, LEAF]), sq('⭕', [FREEZE, FREEZE]), sq('⭕', [{ effect: '📜' }])]];
+        const keys = ['onClickDoubleLeafToken', 'onClickBristle', 'onClickChargeSeason', 'onClickDarkPot', 'onClickChargeHeal', 'onClickSmallFry', 'onClickGather', 'onClickBurnOff', 'onClickToken'];
         const kindSets = [new Set<string>(), new Set(['onClickChargeArea']), new Set(['onClickChargeSeason'])];
         for (const b of boards) for (const k of keys) for (const kinds of kindSets) for (const base of [0, 1]) {
             expect(simCombo.comboCut(k, b, '💙', base, kinds, base)).toBe(comboCut(k, b, '💙', base, kinds, base));
             expect(simCombo.comboFloor(k)).toBe(comboFloor(k));
         }
+    });
+
+    test('吹き寄せ・山焼き: 氷結のマスは❄の数だけ・🔑自体と📜は数えず、ロックのマスの他のエフェクトは数える。1つにつき2/3軽減で下限1', () => {
+        // 1:🌱🍂(2) 2:❄🌱☠ → ❄だけ(1) 3:🔑🌱 → 🌱(1) 4:📜だけ(0) 5:❄❄(2) = 6
+        const board = [sq('💙', [{ effect: '🌱' }, LEAF]), sq('⭕', [FREEZE, { effect: '🌱' }, { effect: '☠' }]), sq('💙', [LOCK, { effect: '🌱' }]), sq('⭕', [{ effect: '📜' }]), sq('⭕', [FREEZE, FREEZE])];
+        expect(reduceCount(board)).toBe(6);
+        expect(comboCut('onClickGather', board, '💙', 0, new Set())).toBe(GATHER_CUT * 6);
+        expect(comboCut('onClickBurnOff', board, '💙', 0, new Set())).toBe(BURN_OFF_CUT * 6);
+        expect(comboFloor('onClickGather')).toBe(1);
+        expect(comboFloor('onClickBurnOff')).toBe(1);
+        expect(simCombo.reduceCount(board)).toBe(reduceCount(board));
     });
 });
