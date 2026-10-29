@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/shikigami.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.purge = exports.curse = exports.bless = exports.blast = exports.purgeTargets = exports.curseTargets = exports.blessTargets = exports.ownShikigamiCells = exports.newShikigami = exports.SHIKIGAMI_CURSE_STACKS = exports.SHIKIGAMI_BLESS_LIFE = exports.SHIKIGAMI_BLAST_DAMAGE = exports.SHIKIGAMI_LIFE = void 0;
+exports.purge = exports.curse = exports.bless = exports.blast = exports.purgeTargets = exports.curseTargets = exports.blessTargets = exports.ownShikigamiCells = exports.newShikigami = exports.shikigamiLandable = exports.SHIKIGAMI_CURSE_STACKS = exports.SHIKIGAMI_BLESS_LIFE = exports.SHIKIGAMI_BLAST_DAMAGE = exports.SHIKIGAMI_LIFE = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const poison_1 = require("./poison");
@@ -15,6 +15,9 @@ exports.SHIKIGAMI_BLAST_DAMAGE = 4;
 exports.SHIKIGAMI_BLESS_LIFE = 3;
 /** 式神の呪詛: エフェクトの乗った敵コマ1つに付ける☠の数 */
 exports.SHIKIGAMI_CURSE_STACKS = 2;
+/** 式神（百鬼夜行・式神設置・爆破で空きマスに生まれる式神）を置けるマスか: 空きで、氷結中でも🔑ロック中でもない（ロック中の空きマスには通常の着手もできない） */
+const shikigamiLandable = (sq) => !sq.player && !(0, thermal_1.emptyBlocked)(sq) && !(sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0);
+exports.shikigamiLandable = shikigamiLandable;
 const newShikigami = (player, bind = exports.SHIKIGAMI_LIFE) => ({ player, bind, effects: [{ effect: '📜' }] });
 exports.newShikigami = newShikigami;
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
@@ -39,7 +42,7 @@ const blast = (board, i, player, chars) => {
     for (const j of (0, boardGeometry_1.geometryForCells)(board.length).surroundRange(i)) {
         const sq = board[j];
         if (!sq.player) {
-            if (!(0, thermal_1.emptyBlocked)(sq)) {
+            if ((0, exports.shikigamiLandable)(sq)) {
                 board[j] = (0, exports.newShikigami)(player);
                 affected.push(j);
             }
