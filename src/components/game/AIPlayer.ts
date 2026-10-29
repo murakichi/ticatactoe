@@ -1814,7 +1814,9 @@ class AIPlayer {
                         else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) || this.shield.has(idx)) bad = true;
                         else empties.push(idx);
                     }
-                    if (bad || real < SH_COMBO_REAL || shiki + empties.length === 0) continue;
+                    if (bad || shiki + empties.length === 0) continue;
+                    // 通常コマが1つも無い列は、魔力に大きな余裕があるときだけ（式神を4つ置いて一括で通常コマにする）
+                    if (real < SH_COMBO_REAL && m < RICH_REROLL_MAGIC) continue;
                     // 式神を置く手番は全スキル-1（陰陽師のパッシブ）: 設置は各1安く、式神一括も1安い
                     const placeSum = empties.length * placeCost; // 設置自身も-1（calculateAICost が含む）
                     const allSum = empties.length > 0 ? Math.max(1, allCostFor(ownShiki + empties.length) - 1) : allCostFor(ownShiki + empties.length);
@@ -1998,7 +2000,9 @@ class AIPlayer {
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
         const facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
-        if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
+        const cheapWin = this.character === 'yinYangMaster' && magic >= RICH_REROLL_MAGIC && this.planShikigami(board, magic, costs, availableSkills)?.win === true;
+        if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }

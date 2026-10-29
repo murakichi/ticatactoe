@@ -1925,7 +1925,10 @@ class AIPlayer {
                         else
                             empties.push(idx);
                     }
-                    if (bad || real < SH_COMBO_REAL || shiki + empties.length === 0)
+                    if (bad || shiki + empties.length === 0)
+                        continue;
+                    // 通常コマが1つも無い列は、魔力に大きな余裕があるときだけ（式神を4つ置いて一括で通常コマにする）
+                    if (real < SH_COMBO_REAL && m < RICH_REROLL_MAGIC)
                         continue;
                     // 式神を置く手番は全スキル-1（陰陽師のパッシブ）: 設置は各1安く、式神一括も1安い
                     const placeSum = empties.length * placeCost; // 設置自身も-1（calculateAICost が含む）
@@ -2064,7 +2067,7 @@ class AIPlayer {
         return total;
     }
     planMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
-        var _a;
+        var _a, _b;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
         // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
@@ -2109,7 +2112,9 @@ class AIPlayer {
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
         const facesWitch = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
-        if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
+        const cheapWin = this.character === 'yinYangMaster' && magic >= RICH_REROLL_MAGIC && ((_a = this.planShikigami(board, magic, costs, availableSkills)) === null || _a === void 0 ? void 0 : _a.win) === true;
+        if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
@@ -2246,7 +2251,7 @@ class AIPlayer {
         // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（sim/ai.js F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const necro = this.opponents.find((o) => this.characterOf(o) === 'necromancer');
-            if (necro && 10 - ((_a = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _a !== void 0 ? _a : 10) >= 1) {
+            if (necro && 10 - ((_b = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _b !== void 0 ? _b : 10) >= 1) {
                 const score = new Map();
                 for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
                     if (line.some((i) => board[i].player === this.playerSymbol))
