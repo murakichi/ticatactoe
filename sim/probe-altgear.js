@@ -11,6 +11,8 @@
  * 出力: 行ごとに JSON（gears, field, se, diffFromMain）と、最後に別案の推奨。
  */
 const { spawnSync } = require('child_process');
+// 主指標は probe-top の strong（対強豪平均）。強豪リストが無いとき(strong=null)は field。出力キーの `field` はこの値を指す
+const metric = (row) => (row.strong != null ? row.strong : row.field);
 const path = require('path');
 const gear = require('./shared/gear');
 
@@ -70,8 +72,8 @@ function runDeck() {
         const r = spawnSync(process.execPath, [path.join(__dirname, 'probe-top.js'), '--target', char, '--deck', d.join(','), '--games', games, '--seed', seed, '--json'], { encoding: 'utf8', maxBuffer: 1 << 26 });
         if (r.status !== 0) throw new Error(r.stderr);
         const row = JSON.parse(r.stdout.trim().split('\n').pop()).rows[0];
-        rows.push({ deck: d, field: row.field, se: row.se });
-        console.log(JSON.stringify({ char, deck: d, field: row.field, se: row.se, diffFromMain: +(row.field - rows[0].field).toFixed(4) }));
+        rows.push({ deck: d, field: metric(row), se: row.strong != null ? row.strongSe : row.se });
+        console.log(JSON.stringify({ char, deck: d, field: metric(row), se: row.strong != null ? row.strongSe : row.se, diffFromMain: +(metric(row) - rows[0].field).toFixed(4) }));
     }
     const alts = rows.slice(1).filter((r) => r.field - rows[0].field >= -margin).sort((a, b) => b.field - a.field);
     console.log('ALT_DECK ' + JSON.stringify({ char, main: base, mainField: rows[0].field, alts: alts.map((r) => ({ deck: r.deck, field: r.field, diff: +(r.field - rows[0].field).toFixed(4) })) }));
@@ -90,8 +92,8 @@ function measure(set) {
 const rows = [];
 for (const set of sets) {
     const row = measure(set);
-    rows.push({ gears: set, field: row.field, se: row.se });
-    console.log(JSON.stringify({ char, gears: set, field: row.field, se: row.se, diffFromMain: +(row.field - rows[0].field).toFixed(4) }));
+    rows.push({ gears: set, field: metric(row), se: row.strong != null ? row.strongSe : row.se });
+    console.log(JSON.stringify({ char, gears: set, field: metric(row), se: row.strong != null ? row.strongSe : row.se, diffFromMain: +(metric(row) - rows[0].field).toFixed(4) }));
 }
 const alts = rows.slice(1).filter((r) => r.field - rows[0].field >= -margin).sort((a, b) => b.field - a.field);
 console.log('ALT ' + JSON.stringify({ char, main, mainField: rows[0].field, alts: alts.map((r) => ({ gears: r.gears, field: r.field, diff: +(r.field - rows[0].field).toFixed(4) })) }));

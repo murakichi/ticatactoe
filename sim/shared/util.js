@@ -35,17 +35,32 @@ const calculateLife = (nextCharacterId, yingYangMode, lifeBonus = 0, std = expor
 };
 exports.calculateLife = calculateLife;
 /** 式神(📜)は列の並びに数えない */
-const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
+const isShikigami = (sq) => {
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++)
+        if (ef[i].effect === '📜')
+            return true;
+    return false;
+};
 exports.isShikigami = isShikigami;
 /** 列判定用のシンボル配列（式神はコマ無し扱い） */
 const lineSymbols = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
 exports.lineSymbols = lineSymbols;
 const calculateWinner = (squares) => {
-    for (const line of (0, boardGeometry_1.geometryForCells)(squares.length).winLines) {
+    const lines = (0, boardGeometry_1.geometryForCells)(squares.length).winLines;
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l];
         const first = squares[line[0]];
-        if (first && line.every((idx) => squares[idx] === first)) {
+        if (!first)
+            continue;
+        let all = true;
+        for (let k = 1; k < line.length; k++)
+            if (squares[line[k]] !== first) {
+                all = false;
+                break;
+            }
+        if (all)
             return first;
-        }
     }
     return undefined;
 };
@@ -81,5 +96,20 @@ const normRand = (m, s, rng = Math.random) => {
 exports.normRand = normRand;
 const range = (start, count) => Array.from({ length: count }, (_, i) => start + i);
 exports.range = range;
-const findEmptyIndexes = (ary) => ary.map((x, i) => ((x === null || x === void 0 ? void 0 : x.player) === undefined && (x === null || x === void 0 ? void 0 : x.effects.filter((effect) => effect.effect === '🔑' || effect.effect === '❄').length) === 0 ? i : -1)).filter((x) => x !== -1);
+const hasBlockingEffect = (sq) => {
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++)
+        if (ef[i].effect === '🔑' || ef[i].effect === '❄')
+            return true;
+    return false;
+};
+const findEmptyIndexes = (ary) => {
+    const out = [];
+    for (let i = 0; i < ary.length; i++) {
+        const x = ary[i];
+        if (x && x.player === undefined && !hasBlockingEffect(x))
+            out.push(i);
+    }
+    return out;
+};
 exports.findEmptyIndexes = findEmptyIndexes;

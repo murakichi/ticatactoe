@@ -19,6 +19,10 @@
  * 共通: --envDeck pick / --oppGears pick（相手が本番どおり主案と別案から選ぶ。完了判定の2条件目）, --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（頑健性確認: 相手のデッキを推奨から3枚ランダムに入れ替える。本番のAIデッキはこう入れ替えないので、環境の基準ではなくストレステスト）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
  * 出力の `field` が環境勝率（対象の対キャラ別勝率の単純平均）。`se` は標準誤差の概算。
+ * 判定に使う主指標は `strong`（対強豪平均）: 弱いキャラを大勝するだけで `field` が上がるのを避けるため、強豪(環境の平均勝率の上位半分、対象自身は除く)だけとの勝率の平均。
+ *   強豪の集合は `--rank --write-strong` が .tune-cache/strong.json に書き、`--target`/`--scan` はそれを固定して使う（候補の設定で集合が動いて指標をごまかせないように）。
+ *   `--strong a,b,c` で明示指定もできる。集合が無いときは全相手（= field）になり、警告を出す。
+ *   `--rank` は対強豪平均で並べ、最悪対面・有意な不利/有利対面数・均衡の選択確率（sim/live.js の analyze）も出す。
  */
 const os = require('os');
 const path = require('path');
@@ -26,6 +30,7 @@ const { spawn } = require('child_process');
 const engine = require('./engine');
 const gearMod = require('./shared/gear');
 const deckMod = require('./shared/deck');
+const live = require('./live');
 
 const args = {};
 for (let i = 2; i < process.argv.length; i++) {
@@ -173,18 +178,23 @@ function runWorkersRaw(tasks, variants, workers) {
 const rate = (t) => { const n = t.w + t.l; return n ? t.w / n : 0.5; };
 
 /** 変種 v の対象キャラ target の環境勝率（対キャラ別と平均） */
-function summarize(results, variant, target, opps) {
+function summarize(results, variant, target, opps, strongSet) {
     const per = {};
-    let sum = 0, varSum = 0;
+    let sum = 0, varSum = 0, sSum = 0, sVar = 0, sN = 0;
     for (const o of opps) {
         const r = results.find((x) => x.variant === variant && x.a === target && x.b === o);
         const n = r.w + r.l, p = rate(r);
         per[o] = +p.toFixed(3);
         sum += p;
         varSum += n ? (p * (1 - p)) / n : 0;
+        if (!strongSet || strongSet.includes(o)) { sSum += p; sVar += n ? (p * (1 - p)) / n : 0; sN++; }
     }
     const tally = results.filter((x) => x.variant === variant && x.a === target).map((x) => `${x.b}:${x.w}-${x.l}-${x.d}`).sort().join(' ');
-    return { per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4), tally };
+    return {
+        per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4), tally,
+        // 対強豪平均（主指標）。集合が無ければ全相手と同じ
+        strong: strongSet && sN ? +(sSum / sN).toFixed(4) : null, strongSe: strongSet && sN ? +(Math.sqrt(sVar) / sN).toFixed(4) : null, strongN: strongSet ? sN : 0,
+    };
 }
 
 async function main() {
@@ -199,6 +209,13 @@ async function main() {
     }
     if (args.gears) cand.gears = args.gears === 'none' ? [] : args.gears.split(',');
     if (args.flags) cand.flags = parseFlags(args.flags);
+
+    const STRONG_FILE = path.resolve(__dirname, '..', '.tune-cache', 'strong.json');
+    const fs = require('fs');
+    let strongSet = null;
+    if (args.strong) strongSet = args.strong.split(',');
+    else if (!args.rank && fs.existsSync(STRONG_FILE)) strongSet = JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8')).strong;
+    if (!args.rank && !strongSet) console.error('警告: 強豪リストが無いので strong は全相手の平均(field)と同じです。先に `--rank --write-strong` で集合を決めてください（--strong a,b,c でも指定可）。');
 
     if (args.rank) {
         if (!target && ((args.oppGears && args.oppGears !== 'recommended') || args.envDeck)) {
@@ -223,12 +240,34 @@ async function main() {
                 sum += p;
             }
             return { char: c, field: +(sum / (CHARS.length - 1)).toFixed(4), per };
-        }).sort((x, y) => y.field - x.field);
-        const out = { mode: 'rank', games, seed: seed0, size: size || 4, target: target || null, candidate: target ? cand : null, table: table.map((r, i) => ({ rank: i + 1, ...r })) };
+        });
+        // 対強豪平均・最悪対面・不利対面数・均衡（sim/live.js analyze。--target 付きでも候補設定を反映した対面表で出す）
+        const pairs = [];
+        for (let i = 0; i < CHARS.length; i++) for (let j = i + 1; j < CHARS.length; j++) {
+            const direct = res.find((x) => x.a === CHARS[i] && x.b === CHARS[j]);
+            pairs.push({ a: CHARS[i], b: CHARS[j], w: direct ? direct.w : 0, l: direct ? direct.l : 0 });
+        }
+        const an = live.analyze(live.statsFromPairs(CHARS, pairs));
+        const byId = Object.fromEntries(an.rows.map((r) => [r.id, r]));
+        for (const r of table) {
+            const a = byId[r.char];
+            r.strong = a.strongAvg == null ? null : +a.strongAvg.toFixed(4);
+            r.worst = a.worst ? { char: a.worst.id, rate: +a.worst.rate.toFixed(3) } : null;
+            r.unfavorable = a.unfavorable; r.favorable = a.favorable; r.eq = +a.eq.toFixed(4);
+        }
+        table.sort((x, y) => (y.strong ?? 0) - (x.strong ?? 0));
+        if (args['write-strong']) {
+            fs.mkdirSync(path.dirname(STRONG_FILE), { recursive: true });
+            fs.writeFileSync(STRONG_FILE, JSON.stringify({ strong: an.strong, games, seed: seed0, size: size || 4, at: new Date().toISOString() }, null, 2));
+            console.error(`強豪リストを保存: ${an.strong.join(',')} -> ${path.relative(process.cwd(), STRONG_FILE)}`);
+        }
+        const out = { mode: 'rank', games, seed: seed0, size: size || 4, target: target || null, candidate: target ? cand : null, strongSet: an.strong, exploit: +an.exploit.toFixed(4), table: table.map((r, i) => ({ rank: i + 1, ...r })) };
         if (args.json) { console.log(JSON.stringify(out)); return; }
         console.log(`環境順位（各ペア${games}試合・席交互・引分除く${target ? `・${target} に候補設定を反映` : ''}）`);
-        table.forEach((r, i) => console.log(`${String(i + 1).padStart(2)}. ${r.char.padEnd(14)} ${(r.field * 100).toFixed(1)}%${r.char === target ? '  ← target' : ''}`));
-        console.log('GAP(1位 - 2位) ' + ((table[0].field - table[1].field) * 100).toFixed(1) + 'pt');
+        console.log(`順位は対強豪平均（強豪=${an.strong.join(',')}）。field=対全キャラ平均（参考）。不利/有利=有意に負け越す/勝ち越す対面の数。均衡=相手が最適に選ぶ場合の選択確率`);
+        console.log(`    ${'キャラ'.padEnd(14)} ${'対強豪'.padEnd(7)} ${'field'.padEnd(7)} ${'最悪対面'.padEnd(18)} ${'不利/有利'.padEnd(8)} 均衡`);
+        table.forEach((r, i) => console.log(`${String(i + 1).padStart(2)}. ${r.char.padEnd(14)} ${((r.strong ?? 0) * 100).toFixed(1).padStart(5)}% ${((r.field) * 100).toFixed(1).padStart(5)}% ${(r.worst ? `${(r.worst.rate * 100).toFixed(0)}%(${r.worst.char.slice(0, 9)})` : 'n/a').padEnd(18)} ${`${r.unfavorable}/${r.favorable}`.padEnd(8)} ${(r.eq * 100).toFixed(1)}%${r.char === target ? '  ← target' : ''}`));
+        console.log('GAP(1位 - 2位, 対強豪) ' + (((table[0].strong ?? 0) - (table[1].strong ?? 0)) * 100).toFixed(1) + 'pt   (field の GAP ' + (([...table].sort((x, y) => y.field - x.field).map((r) => r.field)).slice(0, 2).reduce((a, b) => a - b) * 100).toFixed(1) + 'pt)');
         console.log('RESULT ' + JSON.stringify(out));
         return;
     }
@@ -293,19 +332,24 @@ async function main() {
     const tasks = [];
     variants.forEach((_, v) => { for (const o of opps) tasks.push({ a: target, b: o, variant: v, aCand: true, bCand: false }); });
     const res = await runWorkers(tasks, variants, workers);
-    const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps) }));
-    const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, rows };
+    const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps, strongSet) }));
+    const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, strongSet, rows };
     if (args.json) { console.log(JSON.stringify(out)); return; }
+    // 主指標: 対強豪平均（強豪の集合が無い・--opp で強豪が残らないときは field）
+    const M = (r) => (r.strong != null ? r.strong : r.field);
+    const SE = (r) => (r.strong != null ? r.strongSe : r.se);
+    const metricName = rows[0].strong != null ? `対強豪(${rows[0].strongN}体)` : 'field';
     if (args.scan === 'audit') {
         const base = rows[0];
-        console.log(`base ${(base.field * 100).toFixed(1)}%（寄与 = base − 禁止/除去後。同一シードなので差は札/ギアの寄与。「差なし」= 全試合の結果が基準と完全一致。AIが使っていないか、banが効かない経路で使っているかのどちらかなので、probe-usage.js で使用回数を確認すること）`);
-        rows.slice(1).forEach((r) => console.log(`${r.tally === base.tally ? '差なし  ' : `${((base.field - r.field) * 100 >= 0 ? '+' : '')}${((base.field - r.field) * 100).toFixed(1)}pt`.padEnd(8)} ${r.label}`));
+        console.log(`base ${(M(base) * 100).toFixed(1)}% [${metricName}]（寄与 = base − 禁止/除去後。同一シードなので差は札/ギアの寄与。「差なし」= 全試合の結果が基準と完全一致。AIが使っていないか、banが効かない経路で使っているかのどちらかなので、probe-usage.js で使用回数を確認すること）`);
+        rows.slice(1).forEach((r) => console.log(`${r.tally === base.tally ? '差なし  ' : `${((M(base) - M(r)) * 100 >= 0 ? '+' : '')}${((M(base) - M(r)) * 100).toFixed(1)}pt`.padEnd(8)} ${r.label}`));
         console.log('RESULT ' + JSON.stringify(out));
         return;
     }
-    const sorted = rows.map((r, i) => ({ ...r, i })).sort((x, y) => y.field - x.field);
+    const sorted = rows.map((r, i) => ({ ...r, i })).sort((x, y) => M(y) - M(x));
+    console.log(`指標: ${metricName}（field=対全キャラ平均は参考で併記）`);
     for (const r of args.scan ? sorted : rows) {
-        console.log(`${(r.field * 100).toFixed(1)}% ±${(1.96 * r.se * 100).toFixed(1)}  ${r.label}`);
+        console.log(`${(M(r) * 100).toFixed(1)}% ±${(1.96 * SE(r) * 100).toFixed(1)}  (field ${(r.field * 100).toFixed(1)}%)  ${r.label}`);
         if (!args.scan) console.log('  対キャラ別: ' + Object.entries(r.per).map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`).join(' / '));
     }
     console.log('RESULT ' + JSON.stringify(out));

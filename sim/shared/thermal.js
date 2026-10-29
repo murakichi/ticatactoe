@@ -13,16 +13,25 @@ exports.PYROMANCER_EXTRA_BURN = 1;
 exports.FLAME_SKILL_MULT = 1.5;
 /** 🔥を付与した瞬間に与えるダメージ（スタック1つにつき。sim/thermal.js と同値） */
 exports.FLAME_INSTANT_DAMAGE = 1;
-const frozenStacks = (sq) => sq.effects.filter((e) => e.effect === '❄').length;
+/** 指定エフェクトの個数（配列を作らない数え方。シミュレーションで大量に呼ぶので速さのため） */
+const countEffect = (sq, kind) => {
+    let n = 0;
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++)
+        if (ef[i].effect === kind)
+            n++;
+    return n;
+};
+const frozenStacks = (sq) => countEffect(sq, '❄');
 exports.frozenStacks = frozenStacks;
-const isFrozen = (sq) => sq.effects.some((e) => e.effect === '❄');
+const isFrozen = (sq) => (0, exports.frozenStacks)(sq) > 0;
 exports.isFrozen = isFrozen;
-const flameStacks = (sq) => sq.effects.filter((e) => e.effect === '🔥').length;
+const flameStacks = (sq) => countEffect(sq, '🔥');
 exports.flameStacks = flameStacks;
 /** 休眠マス: 氷結中。マスの他のエフェクト（🌱⚡☠）は消えないが効力を発揮しない（火炎中のマスは休眠しない: 🌱は消え、⚡☠は重複して働く） */
 const isDormant = (sq) => (0, exports.isFrozen)(sq);
 exports.isDormant = isDormant;
-const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+const hasLock = (sq) => countEffect(sq, '🔑') > 0;
 const without = (sq, ...kinds) => ({
     ...sq,
     effects: sq.effects.filter((e) => !kinds.includes(e.effect)),
@@ -290,7 +299,7 @@ exports.burnout = burnout;
 // sim/thermal.js と同じ仕様（thermal.test.ts が一致を確認する）。
 // 冬至の種子の「🌱ガード」は、activeBuds / harvestBuds の guarded 引数（氷結中でも🌱が働く）と、ignite の keepBuds 述語（🔥が付いても🌱が消えない）として渡す。
 /** マスの🌱の数 */
-const budStacks = (sq) => sq.effects.filter((e) => e.effect === '🌱').length;
+const budStacks = (sq) => countEffect(sq, '🌱');
 exports.budStacks = budStacks;
 /** 効力を発揮している🌱の数。氷結中のマスの🌱は消えないが魔力ボーナスに数えない。guarded（冬至の種子）なら休眠しない */
 const activeBuds = (sq, guarded = false) => (!guarded && (0, exports.isDormant)(sq) ? 0 : (0, exports.budStacks)(sq));

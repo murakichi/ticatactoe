@@ -961,7 +961,8 @@ class AIPlayer {
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
         const enemiesOn = (idxs) => idxs.filter((i) => this.isEnemy(board[i].player) && !(0, thermal_1.isFrozen)(board[i]) && !board[i].effects.some((e) => e.effect === '🔑')).length;
         // キャラ専用シナジー: 軍師→トークン系 / 魔法使い→バッズ系
-        const tokenIdx = [3, 4, 9, 11];
+        // 軍師は氷結トークン(45/46)も固定する: 凍ったコマは☠🔥のダメージを受けない (sim/ai.js の taFrostLock=1。全相手 61→66%)
+        const tokenIdx = [3, 4, 9, 11, 45, 46];
         const budsIdx = [2, 10];
         // 毒使い: トークン系スキル(両トークンを除く。ポイズントークンを含む)を手札でロックして、毎手番トークンを撃てるようにする (sim/ai.js と同一)
         const poisonerTokenIdx = [3, 9, 11, 16];
@@ -1260,7 +1261,9 @@ class AIPlayer {
         // 氷室の番人: 霜降り・氷結トークン系を使う (sim/ai.js F.cryoCards と同一。環境勝率 seed2/200 で +9.1pt)
         const freeCells = (0, util_1.findEmptyIndexes)(board).length;
         const cryo = this.character === 'cryomancer' || this.character === 'poisoner'; // 毒使いも氷結札を使う(自陣の毒マスを凍らせる。sim F.cryoPoison)
-        if (cryo && availableSkills.includes(48) && (0, thermal_1.frostfallTargets)(board, this.playerSymbol).length >= 2) {
+        // 軍師も氷結札(霜降り・氷結トークン)を使う: 凍ったコマは☠🔥のダメージを受けず、毒使い・鍛冶師に強くなる (sim/ai.js の taFrost=1。全相手 49.4→60.8%)
+        const frostUse = cryo || this.character === 'tactician';
+        if (frostUse && availableSkills.includes(48) && (0, thermal_1.frostfallTargets)(board, this.playerSymbol).length >= 2) {
             spend(this.calculateAICost(costs.onClickFrostfall, false, false, 'onClickFrostfall'), 'onClickFrostfall');
         }
         // 霜枯れ: 煉獄の鍛冶師が敵にいるとき、自陣の🍂マスを凍らせて🔥から守る（氷結中は🍂が休眠するので、2マス以上あるときだけ。sim/ai.js と同一）
@@ -1315,10 +1318,10 @@ class AIPlayer {
                 && remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + SH_RESERVE) {
                 spend(this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
             }
-            else if (cryo && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
+            else if (frostUse && freeCells >= 4 && availableSkills.includes(46) && remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
                 spend(this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken'), 'onClickDoubleFrostToken');
             }
-            else if (cryo && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
+            else if (frostUse && freeCells >= 3 && availableSkills.includes(45) && remaining >= this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken')) {
                 spend(this.calculateAICost(costs.onClickFrostToken, true, false, 'onClickFrostToken'), 'onClickFrostToken');
             }
             else if (this.character === 'electrician' && availableSkills.includes(23) && remaining >= this.calculateAICost(costs.onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken')) {
@@ -1472,7 +1475,8 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+            // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔑'))
                 continue;
             let val = 1;
             for (const line of geo.winLines) {
@@ -1874,6 +1878,12 @@ class AIPlayer {
         // 対魔女: 初霜・吹き寄せ・山焼きが手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで手札を引き直して探す
         // （見つけた札は引き直しのたびに chooseLocks が固定し直す。sim/ai.js の witchDig=2, digMargin=3）
         if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
+            && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
+        }
+        // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
+        // （見つけた92は chooseLocks が魔女戦で固定する。sim/ai.js の yinDig。本番AI 対魔女 55%(124/227) → 66%(109/166)）
+        if (facesWitch && this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }

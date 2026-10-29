@@ -4,30 +4,10 @@ import { range } from '../util';
 import { MIN_BOARD_SIZE, MAX_BOARD_SIZE, boardSizeFor } from './game/boardGeometry';
 import styles from './SimPanel.module.css';
 
-/** public/simWorker.js が返す集計(sim/live.js の summarize / matchups) */
-type CharRow = { id: string; appearances: number; wins: number; winRate: number; ci: number | null; avgTurnsWon: number | null };
-type Summary = { games: number; drawRate: number; avgTurns: number; fair: number; seatWinRate: (number | null)[]; rows: CharRow[] };
-type Matchups = Record<string, Record<string, { meets: number; wins: number; losses: number; winRate: number | null }>>;
-type Analysis = {
-    rows: {
-        id: string;
-        fieldAvg: number | null;
-        strongAvg: number | null;
-        worst: { id: string; rate: number; decided: number } | null;
-        unfavorable: number;
-        favorable: number;
-        solidOpponents: number;
-        opponents: number;
-        eq: number;
-    }[];
-    exploit: number;
-    minPairDecided: number;
-    minDecided: number;
-    players: number;
-    verdict: { headline: string; points: string[] };
-};
-type Snapshot = { summary: Summary; matchups: Matchups; analysis: Analysis | null; drift: number | null; elapsed: number };
-type Status = 'idle' | 'running' | 'stopped' | 'converged' | 'max' | 'error';
+import { Analysis, Conv, LiveApi, Matchups, RawStats, Summary, Verdict, loadLive } from './simLive';
+
+type Snapshot = { summary: Summary; matchups: Matchups; analysis: (Analysis & { verdict: Verdict }) | null; drift: number | null; elapsed: number; jobs: number };
+type Status = 'idle' | 'running' | 'stopped' | 'converged' | 'error';
 
 type Props = {
     /** キャラID → 表示名（アイコン付き） */
@@ -35,10 +15,11 @@ type Props = {
     initialPlayers: number;
     initialBoardSize: 'auto' | number;
     onBack: () => void;
+    /** 集計用の live.js の読み込み（テストで差し替える） */
+    load?: () => Promise<LiveApi>;
 };
 
-const CONV = { window: 10, eps: 0.005, minGames: 2000 };
-const CHECKPOINT = 200;
+const CONV: Conv = { window: 10, eps: 0.005, minGames: 2000 };
 const SEAT_ICONS = ['💙', '⭕', '🟩', '🔶', '⭐', '🟣', '🟫', '🩷'];
 
 const pct = (x: number | null | undefined, d = 1) => (x == null ? '—' : `${(x * 100).toFixed(d)}%`);
@@ -46,7 +27,7 @@ const pct = (x: number | null | undefined, d = 1) => (x == null ? '—' : `${(x 
 const tone = (rate: number | null, fair: number) => (rate == null ? '' : rate > fair * 1.1 ? styles.hi : rate < fair * 0.9 ? styles.lo : '');
 const matchTone = (rate: number | null) => (rate == null ? '' : rate >= 0.55 ? styles.hi : rate <= 0.45 ? styles.lo : '');
 
-export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Props) => {
+export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load = loadLive }: Props) => {
     const [players, setPlayers] = useState<number>(initialPlayers);
     const [boardChoice, setBoardChoice] = useState<'auto' | number>(initialBoardSize);
     const [useSkills, setUseSkills] = useState<boolean>(true);
@@ -57,64 +38,101 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
     const [status, setStatus] = useState<Status>('idle');
     const [snap, setSnap] = useState<Snapshot | null>(null);
     const [error, setError] = useState<string>('');
-    const worker = useRef<Worker | null>(null);
+    const workers = useRef<Worker[]>([]);
+    const timer = useRef<number | undefined>(undefined);
+    const finish = useRef<((s: Status) => void) | null>(null);
+    const runId = useRef<number>(0);
 
     const terminate = () => {
-        worker.current?.terminate();
-        worker.current = null;
+        workers.current.forEach((w) => w.terminate());
+        workers.current = [];
+        if (timer.current !== undefined) window.clearInterval(timer.current);
+        timer.current = undefined;
+        finish.current = null;
     };
     // 画面を離れたら裏の対戦も止める
-    useEffect(() => terminate, []);
+    useEffect(() => () => { runId.current++; terminate(); }, []);
 
-    const start = () => {
+    const fail = (message: string) => {
         terminate();
+        setStatus('error');
+        setError(message);
+    };
+
+    const start = async () => {
+        terminate();
+        const id = ++runId.current;
         setError('');
         setSnap(null);
-        let w: Worker;
-        try {
-            w = new Worker(`${process.env.PUBLIC_URL}/simWorker.js`);
-        } catch (e) {
-            setStatus('error');
-            setError('この環境では Web Worker を起動できませんでした');
-            return;
-        }
-        worker.current = w;
-        w.onmessage = (e: MessageEvent) => {
-            const m = e.data;
-            if (m.type === 'error') {
-                setStatus('error');
-                setError(m.message);
-                terminate();
-                return;
-            }
-            setSnap({ summary: m.summary, matchups: m.matchups, analysis: m.analysis ?? null, drift: m.drift, elapsed: m.elapsed });
-            if (m.type === 'done') {
-                setStatus(m.reason === 'converged' ? 'converged' : m.reason === 'max' ? 'max' : 'stopped');
-                terminate();
-            }
-        };
-        w.onerror = () => {
-            setStatus('error');
-            setError('シミュレーションの読み込みに失敗しました');
-            terminate();
-        };
-        w.postMessage({
-            cmd: 'start',
-            players,
-            size: boardChoice === 'auto' ? undefined : boardChoice,
-            mode: 'prod',
-            seed: Math.floor(Math.random() * 1e6),
-            fixedChars: null,
-            skills: useSkills,
-            gears: useGears,
-            conv: autoStop ? CONV : null,
-            checkpoint: CHECKPOINT,
-            maxGames: Infinity,
-        });
         setRan({ skills: useSkills, gears: useGears });
         setStatus('running');
+        let live: LiveApi;
+        try {
+            live = await load();
+        } catch (e) {
+            if (id === runId.current) fail('シミュレーションの読み込みに失敗しました');
+            return;
+        }
+        if (id !== runId.current) return; // 読み込み中に止めた・画面を離れた
+        // 計算は端末のコアぶんの Worker で分担する（画面が重くならないよう1つ空ける）
+        const jobs = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+        const seed = Math.floor(Math.random() * 1e6);
+        const t0 = Date.now();
+        const latest: (RawStats | null)[] = Array(jobs).fill(null);
+        let agg: unknown = null;
+        // 1対1は全組を1周する長さ(110)の倍数ごとに勝率のスナップショットを積む
+        const ckEvery = players === 2 ? 220 : 200;
+
+        const publish = (): RawStats | null => {
+            const first = latest.find((p) => p);
+            if (!first) return null;
+            if (!agg) agg = live.createAggregator(Object.keys(first.perChar), players, ckEvery);
+            const st = live.aggregate(agg, latest);
+            const an = live.analyze(st);
+            setSnap({
+                summary: live.summarize(st),
+                matchups: live.matchups(st),
+                analysis: an ? { ...an, verdict: live.verdict(an) } : null,
+                drift: live.maxDrift(st, CONV.window),
+                elapsed: (Date.now() - t0) / 1000,
+                jobs,
+            });
+            return st;
+        };
+
+        try {
+            for (let k = 0; k < jobs; k++) {
+                const w = new Worker(`${process.env.PUBLIC_URL}/simWorker.js`);
+                w.onmessage = (e: MessageEvent) => {
+                    const m = e.data;
+                    if (m.type === 'error') fail(m.message);
+                    else latest[k] = m.stats;
+                };
+                w.onerror = () => fail('シミュレーションの読み込みに失敗しました');
+                workers.current.push(w);
+            }
+        } catch (e) {
+            fail('この環境では Web Worker を起動できませんでした');
+            return;
+        }
+        finish.current = (s: Status) => {
+            publish();
+            terminate();
+            setStatus(s);
+        };
+        // ゲーム番号 g は全Workerで共通。Worker k が g = k, k+jobs, ... を担当する（結果は g だけで決まり、並列数に依らない）
+        workers.current.forEach((w, k) =>
+            w.postMessage({
+                cmd: 'start', players, size: boardChoice === 'auto' ? undefined : boardChoice, mode: 'prod', seed,
+                fixedChars: null, skills: useSkills, gears: useGears, offset: k, stride: jobs, maxGames: null,
+            })
+        );
+        timer.current = window.setInterval(() => {
+            const st = publish();
+            if (st && autoStop && live.converged(st, CONV)) finish.current?.('converged');
+        }, 500);
     };
-    const stop = () => worker.current?.postMessage({ cmd: 'stop' });
+    const stop = () => finish.current?.('stopped');
 
     const running = status === 'running';
     const size = boardChoice === 'auto' ? boardSizeFor(players) : boardChoice;
@@ -131,7 +149,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                 <h2 className={styles.title}>📊 対戦シミュレーション</h2>
             </div>
             <p className={styles.lead}>
-                AIどうしがキャラをランダムに引いて対戦し続け、勝率を集計します。この端末のブラウザの中だけで動き、停止するか勝率が落ち着くまで続きます。
+                AIどうしが対戦し続け、勝率を集計します（1対1は全キャラの組を順に、3人以上はキャラをランダムに引きます）。この端末のブラウザの中だけで、端末のコアを分担して動き、停止するか勝率が落ち着くまで続きます。
             </p>
 
             <div className={styles.controls}>
@@ -194,7 +212,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
                             {status === 'converged' && '勝率が落ち着いたので停止しました'}
                         </strong>
                         <span>
-                            {players}人 {size}x{size}・スキル{ran.skills ? 'あり' : 'なし'}・ギア{ran.gears ? 'あり' : 'なし'}・{s.games.toLocaleString()}局・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
+                            {players}人 {size}x{size}・スキル{ran.skills ? 'あり' : 'なし'}・ギア{ran.gears ? 'あり' : 'なし'}・{s.games.toLocaleString()}局・並列{snap!.jobs}・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
                         </span>
                         <span>
                             勝率の変動幅（直近{CONV.window}回）: {pct(snap!.drift, 2)}
@@ -292,8 +310,8 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack }: Pr
 };
 
 /** 「何が強いか」の結論。平均勝率だけでなく、最悪対面・不利対面数・相手を見て選ぶ場合(均衡)で判断する */
-const Conclusion = ({ an, label }: { an: Analysis; label: (id: string) => string }) => {
-    const ready = an.minPairDecided >= an.minDecided;
+const Conclusion = ({ an, label }: { an: Analysis & { verdict: Verdict }; label: (id: string) => string }) => {
+    const ready = an.ready;
     return (
         <section className={styles.conclusion} aria-label='結論'>
             <h3 className={styles.sub}>結論: 何が強いか</h3>
@@ -363,7 +381,7 @@ const Conclusion = ({ an, label }: { an: Analysis; label: (id: string) => string
                         1キャラに集中すれば「そのキャラを出せば済む」、分散していれば「相性次第で選ぶ余地がある」状態です。
                     </li>
                     <li>
-                        <strong>結論の出し方</strong>: 全対面が{an.minDecided}試合に届くまで保留します。届いたら、対強豪平均・最悪対面・均衡のすべてで1位かつ有意な不利対面なしなら「突出」、均衡の50%以上が1キャラなら「実質最強」、それ以外は「突出なし」または「平均と均衡で1位が違う」と判定します。
+                        <strong>結論の出し方</strong>: {an.minDecided}試合に届いた対面が9割になるまで保留します(引き分けが多い組が1つあっても、いつまでも待たないため。届いていない対面は最悪対面と不利/有利の数に入れません)。届いたら、対強豪平均・最悪対面・均衡のすべてで1位かつ有意な不利対面なしなら「突出」、均衡の50%以上が1キャラなら「実質最強」、それ以外は「突出なし」または「平均と均衡で1位が違う」と判定します。
                     </li>
                     <li>
                         <strong>注意</strong>: 3人以上では第三者が勝つ試合が混ざり、均衡の前提(2人の直接対決)が崩れるので参考値です。「あなた」のように極端に弱いキャラが混ざると対全キャラ平均が見かけ上押し上げられるため、対強豪平均・最悪対面・均衡も併せて見てください。

@@ -36,16 +36,23 @@ const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode 
 };
 
 /** 式神(📜)は列の並びに数えない */
-const isShikigami = (sq: { effects: readonly { effect: string }[] }): boolean => sq.effects.some((e) => e.effect === '📜');
+const isShikigami = (sq: { effects: readonly { effect: string }[] }): boolean => {
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++) if (ef[i].effect === '📜') return true;
+    return false;
+};
 /** 列判定用のシンボル配列（式神はコマ無し扱い） */
 const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isShikigami(x) ? undefined : x.player));
 
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
-    for (const line of geometryForCells(squares.length).winLines) {
+    const lines = geometryForCells(squares.length).winLines;
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l];
         const first = squares[line[0]];
-        if (first && line.every((idx) => squares[idx] === first)) {
-            return first;
-        }
+        if (!first) continue;
+        let all = true;
+        for (let k = 1; k < line.length; k++) if (squares[line[k]] !== first) { all = false; break; }
+        if (all) return first;
     }
     return undefined;
 };
@@ -80,7 +87,18 @@ const normRand = (m: number, s: number, rng: () => number = Math.random): number
 
 const range = (start: number, count: number): number[] => Array.from({ length: count }, (_, i) => start + i);
 
-const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) =>
-    ary.map((x, i) => (x?.player === undefined && x?.effects.filter((effect) => effect.effect === '🔑' || effect.effect === '❄').length === 0 ? i : -1)).filter((x) => x !== -1);
+const hasBlockingEffect = (sq: SquareInfo): boolean => {
+    const ef = sq.effects;
+    for (let i = 0; i < ef.length; i++) if (ef[i].effect === '🔑' || ef[i].effect === '❄') return true;
+    return false;
+};
+const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) => {
+    const out: number[] = [];
+    for (let i = 0; i < ary.length; i++) {
+        const x = ary[i];
+        if (x && x.player === undefined && !hasBlockingEffect(x)) out.push(i);
+    }
+    return out;
+};
 
 export {isShikigami, lineSymbols, calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };

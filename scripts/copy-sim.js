@@ -2,7 +2,7 @@
 'use strict';
 /*
  * ブラウザの対戦シミュレーション(public/simWorker.js)が読む sim/ のモジュールを public/sim/ にコピーする。
- * run.js と live.js から require('./x') を辿って必要なファイルだけを集める（テストや probe は含めない）。
+ * compute.js と live.js から require('./x') を辿って必要なファイルだけを集める（テストや probe は含めない）。
  * npm start / npm run build の前に自動で走る(package.json の prestart / prebuild)。
  */
 const fs = require('fs');
@@ -10,7 +10,7 @@ const path = require('path');
 
 const SRC = path.join(__dirname, '..', 'sim');
 const DEST = path.join(__dirname, '..', 'public', 'sim');
-const ENTRIES = ['run', 'live'];
+const ENTRIES = ['compute', 'live'];
 
 const seen = new Set();
 // name は sim/ からの相対パス(拡張子なし。例 'engine' / 'shared/gear')。require は読んだファイルのあるフォルダ基準で辿る
