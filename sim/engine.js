@@ -260,7 +260,7 @@ const skillCosts = {
     onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
     onClickFirstFrost: 6, // 初霜(idx 93)。トークン扱い。盤面の🍂（効力のあるもの）が4枚以上なら0
     onClickBurnOff: 9, // 山焼き(idx 95)。トークン扱い。盤面のエフェクト1つにつき3軽減（最低1）
-    onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。盤面のエフェクト1つにつき2軽減（最低1）
+    onClickGather: 8, // 吹き寄せ(idx 94)。トークン扱い。盤面の氷結(❄)1つにつき2軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -1986,7 +1986,7 @@ function onClickBurnOff(s) {
 }
 
 // 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
-// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。動かせるエフェクト（氷結・ロックのマスを除く）1つにつき2軽減（最低1） [FAITHFUL] Game.tsx onClickGather
+// 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。盤面の氷結(❄)1つにつき2軽減（最低1。氷結分だけ数える） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {
     if (!gatherLegal(s)) return;
