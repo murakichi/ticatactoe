@@ -66,7 +66,9 @@ const NO_CAP_NECRO_WEIGHT = 100;
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (旧sim AI yyCover) */
 const YY_COVER_WEIGHT = 150;
 const SH_MAX = 3; // 同時に持つ式神の数
-const SH_BLAST_MIN = 3; // 爆破に値する最低ライン価値
+const SH_BLAST_MIN = 3;
+const SH_RICH_BLAST_MIN = 1; // 魔力に余裕があるときの、爆破に値する最低ライン価値
+const SH_RICH_GUARD = 8; // 同じく、1手番の式神運用の繰り返し回数
 const SH_BLESS_WEAK = 2; // 加護: ライフがこの値以下の自陣コマが2つ以上のとき使う (旧sim AI SH_BLESS_WEAK)
 const SH_CURSE_MIN = 2; // 呪詛: エフェクトが乗っている敵コマの最低数 (旧sim AI SH_CURSE_MIN)
 const SH_PURGE_FREE = 3; // 供犠: 自陣の式神がこの数以上なら0コスト (Game.tsx SHIKIGAMI_PURGE_FREE)
@@ -1943,10 +1945,12 @@ class AIPlayer {
                     return { clicks, board: b, win: true };
                 }
             }
-            for (let guard = 0; guard < 3; guard++) {
+            // 魔力が大きく余るときは、爆破の価値が低くても、置く→爆破を繰り返す（爆破で空いたマスにまた式神を置ける）
+            const rich = magic >= RICH_REROLL_MAGIC;
+            for (let guard = 0; guard < (rich ? SH_RICH_GUARD : 3); guard++) {
                 const own = mine();
                 const best = own.map((i) => ({ i, v: this.blastValue(b, i) })).sort((x, y) => y.v - x.v)[0];
-                const worth = !!best && best.v >= SH_BLAST_MIN;
+                const worth = !!best && best.v >= (rich ? SH_RICH_BLAST_MIN : SH_BLAST_MIN);
                 const toggleCost = costOf('onClickToggleYingYang');
                 const blastCost = costOf('onClickShikigamiBlast') + (mode === 'ying' ? 1 : 0); // 陰からは転化+陽のコスト+1
                 if (worth && m >= blastCost + (mode === 'ying' ? toggleCost : 0)) {
