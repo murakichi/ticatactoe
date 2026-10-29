@@ -143,8 +143,8 @@ const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
-    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiPlace: 2, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 4, // 陽: 自分の式神を1つ選んで爆破
     onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
