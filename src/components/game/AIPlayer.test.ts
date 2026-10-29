@@ -1615,3 +1615,27 @@ describe('巨人のストンプ連打（1手番で4つ並べる）', () => {
         expect(r.chargeClicks).toEqual([{ skill: 'onClickStomp', target: 3 }]);
     });
 });
+
+describe('毒使い: 魔力が有り余るときの連打', () => {
+    const { skillCosts } = require('./skillCosts');
+    const poisoner = () => new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', 'you']);
+    const ring = (): SquareInfo[] => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 6, effects: [] };
+        [0, 1, 4, 6].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [] }; });
+        return b;
+    };
+
+    it('毒霧→ミアズマを連打する（魔力に余裕があるときだけ）', () => {
+        expect(poisoner().makeMove(ring(), 40, skillCosts, 2, 5, [29], false).skills).toEqual(['onClickPoisonMist', 'onClickMiasma']);
+        expect(poisoner().makeMove(ring(), 9, skillCosts, 2, 5, [29], false).skills).not.toContain('onClickMiasma');
+    });
+
+    it('パンデミック→猛毒化: 敵が集まる3×3に毒を撒き、その毒を倍にする', () => {
+        const b = ring();
+        b[5] = { player: undefined, bind: 0, effects: [] };
+        const r = poisoner().makeMove(b, 23, skillCosts, 2, 5, [19], false);
+        expect(r.chargeClicks?.[0]).toEqual({ skill: 'onClickPandemic', target: expect.any(Number) });
+        expect(poisoner().makeMove(b, 12, skillCosts, 2, 5, [19], false).chargeClicks ?? []).toEqual([]);
+    });
+});

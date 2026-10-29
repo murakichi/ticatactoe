@@ -34,6 +34,8 @@ const RICH_MAGIC = 14;
 const STOMP_CHAIN_MAX = 4;
 /** 毒使いが パンデミック/猛毒化 を撃ったあとに残しておく魔力（毒の連打で空にしない） */
 const POISON_RICH_RESERVE = 10;
+/** 毒霧→ミアズマ: ミアズマの採点(毒が付く敵マス数＋要所)の最低値 */
+const MIST_MIASMA_MIN_SCORE = 4;
 /** パンデミック: 毒が付く敵コマ(−自陣の巻き込み)の最低数 */
 const PANDEMIC_MIN_SCORE = 3;
 /** 猛毒化: 敵コマに乗っている毒の最低スタック数 */
@@ -1927,7 +1929,38 @@ class AIPlayer {
         return clicks.length > 0 ? { clicks, board: b, win: false } : null;
     }
     /** メインエントリポイント: スキル選択 + 最善手を返す */
-    makeMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
+    /**
+     * 1手番の計画。魔力が大きく余っているのに使う額が少ない計画なら、手札を引き直す（引き直し回数を超えて RICH_EXTRA_REROLLS 回まで。
+     * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
+     */
+    makeMove(...args) {
+        const result = this.planMove(...args);
+        const magic = args[1];
+        if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS)
+            return result;
+        if (this.character === 'magician' || this.character === 'yinYangMaster')
+            return result;
+        if (result.skills.some((sk) => exports.TURN_ENDING_SKILLS.includes(sk)))
+            return result;
+        if (this.plannedSpend(result, args[2]) >= Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4))))
+            return result;
+        return { move: null, skills: [], reroll: {} };
+    }
+    /** 計画で払う魔力のおおよその額（スキル名からコスト表を引く。割引・特殊な軽減は見ない） */
+    plannedSpend(result, costs) {
+        var _a;
+        const names = [...result.skills, ...((_a = result.chargeClicks) !== null && _a !== void 0 ? _a : []).map((c) => c.skill)];
+        let total = 0;
+        for (const name of names) {
+            const base = costs[name];
+            if (typeof base === 'number')
+                total += this.calculateAICost(base, false, false, name);
+        }
+        if (result.lockTargets)
+            total += result.lockTargets.length * this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+        return total;
+    }
+    planMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
         var _a;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
@@ -1937,7 +1970,7 @@ class AIPlayer {
             const stompCost = this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp');
             const win = this.planStompWin(board, stompCost > 0 ? Math.floor(magic / stompCost) : STOMP_CHAIN_MAX, life);
             if (win !== null) {
-                return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })) };
+                return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })), win: true };
             }
         }
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
@@ -1973,16 +2006,10 @@ class AIPlayer {
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }
-        if (this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
-            // 魔力が大きく余るときは、1手番の引き直し回数を超えて(RICH_EXTRA_REROLLS回まで)、使う額が少ない手札も引き直す（シャッフルは1コスト）。
-            // 巨人のストンプのように chooseSkills の外で撃つ札があるキャラは、使う額が少ないだけでは引き直さない
-            const rich = magic >= RICH_REROLL_MAGIC && this.rerollsLeft > -RICH_EXTRA_REROLLS;
-            if (this.rerollsLeft > 0 || rich) {
-                const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
-                const thin = rich && this.character !== 'giant' && this.lastSpent < Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4))) && !plan.some((sk) => exports.TURN_ENDING_SKILLS.includes(sk));
-                if ((plan.length === 0 && this.rerollsLeft > 0) || (plan.length === 0 && rich) || thin)
-                    return { move: null, skills: [], reroll: {} };
-            }
+        if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
+            const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+            if (plan.length === 0)
+                return { move: null, skills: [], reroll: {} };
         }
         if (this.character === 'magician' && this.rerollsLeft > 0) {
             const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
@@ -2248,6 +2275,19 @@ class AIPlayer {
         // 毒使い ミアズマ: 自陣の毒マスの周囲の敵に毒を撒く（対象選択なし。手番は進まないので通常着手へ続ける）(sim/ai.js と同一)
         if (this.character === 'poisoner') {
             const miasmaCost = Math.max(skillCosts_1.MIASMA_MIN_COST, this.calculateAICost(costs.onClickMiasma - this.ownPoisonCount(board), false, true));
+            // 魔力が有り余るとき: 毒霧(全コマに毒) → ミアズマ の連打。毒霧で自陣の全コマに毒が乗り（ライフ1.5倍）、ミアズマが自陣の毒を全て敵に送って消す。
+            // 自陣の毒は残らず、毒が付いた自陣のコマの数だけ、隣の敵コマに毒が積み上がる
+            if (availableSkills.includes(29) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+                const mistCost = this.calculateAICost(costs.onClickPoisonMist, false, true, 'onClickPoisonMist');
+                if (magic >= mistCost + skillCosts_1.MIASMA_MIN_COST + POISON_RICH_RESERVE) {
+                    const after = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    (0, poison_1.addPoison)(after, (0, poison_1.poisonMistTargets)(after, this.characters), this.characters);
+                    const mistMiasmaCost = Math.max(skillCosts_1.MIASMA_MIN_COST, this.calculateAICost(costs.onClickMiasma - (0, poison_1.poisonCountFor)(after, this.playerSymbol), false, true));
+                    if (magic >= mistCost + mistMiasmaCost + POISON_RICH_RESERVE && this.miasmaScore(after) >= MIST_MIASMA_MIN_SCORE) {
+                        return { move: this.getBestMove(board, life), skills: ['onClickPoisonMist', 'onClickMiasma'] };
+                    }
+                }
+            }
             if (magic >= miasmaCost && this.miasmaScore(board) >= MIASMA_MIN_SCORE) {
                 return { move: this.getBestMove(board, life), skills: ['onClickMiasma'] };
             }
