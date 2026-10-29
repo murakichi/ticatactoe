@@ -129,7 +129,7 @@ export const gearDefOf = (id: GearId): GearDef => GEARS.find((g) => g.id === id)
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
 export const gearSlotsFor = (character: CharacterId): number => (character === 'you' ? 3 : 2);
 
-type Gears = readonly GearId[] | undefined;
+export type Gears = readonly GearId[] | undefined;
 export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.includes(id);
 
 /** ライフ平均への加算（頑健 / 剛腕の代償） */
@@ -278,7 +278,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'emptyLock', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['lastStand', 'ironLock'],
+    magician: ['spellWard', 'ironLock'],
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'afterglow'],
     necromancer: ['vengeance', 'lastStand'],
@@ -298,7 +298,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
-    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+    electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */

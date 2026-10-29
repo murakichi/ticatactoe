@@ -123,7 +123,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
         // ゲーム番号 g は全Workerで共通。Worker k が g = k, k+jobs, ... を担当する（結果は g だけで決まり、並列数に依らない）
         workers.current.forEach((w, k) =>
             w.postMessage({
-                cmd: 'start', players, size: boardChoice === 'auto' ? undefined : boardChoice, mode: 'faithful', seed,
+                cmd: 'start', players, size: boardChoice === 'auto' ? undefined : boardChoice, mode: 'prod', seed,
                 fixedChars: null, skills: useSkills, gears: useGears, offset: k, stride: jobs, maxGames: null,
             })
         );

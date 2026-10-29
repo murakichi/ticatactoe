@@ -3,7 +3,7 @@
 // ギア (sim/gear.js + engine.js) のテスト。実行: node sim/gear.test.js
 const assert = require('assert');
 const e = require('./engine');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -467,7 +467,7 @@ test('灰の供物: 敵のマスに🔥を付与すると、付与したマス1�
     s.board[6].effects.push({ effect: '🔥' });
     s.board[8] = { player: H, bind: 30, effects: [{ effect: '🔥' }] }; // 自分のマスの🔥は数えない
     e.placeMove(s, 2); // 💙の手番終了 → ⭕の手番
-    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 4, '相手の手番中は⭕の側のコストを見る(💙の次の手番まで保留)');
+    assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '手番でない席のコストは、その席の次の手番の頭の状態で出す(Game のパネルと同じ)');
     e.placeMove(s, 3); // ⭕の手番終了 → 💙の手番
     assert.strictEqual(e.gearCost(s, 4, false, 0, 'onClickShuffle'), 2, '2マスぶん重複して-2');
     assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');
@@ -548,7 +548,7 @@ test('術中の加護: 帯電の発火も、🔥を付けた瞬間のダメー�
         const s = game([[], g]);
         s.board[6] = { player: C, bind: 9, effects: [] };
         e.spendMagic(s, 0, 'onClickAddLife');
-        const thermal = require('./thermal');
+        const thermal = require('./shared/thermal');
         thermal.ignite(s.board, [6], s.size);
         return s.board[6].bind;
     }
@@ -569,18 +569,13 @@ test('装備枠: 「あなた」だけ3枠、他は2枠', () => {
 });
 
 test('全ギアを持たせたAI同士の試合が最後まで進む（落ちない・魔力が負にならない）', () => {
-    const ai = require('./ai');
+    const aiDriver = require('./aiDriver');
     for (let seed = 1; seed <= 8; seed++) {
         const g = [gear.randomGears(3, e.makeRng(seed)), gear.randomGears(3, e.makeRng(seed + 100))];
         const s = e.newGame({ chars: ['you', 'magician'], gears: g, rng: e.makeRng(seed) });
         let guard = 0;
         while (!s.winner && guard++ < 600) {
-            const r = ai.makeMove(s, 'faithful');
-            if (r.turnEnded) continue;
-            if (r.move === null) break;
-            const before = s.currentTurn;
-            e.placeMove(s, r.move);
-            if (s.currentTurn === before) break;
+            aiDriver.playTurn(s);
             assert.ok(s.magic.every((m) => m >= 0), `seed ${seed}: 魔力が負 ${s.magic}`);
         }
         assert.ok(guard < 600, `seed ${seed}: 終わらない`);

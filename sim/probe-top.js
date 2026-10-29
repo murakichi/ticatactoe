@@ -28,8 +28,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const engine = require('./engine');
-const gearMod = require('./gear');
-const deckMod = require('./deck');
+const gearMod = require('./shared/gear');
+const deckMod = require('./shared/deck');
 const live = require('./live');
 
 const args = {};
@@ -103,7 +103,7 @@ function pairTally(a, b, cfgA, cfgB, mods, from, to, seedBase) {
 // ---- ワーカー（子プロセス）----
 if (args.worker) {
     const job = JSON.parse(process.env.TOP_JOB || '{}');
-    const base = require(path.resolve(__dirname, 'ai.js'));
+    const base = require(path.resolve(__dirname, 'aiDriver.js'));
     const mods = { base, A: job.modA ? require(path.resolve(__dirname, job.modA)) : base };
     const out = [];
     for (const t of job.tasks) {
@@ -331,7 +331,8 @@ async function main() {
 
     if (args.scan === 'flags') {
         // AI_DEFAULTS の数値ノブを1つずつ動かす。0/1 は反転、それ以外は半分と2倍。--knobs a,b で絞る、--neighbors N で N 個をランダム抽出
-        const defaults = require('./ai.js').AI_DEFAULTS;
+        let defaults;
+        try { defaults = require('./ai.js').AI_DEFAULTS; } catch (e) { throw new Error('--scan flags は未対応: AIのノブは本番 AIPlayer.ts の定数になり、sim/ai.js の AI_DEFAULTS は無くなった（#289）'); }
         const cur = { ...((ENV[target] && ENV[target].flags) || {}), ...(cand.flags || {}) };
         const only = args.knobs ? args.knobs.split(',') : null;
         const rng = engine.makeRng(seed0 * 977 + 11);

@@ -8,8 +8,12 @@
 'use strict';
 const base = new URL('sim/', self.location.href).href;
 const cache = {};
-function load(name) {
-    const key = name.replace(/^\.\//, '').replace(/\.js$/, '');
+// name は require の引数。from は require したファイルのキー(sim/ からの相対パス、拡張子なし)。sim/shared/ のように入れ子でも解決できる
+function load(name, from) {
+    const parts = (from ? from.split('/').slice(0, -1) : []).concat(name.replace(/\.js$/, '').split('/'));
+    const out = [];
+    for (const p of parts) { if (p === '..') out.pop(); else if (p !== '.' && p !== '') out.push(p); }
+    const key = out.join('/');
     if (cache[key]) return cache[key].exports;
     const xhr = new XMLHttpRequest();
     xhr.open('GET', base + key + '.js', false);
@@ -17,7 +21,7 @@ function load(name) {
     if (xhr.status !== 200) throw new Error('failed to load ' + key + ' (' + xhr.status + ')');
     const module = { exports: {} };
     cache[key] = module;
-    new Function('module', 'exports', 'require', 'process', xhr.responseText + '\n//# sourceURL=sim/' + key + '.js')(module, module.exports, load, { env: {} });
+    new Function('module', 'exports', 'require', 'process', xhr.responseText + '\n//# sourceURL=sim/' + key + '.js')(module, module.exports, (n) => load(n, key), { env: {} });
     return module.exports;
 }
 

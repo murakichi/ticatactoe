@@ -7,7 +7,7 @@
  * 試合ごとに先手を入れ替え、a 側の勝敗を数える。--flags は両席に同じ設定を渡す（AI の設定そのものを切り替える用）。
  */
 const engine = require('./engine');
-const ai = require('./ai');
+const ai = require('./aiDriver');
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].slice(2)] = process.argv[i + 1];
 const flags = {};

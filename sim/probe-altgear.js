@@ -14,7 +14,7 @@ const { spawnSync } = require('child_process');
 // 主指標は probe-top の strong（対強豪平均）。強豪リストが無いとき(strong=null)は field。出力キーの `field` はこの値を指す
 const metric = (row) => (row.strong != null ? row.strong : row.field);
 const path = require('path');
-const gear = require('./gear');
+const gear = require('./shared/gear');
 
 const argv = process.argv.slice(2);
 const flag = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : def; };
@@ -43,7 +43,7 @@ if (deckMode) { runDeck(); process.exit(0); }
 if (!char || !cands) { console.error('usage: probe-altgear.js <char> [games] [seed] [--cand a,b;c,d]'); process.exit(1); }
 
 function runDeck() {
-    const deckMod = require('./deck');
+    const deckMod = require('./shared/deck');
     const engine = require('./engine');
     const n = parseInt(flag('neighbors', '8'), 10);
     const k = Math.max(1, parseInt(flag('swap', '1'), 10));
