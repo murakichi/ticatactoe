@@ -14,7 +14,7 @@ export const LIFE_BAN_MAX = 3;
 export const LIFE_BAN_PLACING_KEYS: ReadonlySet<string> = new Set([
     'onClickToken', 'onClickDoubleToken', 'onClickBothToken', 'onClickBudsToken', 'onClickPoisonToken',
     'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickFlameToken', 'onClickDoubleFlameToken',
-    'onClickFrostToken', 'onClickDoubleFrostToken',
+    'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
     'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken',
     'onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood',
 ]);

@@ -1450,3 +1450,59 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
         expect(lockTargetsOf('tactician')).toEqual([]);
     });
 });
+
+describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・無礼講・一寸の虫に魂なし)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const mk = (me: string, foe: string, deck?: number[]) => new AIPlayer('💙', me as 'you', ['⭕'], [me, foe] as never, undefined, false, false, deck);
+    const leafBoard = (): SquareInfo[] => {
+        const b = emptyBoard();
+        b[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        return b;
+    };
+
+    it('魔女が相手のとき、初霜/吹き寄せ/山焼きを手札に固定する。魔女以外が相手なら固定しない', () => {
+        const hand = [93, 94, 95, 3];
+        expect(mk('you', 'witch').chooseLocks(emptyBoard(), 0, 5, hand)).toEqual(expect.arrayContaining([93, 94]));
+        expect(mk('you', 'giant').chooseLocks(emptyBoard(), 0, 5, hand)).not.toContain(93);
+    });
+
+    it('魔女が相手で、新スキルが手札に無くデッキにあり、魔力に余裕があれば引き直す。手札にあれば引き直さない', () => {
+        const ai = mk('tactician', 'witch', [3, 9, 93, 94, 95]);
+        ai.rerollsLeft = 2;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeDefined();
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 93, 11], false).reroll).toBeUndefined();
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeUndefined();
+    });
+
+    it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
+        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
+        const one = emptyBoard();
+        one[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
+        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
+        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
+    });
+
+    it('高いトークンを撃つ予定なら、先に無礼講を撃つ（トークンが無礼講より安いときは撃たない）', () => {
+        const r = mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills;
+        expect(r.indexOf('onClickFreeToken')).toBeGreaterThanOrEqual(0);
+        expect(r.indexOf('onClickFreeToken')).toBeLessThan(r.indexOf('onClickBurnOff'));
+        const cheap = mk('you', 'witch');
+        expect(cheap.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
+        const active = mk('you', 'witch');
+        active.tokenFree = true;
+        expect(active.makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
+    });
+
+    it('一寸の虫に魂なし: 壊せる（ライフ3以下の）敵コマが2個以上のとき撃つ', () => {
+        const b = emptyBoard();
+        b[4] = { player: '⭕', bind: 3, effects: [] };
+        b[5] = { player: '⭕', bind: 2, effects: [] };
+        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
+        b[5] = { player: '⭕', bind: 6, effects: [] };
+        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
+    });
+});
