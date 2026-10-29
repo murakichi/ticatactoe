@@ -59,6 +59,7 @@ const poisonMod = require('./shared/poison');
 const blastMod = require('./shared/blast');
 const shikiMod = require('./shared/shikigami');
 const turnMod = require('./shared/turn');
+const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
 const giantAuraMod = require('./shared/giantAura');
@@ -629,6 +630,12 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 膠着の打開(本番 deadlock.ts): 着手が何周も無いと氷結とロックが一段解ける
+    if (!s.deadlock || s.deadlock.placements !== s.placements) s.deadlock = { placements: s.placements, turn: s.currentTurn };
+    else if (deadlockMod.isDeadlocked(s.currentTurn, s.deadlock.turn, seatCount(s))) {
+        if (deadlockMod.breakDeadlock(s.board).length > 0) bumpStat(s, 'deadlockBreak');
+        s.deadlock = { placements: s.placements, turn: s.currentTurn };
+    }
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
     s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる

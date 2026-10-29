@@ -6,6 +6,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
+import { breakDeadlock, isDeadlocked } from './deadlock';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -130,6 +131,8 @@ export const Game = (props: GameProps) => {
     const [currentTurn, setCurrentTurn] = useState<number>(1);
     // 盤面に着手した回数。3人以上のときの減衰タイミング(手番が1周するごと)の判定に使う
     const [placements, setPlacements] = useState<number>(0);
+    // 最後に着手があった手番（膠着の判定用）
+    const deadlockRef = useRef({ placements: 0, turn: 1 });
     // 手番の席番号(0始まり)
     const [turnSeat, setTurnSeat] = useState<number>(0);
     const currentTurnPlayer = symbols[turnSeat];
@@ -465,6 +468,7 @@ export const Game = (props: GameProps) => {
                     else onClickCharge();
                 } else onCellClick(next);
                 setPendingAIMove(rest.length > 0 ? rest : null);
+                if (rest.length === 0) watchAIStall();
             }, 200);
             return () => clearTimeout(timer);
         }
@@ -544,6 +548,8 @@ export const Game = (props: GameProps) => {
         } else if (plan.chargeWhenEmpty) {
             // 置ける場所もスキルもなければチャージで手番を終える（何もしないと進行不能になる）
             onClickCharge();
+        } else {
+            watchAIStall();
         }
     };
 
@@ -551,6 +557,17 @@ export const Game = (props: GameProps) => {
     // 巨人が休んで同じ席が連続で動く手番（turnSeat が変わらず再描画で張り直されない）で、手番開始の魔力・手札・ライフの更新前の値でAIが計画してしまう
     const runAIMoveRef = useRef(runAIMove);
     runAIMoveRef.current = runAIMove;
+
+    // AIの計画を最後まで実行したのに手番が進まないとき（氷結・ロックで対象や着手が無効になった等）は、チャージでパスして止まらないようにする。
+    // 計画の実行直後は state がまだ古いので、少し待ってから最新の値で確かめる
+    const stallRef = useRef<{ turn: number; over: boolean; queued: boolean; spinning: boolean; charge: () => void }>({ turn: currentTurn, over: true, queued: false, spinning: false, charge: () => {} });
+    const watchAIStall = () => {
+        const turn = stallRef.current.turn;
+        setTimeout(() => {
+            const cur = stallRef.current;
+            if (cur.turn === turn && !cur.over && !cur.queued && !cur.spinning) cur.charge();
+        }, 900);
+    };
 
     useEffect(() => {
         if (!currentAI) return;
@@ -710,6 +727,18 @@ export const Game = (props: GameProps) => {
         const nextSeat = judgeNextSeat();
         const nextCharacter = characters[nextSeat];
         const nextSymbol = symbols[nextSeat];
+        // 膠着の打開: 着手が何周も無い（全マスが氷結・ロックで全員がパスし続ける）と、減衰が進まず永久に終わらないので、盤面の時間を進める
+        if (placements !== deadlockRef.current.placements) deadlockRef.current = { placements, turn: currentTurn };
+        else if (isDeadlocked(currentTurn, deadlockRef.current.turn, seatCount)) {
+            const board = currentBoard.slice();
+            const changed = breakDeadlock(board);
+            deadlockRef.current = { placements, turn: currentTurn };
+            if (changed.length > 0) {
+                setCurrentBoard(board);
+                setGameLog((prev) => [...prev, `ターン${currentTurn}: 着手が続かないので氷結とロックが一段解けた`]);
+                flashCells(changed);
+            }
+        }
         // 「次のクリックで対象を選ぶ」待ち状態は手番をまたがない（ターン終了スキルで手番が終わったとき、次の席の最初のクリックが前の席のスキルの対象にならないように）
         setUseLock(0);
         setUseFreeze(false);
@@ -3132,6 +3161,7 @@ export const Game = (props: GameProps) => {
     const winner = rawWinner && lastStandHolderFor(rawWinner) < 0 ? rawWinner : undefined;
     // AIの手番の間は、人間の操作(マス・スキル・ロック切替)を受け付けない。AIは onCellClick/executeSkillForAI を直接呼ぶので影響しない
     const aiTurn = currentAI !== null && !winner;
+    stallRef.current = { turn: currentTurn, over: !!winner || currentAI === null, queued: pendingAIMove !== null, spinning: hailMarySpin !== null, charge: onClickCharge };
     // 勝ちを決めた列(複数同時に揃ったら全部)。盤面で光らせる
     const winCells = winner
         ? Array.from(new Set(geo.winLines.filter((line) => line.every((idx) => lineSymbols(currentBoard)[idx] === winner)).flat()))

@@ -37,7 +37,9 @@ const planAITurn = (ai, input, pickHailMary) => {
         ai.updateShield(board);
         const move = ai.getBestMove(board, life);
         const blocked = (0, lifeBan_1.moveBlocked)(input.lifeBan, life);
-        return { kind: 'silenced', move: move !== null && !blocked ? move : null, charge: blocked };
+        const cell = move !== null && !blocked ? move : null;
+        // 置けるマスが無い（全マスが氷結・ロックなど）ときも、チャージでパスしないと手番が進まず止まる
+        return { kind: 'silenced', move: cell, charge: cell === null };
     }
     ai.glacierPending = input.glacierPending;
     ai.glacierCharge = input.glacierCharge;

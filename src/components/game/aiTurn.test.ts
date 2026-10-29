@@ -50,6 +50,10 @@ describe('planAITurn', () => {
         const p = planAITurn(ai, input(b, { silenced: true }), () => 'ストンプ');
         expect(p.kind).toBe('silenced');
         if (p.kind === 'silenced') expect(p.move).not.toBeNull();
+        // 置けるマスが無い盤面（全マス相手のロック中）でも、サイレンス中の計画は必ずチャージでパスする
+        const lock = { effect: '🔑' as const };
+        const locked = emptyBoard().map(() => ({ player: '⭕' as const, bind: 9, effects: [lock] }));
+        expect(planAITurn(ai, input(locked, { silenced: true }), () => 'ストンプ')).toEqual({ kind: 'silenced', move: null, charge: true });
         const banned = planAITurn(ai, input(b, { silenced: true, lifeBan: true, life: 3 }), () => 'ストンプ');
         expect(banned).toEqual({ kind: 'silenced', move: null, charge: true });
     });

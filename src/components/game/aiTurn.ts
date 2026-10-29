@@ -60,7 +60,7 @@ export type AITurnInput = {
 };
 
 export type AITurnPlan =
-    /** サイレンス中: 通常の着手だけ。move=着手マス、charge=着手できないのでチャージでパス、どちらも無ければ何もしない */
+    /** サイレンス中: 通常の着手だけ。move=着手マス。着手できなければ charge=チャージでパス */
     | { kind: 'silenced'; move: number | null; charge: boolean }
     /** 引き直し（軽減札→シャッフル→再計画）。steps を順に実行する。locks は計画前にAIが決めたロック */
     | { kind: 'reroll'; steps: string[]; locks: number[] }
@@ -100,7 +100,9 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         ai.updateShield(board);
         const move = ai.getBestMove(board, life);
         const blocked = moveBlocked(input.lifeBan, life);
-        return { kind: 'silenced', move: move !== null && !blocked ? move : null, charge: blocked };
+        const cell = move !== null && !blocked ? move : null;
+        // 置けるマスが無い（全マスが氷結・ロックなど）ときも、チャージでパスしないと手番が進まず止まる
+        return { kind: 'silenced', move: cell, charge: cell === null };
     }
     ai.glacierPending = input.glacierPending;
     ai.glacierCharge = input.glacierCharge;
