@@ -1,6 +1,6 @@
 # tune-top: cryomancer
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: e53549e（再検証: 順位変わらず）（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
+- 最後に検証したmaster: 04c8796（再検証: 3位 58.6% のまま。上の順位は 1位 witch 78.7 / 2位 poisoner 69.0）（witch 追加後の環境。基準 58.8%/seed1/100、対 witch 22%）
 - 現在の推奨設定: gears=[lightToken,lastStand] deck=[8,12,28,37,41,43,44,45,46,47,48,73] AIフラグ=cryoCards=1, freezeBuds=1(魔法使い限定), antiPoison=1(margin2), yyCoverCryo=1, noCapNecro=100, antiSummon=1/antiSummonMax=1, antiFlood=13(すべて既定)
 - 基準線(0c49dd7, seed3/200): 3位 57.4%（1位 witch 77.6 / 2位 poisoner 77.1 / 4位 electrician 56.2 / 5位 necromancer 56.0）。対キャラ別: you 94 / tactician 64 / magician 88 / giant 77 / 陰陽師 61 / ネクロ 48 / 毒使い 29 / 雷霆 58 / 鍛冶師 63 / 魔女 26。旧基準線: 魔力+1・ライフ4 の採用後 環境勝率 約59% / 3位(1位 poisoner 約68%)。対鍛冶師 53%(互角)。対キャラ別(seed3/400): あなた89 / 魔法使い87 / 軍師61 / 巨人66 / 雷霆の巫58 / 毒使い60 / 鍛冶師56 / 陰陽師30 / ネクロ23
 - 連続不採用回数: 0（試行30のjointで採用）
@@ -31,6 +31,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 33 | gear | 最新 master（鍛冶師が afterglow+spellWard に、連続手番のAI修正など）で再検証。ギア5通り（seed5/300）→ sturdy+lastStand だけ別seed再測定（seed6/400） | 現行 lightToken+lastStand 58.0 / spellWard+lastStand 58.6 / afterglow+lastStand 56.4 / **sturdy+lastStand 61.0** / lightToken+spellWard 55.2。再測定 seed6/400: 現行 60.1 vs sturdy+lastStand 60.0（差なし）。対鍛冶師は 63→20〜22% に急落（鍛冶師の新ギアで火遁連打が強化）、対 witch 25%、対毒使い 36〜38% | 不採用（現行維持。新しい弱点: 対鍛冶師） |
 | 32 | synergy | 3枚同時入れ替え26近傍（採用デッキ、seed92/80） | 最良 63.2（写し身・総毛立つ・式神一括を足す）、62.4、61.2（基準 56.6）。上位2つを seed93/300 で再測定: 60.8 / 58.2 vs 基準 59.1（+1.7 / -0.9。+1.96×SE に届かず） | 不採用（探索の6種類を一巡: gear/deck/synergy/strategy/meta/joint） |
 | 31 | gear | spellWard を番人にも（#250: 毒使いの突出の原因）。spellWard+lastStand / lightToken+spellWard（seed5/200、base lightToken+lastStand 62.5） | 57.1 / 56.9。対毒使いは 30→44 / 32 に戻るが、環境勝率が下がる（対鍛冶師・電気・巨人が落ちる） | 不採用 |
 | 30 | joint | ギア lightToken+lastStand とデッキ A（[8,12,28,37,41,43,44,45,46,47,48,73]：氷柱・トークン→火炎トークン・百鬼夜行）の同時変更（現行 afterglow,lastStand+推奨デッキと比較、各400試合） | seed85: 65.2 vs 61.5（+3.7）、seed86: 63.2 vs 61.0（+2.2）、seed87: 64.2 vs 59.9（+4.3）。3つとも +1.5pt 以上、平均 +3.4pt（プールSE_diff約1.2）。対陰陽師・巨人・雷霆の巫・鍛冶師が上がり、対ネクロ・毒使いは-1〜-3 | **採用**（sim/gear.js・deck.js と gear.ts・deck.ts にミラー済み。本番AIでは未計測） |
