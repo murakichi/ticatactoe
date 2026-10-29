@@ -47,6 +47,15 @@ function deepClone(x) {
     for (const k of Object.keys(x)) o[k] = deepClone(x[k]);
     return o;
 }
+/** 簡易判定の候補マスのうち、実際に置くと勝つもの(着手後の減衰・炎・毒を含む)。乱数は別のものを使う */
+function exactWinCells(s, me, cands) {
+    return cands.filter((i) => {
+        const c = deepClone(s);
+        c.rng = engine.makeRng(777);
+        try { engine.placeMove(c, i); } catch (e) { return false; }
+        return c.winner === me;
+    });
+}
 /** 複製した手番前の状態で、置き直せば相手の勝ち手を残さずに済んだ着手を探す */
 function avoidingMoves(pre, me, exclude) {
     const out = [];
@@ -73,7 +82,7 @@ for (const chars of pairs) {
         let n = 0;
         while (!s.winner && n++ < 400) {
             const me = engine.curPlayer(s), ch = engine.curChar(s);
-            const myT = winCells(s, me);
+            const myT = exactWinCells(s, me, winCells(s, me)); // 簡易判定で勝てそうなマスを、複製して実際に置いて確かめる(減衰・炎・毒で列が崩れるものを除く)
             const oppT = engine.otherSeats(s).map((k) => winCells(s, engine.SYMBOLS[k]));
             const ls = (s.gears[s.turn] || []).includes('lastStand') && !s.lastStandUsed[s.turn]; // 土壇場の防壁が未発動なら守りは意図的に捨てる
             const flatPre = [...new Set(oppT.flat())];
