@@ -55,6 +55,9 @@ import { Status } from './Status';
 import styles from './Game.module.css';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
+/** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
+const SHIKIGAMI_PLACING_KEYS: ReadonlySet<string> = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
+
 /** 式神の供犠: 自陣の式神がこの数以上なら0コスト（sim/engine.js の SHIKIGAMI_PURGE_FREE と同値） */
 const SHIKIGAMI_PURGE_FREE = 3;
 
@@ -158,6 +161,7 @@ export const Game = (props: GameProps) => {
         freeCast: false, // 福引きで発動するスキルの支払いを0にする（次の spendMagic で消える）
         oppSkilled: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がスキルを使った（返し特売の0コスト条件の元）
         oppSkillPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での oppSkilled
+        shikiPlaced: Array<boolean>(seatCount).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
         fireBase: Array<number>(seatCount).fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件。増えていれば、この手番に敵か自陣へ🔥を付与した）
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
@@ -199,7 +203,9 @@ export const Game = (props: GameProps) => {
         if (skillKey === 'onClickFirstFrost' && seat === turnSeat && boardLeaves(currentBoard) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
         const leafAdd = withLeaf ? leafSurcharge(currentBoard, symbols[seat]) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
         const cut = seat === turnSeat ? comboCut(skillKey, currentBoard, symbols[seat], gearTurn.current.leafBase[seat], gearTurn.current.kinds[seat], gearTurn.current.chargeBase[seat]) : 0; // 導線（コンボ）による軽減
-        const adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost + leafAdd, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // カウント型の導線は下限1
+        let adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost + leafAdd, gearsBySeat[seat], gearCtxFor(seat), isToken, skillKey) - cut); // カウント型の導線は下限1
+        // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1。sim/engine.js gearCost と同値
+        if (seat === turnSeat && characters[seat] === 'yinYangMaster' && (gearTurn.current.shikiPlaced[seat] || (!!skillKey && SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1) adjusted -= 1;
         // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
         if (skillKey === 'onClickCounterMarkdown' && gearTurn.current.oppSkillPrev[seat]) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
         if (skillKey === 'onClickFireWheel' && seat === turnSeat && fireStacksTotal(currentBoard) > gearTurn.current.fireBase[seat]) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
@@ -782,6 +788,7 @@ export const Game = (props: GameProps) => {
             gearTurn.current.oppSkillPrev[nextSeat] = gearTurn.current.oppSkilled[nextSeat];
             gearTurn.current.oppSkilled[nextSeat] = false;
             gearTurn.current.fireBase[nextSeat] = fireStacksTotal(currentBoard);
+            gearTurn.current.shikiPlaced[nextSeat] = false;
             gearTurn.current.leafBase[nextSeat] = ownLeaves(currentBoard, nextSymbol);
             gearTurn.current.darkPotUsed[nextSeat] = false;
             gearTurn.current.tokenFree[turnSeat] = false; // 無礼講は手番が終わると切れる
@@ -1938,6 +1945,7 @@ export const Game = (props: GameProps) => {
         if (currentBoard[i].player || emptyBlocked(currentBoard[i])) return; // 埋まっている・氷結中のマスは選び直せる
         const board = currentBoard.slice();
         board[i] = newShikigami(currentTurnPlayer);
+        gearTurn.current.shikiPlaced[turnSeat] = true;
         addLog(`${posName(i)}に式神を設置`);
         flashCells([i]);
         playEffect('shikigami', i);
@@ -2085,6 +2093,7 @@ export const Game = (props: GameProps) => {
         playEffect('shikigami');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood'), true, true, 'onClickShikigamiFlood');
+        if (placed.length > 0) gearTurn.current.shikiPlaced[turnSeat] = true;
     };
     // 汎用(idx 72・トークン扱い): ランダムな空きマスに式神。トークン系ギア(補強・軽量)のライフ補正を受ける
     const onClickShikigamiRandom = () => {
@@ -2100,6 +2109,7 @@ export const Game = (props: GameProps) => {
             setCurrentBoard(board);
         }
         spendMagic(calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom'), true, true, 'onClickShikigamiRandom');
+        if (emptyIndexes.length > 0) gearTurn.current.shikiPlaced[turnSeat] = true;
         setUseToken(true);
     };
 
@@ -2120,6 +2130,7 @@ export const Game = (props: GameProps) => {
     };
 
     const onClickNecromancy = () => {
+        if (placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())) return; // 一寸の虫に魂なし: ライフ2のコマを召喚できない
         const curCost = necroCost[turnSeat];
         summonCorpses(baseNecromancyCost - curCost);
         spendMagic(gearCost(curCost, turnSeat, false, 'onClickNecromancy'), true, true, 'onClickNecromancy');
@@ -3579,6 +3590,7 @@ export const Game = (props: GameProps) => {
             oppSkilled: Array<boolean>(seatCount).fill(false),
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
             fireBase: Array<number>(seatCount).fill(0),
+            shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
             tokenFree: Array<boolean>(seatCount).fill(false),
             darkPotUsed: Array<boolean>(seatCount).fill(false),
@@ -4009,7 +4021,7 @@ export const Game = (props: GameProps) => {
                         paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
                         hidden={currentCharacter !== 'necromancer'}
                         exclusive
-                        disabled={checkSkillDisable(currentNecroCost)}
+                        disabled={checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())}
                     />
                     <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMiasma}

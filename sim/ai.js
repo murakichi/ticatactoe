@@ -1536,7 +1536,8 @@ function comboPlan(s, assumeMd = false) {
     // 式神一括は式神1体あたりのコスト。百鬼夜行のあとは『今の式神+埋まる空きマス』が全て対象になる
     const nAfterFlood = ownShikigami(s, curPlayer(s)).length + s.board.filter((sq) => !sq.player && !thermal.emptyBlocked(sq)).length;
     const f = best(cost('onClickShikigamiFlood'));
-    const a = best(calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll'));
+    // 百鬼夜行で式神を置くと、以降のスキルは-1（陰陽師のパッシブ。AIPlayer.ts comboPlan と同一）
+    const a = best(Math.max(1, calculateCost(s, costsOf(s).onClickShikigamiAll * Math.max(1, nAfterFlood), false, false, 'onClickShikigamiAll') - 1));
     return { floodCasts: f.m, allCasts: a.m, total: f.total + a.total };
 }
 // 相手が次の一手で2つ以上のリーチ（フォーク）か即勝ちを作れるか。チャージで駒を置かない手番の安全確認
@@ -1627,7 +1628,10 @@ function shikigamiTurn(s, me) {
                 else empties.push(idx);
             }
             if (bad || real < F.shComboReal || shiki + empties.length === 0) continue;
-            const total = empties.length * placeCost + allCostFor(ownShiki + empties.length) + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
+            // 式神を置く手番は全スキル-1（陰陽師のパッシブ）: 設置は各1安く、式神一括も1安い（AIPlayer.ts と同一）
+            const placeSum = empties.length * placeCost; // 設置自身も-1（calculateCost が含む）
+            const allSum = empties.length > 0 ? Math.max(1, allCostFor(ownShiki + empties.length) - 1) : allCostFor(ownShiki + empties.length);
+            const total = placeSum + allSum + (empties.length > 0 && mode === 'yang' ? toggleCost : 0);
             if (curMagic(s) < total) continue;
             if (!bestLine || empties.length < bestLine.empties.length) bestLine = { empties, total };
         }
