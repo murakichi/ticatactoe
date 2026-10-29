@@ -63,7 +63,7 @@ const AI_DEFAULTS = {
 AI_DEFAULTS.tinderLock = 2; AI_DEFAULTS.yyBudLock = 0; AI_DEFAULTS.loopDig = 0; AI_DEFAULTS.loopMin = 5; AI_DEFAULTS.comboDiscount = 1; AI_DEFAULTS.lock53Late = 0; AI_DEFAULTS.noDig53 = 8; AI_DEFAULTS.digRelock = 1; AI_DEFAULTS.chargeSafe = 0; AI_DEFAULTS.chargeWait = 1; AI_DEFAULTS.digSpare = 0; AI_DEFAULTS.shuffleDig = 8; AI_DEFAULTS.bloomLoop = 0; AI_DEFAULTS.floodLock = 1; AI_DEFAULTS.floodHold = 2; AI_DEFAULTS.shReserve = 9; AI_DEFAULTS.shComboReal = 1; AI_DEFAULTS.shMax = 3; AI_DEFAULTS.shBlastMin = 3; AI_DEFAULTS.shSpecials = 1; AI_DEFAULTS.smallFry = 1; AI_DEFAULTS.staleMove = 1; // 本番(AIPlayer.ts)は着手をスキルの前の盤面で決める。sim もそれに合わせる(issue #180)
 AI_DEFAULTS.lockFirstPyro = 2; // 魔法使い: 鍛冶師が相手のときも審判の日より先に自陣のコマを全てロック（🔥はロック中のコマに付かない。対鍛冶師 33〜37→47〜51%、seed41/42 各300）
 AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判の日より先に自陣のコマを全てロック（ロック中のコマには❄が付かない=バッズ凍結を防ぐ。対氷室 10→28%、seed32/300。本番は AIPlayer.ts）
-AI_DEFAULTS.judgeUnderThreat = 0; // 検証用: 相手リーチを全て崩せる審判の日を、リーチがあっても撃つ
+AI_DEFAULTS.judgeUnderThreat = 1; // 魔法使い(採用。対魔女・毒使い 40.5→45.3% seed8/300、全相手 49.6→55.3% seed9/150。本番は AIPlayer.findJudgeBreakingReach): 相手リーチを全て崩せる審判の日を、リーチがあっても撃つ
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 // 対魔女の新スキル（初霜93・吹き寄せ94・山焼き95・無礼講96）: 引いたら先に固定し(lockNew)、手札に無ければ魔力に余裕があるとき1コストで引き直して探す(witchDig=回数, digMargin=シャッフルのあとに残す魔力)。無礼講(freeTok)は高いトークンの前に撃つ
