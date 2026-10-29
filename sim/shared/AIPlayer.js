@@ -77,6 +77,8 @@ const EXCLUSIVE_MIN_MAGIC = {
 const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
+/** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
+const FORCED_WIN_PLIES = 4;
 class AIPlayer {
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
     inDeck(idx, availableSkills) {
@@ -858,6 +860,58 @@ class AIPlayer {
     oppCanWinNow(board, life) {
         return this.opponents.some((o) => this.getMovesFor(board, o, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, j, o, life))) === o));
     }
+    /**
+     * 強制勝ちの着手。相手がどう打っても（着手だけの盤面ゲームとして）FORCED_WIN_PLIES 手先までに自分が勝てる着手を探す。
+     * minimax(深さ3)は相手の着手で評価が終わるため、自分が3回打つ勝ちを見逃す。2人戦の小さい盤（16マス以下）だけ。
+     * オラクル照合(sim/probe-oracle.js): 見逃しは着手判断の 4.5%、そこで最善手を打つと実戦勝率 +9.6pt (z=3.5)
+     */
+    forcedWinMove(board, life, moves) {
+        if (this.opponents.length !== 1 || board.length > 16)
+            return null;
+        const me = this.playerSymbol;
+        const opp = this.opponents[0];
+        // me の視点の値 (+1 強制勝ち / -1 強制負け / 0 未決)。mover が手番、ply は着手の通し番号（減衰の文脈）、depth は残りの手数
+        const search = (b, mover, ply, depth, alpha, beta) => {
+            if (depth === 0)
+                return 0;
+            const next = this.getMovesFor(b, mover, life);
+            if (next.length === 0)
+                return 0;
+            let best = mover === me ? -2 : 2;
+            for (const j of next) {
+                const nb = this.simulatePlace(b, j, mover, life, ply);
+                const w = (0, util_1.calculateWinner)((0, util_1.lineSymbols)(nb));
+                const v = w ? (w === me ? 1 : -1) : search(nb, mover === me ? opp : me, ply + 1, depth - 1, alpha, beta);
+                if (mover === me) {
+                    if (v > best)
+                        best = v;
+                    if (best > alpha)
+                        alpha = best;
+                }
+                else {
+                    if (v < best)
+                        best = v;
+                    if (best < beta)
+                        beta = best;
+                }
+                if (beta <= alpha)
+                    break;
+            }
+            return best;
+        };
+        for (const m of moves) {
+            const nb = this.simulatePlace(board, m, me, life, 0);
+            const w = (0, util_1.calculateWinner)((0, util_1.lineSymbols)(nb));
+            if (w) {
+                if (w === me)
+                    return m;
+                continue;
+            }
+            if (search(nb, opp, 1, FORCED_WIN_PLIES, -2, 2) === 1)
+                return m;
+        }
+        return null;
+    }
     /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
     winningMove(board, life) {
         const moves = Array.from(new Set([...(0, util_1.findEmptyIndexes)(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
@@ -878,6 +932,12 @@ class AIPlayer {
             const sim = this.simulatePlace(board, i, this.playerSymbol, life);
             if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(sim)) === this.playerSymbol)
                 return i;
+        }
+        // 1.5 強制勝ち（土壇場の防壁が未発動のときは、相手の勝ちを防壁が受けるので普通の判断に任せる）
+        if (!this.lastStandReady) {
+            const forced = this.forcedWinMove(board, life, allMoves);
+            if (forced !== null)
+                return forced;
         }
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
         let candidates = allMoves;
