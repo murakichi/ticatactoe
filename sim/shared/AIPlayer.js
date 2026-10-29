@@ -854,6 +854,15 @@ class AIPlayer {
         }
     }
     /** 最善手を選択: 即勝ち→即ブロック→Minimax+フォーク評価 */
+    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
+    winningMove(board, life) {
+        const moves = Array.from(new Set([...(0, util_1.findEmptyIndexes)(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
+        for (const i of moves) {
+            if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, i, this.playerSymbol, life))) === this.playerSymbol)
+                return i;
+        }
+        return null;
+    }
     getBestMove(board, life) {
         const empty = (0, util_1.findEmptyIndexes)(board);
         const validMoves = this.getValidMoves(board, life);
@@ -867,24 +876,37 @@ class AIPlayer {
                 return i;
         }
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
+        let candidates = allMoves;
         for (const opp of this.lastStandReady ? [] : this.opponents) {
             const oppMoves = this.getMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);
                 if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(sim)) === opp) {
-                    if (allMoves.includes(i))
+                    if (!allMoves.includes(i))
+                        continue;
+                    // 塞いだ後の減衰で別のコマが 0 になって奪われ、相手に別の勝ち手ができることがある。
+                    // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ。sim/ai.js の safeBlock）
+                    const safe = allMoves.filter((m) => {
+                        const after = this.simulatePlace(board, m, this.playerSymbol, life, 0);
+                        return this.opponents.every((q) => !this.getMovesFor(after, q, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(after, j, q, life))) === q));
+                    });
+                    if (safe.length === 0)
                         return i;
+                    candidates = safe;
+                    break;
                 }
             }
+            if (candidates !== allMoves)
+                break;
         }
         // 3. Minimax評価 + フォーク検出
         let bestScore = -Infinity;
-        let bestMove = allMoves[0];
+        let bestMove = candidates[0];
         // 雷霆の巫: 相手に陰陽師がいると、百鬼夜行→式神一括で空きマスが全部相手のコマになる。自分のコマが1つも無い線があると
         // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（旧sim AI F.floodCover と同じ。対陰陽師 11→28%）
         const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
         const floodLines = floodCover ? (0, boardGeometry_1.geometryForCells)(board.length).winLines : [];
-        for (const i of allMoves) {
+        for (const i of candidates) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
             if (this.character === 'giant' && simBoard[i].player === this.playerSymbol)
                 this.applyAuraSim(simBoard, i);
@@ -942,6 +964,11 @@ class AIPlayer {
             // 魔女戦: 一寸の虫に魂なし(92)を最優先で固定する（旧sim AI と同一。本番AI 対魔女 28→51%(51/182→92/179)。相手が魔女以外だと固定が裏目: 対毒使い 26/54→10/39、対軍師 21/55→6/37）
             const vsWitch = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch');
             return vsWitch && availableSkills.includes(92) ? [92, ...combo].slice(0, 2) : combo;
+        }
+        // 氷室の番人: 魔女が相手のときだけ、一寸の虫に魂なし(92)を手札に固定して壊せる敵コマが揃うまで持ち続ける（sim/ai.js F.fryDig=2。対魔女 22〜26→58〜61%。魔女以外では固定が邪魔になり対巨人 72→61%、対鍛冶師 23→15%）
+        if (this.character === 'cryomancer' && availableSkills.includes(92)
+            && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch')) {
+            return [92];
         }
         if (this.character === 'giant' || this.character === 'magician') {
             return [];
@@ -1849,11 +1876,23 @@ class AIPlayer {
         }
         return clicks.length > 0 ? { clicks, board: b, win: false } : null;
     }
+    /** 引き直しの前に、手札が全て固定されていれば固定を1つ外して札が入れ替わるようにする（特売(53)など、無くても組める札を優先して外す） */
+    locksForReroll(locks, handSize) {
+        if (locks.length < handSize || locks.length === 0)
+            return locks;
+        const drop = locks.includes(53) ? 53 : locks[locks.length - 1];
+        return locks.filter((i) => i !== drop);
+    }
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     makeMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
         var _a;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+        // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（winFirst）
+        // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われるので先にギアを剥がす等の判断に任せる
+        const winNow = this.oppLastStand ? null : this.winningMove(board, life);
+        if (winNow !== null)
+            return { move: winNow, skills: [] };
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（旧sim AI の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
         // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（旧sim AI の noDig53=8）
@@ -1879,6 +1918,13 @@ class AIPlayer {
         // （見つけた札は引き直しのたびに chooseLocks が固定し直す。旧sim AI の witchDig=2, digMargin=3）
         if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
+            return { move: null, skills: [], reroll: {} };
+        }
+        // 氷室の番人 対魔女: デッキに一寸の虫に魂なし(92)があり手札に無く、壊せる敵コマが2個以上あって、シャッフルと92の分の魔力があれば、1コストで引き直して探す
+        // （見つけた92は chooseLocks が固定する。sim/ai.js の fryDig=2）
+        if (facesWitch && this.character === 'cryomancer' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
+            && (0, lifeBan_1.smallFryTargets)(board, this.playerSymbol, this.characters).length >= 2
+            && magic >= costs.onClickShuffle + this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
             return { move: null, skills: [], reroll: {} };
         }
         // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
