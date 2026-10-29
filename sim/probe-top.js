@@ -16,7 +16,7 @@
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
  *
 
- * 共通: --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（頑健性確認: 相手のデッキを推奨から3枚ランダムに入れ替える。本番のAIデッキはこう入れ替えないので、環境の基準ではなくストレステスト）, --workers N（既定=コア数）,
+ * 共通: --envDeck pick / --oppGears pick（相手が本番どおり主案と別案から選ぶ。完了判定の2条件目）, --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（頑健性確認: 相手のデッキを推奨から3枚ランダムに入れ替える。本番のAIデッキはこう入れ替えないので、環境の基準ではなくストレステスト）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
  * 出力の `field` が環境勝率（対象の対キャラ別勝率の単純平均）。`se` は標準誤差の概算。
  */
@@ -60,10 +60,15 @@ function play(chars, cfgs, seed) {
     return s.winner ? engine.seatOf(s.winner) : -1;
 }
 
-/** 環境のキャラ c の標準設定。deckRng が渡れば本番どおり「推奨から3枚入れ替え」 */
-function envCfg(c, mods, rng, varied, oppGears) {
-    const gears = oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : oppGears === 'lastStand' ? ['lastStand', ...gearMod.recommendedGears(c).filter((g) => g !== 'lastStand').slice(0, gearMod.gearSlotsFor(c) - 1)] : gearMod.recommendedGears(c);
-    return { deck: varied ? deckMod.variedAIDeck(c, rng) : deckMod.recommendedDeck(c), gears, flags: {}, mod: mods.base };
+/**
+ * 環境のキャラ c の設定。envDeck: 'varied'=推奨から3枚ランダムに入れ替え(ストレステスト) / 'pick'=本番どおり主案と別案から選ぶだけ(入れ替えなし) / 省略=主案。
+ * oppGears: 'pick'=本番どおり主案と別案から選ぶ。対象(候補側)には pick を掛けない(測定対象は主案/指定の設定)
+ */
+function envCfg(c, mods, rng, envDeck, oppGears) {
+    const varied = envDeck === 'varied';
+    const gears = oppGears === 'pick' ? gearMod.pickRecommendedGears(c, rng) : oppGears === 'none' ? [] : oppGears === 'random' ? gearMod.randomGears(gearMod.gearSlotsFor(c), rng) : oppGears === 'lastStand' ? ['lastStand', ...gearMod.recommendedGears(c).filter((g) => g !== 'lastStand').slice(0, gearMod.gearSlotsFor(c) - 1)] : gearMod.recommendedGears(c);
+    const deck = varied ? deckMod.variedAIDeck(c, rng) : envDeck === 'pick' ? deckMod.pickRecommendedDeck(c, rng) : deckMod.recommendedDeck(c);
+    return { deck, gears, flags: {}, mod: mods.base };
 }
 
 /** ワーカー: a と b の組を games 試合（席交互）。a の勝ち・負け・引分を返す */
@@ -93,7 +98,7 @@ if (args.worker) {
         const cand = job.variants[t.variant];
         const mk = (c, isCand) => (rng) => {
             // 対象（候補側）は相手設定の揺らぎ（ギアなし/ランダム）を受けず、推奨ギア（候補が指定すればそれ）を使う
-            const e = envCfg(c, mods, rng, job.envDeck === 'varied', isCand ? 'recommended' : job.oppGears);
+            const e = envCfg(c, mods, rng, isCand && job.envDeck === 'pick' ? undefined : job.envDeck, isCand ? 'recommended' : job.oppGears);
             if (!isCand) return e;
             if (cand.deck) e.deck = cand.deck;
             if (cand.gears) e.gears = cand.gears;
