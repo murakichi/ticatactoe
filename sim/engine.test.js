@@ -384,12 +384,12 @@ test('両トークン: 参加者全員のコマが1つずつ置かれる', () =>
     assert.deepStrictEqual(placed, e.SYMBOLS.slice(0, 5).slice().sort());
 });
 
-test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト2。埋まったマスは選び直せる', () => {
+test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付きの自陣、コスト2（置くスキル自身も-1で実費1）。埋まったマスは選び直せる', () => {
     const s = gameN('yinYangMaster', 'you', 'you');
     s.board[1] = { player: '⭕', bind: 5, effects: [] };
     s.magic[0] = 10;
     e.SKILLS.shikigamiPlace(s);
-    assert.strictEqual(s.magic[0], 8);
+    assert.strictEqual(s.magic[0], 9);
     assert.strictEqual(e.placeMove(s, 1), false); // 埋まっている
     assert.strictEqual(s.useShikigamiPlace, true);
     assert.strictEqual(e.placeMove(s, 6), true);
@@ -546,6 +546,27 @@ test('式神一括(1体あたりコスト3): 自分の式神を全て通常の�
     assert.strictEqual(s.magic[0], 14);
 });
 
+test('陰陽師のパッシブ: 式神を置く手番は全スキルのコスト-1（下限1）。置くスキル自身も-1。手番が変わると戻る', () => {
+    const s = game('yinYangMaster', 'you');
+    s.magic[0] = 30;
+    e.SKILLS.shikigamiPlace(s); // 設置(2): 置くスキル自身も-1 で 1
+    assert.strictEqual(s.magic[0], 29);
+    e.placeMove(s, 5);
+    assert.strictEqual(s.shikiPlaced[0], true);
+    const m = s.magic[0];
+    e.SKILLS.shikigamiPlace(s); // 2-1=1（下限1）
+    assert.strictEqual(m - s.magic[0], 1);
+    e.placeMove(s, 6);
+    const m2 = s.magic[0];
+    e.SKILLS.toggleYY(s); // 陰陽転化(1)は下限1のまま
+    assert.strictEqual(m2 - s.magic[0], 1);
+    e.SKILLS.shikigamiBlast(s); // 爆破 4-1 = 3
+    assert.strictEqual(m2 - 1 - s.magic[0], 3);
+    e.advanceTurn(s);
+    e.advanceTurn(s);
+    assert.strictEqual(s.shikiPlaced[0], false);
+});
+
 test('式神一括は式神の数に比例して高くなる（盤面を埋める百鬼夜行→一括は重い）', () => {
     const s = game('yinYangMaster', 'you');
     for (let i = 0; i < 16; i++) s.board[i] = { player: undefined, bind: 0, effects: [] };
@@ -553,7 +574,7 @@ test('式神一括は式神の数に比例して高くなる（盤面を埋め�
     e.SKILLS.shikigamiFlood(s); // 16マス全て式神
     const before = s.magic[0];
     e.SKILLS.shikigamiAll(s);
-    assert.strictEqual(before - s.magic[0], 3 * 16);
+    assert.strictEqual(before - s.magic[0], 3 * 16 - 1); // 式神を置いた手番は全スキル-1
 });
 
 test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ0の式神を置く。氷結中の空きマスと既存のコマは変えない', () => {
@@ -564,7 +585,7 @@ test('百鬼夜行(コスト7): 着手できる全ての空きマスにライフ
     s.board[2] = { player: undefined, bind: 0, effects: [frz] };
     s.magic[0] = 20;
     e.SKILLS.shikigamiFlood(s);
-    assert.strictEqual(s.magic[0], 13);
+    assert.strictEqual(s.magic[0], 14); // 7-1（置くスキル自身も-1）
     assert.deepStrictEqual(s.board[0], { player: '⭕', bind: 3, effects: [] });
     assert.deepStrictEqual(s.board[2], { player: undefined, bind: 0, effects: [frz] });
     const placed = s.board.filter((sq) => e.isShikigami(sq));
