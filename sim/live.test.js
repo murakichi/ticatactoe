@@ -122,3 +122,17 @@ describe('analyze / verdict', () => {
         expect(an.rows[0].id).not.toBe('pad');
     });
 });
+
+describe('statsFromPairs / strong set', () => {
+    test('ペア集計から analyze でき、強豪は平均の上位半分', () => {
+        const st = live.statsFromPairs(['a', 'b', 'c', 'pad'], [
+            { a: 'a', b: 'b', w: 40, l: 60 }, { a: 'a', b: 'c', w: 40, l: 60 }, { a: 'a', b: 'pad', w: 100, l: 0 },
+            { a: 'b', b: 'c', w: 50, l: 50 }, { a: 'b', b: 'pad', w: 60, l: 40 }, { a: 'c', b: 'pad', w: 60, l: 40 },
+        ]);
+        const an = live.analyze(st);
+        expect(an.strong).toHaveLength(2);
+        expect(an.strong).not.toContain('pad');
+        const a = an.rows.find((r) => r.id === 'a');
+        expect(a.fieldAvg).toBeCloseTo(0.6, 5);
+    });
+});

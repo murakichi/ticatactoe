@@ -173,7 +173,7 @@ function analyze(st, { minDecided = MIN_DECIDED } = {}) {
     rows.sort((a, b) => b.eq - a.eq || (b.strongAvg || 0) - (a.strongAvg || 0));
     const pairs = [];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push(cell(ids[i], ids[j]).d);
-    return { rows, exploit, minPairDecided: Math.min(...pairs), minDecided, players: st.players, games: st.games };
+    return { rows, strong: [...strong], exploit, minPairDecided: Math.min(...pairs), minDecided, players: st.players, games: st.games };
 }
 
 // 分析から日本語の結論を作る。何を根拠にしたかを points に1行ずつ残す
@@ -206,4 +206,16 @@ function verdict(an, label = (id) => id) {
     return { headline, points: pts };
 }
 
-module.exports = { createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
+// probe-top のように「ペアごとの勝敗数」だけが分かる計測から、analyze に渡せる統計を組み立てる（2人戦）。
+// pairs = [{ a, b, w, l }]（a から見た勝ち・負け。引き分けは除く）
+function statsFromPairs(chars, pairs) {
+    const st = createStats(chars, 2);
+    for (const c of chars) st.perChar[c].appearances = 1;
+    for (const { a, b, w, l } of pairs) {
+        const [x, y, xw, yw] = a < b ? [a, b, w, l] : [b, a, l, w];
+        st.vs[x + '|' + y] = { a: x, b: y, meets: w + l, aWins: xw, bWins: yw };
+    }
+    return st;
+}
+
+module.exports = { statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
