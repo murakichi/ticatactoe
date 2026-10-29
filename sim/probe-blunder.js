@@ -43,7 +43,7 @@ for (const chars of pairs) {
             let placed = false;
             if (!r.turnEnded && r.move != null) { engine.placeMove(s, r.move); placed = true; }
             else if (!r.turnEnded) engine.SKILLS.charge(s);
-            if (myT.length && !(s.winner === me)) { st.missWin++; if (st.samples.length < 4) st.samples.push({ kind: 'win', chars, g, n, myT, move: r.move, skills: r.skills || r.used, placed }); }
+            if (myT.length && !(s.winner === me) && !(placed && myT.includes(r.move))) { // 勝てるはずのマスに置いて勝てなかった=式神のライン等の簡易判定のずれ。除く st.missWin++; if (st.samples.length < 4) st.samples.push({ kind: 'win', chars, g, n, myT, move: r.move, skills: r.skills || r.used, placed }); }
             else if (!s.winner) {
                 // 単独リーチ(相手1人・脅威マス1つ)を、着手後も残している
                 const flat = [...new Set(oppT.flat())];
