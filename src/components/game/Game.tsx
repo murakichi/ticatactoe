@@ -850,9 +850,11 @@ export const Game = (props: GameProps) => {
     }, [currentTurn]);
 
     useEffect(() => {
-        // 次に手番が来るプレイヤーのロックを固定して再シャッフル
+        // 次に手番が来るプレイヤーのロックを固定して再シャッフル。
+        // チャージのように盤面(history)が変わらずにターンだけ進む場合も、次の席の手札を引き直す（currentTurn も依存に含める）。
+        // 含めないと、チャージで手番を渡したとき次の席が前の席の手札をそのまま引き継いでしまう（sim は毎手番引き直す）
         setSkills(reshuffledSkills(deckBySeat[judgeNextSeat()], lockedSkills[judgeNextSeat()]));
-    }, [history]);
+    }, [history, currentTurn]);
 
     const onCellClick = (i: number) => {
         if (hailMarySpin) return;
