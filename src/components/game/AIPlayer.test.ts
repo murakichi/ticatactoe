@@ -1665,3 +1665,19 @@ describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () =
         expect(names.indexOf('onClickUseLock')).toBeLessThan(names.indexOf('onClickShatter'));
     });
 });
+
+describe('縮地の連打', () => {
+    const { skillCosts } = require('./skillCosts');
+    it('列の足りないマスが空きだけなら、列の外の自陣コマを動かして最後の1マスを着手で揃える', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        b[1] = { player: '💙', bind: 5, effects: [] };
+        b[12] = { player: '💙', bind: 2, effects: [] };
+        b[13] = { player: '💙', bind: 3, effects: [] };
+        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [50], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickRelocate', target: 12, target2: 2 }]);
+        expect(r.move).toBe(3);
+        expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
+    });
+});

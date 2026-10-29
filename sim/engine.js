@@ -425,6 +425,8 @@ function newGame(opts = {}) {
         useSacrifice: false,
         useKimon: false,
         usePlunder: false,
+        useRelocate: false,
+        relocateFrom: null,
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
@@ -625,9 +627,10 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
+    s.relocateFrom = null;
     s.useLock = 0;
 }
 function advanceTurn(s) {
@@ -809,6 +812,15 @@ function placeMove(s, i) {
     if (s.useSwidden) {
         if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
         s.useSwidden = false;
+        return true;
+    }
+    if (s.useRelocate) {
+        // 縮地: 動かす自陣のコマを選び、空きマスを選ぶ。選べないマスは選び直せる
+        if (genericMod.canRelocate(s.board[i], curPlayer(s))) { s.relocateFrom = i; return false; }
+        if (s.relocateFrom === null) return false;
+        if (!genericMod.relocate(s.board, s.relocateFrom, i, curPlayer(s))) return false;
+        s.useRelocate = false;
+        s.relocateFrom = null;
         return true;
     }
     if (s.usePlunder) {
@@ -2242,6 +2254,14 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
+// 縮地 (idx50): 自陣のコマを1つ選び、空きマスへ動かす（ライフ・エフェクトごと）。手番は続く
+function onClickRelocate(s) {
+    s.useRelocate = true;
+    s.relocateFrom = null;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickRelocate, false, false, 'onClickRelocate'), 'onClickRelocate');
+    bumpMagicCount(s);
+    bumpStat(s, 'relocate');
+}
 // 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
 function onClickPlunder(s) {
     if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
@@ -2522,6 +2542,7 @@ const SKILLS = {
     springWind: onClickSpringWind,
     kimon: onClickKimon,
     plunder: onClickPlunder,
+    relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,

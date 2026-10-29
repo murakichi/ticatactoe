@@ -31,6 +31,8 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 /** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
 const RICH_MAGIC = 14;
+/** 縮地を1手番に連打する回数の上限 */
+const RELOCATE_CHAIN_MAX = 3;
 /** 氷室の番人の砕氷: 1手番に壊す敵コマの数・氷結を重ねる回数の上限・撃ったあとに残す魔力 */
 const SHATTER_MAX_PER_TURN = 2;
 const SHATTER_MAX_FREEZES = 3;
@@ -1644,6 +1646,26 @@ class AIPlayer {
         }
         return best;
     }
+    /** 縮地の連打で1列を揃える計画。列の自陣でないマスは全て置ける空きマスで、そのうち1つを最後の着手に残し、残りを列の外の自陣コマで埋める */
+    planRelocateWin(board, maxCasts) {
+        const cap = Math.min(maxCasts, RELOCATE_CHAIN_MAX);
+        let best = null;
+        for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+            const need = line.filter((c) => board[c].player !== this.playerSymbol);
+            if (need.length < 2 || need.length - 1 > cap || !need.every((c) => (0, generic_1.isPlaceable)(board[c])) || (best && need.length - 1 >= best.moves.length))
+                continue;
+            const spare = board.map((_, i) => i).filter((i) => !line.includes(i) && (0, generic_1.canRelocate)(board[i], this.playerSymbol));
+            if (spare.length < need.length - 1)
+                continue;
+            const last = need[need.length - 1];
+            if (board[last].effects.some((e) => e.effect === '❄' || e.effect === '🔑'))
+                continue;
+            // ライフの低いコマから動かす（動かしても元のマスに自陣のコマは要らない）
+            spare.sort((a, b) => board[a].bind - board[b].bind);
+            best = { moves: need.slice(0, -1).map((to, k) => ({ from: spare[k], to })), move: last };
+        }
+        return best;
+    }
     /** 追い剥ぎの連打で1列を揃える計画。列の自陣でないマスは、追い剥ぎできる(ライフ0の敵)か、最後の着手に使う空きマス1つだけ */
     planPlunderWin(board, maxCasts) {
         const cap = Math.min(maxCasts, PLUNDER_CHAIN_MAX);
@@ -2060,6 +2082,14 @@ class AIPlayer {
             const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : PLUNDER_CHAIN_MAX);
             if (win !== null) {
                 return { move: win.move, skills: [], chargeClicks: win.cells.map((c) => ({ skill: 'onClickPlunder', target: c })), win: true };
+            }
+        }
+        // 縮地(50): 自陣のコマを空きマスへ動かす（手番は続く）。列の足りないマスが空きだけで、よそに動かせる自陣のコマが足りるなら、動かして最後の1マスは着手で揃える
+        if (availableSkills.includes(50)) {
+            const relocateCost = this.calculateAICost(costs.onClickRelocate, false, false, 'onClickRelocate');
+            const win = this.planRelocateWin(board, relocateCost > 0 ? Math.floor(magic / relocateCost) : RELOCATE_CHAIN_MAX);
+            if (win !== null) {
+                return { move: win.move, skills: [], chargeClicks: win.moves.map((m) => ({ skill: 'onClickRelocate', target: m.from, target2: m.to })), win: true };
             }
         }
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。

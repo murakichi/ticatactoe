@@ -369,6 +369,7 @@ export const Game = (props: GameProps) => {
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickPlunder': onClickPlunder(); break;
+            case 'onClickRelocate': onClickRelocate(); break;
             case 'onClickShatter': onClickShatter(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;

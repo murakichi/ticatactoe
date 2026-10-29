@@ -9,7 +9,7 @@ import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, ca
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { stomp as stompOf } from './blast';
-import { plunderTargets as plunderTargetsOf } from './generic';
+import { plunderTargets as plunderTargetsOf, canRelocate, isPlaceable } from './generic';
 import { NECROMANCY } from './turn';
 import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
@@ -31,6 +31,8 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 /** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
 const RICH_MAGIC = 14;
+/** 縮地を1手番に連打する回数の上限 */
+const RELOCATE_CHAIN_MAX = 3;
 /** 氷室の番人の砕氷: 1手番に壊す敵コマの数・氷結を重ねる回数の上限・撃ったあとに残す魔力 */
 const SHATTER_MAX_PER_TURN = 2;
 const SHATTER_MAX_FREEZES = 3;
@@ -86,7 +88,7 @@ export type AIResult = {
     lockTargets?: number[];
     stompTarget?: number; // 着手前にクリックする対象マス (ストンプ/インジェクション)
     /** 「スキル→対象マスのクリック」を順に行うスキル。雷霆の巫の帯電系（帯電拡散→帯電付与の順）と、氷室の番人の絶対零度(target なし)・煉獄の鍛冶師の業火 */
-    chargeClicks?: { skill: string; target?: number }[];
+    chargeClicks?: { skill: string; target?: number; /** 縮地の移動先（2回目のクリック） */ target2?: number }[];
     /** 詰み: ヘイルメアリーを撃つ。当選スキルは Game 側で引くので、対象は planHailMary で後から決める */
     hailMary?: boolean;
     /** 魔法使い: 撃てるスキルが無いので、軽減札(discount)を撃ってから1コストで手札を引き直す。Game 側が [軽減札, シャッフル, 再計画] を順に行う */
@@ -1579,6 +1581,24 @@ class AIPlayer {
         return best;
     }
 
+    /** 縮地の連打で1列を揃える計画。列の自陣でないマスは全て置ける空きマスで、そのうち1つを最後の着手に残し、残りを列の外の自陣コマで埋める */
+    planRelocateWin(board: SquareInfo[], maxCasts: number): { moves: { from: number; to: number }[]; move: number } | null {
+        const cap = Math.min(maxCasts, RELOCATE_CHAIN_MAX);
+        let best: { moves: { from: number; to: number }[]; move: number } | null = null;
+        for (const line of geometryForCells(board.length).winLines) {
+            const need = line.filter((c) => board[c].player !== this.playerSymbol);
+            if (need.length < 2 || need.length - 1 > cap || !need.every((c) => isPlaceable(board[c])) || (best && need.length - 1 >= best.moves.length)) continue;
+            const spare = board.map((_, i) => i).filter((i) => !line.includes(i) && canRelocate(board[i], this.playerSymbol));
+            if (spare.length < need.length - 1) continue;
+            const last = need[need.length - 1];
+            if (board[last].effects.some((e) => e.effect === '❄' || e.effect === '🔑')) continue;
+            // ライフの低いコマから動かす（動かしても元のマスに自陣のコマは要らない）
+            spare.sort((a, b) => board[a].bind - board[b].bind);
+            best = { moves: need.slice(0, -1).map((to, k) => ({ from: spare[k], to })), move: last };
+        }
+        return best;
+    }
+
     /** 追い剥ぎの連打で1列を揃える計画。列の自陣でないマスは、追い剥ぎできる(ライフ0の敵)か、最後の着手に使う空きマス1つだけ */
     planPlunderWin(board: SquareInfo[], maxCasts: number): { cells: number[]; move: number } | null {
         const cap = Math.min(maxCasts, PLUNDER_CHAIN_MAX);
@@ -1949,6 +1969,15 @@ class AIPlayer {
             const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : PLUNDER_CHAIN_MAX);
             if (win !== null) {
                 return { move: win.move, skills: [], chargeClicks: win.cells.map((c) => ({ skill: 'onClickPlunder', target: c })), win: true };
+            }
+        }
+
+        // 縮地(50): 自陣のコマを空きマスへ動かす（手番は続く）。列の足りないマスが空きだけで、よそに動かせる自陣のコマが足りるなら、動かして最後の1マスは着手で揃える
+        if (availableSkills.includes(50)) {
+            const relocateCost = this.calculateAICost(costs.onClickRelocate, false, false, 'onClickRelocate');
+            const win = this.planRelocateWin(board, relocateCost > 0 ? Math.floor(magic / relocateCost) : RELOCATE_CHAIN_MAX);
+            if (win !== null) {
+                return { move: win.move, skills: [], chargeClicks: win.moves.map((m) => ({ skill: 'onClickRelocate', target: m.from, target2: m.to })), win: true };
             }
         }
 

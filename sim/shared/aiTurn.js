@@ -100,6 +100,8 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(c.skill);
             if (c.target !== undefined)
                 steps.push(c.target);
+            if (c.target2 !== undefined)
+                steps.push(c.target2);
         }
         steps.push(...result.skills);
         if (result.lockTargets)
