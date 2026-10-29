@@ -98,7 +98,11 @@ const SKILL_CATALOG = [
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
     { idx: 87, name: '火口', icon: '🔥', category: 'fire' },
-    { idx: 88, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
 ];
 
 

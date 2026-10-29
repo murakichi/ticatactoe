@@ -107,7 +107,7 @@ function build(cfg) {
 }
 
 const PENDING = ['useLock', 'useStomp', 'useJudgeDay', 'useInjection', 'usePandemic', 'useBuds', 'useChargeOne', 'useChargeSpread', 'useChargeArea',
-    'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter', 'useSwidden', 'useKimon', 'useShikigamiPlace', 'useShikigamiBlast', 'useFreeze',
+    'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter', 'useSwidden', 'useKimon', 'useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze',
     'useSucker', 'useIgnite', 'useSacrifice', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
 const pendingOf = (s) => PENDING.filter((k) => { const v = s[k]; return Array.isArray(v) ? v[0] : !!v; });
 
