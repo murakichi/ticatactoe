@@ -371,6 +371,8 @@ export const Game = (props: GameProps) => {
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
             case 'onClickSerum': onClickSerum(); break;
+            case 'onClickIntensify': onClickIntensify(); break;
+            case 'onClickPandemic': onClickPandemic(); break;
             case 'onClickInjection': onClickInjection(); break;
             case 'onClickMiasma': onClickMiasma(); break;
             case 'onClickChargeToken': onClickChargeToken(); break;

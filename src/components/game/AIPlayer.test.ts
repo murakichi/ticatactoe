@@ -635,12 +635,12 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
         expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
     });
     it('魔法使い以外も、魔力が有り余っていて撃てるスキルが無ければ、軽減札を使わずシャッフルだけ行う', () => {
-        const r = run(mk('giant'), 12, [53]);
+        const r = run(mk('poisoner'), 12, [53]);
         expect(r.reroll).toEqual({});
         expect(r.skills).toEqual([]);
     });
     it('魔法使い以外が有り余っていても、引き直しの回数が残っていなければ引き直さない', () => {
-        const ai = mk('giant');
+        const ai = mk('poisoner');
         ai.rerollsLeft = 0;
         expect(run(ai, 12, [53]).reroll).toBeUndefined();
     });
@@ -1574,7 +1574,7 @@ describe('魔力が有り余るとき（多人数戦・防壁で長引いた試�
         spent.rerollsLeft = 0;
         expect(spent.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [3], false).reroll).toBeUndefined();
         const deep = you();
-        deep.rerollsLeft = -5;
+        deep.rerollsLeft = -8;
         expect(deep.makeMove(emptyBoard(), 40, skillCosts, 2, 5, [], false).reroll).toBeUndefined();
     });
 
@@ -1582,7 +1582,7 @@ describe('魔力が有り余るとき（多人数戦・防壁で長引いた試�
         const geo = geometryForCells(16);
         const b = emptyBoard();
         geo.antiDiagonal.slice(0, 2).forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [] }; });
-        expect(you().makeMove(b, 30, skillCosts, 2, 5, [5], false).skills).toContain('onClickSlash');
+        expect(you().makeMove(b, 22, skillCosts, 2, 5, [5], false).skills).toContain('onClickSlash');
         expect(you().makeMove(b, 8, skillCosts, 2, 5, [5], false).skills).not.toContain('onClickSlash');
     });
 
@@ -1591,5 +1591,27 @@ describe('魔力が有り余るとき（多人数戦・防壁で長引いた試�
         [0, 2, 5, 7, 10].forEach((i) => { b[i] = { player: i % 2 ? '🟩' : '⭕', bind: 4, effects: [] }; });
         expect(you().makeMove(b, 30, skillCosts, 2, 5, [8], false).skills).toContain('onClickOpium');
         expect(you().makeMove(b, 10, skillCosts, 2, 5, [8], false).skills).not.toContain('onClickOpium');
+    });
+});
+
+describe('巨人のストンプ連打（1手番で4つ並べる）', () => {
+    const { skillCosts } = require('./skillCosts');
+    const giant = () => new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'you']);
+
+    it('魔力が足りれば、ストンプを連打して1列を自陣にして勝つ。足りなければ連打しない', () => {
+        const b = emptyBoard();
+        const r = giant().makeMove(b, 12, skillCosts, 2, 5, [], false);
+        const clicks = r.chargeClicks ?? [];
+        expect(clicks.length).toBe(4);
+        expect(clicks.every((c) => c.skill === 'onClickStomp' && c.target !== undefined)).toBe(true);
+        const none = giant().makeMove(b, 6, skillCosts, 2, 5, [], false);
+        expect(none.chargeClicks ?? []).toEqual([]);
+    });
+
+    it('自陣のコマが3つ並んでいれば、残り1マスのストンプ1回で揃える', () => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => { b[i] = { player: '💙', bind: 6, effects: [] }; });
+        const r = giant().makeMove(b, 3, skillCosts, 2, 5, [], false);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickStomp', target: 3 }]);
     });
 });

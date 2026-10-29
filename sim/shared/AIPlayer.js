@@ -30,10 +30,20 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 /** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
 const RICH_MAGIC = 14;
+/** 巨人がストンプを1手番に連打する回数の上限 */
+const STOMP_CHAIN_MAX = 4;
+/** 毒使いが パンデミック/猛毒化 を撃ったあとに残しておく魔力（毒の連打で空にしない） */
+const POISON_RICH_RESERVE = 10;
+/** パンデミック: 毒が付く敵コマ(−自陣の巻き込み)の最低数 */
+const PANDEMIC_MIN_SCORE = 3;
+/** 猛毒化: 敵コマに乗っている毒の最低スタック数 */
+const INTENSIFY_MIN_FOE_POISON = 3;
 /** この魔力以上あるときは、手札で使う額が RICH_SPEND_GOAL に届かなければ、引き直し回数(rerollBudget)を使い切っても RICH_EXTRA_REROLLS 回まで引き直す */
 const RICH_REROLL_MAGIC = 24;
+/** 手札で使う額の目標は魔力の1/4（RICH_SPEND_GOAL〜RICH_SPEND_GOAL_MAX）。魔力が多いほど、もっと使える手札が出るまで引き直す */
 const RICH_SPEND_GOAL = 5;
-const RICH_EXTRA_REROLLS = 5;
+const RICH_SPEND_GOAL_MAX = 12;
+const RICH_EXTRA_REROLLS = 8;
 /** 有り余るときのオピウム: 当てられる敵コマがこの数以上 */
 const RICH_OPIUM_MIN_HIT = 4;
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
@@ -497,6 +507,25 @@ class AIPlayer {
      * ジャマーの対象(⚡マス)。縦横隣接の敵コマ(ライフ>0・ロックなし)を⚡のスタック数でライフ0にできる数が2以上、
      * 敵のリーチ列の要をライフ0にできる、または与ダメージ合計が JAMMER_MIN_DMG 以上なら撃つ。他人の無敵マスは選べない (sim/ai.js bestJammerTarget と同一)
      */
+    /** パンデミックの中心: 3×3で毒が付く敵コマが多く(自陣の巻き込みは1つ1点減点)、合計が PANDEMIC_MIN_SCORE 以上のマス */
+    bestPandemicTarget(board) {
+        let best = null;
+        let bestScore = PANDEMIC_MIN_SCORE - 1;
+        for (let i = 0; i < board.length; i++) {
+            let score = 0;
+            for (const j of (0, poison_1.pandemicTargets)(board, i, this.characters)) {
+                if (this.isEnemy(board[j].player) && !this.shield.has(j))
+                    score++;
+                else if (board[j].player === this.playerSymbol)
+                    score--;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        return best;
+    }
     bestJammerTarget(board) {
         const size = this.sizeOf(board);
         let bestIdx = null, bestScore = 0;
@@ -1545,6 +1574,29 @@ class AIPlayer {
         }
         return bestEnemies >= 1 ? bestIdx : null;
     }
+    /**
+     * ストンプを連打して、1手番のうちに4つ並べる計画。ストンプの中心には必ず自分のコマが置かれる（氷結中の空きマスを除く）ので、
+     * 自陣でないマスの数がちょうど回数になる列のうち、最も回数が少ないものを選ぶ。実際にストンプを順に適用して列が自陣で揃うことを確かめる。
+     * なければ null（maxCasts は魔力で撃てる回数）
+     */
+    planStompWin(board, maxCasts, life) {
+        const cap = Math.min(maxCasts, STOMP_CHAIN_MAX);
+        if (cap < 1)
+            return null;
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        for (const line of geo.winLines) {
+            const need = line.filter((c) => board[c].player !== this.playerSymbol);
+            if (need.length === 0 || need.length > cap || (best && need.length >= best.centers.length))
+                continue;
+            const nb = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            for (const c of need)
+                (0, blast_1.stomp)(nb, c, this.playerSymbol, life);
+            if (line.every((c) => nb[c].player === this.playerSymbol))
+                best = { centers: need, board: nb };
+        }
+        return best;
+    }
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board, i, player, life) {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
@@ -1879,6 +1931,15 @@ class AIPlayer {
         var _a;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
+        // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
+        // （自陣のコマが範囲に入ってもライフ-5だけ）。最少回数で1列を自陣にできるなら、魔力が許す限り連打して勝つ
+        if (this.character === 'giant') {
+            const stompCost = this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp');
+            const win = this.planStompWin(board, stompCost > 0 ? Math.floor(magic / stompCost) : STOMP_CHAIN_MAX, life);
+            if (win !== null) {
+                return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })) };
+            }
+        }
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
         // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
         // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（sim/ai.js の noDig53=8）
@@ -1918,7 +1979,7 @@ class AIPlayer {
             const rich = magic >= RICH_REROLL_MAGIC && this.rerollsLeft > -RICH_EXTRA_REROLLS;
             if (this.rerollsLeft > 0 || rich) {
                 const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
-                const thin = rich && this.character !== 'giant' && this.lastSpent < RICH_SPEND_GOAL && !plan.some((sk) => exports.TURN_ENDING_SKILLS.includes(sk));
+                const thin = rich && this.character !== 'giant' && this.lastSpent < Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4))) && !plan.some((sk) => exports.TURN_ENDING_SKILLS.includes(sk));
                 if ((plan.length === 0 && this.rerollsLeft > 0) || (plan.length === 0 && rich) || thin)
                     return { move: null, skills: [], reroll: {} };
             }
@@ -2267,6 +2328,33 @@ class AIPlayer {
                 (0, thermal_1.mogaribue)(board, this.playerSymbol, this.seatCharacters());
                 magic -= cost;
                 this.updateShield(board);
+            }
+        }
+        // 毒使い×魔力が有り余るとき: 連続で撃つと強い パンデミック(敵が集まる3×3に毒) → 猛毒化(盤面の毒を倍) の順に撃つ。
+        // 毒は着手のたびに減衰するので、撃った手番のうちに倍にするのが効く。どちらも対象に自陣を巻き込みすぎないときだけ
+        if (this.character === 'poisoner' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const pandemicCost = this.calculateAICost(costs.onClickPandemic, false, true, 'onClickPandemic');
+            if (availableSkills.includes(19) && magic - pandemicCost >= POISON_RICH_RESERVE) {
+                const center = this.bestPandemicTarget(board);
+                if (center !== null) {
+                    chargeClicks.push({ skill: 'onClickPandemic', target: center });
+                    board = board.slice();
+                    const hit = (0, poison_1.pandemicTargets)(board, center, this.characters);
+                    (0, poison_1.addPoison)(board, hit, this.characters);
+                    magic -= pandemicCost;
+                    this.updateShield(board);
+                }
+            }
+            const intensifyCost = this.calculateAICost(costs.onClickIntensify, false, true, 'onClickIntensify');
+            if (availableSkills.includes(18) && magic - intensifyCost >= POISON_RICH_RESERVE) {
+                const foe = board.reduce((n, sq) => (this.isEnemy(sq.player) ? n + (0, poison_1.activePoison)(sq) : n), 0);
+                if (foe >= INTENSIFY_MIN_FOE_POISON && foe > (0, poison_1.poisonCountFor)(board, this.playerSymbol) + 1) {
+                    chargeClicks.push({ skill: 'onClickIntensify' });
+                    board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    (0, poison_1.intensify)(board, this.characters);
+                    magic -= intensifyCost;
+                    this.updateShield(board);
+                }
             }
         }
         // 浄化（汎用スキル）: 自陣のコマ（ライフ>0）の状態異常が合計3スタック以上で撃つ。雷霆の巫の⚡無敵は数えない
