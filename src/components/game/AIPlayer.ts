@@ -1741,8 +1741,43 @@ class AIPlayer {
         return clicks.length > 0 ? { clicks, board: b, win: false } : null;
     }
 
-    /** メインエントリポイント: スキル選択 + 最善手を返す */
+    /** 手札が全て固定されていると、シャッフルは魔力を捨てるだけで札が変わらない（3枠とも固定→引き直し、を防ぐ） */
+    private noFreeSlot(board: SquareInfo[], opponentMagic: number, life: number, availableSkills: number[]): boolean {
+        return availableSkills.length > 0 && this.chooseLocks(board, opponentMagic, life, availableSkills).length >= availableSkills.length;
+    }
+
+    /** メインエントリポイント: スキル選択 + 最善手を返す。手札が全て固定なら引き直しはしない */
     makeMove(
+        board: SquareInfo[],
+        magic: number,
+        costs: Record<keyof SkillCosts, number>,
+        opponentMagic: number,
+        life: number,
+        availableSkills: number[],
+        tokenUsed: boolean,
+        necroRemain: number = 0,
+        necroCost: number = 0,
+        judgeCost: number = 99,
+        assaultCost: number = 99,
+        proliferateActive: boolean = false,
+        seatMagic: number[] = [],
+        necroPay: number = necroCost,
+        necroCosts: number[] = []
+    ): AIResult {
+        this.updateShield(board);
+        if (this.rerollsLeft > 0 && this.noFreeSlot(board, opponentMagic, life, availableSkills)) {
+            const saved = this.rerollsLeft;
+            this.rerollsLeft = 0;
+            try {
+                return this.makeMoveCore(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, judgeCost, assaultCost, proliferateActive, seatMagic, necroPay, necroCosts);
+            } finally {
+                this.rerollsLeft = saved;
+            }
+        }
+        return this.makeMoveCore(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, judgeCost, assaultCost, proliferateActive, seatMagic, necroPay, necroCosts);
+    }
+
+    private makeMoveCore(
         board: SquareInfo[],
         magic: number,
         costs: Record<keyof SkillCosts, number>,

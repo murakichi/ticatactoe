@@ -1489,6 +1489,20 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
     });
 
+    it('手札が全て固定されているときは引き直さない（3枠とも固定したままシャッフルすると魔力を捨てるだけ）', () => {
+        const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
+        ai.rerollsLeft = 8;
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [71, 73, 53])).toHaveLength(3); // 全て固定される手札
+        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 53], false).reroll).toBeUndefined();
+        expect(ai.rerollsLeft).toBe(8); // 一時的に止めるだけで、残り回数は変えない
+        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 2], false).reroll).toBeDefined(); // 空き枠があれば探す
+        // 空き枠が1つでもあれば（軍師は固定が2枚まで）従来どおり探す
+        const tac = mk('tactician', 'witch', [3, 4, 9, 11, 93, 94, 95]);
+        tac.rerollsLeft = 2;
+        expect(tac.chooseLocks(emptyBoard(), 0, 5, [3, 9, 11])).toHaveLength(2);
+        expect(tac.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [3, 9, 11], false).reroll).toBeDefined();
+    });
+
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
