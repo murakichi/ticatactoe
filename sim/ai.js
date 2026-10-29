@@ -2158,7 +2158,8 @@ function faithfulMakeMoveInner(s) {
         }
     }
     // 陰陽師(F.chargeWait): 勝てる盤面(敵コマの入っていない列がある)で、相手のリーチも無く、探索の魔力に足りないうちは、駒を置かずチャージで魔力を貯める
-    if (F.chargeWait && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
+    const facesWitch = s.chars.some((c, seat) => seat !== s.turn && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。AIPlayer.ts と同一)
+    if (F.chargeWait && !facesWitch && curChar(s) === 'yinYangMaster' && !s.silenced[s.turn] && comboReachable(s) && oppReachesNow(s, opps) === 0
         && floodComboWins(s, me) && (curMagic(s) < comboPlan(s, true).total + costsOf(s).onClickShuffle + F.chargeWait - 1
             || (F.noDig53 && s.skills.includes(71) && s.skills.includes(73) && !s.skills.includes(53) && curMagic(s) >= F.noDig53 && curMagic(s) < comboPlan(s).total))
         && !(F.chargeSafe && oppCanFork(s, opps))) {
@@ -2166,7 +2167,7 @@ function faithfulMakeMoveInner(s) {
         return { move: null, turnEnded: true };
     }
     // 陰陽師: コンボ札を持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める(F.floodHold: 1=両札が手札 2=どちらかが手札)
-    const holdFlood = curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
+    const holdFlood = !facesWitch && curChar(s) === 'yinYangMaster' && F.floodHold && comboReachable(s)
         && (F.floodHold >= 2 ? (s.skills.includes(71) || s.skills.includes(73)) : (s.skills.includes(71) && s.skills.includes(73)))
         && curMagic(s) < comboPlan(s).total;
     // 陰陽師: 式神の設置・転化・爆破

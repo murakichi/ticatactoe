@@ -1742,7 +1742,8 @@ class AIPlayer {
         }
         // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
         // （sim/ai.js の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
-        if (this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        const facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
+        if (!facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
@@ -1771,7 +1772,7 @@ class AIPlayer {
         }
 
         // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（sim/ai.js の floodHold=2）
-        const holdFlood = this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
+        const holdFlood = !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
             && magic < this.comboPlan(board, costs, availableSkills).total;
         // 陰陽師: 式神の設置・転化・爆破（sim/ai.js の shikigamiTurn）
         if (this.character === 'yinYangMaster' && !holdFlood) {
