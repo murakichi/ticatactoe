@@ -667,12 +667,12 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         return ai.makeMove(budBoard(cells), magic, skillCosts, 2, 5, [], false);
     };
     it('バッズ駒が複数あり魔力が足りれば、最大3つまで順にロックする', () => {
-        const r = run([0, 1, 2, 3], 9);
+        const r = run([0, 2, 5, 7], 9);
         expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickUseLock', 'onClickUseLock', 'onClickUseLock']);
-        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 1, 2]);
+        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 2, 5]);
     });
     it('魔力で払える数までに減らす', () => {
-        const r = run([0, 1, 2], skillCosts.onClickUseLock * 2);
+        const r = run([0, 2, 5], skillCosts.onClickUseLock * 2);
         expect(r.chargeClicks?.length).toBe(2);
     });
     it('1つだけなら従来どおり lockTargets で返す', () => {
@@ -1357,7 +1357,7 @@ describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
     const costs = { onClickChargeSeason: 6, onClickBristle: 5 } as any;
     const own3 = () => {
         const b = emptyBoard();
-        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        [0, 2, 5].forEach((i) => put(b, i, '💙')); // 一列に3つ並べない（即勝ちできると勝ちを優先する）
         put(b, 15, '⭕');
         return b;
     };
@@ -1380,7 +1380,7 @@ describe('落雷は忘れた頃にのAI使用', () => {
     const costs = { onClickRelease: 5, onClickChargeSeason: 6, onClickBristle: 5 } as any;
     const bolts = (n: number) => {
         const b = emptyBoard();
-        for (let i = 0; i < n; i++) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        for (const i of [0, 2, 5].slice(0, n)) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] }; // 一列に3つ並べない（即勝ちできると勝ちを優先する）
         put(b, 14, '⭕', 5);
         put(b, 15, '⭕', 5);
         return b;

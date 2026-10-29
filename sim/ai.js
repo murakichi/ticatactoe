@@ -1716,7 +1716,9 @@ function faithfulMakeMoveInner(s) {
     updateShield(s);
 
     // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ(F.winFirst)
-    if (F.winFirst) { const w = winningMove(s); if (w !== null) return { move: w, turnEnded: false }; }
+    // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われて自駒が消えるので、先にギアを剥がす等の判断(chooseSkills)に任せる
+    const foeLastStand = otherSeats(s).some((seat) => hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat]);
+    if (F.winFirst && !foeLastStand) { const w = winningMove(s); if (w !== null) return { move: w, turnEnded: false }; }
 
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (s.silenced[s.turn]) return { move: getEnhancedBestMove(s), turnEnded: false };

@@ -1793,7 +1793,8 @@ class AIPlayer {
         this.updateShield(board);
 
         // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（sim/ai.js の winFirst）
-        const winNow = this.winningMove(board, life);
+        // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われるので先にギアを剥がす等の判断に任せる
+        const winNow = this.oppLastStand ? null : this.winningMove(board, life);
         if (winNow !== null) return { move: winNow, skills: [] };
 
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（sim/ai.js の discountPlan>=2 と同方針。
