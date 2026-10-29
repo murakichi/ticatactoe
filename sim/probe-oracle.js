@@ -17,6 +17,7 @@ const driver = require('./' + (args0.mod || 'aiDriver.js')); // --mod aiDriver.o
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const [c1, c2] = (args.chars || 'you,you').split(',');
+const size = args.size ? parseInt(args.size, 10) : undefined;
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), D = parseInt(args.depth || '4', 10);
 const symbolsOf = (b) => b.map((x) => (engine.isShikigami(x) ? undefined : x.player));
 
@@ -50,7 +51,7 @@ const K = parseInt(args.rollouts || '0', 10);
 const stat = { turns: 0, compared: 0, optimal: 0, missedWin: 0, intoLoss: 0, other: 0, samples: [] };
 const t0 = Date.now();
 for (let g = 0; g < games; g++) {
-    const s = engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g) });
+    const s = engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g), size });
     let n = 0;
     while (!s.winner && n++ < 400) {
         const seat = s.turn;
