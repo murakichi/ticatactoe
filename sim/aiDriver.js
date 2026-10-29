@@ -30,7 +30,7 @@ const keyOf = (name) => SKILL_KEY[name] || name.replace(/^onClick/, '').replace(
 /** 席 seat のAI。Game.tsx が毎描画で作り直しているのと同じく、手番ごとに作る（AI自身は手番をまたぐ状態を持たない） */
 function aiFor(s, seat) {
     const symbols = SYMBOLS.slice(0, s.chars.length);
-    return new AIPlayer(
+    const ai = new AIPlayer(
         symbols[seat],
         s.chars[seat],
         symbols.filter((_, i) => i !== seat),
@@ -40,6 +40,8 @@ function aiFor(s, seat) {
         hasGear(s.gears[seat], 'emptyLock'),
         s.decks ? s.decks[seat] : undefined
     );
+    ai.placements = s.placements; // 着手後の減衰の先読み(simulatePlace)に使う。Game.tsx は計画時に設定済みの同じAIを打ち直しに渡す
+    return ai;
 }
 
 function inputOf(s, reroll) {
@@ -147,7 +149,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
     for (let i = 0; i < plan.clicks.length; i++) {
         if (over()) return;
         const last = i === plan.clicks.length - 1;
-        if (i >= queued && last) {
+        if (i >= queued && last && plan.moveLast) {
             const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i], s.lifeBan[seat]);
             if (cell !== null) click(cell); else E.SKILLS.charge(s);
         } else click(plan.clicks[i]);
@@ -185,4 +187,4 @@ function makeMove(s) {
     return { move: null, turnEnded: true };
 }
 
-module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf };
+module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf, aiFor };

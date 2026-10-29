@@ -67,12 +67,13 @@ export type AITurnPlan =
     /** 詰み: ヘイルメアリー。当選名を pick で決めたあとのステップ */
     | { kind: 'queue'; steps: AIStep[]; locks: number[] }
     /** 通常: skills を順に実行してから clicks（ロック対象→ストンプ等の対象→着手）をクリックする。何も無ければチャージでパス */
-    | { kind: 'direct'; skills: string[]; clicks: number[]; locks: number[]; chargeWhenEmpty: boolean };
+    | { kind: 'direct'; skills: string[]; clicks: number[]; locks: number[]; chargeWhenEmpty: boolean; /** clicks の最後が着手マス（埋まっていたら打ち直す対象）か。対象クリックで終わるなら false */ moveLast: boolean };
 
 /** ステップ列が手番を終えない（最後が着手でもターン終了スキルでもない）なら、チャージでパスするステップを足す */
-const endsTurn = (steps: AIStep[]): AIStep[] => {
+const endsTurn = (steps: AIStep[], hasMove: boolean): AIStep[] => {
     const last = steps[steps.length - 1];
-    const ends = typeof last === 'number' || (typeof last === 'string' && TURN_ENDING_SKILLS.includes(last));
+    // 最後の数値が着手マスのときだけ手番が終わる。ロック・インジェクションなどの対象クリックで終わる列は、チャージでパスする
+    const ends = (hasMove && typeof last === 'number') || (typeof last === 'string' && TURN_ENDING_SKILLS.includes(last));
     return ends ? steps : [...steps, 'onClickCharge'];
 };
 
@@ -144,7 +145,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         const steps: string[] = [];
         if (result.reroll.discount) steps.push(result.reroll.discount);
         steps.push('onClickShuffle', 'aiReplan');
-        return { kind: 'reroll', steps, locks };
+        return { kind: 'reroll', steps, locks: ai.locksForReroll(locks, input.hand.length) };
     }
 
     // 詰みからのヘイルメアリー: 当選スキルをここで決め、AI がそのスキルに合った対象を選ぶ
@@ -154,7 +155,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         const steps: AIStep[] = [`onClickHailMary:${picked}`];
         if (plan.target !== null) steps.push(plan.target);
         if (plan.move !== null && !moveBlocked(input.lifeBan, life)) steps.push(plan.move);
-        return { kind: 'queue', steps: endsTurn(steps), locks };
+        return { kind: 'queue', steps: endsTurn(steps, plan.move !== null && !moveBlocked(input.lifeBan, life)), locks };
     }
 
     // 雷霆の巫: 帯電拡散→帯電付与は「スキル→対象クリック」を順に行う。トークン等の後続スキルも盤面への反映順を保つため同じ列に積む
@@ -169,7 +170,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         if (result.lockTargets) steps.push(...result.lockTargets);
         if (result.stompTarget !== undefined) steps.push(result.stompTarget);
         if (result.move !== null) steps.push(result.move);
-        return { kind: 'queue', steps: endsTurn(steps), locks };
+        return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
     }
 
     const clicks: number[] = [];
@@ -178,7 +179,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     if (result.move !== null) clicks.push(result.move);
     // 着手もターンを終えるスキルも無いまま終わると、手番が進まずAIが止まる（置けるマスが無い・全マスが氷結/ロックなど）。そのときはチャージでパスする
     const ends = result.move !== null || result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk));
-    return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends };
+    return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends, moveLast: result.move !== null };
 };
 
 /** player が今の盤面で cell に通常の着手をできるか（Game.onCellClick / sim の placeMove が弾く条件。人数・ライフ縛りは含めない） */
