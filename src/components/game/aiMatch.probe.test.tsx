@@ -27,9 +27,9 @@ run('AI同士の実戦（本番TS版）', () => {
             const orig = AIPlayer.prototype.makeMove;
             const spy = process.env.AI_MATCH_TRACE ? jest.spyOn(AIPlayer.prototype, 'makeMove').mockImplementation(function (this: AIPlayer, ...args: Parameters<AIPlayer['makeMove']>) {
                 const r = orig.apply(this, args);
-                if (this.character === 'yinYangMaster') {
+                if (this.character === (process.env.AI_MATCH_TRACE_CHAR || 'yinYangMaster')) {
                     const empties = args[0].filter((q) => !q.player).length;
-                    trace.push(`yy=${this.yinYangMode} oppReach=${this.opponents.reduce((n, o) => n + this.countReaches(args[0], o), 0)} magic=${args[1]} hand=[${args[5]}] empties=${empties} win=${this.floodComboWins(args[0]) ? 1 : 0} -> ${r.reroll ? 'REROLL' : ''}${r.skills.join('+')}${r.chargeClicks ? ' clicks:' + r.chargeClicks.map((c) => c.skill.replace('onClick', '')).join(',') : ''}${r.move !== null ? ' move=' + r.move : ''}`);
+                    trace.push(`T=${(document.body.textContent ?? '').match(/ターン\s*(\d+)/)?.[1] ?? '?'} yy=${this.yinYangMode} oppReach=${this.opponents.reduce((n, o) => n + this.countReaches(args[0], o), 0)} magic=${args[1]} hand=[${args[5]}] empties=${empties} win=${this.floodComboWins(args[0]) ? 1 : 0} -> ${r.reroll ? 'REROLL' : ''}${r.skills.join('+')}${r.chargeClicks ? ' clicks:' + r.chargeClicks.map((c) => c.skill.replace('onClick', '')).join(',') : ''}${r.move !== null ? ' move=' + r.move : ''}`);
                 }
                 return r;
             }) : null;

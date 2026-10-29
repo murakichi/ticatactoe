@@ -544,6 +544,11 @@ export const Game = (props: GameProps) => {
         }
     };
 
+    // AIのタイマーは500ms後に発火するので、その時点の最新の runAIMove を呼ぶ。描画時の runAIMove を握ったままだと、
+    // 巨人が休んで同じ席が連続で動く手番（turnSeat が変わらず再描画で張り直されない）で、手番開始の魔力・手札・ライフの更新前の値でAIが計画してしまう
+    const runAIMoveRef = useRef(runAIMove);
+    runAIMoveRef.current = runAIMove;
+
     useEffect(() => {
         if (!currentAI) return;
 
@@ -555,7 +560,7 @@ export const Game = (props: GameProps) => {
 
         const timer = setTimeout(() => {
             aiReroll.current = { left: rerollBudget(currentCharacter), started: false };
-            runAIMove();
+            runAIMoveRef.current();
         }, 500);
 
         return () => clearTimeout(timer);
