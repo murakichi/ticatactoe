@@ -231,7 +231,7 @@ describe('サイレンス (先回りの封印)', () => {
     });
 });
 
-describe('毒使いのミアズマと毒花 (sim/ai.js と同じ動き)', () => {
+describe('毒使いのミアズマと毒花 (旧sim AI と同じ動き)', () => {
     const costs = { onClickInjection: 2, onClickMiasma: 6, onClickToken: 4 } as never;
     const poisonedPiece = (bind: number, poison = 1): SquareInfo => ({
         player: '💙',
@@ -289,7 +289,7 @@ describe('毒使いのミアズマと毒花 (sim/ai.js と同じ動き)', () => 
     });
 });
 
-describe('毒使いはトークン系スキルを手札でロックして残す (sim/ai.js と同じ)', () => {
+describe('毒使いはトークン系スキルを手札でロックして残す (旧sim AI と同じ)', () => {
     it('ポイズントークン(16)・トークン(3)を優先してロックする。両トークン(4)は対象外', () => {
         const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
         const locks = ai.chooseLocks(emptyBoard(), 2, 5, [4, 16, 3, 7]);
@@ -409,7 +409,7 @@ describe('氷室の番人: 単独のリーチは氷結で塞ぐ (AI追随 Phase2
     });
 });
 
-describe('氷室の番人: 魔法使いの🌱付きコマを凍らせる (sim/ai.js F.freezeBuds と同一)', () => {
+describe('氷室の番人: 魔法使いの🌱付きコマを凍らせる (旧sim AI F.freezeBuds と同一)', () => {
     const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
     const budBoard = (budEffects: SquareInfo['effects'] = [{ effect: '🌱' }]) => {
         const b = emptyBoard();
@@ -433,7 +433,7 @@ describe('氷室の番人: 魔法使いの🌱付きコマを凍らせる (sim/a
     });
 });
 
-describe('氷室の番人: 毒で倒れそうな自陣コマを先に凍らせる (sim/ai.js F.antiPoison と同一)', () => {
+describe('氷室の番人: 毒で倒れそうな自陣コマを先に凍らせる (旧sim AI F.antiPoison と同一)', () => {
     const costs = { onClickUseLock: 2, onClickCryoFreeze: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
     const poisonBoard = (poison: number, life = 3) => {
         const b = emptyBoard();
@@ -584,7 +584,7 @@ describe('軽減札を先に撃って通常スキルを撃てるようにする'
     });
 });
 
-describe('AIPlayer cryomancer frost cards (sim/ai.js F.cryoCards と同一)', () => {
+describe('AIPlayer cryomancer frost cards (旧sim AI F.cryoCards と同一)', () => {
     const { skillCosts } = require('./skillCosts');
     const plan = (character: 'cryomancer' | 'you', avail: number[]) => {
         const b = emptyBoard();
@@ -606,7 +606,7 @@ describe('AIPlayer cryomancer frost cards (sim/ai.js F.cryoCards と同一)', ()
     });
 });
 
-describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直し（sim/ai.js の discountPlan>=2）', () => {
+describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直し（旧sim AI の discountPlan>=2）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const mk = (character: 'magician' | 'giant' = 'magician') => {
@@ -654,7 +654,7 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
     });
 });
 
-describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/ai.js の magLockN=3）', () => {
+describe('魔法使いAI: バッズ駒を1手番に複数ロックする（旧sim AI の magLockN=3）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const budBoard = (cells: number[]) => {
@@ -667,12 +667,12 @@ describe('魔法使いAI: バッズ駒を1手番に複数ロックする（sim/a
         return ai.makeMove(budBoard(cells), magic, skillCosts, 2, 5, [], false);
     };
     it('バッズ駒が複数あり魔力が足りれば、最大3つまで順にロックする', () => {
-        const r = run([0, 1, 2, 3], 9);
+        const r = run([0, 2, 5, 7], 9);
         expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickUseLock', 'onClickUseLock', 'onClickUseLock']);
-        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 1, 2]);
+        expect(r.chargeClicks?.map((c) => c.target)).toEqual([0, 2, 5]);
     });
     it('魔力で払える数までに減らす', () => {
-        const r = run([0, 1, 2], skillCosts.onClickUseLock * 2);
+        const r = run([0, 2, 5], skillCosts.onClickUseLock * 2);
         expect(r.chargeClicks?.length).toBe(2);
     });
     it('1つだけなら従来どおり lockTargets で返す', () => {
@@ -727,7 +727,7 @@ describe('AIPlayer: 補強は必要なときだけ', () => {
     });
 });
 
-describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
+describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
     const costs = { onClickShikigamiPlace: 3, onClickShikigamiBlast: 5, onClickShikigamiAll: 2, onClickShikigamiRandom: 2, onClickToggleYingYang: 1 } as any; // 式神一括は式神1体あたり2
     // 終盤の盤面: 行0(0〜3)だけが空き、残りは敵のコマ。百鬼夜行で空き4マスが式神になり、行0が敵のいない列になる
     const nearFull = (): SquareInfo[] => {
@@ -899,7 +899,7 @@ describe('陰陽師の式神運用 (sim/ai.js shikigamiTurn と同一)', () => {
     });
 });
 
-describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先にロックする（sim/ai.js の EL_AI）', () => {
+describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先にロックする（旧sim AI の EL_AI）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     // 行0に💙が2つ(0,1)あり、2が空き(3つ並びの要)。相手のリーチは無い
@@ -934,7 +934,7 @@ describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先に
     });
 });
 
-describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の igniteSig=1 / igniteSkip=1）', () => {
+describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const board = () => {
@@ -969,7 +969,7 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（sim/ai.js の i
     });
 });
 
-describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（sim/ai.js の火口と同一）', () => {
+describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（旧sim AI の火口と同一）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const board = () => {
@@ -997,7 +997,7 @@ describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁�
     });
 });
 
-describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固定する（sim/ai.js の tinderLock=2）', () => {
+describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固定する（旧sim AI の tinderLock=2）', () => {
     const board = () => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] } as SquareInfo));
     const locks = (foe: 'magician' | 'you') => new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]).chooseLocks(board(), 0, 5, [87, 0, 1]);
 
@@ -1009,7 +1009,7 @@ describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固
     });
 });
 
-describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（sim/ai.js の igniteBud）', () => {
+describe('鍛冶師AI: 火遁は魔法使いの🌱コマを優先して燃やす（旧sim AI の igniteBud）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     it('ライフが同じ敵コマが2つあるとき、魔法使いなら🌱のあるほうを狙う', () => {
@@ -1199,7 +1199,7 @@ describe('氷室の番人の対陰陽師の列カバー', () => {
     });
 });
 
-describe('雷霆の巫は対策ロックを撃たない (sim/ai.js elecNoAnti)', () => {
+describe('雷霆の巫は対策ロックを撃たない (旧sim AI elecNoAnti)', () => {
     const costs = { onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
     const board = () => {
         const b = emptyBoard();
@@ -1220,7 +1220,7 @@ describe('雷霆の巫は対策ロックを撃たない (sim/ai.js elecNoAnti)',
     });
 });
 
-describe('凩の魔女は対策ロックを撃たない (sim/ai.js witchNoAnti)', () => {
+describe('凩の魔女は対策ロックを撃たない (旧sim AI witchNoAnti)', () => {
     const costs = { onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
     const board = () => {
         const b = emptyBoard();
@@ -1237,7 +1237,7 @@ describe('凩の魔女は対策ロックを撃たない (sim/ai.js witchNoAnti)'
     });
 });
 
-describe('凩の魔女は🍂トークンの分の魔力を温存する (sim/ai.js witchReserve)', () => {
+describe('凩の魔女は🍂トークンの分の魔力を温存する (旧sim AI witchReserve)', () => {
     const costs = { onClickAddLife: 3, onClickLeafToken: 3, onClickUseLock: 2, onClickDoubleLock: 3, onClickTripleLock: 4 } as any;
     const board = () => {
         const b = emptyBoard();
@@ -1357,7 +1357,7 @@ describe('雷霆の巫AIの静電気の季節・総毛立つ', () => {
     const costs = { onClickChargeSeason: 6, onClickBristle: 5 } as any;
     const own3 = () => {
         const b = emptyBoard();
-        [0, 1, 2].forEach((i) => put(b, i, '💙'));
+        [0, 2, 5].forEach((i) => put(b, i, '💙')); // 一列に3つ並べない（即勝ちできると勝ちを優先する）
         put(b, 15, '⭕');
         return b;
     };
@@ -1380,7 +1380,7 @@ describe('落雷は忘れた頃にのAI使用', () => {
     const costs = { onClickRelease: 5, onClickChargeSeason: 6, onClickBristle: 5 } as any;
     const bolts = (n: number) => {
         const b = emptyBoard();
-        for (let i = 0; i < n; i++) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] };
+        for (const i of [0, 2, 5].slice(0, n)) b[i] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }] }; // 一列に3つ並べない（即勝ちできると勝ちを優先する）
         put(b, 14, '⭕', 5);
         put(b, 15, '⭕', 5);
         return b;
@@ -1397,7 +1397,7 @@ describe('落雷は忘れた頃にのAI使用', () => {
     });
 });
 
-describe('魔法使いはネクロマンサー相手に審判の日を撃たない (sim/ai.js noJudgeNecro と同じ)', () => {
+describe('魔法使いはネクロマンサー相手に審判の日を撃たない (旧sim AI noJudgeNecro と同じ)', () => {
     // 💙(魔法使い)の周りに⭕のコマが固まっていて、審判の日なら2つ以上巻き込める盤面
     const board = () => {
         const b = emptyBoard();
@@ -1417,7 +1417,31 @@ describe('魔法使いはネクロマンサー相手に審判の日を撃たな�
     });
 });
 
-describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (sim/ai.js lockFirstCryo と同じ)', () => {
+describe('魔法使いは相手リーチを全て崩せる審判の日なら、リーチがあっても撃つ (旧sim AI judgeUnderThreat と同じ)', () => {
+    // ⭕が上段 0,1,2 の3つ揃い(3が空き=リーチ)。中心1の審判の日で 0,1,2 が壊れて列が崩れる
+    const board = (extraReach = false) => {
+        const b = emptyBoard();
+        [0, 1, 2].forEach((i) => put(b, i, '⭕', 4));
+        if (extraReach) [8, 9, 10].forEach((i) => put(b, i, '⭕', 4)); // 別の列にもリーチ=1回では崩せない
+        return b;
+    };
+    const plan = (b: SquareInfo[], foe: 'tactician' | 'necromancer' = 'tactician') => {
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', foe]);
+        return ai.makeMove(b, 20, { onClickToken: 4, onClickLock: 2, onClickUseLock: 2 } as never, 2, 4, [], false, 0, 0, 5);
+    };
+
+    it('リーチの列を全て崩せるなら審判の日を撃つ', () => {
+        expect(plan(board()).skills).toContain('onClickJudgeDay');
+    });
+    it('1回で全てのリーチを崩せないなら撃たない', () => {
+        expect(plan(board(true)).skills).not.toContain('onClickJudgeDay');
+    });
+    it('ネクロマンサー相手なら撃たない', () => {
+        expect(plan(board(), 'necromancer').skills).not.toContain('onClickJudgeDay');
+    });
+});
+
+describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
     // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
     const board = () => {
         const b = emptyBoard();
@@ -1489,6 +1513,17 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(noCard.makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 2, 3], false).reroll).toBeUndefined();
     });
 
+    it('手札が全て固定されている引き直しは、固定を1つ外してから行う（3枠とも固定したままではシャッフルしても札が変わらない）', () => {
+        const ai = mk('yinYangMaster', 'witch', [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53]);
+        ai.rerollsLeft = 8;
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [71, 73, 53])).toHaveLength(3); // 全て固定される手札
+        expect(ai.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [71, 73, 53], false).reroll).toBeDefined(); // 92を探す
+        expect(ai.locksForReroll([71, 73, 53], 3)).toEqual([71, 73]); // 無くても組める特売(53)を外す
+        expect(ai.locksForReroll([71, 73, 92], 3)).toEqual([71, 73]); // 特売が無ければ最後の固定を外す
+        expect(ai.locksForReroll([71, 73], 3)).toEqual([71, 73]); // 空き枠があれば外さない
+        expect(ai.locksForReroll([], 3)).toEqual([]);
+    });
+
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
         expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
@@ -1516,6 +1551,36 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
         b[5] = { player: '⭕', bind: 6, effects: [] };
         expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
+    });
+});
+
+describe('氷室の番人の対魔女: 一寸の虫に魂なし(92)を探して固定する', () => {
+    const mk = (opp: string) => new AIPlayer('💙', 'cryomancer', ['⭕'], ['cryomancer', opp] as any, undefined, false, false, [92, 12, 28, 45, 46, 48, 41, 44, 47, 43, 37, 73]);
+    const costs = { onClickShuffle: 1, onClickSmallFry: 6, onClickCryoFreeze: 2, onClickUseLock: 2 } as any;
+
+    it('魔女が相手のときだけ、手札の92を固定する', () => {
+        expect(mk('witch').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).toEqual([92]);
+        expect(mk('giant').chooseLocks(emptyBoard(), 0, 5, [92, 12, 28])).not.toEqual([92]);
+    });
+
+    it('魔女戦で手札に92が無く、壊せる敵コマが2個以上あれば引き直して探す', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('witch');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeDefined();
+    });
+
+    it('魔女以外が相手なら探さない', () => {
+        const b = emptyBoard();
+        put(b, 1, '⭕'); put(b, 2, '⭕'); put(b, 15, '💙');
+        b[1] = { ...b[1], bind: 2 }; b[2] = { ...b[2], bind: 3 };
+        const ai = mk('giant');
+        ai.rerollsLeft = 3;
+        const r = ai.makeMove(b, 8, costs, 0, 5, [12, 28, 45], false);
+        expect(r.reroll).toBeUndefined();
     });
 });
 
