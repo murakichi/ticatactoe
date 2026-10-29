@@ -98,6 +98,7 @@ describe('analyze / verdict', () => {
     test('対面の試合数が少ないと結論を保留する', () => {
         const st = build(['a', 'b'], { a: { b: [3, 1] } });
         expect(live.verdict(live.analyze(st)).headline).toContain('標本が少なく');
+        expect(live.analyze(st).ready).toBe(false);
     });
 
     test('キャラが1つだけなら分析なし', () => {
@@ -134,5 +135,52 @@ describe('statsFromPairs / strong set', () => {
         expect(an.strong).not.toContain('pad');
         const a = an.rows.find((r) => r.id === 'a');
         expect(a.fieldAvg).toBeCloseTo(0.6, 5);
+    });
+});
+
+describe('roundRobinPairs / mergeStats / aggregate', () => {
+    test('1対1は異なる2キャラの全順列を1周する（先手・後手が同数）', () => {
+        const ids = ['a', 'b', 'c'];
+        const pairs = live.roundRobinPairs(ids);
+        expect(pairs).toHaveLength(6);
+        expect(new Set(pairs.map((p) => p.join('>'))).size).toBe(6);
+        pairs.forEach(([x, y]) => expect(x).not.toBe(y));
+        for (const id of ids) expect(pairs.filter((p) => p[0] === id)).toHaveLength(pairs.filter((p) => p[1] === id).length);
+    });
+
+    test('ワーカーの累計を足すと、1本で回した場合と同じになる', () => {
+        const { createJob } = require('./compute');
+        const E = require('./engine');
+        const mk = (offset, stride) => { const j = createJob({ players: 2, mode: 'faithful', seed: 1, maxGames: 6, offset, stride }); j.run(1e6); return j.stats; };
+        const merged = live.mergeStats(E.CHARACTERS, 2, [mk(0, 3), mk(1, 3), mk(2, 3)]);
+        const single = mk(0, 1);
+        expect(merged.games).toBe(6);
+        const norm = (v) => JSON.stringify(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)));
+        expect(norm(merged.perChar)).toBe(norm(single.perChar));
+        expect(norm(merged.vs)).toBe(norm(single.vs));
+        expect(merged.seatWins).toEqual(single.seatWins);
+        expect(merged.turns).toBe(single.turns);
+    }, 60000);
+
+    test('aggregate は ckEvery 局ごとにスナップショットを積む', () => {
+        const agg = live.createAggregator(['a', 'b'], 2, 10);
+        const part = (n) => { const st = live.createStats(['a', 'b'], 2); for (let i = 0; i < n; i++) live.record(st, ['a', 'b'], { winnerSeat: i % 2, turns: 1 }); return st; };
+        expect(live.aggregate(agg, [part(4), part(4)]).history).toHaveLength(0);
+        expect(live.aggregate(agg, [part(6), part(6)]).history).toHaveLength(1);
+        expect(live.aggregate(agg, [part(7), part(7)]).history).toHaveLength(1); // 14局: まだ次の20局に届かない
+        expect(live.aggregate(agg, [part(11), part(11)]).history).toHaveLength(2);
+    });
+
+    test('引き分けばかりの組が1つあっても、9割の対面が揃えば結論を出す', () => {
+        const ids = ['a', 'b', 'c', 'd', 'e'];
+        // 10組のうち1組(d-e)だけ少数（打ち切りが多い想定）。他は50試合
+        const pairs = [];
+        for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push({ a: ids[i], b: ids[j], w: ids[i] === 'd' && ids[j] === 'e' ? 2 : 30, l: ids[i] === 'd' && ids[j] === 'e' ? 1 : 20 });
+        const an = live.analyze(live.statsFromPairs(ids, pairs));
+        expect(an.solidPairs).toBe(9);
+        expect(an.totalPairs).toBe(10);
+        expect(an.ready).toBe(true);
+        // 少数の組は最悪対面に入らない
+        expect(an.rows.find((r) => r.id === 'e').worst.id).not.toBe('d');
     });
 });

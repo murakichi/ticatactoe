@@ -716,44 +716,60 @@ function forceUse(s, me, availableSkills) {
 // ---- helpers ----
 
 // 式神(📜)は列の並びに数えない: 列判定ではコマ無し扱い、リーチ/脅威の判定ではその列自体を無効にする
-const lineSyms = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
-const hasShikigami = (board, line) => line.some((idx) => isShikigami(board[idx]));
+const lineSyms = (board) => { const out = new Array(board.length); for (let i = 0; i < board.length; i++) { const x = board[i]; out[i] = isShikigami(x) ? undefined : x.player; } return out; };
+const hasShikigami = (board, line) => { for (let k = 0; k < line.length; k++) if (isShikigami(board[line[k]])) return true; return false; };
+const hasKey = (sq) => { const ef = sq.effects; for (let i = 0; i < ef.length; i++) if (ef[i].effect === '🔑') return true; return false; };
 function symbolsWith(board, i, symbol) {
     const syms = lineSyms(board);
     syms[i] = symbol;
     return syms;
 }
 
+const EVAL_BLOCKED = [], EVAL_SHIK = [];
 function evaluateBoard(board, me) {
     let score = 0;
-    for (const line of geometryForCells(board.length).winLines) {
+    const n = board.length;
+    // マスごとの判定を1回だけ求める（ラインごとに同じマスを何度も調べない）
+    // （効果の無いマスが大半なので、その場合は調べずに済ませる。配列は使い回す）
+    const blocked = EVAL_BLOCKED, shik = EVAL_SHIK;
+    for (let k = 0; k < n; k++) {
+        const sq = board[k];
+        if (sq.effects.length === 0) { blocked[k] = false; shik[k] = false; } else { blocked[k] = thermal.emptyBlocked(sq); shik[k] = isShikigami(sq); }
+    }
+    const lines = geometryForCells(n).winLines;
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l];
         // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
-        if (line.some((idx) => thermal.emptyBlocked(board[idx])) || hasShikigami(board, line)) continue;
+        let skip = false;
+        for (let k = 0; k < line.length; k++) if (blocked[line[k]] || shik[line[k]]) { skip = true; break; }
+        if (skip) continue;
         let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
         // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
-        const enemiesInLine = new Set();
-        for (const idx of line) {
-            const sq = board[idx];
+        let firstEnemy, multiEnemy = false;
+        for (let k = 0; k < line.length; k++) {
+            const sq = board[line[k]];
             if (sq.player === me) { myCount++; myBindSum += sq.bind; }
-            else if (sq.player) { oppCount++; oppBindSum += sq.bind; enemiesInLine.add(sq.player); }
+            else if (sq.player) { oppCount++; oppBindSum += sq.bind; if (firstEnemy === undefined) firstEnemy = sq.player; else if (firstEnemy !== sq.player) multiEnemy = true; }
         }
         if (myCount > 0 && oppCount === 0) {
             score += LINE_SCORES[myCount];
-        } else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
+        } else if (oppCount > 0 && myCount === 0 && !multiEnemy) {
             score -= LINE_SCORES[oppCount];
             if (oppCount === 2) {
                 let emptyInLine = 0;
-                for (const idx of line) { if (!board[idx].player) emptyInLine++; }
+                for (let k = 0; k < line.length; k++) { if (!board[line[k]].player) emptyInLine++; }
                 if (emptyInLine === 2) score -= 20;
             }
         }
         score += myBindSum * 0.5 - oppBindSum * 0.5;
     }
-    for (const sq of board) {
+    for (let k = 0; k < n; k++) {
+        const sq = board[k];
+        if (!sq.player || sq.effects.length === 0) continue;
         const buds = thermal.activeBuds(sq); // 氷結中の🌱は休眠
-        const hasLock = sq.effects.some(e => e.effect === '🔑');
+        const hasLock = hasKey(sq);
         if (sq.player === me) { score += buds * 3 + (hasLock ? 5 : 0); }
-        else if (sq.player) { score -= buds * 3 + (hasLock ? 5 : 0); }
+        else { score -= buds * 3 + (hasLock ? 5 : 0); }
     }
     return score;
 }
@@ -800,6 +816,8 @@ let decayCtx = null;
 // ライフ1の自コマは自分の着手の直後に0になり、相手に奪われる。着手マス skip の毒消滅だけは除く
 function decayBoard(board, skip) {
     return board.map((sq, k) => {
+        // 効果の無いマス（大半）は火炎・毒・氷結が働かないので、🔑も無く、ライフが1つ減るだけ
+        if (sq.effects.length === 0) return { player: sq.player, bind: sq.player && sq.bind > 0 ? sq.bind - 1 : sq.bind, effects: [] };
         const q = { player: sq.player, bind: sq.bind, effects: sq.effects.slice() };
         if ((q.player || q.effects.some((e) => e.effect === '🔑')) && q.bind > 0 && !thermal.isFrozen(q)) q.bind--;
         const burn = thermal.burnDamageOf(q, decayCtx.chars, SYMBOLS);
@@ -818,8 +836,9 @@ function decayBoard(board, skip) {
 
 // ply を渡すと、その着手で減衰が進む場合は先に減衰させる (0 = 今回の着手)
 function simulatePlace(board, index, player, life, ply) {
-    const src = decayCtx && ply !== undefined && E.shouldDecay(decayCtx.placements + ply, decayCtx.n) ? decayBoard(board, index) : board;
-    const nb = src.map(sq => ({ player: sq.player, bind: sq.bind, effects: sq.effects.slice() }));
+    const decayed = decayCtx && ply !== undefined && E.shouldDecay(decayCtx.placements + ply, decayCtx.n);
+    // 減衰した盤面は新しいオブジェクトなので、そのまま使える（もう一度コピーしない）
+    const nb = decayed ? decayBoard(board, index) : board.map(sq => ({ player: sq.player, bind: sq.bind, effects: sq.effects.length === 0 ? [] : sq.effects.slice() }));
     const sq = nb[index];
     if (isShikigami(sq) && sq.player !== player && sq.bind <= 0) {
         nb[index] = { player: undefined, bind: 0, effects: [] }; // 式神は乗っ取られると空きマスになる
@@ -896,10 +915,11 @@ function getMovesFor(board, player, life) {
     for (let i = 0; i < board.length; i++) {
         const sq = board[i];
         if (shield.has(i)) continue;
-        if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) continue;
+        const key = hasKey(sq);
+        if (key && sq.bind > 0) continue;
         if (thermal.emptyBlocked(sq)) continue;
         if (!sq.player) {
-            if (!sq.effects.some(e => e.effect === '🔑')) moves.push(i);
+            if (!key) moves.push(i);
         } else if (sq.player !== player) {
             if (sq.bind <= 0) moves.push(i);
         }

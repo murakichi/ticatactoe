@@ -133,6 +133,7 @@ function solveSymmetric(A, iters = 4000) {
     return { eq, exploit };
 }
 
+const READY_SHARE = 0.9; // 結論を出すのに必要な、minDecided に届いた対面(組)の割合
 const MIN_DECIDED = 20; // 最悪対面・有利/不利に数える最低試合数（これ未満の対面は誤差が大きすぎる）
 
 function analyze(st, { minDecided = MIN_DECIDED } = {}) {
@@ -173,7 +174,11 @@ function analyze(st, { minDecided = MIN_DECIDED } = {}) {
     rows.sort((a, b) => b.eq - a.eq || (b.strongAvg || 0) - (a.strongAvg || 0));
     const pairs = [];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push(cell(ids[i], ids[j]).d);
-    return { rows, strong: [...strong], exploit, minPairDecided: Math.min(...pairs), minDecided, players: st.players, games: st.games };
+    // 引き分け（打ち切り）が多い組があると、全組が minDecided に届くのを待つといつまでも結論が出ない。
+    // 届いていない組は最悪対面・有利/不利の数から除いてあるので、9割の組が届けば結論を出す
+    const solidPairs = pairs.filter((d) => d >= minDecided).length;
+    const ready = solidPairs >= Math.ceil(pairs.length * READY_SHARE);
+    return { rows, strong: [...strong], exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
 }
 
 // 分析から日本語の結論を作る。何を根拠にしたかを points に1行ずつ残す
@@ -186,8 +191,8 @@ function verdict(an, label = (id) => id) {
     const f = (x) => `${(x * 100).toFixed(1)}%`;
     let headline;
     const allSame = topWorst && topEq.id === topAvg.id && topEq.id === topWorst.id;
-    if (an.minPairDecided < an.minDecided) {
-        headline = `まだ標本が少なく結論は出せません（全対面が${an.minDecided}試合に届くまで。最少の対面は今 ${an.minPairDecided}/${an.minDecided}試合）`;
+    if (!an.ready) {
+        headline = `まだ標本が少なく結論は出せません（${an.minDecided}試合に届いた対面は ${an.solidPairs}/${an.totalPairs}。${Math.round(READY_SHARE * 100)}%に届くまで）`;
     } else if (allSame && topEq.unfavorable === 0 && topEq.eq >= 0.5) {
         headline = `${label(topEq.id)}が突出しています（対強豪平均・最悪対面・均衡のすべてで1位、有意な不利対面なし）`;
     } else if (topEq.eq >= 0.5) {
@@ -218,4 +223,44 @@ function statsFromPairs(chars, pairs) {
     return st;
 }
 
-module.exports = { statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
+// ---------- 1対1の組み合わせ / 並列集計 ----------
+// 1対1は、キャラをランダムに引かず「異なる2キャラ（席順つき）」の全組を線形に1周し、それを繰り返す。
+// どの組も先手・後手とも同じ回数になり、全組の試合数が最速で揃う（ランダムだと偏って、最少の対面が増えにくい）。
+// 同じ組でもライフ・AIのデッキに乱数が入るので、周回ごとに結果は変わる。同キャラ対戦は対面表に入らないので除く。
+function roundRobinPairs(ids) {
+    const out = [];
+    for (const a of ids) for (const b of ids) if (a !== b) out.push([a, b]);
+    return out;
+}
+
+// 複数ワーカーの createStats を足し合わせる（履歴は持たない）。ワーカーごとの累計を渡す
+function mergeStats(ids, players, parts) {
+    const st = createStats(ids, players);
+    for (const p of parts) {
+        if (!p) continue;
+        st.games += p.games; st.draws += p.draws; st.turns += p.turns;
+        p.seatWins.forEach((w, i) => { st.seatWins[i] += w; });
+        for (const [id, a] of Object.entries(p.perChar)) {
+            const t = st.perChar[id] || (st.perChar[id] = { appearances: 0, wins: 0, turnsWon: 0 });
+            t.appearances += a.appearances; t.wins += a.wins; t.turnsWon += a.turnsWon;
+        }
+        for (const [k, m] of Object.entries(p.vs)) {
+            const t = st.vs[k] || (st.vs[k] = { a: m.a, b: m.b, meets: 0, aWins: 0, bWins: 0 });
+            t.meets += m.meets; t.aWins += m.aWins; t.bWins += m.bWins;
+        }
+    }
+    return st;
+}
+
+// 並列で回すときの集計役。ワーカーの累計を足して、ckEvery 局ごとに勝率のスナップショットを積む（収束判定用）
+function createAggregator(ids, players, ckEvery) {
+    return { ids, players, ckEvery, next: ckEvery, history: [] };
+}
+function aggregate(agg, parts) {
+    const st = mergeStats(agg.ids, agg.players, parts);
+    st.history = agg.history;
+    if (st.games >= agg.next) { checkpoint(st); agg.next = (Math.floor(st.games / agg.ckEvery) + 1) * agg.ckEvery; }
+    return st;
+}
+
+module.exports = { roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
