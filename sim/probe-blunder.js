@@ -12,7 +12,11 @@ for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), size = args.size ? parseInt(args.size, 10) : undefined;
 const pairs = [];
 if (args.chars) pairs.push(args.chars.split(','));
-else for (const a of engine.CHARACTERS) for (const b of engine.CHARACTERS) pairs.push([a, b]);
+else {
+    // 式神(陰陽師)・氷結(氷室)は簡易な勝ち判定に載らず誤検出が多いので、--skip yinYangMaster,cryomancer で組ごと除ける
+    const skip = (args.skip || '').split(',');
+    for (const a of engine.CHARACTERS) for (const b of engine.CHARACTERS) if (!skip.includes(a) && !skip.includes(b)) pairs.push([a, b]);
+}
 /** player が今 1 手で勝てるマス(空き + bind0 の敵コマの奪取)。氷結・無敵は見ない簡易版 */
 function winCells(s, player) {
     const out = [];
@@ -44,7 +48,7 @@ for (const chars of pairs) {
             if (!r.turnEnded && r.move != null) { engine.placeMove(s, r.move); placed = true; }
             else if (!r.turnEnded) engine.SKILLS.charge(s);
             // 勝てるはずのマスに置いて勝てなかった=式神のライン等の簡易判定のずれは除く
-            if (myT.length && !(s.winner === me) && !(placed && myT.includes(r.move))) { st.missWin++; if (st.samples.length < 4) st.samples.push({ kind: 'win', chars, g, n, myT, move: r.move, skills: r.skills || r.used, placed }); }
+            if (myT.length && !(s.winner === me) && !(placed && myT.includes(r.move))) { st.missWin++; if (st.samples.length < 12) st.samples.push({ kind: 'win', chars, g, n, myT, move: r.move, skills: r.skills || r.used, placed }); }
             else if (!s.winner) {
                 // 単独リーチ(相手1人・脅威マス1つ)を、着手後も残している
                 const flat = [...new Set(oppT.flat())];
@@ -52,7 +56,7 @@ for (const chars of pairs) {
                     const after = engine.otherSeats(s).length; // dummy to keep lint quiet
                     const prevSeat = engine.seatOf(me);
                     const still = engine.SYMBOLS.map((_, k) => k).filter((k) => k !== prevSeat && k < engine.seatCount(s)).some((k) => winCells(s, engine.SYMBOLS[k]).length > 0);
-                    if (still) { st.missBlock++; if (st.samples.length < 4) st.samples.push({ kind: 'block', chars, g, n, threat: flat, move: r.move, skills: r.skills || r.used, placed }); }
+                    if (still) { st.missBlock++; if (st.samples.length < 12) st.samples.push({ kind: 'block', chars, g, n, threat: flat, move: r.move, skills: r.skills || r.used, placed }); }
                 }
             }
         }
