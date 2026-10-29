@@ -28,6 +28,14 @@ const JAMMER_MIN_DMG = 2;
 const CHARGE_RANDOM_MARGIN = 1;
 /** この魔力以上あって撃てるスキルが手札に無いとき、魔法使い以外も1コストで手札を引き直す（防壁発動後の魔力の使い道） */
 const SURPLUS_MAGIC = 12;
+/** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
+const RICH_MAGIC = 14;
+/** この魔力以上あるときは、手札で使う額が RICH_SPEND_GOAL に届かなければ、引き直し回数(rerollBudget)を使い切っても RICH_EXTRA_REROLLS 回まで引き直す */
+const RICH_REROLL_MAGIC = 24;
+const RICH_SPEND_GOAL = 5;
+const RICH_EXTRA_REROLLS = 5;
+/** 有り余るときのオピウム: 当てられる敵コマがこの数以上 */
+const RICH_OPIUM_MIN_HIT = 4;
 
 // 陰陽師の式神運用の設定 (sim/ai.js の AI_DEFAULTS shMax / shBlastMin / shReserve / shComboReal と同値)
 /** 氷室の番人が対ネクロで敵コマの奪取に付ける減点 (sim/ai.js noCapNecro) */
@@ -1058,6 +1066,8 @@ class AIPlayer {
             }
         }
         // 敵が複数いるときは最大勢力の敵と比べる（2人戦なら従来どおり相手の数）
+        let oppHitTotal = 0;
+        hitOf.forEach((n) => { oppHitTotal += n; });
         piecesOf.forEach((n) => { oppPieces = Math.max(oppPieces, n); });
         hitOf.forEach((n) => { oppHit = Math.max(oppHit, n); });
         const geo = geometryForCells(board.length);
@@ -1145,7 +1155,9 @@ class AIPlayer {
         // → getBestMoveでブロック配置させる
 
         // 劣勢時の破壊系 (ターン終了するので、相手リーチ時は使わない→ブロック優先)
-        if (skills.length === 0 && isLosing && oppReaches === 0) {
+        // 魔力が有り余るとき(RICH_MAGIC以上残る)は劣勢でなくても撃つ（斜めの敵コマが自陣より多いときだけ。オピウムは敵コマが多いとき）
+        const richFor = (cost: number): boolean => remaining >= cost + RICH_MAGIC;
+        if (skills.length === 0 && oppReaches === 0 && (isLosing || richFor(this.calculateAICost(costs.onClickSlash, false, false, 'onClickSlash')))) {
             if (availableSkills.includes(5)) {
                 let oppOn = 0, myOn = 0;
                 for (const idx of geo.antiDiagonal) {
@@ -1164,9 +1176,13 @@ class AIPlayer {
                 }
                 if (oppOn > myOn) spend(this.calculateAICost(costs.onClickBackSlash, false, false, 'onClickBackSlash'), 'onClickBackSlash');
             }
-            if (skills.length === 0 && availableSkills.includes(7) && opponentMagic >= 6) {
+            if (skills.length === 0 && isLosing && availableSkills.includes(7) && opponentMagic >= 6) {
                 spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
+        }
+        if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
+            const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
+            if (richFor(opiumCost) && oppHitTotal >= RICH_OPIUM_MIN_HIT && oppHitTotal > myPieces) spend(opiumCost, 'onClickOpium');
         }
 
 
@@ -1341,6 +1357,14 @@ class AIPlayer {
             spend(this.calculateAICost(costs.onClickFireWheel, false, false, 'onClickFireWheel'), 'onClickFireWheel');
         }
 
+        // 魔力が有り余るとき: 置くコマのライフを厚くする（ライフ+3 → 2倍の順。減衰で盤面が空になる長期戦でコマが残りやすくなる）
+        if (remaining >= RICH_MAGIC) {
+            for (const [idx, key] of [[0, 'onClickAddLife'], [1, 'onClickBibine']] as const) {
+                if (availableSkills.includes(idx) && !skills.includes(key)) spend(this.calculateAICost(costs[key], false, false, key), key);
+            }
+        }
+
+        this.lastSpent = magic - remaining;
         return skills;
     }
 
@@ -1795,9 +1819,15 @@ class AIPlayer {
             && magic >= costs.onClickShuffle + WITCH_DIG_MARGIN) {
             return { move: null, skills: [], reroll: {} };
         }
-        if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
-            const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
-            if (plan.length === 0) return { move: null, skills: [], reroll: {} };
+        if (this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= SURPLUS_MAGIC) {
+            // 魔力が大きく余るときは、1手番の引き直し回数を超えて(RICH_EXTRA_REROLLS回まで)、使う額が少ない手札も引き直す（シャッフルは1コスト）。
+            // 巨人のストンプのように chooseSkills の外で撃つ札があるキャラは、使う額が少ないだけでは引き直さない
+            const rich = magic >= RICH_REROLL_MAGIC && this.rerollsLeft > -RICH_EXTRA_REROLLS;
+            if (this.rerollsLeft > 0 || rich) {
+                const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+                const thin = rich && this.character !== 'giant' && this.lastSpent < RICH_SPEND_GOAL && !plan.some((sk) => TURN_ENDING_SKILLS.includes(sk));
+                if ((plan.length === 0 && this.rerollsLeft > 0) || (plan.length === 0 && rich) || thin) return { move: null, skills: [], reroll: {} };
+            }
         }
         if (this.character === 'magician' && this.rerollsLeft > 0) {
             const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);

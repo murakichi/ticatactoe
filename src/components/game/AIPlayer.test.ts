@@ -1490,32 +1490,32 @@ describe('AIPlayer 対魔女の新スキル(初霜・吹き寄せ・山焼き・
     });
 
     it('敵の🍂が2枚以上あれば吹き寄せ・山焼き、敵の🍂のコマがあれば初霜を撃つ', () => {
-        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
-        expect(mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [94], false).skills).toContain('onClickGather');
+        expect(mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [95], false).skills).toContain('onClickBurnOff');
         const one = emptyBoard();
         one[4] = { player: '⭕', bind: 5, effects: [{ effect: '🍂' }] };
-        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
-        expect(mk('you', 'witch').makeMove(one, 30, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
+        expect(mk('you', 'witch').makeMove(one, 22, skillCosts, 2, 5, [93], false).skills).toContain('onClickFirstFrost');
+        expect(mk('you', 'witch').makeMove(one, 22, skillCosts, 2, 5, [93], true).skills).not.toContain('onClickFirstFrost'); // トークンはターン1回
     });
 
     it('高いトークンを撃つ予定なら、先に無礼講を撃つ（トークンが無礼講より安いときは撃たない）', () => {
-        const r = mk('you', 'witch').makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills;
+        const r = mk('you', 'witch').makeMove(leafBoard(), 22, skillCosts, 2, 5, [95, 96], false).skills;
         expect(r.indexOf('onClickFreeToken')).toBeGreaterThanOrEqual(0);
         expect(r.indexOf('onClickFreeToken')).toBeLessThan(r.indexOf('onClickBurnOff'));
         const cheap = mk('you', 'witch');
-        expect(cheap.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
+        expect(cheap.makeMove(emptyBoard(), 22, skillCosts, 2, 5, [3, 96], false).skills).not.toContain('onClickFreeToken');
         const active = mk('you', 'witch');
         active.tokenFree = true;
-        expect(active.makeMove(leafBoard(), 30, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
+        expect(active.makeMove(leafBoard(), 22, skillCosts, 2, 5, [95, 96], false).skills).not.toContain('onClickFreeToken');
     });
 
     it('一寸の虫に魂なし: 壊せる（ライフ3以下の）敵コマが2個以上のとき撃つ', () => {
         const b = emptyBoard();
         b[4] = { player: '⭕', bind: 3, effects: [] };
         b[5] = { player: '⭕', bind: 2, effects: [] };
-        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
+        expect(mk('you', 'witch').makeMove(b, 22, skillCosts, 2, 5, [92], false).skills).toContain('onClickSmallFry');
         b[5] = { player: '⭕', bind: 6, effects: [] };
-        expect(mk('you', 'witch').makeMove(b, 30, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
+        expect(mk('you', 'witch').makeMove(b, 22, skillCosts, 2, 5, [92], false).skills).not.toContain('onClickSmallFry');
     });
 });
 
@@ -1544,14 +1544,52 @@ describe('AIPlayer 軍師の氷結トークン（凍ったコマは☠🔥のダ
     const tac = () => new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'poisoner']);
 
     it('軍師も氷結トークン(45)・氷結ダブルトークン(46)を撃つ', () => {
-        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
-        expect(tac().makeMove(emptyBoard(), 30, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
+        expect(tac().makeMove(emptyBoard(), 22, skillCosts, 2, 5, [45], false).skills).toContain('onClickFrostToken');
+        expect(tac().makeMove(emptyBoard(), 22, skillCosts, 2, 5, [46], false).skills).toContain('onClickDoubleFrostToken');
     });
     it('氷結トークンを手札に固定する（毎手番撃てるように）', () => {
         expect(tac().chooseLocks(emptyBoard(), 0, 5, [45, 46, 3, 28])).toEqual(expect.arrayContaining([45]));
     });
     it('氷結札を使うのは軍師・氷室・毒使いだけ（巨人は撃たない）', () => {
         const giant = new AIPlayer('💙', 'giant', ['⭕'], ['giant', 'poisoner']);
-        expect(giant.makeMove(emptyBoard(), 30, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
+        expect(giant.makeMove(emptyBoard(), 22, skillCosts, 2, 5, [45], false).skills).not.toContain('onClickFrostToken');
+    });
+});
+
+describe('魔力が有り余るとき（多人数戦・防壁で長引いた試合）', () => {
+    const { skillCosts } = require('./skillCosts');
+    const you = () => new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'poisoner', 'witch']);
+
+    it('魔力に余裕があればライフ+3とバイバインで置くコマを厚くする。余裕が無ければ撃たない', () => {
+        const rich = you().makeMove(emptyBoard(), 20, skillCosts, 2, 5, [0, 1], false).skills;
+        expect(rich).toEqual(['onClickAddLife', 'onClickBibine']);
+        expect(you().makeMove(emptyBoard(), 8, skillCosts, 2, 5, [0, 1], false).skills).toEqual([]);
+    });
+
+    it('魔力が大きく余り、使う額が少ない手札なら、引き直し回数を使い切っても引き直す', () => {
+        const ai = you();
+        ai.rerollsLeft = 0;
+        expect(ai.makeMove(emptyBoard(), 40, skillCosts, 2, 5, [3], false).reroll).toBeDefined();
+        const spent = you();
+        spent.rerollsLeft = 0;
+        expect(spent.makeMove(emptyBoard(), 20, skillCosts, 2, 5, [3], false).reroll).toBeUndefined();
+        const deep = you();
+        deep.rerollsLeft = -5;
+        expect(deep.makeMove(emptyBoard(), 40, skillCosts, 2, 5, [], false).reroll).toBeUndefined();
+    });
+
+    it('魔力が有り余るときは、劣勢でなくても斜めの敵コマを一掃するスラッシュを撃つ', () => {
+        const geo = geometryForCells(16);
+        const b = emptyBoard();
+        geo.antiDiagonal.slice(0, 2).forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [] }; });
+        expect(you().makeMove(b, 30, skillCosts, 2, 5, [5], false).skills).toContain('onClickSlash');
+        expect(you().makeMove(b, 8, skillCosts, 2, 5, [5], false).skills).not.toContain('onClickSlash');
+    });
+
+    it('魔力が有り余るとき、敵コマが多ければオピウムを撃つ', () => {
+        const b = emptyBoard();
+        [0, 2, 5, 7, 10].forEach((i) => { b[i] = { player: i % 2 ? '🟩' : '⭕', bind: 4, effects: [] }; });
+        expect(you().makeMove(b, 30, skillCosts, 2, 5, [8], false).skills).toContain('onClickOpium');
+        expect(you().makeMove(b, 10, skillCosts, 2, 5, [8], false).skills).not.toContain('onClickOpium');
     });
 });
