@@ -1402,6 +1402,8 @@ function chooseLocks(s, availableSkills) {
     // 片側だけロック無効化(A/B検証用): s.noLockHeart / s.noLockCircle
     if (s.turn === 0 ? s.noLockHeart : s.turn === 1 ? s.noLockCircle : false) return [];
     const character0 = curChar(s);
+    // 氷室の番人(F.fryDig, デッキ把握): 一寸の虫に魂なし(92)を手札に持っているあいだは固定して、壊せる敵コマが揃うまで持ち続ける（魔女が相手のときだけ。他の相手では固定が邪魔になり対巨人・対鍛冶師が落ちた）
+    if (character0 === 'cryomancer' && F.fryDig && availableSkills.includes(92) && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) return [92];
     // 氷室の番人(F.cryoBuds): バッズ札(2,10)を手札に固定して毎手番撃てるようにする。自陣の🌱1つにつき毎手番+1魔力（上限実験: 毎手番+1で環境勝率+19pt）
     if (character0 === 'cryomancer' && F.cryoBuds && !F.iceComboLock) return availableSkills.filter((i) => i === 2 || i === 10).slice(0, 2);
     // 氷室の番人(F.iceComboLock): 範囲氷結(41)・氷柱(42)を手札に固定し続け、絶対零度と組む氷結コンボが揃うのを待つ
@@ -1713,6 +1715,18 @@ function faithfulMakeMoveInner(s) {
     // AIが盤面・キャラに応じて次ターン用にスキルをロック [要検証]
     const locks = chooseLocks(s, availableSkills);
     s.lockedSkills[s.turn] = locks;
+
+    // 氷室の番人(F.fryDig, デッキ把握): デッキに一寸の虫に魂なし(92)があり手札に無く、壊せる敵コマが F.fryDigMin 個以上あるとき、魔力に余裕があれば1コストで引き直して探す。魔女が相手のときだけ探す
+    if (F.fryDig && curChar(s) === 'cryomancer' && !s.silenced[s.turn] && inDeck(s, 92) && !s.skills.includes(92)
+        && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) {
+        const sfc = calculateCost(s, costsOf(s).onClickSmallFry, false, false, 'onClickSmallFry');
+        for (let k = 0; k < F.fryDig && !s.skills.includes(92) && E.smallFryTargets(s).length >= (F.fryDigMin || 2) && curMagic(s) >= costsOf(s).onClickShuffle + sfc + (F.fryDigMargin || 0); k++) {
+            s.lockedSkills[s.turn] = chooseLocks(s, s.skills.slice());
+            E.shuffleHand(s);
+        }
+        availableSkills = s.skills.slice();
+        s.lockedSkills[s.turn] = chooseLocks(s, availableSkills);
+    }
 
     // 対魔女の新スキルを探す: 手札に初霜/吹き寄せ/山焼きが無く、デッキにあって、魔力に余裕があるなら、1コストで引き直す（見つけた札は引き直しのたびに固定し直す）
     if (F.witchDig && character0(s) !== 'witch' && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) {
