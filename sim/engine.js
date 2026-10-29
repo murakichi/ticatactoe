@@ -868,7 +868,7 @@ function placeMove(s, i) {
     if (lifeBanMod.moveBlocked(s.lifeBan[s.turn], s.life)) return false; // ライフ3以下のコマは置けない
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
-        if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
+        if (board[i].bind > 0 && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
     // 氷結中の空きマスには誰も着手できない

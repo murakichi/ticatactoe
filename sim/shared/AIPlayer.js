@@ -11,6 +11,7 @@ const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const blast_1 = require("./blast");
+const decay_2 = require("./decay");
 const generic_1 = require("./generic");
 const turn_1 = require("./turn");
 const shikigami_1 = require("./shikigami");
@@ -856,8 +857,8 @@ class AIPlayer {
                 if (sq.bind <= 0) {
                     moves.push(i);
                 }
-                else if (this.character === 'giant') {
-                    // 巨人のみbind>0の敵マスを攻撃可能
+                else if ((0, decay_2.canHitBound)(this.character, board, this.opponents.length + 1)) {
+                    // 巨人と、満杯の盤面では誰でも、bind>0の敵マスを攻撃可能
                     moves.push(i);
                 }
             }

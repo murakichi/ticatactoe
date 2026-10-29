@@ -9,6 +9,7 @@ import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, ca
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { stomp as stompOf } from './blast';
+import { canHitBound } from './decay';
 import { plunderTargets as plunderTargetsOf, canRelocate, isPlaceable } from './generic';
 import { NECROMANCY } from './turn';
 import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
@@ -810,8 +811,8 @@ class AIPlayer {
                 // bind=0の敵マスは無条件で乗っ取り可能
                 if (sq.bind <= 0) {
                     moves.push(i);
-                } else if (this.character === 'giant') {
-                    // 巨人のみbind>0の敵マスを攻撃可能
+                } else if (canHitBound(this.character, board, this.opponents.length + 1)) {
+                    // 巨人と、満杯の盤面では誰でも、bind>0の敵マスを攻撃可能
                     moves.push(i);
                 }
             }
