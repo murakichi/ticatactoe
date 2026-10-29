@@ -569,18 +569,13 @@ test('装備枠: 「あなた」だけ3枠、他は2枠', () => {
 });
 
 test('全ギアを持たせたAI同士の試合が最後まで進む（落ちない・魔力が負にならない）', () => {
-    const ai = require('./ai');
+    const aiDriver = require('./aiDriver');
     for (let seed = 1; seed <= 8; seed++) {
         const g = [gear.randomGears(3, e.makeRng(seed)), gear.randomGears(3, e.makeRng(seed + 100))];
         const s = e.newGame({ chars: ['you', 'magician'], gears: g, rng: e.makeRng(seed) });
         let guard = 0;
         while (!s.winner && guard++ < 600) {
-            const r = ai.makeMove(s, 'faithful');
-            if (r.turnEnded) continue;
-            if (r.move === null) break;
-            const before = s.currentTurn;
-            e.placeMove(s, r.move);
-            if (s.currentTurn === before) break;
+            aiDriver.playTurn(s);
             assert.ok(s.magic.every((m) => m >= 0), `seed ${seed}: 魔力が負 ${s.magic}`);
         }
         assert.ok(guard < 600, `seed ${seed}: 終わらない`);

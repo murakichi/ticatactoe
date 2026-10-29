@@ -537,12 +537,13 @@ export const Game = (props: GameProps) => {
             executeSkillForAI(sk);
         }
 
-        const pendingClicks = plan.clicks;
+        // 対象クリック(ロック・インジェクションなど)で終わり、着手もターン終了スキルも無いなら、クリックのあとにチャージでパスする
+        const pendingClicks: (number | string)[] = plan.chargeWhenEmpty && !plan.moveLast ? [...plan.clicks, 'onClickCharge'] : plan.clicks;
         if (pendingClicks.length > 0) {
-            if (plan.skills.length > 0) {
+            if (plan.skills.length > 0 || typeof pendingClicks[0] === 'string') {
                 setPendingAIMove(pendingClicks);
             } else {
-                onCellClick(pendingClicks[0]);
+                onCellClick(pendingClicks[0] as number);
                 if (pendingClicks.length > 1) setPendingAIMove(pendingClicks.slice(1));
             }
         } else if (plan.chargeWhenEmpty) {

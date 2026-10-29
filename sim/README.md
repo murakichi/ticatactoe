@@ -29,7 +29,7 @@ node sim/cli.js play --me 💙 --mychar you --aichar giant
 - マス番号 `0`〜`15` を入力して着手
 - `skill <名前> [idx]` でスキル使用（例 `skill token`、`skill lock` の後にマス指定）
 - `help` でスキル一覧、`quit` で終了
-- `--mode prod`（既定）は本番のAIそのもの。`faithful`/`capture` は旧 sim 版AI（`ai.js`。廃止予定）
+- `AIは常に本番のAIそのもの（旧 sim 版AIは #307 で削除。`--mode` は互換のために受け付けるだけ）
 
 ### 2. 1試合を観戦（AI対AI）
 ```bash
@@ -40,7 +40,6 @@ node sim/cli.js auto --hchar giant --cchar you --seed 1
 ```bash
 node sim/cli.js sim --games 2000                          # 全キャラ総当たり（本番AI）
 node sim/cli.js sim --games 3000 --pair giant,you         # 特定マッチアップ
-node sim/cli.js sim --games 2000 --mode capture           # 捕獲考慮AIで比較
 ```
 `--seed` で再現可能（mulberry32 のシード固定）。
 
@@ -94,8 +93,8 @@ node sim/cli.js auto    --chars you,giant,poisoner --seed 1     # 1試合を観�
   A/B は環境変数で: `DECAY_PER_ROUND_MIN_PLAYERS=99 node sim/cli.js sim --players 4`（全人数で着手ごと）
 - 50ターンごとに手番開始時の魔力が全員+1ずつ増える（2人戦も対象）（本番の `lateMagic.ts` の規則をそのまま使う）。
   A/B は `LATE_MAGIC_INTERVAL=0 node sim/cli.js sim --players 4`（無効化）
-- 速度の目安: 旧 faithful AI は 3人戦で約0.35秒/試合、8人戦で約5秒/試合（深さを 3/2/1 に落としている）
-- 2人戦の結果は多人数対応の前後で（同じseedなら）完全に一致する（capture/faithful とも確認済み）
+- 速度の目安: 旧AIは 3人戦で約0.35秒/試合、8人戦で約5秒/試合（深さを 3/2/1 に落としている）
+- 2人戦の結果は多人数対応の前後で（同じseedなら）完全に一致する
 - `engine.js` の状態は席ごとの配列（`s.chars` / `s.magic` / …、手番は `s.turn`）。2人戦の旧名
   （`s.heartMagic` / `s.circleChar` / `s.heartTurn` など）は getter/setter の別名で残してあり、既存のテストやスクリプトはそのまま動く
 - `play`（対人CLI）は2人専用のまま
@@ -129,8 +128,7 @@ node sim/gear.test.js                                   # ギアの単体テス�
 - `engine.js` — ゲームエンジン（盤面・ライフ・マジック・手番・全スキル）。移植の
   忠実性メモ（`[FAITHFUL]` / `[FIX]`）をコメントで明記。
 - `shared/` — 本番のTSから生成した純粋ロジックとAI（手で編集しない。上の表）。
-- `aiDriver.js` — 本番AIを engine で動かす（`playTurn` / `makeMove`）。`aiSelect.js` は probe-*.js / duel.js が使うAIの切り替え（既定は本番AI、`SIM_AI=legacy` で `ai.js`）。
-- `ai.js` — 旧 sim 版AI（`faithful`/`capture`。`F.xxx` のノブ付き）。**廃止予定**: 本番AIを直接測れるようになったので、engine.test.js の挙動テストと probe-ai.js / probe-parity.js が使っている間だけ残している。
+- `aiDriver.js` — 本番AIを engine で動かす（`playTurn` / `makeMove`）。probe-*.js / duel.js も同じ `aiDriver.js` を使う。
 - `cli.js` — `play` / `auto` / `sim` のフロントエンド。
 - `BALANCE.md` — 分析結果と所見。
 
@@ -140,9 +138,8 @@ node sim/gear.test.js                                   # ギアの単体テス�
 
 ## AI の paired A/B（ai-improve）
 
-- `node sim/probe-ai.js --mode vs|h2h --chars A,B --games N --seed S --flagsA k=v [--modB ai.old.js]  # ai.old.js は git show <旧コミット>:sim/ai.js > sim/ai.old.js で作る` — 同一シード・席入れ替えで AI 設定を比較（結果は `RESULT {json}` 行。`| node sim/probe-sum.js` で勝率と 95%CI に集計）
 - `node sim/probe-usage.js --chars A,B --games N [--size N] [--flags k=v]` — スキルの使用回数/試合と、使った試合の勝率
-- （旧）`sim/ai.js` の `AI_DEFAULTS`（採用済み）と `F.xxx`（検証用ノブ。`s.aiFlags[seat]` で席ごとに上書き）。本番AI（`AIPlayer.ts`）にはこのノブは無い。AIを変えるときは `AIPlayer.ts` を直接直し、`probe-top.js` などで改修前後を同一シードで比べる
+- AIの調整ノブは無い。AIを変えるときは `AIPlayer.ts` を直接直し、改修前後を同一シードで `probe-top.js` などに回して比べる
 
 ## 環境トップのチューニング（tune-top）
 ```bash

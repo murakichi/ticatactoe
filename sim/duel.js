@@ -24,7 +24,7 @@ const fs = require('fs');
 const engine = require('./engine');
 const gearMod = require('./shared/gear');
 const deckMod = require('./shared/deck');
-const ai = require('./aiSelect');
+const ai = require('./aiDriver');
 const threat = require('./duel-threat');
 
 const { SKILLS } = engine;
