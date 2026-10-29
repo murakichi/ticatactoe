@@ -52,6 +52,7 @@ const gear = require('./gear');
 const deckMod = require('./deck');
 const discountMod = require('./discount');
 const comboMod = require('./comboCost');
+const lifeBanMod = require('./lifeBan');
 const darkPotMod = require('./darkPot');
 const thermal = require('./thermal');
 const { GEAR_PARAMS: GP, hasGear } = gear;
@@ -142,8 +143,8 @@ const skillCosts = {
     onClickToken: 4,
     onClickTotalAssault: 9,
     onClickToggleYingYang: 1,
-    onClickShikigamiPlace: 3, // 陰: 任意の空きマスに式神を置く
-    onClickShikigamiBlast: 5, // 陽: 自分の式神を1つ選んで爆破
+    onClickShikigamiPlace: 2, // 陰: 任意の空きマスに式神を置く
+    onClickShikigamiBlast: 4, // 陽: 自分の式神を1つ選んで爆破
     onClickShikigamiAll: 3, // 汎用: 自分の式神を全て通常の自陣コマにする。コストは式神1体あたり
     onClickShikigamiRandom: 2, // 汎用(トークン扱い): 式神をランダムな空きマスに置く
     onClickShikigamiFlood: 7, // 汎用(百鬼夜行): 全ての空きマスにライフ0の式神を置く
@@ -256,6 +257,7 @@ const skillCosts = {
     onClickKindling: 5, // 焚きつけ(idx 85)
     onClickLeafCloak: 3, // 落葉の衣(idx 86)
     onClickTinder: 2, // 火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける（鍛冶師は🔥付与で-1）
+    onClickSmallFry: 10, // 一寸の虫に魂なし(idx 92)。盤面のコマの数だけ軽減（最低1）
 };
 // A/B検証用: SIM_COSTS='onClickFrostToken=5,onClickWindborne=4' のようにコストを上書きできる（既定は未設定＝上の値）
 if (process.env.SIM_COSTS) for (const kv of process.env.SIM_COSTS.split(',')) { const [k, v] = kv.split('='); if (k in skillCosts) skillCosts[k] = Number(v); }
@@ -566,6 +568,7 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
+        lifeBan: fill(false), // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
         chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
         gearHeld: fill(null),
@@ -839,6 +842,7 @@ function settleWinner(s) {
 function advanceTurn(s) {
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    s.lifeBan[s.turn] = false;
     // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
     s.chargeBuff[s.turn] = Math.max(0, s.chargeBuff[s.turn] - 1);
     // 裸の王様は、ギアを封じられた側の手番が終わるたびに解除（預かっていた装備を戻す）
@@ -1097,6 +1101,7 @@ function placeMove(s, i) {
     }
 
     if (s.winner) return false;
+    if (lifeBanMod.moveBlocked(s.lifeBan[s.turn], s.life)) return false; // ライフ3以下のコマは置けない
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
@@ -1911,6 +1916,29 @@ function onClickKindling(s) {
     bumpStat(s, 'kindlingLeaves', r.leaves);
 }
 
+// 一寸の虫に魂なし (idx 92): 敵のライフ3以下のコマを全て破壊し（氷結中は❄-1だけ・🔑ロックと無敵は除く）、相手全員を次の手番の終わりまで「ライフ3以下のコマを置けない」縛りにする。
+// コストは盤面のコマの数だけ軽減（最低1） [FAITHFUL] Game.tsx onClickSmallFry
+function smallFryTargets(s) {
+    const me = curPlayer(s);
+    return s.board.map((sq, i) => (sq.player && sq.player !== me && sq.bind <= lifeBanMod.LIFE_BAN_MAX && !isGuarded(s, sq) ? i : -1)).filter((i) => i !== -1);
+}
+function onClickSmallFry(s) {
+    const cost = calculateCost(s, costsOf(s).onClickSmallFry, false, false, 'onClickSmallFry');
+    let destroyed = 0;
+    for (const k of smallFryTargets(s)) {
+        const guard = thermal.absorbDestroy(s.board[k]);
+        if (guard.blocked) { s.board[k] = guard.sq; continue; }
+        s.board[k] = { player: undefined, bind: 0, effects: [] };
+        destroyed++;
+    }
+    if (destroyed > 0) addCorpses(s, destroyed);
+    otherSeats(s).forEach((seat) => { s.lifeBan[seat] = true; });
+    spendMagic(s, cost, 'onClickSmallFry');
+    bumpMagicCount(s);
+    bumpStat(s, 'smallFry');
+    bumpStat(s, 'smallFryDestroyed', destroyed);
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2716,7 +2744,18 @@ const SKILLS = {
     uniqueDiscount: (s) => useDiscountSkill(s, 'onClickUniqueDiscount'),
     counterMarkdown: (s) => useDiscountSkill(s, 'onClickCounterMarkdown'),
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
+    smallFry: onClickSmallFry,
 };
+// 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
+for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
+    const name = key.replace(/^onClick/, '').replace(/^./, (c) => c.toLowerCase());
+    const orig = SKILLS[name];
+    if (typeof orig !== 'function') continue;
+    SKILLS[name] = function (s, ...rest) {
+        if (lifeBanMod.placeBlocked(s.lifeBan[s.turn], key, calculateTokenBind(s))) return;
+        return orig.call(this, s, ...rest);
+    };
+}
 
 // ---- Rendering ------------------------------------------------------------
 function renderBoard(s) {
