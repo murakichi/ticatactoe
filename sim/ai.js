@@ -66,7 +66,7 @@ AI_DEFAULTS.lockFirstCryo = 2; // 魔法使い: 氷室が相手のとき審判�
 AI_DEFAULTS.noJudgeNecro = 1; // 魔法使い: ネクロマンサーが相手のとき審判の日を撃たない（壊したコマが墓地になり蘇生の燃料になる。対ネクロ 17→26%、seed22/300。本番は AIPlayer.ts judgeFuelsNecro）
 AI_DEFAULTS.necroLock = 1; AI_DEFAULTS.yyCover = 150; AI_DEFAULTS.yyCoverCryo = 1; AI_DEFAULTS.noCapNecro = 100; AI_DEFAULTS.antiSummon = 1; AI_DEFAULTS.antiSummonMax = 1; AI_DEFAULTS.antiFlood = 13; // ネクロマンサー: 割引札(53/57/58)を手札に固定して降霊を圧縮 / 陰陽師が相手のとき全ての列に自コマを置いてコンボを不発にする(A/B採用)
 // 対魔女の新スキル（初霜93・吹き寄せ94・山焼き95・無礼講96）: 引いたら先に固定し(lockNew)、手札に無ければ魔力に余裕があるとき1コストで引き直して探す(witchDig=回数, digMargin=シャッフルのあとに残す魔力)。無礼講(freeTok)は高いトークンの前に撃つ
-AI_DEFAULTS.smallFryMin = 2; AI_DEFAULTS.lockNew = 1; AI_DEFAULTS.witchDig = 2; AI_DEFAULTS.digMargin = 3; AI_DEFAULTS.freeTok = 1;
+AI_DEFAULTS.yinDig = 8; AI_DEFAULTS.smallFryMin = 2; AI_DEFAULTS.lockNew = 1; AI_DEFAULTS.witchDig = 2; AI_DEFAULTS.digMargin = 3; AI_DEFAULTS.freeTok = 1;
 let F = AI_DEFAULTS;
 function loadFlags(s) {
     const o = s.aiFlags && s.aiFlags[s.turn];
@@ -1724,6 +1724,16 @@ function faithfulMakeMoveInner(s) {
         const hasWant = () => want.some((i) => s.skills.includes(i));
         const inDeckWant = want.some((i) => inDeck(s, i));
         for (let k = 0; k < F.witchDig && inDeckWant && !hasWant() && curMagic(s) >= costsOf(s).onClickShuffle + F.digMargin; k++) {
+            s.lockedSkills[s.turn] = chooseLocks(s, s.skills.slice());
+            E.shuffleHand(s);
+        }
+        availableSkills = s.skills.slice();
+        s.lockedSkills[s.turn] = chooseLocks(s, availableSkills);
+    }
+
+    // 陰陽師×対魔女(F.yinDig): 一寸の虫に魂なし(92)が手札に無く、デッキにあって、魔力に余裕があるなら、1コストで引き直して探す（AIPlayer.ts と同一。92は chooseLocks が固定する）
+    if (F.yinDig && character0(s) === 'yinYangMaster' && otherSeats(s).some((seat) => s.chars[seat] === 'witch')) {
+        for (let k = 0; k < F.yinDig && inDeck(s, 92) && !s.skills.includes(92) && curMagic(s) >= costsOf(s).onClickShuffle + F.digMargin; k++) {
             s.lockedSkills[s.turn] = chooseLocks(s, s.skills.slice());
             E.shuffleHand(s);
         }
