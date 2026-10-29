@@ -154,10 +154,10 @@ function randomDeck(rng = Math.random) {
     return out.sort((a, b) => a - b);
 }
 
-/** AIが何も指定しないときのランダム入れ替えの枚数（推奨デッキの12枚中） */
+/** variedAIDeck(ストレステスト用)のランダム入れ替えの枚数（推奨デッキの12枚中） */
 const AI_DECK_SWAPS = 3;
 
-/** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ）。本番のAI席は pickRecommendedDeck（主案/別案の選択のみ） */
 /** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
 const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
 

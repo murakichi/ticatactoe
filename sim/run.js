@@ -10,11 +10,11 @@ const gearMod = require('./gear');
 const { CHARACTERS } = engine;
 
 // 1ゲーム分を最後まで回す。chars=席順のキャラ配列、modes=席ごとのAI種別（文字列1つなら全席同じ）
-// 本番のAI席と同じ装備（推奨デッキから3枚入れ替え / 推奨ギア・別案）を席ごとに持たせる。
+// 本番のAI席と同じ装備（推奨デッキ・推奨ギアの主案/別案からの選択。ランダムな入れ替えはしない）を席ごとに持たせる。
 // 何も渡さないと全キャラが「デッキ未指定・ギアなし」で戦い、実ゲームや環境順位(probe-top)とかけ離れる（陰陽師が極端に弱くなる）
 function aiLoadout(chars, rng, opts) {
     const out = {};
-    if (opts.deck) out.decks = chars.map((c) => deckMod.variedAIDeck(c, rng));
+    if (opts.deck) out.decks = chars.map((c) => deckMod.pickRecommendedDeck(c, rng));
     if (opts.gears) out.gears = chars.map((c) => gearMod.pickRecommendedGears(c, rng));
     return out;
 }

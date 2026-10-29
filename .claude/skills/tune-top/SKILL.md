@@ -25,7 +25,7 @@ node sim/probe-top.js --target <char> --scan deck --neighbors 30 --games 60   # 
 node sim/probe-top.js --target <char> --gears a,b --deck 0,3,... --flags k=v --modA ai.new.js   # 候補を直接測る
 node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補を環境に反映した順位(最終確認)
 ```
-共通: `--size N`(既定4)、`--envDeck varied`(相手が本番どおり推奨から3枚入れ替えのデッキ)、`--oppGears none|random`(相手のギアをなし/ランダムにする。完了判定では使わない。特定の相手設定を調べたいときだけ。**`--rank` では `--target` 無しだと対象自身にも掛かる**)、`--opp a,b`。
+共通: `--size N`(既定4)、`--envDeck varied`(頑健性確認。相手のデッキを推奨から3枚ランダムに入れ替える。**本番のAIデッキはランダムに入れ替えない**=主案/別案の選択のみなので、環境の基準ではなくストレステスト)、`--oppGears none|random`(相手のギアをなし/ランダムにする。完了判定では使わない。特定の相手設定を調べたいときだけ。**`--rank` では `--target` 無しだと対象自身にも掛かる**)、`--opp a,b`。
 目安: 2人戦1試合≈0.3秒。`--target` 1設定 ×100試合 ≈ 数十秒〜1分、`--rank --games 60` ≈ 数分。
 ギアは `sim/gear.js`(`GEAR_IDS`)、デッキは `sim/deck.js`(`SKILL_CATALOG` の idx 0..61)、AIの検証用ノブは `sim/ai.js` の `AI_DEFAULTS`/`F.xxx` と `probe-ai.js`/`probe-usage.js`(ai-improve 参照)。
 
@@ -69,7 +69,7 @@ node sim/probe-top.js --rank --target <char> --gears a,b --games 200  # 候補�
 1.5. **読む**: まず `docs/tune/LEARNINGS.md`(全キャラ共通の知見。無ければ作る)、次に `docs/tune/<char>.md`(**「不採用にした案」節と試行ログを読み、書かれた案は再提案・再測定しない**。無ければ作成し、`--rank --games 60 --seed 1` で基準線を記録)。`状態: blocked` なら **何もせず「停止中」と報告して終了**(loop を止めるよう伝える)。`状態: done` なら **手順8(再検証)** を行う。`状態: refining` は手順3以降をそのまま続ける(洗練)。
 2. **完了判定**: 直近の採用後に、次の**相手設定の2条件**で `--rank --games 200 --seed 3 --target <char> ...`(採用した設定を反映。**`--target` を必ず付ける**)を測り、**2条件とも1位**(差は問わない)であれば「トップ到達」として手順7へ。ギアなし(`--oppGears none`)・ギアランダム(`--oppGears random`)の条件は**測らない**(2026-10-21 ユーザー指示。人間も AI 席も既定でギアを付けるため、完了判定に不要)。
    1. 基本: 相手は推奨デッキ・推奨ギア
-   2. `--envDeck varied`: 相手のデッキが本番どおり推奨から3枚入れ替わる
+   2. `--envDeck varied`: 相手のデッキが推奨から3枚ランダムにずれても(頑健性。本番のAIデッキはランダムに入れ替えない)
    どれかで1位でなければ、その条件で負けている相手を `--opp` に絞って調べ、手順3 の「メタ」軸に回す。
 3. **診断してから軸を選ぶ**(状態ファイルに「## 診断」が無い・master でキャラが変わった、のどちらかなら先に下の「診断(測る前に仕組みから考える)」を行い、結果を状態ファイルに書く。**診断なしにスキャンを回さない**)。
    **軸を1つ選ぶ**(ログの巡回順で、まだ測っていない軸。**重み・ノブの微調整だけで終わらせない**。下の「探索の幅」の各軸を巡回する):
