@@ -133,8 +133,8 @@ function candArgs(cand) {
 }
 
 const tunedOf = (char) => load()[char] || {};
-const curDeck = (char) => tunedOf(char).deck || require('./deck').recommendedDeck(char);
-const curGears = (char) => tunedOf(char).gears || require('./gear').recommendedGears(char);
+const curDeck = (char) => tunedOf(char).deck || require('./shared/deck').recommendedDeck(char);
+const curGears = (char) => tunedOf(char).gears || require('./shared/gear').recommendedGears(char);
 
 /** そのキャラのAIが使わないノブを pilot（少数試合）で洗い出す。基準と全試合の結果が完全一致 = 無効。コードが変わるまで再測定しない */
 /** 基準と全試合一致した行をノブ単位にまとめる。そのノブの全ての値が一致なら `k=*`（値が増えても再測定しない）、一部だけなら `k=v` */
