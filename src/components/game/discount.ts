@@ -41,7 +41,7 @@ export const EFFECT_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickInjection', 'onClickIntensify', 'onClickPandemic', 'onClickPoisonMist',
     'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom',
     'onClickFreeze', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostfall',
-    'onClickIgnite', 'onClickTinder', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
+    'onClickIgnite', 'onClickTinder', 'onClickSpark', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
     'onClickShikigamiCurse',
 ]);
 /** 各キャラの固有スキル（コストキー） */

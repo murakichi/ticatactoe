@@ -211,7 +211,7 @@ export const GLACIER_DAMAGE_PER_STACK = 3;
 export const reducedGlacierCost = (baseCost: number, charges: number, calc: (cost: number) => number): number =>
     Math.max(1, calc(baseCost - charges));
 /** 煉獄の鍛冶師のパッシブでコストが常に-1される、🔥を付与するスキル（コストキー。業火は固有スキルなので含めない）。sim/thermal.js と同じ */
-export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickTinder', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
+export const FLAME_SKILL_KEYS: ReadonlySet<string> = new Set(['onClickIgnite', 'onClickTinder', 'onClickSpark', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 /** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
 export const INFERNO_FREE_SKILLS = 3;
 /** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。

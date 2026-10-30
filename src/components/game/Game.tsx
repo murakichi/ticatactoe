@@ -172,6 +172,8 @@ export const Game = (props: GameProps) => {
         shikiPlaced: Array<boolean>(seatCount).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
         plantPrev: Array<boolean>(seatCount).fill(false), // 直前の手番に🌱🍂が増えた（火口の無料条件。撃つと消える）
         plantBase: Array<number>(seatCount).fill(0), // 手番開始時点の盤面の🌱🍂の総数
+        placedPrev: Array<boolean>(seatCount).fill(false), // 直前の手番に相手がコマを2つ以上設置した（飛び火の無料条件。撃つと消える）
+        placeBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣のコマ数
         fireBase: Array<number>(seatCount).fill(0), // 手番開始時点（と火の車を撃った直後）の盤面全体の🔥の総数（火の車の無料条件。増えていれば、この手番に敵か自陣へ🔥を付与した）
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
@@ -221,6 +223,7 @@ export const Game = (props: GameProps) => {
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
+        placedPrev: gearTurn.current.placedPrev[seat],
         discount: gearTurn.current.discount[seat],
     });
     /** キャラ補正済みのコストにギアのコスト補正を掛ける */
@@ -450,6 +453,7 @@ export const Game = (props: GameProps) => {
             case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickKimon': onClickKimon(); break;
             case 'onClickFireWheel': onClickFireWheel(); break;
+            case 'onClickSpark': onClickSpark(); break;
             case 'onClickShuffle': onClickShuffle(); break;
             case 'aiReplan': runAIMove(); break; // 引き直しのあと、新しい手札で計画し直す
             case 'onClickCounterMarkdown':
@@ -2919,6 +2923,23 @@ export const Game = (props: GameProps) => {
         setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills)); // 手札のシャッフル（無料。スキル扱いではない）
     };
 
+    // 飛び火: ランダムな敵マス2つに🔥を1つずつ付ける（火の車からシャッフルを除いたもの）。直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
+    const onClickSpark = () => {
+        const cands = fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard);
+        if (cands.length === 0) return;
+        const picks = randomAnyPick(cands, Math.min(FIRE_WHEEL_COUNT, cands.length));
+        const board = currentBoard.slice();
+        const thawed = fireWheel(board, picks, geo.size, keepBuds);
+        addLog(`「飛び火」を使用（${picks.map(posName).join('・')}に🔥）`);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        flashCells(picks);
+        playEffect('flame', undefined, picks, '飛び火');
+        playBurst('thaw', thawed);
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark'), true, true, 'onClickSpark');
+        gearTurn.current.placedPrev[turnSeat] = false; // 無料で撃てるのは1手番に1回まで
+    };
+
     // 浄化: 自陣のコマの状態異常（毒・火炎・氷結・帯電）を全部回復する。クリック不要・手番は続く
     const ownAilmentCells = (): number[] =>
         currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && ailmentStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
@@ -3302,6 +3323,8 @@ export const Game = (props: GameProps) => {
             oppSkillPrev: Array<boolean>(seatCount).fill(false),
             plantPrev: Array<boolean>(seatCount).fill(false),
             plantBase: Array<number>(seatCount).fill(0),
+            placedPrev: Array<boolean>(seatCount).fill(false),
+            placeBase: Array<number>(seatCount).fill(0),
             fireBase: Array<number>(seatCount).fill(0),
             shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
@@ -3531,6 +3554,7 @@ export const Game = (props: GameProps) => {
         { idx: 91, onClick: onClickShikigamiPurge, buttonText: `式神の供犠-${calculateCost(seatCosts.onClickShikigamiPurge, false, false, currentTurnPlayer, 'onClickShikigamiPurge')}`, paragraph: `自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）\n自陣の式神が${SHIKIGAMI_PURGE_FREE}体以上ならコスト0`, disabled: checkSkillDisable(seatCosts.onClickShikigamiPurge, false, false, 'onClickShikigamiPurge') || ownShikigami().length === 0 || purgeTargets().length === 0 },
         { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
         { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel, false, false, 'onClickFireWheel') || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
+        { idx: 97, onClick: onClickSpark, buttonText: `飛び火-${calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark')}`, paragraph: `ランダムな敵のコマ2つに🔥火炎を1つずつ付与します\n付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外です\n直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料です\n鍛冶師は🔥付与のスキルが-1`, disabled: checkSkillDisable(seatCosts.onClickSpark) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
         { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
         { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, paragraph: `今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます（雷霆の巫以外は乗った時点でダメージ）\n自陣に⚡が1つもなければ、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason, false, false, 'onClickChargeSeason') || chargeBuff[turnSeat] > 0 },
         { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, paragraph: `自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます（雷霆の巫以外は乗った時点でダメージ）\nこのターンに⚡を付与するスキルを使っていれば、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickBristle, false, false, 'onClickBristle') || bristleTargets().length === 0 },
