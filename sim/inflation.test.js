@@ -53,4 +53,33 @@ describe('inflation metrics', () => {
         expect(m.index).toBeNull();
         expect(typeof m.note).toBe('string');
     });
+
+    test('board change metrics: stillRate counts turns with no cell change, change ignores life (decay) only', () => {
+        const rows = [];
+        for (let t = 0; t < 10; t++) rows.push({ seat: 0, turn: t, start: 4, end: 0, income: 4, skills: 1, changed: t % 2 === 0 ? 0 : 3, pieces: t % 2 === 0 ? 0 : 1, cells: 16 });
+        const m = summarize([rows], 4, 10).overall;
+        expect(m.stillRate).toBeCloseTo(0.5);
+        expect(m.changePerTurn).toBeCloseTo(1.5);
+        expect(m.changeRate).toBeCloseTo(1.5 / 16);
+        expect(m.changePerMagic).toBeCloseTo(15 / 40);
+    });
+
+    test('createTracker counts owner/effect changes but not bind (life) changes', () => {
+        const { createTracker } = require('./inflation');
+        const mk = (cells) => ({ magic: [5, 5], gearSkills: [0, 0], turn: 0, currentTurn: 0, board: cells });
+        const board0 = [{ player: undefined, bind: 0, effects: [] }, { player: '💙', bind: 5, effects: [] }, { player: '⭕', bind: 3, effects: [] }, { player: undefined, bind: 0, effects: [] }];
+        const s = mk(board0.map((c) => ({ ...c, effects: [...c.effects] })));
+        const tr = createTracker(s);
+        tr.onTurnChange(s);
+        const next = mk([
+            { player: '💙', bind: 5, effects: [] },                 // 空き→コマ: 変化
+            { player: '💙', bind: 4, effects: [] },                 // ライフだけ(減衰): 変化なし
+            { player: '💙', bind: 3, effects: [] },                 // 持ち主が変わった: 変化
+            { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }, // 効果が付いた: 変化
+        ]);
+        next.turn = 1; next.currentTurn = 1;
+        tr.onTurnChange(next);
+        expect(tr.rows[0].changed).toBe(3);
+        expect(tr.rows[0].pieces).toBe(2);
+    });
 });
