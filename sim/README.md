@@ -58,6 +58,8 @@ node sim/cli.js watch --no-gear                # ギアなし（--no-skill で�
 スナップショット(`--checkpoint` 200局ごと)で全キャラの勝率の動きが `--eps`(0.5pt) 以内」かつ
 `--min-games`(2000) 以上。`--max N` で局数上限。停止時（Ctrl-C含む）は必ず最終統計と対面表を出す。
 
+**有利・不利の関係図**: 画面の「有利・不利の関係図」と、CLI の「有利関係」「閉ループ」の欄。勝つ側→負ける側の有向グラフで、同じ組で勝率の95%区間(Wilson)の下限が50%超の辺が「有意」、そうでない辺は「傾向」(点線)。互いに行き来できるキャラの集まり(強連結成分)と、そこに入る辺を閉ループ(三すくみ・4すくみ…)として橙で示す。実装は `sim/live.js` の `analyze`(edges, loops)と `findLoops`。
+
 **ブラウザ版**: セットアップ画面の「📊 シミュレーション」から同じ集計を画面で見られる（ユーザーの端末の Web Worker で動く。
 `public/simWorker.js`（計算だけ。端末のコア数-1 個を並列に立てる）が `sim/compute.js` 経由で `sim/` のモジュールを読み、集計・分析は画面側が `public/sim/live.js` を読み込んで行う。`npm start` / `npm run build` の前に `scripts/copy-sim.js` が
 `compute.js` / `live.js` から辿れる `sim/*.js` を `public/sim/` にコピーする（git管理外）。sim のエンジンを直せば
