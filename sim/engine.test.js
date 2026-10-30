@@ -2238,7 +2238,7 @@ test('🍂落ち葉: 他の席の🍂の枚数ぶんスキルコストが上が�
     assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3 + 10);
 });
 
-test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト3/7/9・トークンはターン1回）', () => {
+test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト5/7/9・トークンはターン1回）', () => {
     const run = (key, pre) => {
         const s = game(); s.heartTurn = true; s.heartMagic = 30;
         e.SKILLS[key](s);
@@ -2246,7 +2246,7 @@ test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（
         return s;
     };
     let s = run('leafToken');
-    assert.strictEqual(s.heartMagic, 30 - 3);
+    assert.strictEqual(s.heartMagic, 30 - 5);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1]);
     s = run('twinLeafToken');
     assert.strictEqual(s.heartMagic, 30 - 7);
