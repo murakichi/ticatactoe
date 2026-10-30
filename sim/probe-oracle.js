@@ -16,7 +16,10 @@ for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a
 const driver = require('./' + (args0.mod || 'aiDriver.js')); // --mod aiDriver.old.js で別版のAIを測る
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
-const [c1, c2] = (args.chars || 'you,you').split(',');
+const CH = (args.chars || 'you,you').split(','); // 2人以上。3人以上は『自分が最大化、他の全員が順番に最小化』(パラノイド探索)
+const [c1, c2] = CH;
+const PROD = !!args.prod; // --prod: 全席が推奨デッキ・推奨ギア（省略するとデッキなし・ギアなし=手札が全札からランダム）
+const gearMod = require('./shared/gear');
 const size = args.size ? parseInt(args.size, 10) : undefined;
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), D = parseInt(args.depth || '4', 10);
 const symbolsOf = (b) => b.map((x) => (engine.isShikigami(x) ? undefined : x.player));
@@ -51,12 +54,15 @@ const K = parseInt(args.rollouts || '0', 10);
 const stat = { turns: 0, compared: 0, optimal: 0, missedWin: 0, intoLoss: 0, other: 0, samples: [] };
 const t0 = Date.now();
 for (let g = 0; g < games; g++) {
-    const s = engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g), size });
+    const s = PROD ? engine.newGame({ chars: CH, rng: engine.makeRng(seed0 * 100003 + g), size, decks: true, gears: CH.map((c) => gearMod.recommendedGears(c)) }) : engine.newGame({ chars: CH, rng: engine.makeRng(seed0 * 100003 + g), size });
     let n = 0;
     while (!s.winner && n++ < 400) {
         const seat = s.turn;
         const ai = driver.aiFor(s, seat);
-        const me = ai.playerSymbol, opp = ai.opponents[0];
+        const me = ai.playerSymbol;
+        // 手番順: 自分の次の席から巡回
+        const order = [me]; for (let k = 1; k < CH.length; k++) order.push(engine.SYMBOLS[(seat + k) % CH.length]);
+        const nextOf = (m) => order[(order.indexOf(m) + 1) % order.length];
         const board = s.board, life = s.life;
         ai.updateShield(board);
         stat.turns++;
@@ -73,7 +79,7 @@ for (let g = 0; g < games; g++) {
                 for (const j of moves) {
                     const nb = ai.simulatePlace(b, j, mover, life, ply);
                     const w = engine.calculateWinner(symbolsOf(nb));
-                    const v = w ? (w === me ? 1 : -1) : search(nb, mover === me ? opp : me, ply + 1, depth - 1, alpha, beta);
+                    const v = w ? (w === me ? 1 : -1) : search(nb, nextOf(mover), ply + 1, depth - 1, alpha, beta);
                     if (mover === me) { if (v > best) best = v; if (best > alpha) alpha = best; } else { if (v < best) best = v; if (best < beta) beta = best; }
                     if (beta <= alpha) break;
                 }
@@ -83,7 +89,7 @@ for (let g = 0; g < games; g++) {
                 const nb = ai.simulatePlace(board, m, me, life, 0);
                 const w = engine.calculateWinner(symbolsOf(nb));
                 if (w) return w === me ? 1 : -1;
-                return search(nb, opp, 1, D, -2, 2);
+                return search(nb, order[1], 1, D, -2, 2);
             };
             const vals = new Map(cand.map((m) => [m, value(m)]));
             const best = Math.max(...vals.values());
@@ -107,4 +113,4 @@ for (let g = 0; g < games; g++) {
         if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move); else if (!r.turnEnded) engine.SKILLS.charge(s);
     }
 }
-console.log(JSON.stringify({ chars: [c1, c2], games, depth: D, secs: Math.round((Date.now() - t0) / 1000), ...stat }, null, 1));
+console.log(JSON.stringify({ chars: CH, games, depth: D, secs: Math.round((Date.now() - t0) / 1000), ...stat }, null, 1));
