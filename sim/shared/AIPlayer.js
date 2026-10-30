@@ -567,6 +567,9 @@ class AIPlayer {
         let best = null;
         let bestScore = PANDEMIC_MIN_SCORE - 1;
         for (let i = 0; i < board.length; i++) {
+            // ⚡で無敵のマスは中心に選べない（クリックが無視されて手番が進まなくなる）
+            if (this.shield.has(i))
+                continue;
             let score = 0;
             for (const j of (0, poison_1.pandemicTargets)(board, i, this.characters)) {
                 if (this.isEnemy(board[j].player) && !this.shield.has(j))
