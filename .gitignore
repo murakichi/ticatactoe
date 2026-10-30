@@ -22,7 +22,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.tune-cache/
+.tune-cache*/
 
 # scripts/copy-sim.js が生成（sim/ のコピー）
 /public/sim/
