@@ -1260,7 +1260,9 @@ class AIPlayer {
 
             // 増殖: 空きマスが残っていて、維持コストを数ターン払える余裕があるうちに回し始める
             // (発動が遅いほど盤面が埋まりループの旨味が減るため、序盤〜中盤限定)
-            if (!proliferateActive && availableSkills.includes(20)) {
+            // 氷室の番人は使わない: 使った手番は、使わない手番より実戦勝率が -13.4pt、手札から外した次善の計画より -11.6pt
+            // （n=32, SE 3.8, z=-3.1。sim/probe-skilluse.js）。氷結で盤面を止めるキャラに増殖の維持コストが重い
+            if (!proliferateActive && availableSkills.includes(20) && this.character !== 'cryomancer') {
                 const proliferateCost = this.calculateAICost(costs.onClickProliferate, false, false, 'onClickProliferate');
                 const emptyCount = board.filter((sq) => !sq.player).length;
                 if (remaining >= proliferateCost + 1 && emptyCount >= 5) {
