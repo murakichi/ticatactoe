@@ -291,7 +291,7 @@ class AIPlayer {
         return bestIdx;
     }
 
-    /** 火口(idx 87)の対象: 🌱か🍂を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
+    /** 火口(idx 87)の対象: 🌱か🍂か❄を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
     private bestTinderTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
         const guardedCell = (sq: SquareInfo, i: number) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
@@ -299,7 +299,7 @@ class AIPlayer {
         let bestVal = 0;
         for (const i of tinderTargets(board, this.playerSymbol, guardedCell)) {
             const sq = board[i];
-            if (sq.bind <= 0 || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+            if (sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔥')) continue;
             let build = 0;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
@@ -307,7 +307,8 @@ class AIPlayer {
                 const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
                 if (mine === 0 && foes >= 2) build += foes;
             }
-            const val = sq.bind + (budStacks(sq) + sq.effects.filter((e) => e.effect === '🍂').length) * 3 + build * 2;
+            // ❄のコマは氷結を解いて攻撃の通る状態に戻す（❄1スタックにつき3）
+            const val = sq.bind + (budStacks(sq) + sq.effects.filter((e) => e.effect === '🍂').length + frozenStacks(sq)) * 3 + build * 2;
             if (val > bestVal) {
                 bestVal = val;
                 best = i;
@@ -1091,8 +1092,8 @@ class AIPlayer {
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58)) ||
-            // 鍛冶師: 相手に魔法使いがいるとき、火口(87)を手札に固定して毎手番🌱のコマを燃やす (旧sim AI の tinderLock=2。対魔法使い 37→58%)
-            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'magician'));
+            // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
+            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
