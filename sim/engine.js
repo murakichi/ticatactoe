@@ -66,6 +66,7 @@ const tokenAfterMod = require('./shared/tokenAfter');
 const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
+const genericMod = require('./shared/generic');
 const giantAuraMod = require('./shared/giantAura');
 const giantTurnMod = require('./shared/giantTurn');
 // 巨人が何ラウンドに1回動くか。A/B検証用に config.giantActEvery で上書きできる（未設定なら本番の GIANT_ACT_EVERY）
@@ -407,6 +408,9 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        usePlunder: false,
+        useRelocate: false,
+        relocateFrom: null,
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
@@ -600,9 +604,10 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
+    s.relocateFrom = null;
     s.useLock = 0;
 }
 function advanceTurn(s) {
@@ -755,6 +760,22 @@ function placeMove(s, i) {
         s.useSwidden = false;
         return true;
     }
+    if (s.useRelocate) {
+        // 縮地: 動かす自陣のコマを選び、空きマスを選ぶ。選べないマスは選び直せる
+        if (genericMod.canRelocate(s.board[i], curPlayer(s))) { s.relocateFrom = i; return false; }
+        if (s.relocateFrom === null) return false;
+        if (!genericMod.relocate(s.board, s.relocateFrom, i, curPlayer(s))) return false;
+        s.useRelocate = false;
+        s.relocateFrom = null;
+        return true;
+    }
+    if (s.usePlunder) {
+        if (!genericMod.plunderTargets(s.board, curPlayer(s), s.chars).includes(i)) return false; // 対象外は選び直せる
+        genericMod.plunder(s.board, i, curPlayer(s));
+        addCorpses(s, 1);
+        s.usePlunder = false;
+        return true;
+    }
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
@@ -847,7 +868,7 @@ function placeMove(s, i) {
     if (lifeBanMod.moveBlocked(s.lifeBan[s.turn], s.life)) return false; // ライフ3以下のコマは置けない
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
-        if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
+        if (board[i].bind > 0 && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
     // 氷結中の空きマスには誰も着手できない
@@ -862,7 +883,7 @@ function placeMove(s, i) {
     const spreadOrigins = [];
     if (decayNow) {
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は本番(decay.ts)の生成物
-        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS);
+        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS, decayMod.isCrowded(board, seatCount(s))); // 満杯の盤面は自然減衰がもう1回
         if (d.flameKills > 0) bumpStat(s, 'flameKill', d.flameKills);
         if (d.emptyLockSpawns.length > 0) bumpStat(s, 'emptyLockSpawn', d.emptyLockSpawns.length);
         for (const k of d.spreadOrigins) {
@@ -2089,6 +2110,22 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
+// 縮地 (idx50): 自陣のコマを1つ選び、空きマスへ動かす（ライフ・エフェクトごと）。手番は続く
+function onClickRelocate(s) {
+    s.useRelocate = true;
+    s.relocateFrom = null;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickRelocate, false, false, 'onClickRelocate'), 'onClickRelocate');
+    bumpMagicCount(s);
+    bumpStat(s, 'relocate');
+}
+// 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
+function onClickPlunder(s) {
+    if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
+    s.usePlunder = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPlunder, false, false, 'onClickPlunder'), 'onClickPlunder');
+    bumpMagicCount(s);
+    bumpStat(s, 'plunder');
+}
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function onClickKimon(s) {
@@ -2348,6 +2385,8 @@ const SKILLS = {
     leafFrost: onClickLeafFrost,
     springWind: onClickSpringWind,
     kimon: onClickKimon,
+    plunder: onClickPlunder,
+    relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,
