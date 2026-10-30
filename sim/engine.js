@@ -375,6 +375,8 @@ function newGame(opts = {}) {
         discount: Array.from({ length: n }, () => discountMod.emptyDiscount()), // コスト軽減スキルの状態（手番内だけ有効）
         oppSkilled: fill(false), // 自分の前の手番以降に他の席がスキルを使った
         oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
+        plantPrev: fill(false), // 直前の手番に🌱🍂が増えた（火口の無料条件。撃つと消える）
+        plantBase: fill(0), // 手番開始時点の盤面の🌱🍂の総数
         echoReady: fill(false),
         echoNext: fill(false),
         // 廃墟の底力: ruinActive=割引が有効（自陣が破壊された後の、自分の次の手番の終わりまで）/ ruinPending=次の自分の手番から有効
@@ -488,6 +490,7 @@ function costEnv(s, seat) {
         tokenFree: s.tokenFree[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         fireBase: s.fireBase[seat],
+        plantPrev: s.plantPrev[seat],
         discount: s.discount[seat],
     };
 }
@@ -566,7 +569,7 @@ function judgeNextIsHeart(s) {
 function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
-        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase,
+        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, chargeBase: s.chargeBase,
     };
     const r = {
@@ -1756,6 +1759,7 @@ function onClickTinder(s) {
     if (!tinderLegal(s)) return;
     s.useTinder = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder'), 'onClickTinder');
+    s.plantPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
     bumpMagicCount(s);
     bumpStat(s, 'tinder');
 }

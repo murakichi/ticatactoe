@@ -49,6 +49,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
     // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1
     if (mine && env.characters[env.seat] === 'yinYangMaster' && (env.shikiPlaced || (!!skillKey && exports.SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1)
         adjusted -= 1;
+    if (skillKey === 'onClickTinder' && mine && env.plantPrev)
+        return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev)
         return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickFireWheel' && mine && (0, thermal_1.fireStacksTotal)(env.board) > env.fireBase)

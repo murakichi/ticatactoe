@@ -77,10 +77,21 @@ describe('ギアの手番状態 advanceGearState', () => {
     const mk = (): [GearTurnState, RuinState] => {
         const n = 2;
         return [
-            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], chargeBase: [0, 0] },
+            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], chargeBase: [0, 0] },
             { active: [false, false], pending: [false, true], snap: null, snapBuds: null, snapFlames: null, ashActive: Array(n).fill(0), ashPending: Array(n).fill(0), lastMove: null },
         ];
     };
+    it('火口: 終わる手番の間に盤面の🌱🍂が増えていれば次の席は plantPrev。増えていなければ立たない', () => {
+        const [g, r] = mk();
+        g.plantBase = [0, 0];
+        const b = board();
+        b[3] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }] };
+        advanceGearState(g, r, { board: b, symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
+        expect(g.plantPrev[1]).toBe(true);
+        expect(g.plantBase[1]).toBe(1);
+        advanceGearState(g, r, { board: b, symbols, gears: [[], []], endSeat: 1, nextSeat: 0 }); // 増えていない
+        expect(g.plantPrev[0]).toBe(false);
+    });
     it('次の席のスキル数・導線・無礼講がリセットされ、余韻と廃墟の底力が次の席に引き継がれる', () => {
         const [g, r] = mk();
         const c = advanceGearState(g, r, { board: board(), symbols, gears: [['afterglow'], ['ruinSurge']], endSeat: 0, nextSeat: 1 });
