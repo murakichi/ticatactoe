@@ -44,6 +44,8 @@ const PLUNDER_CHAIN_MAX = 3;
 /** 巨人がストンプを1手番に連打する回数の上限 */
 const STOMP_CHAIN_MAX = 4;
 /** 毒使いが パンデミック/猛毒化 を撃ったあとに残しておく魔力（毒の連打で空にしない） */
+/** 猛毒化を撃たなくなる、敵の1マスの毒の数（ライフ平均は高くても10台。これ以上は倍にしても死ぬ数が変わらない） */
+const INTENSIFY_MAX_CELL_POISON = 32;
 const POISON_RICH_RESERVE = 10;
 /** 毒霧→ミアズマ: ミアズマの採点(毒が付く敵マス数＋要所)の最低値 */
 const MIST_MIASMA_MIN_SCORE = 4;
@@ -2745,7 +2747,9 @@ class AIPlayer {
             const intensifyCost = this.calculateAICost(costs.onClickIntensify, false, true, 'onClickIntensify');
             if (availableSkills.includes(18) && magic - intensifyCost >= POISON_RICH_RESERVE) {
                 const foe = board.reduce((n, sq) => (this.isEnemy(sq.player) ? n + (0, poison_1.activePoison)(sq) : n), 0);
-                if (foe >= INTENSIFY_MIN_FOE_POISON && foe > (0, poison_1.poisonCountFor)(board, this.playerSymbol) + 1) {
+                // 敵の1マスの毒が十分大きい（ライフを超える）なら、もう倍にしても意味がない。🔑ロック中のコマは毒で死なないので、撃ち続けると毒が倍々に増えて試合が終わらなくなる
+                const foeMax = board.reduce((m, sq) => (this.isEnemy(sq.player) ? Math.max(m, (0, poison_1.activePoison)(sq)) : m), 0);
+                if (foe >= INTENSIFY_MIN_FOE_POISON && foe > (0, poison_1.poisonCountFor)(board, this.playerSymbol) + 1 && foeMax < INTENSIFY_MAX_CELL_POISON) {
                     chargeClicks.push({ skill: 'onClickIntensify' });
                     board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                     (0, poison_1.intensify)(board, this.characters);
