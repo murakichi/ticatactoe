@@ -10,6 +10,7 @@
 - 最新(master 6c8ebaf + 採用, --rank seed3 games200 基本): 1 yinYangMaster 79.4% / 2 poisoner 64.4% / 3 necromancer 57.8% / 4 magician 52.8%。陰陽師は式神リワーク+戦略強化で突出(ユーザーがナーフ予定)。他の3条件は --target を付け忘れたため無効(要再測定)
 - 最新環境(master 994da6c, 11キャラ, 対強豪平均で並べる --rank seed1/100): 10位 29.7%(field 39.9%)。1位 cryomancer 64.2%・2位 witch 62.4%。最悪対面 witch 9%、不利対面6。対キャラ別(seed2/100): you 86 / pyromancer 67 / yinYang 66 / magician 57 / electrician 46 / giant 31 / tactician 27 / poisoner 15 / cryomancer 15 / witch 11
 - 新スキル(idx 98〜100)は実装済み(master 未マージ)。デッキに入れると現行より-2.5〜-3.2pt。AIの使い方(撃つ条件・ロック固定)を詰めるまでは推奨に入れない
+- 最新環境(master 994da6c + 採用: 92入りデッキ, --rank seed1 games100, 対強豪平均で並べる): 10位 35.5%(field 43.9%) / 1位 cryomancer 64.8% / 2位 witch 55.0%。最悪対面 poisoner 12%、不利5。採用前は 29.7%/39.9%
 - 連続不採用回数: 0 (採用で戻した)
 - 状態: blocked(issue #124, #92)  # master 349cb36 で 3位 55.1%、1位 poisoner 76.3%(防壁採用で突出)。対poisoner 14〜18%は構造的な天敵
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
