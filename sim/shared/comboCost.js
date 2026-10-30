@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/comboCost.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.comboFloor = exports.comboCut = exports.ownCharges = exports.boardPieceCount = exports.reduceCount = exports.BURN_OFF_CUT = exports.GATHER_CUT = exports.boardEffectCount = exports.ownLeaves = exports.CHARGE_GRANT_KEYS = exports.COMBO_CUT = void 0;
+exports.comboFloor = exports.comboCut = exports.ownCharges = exports.boardPieceCount = exports.KINDLING_BUD_CUT = exports.KINDLING_LEAF_CUT = exports.reduceCount = exports.BURN_OFF_CUT = exports.GATHER_CUT = exports.boardEffectCount = exports.ownLeaves = exports.CHARGE_GRANT_KEYS = exports.COMBO_CUT = void 0;
 /** 導線が成立したときの軽減額 */
 exports.COMBO_CUT = 2;
 /** 総毛立つの導線になる、⚡を付与するスキル（静電気の季節・総毛立つ自身・浄化などは含まない） */
@@ -27,6 +27,11 @@ const reduceCount = (board) => board.reduce((n, sq) => {
     return n + sq.effects.filter((e) => e.effect !== '📜' && e.effect !== '🔑').length;
 }, 0);
 exports.reduceCount = reduceCount;
+/** 焚きつけ: 盤面（敵味方とも）の🍂1枚につき3、🌱1つにつき2だけ軽減する */
+exports.KINDLING_LEAF_CUT = 3;
+exports.KINDLING_BUD_CUT = 2;
+/** 盤面のエフェクト effect の総数（敵味方・空きマスとも。休眠中も数える） */
+const effectCount = (board, effect) => board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect === effect).length, 0);
 /** 盤面にあるコマの数（敵味方とも） */
 const boardPieceCount = (board) => board.filter((sq) => !!sq.player).length;
 exports.boardPieceCount = boardPieceCount;
@@ -40,6 +45,7 @@ exports.ownCharges = ownCharges;
  * - 静電気の季節: 自陣に⚡が1つもなければ
  * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型）
  * - 一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも。カウント型）
+ * - 焚きつけ: 盤面の🍂1枚につき3、🌱1つにつき2（カウント型。敵味方とも）
  * - 雷を食らわば皿まで: この手番に付与した⚡の数だけ（自陣の⚡が手番開始時 chargeBase より増えたぶん。撃つと基準がリセットされる）
  */
 const comboCut = (skillKey, board, player, leafBase, kinds, chargeBase = 0) => {
@@ -51,6 +57,8 @@ const comboCut = (skillKey, board, player, leafBase, kinds, chargeBase = 0) => {
         return (0, exports.ownCharges)(board, player) === 0 ? exports.COMBO_CUT : 0;
     if (skillKey === 'onClickDarkPot')
         return (0, exports.boardEffectCount)(board);
+    if (skillKey === 'onClickKindling')
+        return exports.KINDLING_LEAF_CUT * effectCount(board, '🍂') + exports.KINDLING_BUD_CUT * effectCount(board, '🌱');
     if (skillKey === 'onClickSmallFry')
         return (0, exports.boardPieceCount)(board);
     if (skillKey === 'onClickGather')
@@ -63,5 +71,5 @@ const comboCut = (skillKey, board, player, leafBase, kinds, chargeBase = 0) => {
 };
 exports.comboCut = comboCut;
 /** 軽減の下限が1のスキル（カウント型で、軽減しきると0円になってしまうもの） */
-const comboFloor = (skillKey) => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' || skillKey === 'onClickSmallFry' || skillKey === 'onClickGather' || skillKey === 'onClickBurnOff' ? 1 : 0);
+const comboFloor = (skillKey) => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' || skillKey === 'onClickSmallFry' || skillKey === 'onClickGather' || skillKey === 'onClickBurnOff' || skillKey === 'onClickKindling' ? 1 : 0);
 exports.comboFloor = comboFloor;

@@ -124,7 +124,7 @@ exports.skillCosts = {
     onClickDarkPot: 9,
     onClickChargeHeal: 6,
     onClickLeafDrop: 1,
-    onClickKindling: 5,
+    onClickKindling: 7,
     onClickLeafCloak: 3,
     onClickTinder: 2,
     onClickSmallFry: 10,

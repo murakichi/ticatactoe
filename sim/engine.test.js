@@ -2948,7 +2948,7 @@ test('落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ。
     assert.strictEqual(e.leafDropLegal(t), false);
 });
 
-test('焚きつけ: 敵の🍂を全て🔥に変換（1枚につき🔥1つ）。🔑・自陣の🍂は対象外', () => {
+test('焚きつけ: 敵の🍂と🌱を全て🔥に変換（1つにつき🔥1つ）。🔑・自陣は対象外。コスト7（盤面の🍂1枚につき3・🌱1つにつき2軽減、最低1）', () => {
     const s = game('you', 'you');
     s.heartTurn = true; s.heartMagic = 20;
     const LF = { effect: '🍂' };
@@ -2956,6 +2956,8 @@ test('焚きつけ: 敵の🍂を全て🔥に変換（1枚につき🔥1つ）�
     s.board[4] = { player: '⭕', bind: 8, effects: [LF, LF] };
     s.board[5] = { player: '⭕', bind: 8, effects: [LF, { effect: '🔑' }] };
     s.board[6] = { player: '⭕', bind: 8, effects: [] };
+    s.board[7] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }, { effect: '🌱' }] };
+    s.board[8] = { player: '💙', bind: 8, effects: [{ effect: '🌱' }] }; // 自陣の🌱は残る（軽減には数える）
     const before = s.heartMagic;
     e.SKILLS.kindling(s);
     const count = (i, k) => s.board[i].effects.filter((x) => x.effect === k).length;
@@ -2965,9 +2967,27 @@ test('焚きつけ: 敵の🍂を全て🔥に変換（1枚につき🔥1つ）�
     assert.strictEqual(count(5, '🔥'), 0);
     assert.strictEqual(count(0, '🍂'), 1);
     assert.strictEqual(count(6, '🔥'), 0);
-    assert.strictEqual(before - s.heartMagic, e.skillCosts.onClickKindling + 3); // 払うコストは変換前の盤面で決まる: 敵の🍂3枚ぶん高い
+    assert.strictEqual(count(7, '🌱'), 0);
+    assert.strictEqual(count(7, '🔥'), 2); // 🌱も1つにつき🔥1つ
+    assert.strictEqual(count(8, '🌱'), 1);
+    // 払うコストは変換前の盤面で決まる: 基礎7 + 敵の🍂3枚ぶん高い − (🍂4枚×3 + 🌱3つ×2) の軽減、最低1
+    assert.strictEqual(e.skillCosts.onClickKindling, 7);
+    assert.strictEqual(before - s.heartMagic, 1);
     assert.strictEqual(s.heartTurn, true);
     assert.strictEqual(e.kindlingLegal(s), false);
+});
+
+test('焚きつけ: コストは盤面の🍂1枚につき3・🌱1つにつき2だけ下がる（敵味方とも・最低1）', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickKindling, false, false, 'onClickKindling');
+    assert.strictEqual(price(), 7);
+    s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '🌱' }] };          // 自陣の🌱1つ → −2
+    assert.strictEqual(price(), 5);
+    s.board[4] = { player: '⭕', bind: 8, effects: [{ effect: '🍂' }] };          // 敵の🍂1枚 → 敵の🍂で+1、−3
+    assert.strictEqual(price(), 5 + 1 - 3);
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '🌱' }] };     // 空きマスの🌱も数える → −2
+    assert.strictEqual(price(), 3 - 2);
 });
 
 test('枯野の相席: 盤面の全てのコマ（敵味方）に🍂を1つずつ。🔑ロック中は除く。手番は続く。コストは付与前の盤面で決まる', () => {

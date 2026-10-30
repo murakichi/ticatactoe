@@ -385,25 +385,41 @@ exports.leafCloakTargets = leafCloakTargets;
 /** 火口の対象: 使用者以外のコマのうち、🌱か🍂か❄を持ち、guarded でないもの（昇順）。❄のコマは🔥で氷結が解ける */
 const tinderTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && ((0, exports.budStacks)(sq) > 0 || (0, exports.leafStacks)(sq) > 0 || (0, exports.isFrozen)(sq)) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 exports.tinderTargets = tinderTargets;
-/** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
-const kindlingTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && (0, exports.leafStacks)(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 焚きつけで🔥に変わる、そのマスの🍂と🌱の数（keepBuds=冬至の種子のガード中のコマの🌱は燃えないので数えない） */
+const kindlingStacks = (sq, keepBuds) => ({
+    leaves: (0, exports.leafStacks)(sq),
+    buds: (keepBuds === null || keepBuds === void 0 ? void 0 : keepBuds(sq)) ? 0 : (0, exports.budStacks)(sq),
+});
+/** 焚きつけの対象: 使用者以外のコマのうち、🍂か🌱を持ち、guarded でないもの（昇順）。keepBuds のコマは🍂だけが対象 */
+const kindlingTargets = (board, player, guarded, keepBuds) => board
+    .map((sq, i) => {
+    if (!sq.player || sq.player === player || guarded(sq, i))
+        return -1;
+    const k = kindlingStacks(sq, keepBuds);
+    return k.leaves + k.buds > 0 ? i : -1;
+})
+    .filter((i) => i !== -1);
 exports.kindlingTargets = kindlingTargets;
 /**
- * 焚きつけ: 対象マスの🍂を全て取り除き、取り除いた🍂1枚につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて🔥は残りのスタックぶん、
- * 付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。変換した🍂の枚数と、解けたマスを返す。board を直接書き換える
+ * 焚きつけ: 対象マスの🍂と🌱を全て取り除き、取り除いた1つ（🍂も🌱も1つ）につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて
+ * 🔥は残りのスタックぶん、付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。keepBuds のコマの🌱は燃えず、数えない。
+ * 変換した🍂と🌱の数と、解けたマスを返す。board を直接書き換える
  */
 const kindling = (board, cells, size, keepBuds) => {
     let leaves = 0;
+    let buds = 0;
     const thawed = [];
     for (const k of cells) {
-        const n = (0, exports.leafStacks)(board[k]);
+        const stacks = kindlingStacks(board[k], keepBuds);
+        const n = stacks.leaves + stacks.buds;
         if (n === 0)
             continue;
-        leaves += n;
-        board[k] = without(board[k], '🍂');
+        leaves += stacks.leaves;
+        buds += stacks.buds;
+        board[k] = without(board[k], '🍂', ...(stacks.buds > 0 ? ['🌱'] : []));
         thawed.push(...(0, exports.ignite)(board, [k], size, n, keepBuds).thawed);
     }
-    return { leaves, thawed };
+    return { leaves, buds, thawed };
 };
 exports.kindling = kindling;
 /** 虎落笛で自陣のコマ全てが得るライフ */

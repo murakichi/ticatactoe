@@ -1521,7 +1521,7 @@ function onClickLeafCloak(s) {
     bumpStat(s, 'leafCloak');
 }
 // 焚きつけ (idx 85): 敵の🍂を全て🔥に変換する（🍂1枚につき🔥1つ。🔑ロック・⚡無敵のコマは除く）。対象が無ければ使えない
-function kindlingCandidates(s) { return thermal.kindlingTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+function kindlingCandidates(s) { return thermal.kindlingTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq), keepBudsOf(s)); }
 function kindlingLegal(s) { return kindlingCandidates(s).length > 0; }
 function onClickKindling(s) {
     const cands = kindlingCandidates(s);
@@ -1532,6 +1532,7 @@ function onClickKindling(s) {
     bumpMagicCount(s);
     bumpStat(s, 'kindling');
     bumpStat(s, 'kindlingLeaves', r.leaves);
+    bumpStat(s, 'kindlingBuds', r.buds);
 }
 
 
