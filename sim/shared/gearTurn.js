@@ -6,6 +6,7 @@ const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
+const graveSkills_1 = require("./graveSkills");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -17,7 +18,7 @@ exports.plantedStacksTotal = plantedStacksTotal;
  */
 const advanceGearState = (g, r, input) => {
     const { board, symbols, gears, endSeat, nextSeat } = input;
-    const change = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], ashNext: 0, ruinNext: false, echoNext: false };
+    const change = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], wardPlace: [], ashNext: 0, ruinNext: false, echoNext: false };
     // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力
     if (r.snap && r.snapBuds) {
         symbols.forEach((sym, seat) => {
@@ -48,6 +49,17 @@ const advanceGearState = (g, r, input) => {
             }
         });
     }
+    // 毒返しの構え: 終わる手番の間に自陣のコマが破壊/乗っ取られていたら、その席にコマを置く（相手の手番ごとに1度まで）。終わる席自身の手番では減らす
+    symbols.forEach((sym, seat) => {
+        if (seat === endSeat || g.ward[seat] <= 0 || !r.snap)
+            return;
+        if ((0, graveSkills_1.wardTriggered)(r.snap, board.map((sq) => sq.player), sym))
+            change.wardPlace.push(seat);
+    });
+    if (g.wardFresh[endSeat])
+        g.wardFresh[endSeat] = false;
+    else if (g.ward[endSeat] > 0)
+        g.ward[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -76,6 +88,9 @@ const advanceGearState = (g, r, input) => {
     g.darkPotUsed[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
     g.tokenFree[nextSeat] = false;
+    g.veil[endSeat] = false; // 夜の帳は、効いた相手の手番が終わると切れる。次の手番の席には、使われていれば効く
+    g.veil[nextSeat] = g.veilNext[nextSeat];
+    g.veilNext[nextSeat] = false;
     g.chargeBase[nextSeat] = (0, comboCost_1.ownCharges)(board, symbols[nextSeat]);
     g.echoReady[nextSeat] = g.echoNext[nextSeat];
     change.echoNext = g.echoReady[nextSeat];

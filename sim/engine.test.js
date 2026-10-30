@@ -2088,7 +2088,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard']);
 });
 
 
@@ -3292,6 +3292,45 @@ test('飛び火: ランダムな敵2マスに🔥。直前の手番に相手が�
     const m2 = t.magic[1];
     e.SKILLS.spark(t);
     assert.strictEqual(m2 - t.magic[1], 3);
+});
+
+// ---- 夜の帳・弔い割引・毒返しの構え(idx 98〜100) ----
+test('夜の帳: 次の相手の手番の間だけ、相手のスキルのコストが+3になる。自分は変わらない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    const mineBefore = e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry');
+    e.SKILLS.nightVeil(s);
+    assert.strictEqual(s.veilNext[1], true, '相手の席に予約される');
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickSmallFry, false, false, 'onClickSmallFry'), mineBefore, '自分のコストは変わらない');
+    assert.strictEqual(s.veilNext[0], false);
+});
+test('弔い割引: 死体の数（上限3）だけ次のスキルを軽減する。死体が無ければ撃てない', () => {
+    const s = game('necromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.graveDiscountLegal(s), false, '死体が無いと撃てない');
+    s.necroCost[0] = 6; // 死体4体
+    assert.strictEqual(e.graveDiscountLegal(s), true);
+    const before = s.discount[0].next;
+    const m = s.heartMagic;
+    e.SKILLS.graveDiscount(s);
+    assert.strictEqual(s.discount[0].next - before, 3, '上限3');
+    assert.strictEqual(m - s.heartMagic, e.skillCosts.onClickGraveDiscount);
+});
+test('弔い割引: ネクロマンサー以外でも、墓地（necroCost）が減っていれば使える。自動では貯まらない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.graveDiscountLegal(s), false);
+    s.necroCost[0] = 9;
+    assert.strictEqual(e.graveDiscountLegal(s), true);
+});
+test('毒返しの構え: 使うと3手番の間効き、二重には撃てない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.poisonWardLegal(s), true);
+    e.SKILLS.poisonWard(s);
+    assert.strictEqual(s.ward[0], 3);
+    assert.strictEqual(s.wardFresh[0], true);
+    assert.strictEqual(e.poisonWardLegal(s), false);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
