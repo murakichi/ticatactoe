@@ -249,6 +249,25 @@ describe('毒使いのミアズマと毒花 (旧sim AI と同じ動き)', () => 
         expect(r.skills).toContain('onClickMiasma');
     });
 
+    it('周囲の敵マスが氷結中(毒が休眠して効かない)なら、数えずミアズマを撃たない', () => {
+        const frozen = (b: SquareInfo[], i: number) => b[i].effects.push({ effect: '❄' as const });
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        put(b, 9, '⭕', 3);
+        frozen(b, 6);
+        frozen(b, 9);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        expect(ai.makeMove(b, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+        // 片方だけ氷結なら、効く敵マスは1つだけ(リーチ列でもない)ので撃たない。両方溶ければ撃つ
+        const half = emptyBoard();
+        half[5] = poisonedPiece(6);
+        put(half, 6, '⭕', 3);
+        put(half, 9, '⭕', 3);
+        frozen(half, 6);
+        expect(new AIPlayer('💙', 'poisoner', ['⭕']).makeMove(half, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+    });
+
     it('敵が周囲に1マスだけ(リーチ列でもない)ならミアズマは撃たない', () => {
         const b = emptyBoard();
         b[5] = poisonedPiece(6);
