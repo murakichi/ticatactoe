@@ -95,8 +95,6 @@ const POISON_WARD_MIN_PIECES = 3;
 /** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
 const GRAVE_OFFERING_MIN_PIECES = 3;
 const GRAVE_OFFERING_MAX_CORPSES = 3;
-/** ネクロマンサーが自陣に☠/🔥付きのトークンを置いて死体を作るのは、死体がこの数以下のとき */
-const SELF_BURN_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 exports.MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
@@ -1253,7 +1251,7 @@ class AIPlayer {
     chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, assaultCost = 99, proliferateActive = false, seatMagic = [], 
     /** 蘇生で実際に払う魔力（ギア補正込み）。省略時は necroCost */
     necroPay = necroCost) {
-        var _a, _b, _c;
+        var _a, _b;
         const skills = [];
         let remaining = magic;
         const oppReaches = this.opponents.reduce((n, o) => n + this.countReaches(board, o), 0);
@@ -1512,18 +1510,7 @@ class AIPlayer {
             // 🍂付きのトークンを撃った（トークンはターンに1回）
         }
         else if (!tokenUsed) {
-            // ネクロマンサー: 自陣に☠/🔥付きのトークンを置いて、自分のコマを時間とともに削らせて死体（墓地）を作る。降霊が未発動で死体が少ないときだけ
-            const selfBurn = this.character === 'necromancer' && necroRemain === 0 && turn_1.NECROMANCY.baseCost - necroCost <= SELF_BURN_MAX_CORPSES
-                ? ((_c = [
-                    { idx: 38, key: 'onClickDoubleFlameToken', poison: false, ok: freeCells >= 4 },
-                    { idx: 16, key: 'onClickPoisonToken', poison: true, ok: freeCells >= 2 },
-                    { idx: 37, key: 'onClickFlameToken', poison: false, ok: freeCells >= 3 },
-                ].find((t) => t.ok && availableSkills.includes(t.idx) && remaining >= this.calculateAICost(costs[t.key], true, t.poison, t.key))) !== null && _c !== void 0 ? _c : null)
-                : null;
-            if (selfBurn) {
-                spend(this.calculateAICost(costs[selfBurn.key], true, selfBurn.poison, selfBurn.key), selfBurn.key);
-            }
-            else if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
+            if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
                 spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
             }
             else if (this.character === 'yinYangMaster' && availableSkills.includes(72)
