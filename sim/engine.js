@@ -53,6 +53,7 @@ const deckMod = require('./shared/deck');
 const discountMod = require('./shared/discount');
 const comboMod = require('./shared/comboCost');
 const lifeBanMod = require('./shared/lifeBan');
+const bigMod = require('./shared/bigSkills');
 const darkPotMod = require('./shared/darkPot');
 const thermal = require('./shared/thermal');
 const poisonMod = require('./shared/poison');
@@ -420,6 +421,7 @@ function newGame(opts = {}) {
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        bigCast: fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: fill(false), // 夜の帳: この席の次の手番から効く
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
@@ -495,6 +497,7 @@ function costEnv(s, seat) {
         chargeBase: s.chargeBase[seat],
         shikiPlaced: s.shikiPlaced[seat],
         tokenFree: s.tokenFree[seat],
+        bigCast: s.bigCast[seat],
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         fireBase: s.fireBase[seat],
@@ -579,7 +582,7 @@ function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
-        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, chargeBase: s.chargeBase,
+        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, chargeBase: s.chargeBase,
         veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
     };
     const r = {
@@ -1668,6 +1671,37 @@ function onClickSmallFry(s) {
     bumpStat(s, 'smallFryDestroyed', destroyed);
 }
 
+// パーフェクトゲーム (idx 101): 盤面のコマを敵味方とも全て破壊する（🔑ロック・無敵は除き、氷結中は❄-1だけ） [FAITHFUL] Game.tsx onClickPerfectGame
+function perfectGameLegal(s) { return s.board.some((sq) => !!sq.player); }
+function onClickPerfectGame(s) {
+    const cost = calculateCost(s, costsOf(s).onClickPerfectGame, false, false, 'onClickPerfectGame');
+    const r = bigMod.perfectGame(s.board, s.chars);
+    if (r.destroyed.length > 0) addCorpses(s, r.destroyed.length);
+    spendMagic(s, cost, 'onClickPerfectGame');
+    bumpMagicCount(s);
+    bumpStat(s, 'perfectGame');
+    bumpStat(s, 'perfectGameDestroyed', r.destroyed.length);
+}
+// 超助っ人 (idx 102): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを自陣のランダムな空きマスに置く（トークン扱い・ターン1回） [FAITHFUL] Game.tsx onClickHelper
+function onClickHelper(s) {
+    const empties = findEmptyIndexes(s.board);
+    const effect = bigMod.pickHelperEffect(s.rng);
+    let granted = 0;
+    if (empties.length) {
+        const idx = randomPick(empties, s.rng);
+        bigMod.placeHelperToken(s.board, idx, curPlayer(s), calculateTokenBind(s), effect, s.chars, s.size);
+        granted = afterTokenPlaced(s, idx, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined);
+        if (effect === '☠') toxicBloom(s, [idx]);
+    }
+    harvestMagic(s, granted);
+    spendMagic(s, calculateCost(s, costsOf(s).onClickHelper, true, false, 'onClickHelper'), 'onClickHelper');
+    bumpMagicCount(s);
+    s.usedTokenThisTurn = true;
+    s.useTokenCount[s.turn]++;
+    bumpStat(s, 'helper');
+    checkDischarge(s);
+}
+
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2487,6 +2521,8 @@ const SKILLS = {
     counterMarkdown: (s) => useDiscountSkill(s, 'onClickCounterMarkdown'),
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
     smallFry: onClickSmallFry,
+    perfectGame: onClickPerfectGame,
+    helper: onClickHelper,
     firstFrost: onClickFirstFrost,
     gather: onClickGather,
     burnOff: onClickBurnOff,
@@ -2524,7 +2560,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

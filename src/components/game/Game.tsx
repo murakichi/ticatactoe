@@ -33,6 +33,7 @@ import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, wit
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather, FIRST_FROST_FREE_LEAVES } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
+import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
@@ -179,6 +180,7 @@ export const Game = (props: GameProps) => {
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         tokenFree: Array<boolean>(seatCount).fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        bigCast: Array<boolean>(seatCount).fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の次の手番から効く
         ward: Array<number>(seatCount).fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
@@ -225,6 +227,7 @@ export const Game = (props: GameProps) => {
         chargeBase: gearTurn.current.chargeBase[seat],
         shikiPlaced: gearTurn.current.shikiPlaced[seat],
         tokenFree: gearTurn.current.tokenFree[seat],
+        bigCast: gearTurn.current.bigCast[seat],
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         fireBase: gearTurn.current.fireBase[seat],
@@ -405,6 +408,9 @@ export const Game = (props: GameProps) => {
             case 'onClickDarkPot': onClickDarkPot(); break;
             case 'onClickChargeHeal': onClickChargeHeal(); break;
             case 'onClickSmallFry': onClickSmallFry(); break;
+            case 'onClickPerfectGame': onClickPerfectGame(); break;
+            case 'onClickHelper': onClickHelper(); break;
+            case 'onClickSecondCatch': onClickSecondCatch(); break;
             case 'onClickFirstFrost': onClickFirstFrost(); break;
             case 'onClickGather': onClickGather(); break;
             case 'onClickBurnOff': onClickBurnOff(); break;
@@ -2267,6 +2273,59 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard'), true, true, 'onClickPoisonWard');
     };
 
+    // パーフェクトゲーム(idx 101): 盤面のコマを敵味方とも全て破壊する（🔑ロック・無敵は除き、氷結中のコマは❄-1だけ）
+    const onClickPerfectGame = () => {
+        const board = currentBoard.slice();
+        const r = perfectGame(board, characters);
+        if (r.destroyed.length > 0) addCorpses(r.destroyed.length);
+        addLog(`「パーフェクトゲーム」を使用（${r.destroyed.length}個のコマを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}）`);
+        flashCells([...r.destroyed, ...r.blocked]);
+        playEffect('tsunami', undefined, undefined, 'パーフェクトゲーム');
+        setCurrentBoard(board);
+        spendMagic(calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame'), true, true, 'onClickPerfectGame');
+    };
+
+    // 超助っ人(idx 102): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを、自陣のランダムな空きマスに置く（トークン扱い・ターン1回）
+    const onClickHelper = () => {
+        const board = currentBoard.slice();
+        const emptyIndexes = findEmptyIndexes(board);
+        const effect = pickHelperEffect(Math.random);
+        if (emptyIndexes.length > 0) {
+            const index = randomPick(emptyIndexes);
+            const r = placeHelperToken(board, index, currentTurnPlayer, calculateTokenBind(), effect, characters, geo.size);
+            addLog(`「超助っ人」を使用（${posName(index)}に${effect}付きのコマを設置）`);
+            if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
+            playEffect('token', index, [index], '超助っ人');
+            playBurst('thaw', r.thawed);
+            // 🌱☠⚡はトークンのエフェクトとして収穫・伝播に数える。🔥❄🍂は持たない扱い（火炎・氷結・落ち葉トークンと同じ）
+            harvestMagic(afterTokenPlaced(board, index, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined));
+            if (effect === '☠') toxicBloom(board, [index]);
+            setCurrentBoard(effect === '⚡' ? withOverload(board) : board);
+        }
+        spendMagic(calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper'), true, true, 'onClickHelper');
+        setUseToken(true);
+    };
+
+    // 柳の下に二匹目がいた(idx 103): 自分のデッキから、基礎コスト5以下で今撃てるスキルをランダムに1つ、コストを払わず発動する（福引きと同じ仕組み）。
+    // この手番に基礎コスト7以上のスキルを使っていれば0コスト（cost.ts）
+    const secondCatchPool = () =>
+        deckBySeat[turnSeat]
+            .filter((i) => i !== 59 && i !== 103 && baseCostOf(i) <= SECOND_CATCH_MAX_BASE)
+            .map((i) => shuffleSkillDefs.find((d) => d.idx === i))
+            .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled && !placeBlocked(lifeBan[turnSeat], SKILL_CATALOG[d.idx].costKey, calculateTokenBind()));
+    const onClickSecondCatch = () => {
+        const pool = secondCatchPool();
+        if (pool.length === 0) {
+            addLog('「柳の下に二匹目がいた」: 今撃てるスキルがデッキにありません');
+            return;
+        }
+        const second = randomPick(pool);
+        addLog(`「柳の下に二匹目がいた」を使用 → ${SKILL_CATALOG[second.idx].name}が発動`);
+        spendMagic(calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch'), true, true, 'onClickSecondCatch');
+        gearTurn.current.freeCast = true;
+        second.onClick();
+    };
+
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
@@ -3379,6 +3438,7 @@ export const Game = (props: GameProps) => {
             shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
             tokenFree: Array<boolean>(seatCount).fill(false),
+            bigCast: Array<boolean>(seatCount).fill(false),
             veil: Array<boolean>(seatCount).fill(false),
             veilNext: Array<boolean>(seatCount).fill(false),
             ward: Array<number>(seatCount).fill(0),
@@ -3621,6 +3681,9 @@ export const Game = (props: GameProps) => {
         { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || gearTurn.current.darkPotUsed[turnSeat] || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
         { idx: 83, onClick: onClickChargeHeal, buttonText: `雷を食らわば皿まで-${calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal')}`, paragraph: `⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します\nこのターンに付与した⚡の数だけコストが下がります（最低1。使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickChargeHeal, false, false, 'onClickChargeHeal') || chargeHealCells().length === 0 },
         { idx: 92, onClick: onClickSmallFry, buttonText: `一寸の虫に魂なし-${calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry')}`, paragraph: `敵のライフ3以下のコマを全て破壊します（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）\n相手全員は次の手番の終わりまで、ライフ3以下のコマを置けません（トークン・式神などのスキルも含む）\n盤面のコマの数だけコストが下がります（最低1）`, disabled: checkSkillDisable(seatCosts.onClickSmallFry, false, false, 'onClickSmallFry') },
+        { idx: 101, onClick: onClickPerfectGame, buttonText: `パーフェクトゲーム-${calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame')}`, paragraph: `盤面のコマを敵味方とも全て破壊します\n🔑ロック・⚡無敵のコマは壊れず、氷結中のコマは❄が1つ減るだけです`, disabled: checkSkillDisable(seatCosts.onClickPerfectGame, false, false, 'onClickPerfectGame') || !currentBoard.some((sq) => sq.player) },
+        { idx: 102, onClick: onClickHelper, buttonText: `超助っ人-${calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper')}`, paragraph: `🔥❄⚡☠🌱🍂のうちランダムな1つを付けた、ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickHelper, true, false, 'onClickHelper') },
+        { idx: 103, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, paragraph: `自分のデッキから、基礎コスト${SECOND_CATCH_MAX_BASE}以下で今撃てるスキルをランダムに1つ、コストを払わず発動します\nこのターンに基礎コスト7以上のスキルを使っていれば、0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
         { idx: 93, onClick: onClickFirstFrost, buttonText: `初霜-${calculateCost(seatCosts.onClickFirstFrost, true, false, currentTurnPlayer, 'onClickFirstFrost')}`, paragraph: `敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置きます\nトークンはターンに一度だけ。盤面の🍂が3枚以上ならコスト0`, disabled: checkSkillDisable(seatCosts.onClickFirstFrost, true, false, 'onClickFirstFrost') || firstFrostTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
         { idx: 94, onClick: onClickGather, buttonText: `吹き寄せ-${calculateCost(seatCosts.onClickGather, true, false, currentTurnPlayer, 'onClickGather')}`, paragraph: `自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑と📜はその場に残ります。🔥は集め終えてから処理）\nエフェクト1つにつきコスト-2（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）`, disabled: checkSkillDisable(seatCosts.onClickGather, true, false, 'onClickGather') || findEmptyIndexes(currentBoard).length === 0 },
         { idx: 95, onClick: onClickBurnOff, buttonText: `山焼き-${calculateCost(seatCosts.onClickBurnOff, true, false, currentTurnPlayer, 'onClickBurnOff')}`, paragraph: `敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きトークンを1つ置きます\nエフェクト1つにつきコスト-3（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）`, disabled: checkSkillDisable(seatCosts.onClickBurnOff, true, false, 'onClickBurnOff') },

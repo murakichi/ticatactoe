@@ -2088,7 +2088,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch']);
 });
 
 
@@ -2595,6 +2595,68 @@ test('雷を食らわば皿まで: この手番に付与した⚡の数だけ軽
     assert.strictEqual(price(), 6); // 撃ったらリセット
     s.board[5] = { player: '⭕', bind: 3, effects: [B, B] }; // 敵の⚡は数えない
     assert.strictEqual(price(), 6);
+});
+
+test('パーフェクトゲーム: 盤面のコマを敵味方とも全て破壊（🔑ロック・⚡無敵は除き、氷結中は❄-1だけ）。コスト10', () => {
+    const s = e.newGame({ chars: ['you', 'electrician'], rng: e.makeRng(12) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.perfectGameLegal(s), false);
+    s.board[0] = { player: '💙', bind: 5, effects: [] };
+    s.board[1] = { player: '⭕', bind: 9, effects: [] };
+    s.board[2] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+    s.board[3] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };       // 雷霆の巫の無敵
+    s.board[4] = { player: '💙', bind: 3, effects: [FRZ, FRZ] };             // 氷結は身代わり
+    assert.strictEqual(e.perfectGameLegal(s), true);
+    assert.strictEqual(e.skillCosts.onClickPerfectGame, 10);
+    e.SKILLS.perfectGame(s);
+    assert.strictEqual(s.board[0].player, undefined);
+    assert.strictEqual(s.board[1].player, undefined);
+    assert.strictEqual(s.board[2].player, '⭕');
+    assert.strictEqual(s.board[3].player, '⭕');
+    assert.strictEqual(s.board[4].effects.filter((x) => x.effect === '❄').length, 1);
+    assert.strictEqual(s.magic[0], 20);
+});
+
+test('超助っ人: ランダムな1エフェクトを付けた自陣のトークンを1つ置く（トークン扱い・ターン1回）。コスト3', () => {
+    const seen = new Set();
+    for (let seed = 1; seed <= 60; seed++) {
+        const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(seed) });
+        s.magic[0] = 30;
+        e.SKILLS.helper(s);
+        assert.strictEqual(s.magic[0], 30 - 3);
+        assert.strictEqual(s.usedTokenThisTurn, true);
+        const mine = s.board.filter((sq) => sq.player === '💙');
+        assert.strictEqual(mine.length, 1);
+        const effects = mine[0].effects.map((x) => x.effect);
+        assert.strictEqual(effects.length, 1);
+        assert.ok(['🔥', '❄', '⚡', '☠', '🌱', '🍂'].includes(effects[0]));
+        seen.add(effects[0]);
+    }
+    assert.strictEqual(seen.size, 6); // 6種類すべてが出る
+});
+
+test('柳の下に二匹目がいた: コスト6。この手番に基礎コスト7以上のスキルを使っていれば0（手番が変わると戻る）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(3) });
+    s.magic[0] = 40;
+    const price = () => e.calculateCost(s, e.skillCosts.onClickSecondCatch, false, false, 'onClickSecondCatch');
+    assert.strictEqual(e.skillCosts.onClickSecondCatch, 6);
+    assert.strictEqual(price(), 6);
+    e.spendMagic(s, 3, 'onClickStomp');          // 基礎3
+    e.spendMagic(s, 6, 'onClickPoisonWard');     // 基礎6
+    assert.strictEqual(price(), 6);
+    e.spendMagic(s, 10, 'onClickPerfectGame');   // 基礎10
+    assert.strictEqual(price(), 0);
+    e.spendMagic(s, 11, 'onClickJudgeDay');
+    assert.strictEqual(price(), 0);
+    s.currentTurn += 1; e.advanceTurn(s);        // 相手の手番
+    assert.strictEqual(s.bigCast[0], false);
+});
+
+test('超助っ人はライフ3以下のコマを置けない縛りで、トークンのライフが3以下なら使えない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(5) });
+    s.magic[0] = 30; s.lifeBan[0] = true;
+    e.SKILLS.helper(s);                          // トークンのライフは4なので置ける
+    assert.strictEqual(s.board.filter((sq) => sq.player === '💙').length, 1);
 });
 
 test('一寸の虫に魂なし: 敵のライフ3以下のコマを全て破壊（🔑ロック・無敵は除き、氷結中は❄-1だけ）。自陣と、ライフ4以上の敵は残る', () => {

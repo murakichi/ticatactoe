@@ -41,6 +41,8 @@ export type CostEnv = {
     shikiPlaced: boolean;
     /** 無礼講が効いているか */
     tokenFree: boolean;
+    /** この手番に基礎コスト7以上のスキルを使ったか（柳の下に二匹目がいたの無料条件） */
+    bigCast: boolean;
     /** 夜の帳が効いているか（この席の手番の間、スキルコスト+3。手番の席にだけ掛かる） */
     veil: boolean;
     /** 自分の前の手番以降の相手のスキル使用（返し特売の0コスト条件）と、手番開始時点の盤面全体の🔥の総数（火の車の無料条件） */
@@ -79,6 +81,7 @@ export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean
 export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKey: string | undefined, withLeaf: boolean = true): number => {
     const mine = env.seat === env.turnSeat;
     if (skillKey === 'onClickShikigamiPurge' && mine && ownShikigami(env.board, env.player) >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
+    if (skillKey === 'onClickSecondCatch' && mine && env.bigCast) return 0; // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使っていれば0
     if (isToken && mine && env.tokenFree) return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (skillKey === 'onClickFirstFrost' && mine && boardLeaves(env.board) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
     const leafAdd = withLeaf ? leafSurcharge(env.board, env.player) + veilSurcharge(env) : 0; // 夜の帳も🍂と同じ増加分。characterCostOf が足し済みのときは withLeaf=false

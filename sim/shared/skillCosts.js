@@ -135,7 +135,10 @@ exports.skillCosts = {
     onClickSpark: 4,
     onClickNightVeil: 3,
     onClickGraveDiscount: 1,
-    onClickPoisonWard: 6, //     毒返しの構え(idx 100): 3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊/乗っ取られたらライフ4・☠付きの自陣コマをランダムな空きマスに置く。基準: トークン4＋☠2（自傷-1）＋ライフ補正≒6/個、期待1〜2回、反応型の導線-1
+    onClickPoisonWard: 6,
+    onClickPerfectGame: 10,
+    onClickHelper: 3,
+    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 103): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

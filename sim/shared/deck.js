@@ -101,6 +101,9 @@ exports.SKILL_CATALOG = [
     { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
     { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
     { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
+    { idx: 101, name: 'パーフェクトゲーム', icon: '🎳', category: 'attack', costKey: 'onClickPerfectGame', desc: '盤面のコマを敵味方とも全て破壊します（🔑ロック・⚡無敵のコマは除き、氷結中のコマは❄が1つ減るだけ）' },
+    { idx: 102, name: '超助っ人', icon: '🦸', category: 'token', costKey: 'onClickHelper', desc: '🔥❄⚡☠🌱🍂のうちランダムな1つを付けたコマを、自陣のランダムな空きマスに置きます（ターン1回）' },
+    { idx: 103, name: '柳の下に二匹目がいた', icon: '🐟', category: 'support', costKey: 'onClickSecondCatch', desc: '自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動します。この手番に基礎コスト7以上のスキルを使っていれば0コストで使えます' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
