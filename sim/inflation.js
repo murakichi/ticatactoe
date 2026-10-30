@@ -94,7 +94,39 @@ function summarize(games, refCost, bucketTurns = BUCKET_TURNS) {
     const solid = buckets.filter((b) => b.turns >= minTurns);
     const first = solid[0], last = solid[solid.length - 1];
     const inflationIndex = first && last && first !== last && first.stockToEffCost > 0 ? last.stockToEffCost / first.stockToEffCost : null;
-    return { referenceCost: refCost, hoardMult: HOARD_MULT, bucketTurns, overall: agg(all), buckets, inflationIndex };
+    return { referenceCost: refCost, hoardMult: HOARD_MULT, bucketTurns, overall: agg(all), buckets, inflationIndex, matched: matchedAnalysis(games, refCost, bucketTurns, agg) };
 }
 
-module.exports = { createTracker, summarize, referenceCost, HOARD_MULT, BUCKET_TURNS };
+/** 再現できる乱数(ブートストラップ用) */
+function lcg(seed) { let a = seed >>> 0; return () => { a = (Math.imul(a, 1664525) + 1013904223) >>> 0; return a / 4294967296; }; }
+
+/**
+ * 同じ試合どうしで序盤と後半を比べる。
+ * 後半区間 = minGames 試合以上が届いている最後の区間(なければ null)。その区間に手番がある試合だけを集め、その試合の序盤区間と後半区間を比べる。
+ * minGames の既定は max(20, 試合数の 20%)。ci95 は試合単位のブートストラップ(B 回の再標本)。
+ */
+function matchedAnalysis(games, refCost, bucketTurns, agg, minGamesOpt, B = 300) {
+    const minGames = minGamesOpt != null ? minGamesOpt : Math.max(20, Math.ceil(0.2 * games.length));
+    const bucketOf = (r) => Math.floor(r.turn / bucketTurns);
+    const reach = {}; // 区間 -> その区間に手番がある試合の数
+    for (const rows of games) for (const b of new Set(rows.map(bucketOf))) reach[b] = (reach[b] || 0) + 1;
+    const lateBucket = Object.keys(reach).map(Number).filter((b) => b > 0 && reach[b] >= minGames).sort((a, b) => a - b).pop();
+    if (lateBucket == null) return { minGames, note: `後半に ${minGames} 試合以上が届く区間が無い(試合が短い)。--bucket を小さくするか試合数を増やす`, index: null };
+    const pairs = games.filter((rows) => rows.some((r) => bucketOf(r) === lateBucket)).map((rows) => ({ early: rows.filter((r) => bucketOf(r) === 0), late: rows.filter((r) => bucketOf(r) === lateBucket) }));
+    const stat = (ps) => {
+        const e = agg(ps.flatMap((p) => p.early)), l = agg(ps.flatMap((p) => p.late));
+        return { index: e.stockToEffCost > 0 ? l.stockToEffCost / e.stockToEffCost : null, stockGrowth: e.stock > 0 ? l.stock / e.stock : null, incomeGrowth: e.income > 0 ? l.income / e.income : null, early: e, late: l };
+    };
+    const base = stat(pairs);
+    const rnd = lcg(12345);
+    const boots = [];
+    for (let i = 0; i < B; i++) {
+        const ps = []; for (let k = 0; k < pairs.length; k++) ps.push(pairs[Math.floor(rnd() * pairs.length)]);
+        const s = stat(ps); if (s.index != null) boots.push(s.index);
+    }
+    boots.sort((a, b) => a - b);
+    const q = (p) => (boots.length ? boots[Math.min(boots.length - 1, Math.floor(p * boots.length))] : null);
+    return { minGames, lateFrom: lateBucket * bucketTurns, lateTo: (lateBucket + 1) * bucketTurns - 1, games: pairs.length, index: base.index, ci95: [q(0.025), q(0.975)], stockGrowth: base.stockGrowth, incomeGrowth: base.incomeGrowth, earlyStockToEffCost: base.early.stockToEffCost, lateStockToEffCost: base.late.stockToEffCost };
+}
+
+module.exports = { createTracker, summarize, referenceCost, matchedAnalysis, HOARD_MULT, BUCKET_TURNS };
