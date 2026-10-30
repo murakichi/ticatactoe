@@ -184,3 +184,78 @@ describe('roundRobinPairs / mergeStats / aggregate', () => {
         expect(an.rows.find((r) => r.id === 'e').worst.id).not.toBe('d');
     });
 });
+
+describe('有利・不利の有向グラフ', () => {
+    const pairsOf = (list) => list.map(([a, b, w, l]) => ({ a, b, w, l }));
+
+    test('勝つ側→負ける側の辺を作り、有意かどうかを区別する。試合数が少ない組・ちょうど50%の組は辺なし', () => {
+        const st = live.statsFromPairs(['a', 'b', 'c', 'd'], pairsOf([
+            ['a', 'b', 80, 20],  // a→b 有意
+            ['a', 'c', 28, 22],  // a→c 傾向（有意でない: 56%, n=50）
+            ['b', 'c', 20, 80],  // c→b 有意
+            ['a', 'd', 3, 1],    // 少数: 辺なし
+            ['b', 'd', 25, 25],  // ちょうど50%: 辺なし
+            ['c', 'd', 30, 30],
+        ]));
+        const an = live.analyze(st);
+        const key = (e) => `${e.from}>${e.to}${e.significant ? '*' : ''}`;
+        expect(an.edges.map(key).sort()).toEqual(['a>b*', 'a>c', 'c>b*']);
+        const ab = an.edges.find((e) => e.from === 'a' && e.to === 'b');
+        expect(ab.rate).toBeCloseTo(0.8);
+        expect(ab.lo).toBeGreaterThan(0.5);
+        expect(an.loops.cycles).toEqual([]);
+        expect(an.loops.groups).toEqual([]);
+    });
+
+    test('三すくみ(じゃんけん)を循環として1回だけ検出する。辺の向きは勝つ側→負ける側', () => {
+        const st = live.statsFromPairs(['r', 'p', 's'], pairsOf([
+            ['p', 'r', 80, 20], // p→r
+            ['s', 'p', 80, 20], // s→p
+            ['r', 's', 80, 20], // r→s
+        ]));
+        const an = live.analyze(st);
+        expect(an.edges.map((e) => e.from + '>' + e.to).sort()).toEqual(['p>r', 'r>s', 's>p']);
+        expect(an.loops.cycles).toHaveLength(1);
+        expect(new Set(an.loops.cycles[0])).toEqual(new Set(['r', 'p', 's']));
+        expect(an.loops.groups).toEqual([['r', 'p', 's']]);
+        expect(an.loops.loopEdges.sort()).toEqual(['p>r', 'r>s', 's>p']);
+    });
+
+    test('全員に勝ち越すキャラは出る辺だけを持つ（入る辺なし）', () => {
+        const st = live.statsFromPairs(['w', 'a', 'b'], pairsOf([['w', 'a', 70, 30], ['w', 'b', 65, 35], ['a', 'b', 55, 45]]));
+        const an = live.analyze(st);
+        expect(an.edges.filter((e) => e.to === 'w')).toHaveLength(0);
+        expect(an.edges.filter((e) => e.from === 'w')).toHaveLength(2);
+    });
+
+    test('4つ以上の閉ループ・複数の循環・循環に入らない辺を区別する', () => {
+        const E = (list) => list.map(([from, to]) => ({ from, to, rate: 0.7, decided: 50, lo: 0.6, significant: true }));
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        // a→b→c→d→a の4ループ、c→a の近道で三すくみ a→b→c→a もできる。d→e は循環に入らない（e は行き止まり）。f は孤立
+        const edges = E([['a', 'b'], ['b', 'c'], ['c', 'd'], ['d', 'a'], ['c', 'a'], ['d', 'e']]);
+        const lp = live.findLoops(ids, edges);
+        expect(lp.groups).toEqual([['a', 'b', 'c', 'd']]);
+        expect(lp.cycles.map((c) => c.join('')).sort()).toEqual(['abc', 'abcd']);
+        expect(lp.loopEdges.sort()).toEqual(['a>b', 'b>c', 'c>a', 'c>d', 'd>a']);
+        expect(lp.loopEdges).not.toContain('d>e');
+        expect(lp.truncated).toBe(false);
+    });
+
+    test('一方向だけの階層（全員が上位に負ける）は閉ループではない', () => {
+        const E = (list) => list.map(([from, to]) => ({ from, to, rate: 0.7, decided: 50, lo: 0.6, significant: true }));
+        const lp = live.findLoops(['a', 'b', 'c'], E([['a', 'b'], ['b', 'c'], ['a', 'c']]));
+        expect(lp.groups).toEqual([]);
+        expect(lp.cycles).toEqual([]);
+        expect(lp.loopEdges).toEqual([]);
+    });
+
+    test('循環が多すぎるときは maxCount で打ち切って truncated を立てる', () => {
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        const all = [];
+        for (const x of ids) for (const y of ids) if (x < y) all.push({ from: x, to: y }); // 順方向
+        for (const x of ids) for (const y of ids) if (x > y) all.push({ from: x, to: y }); // 逆方向（全部双方向＝循環だらけ）
+        const lp = live.findLoops(ids, all.map((e) => ({ ...e, rate: 0.7, decided: 50, lo: 0.6, significant: true })), { maxCount: 10 });
+        expect(lp.cycles).toHaveLength(10);
+        expect(lp.truncated).toBe(true);
+    });
+});

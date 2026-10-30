@@ -1,0 +1,255 @@
+.wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 12px;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.title {
+    margin: 0;
+    font-size: 15px;
+}
+
+.mode {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-dim);
+}
+
+.mode select {
+    padding: 4px 8px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 8px;
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-text-dim);
+}
+
+.loopKey {
+    margin: 0 2px;
+    padding: 0 6px;
+    border-radius: 6px;
+    background: #e8a317;
+    color: #2a1d00;
+    font-weight: 800;
+}
+
+.body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+}
+
+@media (max-width: 760px) {
+    .body {
+        grid-template-columns: 1fr;
+    }
+}
+
+.svg {
+    width: 100%;
+    height: auto;
+    max-height: 640px;
+}
+
+/* 辺 */
+.edge {
+    fill: none;
+    stroke-linecap: round;
+    transition: opacity 0.15s;
+}
+
+.edge_plain {
+    stroke: var(--color-text-dim);
+    opacity: 0.55;
+}
+
+.edge_loop {
+    stroke: #e8a317;
+    opacity: 0.95;
+}
+
+.edge_out {
+    stroke: #1f9d55;
+}
+
+.edge_in {
+    stroke: #d64545;
+}
+
+.edge_cycle {
+    stroke: #e8a317;
+}
+
+.edge_dim {
+    stroke: var(--color-text-dim);
+    opacity: 0.08;
+}
+
+/* 傾向（有意でない）辺は点線 */
+.soft {
+    stroke-dasharray: 5 4;
+}
+
+.arrow_plain,
+.arrow_dim {
+    fill: var(--color-text-dim);
+}
+
+.arrow_loop,
+.arrow_cycle {
+    fill: #e8a317;
+}
+
+.arrow_out {
+    fill: #1f9d55;
+}
+
+.arrow_in {
+    fill: #d64545;
+}
+
+/* ノード */
+.node {
+    cursor: pointer;
+    outline: none;
+}
+
+.hit {
+    fill: transparent;
+    stroke: none;
+}
+
+.node circle {
+    fill: var(--color-bg);
+    stroke: var(--color-border-strong);
+    stroke-width: 2;
+}
+
+.inLoop circle {
+    stroke: #e8a317;
+    stroke-width: 3;
+}
+
+.sel circle {
+    stroke: var(--color-text);
+    stroke-width: 4;
+}
+
+.node:focus-visible circle {
+    stroke: var(--color-accent);
+    stroke-width: 4;
+}
+
+.dimNode {
+    opacity: 0.3;
+}
+
+.icon {
+    font-size: 22px;
+}
+
+.name {
+    font-size: 13px;
+    font-weight: 700;
+    fill: var(--color-text);
+}
+
+/* 側の説明 */
+.side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.out {
+    color: #1f9d55;
+    font-weight: 800;
+}
+
+.in {
+    color: #d64545;
+    font-weight: 800;
+}
+
+.chip {
+    padding: 1px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.none {
+    margin: 0;
+    color: var(--color-text-dim);
+    font-size: 12px;
+}
+
+.group {
+    margin: 0;
+    color: var(--color-text-dim);
+}
+
+.cycles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 260px;
+    margin: 0;
+    padding-left: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.cycleBtn {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cycleOn {
+    border-color: #e8a317;
+    background: rgba(232, 163, 23, 0.18);
+}
