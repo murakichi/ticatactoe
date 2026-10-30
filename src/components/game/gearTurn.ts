@@ -4,8 +4,9 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Discount, afterSkill, emptyDiscount } from './discount';
 import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
-import { INFERNO_FREE_SKILLS, fireStacksTotal } from './thermal';
+import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './thermal';
 import { ownCharges, ownLeaves } from './comboCost';
+import { wardTriggered } from './graveSkills';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -18,10 +19,22 @@ export type GearTurnState = {
     oppSkillPrev: boolean[];
     shikiPlaced: boolean[];
     fireBase: number[];
+    /** 火口の無料条件: 直前の手番に盤面の🌱🍂の総数が増えたか（今の手番の頭の時点）と、各席の手番開始時点の🌱🍂の総数 */
+    plantPrev: boolean[];
+    plantBase: number[];
+    /** 飛び火の無料条件: 直前の手番に、その席がコマを2つ以上設置したか（今の手番の頭の時点）と、各席の手番開始時点の自陣のコマ数 */
+    placedPrev: boolean[];
+    placeBase: number[];
     leafBase: number[];
     darkPotUsed: boolean[];
     tokenFree: boolean[];
     chargeBase: number[];
+    /** 夜の帳: veil=この席の今の手番はスキルコスト+3 / veilNext=次の手番から効く */
+    veil: boolean[];
+    veilNext: boolean[];
+    /** 毒返しの構え: ward=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ wardFresh=使った手番（この手番の終わりでは減らさない） */
+    ward: number[];
+    wardFresh: boolean[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -38,6 +51,12 @@ export type RuinState = {
     lastMove: number | null;
 };
 
+/** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
+export const SPARK_FREE_PLACED = 2;
+
+/** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
+export const plantedStacksTotal = (board: SquareInfo[]): number => board.reduce((n, sq) => n + budStacks(sq) + leafStacks(sq), 0);
+
 export type GearTurnChange = {
     /** 焦土で席ごとに得る魔力（次の手番の席の分は、手番開始の魔力に足す）。0 なら無し */
     scorch: number[];
@@ -45,6 +64,8 @@ export type GearTurnChange = {
     ashGained: number;
     /** 廃墟の底力が新しく『次の手番から有効』になった席 */
     ruinTriggered: number[];
+    /** 毒返しの構えが発動した席（自陣のコマが破壊/乗っ取られた）。呼び出し側が、その席にライフ4・☠付きのコマを置く */
+    wardPlace: number[];
     /** 次の手番の席の灰の供物（重ね数）/ 廃墟の底力（有効か）/ 余韻（1つ目のスキルが安い） */
     ashNext: number;
     ruinNext: boolean;
@@ -61,7 +82,7 @@ export const advanceGearState = (
     input: { board: SquareInfo[]; symbols: readonly Player[]; gears: readonly Gears[]; endSeat: number; nextSeat: number }
 ): GearTurnChange => {
     const { board, symbols, gears, endSeat, nextSeat } = input;
-    const change: GearTurnChange = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], ashNext: 0, ruinNext: false, echoNext: false };
+    const change: GearTurnChange = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], wardPlace: [], ashNext: 0, ruinNext: false, echoNext: false };
 
     // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力
     if (r.snap && r.snapBuds) {
@@ -92,6 +113,13 @@ export const advanceGearState = (
             }
         });
     }
+    // 毒返しの構え: 終わる手番の間に自陣のコマが破壊/乗っ取られていたら、その席にコマを置く（相手の手番ごとに1度まで）。終わる席自身の手番では減らす
+    symbols.forEach((sym, seat) => {
+        if (seat === endSeat || g.ward[seat] <= 0 || !r.snap) return;
+        if (wardTriggered(r.snap, board.map((sq) => sq.player), sym)) change.wardPlace.push(seat);
+    });
+    if (g.wardFresh[endSeat]) g.wardFresh[endSeat] = false;
+    else if (g.ward[endSeat] > 0) g.ward[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -108,11 +136,22 @@ export const advanceGearState = (
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
     g.fireBase[nextSeat] = fireStacksTotal(board);
+    // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
+    const plantedNow = plantedStacksTotal(board);
+    g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
+    g.plantBase[nextSeat] = plantedNow;
+    // 飛び火: 終わる手番の間に、その席のコマが2つ以上増えていれば（コマを置くスキルを挟んだ手番）、次の席の飛び火は無料（無料は1手番に1回まで）
+    const ownNow = (seat: number): number => board.filter((sq) => sq.player === symbols[seat]).length;
+    g.placedPrev[nextSeat] = ownNow(endSeat) - g.placeBase[endSeat] >= SPARK_FREE_PLACED;
+    g.placeBase[nextSeat] = ownNow(nextSeat);
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
     g.tokenFree[nextSeat] = false;
+    g.veil[endSeat] = false; // 夜の帳は、効いた相手の手番が終わると切れる。次の手番の席には、使われていれば効く
+    g.veil[nextSeat] = g.veilNext[nextSeat];
+    g.veilNext[nextSeat] = false;
     g.chargeBase[nextSeat] = ownCharges(board, symbols[nextSeat]);
     g.echoReady[nextSeat] = g.echoNext[nextSeat];
     change.echoNext = g.echoReady[nextSeat];

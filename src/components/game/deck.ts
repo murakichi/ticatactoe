@@ -101,7 +101,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂を全て🔥に変換します（🍂1枚につき🔥1つ。🔑ロックと⚡無敵のコマは対象外）' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
-    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズか🍂を持つ敵のコマを1つ選んで🔥を1つ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。鍛冶師は🔥付与が-1' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズ・🍂・❄氷結のいずれかを持つ敵のコマを1つ選んで🔥を1つ付与します（氷結中は氷結が解けます）（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。直前の手番に🌱か🍂が植えられていれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
     { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3します' },
     { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を2つ付与します（🔑ロック・⚡無敵は除く。対象が無いと使えません）' },
     { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
@@ -111,6 +111,11 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: 'トークン扱い（ターン1回）。自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑ロックと式神の印📜はその場に残ります。🔥は集め終えてから処理）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
     { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: 'トークン扱い（ターン1回）。敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置きます。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
     { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークン系スキルのコストを0にします（手番が終わると切れます）' },
+    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外）。直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
+    { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
+    { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
+    { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
+    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1を得ます（コマが消えるので、ネクロマンサーはさらに自動で墓地が貯まる仕組みと二重には数えません）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
@@ -128,11 +133,11 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 71, 72, 73, 92],
-    necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 50, 53, 57, 58],
+    necromancer: [0, 2, 3, 5, 6, 8, 11, 50, 53, 57, 58, 92],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 50],
     electrician: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94],
     cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 50, 73, 92],
-    pyromancer: [0, 3, 5, 8, 11, 28, 31, 50, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
+    pyromancer: [0, 3, 5, 8, 11, 28, 50, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
     witch: [5, 8, 28, 44, 50, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],

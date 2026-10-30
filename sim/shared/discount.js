@@ -10,7 +10,7 @@
 //   - turn   : 「このターンに打つ全スキル」の軽減（春一番が解除した氷結の数だけ。ターンを跨がない）
 // 軽減札どうしは軽減されず、「次に打つスキル」も消費しない。
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.lifeDeltaOf = exports.canUseDiscountSkill = exports.afterSkill = exports.applyDiscount = exports.discountAmount = exports.UNIQUE_SKILL_KEYS = exports.EFFECT_SKILL_KEYS = exports.isDiscountSkill = exports.DISCOUNT_SKILLS = exports.isReducerSkill = exports.SHIKIGAMI_DISCOUNT_BASE = exports.SHIKIGAMI_DISCOUNT_KEY = exports.STASH_KEY = exports.SPRING_WIND_KEY = exports.emptyDiscount = void 0;
+exports.lifeDeltaOf = exports.canUseDiscountSkill = exports.afterSkill = exports.applyDiscount = exports.discountAmount = exports.UNIQUE_SKILL_KEYS = exports.EFFECT_SKILL_KEYS = exports.isDiscountSkill = exports.DISCOUNT_SKILLS = exports.isReducerSkill = exports.GRAVE_DISCOUNT_KEY = exports.SHIKIGAMI_DISCOUNT_BASE = exports.SHIKIGAMI_DISCOUNT_KEY = exports.STASH_KEY = exports.SPRING_WIND_KEY = exports.emptyDiscount = void 0;
 const emptyDiscount = () => ({ next: 0, effect: 0, token: 0, unique: 0, turn: 0, uniqueUsed: false });
 exports.emptyDiscount = emptyDiscount;
 /** 春一番: 氷結を解除した数だけ、このターンに打つ全スキルを軽減する。軽減量が可変なので DISCOUNT_SKILLS の表には入れず、軽減札として別に扱う */
@@ -21,7 +21,9 @@ exports.STASH_KEY = 'onClickStash';
 /** 式神割引: 2＋盤面の式神の数だけ、次に打つスキルを軽減する。軽減量が可変なので、へそくりと同じく表には入れず軽減札として別に扱う */
 exports.SHIKIGAMI_DISCOUNT_KEY = 'onClickShikigamiDiscount';
 exports.SHIKIGAMI_DISCOUNT_BASE = 2;
-const isReducerSkill = (key) => (0, exports.isDiscountSkill)(key) || key === exports.SPRING_WIND_KEY || key === exports.STASH_KEY || key === exports.SHIKIGAMI_DISCOUNT_KEY;
+/** 弔い割引: 墓地の死体の数（上限 GRAVE_DISCOUNT_CAP）だけ、次に打つスキルを軽減する。軽減量が可変なので、式神割引と同じく軽減札として別に扱う */
+exports.GRAVE_DISCOUNT_KEY = 'onClickGraveDiscount';
+const isReducerSkill = (key) => (0, exports.isDiscountSkill)(key) || key === exports.SPRING_WIND_KEY || key === exports.STASH_KEY || key === exports.SHIKIGAMI_DISCOUNT_KEY || key === exports.GRAVE_DISCOUNT_KEY;
 exports.isReducerSkill = isReducerSkill;
 /** 軽減札のコストキー → 効果 */
 exports.DISCOUNT_SKILLS = {
@@ -41,7 +43,7 @@ exports.EFFECT_SKILL_KEYS = new Set([
     'onClickInjection', 'onClickIntensify', 'onClickPandemic', 'onClickPoisonMist',
     'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom',
     'onClickFreeze', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostfall',
-    'onClickIgnite', 'onClickTinder', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
+    'onClickIgnite', 'onClickTinder', 'onClickSpark', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
     'onClickShikigamiCurse',
 ]);
 /** 各キャラの固有スキル（コストキー） */
@@ -69,7 +71,7 @@ exports.applyDiscount = applyDiscount;
 /** スキルを打ったあとの状態。軽減札なら効果を足し、それ以外なら「次に打つスキル」の軽減を消費する */
 const afterSkill = (d, key) => {
     var _a, _b, _c, _d;
-    if (key === exports.SPRING_WIND_KEY || key === exports.STASH_KEY || key === exports.SHIKIGAMI_DISCOUNT_KEY)
+    if (key === exports.SPRING_WIND_KEY || key === exports.STASH_KEY || key === exports.SHIKIGAMI_DISCOUNT_KEY || key === exports.GRAVE_DISCOUNT_KEY)
         return d; // 軽減量は解除した氷結／除去した⚡の数で決まるので、呼び出し側が turn / next に足す
     if ((0, exports.isDiscountSkill)(key)) {
         const e = exports.DISCOUNT_SKILLS[key];

@@ -249,6 +249,25 @@ describe('毒使いのミアズマと毒花 (旧sim AI と同じ動き)', () => 
         expect(r.skills).toContain('onClickMiasma');
     });
 
+    it('周囲の敵マスが氷結中(毒が休眠して効かない)なら、数えずミアズマを撃たない', () => {
+        const frozen = (b: SquareInfo[], i: number) => b[i].effects.push({ effect: '❄' as const });
+        const b = emptyBoard();
+        b[5] = poisonedPiece(6);
+        put(b, 6, '⭕', 3);
+        put(b, 9, '⭕', 3);
+        frozen(b, 6);
+        frozen(b, 9);
+        const ai = new AIPlayer('💙', 'poisoner', ['⭕']);
+        expect(ai.makeMove(b, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+        // 片方だけ氷結なら、効く敵マスは1つだけ(リーチ列でもない)ので撃たない。両方溶ければ撃つ
+        const half = emptyBoard();
+        half[5] = poisonedPiece(6);
+        put(half, 6, '⭕', 3);
+        put(half, 9, '⭕', 3);
+        frozen(half, 6);
+        expect(new AIPlayer('💙', 'poisoner', ['⭕']).makeMove(half, 10, costs, 2, 5, [], false).skills).not.toContain('onClickMiasma');
+    });
+
     it('敵が周囲に1マスだけ(リーチ列でもない)ならミアズマは撃たない', () => {
         const b = emptyBoard();
         b[5] = poisonedPiece(6);
@@ -969,6 +988,35 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の i
     });
 });
 
+describe('鍛冶師AI: 飛び火(idx 97)はランダムな敵2マスに🔥を撃つ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[6] = { player: '⭕', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (hand: number[], magic: number, foe: 'you' | 'necromancer' = 'you', b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false).chargeClicks ?? [];
+    };
+
+    it('手札に飛び火があり、敵コマが2つ以上あれば撃つ', () => {
+        expect(run([97], 8).some((c) => c.skill === 'onClickSpark')).toBe(true);
+    });
+    it('敵コマが1つしかなければ撃たない', () => {
+        const b = board();
+        b[6] = { player: undefined, bind: 0, effects: [] };
+        expect(run([97], 8, 'you', b).some((c) => c.skill === 'onClickSpark')).toBe(false);
+    });
+    it('手札に無ければ撃たない。ネクロマンサーが相手のときも撃たない', () => {
+        expect(run([], 8).some((c) => c.skill === 'onClickSpark')).toBe(false);
+        expect(run([97], 8, 'necromancer').some((c) => c.skill === 'onClickSpark')).toBe(false);
+    });
+});
+
 describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（旧sim AI の火口と同一）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
@@ -989,6 +1037,13 @@ describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁�
         expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
         expect(clicks.find((c) => c.skill === 'onClickIgnite')?.target).toBe(5);
     });
+    it('氷結(❄)した敵コマにも火口を撃つ（🌱🍂の無い盤面でも）', () => {
+        const b = board();
+        b[6] = { player: '⭕', bind: 3, effects: [{ effect: '❄' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const clicks = ai.makeMove(b, 8, skillCosts, 2, 5, [87], false).chargeClicks ?? [];
+        expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
+    });
     it('手札に火口が無ければ撃たない', () => {
         expect(run([], 8).chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
     });
@@ -1003,6 +1058,9 @@ describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固
 
     it('相手に魔法使いがいれば火口(87)を固定する', () => {
         expect(locks('magician')).toContain(87);
+    });
+    it('魔女がいても固定する', () => {
+        expect(new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'witch']).chooseLocks(board(), 0, 5, [87, 0, 1])).toContain(87);
     });
     it('魔法使いがいなければ固定しない', () => {
         expect(locks('you')).not.toContain(87);

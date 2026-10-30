@@ -8,7 +8,7 @@ exports.skillCosts = {
     onClickToggleYingYang: 1,
     onClickShikigamiPlace: 2,
     onClickShikigamiBlast: 4,
-    onClickShikigamiAll: 2,
+    onClickShikigamiAll: 3,
     onClickShikigamiRandom: 2,
     onClickShikigamiFlood: 7,
     onClickShikigamiBless: 5,
@@ -104,8 +104,8 @@ exports.skillCosts = {
     onClickCounterMarkdown: 2,
     onClickBurnout: 5,
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
-    onClickLeafToken: 3,
-    onClickTwinLeafToken: 7,
+    onClickLeafToken: 5,
+    onClickTwinLeafToken: 8,
     onClickDoubleLeafToken: 9,
     onClickLeafAll: 5,
     onClickBonfire: 3,
@@ -124,14 +124,19 @@ exports.skillCosts = {
     onClickDarkPot: 9,
     onClickChargeHeal: 6,
     onClickLeafDrop: 1,
-    onClickKindling: 5,
+    onClickKindling: 7,
     onClickLeafCloak: 3,
     onClickTinder: 2,
     onClickSmallFry: 10,
     onClickFirstFrost: 6,
     onClickGather: 8,
     onClickBurnOff: 9,
-    onClickFreeToken: 4, //      無礼講(idx 96): このターン、トークン系スキルのコストを0にする
+    onClickFreeToken: 4,
+    onClickSpark: 4,
+    onClickNightVeil: 3,
+    onClickGraveDiscount: 1,
+    onClickPoisonWard: 6,
+    onClickGraveOffering: 2, //  墓守の供物(idx 101): 自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1（実質コスト1）。ユーザー指定のコスト2
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）
