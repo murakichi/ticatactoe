@@ -34,7 +34,7 @@ import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather, FIRST_FROST_FREE_LEAVES } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
 import { darkPotRolls } from './darkPot';
-import { corpseCount, graveDiscountAmount, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
+import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
 import { boardLeaves, tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
@@ -435,6 +435,7 @@ export const Game = (props: GameProps) => {
             case 'onClickNightVeil': onClickNightVeil(); break;
             case 'onClickGraveDiscount': onClickGraveDiscount(); break;
             case 'onClickPoisonWard': onClickPoisonWard(); break;
+            case 'onClickGraveOffering': onClickGraveOffering(); break;
             case 'onClickWindborne': onClickWindborne(); break;
             case 'onClickFlameToken': onClickFlameToken(); break;
             case 'onClickDoubleFlameToken': onClickDoubleFlameToken(); break;
@@ -2267,6 +2268,23 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard'), true, true, 'onClickPoisonWard');
     };
 
+    // 墓守の供物(idx 101): 自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1。ネクロマンサーは「コマが消える」自動の墓地+1に含まれるので二重には数えない
+    const onClickGraveOffering = () => {
+        const at = graveOfferingTarget(currentBoard, currentTurnPlayer);
+        if (at < 0) return;
+        const pay = calculateCost(seatCosts.onClickGraveOffering, false, false, currentTurnPlayer, 'onClickGraveOffering');
+        const board = currentBoard.slice();
+        board[at] = { player: undefined, bind: 0, effects: [] };
+        addLog(`「墓守の供物」を使用（${posName(at)}の自コマを消して死体+1・魔力+1）`);
+        flashCells([at]);
+        playEffect('token', at, [at], '墓守の供物');
+        addCorpses(1);
+        if (characters[turnSeat] !== 'necromancer') setNecroCostAt(turnSeat, (cost) => Math.max(0, cost - 1));
+        setCurrentBoard(board);
+        spendMagic(pay, true, true, 'onClickGraveOffering');
+        setMagicAt(turnSeat, (m) => m + 1);
+    };
+
     // --- 帯電（雷霆の巫） ---
     const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
     const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
@@ -3612,6 +3630,7 @@ export const Game = (props: GameProps) => {
         { idx: 98, onClick: onClickNightVeil, buttonText: `夜の帳-${calculateCost(seatCosts.onClickNightVeil, false, false, currentTurnPlayer, 'onClickNightVeil')}`, paragraph: `次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）`, disabled: checkSkillDisable(seatCosts.onClickNightVeil) },
         { idx: 99, onClick: onClickGraveDiscount, buttonText: `弔い割引-${calculateCost(seatCosts.onClickGraveDiscount, false, false, currentTurnPlayer, 'onClickGraveDiscount')}`, paragraph: `墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効。現在-${graveDiscountNow()}）\n死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります`, disabled: checkSkillDisable(seatCosts.onClickGraveDiscount) || graveDiscountNow() === 0 },
         { idx: 100, onClick: onClickPoisonWard, buttonText: `毒返しの構え-${calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard')}`, paragraph: `${POISON_WARD_TURNS}手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます`, disabled: checkSkillDisable(seatCosts.onClickPoisonWard) || gearTurn.current.ward[turnSeat] > 0 },
+        { idx: 101, onClick: onClickGraveOffering, buttonText: `墓守の供物-${calculateCost(seatCosts.onClickGraveOffering, false, false, currentTurnPlayer, 'onClickGraveOffering')}`, paragraph: `自陣のライフが最も低いコマを1つ消して、自分の墓地に死体を+1し、魔力を+1得ます\n墓地は全員が持ちますが、コマが消えるたびに自動で貯まるのはネクロマンサーだけです`, disabled: checkSkillDisable(seatCosts.onClickGraveOffering) || graveOfferingTarget(currentBoard, currentTurnPlayer) < 0 },
         { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
         { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, paragraph: `今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます（雷霆の巫以外は乗った時点でダメージ）\n自陣に⚡が1つもなければ、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason, false, false, 'onClickChargeSeason') || chargeBuff[turnSeat] > 0 },
         { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, paragraph: `自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます（雷霆の巫以外は乗った時点でダメージ）\nこのターンに⚡を付与するスキルを使っていれば、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickBristle, false, false, 'onClickBristle') || bristleTargets().length === 0 },

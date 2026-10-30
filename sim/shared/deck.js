@@ -101,6 +101,7 @@ exports.SKILL_CATALOG = [
     { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
     { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
     { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
+    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1を得ます（コマが消えるので、ネクロマンサーはさらに自動で墓地が貯まる仕組みと二重には数えません）' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;

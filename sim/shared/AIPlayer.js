@@ -19,8 +19,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..100)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 101;
+// 汎用スキルプールの大きさ (idx 0..101)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 102;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -92,6 +92,9 @@ const REROLL_REDUCERS = [
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
 const POISON_WARD_MIN_PIECES = 3;
+/** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
+const GRAVE_OFFERING_MIN_PIECES = 3;
+const GRAVE_OFFERING_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 exports.MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
@@ -1574,6 +1577,12 @@ class AIPlayer {
         if (availableSkills.includes(100) && !this.wardActive && skills.length === 0 &&
             board.filter((sq) => sq.player === this.playerSymbol).length >= POISON_WARD_MIN_PIECES) {
             spend(this.calculateAICost(costs.onClickPoisonWard, false, false, 'onClickPoisonWard'), 'onClickPoisonWard');
+        }
+        // 墓守の供物: ネクロマンサーが、降霊が未発動で、自陣のコマが3つ以上・死体が3体以下のとき、最も弱いコマを供物にして死体と魔力を作る
+        if (availableSkills.includes(101) && this.character === 'necromancer' && necroRemain === 0 && skills.length === 0 &&
+            turn_1.NECROMANCY.baseCost - necroCost <= GRAVE_OFFERING_MAX_CORPSES &&
+            board.filter((sq) => sq.player === this.playerSymbol).length >= GRAVE_OFFERING_MIN_PIECES) {
+            spend(this.calculateAICost(costs.onClickGraveOffering, false, false, 'onClickGraveOffering'), 'onClickGraveOffering');
         }
         // 魔力が有り余るとき: 置くコマのライフを厚くする（ライフ+3 → 2倍の順。減衰で盤面が空になる長期戦でコマが残りやすくなる）
         if (remaining >= RICH_MAGIC) {

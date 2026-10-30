@@ -2088,7 +2088,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering']);
 });
 
 
@@ -3333,5 +3333,28 @@ test('毒返しの構え: 使うと3手番の間効き、二重には撃てな�
     assert.strictEqual(e.poisonWardLegal(s), false);
 });
 
+test('墓守の供物: 自陣のライフが最も低いコマを消して、自分の墓地+1・魔力+1（実質コスト1）。自陣にコマが無ければ撃てない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.graveOfferingLegal(s), false, '自陣にコマが無いと撃てない');
+    s.board[3] = { player: '💙', bind: 4, effects: [] };
+    s.board[5] = { player: '💙', bind: 1, effects: [] };
+    assert.strictEqual(e.graveOfferingLegal(s), true);
+    const m = s.heartMagic;
+    const grave = s.necroCost[0];
+    e.SKILLS.graveOffering(s);
+    assert.strictEqual(s.board[5].player, undefined, 'ライフが最も低いコマが消える');
+    assert.strictEqual(s.board[3].player, '💙');
+    assert.strictEqual(m - s.heartMagic, e.skillCosts.onClickGraveOffering - 1, '魔力+1が戻る');
+    assert.strictEqual(grave - s.necroCost[0], 1, '自分の墓地+1（ネクロ以外でも）');
+});
+test('墓守の供物: ネクロマンサーの墓地は二重に数えない（コマが消える自動の+1に含まれる）', () => {
+    const s = game('necromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[3] = { player: '💙', bind: 2, effects: [] };
+    const grave = s.necroCost[0];
+    e.SKILLS.graveOffering(s);
+    assert.strictEqual(grave - s.necroCost[0], 1);
+});
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
