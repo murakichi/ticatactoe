@@ -1601,6 +1601,21 @@ function onClickPoisonWard(s) {
     bumpStat(s, 'poisonWard');
 }
 
+// 墓守の供物 (idx 101): 自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1 [FAITHFUL] Game.tsx onClickGraveOffering
+function graveOfferingLegal(s) { return graveMod.graveOfferingTarget(s.board, curPlayer(s)) >= 0; }
+function onClickGraveOffering(s) {
+    const at = graveMod.graveOfferingTarget(s.board, curPlayer(s));
+    if (at < 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickGraveOffering, false, false, 'onClickGraveOffering');
+    s.board[at] = newSquare();
+    addCorpses(s, 1); // ネクロマンサーの席は、コマが消える自動の墓地+1に含まれる
+    if (s.chars[s.turn] !== 'necromancer') s.necroCost[s.turn] = Math.max(0, s.necroCost[s.turn] - 1);
+    spendMagic(s, pay, 'onClickGraveOffering');
+    s.magic[s.turn] += 1;
+    bumpMagicCount(s);
+    bumpStat(s, 'graveOffering');
+}
+
 // 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・⚡無敵のマスは無視。🔑ロック自体は数えないが、ロックのマスの他のエフェクトは対象）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
 // エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickBurnOff
 function burnOffTargets(s) {
@@ -2494,6 +2509,7 @@ const SKILLS = {
     nightVeil: onClickNightVeil,
     graveDiscount: onClickGraveDiscount,
     poisonWard: onClickPoisonWard,
+    graveOffering: onClickGraveOffering,
 };
 // 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
@@ -2524,7 +2540,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
