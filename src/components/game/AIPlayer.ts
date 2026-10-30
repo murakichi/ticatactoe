@@ -65,8 +65,6 @@ const NO_CAP_NECRO_WEIGHT = 100;
 
 /** 陰陽師が相手のとき、自コマが入っていない列を1本減らす手に加える評価 (旧sim AI yyCover) */
 const YY_COVER_WEIGHT = 150;
-// 実験用: 環境変数 NECRO_BLOCK で重みを切り替える(採用時に定数へ固定する)
-const NECRO_BLOCK = Number((typeof process !== 'undefined' && process.env && process.env.NECRO_BLOCK) || 0);
 const SH_MAX = 3; // 同時に持つ式神の数
 const SH_BLAST_MIN = 3;
 const SH_RICH_BLAST_MIN = 1; // 魔力に余裕があるときの、爆破に値する最低ライン価値
@@ -224,23 +222,6 @@ class AIPlayer {
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
         this.deck = deck;
-    }
-
-    /** index に自コマを置くことで塞げる、相手の育った列の評価。敵コマが2つ以上・自コマなし・空きがある列ごとに、敵コマ数-1 を足す */
-    private blockGain(board: SquareInfo[], index: number): number {
-        let gain = 0;
-        for (const line of geometryForCells(board.length).winLines) {
-            if (!line.includes(index)) continue;
-            let enemy = 0;
-            let mine = 0;
-            for (const k of line) {
-                const p = board[k].player;
-                if (p === this.playerSymbol) mine++;
-                else if (p) enemy++;
-            }
-            if (mine === 0 && enemy >= 2) gain += enemy - 1;
-        }
-        return gain;
     }
 
     /** 相手に陰陽師がいるか */
@@ -1024,11 +1005,6 @@ class AIPlayer {
             // (旧sim AI yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%。氷室の番人も同様: yyCoverCryo 対陰陽師 +4.6〜+17.4pt, seed1-3)
             if ((this.character === 'necromancer' || this.character === 'cryomancer') && this.facingYinYang()) {
                 score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
-            }
-
-            // ネクロマンサー: 相手の育った列(敵コマが2つ以上、自コマなし)に自コマを置いて妨害する。相手は列を伸ばすために自コマを壊さざるを得なくなり、死体(墓地)が貯まる
-            if (this.character === 'necromancer' && NECRO_BLOCK > 0) {
-                score += NECRO_BLOCK * this.blockGain(board, i);
             }
 
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
