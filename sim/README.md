@@ -153,11 +153,12 @@ node sim/probe-top.js --target pyromancer --scan gears --games 60      # ギア�
 
 ### 7. 自動チューニング（生成AIなしの自己改善ループ）
 ```bash
-node sim/autotune.js --chars giant,pyromancer --axes gears,deck,flags --rounds 3 --games 60 --cache .tune-cache
+node sim/autotune.js --chars giant,pyromancer --axes gears,deck,knobs --rounds 3 --games 60 --cache .tune-cache
 node sim/apply-tuned.js            # tuned.json と推奨設定の差分を表示
 node sim/apply-tuned.js --write    # 推奨デッキ・ギアを sim/ と src/components/game/ に書き込む
 ```
 - 環境は `sim/tuned.json`（キャラ別の `{deck, gears, flags}`。無い項目は推奨のまま）。各キャラが他キャラを固定してギア→デッキ→AIノブを探索し（`probe-top.js --scan gears|deck|flags`）、ゲート（候補数に応じた z 閾値 → 別シード200試合で +1.5pt かつ +1.96SE → 対キャラ -15pt 以内）を通ったものだけ採用する。
 - 全キャラが1周して採用ゼロなら、この探索空間では収束（近似ナッシュ均衡）。ログは `sim/autotune-log.jsonl`。
-- `flags`（AIノブ）は自動では書かない。`apply-tuned.js` の出力を見て `sim/ai.js` / `AIPlayer.ts` に移植する。
+- `knobs` は本番 `AIPlayer.ts` のトップレベル数値定数（`sim/shared/AIPlayer.js` に生成されたもの）を実行時に差し替えて測る（`probe-top.js --set NAME=値 [--knobsGlobal]`）。定数は全キャラ共通なので、再測定は候補のノブを相手席にも掛けて行い、`apply-tuned.js` は `AIPlayer.ts` の定数を書き換えて `sim/shared` を再生成する。キャラ間で値が食い違うときは書かない。
+- 強豪リスト(`.tune-cache/strong.json`)は実行のたびに最新の順位表から作り直す。採用には対強豪平均の改善に加えて全相手平均(field)が悪化しないこと、-15pt の悪化禁止は強豪相手にだけ適用する。
 - `--budget-min N` で時間切れまで回し、`--cache` を付ければ再実行で続きから。`--zmin` は配管確認用でゲートを緩める（本番では使わない）。

@@ -4,12 +4,12 @@
 /*
  * 生成AIなしの機械的な自己改善ループ（ベストレスポンス反復）。
  *
- * 環境 = sim/tuned.json（キャラ別の { deck, gears, flags }）。無いキャラ・項目は推奨のまま。
+ * 環境 = sim/tuned.json（キャラ別の { deck, gears, knobs }）。無いキャラ・項目は推奨のまま。
  * 各キャラについて「他キャラを環境の設定に固定したまま、自分のギア → デッキ → AIノブを1軸ずつ探索」し、
  * 統計ゲートを通った最良の候補だけ tuned.json に採用する。全キャラが1周して採用ゼロになれば、
  * ノブ・デッキ・ギアの空間では誰も一方的に得できない状態（近似ナッシュ均衡）。
  *
- *   node sim/autotune.js --chars giant,pyromancer --axes gears,deck,flags --rounds 3 --games 60
+ *   node sim/autotune.js --chars giant,pyromancer --axes gears,deck,knobs --rounds 3 --games 60
  *   node sim/autotune.js --chars all --budget-min 240 --cache .tune-cache     # 時間切れまで回す。再実行で続きから
  *
  * 採用ゲート（tune-top SKILL と同じ）:
@@ -31,7 +31,7 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 const CHARS = engine.CHARACTERS;
 const chars = !args.chars || args.chars === 'all' ? CHARS : args.chars.split(',');
-const axes = (args.axes || 'gears,deck,flags').split(',');
+const axes = (args.axes || 'gears,deck,knobs').split(',').map((a) => (a === 'flags' ? 'knobs' : a)); // 旧名 flags は knobs の別名
 const rounds = parseInt(args.rounds || '1', 10);
 const games = parseInt(args.games || '60', 10);
 const confirmGames = parseInt(args['confirm-games'] || '200', 10);
@@ -128,7 +128,7 @@ function candArgs(cand) {
     const o = [];
     if (cand.deck) o.push('--deck', cand.deck.join(','));
     if (cand.gears) o.push('--gears', cand.gears.length ? cand.gears.join(',') : 'none');
-    if (cand.flags && Object.keys(cand.flags).length) o.push('--flags', flagStr(cand.flags));
+    if (cand.knobs && Object.keys(cand.knobs).length) o.push('--set', flagStr(cand.knobs), '--knobsGlobal');
     return o;
 }
 
@@ -150,7 +150,7 @@ function inertLabels(base, rest) {
 }
 function pilotInert(char, round) {
     if (mem.inert[char]) return;
-    const r = probe({ games: PILOT_GAMES, seed: 7777, argv: ['--target', char, '--scan', 'flags', '--neighbors', '9999', '--excludeKnobs', (mem.inertDone || []).join(',')] });
+    const r = probe({ games: PILOT_GAMES, seed: 7777, argv: ['--target', char, '--scan', 'knobs', '--neighbors', '9999', '--excludeKnobs', (mem.inertDone || []).join(',')] });
     const [base, ...rest] = r.rows;
     mem.inert[char] = inertLabels(base, rest);
     console.log(`  ${char}: pilot(${PILOT_GAMES}試合) 無効ノブ ${mem.inert[char].length}/${rest.length} を除外`);
@@ -159,7 +159,7 @@ function pilotInert(char, round) {
 
 /** 探索結果を記憶に反映する（無効ノブ・悪い候補の学習） */
 function learn(char, axis, base, rest, z, round) {
-    if (axis === 'flags') {
+    if (axis === 'knobs') {
         // 本探索で基準と完全一致 = 無効（pilot で拾えなかった稀に効くノブも、ここで十分な試合数で判定できる）
         const inert = new Set(mem.inert[char] || []);
         for (const r of rest) { if (r.tally === base.tally) inert.add(r.label); else observe(slot(mem.flags, char), r.label, z(r), round); }
@@ -181,7 +181,7 @@ function learn(char, axis, base, rest, z, round) {
 function step(char, axis, round, stepNo) {
     const seed = seedBase + round * 101 + stepNo;
     const ex = [];
-    if (axis === 'flags') {
+    if (axis === 'knobs') {
         pilotInert(char, round);
         const dead = new Set([...(mem.inert[char] || [])]);
         for (const [k, e] of Object.entries(slot(mem.flags, char))) if (isBad(e, round)) dead.add(k);
@@ -197,7 +197,7 @@ function step(char, axis, round, stepNo) {
         if (dead.length) ex.push('--skipGears', dead.join(','));
     }
     if (ex.length) console.log(`  ${char}/${axis}: 記憶により除外 ${ex[1].split(',').length} 件`);
-    const scanArgs = { gears: ['--scan', 'gears'], deck: ['--scan', 'deck', '--neighbors', String(neighbors), '--swap', String(swap)], flags: ['--scan', 'flags', '--neighbors', String(neighbors)] }[axis];
+    const scanArgs = { gears: ['--scan', 'gears'], deck: ['--scan', 'deck', '--neighbors', String(neighbors), '--swap', String(swap)], knobs: ['--scan', 'knobs', '--neighbors', String(neighbors)] }[axis];
     const scan = probe({ games, seed, argv: ['--target', char, ...scanArgs, ...ex] });
     const [base, ...rest] = scan.rows;
     const z = (r) => (M(r) - M(base)) / Math.sqrt(SE(r) ** 2 + SE(base) ** 2);
@@ -230,7 +230,6 @@ function step(char, axis, round, stepNo) {
 }
 
 function main() {
-    if (axes.includes('flags') && !fs.existsSync(path.join(__dirname, 'ai.js'))) { console.log('注意: AIのノブは本番TSの定数になり sim/ai.js が無いので、flags 軸は省きます'); axes.splice(axes.indexOf('flags'), 1); }
     if (!fs.existsSync(tunedFile)) save({});
     // 強豪リストは毎回作り直す（--keep-strong で固定）。順位表は --envFile で育てた設定を反映した環境で取る
     if (args['keep-strong'] !== 'true' || !hasStrong()) { console.log('強豪リストを最新の順位表で作成(--rank --write-strong)'); probe({ games: 60, seed: 1, argv: ['--rank', '--write-strong'] }); console.log('  強豪: ' + JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8')).strong.join(',')); }

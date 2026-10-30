@@ -56,6 +56,48 @@ const exKnobs = setOf('excludeKnobs'), exCards = setOf('excludeCards', true), ke
 // --envFile <json>: { <char>: { deck, gears, flags } }。autotune.js が育てた設定を環境(全キャラ)の既定として使う。無いキャラ/項目は推奨のまま
 const ENV = args.envFile ? JSON.parse(require('fs').readFileSync(args.envFile, 'utf8')) : {};
 
+// ---- AIノブ: 本番 AIPlayer.ts のトップレベル数値定数（sim/shared/AIPlayer.js に生成される）を実行時に差し替える ----
+// 差し替えた定数でAIモジュールを読み直した「パッチ済みドライバ」を席ごとに使う（定数はモジュール単位なので席ごとに別インスタンス）。
+const AI_SRC = path.join(__dirname, 'shared', 'AIPlayer.js');
+const KNOB_RE = (name) => new RegExp(`^((?:const |exports\\.)${name} = )(-?\\d+(?:\\.\\d+)?)(;)`, 'm');
+/** 探索対象になる定数 { NAME: 値 } */
+function readKnobs() {
+    const src = require('fs').readFileSync(AI_SRC, 'utf8');
+    const out = {};
+    for (const m of src.matchAll(/^(?:const |exports\.)([A-Z][A-Z0-9_]*) = (-?\d+(?:\.\d+)?);/gm)) out[m[1]] = Number(m[2]);
+    delete out.SKILL_POOL_SIZE; // AIの挙動ではなくスキル総数
+    return out;
+}
+const driverCache = new Map();
+function driverFor(knobs, base) {
+    const keys = Object.keys(knobs || {});
+    if (!keys.length) return base;
+    const key = JSON.stringify(Object.entries(knobs).sort());
+    if (driverCache.has(key)) return driverCache.get(key);
+    const Module = require('module');
+    const targets = ['aiDriver.js', 'shared/AIPlayer.js', 'shared/aiTurn.js'].map((f) => path.join(__dirname, f));
+    const saved = targets.map((t) => [t, require.cache[t]]);
+    targets.forEach((t) => { delete require.cache[t]; });
+    const orig = Module.prototype._compile;
+    Module.prototype._compile = function (content, filename) {
+        if (filename === AI_SRC) {
+            for (const [name, v] of Object.entries(knobs)) {
+                if (!KNOB_RE(name).test(content)) throw new Error('AIノブが見つからない: ' + name);
+                content = content.replace(KNOB_RE(name), `$1${v}$3`);
+            }
+        }
+        return orig.call(this, content, filename);
+    };
+    let d;
+    try { d = require(path.join(__dirname, 'aiDriver.js')); } finally {
+        Module.prototype._compile = orig;
+        targets.forEach((t) => { delete require.cache[t]; });
+        for (const [t, m] of saved) if (m) require.cache[t] = m;
+    }
+    driverCache.set(key, d);
+    return d;
+}
+
 /** 1試合。cfg[seat] = { deck, gears, flags, mod }。勝者の席（なければ -1） */
 function play(chars, cfgs, seed) {
     const rng = engine.makeRng(seed);
@@ -81,7 +123,7 @@ function envCfg(c, mods, rng, envDeck, oppGears) {
     const t = ENV[c] || {};
     const useTunedGears = t.gears && !['none', 'random', 'lastStand'].includes(oppGears);
     const deck = varied ? deckMod.variedAIDeck(c, rng) : t.deck ? t.deck.slice() : envDeck === 'pick' ? deckMod.pickRecommendedDeck(c, rng) : deckMod.recommendedDeck(c);
-    return { deck, gears: useTunedGears ? t.gears.slice() : gears, flags: { ...(t.flags || {}) }, mod: mods.base };
+    return { deck, gears: useTunedGears ? t.gears.slice() : gears, flags: {}, knobs: { ...(t.knobs || {}) }, mod: mods.base };
 }
 
 /** ワーカー: a と b の組を games 試合（席交互）。a の勝ち・負け・引分を返す */
@@ -112,11 +154,13 @@ if (args.worker) {
         const mk = (c, isCand) => (rng) => {
             // 対象（候補側）は相手設定の揺らぎ（ギアなし/ランダム）を受けず、推奨ギア（候補が指定すればそれ）を使う
             const e = envCfg(c, mods, rng, isCand && job.envDeck === 'pick' ? undefined : job.envDeck, isCand ? 'recommended' : job.oppGears);
-            if (!isCand) return e;
+            // --knobsGlobal: 本番では定数が全キャラ共通なので、候補のノブを相手の席にも掛けて測る
+            if (!isCand) { if (job.knobsGlobal && cand.knobs) e.knobs = { ...e.knobs, ...cand.knobs }; e.mod = driverFor(e.knobs, mods.base); return e; }
             if (cand.deck) e.deck = cand.deck;
             if (cand.gears) e.gears = cand.gears;
             if (cand.flags) e.flags = { ...e.flags, ...cand.flags };
-            e.mod = mods.A;
+            if (cand.knobs) e.knobs = { ...e.knobs, ...cand.knobs };
+            e.mod = job.modA ? mods.A : driverFor(e.knobs, mods.base);
             return e;
         };
         const tally = pairTally(t.a, t.b, mk(t.a, t.aCand), mk(t.b, t.bCand), mods, job.from, job.to, job.seed);
@@ -149,7 +193,7 @@ async function runWorkers(tasks, variants, workers) {
     const all = [];
     for (let i = 0; i < tasks.length; i += chunk) {
         const part = tasks.slice(i, i + chunk);
-        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears })).digest('hex');
+        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears, knobsGlobal: args.knobsGlobal })).digest('hex');
         const file = path.join(args.cache, key + '.json');
         let res;
         if (fs.existsSync(file)) { res = JSON.parse(fs.readFileSync(file, 'utf8')); console.error(`[cache] hit ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
@@ -164,7 +208,7 @@ function runWorkersRaw(tasks, variants, workers) {
     const jobs = [];
     for (let from = 0; from < games; from += per) jobs.push({ from, to: Math.min(games, from + per) });
     return Promise.all(jobs.map((j) => new Promise((resolve, reject) => {
-        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears };
+        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears, knobsGlobal: args.knobsGlobal };
         const p = spawn(process.execPath, [__filename, '--worker', ...(size ? ['--size', String(size)] : []), ...(args.envFile ? ['--envFile', args.envFile] : [])], { env: { ...process.env, TOP_JOB: JSON.stringify(job) }, stdio: ['ignore', 'pipe', 'inherit'] });
         let buf = '';
         p.stdout.on('data', (d) => { buf += d; });
@@ -218,6 +262,7 @@ async function main() {
     }
     if (args.gears) cand.gears = args.gears === 'none' ? [] : args.gears.split(',');
     if (args.flags) cand.flags = parseFlags(args.flags);
+    if (args.set) cand.knobs = parseFlags(args.set); // --set NAME=値,.. : AIPlayer.ts の数値定数を差し替える
 
     const STRONG_FILE = path.resolve(__dirname, '..', '.tune-cache', 'strong.json');
     const fs = require('fs');
@@ -329,18 +374,16 @@ async function main() {
         }
     }
 
-    if (args.scan === 'flags') {
-        // AI_DEFAULTS の数値ノブを1つずつ動かす。0/1 は反転、それ以外は半分と2倍。--knobs a,b で絞る、--neighbors N で N 個をランダム抽出
-        let defaults;
-        try { defaults = require('./ai.js').AI_DEFAULTS; } catch (e) { throw new Error('--scan flags は未対応: AIのノブは本番 AIPlayer.ts の定数になり、sim/ai.js の AI_DEFAULTS は無くなった（#289）'); }
-        const cur = { ...((ENV[target] && ENV[target].flags) || {}), ...(cand.flags || {}) };
+    if (args.scan === 'knobs' || args.scan === 'flags') {
+        // AIPlayer.ts の数値定数を1つずつ動かす。0 は 1 へ、小さい整数(1〜10)は ±1 と半分/2倍、大きい値は半分/2倍。--knobs a,b で絞る、--neighbors N で N 個をランダム抽出
+        const defaults = readKnobs();
+        const cur = { ...((ENV[target] && ENV[target].knobs) || {}), ...(cand.knobs || {}) };
         const only = args.knobs ? args.knobs.split(',') : null;
         const rng = engine.makeRng(seed0 * 977 + 11);
         const cands = [];
         for (const [k, dv] of Object.entries(defaults)) {
-            if (typeof dv !== 'number' || (only && !only.includes(k))) continue;
+            if (only && !only.includes(k)) continue;
             const v = k in cur ? cur[k] : dv;
-            // 0 は 1 へ。小さい整数(1〜10)は ±1 と半分/2倍（件数や段階のノブ)。大きい値は半分/2倍だけ
             const alts = v === 0 ? [1] : [...new Set([...(Number.isInteger(v) && v <= 10 ? [v - 1, v + 1] : []), Math.round(v / 2), Math.round(v * 2)])].filter((x) => x !== v && x >= 0);
             if (exKnobs.has(`${k}=*`)) continue; // ノブ単位の除外（autotune の無効ノブ記憶）
             for (const a of alts) if (!exKnobs.has(`${k}=${a}`)) cands.push([k, a]);
@@ -348,7 +391,7 @@ async function main() {
         for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
         const n = parseInt(args.neighbors || '40', 10);
         variants = [{ ...cand }]; labels = ['base'];
-        for (const [k, a] of cands.slice(0, n)) { variants.push({ ...cand, flags: { ...cur, [k]: a } }); labels.push(`${k}=${a}`); }
+        for (const [k, a] of cands.slice(0, n)) { variants.push({ ...cand, knobs: { ...cur, [k]: a } }); labels.push(`${k}=${a}`); }
     }
 
     if (args.scan === 'audit') {
