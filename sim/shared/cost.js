@@ -2,6 +2,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.totalAssaultBase = exports.judgeDayBase = exports.tokenBindOf = exports.calculateCostOf = exports.gearCostOf = exports.characterCostOf = exports.SHIKIGAMI_PURGE_FREE = exports.SHIKIGAMI_PLACING_KEYS = void 0;
+// スキルの実コスト（キャラ補正 → ギア補正 → 導線 → 軽減スキル）の計算。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
+// 増加分（キャラの加算・敵の🍂）を先に足し、減少分（キャラの割引・魔女のパッシブ・ギア・導線・軽減スキル）をそのあとに掛ける。下限1は減少のたびに掛かる。
+//   characterCostOf … 増加分 → キャラの減少分
+//   gearCostOf      … ギアの補正・導線・陰陽師のパッシブ・無料条件・軽減スキル
+//   calculateCostOf … 上の2つを続けて掛けたもの（スキルの表示・支払いに使う）
+const graveSkills_1 = require("./graveSkills");
 const comboCost_1 = require("./comboCost");
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
@@ -11,12 +17,14 @@ const thermal_1 = require("./thermal");
 exports.SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
 /** 式神の供犠: 自陣の式神がこの数以上なら0コスト */
 exports.SHIKIGAMI_PURGE_FREE = 3;
+/** 夜の帳: 手番の席のスキルコストに足す量（コストが0のスキルは変えない） */
+const veilSurcharge = (env) => (env.veil && env.seat === env.turnSeat ? graveSkills_1.NIGHT_VEIL_SURCHARGE : 0);
 /** 自陣の式神の数 */
 const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
 const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
     const characterId = env.characters[env.seat];
-    // 敵の🍂による増加分を先に足す（キャラの減少分・割引はそのあと）
-    const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player);
+    // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
+    const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env);
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer')
         return skillKey && thermal_1.FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
@@ -43,7 +51,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
         return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (skillKey === 'onClickFirstFrost' && mine && (0, thermal_1.boardLeaves)(env.board) >= tokenSkills_1.FIRST_FROST_FREE_LEAVES)
         return 0; // 初霜: 盤面の🍂が3枚以上なら0
-    const leafAdd = withLeaf ? (0, thermal_1.leafSurcharge)(env.board, env.player) : 0; // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
+    const leafAdd = withLeaf ? (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env) : 0; // 夜の帳も🍂と同じ増加分。characterCostOf が足し済みのときは withLeaf=false
+    // 🍂落ち葉: 他の席のコマに乗っている🍂の枚数ぶん、スキルコストが上がる（上限なし）
     const cut = mine ? (0, comboCost_1.comboCut)(skillKey, env.board, env.player, env.leafBase, env.kinds, env.chargeBase) : 0; // 導線（コンボ）による軽減
     let adjusted = Math.max((0, comboCost_1.comboFloor)(skillKey), (0, gear_1.adjustCostByGear)(cost + leafAdd, env.gears, env.ctx, isToken, skillKey) - cut); // カウント型の導線は下限1
     // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1
