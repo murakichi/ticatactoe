@@ -105,7 +105,7 @@ exports.skillCosts = {
     onClickBurnout: 5,
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
     onClickLeafToken: 5,
-    onClickTwinLeafToken: 7,
+    onClickTwinLeafToken: 8,
     onClickDoubleLeafToken: 9,
     onClickLeafAll: 5,
     onClickBonfire: 3,
@@ -124,7 +124,7 @@ exports.skillCosts = {
     onClickDarkPot: 9,
     onClickChargeHeal: 6,
     onClickLeafDrop: 1,
-    onClickKindling: 5,
+    onClickKindling: 7,
     onClickLeafCloak: 3,
     onClickTinder: 2,
     onClickSmallFry: 10,
