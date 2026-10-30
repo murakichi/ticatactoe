@@ -17,6 +17,9 @@ for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a
 const [c1, c2] = (args.chars || 'you,you').split(',');
 const games = parseInt(args.games || '10', 10), seed0 = parseInt(args.seed || '1', 10), K = parseInt(args.rollouts || '10', 10), every = parseInt(args.every || '2', 10);
 const IGNORE = new Set(['aiReplan', 'onClickShuffle']);
+const CMP = args.cmp || 'none'; // none: スキルなし(着手だけ)と比べる / ban: その札を手札から外した、AIの次善の計画と比べる
+const idxOfKey = {};
+for (const e of require('./shared/deck').SKILL_CATALOG) idxOfKey[e.costKey] = e.idx;
 
 // 計画の記録（手番ごとに空にする）
 let plans = [];
@@ -67,11 +70,21 @@ for (let g = 0; g < games; g++) {
         if (args.seat !== undefined && args.seat !== 'both' && String(seat) !== args.seat) continue;
         if (++tick % every !== 0) continue;
         let a = 0, b = 0;
+        const banned = {}; // スキル名 -> その札を手札から外したときの勝ち点の合計
+        const uniq = [...new Set(skills)];
         for (let k = 0; k < K; k++) {
             a += rollout(snap, seat, (c) => driver.playTurn(c), k);
-            b += rollout(snap, seat, (c) => driver.playPlaceOnly(c), k);
+            if (CMP === 'ban') {
+                for (const sk of uniq) {
+                    const idx = idxOfKey[sk];
+                    if (idx === undefined) continue; // 手札の札ではない(ロックなど)
+                    banned[sk] = (banned[sk] || 0) + rollout(snap, seat, (c) => { c.skills = c.skills.filter((i) => i !== idx); driver.playTurn(c); }, k);
+                }
+            } else b += rollout(snap, seat, (c) => driver.playPlaceOnly(c), k);
         }
-        samples.push({ g, n, seat, char: s.chars[seat], skills, a: a / K, b: b / K });
+        const bans = {};
+        for (const sk of Object.keys(banned)) bans[sk] = banned[sk] / K;
+        samples.push({ g, n, seat, char: s.chars[seat], skills, a: a / K, b: b / K, bans });
     }
 }
 
@@ -79,10 +92,11 @@ for (let g = 0; g < games; g++) {
 const agg = {};
 const add = (key, d) => { const e = (agg[key] ||= { n: 0, sum: 0, sq: 0 }); e.n++; e.sum += d; e.sq += d * d; };
 for (const x of samples) {
+    if (CMP === 'ban') { for (const sk of Object.keys(x.bans)) add(sk, x.a - x.bans[sk]); continue; }
     const d = x.a - x.b;
     for (const sk of new Set(x.skills)) add(sk, d);
     if (x.skills.length === 1) add('ONLY:' + x.skills[0], d);
     add('ALL', d);
 }
 const rows = Object.entries(agg).map(([k, e]) => { const m = e.sum / e.n; const sd = Math.sqrt(Math.max(e.sq / e.n - m * m, 0)); return { skill: k, n: e.n, meanDiffPt: Math.round(m * 1000) / 10, sePt: e.n > 1 ? Math.round(sd / Math.sqrt(e.n - 1) * 1000) / 10 : null }; }).sort((p, q) => q.n - p.n);
-console.log(JSON.stringify({ chars: [c1, c2], games, rollouts: K, every, secs: Math.round((Date.now() - t0) / 1000), samples: samples.length, rows }, null, 1));
+console.log(JSON.stringify({ chars: [c1, c2], cmp: CMP, games, rollouts: K, every, secs: Math.round((Date.now() - t0) / 1000), samples: samples.length, rows }, null, 1));
