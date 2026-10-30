@@ -14,12 +14,13 @@ const blast_1 = require("./blast");
 const decay_2 = require("./decay");
 const generic_1 = require("./generic");
 const turn_1 = require("./turn");
+const graveSkills_1 = require("./graveSkills");
 const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..96)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 98;
+// 汎用スキルプールの大きさ (idx 0..100)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 101;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -88,6 +89,9 @@ const REROLL_REDUCERS = [
     { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
     { idx: 53, key: 'onClickMarkdown', cut: 3 },
 ];
+/** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
+const NIGHT_VEIL_OPP_MAGIC = 7;
+const POISON_WARD_MIN_PIECES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 exports.MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
@@ -114,6 +118,8 @@ const EXCLUSIVE_MIN_MAGIC = {
 // 毒使い×毒花・ミアズマの調整値 (旧sim AI の BLOOM_* / MIASMA_MIN_SCORE と同値)
 const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
+/** ミアズマの対象が氷結中のマスのとき、1マスぶんの価値に掛ける係数（毒は休眠して残り、氷結が解けたら効く） */
+const MIASMA_FROZEN_WEIGHT = 0.5;
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
 const FORCED_WIN_PLIES = 4;
@@ -136,6 +142,8 @@ class AIPlayer {
         this.lastStandReady = false;
         /** 無礼講が効いている（Game が手番ごとに設定する）。コストは Game の gearCost が0にするので、AIは無礼講を重ねて撃たない */
         this.tokenFree = false;
+        /** 毒返しの構えが効いている（Game が手番ごとに設定する）。効いているあいだは重ねて撃たない */
+        this.wardActive = false;
         /** 裸の王様の判断材料: 相手全員の有効なギアの数 / 使える土壇場の防壁を持つ相手がいるか（Game.tsx runAIMove が毎手番入れる） */
         this.chargeBuffActive = false; // 静電気の季節が自分に掛かっている
         this.oppGearCount = 0;
@@ -470,13 +478,21 @@ class AIPlayer {
     miasmaPlan(board) {
         return (0, poison_1.miasmaPlan)(board, this.playerSymbol, this.characters);
     }
-    /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (旧sim AI miasmaScore と同一) */
+    /** ミアズマを撃つ価値: 毒が効く敵マスの数（氷結中は MIASMA_FROZEN_WEIGHT 倍）+ リーチ列の要のコマ×2 */
     miasmaScore(board) {
         const plan = this.miasmaPlan(board);
-        let critical = 0;
-        plan.forEach((_, j) => { if (this.inOppReachLine(board, j))
-            critical++; });
-        return plan.size + critical * 2;
+        let effective = 0, critical = 0;
+        plan.forEach((_, j) => {
+            // 氷結中の敵マスの毒は休眠する（消えはしないが、氷結が解けるまでダメージが出ない）ので半分の価値で数える
+            if ((0, thermal_1.isDormant)(board[j])) {
+                effective += MIASMA_FROZEN_WEIGHT;
+                return;
+            }
+            effective++;
+            if (this.inOppReachLine(board, j))
+                critical++;
+        });
+        return effective + critical * 2;
     }
     /**
      * 毒花を活かす: 自陣のコマ(敵に隣接・ライフに余裕あり)にインジェクションを打つ対象 (旧sim AI と同一)。なければ null。
@@ -1155,7 +1171,7 @@ class AIPlayer {
             (this.character === 'magician' && budsIdx.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
-            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58)) ||
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'magician' || c === 'witch')));
         // 盤面的に価値が高いスキル
@@ -1559,6 +1575,15 @@ class AIPlayer {
         if (availableSkills.includes(75) &&
             (0, thermal_1.fireWheelTargets)(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2) {
             spend(this.calculateAICost(costs.onClickFireWheel, false, false, 'onClickFireWheel'), 'onClickFireWheel');
+        }
+        // 夜の帳: 次の相手の手番のスキルコストを+3。他に撃つものが無く、相手が高いスキルを撃てそうな魔力を持っているときだけ
+        if (availableSkills.includes(98) && skills.length === 0 && opponentMagic >= NIGHT_VEIL_OPP_MAGIC) {
+            spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
+        }
+        // 毒返しの構え: 自陣のコマが3つ以上あり、構えが無く、他に撃つものが無いとき（壊されると毒付きのコマが返る）
+        if (availableSkills.includes(100) && !this.wardActive && skills.length === 0 &&
+            board.filter((sq) => sq.player === this.playerSymbol).length >= POISON_WARD_MIN_PIECES) {
+            spend(this.calculateAICost(costs.onClickPoisonWard, false, false, 'onClickPoisonWard'), 'onClickPoisonWard');
         }
         // 魔力が有り余るとき: 置くコマのライフを厚くする（ライフ+3 → 2倍の順。減衰で盤面が空になる長期戦でコマが残りやすくなる）
         if (remaining >= RICH_MAGIC) {
@@ -3036,6 +3061,10 @@ class AIPlayer {
                 { idx: 56, key: 'onClickVitalMarkdown', cut: 4 },
                 { idx: 53, key: 'onClickMarkdown', cut: 3 },
             ];
+            // 弔い割引: 墓地の死体の数（上限3）だけ次のスキルを軽減する。コスト1より多く軽減できる（死体2体以上）ときだけ候補にする
+            const graveCut = (0, graveSkills_1.graveDiscountAmount)((0, graveSkills_1.corpseCount)(turn_1.NECROMANCY.baseCost, necroCost));
+            if (graveCut >= 2)
+                reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
             let best = null;
             for (const r of reducers) {
                 if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key))

@@ -77,7 +77,7 @@ describe('ギアの手番状態 advanceGearState', () => {
     const mk = (): [GearTurnState, RuinState] => {
         const n = 2;
         return [
-            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], chargeBase: [0, 0] },
+            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], chargeBase: [0, 0] , veil: [false, false], veilNext: [false, false], ward: [0, 0], wardFresh: [false, false] },
             { active: [false, false], pending: [false, true], snap: null, snapBuds: null, snapFlames: null, ashActive: Array(n).fill(0), ashPending: Array(n).fill(0), lastMove: null },
         ];
     };

@@ -41,6 +41,8 @@ export type AITurnInput = {
     // --- ギア・手番内の状態（AIPlayer に毎手番セットする） ---
     lastStandReady: boolean;
     tokenFree: boolean;
+    /** 毒返しの構えが効いている（残りの手番数が1以上） */
+    wardActive: boolean;
     chargeBuffActive: boolean;
     oppGearCount: number;
     oppLastStand: boolean;
@@ -91,6 +93,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
+    ai.wardActive = input.wardActive;
     // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
     ai.chargeBuffActive = input.chargeBuffActive;
     ai.oppGearCount = input.oppGearCount;
