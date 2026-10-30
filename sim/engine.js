@@ -377,6 +377,8 @@ function newGame(opts = {}) {
         oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
         plantPrev: fill(false), // 直前の手番に🌱🍂が増えた（火口の無料条件。撃つと消える）
         plantBase: fill(0), // 手番開始時点の盤面の🌱🍂の総数
+        placedPrev: fill(false), // 直前の手番に相手がコマを2つ以上設置した（飛び火の無料条件。撃つと消える）
+        placeBase: fill(0), // 手番開始時点の自陣のコマ数
         echoReady: fill(false),
         echoNext: fill(false),
         // 廃墟の底力: ruinActive=割引が有効（自陣が破壊された後の、自分の次の手番の終わりまで）/ ruinPending=次の自分の手番から有効
@@ -491,6 +493,7 @@ function costEnv(s, seat) {
         oppSkillPrev: s.oppSkillPrev[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
+        placedPrev: s.placedPrev[seat],
         discount: s.discount[seat],
     };
 }
@@ -569,7 +572,7 @@ function judgeNextIsHeart(s) {
 function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
-        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase,
+        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, chargeBase: s.chargeBase,
     };
     const r = {
@@ -2251,6 +2254,18 @@ function onClickStrip(s) {
 // 火の車 (idx75): ランダムな敵マス2つに🔥+1、その後自分の手札をシャッフル（無料）。このターン敵か自陣に🔥を付与していれば0コスト（撃つとリセット）。クリック不要
 function fireWheelCandidates(s) { return thermal.fireWheelTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function fireWheelLegal(s) { return fireWheelCandidates(s).length > 0; }
+// 飛び火 (idx97): ランダムな敵マス2つに🔥+1（火の車からシャッフルを除いたもの）。直前の手番に相手がコマを2つ以上設置していれば0コスト（撃つとリセット） [FAITHFUL] Game.tsx onClickSpark
+function onClickSpark(s) {
+    const cands = fireWheelCandidates(s);
+    if (cands.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickSpark, false, false, 'onClickSpark'); // 無料かは撃つ前の状態で決まる
+    const picks = randomAnyPick(cands, Math.min(thermal.FIRE_WHEEL_COUNT, cands.length), s.rng);
+    thermal.fireWheel(s.board, picks, s.size, keepBudsOf(s));
+    spendMagic(s, pay, 'onClickSpark');
+    s.placedPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
+    bumpMagicCount(s);
+    bumpStat(s, 'spark');
+}
 function onClickFireWheel(s) {
     const cands = fireWheelCandidates(s);
     if (cands.length === 0) return;
@@ -2392,6 +2407,7 @@ const SKILLS = {
     plunder: onClickPlunder,
     relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
+    spark: onClickSpark,
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,
     bristle: onClickBristle,

@@ -100,7 +100,7 @@ export const skillCosts = {
     onClickCounterMarkdown: 2, // 返し特売(idx 60)。直前の相手の手番に相手がスキルを使っていれば0
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
-    onClickLeafToken: 3, //       木枯らしの使い(idx 62): 🍂付きトークン
+    onClickLeafToken: 5, //       木枯らしの使い(idx 62): 🍂付きトークン（基準の5〜6に戻した。ユーザー指示で3→5）
     onClickTwinLeafToken: 7, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
     onClickDoubleLeafToken: 9, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
     onClickLeafAll: 5, //         枯野の相席(idx 65): 盤面の全てのコマ（敵味方）に🍂を1つずつ付与
@@ -128,6 +128,7 @@ export const skillCosts = {
     onClickGather: 8, //         吹き寄せ(idx 94): トークン扱い。自陣にトークンを置き、盤面のエフェクトを全てそのマスに集める（氷結・⚡無敵のマスは動かさない）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）
     onClickBurnOff: 9, //        山焼き(idx 95): トークン扱い。敵のエフェクトがあるマス（氷結・⚡無敵を除く）全てに🔥を1つ付け、自陣にロック付きトークンを置く。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）
     onClickFreeToken: 4, //      無礼講(idx 96): このターン、トークン系スキルのコストを0にする
+    onClickSpark: 4, //          飛び火(idx 97): ランダムな敵コマ2つに🔥を1つずつ。直前の手番に相手がコマを2つ以上設置していれば各ターン1回まで0。基準: 🔥3×2×0.85≒5(R3)、ランダム選択で-1。鍛冶師は🔥付与で-1
 };
 
 export type SkillCosts = typeof skillCosts;

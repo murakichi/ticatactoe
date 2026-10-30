@@ -44,6 +44,8 @@ export type CostEnv = {
     oppSkillPrev: boolean;
     /** 直前の手番に盤面の🌱🍂が増えたか（火口の無料条件。撃つと消える） */
     plantPrev: boolean;
+    /** 直前の手番に相手がコマを2つ以上設置したか（飛び火の無料条件。撃つと消える） */
+    placedPrev: boolean;
     fireBase: number;
     discount: Discount;
 };
@@ -78,6 +80,7 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     let adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost + leafAdd, env.gears, env.ctx, isToken, skillKey) - cut); // カウント型の導線は下限1
     // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1
     if (mine && env.characters[env.seat] === 'yinYangMaster' && (env.shikiPlaced || (!!skillKey && SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1) adjusted -= 1;
+    if (skillKey === 'onClickSpark' && mine && env.placedPrev) return 0; // 飛び火: 直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickFireWheel' && mine && fireStacksTotal(env.board) > env.fireBase) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
