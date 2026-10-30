@@ -114,6 +114,8 @@ const POISON_WARD_MIN_PIECES = 3;
 /** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
 const GRAVE_OFFERING_MIN_PIECES = 3;
 const GRAVE_OFFERING_MAX_CORPSES = 3;
+/** ネクロマンサーが自陣に☠/🔥付きのトークンを置いて死体を作るのは、死体がこの数以下のとき */
+const SELF_BURN_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
@@ -1456,7 +1458,17 @@ class AIPlayer {
         } else if (leafToken && spend(leafToken.cost, leafToken.skill)) {
             // 🍂付きのトークンを撃った（トークンはターンに1回）
         } else if (!tokenUsed) {
-            if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
+            // ネクロマンサー: 自陣に☠/🔥付きのトークンを置いて、自分のコマを時間とともに削らせて死体（墓地）を作る。降霊が未発動で死体が少ないときだけ
+            const selfBurn = this.character === 'necromancer' && necroRemain === 0 && NECROMANCY.baseCost - necroCost <= SELF_BURN_MAX_CORPSES
+                ? ([
+                    { idx: 38, key: 'onClickDoubleFlameToken' as const, poison: false, ok: freeCells >= 4 },
+                    { idx: 16, key: 'onClickPoisonToken' as const, poison: true, ok: freeCells >= 2 },
+                    { idx: 37, key: 'onClickFlameToken' as const, poison: false, ok: freeCells >= 3 },
+                ].find((t) => t.ok && availableSkills.includes(t.idx) && remaining >= this.calculateAICost(costs[t.key], true, t.poison, t.key)) ?? null)
+                : null;
+            if (selfBurn) {
+                spend(this.calculateAICost(costs[selfBurn.key], true, selfBurn.poison, selfBurn.key), selfBurn.key);
+            } else if (this.character === 'poisoner' && availableSkills.includes(16) && remaining >= this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
                 spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
             } else if (this.character === 'yinYangMaster' && availableSkills.includes(72)
                 && board.filter((sq) => sq.player === this.playerSymbol && isShikigami(sq)).length < SH_MAX
