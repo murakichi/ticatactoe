@@ -1038,14 +1038,15 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         expect(b[0].effects).toEqual([]);
     });
 
-    it('火口: 🌱か🍂を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
+    it('火口: 🌱か🍂か❄を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
         const b = emptyBoard();
         b[0] = lv('💙', 3, 1);
         b[1] = lv('⭕', 8, 1);
         b[2] = lv('⭕', 8, 1, '🔑');
         b[3] = sq('⭕', 8);
         b[4] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }] };
-        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4]);
+        b[5] = { player: '⭕', bind: 8, effects: [{ effect: '❄' }] }; // ❄のコマも対象（🔥で氷結が解ける）
+        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4, 5]);
         const post = b.map((q) => ({ ...q, effects: [...q.effects] }));
         ignite(post, [4], 4, 1);
         expect(post[4].effects.some((e) => e.effect === '🌱')).toBe(false);

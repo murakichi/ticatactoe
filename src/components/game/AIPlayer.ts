@@ -291,7 +291,7 @@ class AIPlayer {
         return bestIdx;
     }
 
-    /** 火口(idx 87)の対象: 🌱か🍂を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
+    /** 火口(idx 87)の対象: 🌱か🍂か❄を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
     private bestTinderTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
         const guardedCell = (sq: SquareInfo, i: number) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
@@ -299,7 +299,7 @@ class AIPlayer {
         let bestVal = 0;
         for (const i of tinderTargets(board, this.playerSymbol, guardedCell)) {
             const sq = board[i];
-            if (sq.bind <= 0 || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔥')) continue;
+            if (sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔥')) continue;
             let build = 0;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
@@ -307,7 +307,8 @@ class AIPlayer {
                 const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
                 if (mine === 0 && foes >= 2) build += foes;
             }
-            const val = sq.bind + (budStacks(sq) + sq.effects.filter((e) => e.effect === '🍂').length) * 3 + build * 2;
+            // ❄のコマは氷結を解いて攻撃の通る状態に戻す（❄1スタックにつき3）
+            const val = sq.bind + (budStacks(sq) + sq.effects.filter((e) => e.effect === '🍂').length + frozenStacks(sq)) * 3 + build * 2;
             if (val > bestVal) {
                 bestVal = val;
                 best = i;

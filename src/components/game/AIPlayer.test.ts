@@ -989,6 +989,13 @@ describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁�
         expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
         expect(clicks.find((c) => c.skill === 'onClickIgnite')?.target).toBe(5);
     });
+    it('氷結(❄)した敵コマにも火口を撃つ（🌱🍂の無い盤面でも）', () => {
+        const b = board();
+        b[6] = { player: '⭕', bind: 3, effects: [{ effect: '❄' }] };
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'you']);
+        const clicks = ai.makeMove(b, 8, skillCosts, 2, 5, [87], false).chargeClicks ?? [];
+        expect(clicks.find((c) => c.skill === 'onClickTinder')?.target).toBe(6);
+    });
     it('手札に火口が無ければ撃たない', () => {
         expect(run([], 8).chargeClicks?.some((c) => c.skill === 'onClickTinder') ?? false).toBe(false);
     });

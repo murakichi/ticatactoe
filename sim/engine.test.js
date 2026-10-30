@@ -3004,7 +3004,8 @@ test('火口(idx 87): 🌱か🍂のある敵コマ1つに🔥を1つ付ける�
     s.board[5] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
     s.board[6] = { player: '⭕', bind: 5, effects: [] };
     s.board[9] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, { effect: '🔑' }] }; // ロック中は選べない（敵の🍂は自分のコストを上げるので🌱で確かめる）
-    assert.deepStrictEqual(e.tinderCandidates(s), [5]);
+    s.board[12] = { player: '⭕', bind: 5, effects: [{ effect: '❄' }] }; // ❄のコマも対象
+    assert.deepStrictEqual(e.tinderCandidates(s), [5, 12]);
     const before = s.magic[s.turn];
     e.SKILLS.tinder(s);
     assert.strictEqual(before - s.magic[s.turn], 1, '基本2-1');

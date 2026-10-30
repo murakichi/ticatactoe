@@ -416,9 +416,9 @@ export const leafAllTargets = (board: SquareInfo[], guarded: (sq: SquareInfo, i:
 export const leafCloakTargets = (board: SquareInfo[], me: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
 
-/** 火口の対象: 使用者以外のコマのうち、🌱か🍂を持ち、guarded でないもの（昇順） */
+/** 火口の対象: 使用者以外のコマのうち、🌱か🍂か❄を持ち、guarded でないもの（昇順）。❄のコマは🔥で氷結が解ける */
 export const tinderTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
-    board.map((sq, i) => (sq.player && sq.player !== player && (budStacks(sq) > 0 || leafStacks(sq) > 0) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+    board.map((sq, i) => (sq.player && sq.player !== player && (budStacks(sq) > 0 || leafStacks(sq) > 0 || isFrozen(sq)) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 
 /** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
 export const kindlingTargets = (board: SquareInfo[], player: SquareInfo['player'], guarded: (sq: SquareInfo, i: number) => boolean): number[] =>
