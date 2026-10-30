@@ -945,10 +945,6 @@ class AIPlayer {
         }
     }
     /** 最善手を選択: 即勝ち→即ブロック→Minimax+フォーク評価 */
-    /** 相手のどれかに、今すぐ勝てる着手（空きマスで完成・bind0 のコマの奪取で完成）があるか。countReaches は空きマスで完成するリーチしか数えない */
-    oppCanWinNow(board, life) {
-        return this.opponents.some((o) => this.getMovesFor(board, o, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, j, o, life))) === o));
-    }
     /**
      * 強制勝ちの着手。相手がどう打っても（着手だけの盤面ゲームとして）FORCED_WIN_PLIES 手先までに自分が勝てる着手を探す。
      * minimax(深さ3)は相手の着手で評価が終わるため、自分が3回打つ勝ちを見逃す。2人戦の小さい盤（16マス以下）だけ。
@@ -1001,8 +997,8 @@ class AIPlayer {
         }
         return null;
     }
-    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
-    winningMove(board, life) {
+    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null。着手後の炎・毒による減衰は見ない（巨人のストンプ連打の判断だけに使う） */
+    directWinMove(board, life) {
         const moves = Array.from(new Set([...(0, util_1.findEmptyIndexes)(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
         for (const i of moves) {
             if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, i, this.playerSymbol, life))) === this.playerSymbol)
@@ -2238,14 +2234,14 @@ class AIPlayer {
         var _a, _b;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
-        // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（winFirst）
-        // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われるので先にギアを剥がす等の判断に任せる
-        const winNow = this.oppLastStand ? null : this.winningMove(board, life);
-        if (winNow !== null)
-            return { move: winNow, skills: [] };
         // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
         // （自陣のコマが範囲に入ってもライフ-5だけ）。最少回数で1列を自陣にできるなら、魔力が許す限り連打して勝つ
         if (this.character === 'giant') {
+            // 今すぐ着手で勝てるなら、ストンプを挟まずに打つ（全キャラ共通の「勝てる手は先に打つ」は、炎などで勝ちにならない手を
+            // 勝てると誤判定して鍛冶師が 64%→18% に悪化したため入れない。巨人のストンプ連打の中だけで判断する）
+            const direct = this.directWinMove(board, life);
+            if (direct !== null)
+                return { move: direct, skills: [] };
             const stompCost = this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp');
             const win = this.planStompWin(board, stompCost > 0 ? Math.floor(magic / stompCost) : STOMP_CHAIN_MAX, life);
             if (win !== null) {
@@ -2287,7 +2283,7 @@ class AIPlayer {
         const facesWitch = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
         // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
         const cheapWin = this.character === 'yinYangMaster' && magic >= RICH_REROLL_MAGIC && ((_a = this.planShikigami(board, magic, costs, availableSkills)) === null || _a === void 0 ? void 0 : _a.win) === true;
-        if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0) && !this.oppCanWinNow(board, life)
+        if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
             && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
             return { move: null, skills: ['onClickCharge'] };
         }
