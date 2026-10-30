@@ -178,7 +178,76 @@ function analyze(st, { minDecided = MIN_DECIDED } = {}) {
     // 届いていない組は最悪対面・有利/不利の数から除いてあるので、9割の組が届けば結論を出す
     const solidPairs = pairs.filter((d) => d >= minDecided).length;
     const ready = solidPairs >= Math.ceil(pairs.length * READY_SHARE);
-    return { rows, strong: [...strong], exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
+    const edges = advantageEdges(ids, cell, minDecided);
+    return { rows, edges, ids, loops: findLoops(ids, edges.filter((e) => e.significant)), strong: [...strong], exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
+}
+
+// 有利・不利の有向グラフ。勝つ側 from → 負ける側 to。minDecided 試合以上ある組だけで、勝率がちょうど50%の組は辺を作らない。
+// significant = 勝つ側の勝率の95%区間(Wilson)の下限が50%超（偶然では説明しにくい差）。そうでない辺は「傾向」
+function advantageEdges(ids, cell, minDecided) {
+    const edges = [];
+    for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+            const c = cell(ids[i], ids[j]);
+            if (c.d < minDecided || c.rate === 0.5) continue;
+            const aWins = c.rate > 0.5;
+            const [from, to] = aWins ? [ids[i], ids[j]] : [ids[j], ids[i]];
+            const rate = aWins ? c.rate : 1 - c.rate;
+            const lo = aWins ? c.lo : 1 - c.hi;
+            edges.push({ from, to, rate, decided: c.d, lo, significant: lo > 0.5 });
+        }
+    }
+    return edges;
+}
+
+// 勝ち負けの閉ループ（三すくみ a→b→c→a や、もっと長い循環）。edges（勝つ側→負ける側）でできる有向グラフから求める。
+//   groups    : 互いに行き来できるキャラの集まり（強連結成分。2キャラ以上）。ここに入る辺は、必ずどこかの閉ループの一部
+//   cycles    : 具体的な循環（長さ maxLen まで、id 列。各循環は ids の並びで最小のキャラから1回だけ数える）
+//   loopEdges : 閉ループに入っている辺（'from>to'）。長さ maxLen を超える循環の辺も含む
+//   truncated : maxCount で打ち切ったか
+// 長いループは「一強がいない・相性で選ぶ余地がある」ことの目印で、1体が全員に勝つ（辺が出るだけ）状態とは区別できる
+function findLoops(ids, edges, { maxLen = 5, maxCount = 40 } = {}) {
+    const idx = new Map(ids.map((id, i) => [id, i]));
+    const adj = ids.map(() => []);
+    for (const e of edges) if (idx.has(e.from) && idx.has(e.to)) adj[idx.get(e.from)].push(idx.get(e.to));
+    // Tarjan 法で強連結成分
+    const n = ids.length, index = Array(n).fill(-1), low = Array(n).fill(0), on = Array(n).fill(false), comp = Array(n).fill(-1);
+    const stack = [], comps = [];
+    let counter = 0;
+    const visit = (v) => {
+        index[v] = low[v] = counter++; stack.push(v); on[v] = true;
+        for (const w of adj[v]) {
+            if (index[w] === -1) { visit(w); low[v] = Math.min(low[v], low[w]); }
+            else if (on[w]) low[v] = Math.min(low[v], index[w]);
+        }
+        if (low[v] === index[v]) {
+            const c = [];
+            let w;
+            do { w = stack.pop(); on[w] = false; comp[w] = comps.length; c.push(w); } while (w !== v);
+            comps.push(c);
+        }
+    };
+    for (let v = 0; v < n; v++) if (index[v] === -1) visit(v);
+    const groups = comps.filter((c) => c.length >= 2).map((c) => c.slice().sort((a, b) => a - b).map((i) => ids[i])).sort((a, b) => b.length - a.length);
+    const loopEdges = edges.filter((e) => idx.has(e.from) && idx.has(e.to) && comp[idx.get(e.from)] === comp[idx.get(e.to)] && comps[comp[idx.get(e.from)]].length >= 2).map((e) => e.from + '>' + e.to);
+    // 具体的な循環: 開始点より大きい番号だけを通り、同じ成分の中で開始点へ戻る
+    const cycles = [];
+    let truncated = false;
+    const path = [];
+    const dfs = (start, v) => {
+        for (const w of adj[v]) {
+            if (cycles.length >= maxCount) { truncated = true; return; }
+            if (w === start) { cycles.push(path.map((i) => ids[i])); continue; }
+            if (w < start || comp[w] !== comp[start] || path.includes(w) || path.length >= maxLen) continue;
+            path.push(w); dfs(start, w); path.pop();
+        }
+    };
+    for (let start = 0; start < n && !truncated; start++) {
+        if (comps[comp[start]].length < 2) continue;
+        path.length = 0; path.push(start); dfs(start, start);
+    }
+    cycles.sort((a, b) => a.length - b.length);
+    return { groups, cycles, loopEdges, truncated };
 }
 
 // 分析から日本語の結論を作る。何を根拠にしたかを points に1行ずつ残す
@@ -263,4 +332,4 @@ function aggregate(agg, parts) {
     return st;
 }
 
-module.exports = { roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
+module.exports = { findLoops, roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };

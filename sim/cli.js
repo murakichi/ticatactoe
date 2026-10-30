@@ -380,6 +380,17 @@ function watch(args) {
             for (const r of an.rows) {
                 out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.strongAvg == null ? 'n/a' : (r.strongAvg * 100).toFixed(1) + '%', 8)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
             }
+            const beats = (id) => an.edges.filter((e) => e.from === id && e.significant).sort((x, y) => y.rate - x.rate).map((e) => `${e.to}(${(e.rate * 100).toFixed(0)}%)`);
+            out.push('\n## 有利関係（有意に勝ち越す相手。左が勝つ側）');
+            for (const r of an.rows) out.push(`  ${pad(r.id, 14)} > ${beats(r.id).join(' ') || '—'}`);
+            const lp = an.loops;
+            if (!lp.groups.length) out.push('閉ループ(三すくみなど): なし（有意な勝ち越しは一方向だけ）');
+            else {
+                out.push(`閉ループ(三すくみなど): ${lp.groups.length}グループ`);
+                lp.groups.forEach((g) => out.push(`  互いに勝ち負けが循環するキャラ(${g.length}): ${g.join(', ')}`));
+                lp.cycles.slice(0, 10).forEach((c) => out.push(`  ${c.length === 3 ? '三すくみ' : c.length + 'すくみ'}: ${c.join(' → ')} → ${c[0]}`));
+                if (lp.cycles.length > 10 || lp.truncated) out.push(`  ...ほか${lp.truncated ? '多数' : lp.cycles.length - 10 + '件'}`);
+            }
             out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(平均の上位半分の相手だけ)で見る。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合。${an.minDecided}試合未満の対面は数えない)`);
         }
         if (final || args.matrix) {
