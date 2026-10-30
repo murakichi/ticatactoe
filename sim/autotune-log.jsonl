@@ -27,3 +27,4 @@
 {"at":"2026-10-30T03:49:34.297Z","char":"yinYangMaster","axis":"knobs","round":0,"seed":1,"games":60,"candidates":19,"metric":"strong","base":0.64,"best":{"label":"SH_BLAST_MIN=6","value":0.6733,"z":0.94},"accepted":false,"why":"scan gate"}
 {"at":"2026-10-30T03:49:34.297Z","round":0,"summary":true,"accepted":0,"exploitability":0}
 {"at":"2026-10-30T06:31:29.417Z","char":"magician","axis":"gears","round":0,"seed":1,"games":60,"candidates":48,"metric":"strong","base":0.32,"best":{"label":"slot0→harvest  [harvest,ironLock]","value":0.41,"z":2.33},"accepted":false,"why":"scan gate"}
+{"at":"2026-10-30T07:26:17.323Z","char":"magician","axis":"deck","round":0,"seed":2,"games":60,"candidates":30,"metric":"strong","base":0.3333,"best":{"label":"-35(ひこばえ),11(ダブルトークン) +49(慈雨),91(式神の供犠)  [2,9,10,13,47,49,50,53,56,60,91,92]","value":0.39,"z":1.53},"accepted":false,"why":"scan gate"}
