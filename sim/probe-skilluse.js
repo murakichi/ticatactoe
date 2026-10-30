@@ -15,6 +15,8 @@ const aiTurn = require('./shared/aiTurn');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
 const [c1, c2] = (args.chars || 'you,you').split(',');
+const PROD = !!args.prod; // --prod: 全席が推奨デッキ・推奨ギア（省略するとデッキなし・ギアなし=手札が全札からランダム）
+const gearMod = require('./shared/gear');
 const games = parseInt(args.games || '10', 10), seed0 = parseInt(args.seed || '1', 10), K = parseInt(args.rollouts || '10', 10), every = parseInt(args.every || '2', 10);
 const IGNORE = new Set(['aiReplan', 'onClickShuffle']);
 
@@ -55,7 +57,7 @@ const samples = [];
 const t0 = Date.now();
 let tick = 0;
 for (let g = 0; g < games; g++) {
-    const s = engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g) });
+    const s = PROD ? engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g), decks: true, gears: [c1, c2].map((c) => gearMod.recommendedGears(c)) }) : engine.newGame({ chars: [c1, c2], rng: engine.makeRng(seed0 * 100003 + g) });
     let n = 0;
     while (!s.winner && n++ < 300) {
         const seat = s.turn;
