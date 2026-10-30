@@ -1001,15 +1001,6 @@ class AIPlayer {
         }
         return null;
     }
-    /** 今すぐ完成できる着手(捕獲・補強を含む)。無ければ null (getBestMove の「即勝ち」と同じ判定) */
-    winningMove(board, life) {
-        const moves = Array.from(new Set([...(0, util_1.findEmptyIndexes)(board), ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
-        for (const i of moves) {
-            if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, i, this.playerSymbol, life))) === this.playerSymbol)
-                return i;
-        }
-        return null;
-    }
     getBestMove(board, life) {
         const empty = (0, util_1.findEmptyIndexes)(board);
         const validMoves = this.getValidMoves(board, life);
@@ -2238,11 +2229,6 @@ class AIPlayer {
         var _a, _b;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
-        // 今すぐ勝てる着手があるなら、スキル（手番を終えるもの・魔力を使うもの）を挟まずに勝つ（winFirst）
-        // ただし相手に未発動の土壇場の防壁があるときは、勝ちが防壁に吸われるので先にギアを剥がす等の判断に任せる
-        const winNow = this.oppLastStand ? null : this.winningMove(board, life);
-        if (winNow !== null)
-            return { move: winNow, skills: [] };
         // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
         // （自陣のコマが範囲に入ってもライフ-5だけ）。最少回数で1列を自陣にできるなら、魔力が許す限り連打して勝つ
         if (this.character === 'giant') {
