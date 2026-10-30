@@ -61,7 +61,10 @@ const log = (o) => fs.appendFileSync(logFile, JSON.stringify({ at: new Date().to
 //  自分の設定(tuned[char])が変わったらそのキャラの bad 系は破棄する（相互作用が変わるため）
 function codeHash() {
     const h = require('crypto').createHash('sha1');
-    for (const f of fs.readdirSync(__dirname).filter((x) => x.endsWith('.js') && !/autotune|apply-tuned|probe-|test|cli/.test(x)).sort()) h.update(f + fs.readFileSync(path.join(__dirname, f)));
+    // 本番TSから生成した sim/shared/*.js（AI・ギア・デッキ本体）も対象。推奨表は apply-tuned.js が書き換えるので除く
+    const files = [...fs.readdirSync(__dirname).filter((x) => x.endsWith('.js') && !/autotune|apply-tuned|probe-|test|cli/.test(x)).map((x) => path.join(__dirname, x)),
+        ...(fs.existsSync(path.join(__dirname, 'shared')) ? fs.readdirSync(path.join(__dirname, 'shared')).filter((x) => x.endsWith('.js')).map((x) => path.join(__dirname, 'shared', x)) : [])].sort();
+    for (const f of files) h.update(path.relative(__dirname, f) + fs.readFileSync(f, 'utf8').replace(/(?:const|exports\.)\s*RECOMMENDED_(DECKS|GEARS) = \{[\s\S]*?\n\};/, ''));
     return h.digest('hex').slice(0, 12);
 }
 const HASH = codeHash();
@@ -210,19 +213,27 @@ function step(char, axis, round, stepNo) {
     const r0 = c0.rows[0], r1 = c1.rows[0];
     const delta = M(r1) - M(r0), se = Math.sqrt(SE(r0) ** 2 + SE(r1) ** 2);
     const diffs = Object.keys(r0.per).map((o) => [o, r1.per[o] - r0.per[o]]).sort((a, b) => a[1] - b[1]);
-    const worst = diffs[0][1], worstOpp = diffs[0][0];
-    const passEffect = delta >= 0.015 && delta >= 1.96 * se;
+    // 強豪は環境の変化で入れ替わる（2026-10-30 ユーザー指示）。固定の強豪リストだけに最適化して「今の強豪にだけ効く」案を採らないよう、
+    //  (1) 強豪リストは実行のたびに最新の順位表で作り直す  (2) 対強豪平均に加えて全相手平均(field)が悪化しないことを要求する
+    //  (3) -15pt の悪化禁止は、その時点の強豪相手にだけ適用する（強豪以外の相手への悪化は許容）
+    const strongList = hasStrong() ? JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8')).strong : null;
+    const gated = strongList ? diffs.filter(([o]) => strongList.includes(o)) : diffs;
+    const worst = (gated[0] || diffs[0])[1], worstOpp = (gated[0] || diffs[0])[0];
+    const fieldDelta = r1.field - r0.field;
+    const passEffect = delta >= 0.015 && delta >= 1.96 * se && fieldDelta > -0.01;
     const ok = args.zmin ? delta > 0 : passEffect && worst > -0.15;
-    // 効果は十分なのに特定の相手への大幅悪化(-15pt超)だけで落ちた候補は、人が判断できるよう印を付けて残す
+    // 効果は十分なのに強豪への大幅悪化(-15pt超)だけで落ちた候補は、人が判断できるよう印を付けて残す
     const blockedBy = !ok && passEffect && worst <= -0.15 ? { worstOpp, worst: +worst.toFixed(3), diffs: Object.fromEntries(diffs.map(([o, d]) => [o, +d.toFixed(3)])) } : undefined; // --zmin は配管の動作確認用（ゲートを緩める）
-    log({ ...rec, confirm: { seed: cseed, games: confirmGames, base: M(r0), cand: M(r1), delta: +delta.toFixed(4), se: +se.toFixed(4), worst: +worst.toFixed(3), field: { base: r0.field, cand: r1.field } }, accepted: ok, blockedBy, cand: best.r.cand });
+    log({ ...rec, confirm: { seed: cseed, games: confirmGames, base: M(r0), cand: M(r1), delta: +delta.toFixed(4), se: +se.toFixed(4), worst: +worst.toFixed(3), field: { base: r0.field, cand: r1.field }, worstAll: { opp: diffs[0][0], diff: +diffs[0][1].toFixed(3) } }, accepted: ok, blockedBy, cand: best.r.cand });
     console.log(`  ${char}/${axis}: ${best.r.label}  scan z=${best.z.toFixed(1)}  confirm ${(delta * 100).toFixed(1)}pt ±${(1.96 * se * 100).toFixed(1)} -> ${ok ? '採用' : '不採用'}${blockedBy ? `（${blockedBy.worstOpp} への ${(worst * 100).toFixed(0)}pt 悪化で保留。人の判断待ち）` : ''}`);
     return ok ? { gain: delta, cand: best.r.cand } : null;
 }
 
 function main() {
+    if (axes.includes('flags') && !fs.existsSync(path.join(__dirname, 'ai.js'))) { console.log('注意: AIのノブは本番TSの定数になり sim/ai.js が無いので、flags 軸は省きます'); axes.splice(axes.indexOf('flags'), 1); }
     if (!fs.existsSync(tunedFile)) save({});
-    if (!hasStrong()) { console.log('強豪リストを作成(--rank --write-strong)'); probe({ games: 60, seed: 1, argv: ['--rank', '--write-strong'] }); }
+    // 強豪リストは毎回作り直す（--keep-strong で固定）。順位表は --envFile で育てた設定を反映した環境で取る
+    if (args['keep-strong'] !== 'true' || !hasStrong()) { console.log('強豪リストを最新の順位表で作成(--rank --write-strong)'); probe({ games: 60, seed: 1, argv: ['--rank', '--write-strong'] }); console.log('  強豪: ' + JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8')).strong.join(',')); }
     // --inert-from <probe-top --scan flags --json の出力> --inert-char <char>: 既に測った pilot を記憶に取り込む（再測定を省く）
     if (args['inert-from'] && args['inert-char']) {
         const o = JSON.parse(fs.readFileSync(args['inert-from'], 'utf8'));

@@ -36,11 +36,13 @@ let changed = 0;
 for (const [char, t] of Object.entries(tuned)) {
     if (t.deck) {
         const d = t.deck.slice().sort((a, b) => a - b);
-        for (const f of ['sim/deck.js', 'src/components/game/deck.ts']) if (rewrite(f, 'RECOMMENDED_DECKS', char, d, false)) { console.log(`deck  ${char} -> [${d.join(', ')}]  (${f})`); changed++; }
+        for (const f of ['sim/deck.js', 'src/components/game/deck.ts'].filter((x) => fs.existsSync(path.join(root, x)))) if (rewrite(f, 'RECOMMENDED_DECKS', char, d, false)) { console.log(`deck  ${char} -> [${d.join(', ')}]  (${f})`); changed++; }
     }
     if (t.gears) {
-        for (const f of ['sim/gear.js', 'src/components/game/gear.ts']) if (rewrite(f, 'RECOMMENDED_GEARS', char, t.gears, true)) { console.log(`gears ${char} -> [${t.gears.join(', ')}]  (${f})`); changed++; }
+        for (const f of ['sim/gear.js', 'src/components/game/gear.ts'].filter((x) => fs.existsSync(path.join(root, x)))) if (rewrite(f, 'RECOMMENDED_GEARS', char, t.gears, true)) { console.log(`gears ${char} -> [${t.gears.join(', ')}]  (${f})`); changed++; }
     }
     if (t.flags && Object.keys(t.flags).length) console.log(`flags ${char}: ${JSON.stringify(t.flags)}  ← 手動で sim/ai.js / AIPlayer.ts に移植`);
 }
+// 本番TSが正。sim/shared/*.js は生成物なので書き換えたら再生成する（simShared.test.ts が古さを検出する）
+if (write && changed) { const r = require('child_process').spawnSync(process.execPath, ['scripts/gen-sim-shared.js'], { cwd: root, stdio: 'inherit' }); if (r.status !== 0) process.exitCode = 1; }
 console.log(changed ? (write ? `${changed} 箇所を書き込みました。次: npm test -- --watchAll=false と node --test sim/` : `${changed} 箇所に変更あり（--write で書き込み）`) : '推奨設定との差分なし');
