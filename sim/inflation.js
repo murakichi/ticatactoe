@@ -36,21 +36,41 @@ function referenceCost(costs) {
     return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 }
 
+/**
+ * マスの変化。減衰(毎手番、全コマのライフが自動で減る)は『誰も何もしていない』変化なので数えない。
+ * 数えるのは、コマの有無・持ち主・効果(🌱🔑☠🔥❄⚡📜など)が変わったマス。
+ * 1手番(1席の手番開始から次の手番開始まで)の間に、手番の席の行動と、そのあとの自動処理(毒・炎の継続ダメージ、補充)が入る。
+ */
+const cellKey = (sq) => `${sq.player || '-'}|${(sq.effects || []).map((e) => e.effect).sort().join('')}`;
+const snapshotBoard = (board) => board.map(cellKey);
+function boardChange(snap, board) {
+    let changed = 0, pieces = 0;
+    for (let i = 0; i < board.length; i++) {
+        const k = cellKey(board[i]);
+        if (snap && snap[i] !== k) {
+            changed++;
+            if ((snap[i].split('|')[0]) !== (k.split('|')[0])) pieces++; // コマが置かれた/奪われた/壊れたマス
+        }
+    }
+    return { changed, pieces };
+}
+
 /** 1ゲーム分の記録係。手番が切り替わるたびに onTurnChange を呼ぶ */
 function createTracker(s) {
     const n = s.magic.length;
     const lastEnd = s.magic.slice(); // 席ごとの前回手番終了時の魔力(初回は初期値)
     const rows = [];
-    let cur = null; // { seat, turnIndex, start }
+    let cur = null; // { seat, turnIndex, start, snap }
     return {
         /** 手番が切り替わった直後(新しい席の魔力は付与済み)に呼ぶ */
         onTurnChange(state) {
             if (cur) {
                 const end = state.magic[cur.seat];
-                rows.push({ seat: cur.seat, turn: cur.turnIndex, start: cur.start, end, income: cur.start - lastEnd[cur.seat], skills: state.gearSkills[cur.seat] || 0 });
+                const { changed, pieces } = boardChange(cur.snap, state.board);
+                rows.push({ seat: cur.seat, turn: cur.turnIndex, start: cur.start, end, income: cur.start - lastEnd[cur.seat], skills: state.gearSkills[cur.seat] || 0, changed, pieces, cells: state.board.length });
                 lastEnd[cur.seat] = end;
             }
-            cur = { seat: state.turn, turnIndex: state.currentTurn, start: state.magic[state.turn] };
+            cur = { seat: state.turn, turnIndex: state.currentTurn, start: state.magic[state.turn], snap: snapshotBoard(state.board) };
         },
         rows,
         seats: n,
@@ -78,6 +98,14 @@ function summarize(games, refCost, bucketTurns = BUCKET_TURNS) {
             spendRatio: income > 0 ? spent / income : null,
             // 手番終了時に実効コストの HOARD_MULT 倍以上を残した手番の割合(撃ち切れず持ち越した)
             hoardRate: rows.length ? rows.filter((r) => r.end >= HOARD_MULT * effCost).length / rows.length : null,
+            // マスの変化(コマの有無・持ち主・効果が変わったマス)。盤の大きさで割った割合も出す
+            changePerTurn: mean(rows.filter((r) => r.changed != null).map((r) => r.changed)),
+            changeRate: mean(rows.filter((r) => r.changed != null).map((r) => r.changed / r.cells)),
+            piecesPerTurn: mean(rows.filter((r) => r.pieces != null).map((r) => r.pieces)),
+            // 盤面が動かなかった手番(チャージ・パス・効果の無いスキルだけ)の割合
+            stillRate: rows.filter((r) => r.changed != null).length ? rows.filter((r) => r.changed === 0).length / rows.filter((r) => r.changed != null).length : null,
+            // 魔力1あたりの盤面の変化(変換効率)。支出が無い手番は含めない
+            changePerMagic: spent > 0 ? rows.reduce((a, r) => a + (r.changed || 0), 0) / spent : null,
         };
     };
     const all = games.flat();
@@ -126,7 +154,7 @@ function matchedAnalysis(games, refCost, bucketTurns, agg, minGamesOpt, B = 300)
     }
     boots.sort((a, b) => a - b);
     const q = (p) => (boots.length ? boots[Math.min(boots.length - 1, Math.floor(p * boots.length))] : null);
-    return { minGames, lateFrom: lateBucket * bucketTurns, lateTo: (lateBucket + 1) * bucketTurns - 1, games: pairs.length, index: base.index, ci95: [q(0.025), q(0.975)], stockGrowth: base.stockGrowth, incomeGrowth: base.incomeGrowth, earlyStockToEffCost: base.early.stockToEffCost, lateStockToEffCost: base.late.stockToEffCost };
+    return { minGames, lateFrom: lateBucket * bucketTurns, lateTo: (lateBucket + 1) * bucketTurns - 1, games: pairs.length, index: base.index, ci95: [q(0.025), q(0.975)], stockGrowth: base.stockGrowth, incomeGrowth: base.incomeGrowth, earlyStockToEffCost: base.early.stockToEffCost, lateStockToEffCost: base.late.stockToEffCost, earlyStillRate: base.early.stillRate, lateStillRate: base.late.stillRate, earlyChangeRate: base.early.changeRate, lateChangeRate: base.late.changeRate };
 }
 
 module.exports = { createTracker, summarize, referenceCost, matchedAnalysis, HOARD_MULT, BUCKET_TURNS };

@@ -120,11 +120,19 @@ function inflation(args) {
     const mt = out.matched;
     if (mt && mt.index != null) {
         console.log(`matched index = ${f(mt.index)}  95%区間 [${f(mt.ci95[0])}, ${f(mt.ci95[1])}]  (同じ ${mt.games} 試合の 序盤 と 後半${mt.lateFrom}-${mt.lateTo}手 を比較)`);
-        console.log(`  収入の伸び ${f(mt.incomeGrowth)}x  手持ちの伸び ${f(mt.stockGrowth)}x  (後半/序盤。収入=経済、手持ち=収入+AIが撃ち切れない分)\n`);
+        console.log(`  収入の伸び ${f(mt.incomeGrowth)}x  手持ちの伸び ${f(mt.stockGrowth)}x  (後半/序盤。収入=経済、手持ち=収入+AIが撃ち切れない分)`);
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`  マスの変化（盤に占める割合） 序盤 ${pc(mt.earlyChangeRate)} → 後半 ${pc(mt.lateChangeRate)}   動かない手番 序盤 ${pc(mt.earlyStillRate)} → 後半 ${pc(mt.lateStillRate)}  (魔力が余るのに盤面が動かない=撃てない/撃たない)\n`);
     } else console.log(`matched index = n/a  (${(mt && mt.note) || ''})\n`);
     console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
     for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
         console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
+    }
+    console.log('\nマスの変化（コマの有無・持ち主・効果が変わったマス。減衰は数えない）');
+    console.log('区間(手番)    変化マス/手番  盤に占める割合  コマが動く/手番  動かない手番  魔力1あたりの変化');
+    for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(f(b.changePerTurn), 12)}  ${pad(pc(b.changeRate), 13)}  ${pad(f(b.piecesPerTurn), 14)}  ${pad(pc(b.stillRate), 11)}  ${f(b.changePerMagic)}`);
     }
 }
 
