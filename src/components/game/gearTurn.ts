@@ -4,7 +4,7 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Discount, afterSkill, emptyDiscount } from './discount';
 import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
-import { INFERNO_FREE_SKILLS, fireStacksTotal } from './thermal';
+import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './thermal';
 import { ownCharges, ownLeaves } from './comboCost';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
@@ -18,6 +18,9 @@ export type GearTurnState = {
     oppSkillPrev: boolean[];
     shikiPlaced: boolean[];
     fireBase: number[];
+    /** 火口の無料条件: 直前の手番に盤面の🌱🍂の総数が増えたか（今の手番の頭の時点）と、各席の手番開始時点の🌱🍂の総数 */
+    plantPrev: boolean[];
+    plantBase: number[];
     leafBase: number[];
     darkPotUsed: boolean[];
     tokenFree: boolean[];
@@ -37,6 +40,9 @@ export type RuinState = {
     /** その手番の通常の着手マス（攻撃で壊れた自コマは『スキル・エフェクトによる破壊』に数えない） */
     lastMove: number | null;
 };
+
+/** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
+export const plantedStacksTotal = (board: SquareInfo[]): number => board.reduce((n, sq) => n + budStacks(sq) + leafStacks(sq), 0);
 
 export type GearTurnChange = {
     /** 焦土で席ごとに得る魔力（次の手番の席の分は、手番開始の魔力に足す）。0 なら無し */
@@ -108,6 +114,10 @@ export const advanceGearState = (
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
     g.fireBase[nextSeat] = fireStacksTotal(board);
+    // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
+    const plantedNow = plantedStacksTotal(board);
+    g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
+    g.plantBase[nextSeat] = plantedNow;
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;

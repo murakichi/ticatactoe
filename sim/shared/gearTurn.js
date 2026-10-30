@@ -1,11 +1,14 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = void 0;
+exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
+/** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
+const plantedStacksTotal = (board) => board.reduce((n, sq) => n + (0, thermal_1.budStacks)(sq) + (0, thermal_1.leafStacks)(sq), 0);
+exports.plantedStacksTotal = plantedStacksTotal;
 /**
  * 手番が endSeat から nextSeat に変わるときの更新。
  * @param gears 席ごとの装備（裸の王様で封じられている席は封じられた後の装備）
@@ -58,6 +61,10 @@ const advanceGearState = (g, r, input) => {
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
+    // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
+    const plantedNow = (0, exports.plantedStacksTotal)(board);
+    g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
+    g.plantBase[nextSeat] = plantedNow;
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;

@@ -3233,5 +3233,34 @@ test('runGame: 誰も着手しないままパスが続く膠着は、上限ま�
     } finally { aiDriver.playTurn = orig; }
 });
 
+test('火口: 直前の手番に🌱🍂が植えられていれば無料。無料は1手番に1回まで。植えられていなければ通常コスト', () => {
+    const s = game('magician', 'pyromancer'); // 先手=魔法使い(💙)、後手=鍛冶師(⭕)
+    // 魔法使いの手番中に🌱が植わった(盤上の🌱が増えた)まま着手して手番が鍛冶師へ移る
+    s.board[4] = { player: '💙', bind: 5, effects: [{ effect: '🌱' }] };
+    s.board[8] = { player: '💙', bind: 5, effects: [{ effect: '🌱' }] };
+    e.placeMove(s, 0);
+    assert.strictEqual(s.turn, 1);
+    assert.strictEqual(s.plantPrev[1], true, '直前の手番に🌱が増えた');
+    s.magic[1] = 10;
+    const m0 = s.magic[1];
+    e.SKILLS.tinder(s);
+    assert.strictEqual(m0 - s.magic[1], 0, '無料');
+    assert.strictEqual(s.plantPrev[1], false, '無料は1手番に1回まで');
+    assert.ok(e.placeMove(s, 4));
+    const m1 = s.magic[1];
+    e.SKILLS.tinder(s);
+    assert.strictEqual(m1 - s.magic[1], 1, '2回目は通常コスト(鍛冶師は-1で1)');
+    // 植えられていない手番では通常コスト
+    const t = game('magician', 'pyromancer');
+    t.board[4] = { player: '💙', bind: 5, effects: [] };
+    e.placeMove(t, 0);
+    t.board[8] = { player: '💙', bind: 5, effects: [{ effect: '🌱' }] };
+    assert.strictEqual(t.plantPrev[1], false);
+    t.magic[1] = 10;
+    const m2 = t.magic[1];
+    e.SKILLS.tinder(t);
+    assert.strictEqual(m2 - t.magic[1], 1);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
