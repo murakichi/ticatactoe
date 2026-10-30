@@ -115,7 +115,13 @@ function inflation(args) {
     if (args.json) return console.log(JSON.stringify(out, null, 2));
     const f = (x, d = 2) => (x == null ? 'n/a' : x.toFixed(d));
     console.log(`# 魔力インフレ  ${players}人 ${out.boardSize}x${out.boardSize}  games=${games}  AI=${mode}  seed=${baseSeed}  基準コスト=${f(out.referenceCost, 1)}`);
-    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)\n`);
+    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)`);
+    console.log('  ※従来の inflationIndex は、序盤(全試合)と後半(少数の長い試合)を混ぜて比べるので、シード違いでよく動く。下の matched を見る。');
+    const mt = out.matched;
+    if (mt && mt.index != null) {
+        console.log(`matched index = ${f(mt.index)}  95%区間 [${f(mt.ci95[0])}, ${f(mt.ci95[1])}]  (同じ ${mt.games} 試合の 序盤 と 後半${mt.lateFrom}-${mt.lateTo}手 を比較)`);
+        console.log(`  収入の伸び ${f(mt.incomeGrowth)}x  手持ちの伸び ${f(mt.stockGrowth)}x  (後半/序盤。収入=経済、手持ち=収入+AIが撃ち切れない分)\n`);
+    } else console.log(`matched index = n/a  (${(mt && mt.note) || ''})\n`);
     console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
     for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
         console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
