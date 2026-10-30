@@ -109,8 +109,8 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
     { idx: 53, key: 'onClickMarkdown', cut: 3 },
 ];
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
-const NIGHT_VEIL_OPP_MAGIC = 5;
-const POISON_WARD_MIN_PIECES = 2;
+const NIGHT_VEIL_OPP_MAGIC = 7;
+const POISON_WARD_MIN_PIECES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
