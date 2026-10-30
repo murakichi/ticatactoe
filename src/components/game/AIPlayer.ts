@@ -18,7 +18,7 @@ import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..96)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 97;
+export const SKILL_POOL_SIZE = 98;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -2725,6 +2725,14 @@ class AIPlayer {
                     this.updateShield(board);
                     magic -= tinderCost;
                 }
+            }
+            // 飛び火(ランダムな敵2マスに🔥。直前の手番に相手が2コマ以上設置していれば無料)。火遁より🔥が多く付くので先に撃つ。対象は撃つ時に決まるので盤面は更新しない
+            const sparkCost = this.calculateAICost(costs.onClickSpark, false, false, 'onClickSpark');
+            if (!necroFoe && availableSkills.includes(97) && !this.skillKinds.has('onClickSpark') && !chargeClicks.some((c) => c.skill === 'onClickSpark') && magic >= sparkCost
+                && !(worth && magic >= infernoNow() && magic - sparkCost < infernoNow())
+                && fireWheelTargets(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2) {
+                chargeClicks.push({ skill: 'onClickSpark' });
+                magic -= sparkCost;
             }
             if (!necroFoe && !blocksInferno && !this.skillKinds.has('onClickIgnite') && !chargeClicks.some((c) => c.skill === 'onClickIgnite') && magic >= igniteCost) {
                 const t = this.bestIgniteTarget(board);

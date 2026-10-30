@@ -97,6 +97,7 @@ exports.SKILL_CATALOG = [
     { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: 'トークン扱い（ターン1回）。自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑ロックと式神の印📜はその場に残ります。🔥は集め終えてから処理）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
     { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: 'トークン扱い（ターン1回）。敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置きます。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
     { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークン系スキルのコストを0にします（手番が終わると切れます）' },
+    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外）。直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;

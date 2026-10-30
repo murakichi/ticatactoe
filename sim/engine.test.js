@@ -2088,7 +2088,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark']);
 });
 
 
@@ -3261,6 +3261,37 @@ test('火口: 直前の手番に🌱🍂が植えられていれば無料。無�
     const m2 = t.magic[1];
     e.SKILLS.tinder(t);
     assert.strictEqual(m2 - t.magic[1], 1);
+});
+
+test('飛び火: ランダムな敵2マスに🔥。直前の手番に相手がコマを2つ以上設置していれば無料（各ターン1回まで）。1つだけなら通常コスト', () => {
+    const s = game('magician', 'pyromancer'); // 先手=魔法使い(💙)、後手=鍛冶師(⭕)
+    for (const i of [4, 8, 12]) s.board[i] = { player: '💙', bind: 5, effects: [] };
+    // 魔法使いの手番の開始時点で自陣は0コマ。着手と合わせて4コマに増えた状態で手番が鍛冶師へ移る
+    s.placeBase[0] = 0;
+    e.placeMove(s, 0);
+    assert.strictEqual(s.turn, 1);
+    assert.strictEqual(s.placedPrev[1], true, '相手が2つ以上設置した');
+    s.magic[1] = 10;
+    const m0 = s.magic[1];
+    e.SKILLS.spark(s);
+    assert.strictEqual(m0 - s.magic[1], 0, '無料');
+    const hit = [0, 4, 8, 12].filter((i) => !s.board[i].player || s.board[i].effects.some((x) => x.effect === '🔥')).length;
+    assert.strictEqual(hit, 2, '敵2マスに🔥（ライフ1のコマは付与の瞬間に壊れて空きマスになる）');
+    assert.strictEqual(s.placedPrev[1], false, '無料は1手番に1回まで');
+    const m1 = s.magic[1];
+    e.SKILLS.spark(s);
+    assert.strictEqual(m1 - s.magic[1], 3, '2回目は通常コスト(基礎4、鍛冶師は🔥付与で-1=3)');
+    // コマが1つしか増えていない手番では通常コスト
+    const t = game('magician', 'pyromancer');
+    t.board[4] = { player: '💙', bind: 5, effects: [] };
+    t.board[8] = { player: '💙', bind: 5, effects: [] };
+    t.placeBase[0] = 2; // 手番開始時点で自陣2コマ → 着手で3コマ（+1）
+    e.placeMove(t, 0);
+    assert.strictEqual(t.placedPrev[1], false);
+    t.magic[1] = 10;
+    const m2 = t.magic[1];
+    e.SKILLS.spark(t);
+    assert.strictEqual(m2 - t.magic[1], 3);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

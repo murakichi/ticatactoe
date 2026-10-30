@@ -21,6 +21,9 @@ export type GearTurnState = {
     /** 火口の無料条件: 直前の手番に盤面の🌱🍂の総数が増えたか（今の手番の頭の時点）と、各席の手番開始時点の🌱🍂の総数 */
     plantPrev: boolean[];
     plantBase: number[];
+    /** 飛び火の無料条件: 直前の手番に、その席がコマを2つ以上設置したか（今の手番の頭の時点）と、各席の手番開始時点の自陣のコマ数 */
+    placedPrev: boolean[];
+    placeBase: number[];
     leafBase: number[];
     darkPotUsed: boolean[];
     tokenFree: boolean[];
@@ -40,6 +43,9 @@ export type RuinState = {
     /** その手番の通常の着手マス（攻撃で壊れた自コマは『スキル・エフェクトによる破壊』に数えない） */
     lastMove: number | null;
 };
+
+/** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
+export const SPARK_FREE_PLACED = 2;
 
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
 export const plantedStacksTotal = (board: SquareInfo[]): number => board.reduce((n, sq) => n + budStacks(sq) + leafStacks(sq), 0);
@@ -118,6 +124,10 @@ export const advanceGearState = (
     const plantedNow = plantedStacksTotal(board);
     g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
     g.plantBase[nextSeat] = plantedNow;
+    // 飛び火: 終わる手番の間に、その席のコマが2つ以上増えていれば（コマを置くスキルを挟んだ手番）、次の席の飛び火は無料（無料は1手番に1回まで）
+    const ownNow = (seat: number): number => board.filter((sq) => sq.player === symbols[seat]).length;
+    g.placedPrev[nextSeat] = ownNow(endSeat) - g.placeBase[endSeat] >= SPARK_FREE_PLACED;
+    g.placeBase[nextSeat] = ownNow(nextSeat);
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;

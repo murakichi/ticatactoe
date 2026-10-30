@@ -969,6 +969,35 @@ describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の i
     });
 });
 
+describe('鍛冶師AI: 飛び火(idx 97)はランダムな敵2マスに🔥を撃つ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        b[6] = { player: '⭕', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (hand: number[], magic: number, foe: 'you' | 'necromancer' = 'you', b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', foe]);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false).chargeClicks ?? [];
+    };
+
+    it('手札に飛び火があり、敵コマが2つ以上あれば撃つ', () => {
+        expect(run([97], 8).some((c) => c.skill === 'onClickSpark')).toBe(true);
+    });
+    it('敵コマが1つしかなければ撃たない', () => {
+        const b = board();
+        b[6] = { player: undefined, bind: 0, effects: [] };
+        expect(run([97], 8, 'you', b).some((c) => c.skill === 'onClickSpark')).toBe(false);
+    });
+    it('手札に無ければ撃たない。ネクロマンサーが相手のときも撃たない', () => {
+        expect(run([], 8).some((c) => c.skill === 'onClickSpark')).toBe(false);
+        expect(run([97], 8, 'necromancer').some((c) => c.skill === 'onClickSpark')).toBe(false);
+    });
+});
+
 describe('鍛冶師AI: 火口(idx 87)は🌱か🍂のある敵コマを火遁より先に燃やす（旧sim AI の火口と同一）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');

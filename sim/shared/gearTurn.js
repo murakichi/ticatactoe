@@ -1,11 +1,13 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = void 0;
+exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
+/** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
+exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
 const plantedStacksTotal = (board) => board.reduce((n, sq) => n + (0, thermal_1.budStacks)(sq) + (0, thermal_1.leafStacks)(sq), 0);
 exports.plantedStacksTotal = plantedStacksTotal;
@@ -65,6 +67,10 @@ const advanceGearState = (g, r, input) => {
     const plantedNow = (0, exports.plantedStacksTotal)(board);
     g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
     g.plantBase[nextSeat] = plantedNow;
+    // 飛び火: 終わる手番の間に、その席のコマが2つ以上増えていれば（コマを置くスキルを挟んだ手番）、次の席の飛び火は無料（無料は1手番に1回まで）
+    const ownNow = (seat) => board.filter((sq) => sq.player === symbols[seat]).length;
+    g.placedPrev[nextSeat] = ownNow(endSeat) - g.placeBase[endSeat] >= exports.SPARK_FREE_PLACED;
+    g.placeBase[nextSeat] = ownNow(nextSeat);
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
