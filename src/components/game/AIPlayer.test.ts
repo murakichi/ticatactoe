@@ -1011,6 +1011,9 @@ describe('鍛冶師AI: 相手に魔法使いがいるとき火口を手札に固
     it('相手に魔法使いがいれば火口(87)を固定する', () => {
         expect(locks('magician')).toContain(87);
     });
+    it('魔女がいても固定する', () => {
+        expect(new AIPlayer('💙', 'pyromancer', ['⭕'], ['pyromancer', 'witch']).chooseLocks(board(), 0, 5, [87, 0, 1])).toContain(87);
+    });
     it('魔法使いがいなければ固定しない', () => {
         expect(locks('you')).not.toContain(87);
     });
