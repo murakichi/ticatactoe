@@ -142,6 +142,8 @@ const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
 // 毒使い×毒花・ミアズマの調整値 (旧sim AI の BLOOM_* / MIASMA_MIN_SCORE と同値)
 const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
+/** ミアズマの対象が氷結中のマスのとき、1マスぶんの価値に掛ける係数（毒は休眠して残り、氷結が解けたら効く） */
+const MIASMA_FROZEN_WEIGHT = 0.5;
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
@@ -486,12 +488,17 @@ class AIPlayer {
         return miasmaPlanOf(board, this.playerSymbol, this.characters);
     }
 
-    /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (旧sim AI miasmaScore と同一) */
+    /** ミアズマを撃つ価値: 毒が効く敵マスの数（氷結中は MIASMA_FROZEN_WEIGHT 倍）+ リーチ列の要のコマ×2 */
     private miasmaScore(board: SquareInfo[]): number {
         const plan = this.miasmaPlan(board);
-        let critical = 0;
-        plan.forEach((_, j) => { if (this.inOppReachLine(board, j)) critical++; });
-        return plan.size + critical * 2;
+        let effective = 0, critical = 0;
+        plan.forEach((_, j) => {
+            // 氷結中の敵マスの毒は休眠する（消えはしないが、氷結が解けるまでダメージが出ない）ので半分の価値で数える
+            if (isDormant(board[j])) { effective += MIASMA_FROZEN_WEIGHT; return; }
+            effective++;
+            if (this.inOppReachLine(board, j)) critical++;
+        });
+        return effective + critical * 2;
     }
 
     /**

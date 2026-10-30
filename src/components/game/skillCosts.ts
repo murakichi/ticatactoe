@@ -101,7 +101,7 @@ export const skillCosts = {
     onClickBurnout: 5, // バーンアウト(idx 61)。盤面に🔥が4つ以上あれば0
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
     onClickLeafToken: 5, //       木枯らしの使い(idx 62): 🍂付きトークン（基準の5〜6に戻した。ユーザー指示で3→5）
-    onClickTwinLeafToken: 7, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
+    onClickTwinLeafToken: 8, //   落葉松の双子(idx 63): 🍂が2枚付いたトークン
     onClickDoubleLeafToken: 9, // 紅葉狩り(idx 64): 🍂付きのダブルトークン
     onClickLeafAll: 5, //         枯野の相席(idx 65): 盤面の全てのコマ（敵味方）に🍂を1つずつ付与
     onClickBonfire: 3, //         焚き火の唄(idx 66): 敵陣の🍂を全て除去（🔑・❄のマスは対象外）
@@ -120,7 +120,7 @@ export const skillCosts = {
     onClickDarkPot: 9, //         一寸先は闇鍋(idx 82): 敵味方の全コマに🔥❄⚡☠🌱🍂をランダムに（各最大1）。盤面のエフェクトの数だけ軽減（最低1）
     onClickChargeHeal: 6, //     雷を食らわば皿まで(idx 83): ⚡が効いている自陣のコマのライフを⚡1スタックにつき+2。この手番に付与した⚡の数だけ軽減（最低1）
     onClickLeafDrop: 1, //       落ち葉の置き土産(idx 84): ランダムな敵のコマ1つに🍂を1つ付与。敵の🍂は自分のコストも上げる（魔女は相殺）ので最安
-    onClickKindling: 5, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
+    onClickKindling: 7, //       焚きつけ(idx 85): 敵の🍂を全て🔥に変換（1枚につき🔥1）
     onClickLeafCloak: 3, //       落葉の衣(idx 86): ランダムな自陣のコマ1つに🍂を1つ付与
     onClickTinder: 2, //         火口(idx 87): 🌱・🍂・❄のある敵コマ1つに🔥を1つ付与（直前の手番に🌱🍂が植えられていれば各ターン1回まで0。鍛冶師は🔥付与で-1）
     onClickSmallFry: 10, //      一寸の虫に魂なし(idx 92): 敵のライフ3以下のコマを全て破壊し、相手は次の手番の終わりまでライフ3以下のコマを置けない（トークン等・ネクロの蘇生も）。盤面のコマの数だけ軽減（最低1）
