@@ -168,8 +168,8 @@ describe('帯電 AI', () => {
     it('雷霆の巫は敵が密集していて魔力があれば帯電拡散を起点クリック付きで選ぶ', () => {
         const ai = new AIPlayer('⭕', 'electrician', ['💙'], ['you', 'electrician']);
         const b = emptyBoard();
-        [0, 1, 2].forEach((i) => put(b, i, '⭕', 3));
-        [4, 5].forEach((i) => put(b, i, '💙', 3));
+        [0, 2, 5].forEach((i) => put(b, i, '⭕', 3)); // 一列に3つ並べない（即勝ちできると勝ちを優先する）
+        [1, 4].forEach((i) => put(b, i, '💙', 3));
         const costs = { onClickChargeSpread: 7, onClickChargeOne: 2, onClickChargeToken: 3 } as never;
         const r = ai.makeMove(b, 7, costs, 0, 5, [], false);
         expect(r.chargeClicks?.[0].skill).toBe('onClickChargeSpread');

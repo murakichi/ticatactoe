@@ -12,8 +12,8 @@
  * 出力は1ギアにつき1行のJSON。4コアなら引数を分けて並列に走らせる。
  */
 const engine = require('./engine');
-const ai = require('./ai');
-const gear = require('./gear');
+const ai = require('./aiDriver');
+const gear = require('./shared/gear');
 
 const games = parseInt(process.argv[2] || '200', 10);
 const seed = parseInt(process.argv[3] || '1', 10);

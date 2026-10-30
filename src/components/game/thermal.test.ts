@@ -434,68 +434,6 @@ describe('🔥火炎', () => {
     });
 });
 
-// sim/thermal.js（ヘッドレス版）との一致確認。様々なマスに同じ操作をして結果が同じことを見る
-describe('sim/thermal.js との一致', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const sim = require('../../../sim/thermal.js');
-    const kinds = ['skill', 'electric', 'poison', 'pure'] as const;
-    const combos: Effect['effect'][][] = [[], ['❄'], ['❄', '❄'], ['🌱', '❄'], ['🔥'], ['🔥', '🔥'], ['❄', '🔥'], ['🔑'], ['☠', '🔥'], ['⚡', '❄']];
-    const squares = [0, 1, 3, 8].flatMap((bind) => combos.map((e) => sq('💙', bind, ...e)));
-    squares.push(sq(undefined, 0, '❄'), sq(undefined, 0));
-
-    it('applyDamage / absorbDestroy / zeroOut が一致', () => {
-        for (const s of squares) {
-            for (const kind of kinds) for (const amount of [1, 2, 5]) expect(sim.applyDamage(s, amount, kind)).toEqual(applyDamage(s, amount, kind));
-            expect(sim.absorbDestroy(s)).toEqual(absorbDestroy(s));
-            expect(sim.zeroOut(s)).toEqual(zeroOut(s));
-            expect(sim.canFreeze(s)).toBe(canFreeze(s));
-            expect(sim.overwriteBlocked(s)).toBe(overwriteBlocked(s));
-            expect(sim.frozenStacks(s)).toBe(frozenStacks(s));
-            expect(sim.thawOne(s)).toEqual(thawOne(s));
-            expect(sim.lockable(s)).toBe(lockable(s));
-            expect(sim.emptyBlocked(s)).toBe(emptyBlocked(s));
-        }
-    });
-
-    it('burnDamageOf が一致（煉獄の鍛冶師の+1含む）', () => {
-        const cs: CharacterId[] = ['pyromancer', 'you'];
-        for (const s of [...squares, ...squares.map((x) => ({ ...x, player: '⭕' as Player }))]) {
-            expect(sim.burnDamageOf(s, cs, ['💙', '⭕'])).toBe(burnDamageOf(s, cs));
-        }
-    });
-
-    it('ignite / freeze / freezeAll / detonate / infernoTargets が一致', () => {
-        const mk = () => {
-            const b = emptyBoard();
-            b[5] = sq('💙', 4, '❄');
-            b[6] = sq('⭕', 4, '❄');
-            b[9] = sq('⭕', 3, '🔥');
-            b[10] = sq('💙', 2, '🌱');
-            b[1] = sq('⭕', 5, '🔑');
-            b[4] = sq('⭕', 0);
-            return b;
-        };
-        const a = mk();
-        const b = mk();
-        expect(sim.ignite(a, [5, 10], 4)).toEqual(ignite(b, [5, 10], 4));
-        const a2 = mk();
-        const b2 = mk();
-        expect(sim.ignite(a2, [5, 6, 10, 9], 4, 2)).toEqual(ignite(b2, [5, 6, 10, 9], 4, 2));
-        expect(a2).toEqual(b2);
-        expect(a).toEqual(b);
-        const c = mk();
-        const d = mk();
-        expect(sim.freeze(c, [0, 4, 9, 10, 1])).toEqual(freeze(d, [0, 4, 9, 10, 1]));
-        expect(c).toEqual(d);
-        const e = mk();
-        const f = mk();
-        expect(sim.freezeAll(e)).toEqual(freezeAll(f));
-        expect(e).toEqual(f);
-        expect(sim.detonate(e, '💙')).toEqual(detonate(f, '💙'));
-        expect(e).toEqual(f);
-        expect(sim.infernoTargets(mk(), '💙')).toEqual(infernoTargets(mk(), '💙', ['you', 'you']));
-    });
-});
 
 describe('浄化（汎用スキル）', () => {
     it('自陣のコマの毒・火炎・氷結・帯電を全スタック除去し、バッズとロックは残す', () => {
@@ -523,22 +461,6 @@ describe('浄化（汎用スキル）', () => {
         expect(AILMENTS).toEqual(['☠', '🔥', '❄', '⚡']);
     });
 
-    it('sim/thermal.js と一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
-        const mk = () => {
-            const b = emptyBoard();
-            b[0] = sq('💙', 4, '☠', '🔥', '❄', '⚡', '🌱');
-            b[1] = sq('⭕', 4, '☠');
-            b[2] = sq('💙', 4, '🔑', '☠');
-            return b;
-        };
-        const a = mk();
-        const c = mk();
-        expect(sim.cleanse(a, '💙')).toEqual(cleanse(c, '💙'));
-        expect(a).toEqual(c);
-        expect(sim.AILMENTS).toEqual(AILMENTS);
-    });
 });
 
 describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子・ひこばえ・風の落とし子）', () => {
@@ -606,63 +528,6 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(SOW_COUNT).toBe(2);
     });
 
-    it('sim/thermal.js と一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
-        const mk = () => {
-            const b = emptyBoard();
-            b[5] = sq('💙', 3, '🌱', '🌱');
-            b[1] = sq('💙', 3);
-            b[4] = sq('💙', 3, '🌱');
-            b[6] = sq('💙', 3, '❄', '🌱');
-            b[9] = sq('💙', 3, '🔥', '🌱');
-            b[10] = sq('⭕', 3, '🌱');
-            return b;
-        };
-        const guarded = (x: SquareInfo) => x.player === '💙';
-        for (const s of mk()) {
-            expect(sim.canBud(s)).toBe(canBud(s));
-            expect(sim.budStacks(s)).toBe(budStacks(s));
-        }
-        expect(sim.sowCandidates(mk(), '💙')).toEqual(sowCandidates(mk(), '💙'));
-        expect(sim.budReceivers(mk(), 5, '💙', 4)).toEqual(budReceivers(mk(), 5, '💙', 4));
-        const a = mk();
-        const c = mk();
-        expect(sim.graft(a, 5, '💙', 4)).toEqual(graft(c, 5, '💙', 4));
-        expect(a).toEqual(c);
-        expect(sim.GRAFT_MAX).toBe(GRAFT_MAX);
-        const a2 = mk();
-        const c2 = mk();
-        expect(sim.graft(a2, 5, '💙', 4, [1])).toEqual(graft(c2, 5, '💙', 4, [1]));
-        expect(a2).toEqual(c2);
-        expect(sim.harvestBuds(a, '💙')).toBe(harvestBuds(c, '💙'));
-        expect(a).toEqual(c);
-        const d = mk();
-        const e = mk();
-        sim.sow(d, [0, 5]);
-        sow(e, [0, 5]);
-        expect(sim.SOW_COUNT).toBe(SOW_COUNT);
-        expect(d).toEqual(e);
-        for (const [fs, ft] of [[sim.freeze, freeze], [sim.ignite, ignite]] as const) {
-            expect(fs).toBeDefined();
-            expect(ft).toBeDefined();
-        }
-        const f = mk();
-        const g = mk();
-        sim.freeze(f, [5, 10]);
-        freeze(g, [5, 10]);
-        expect(f).toEqual(g);
-        const h = mk();
-        const i = mk();
-        sim.ignite(h, [5, 10], 4, 1);
-        ignite(i, [5, 10], 4, 1);
-        expect(h).toEqual(i);
-        const j = mk();
-        const k = mk();
-        sim.freezeAll(j);
-        freezeAll(k);
-        expect(j).toEqual(k);
-    });
 });
 
 describe('氷結中のマスの他エフェクトは消えないが休眠する', () => {
@@ -746,25 +611,6 @@ describe('火炎系の汎用スキル（火炎トークン・焼畑）', () => {
         expect(f[15].bind).toBe(5);
     });
 
-    it('sim/thermal.js と一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
-        const mk = () => {
-            const b = emptyBoard();
-            b[5] = sq('⭕', 4, '🌱', '🌱', '❄', '❄');
-            b[6] = sq('⭕', 4, '❄', '❄');
-            b[9] = sq('💙', 4, '🌱');
-            return b;
-        };
-        const a = mk();
-        const c = mk();
-        expect(sim.swidden(a, 5, 4)).toEqual(swidden(c, 5, 4));
-        expect(a).toEqual(c);
-        const d = mk();
-        const e = mk();
-        expect(sim.placeFlameToken(d, 10, '💙', 4, 4)).toEqual(placeFlameToken(e, 10, '💙', 4, 4));
-        expect(d).toEqual(e);
-    });
 });
 
 describe('殉火（仮名）', () => {
@@ -898,34 +744,6 @@ describe('氷結系の汎用スキル（範囲氷結・氷柱・ランダム氷�
         expect(frostfallTargets(b, '💙')).toEqual([0, 1, 6]);
     });
 
-    it('sim/thermal.js と一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const simGeo = require('../../../sim/geometry.js');
-        for (const size of [4, 5, 7]) for (const dir of ['row', 'col', 'diag', 'anti'] as const) for (const cell of [0, size + 1, size * size - 1]) expect(simGeo.lineCells(size, cell, dir)).toEqual(lineCells(size, cell, dir));
-        const mk = () => {
-            const b = emptyBoard();
-            b[0] = sq('⭕', 10, '❄', '❄', '🔥');
-            b[1] = sq('⭕', 3, '❄');
-            b[2] = sq('💙', 2);
-            b[3] = sq('💙', 1, '🔑');
-            b[4] = sq('💙', 0, '❄');
-            return b;
-        };
-        expect(sim.randomFreezeCandidates(mk())).toEqual(randomFreezeCandidates(mk()));
-        expect(sim.frostfallTargets(mk(), '💙')).toEqual(frostfallTargets(mk(), '💙'));
-        for (const cell of [0, 1, 2, 4]) {
-            const a = mk();
-            const c = mk();
-            expect(sim.shatter(a, cell)).toEqual(shatter(c, cell));
-            expect(a).toEqual(c);
-        }
-        const d = mk();
-        const e = mk();
-        expect(sim.placeFrostToken(d, 9, '💙', 4)).toBe(placeFrostToken(e, 9, '💙', 4));
-        expect(d).toEqual(e);
-    });
 });
 
 describe('業火の無料化', () => {
@@ -937,11 +755,6 @@ describe('業火の無料化', () => {
 });
 
 describe('煉獄の鍛冶師の火炎スキル割引', () => {
-    it('対象のスキルキーが sim と一致する', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const simThermal = require('../../../sim/thermal');
-        expect(Array.from(simThermal.FLAME_SKILL_KEYS).sort()).toEqual(Array.from(FLAME_SKILL_KEYS).sort());
-    });
 });
 
 describe('バーンアウト', () => {
@@ -959,13 +772,6 @@ describe('バーンアウト', () => {
         expect(burnout(b, [1, 2])).toBe(2);
         expect(b[1].player).toBeUndefined();
         expect(b[3].player).toBe('⭕');
-        // sim と同じ対象・結果
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const simT = require('../../../sim/thermal');
-        const c = emptyBoard();
-        c[1] = sq('⭕', 5, '🔥');
-        c[4] = sq('🟩', 5, '🔥', '⚡');
-        expect(simT.burnoutTargets(c, cs, ['💙', '⭕', '🟩'])).toEqual(burnoutTargets(c, cs));
     });
 });
 
@@ -1215,26 +1021,6 @@ describe('凩の魔女（パッシブ・虎落笛）', () => {
         expect(b[0].bind).toBe(2 + MOGARIBUE_LIFE);
     });
 
-    it('sim/thermal.js との一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
-        const mk = (): SquareInfo[] => {
-            const b = emptyBoard();
-            b[0] = lv('💙', 3, 2);
-            b[1] = sq('💙', 0);
-            b[4] = sq('⭕', 5, '🔑');
-            b[5] = lv('⭕', 1, 1, '🔥');
-            b[6] = sq('⭕', 6, '❄');
-            b[7] = lv('⭕', 4, 4, '❄');
-            return b;
-        };
-        const a = mk();
-        const c = mk();
-        expect(mogaribue(a, '💙', cs)).toEqual(sim.mogaribue(c, '💙'));
-        expect(a).toEqual(c);
-        expect(witchCostOf(7, mk())).toBe(sim.witchCostOf(7, mk()));
-        expect(boardLeaves(mk())).toBe(sim.boardLeaves(mk()));
-    });
 });
 
 describe('落ち葉の置き土産・焚きつけ', () => {
@@ -1281,9 +1067,7 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         expect(b[2].effects).toHaveLength(2);
     });
 
-    it('焚きつけ: 氷結中のコマは最初の1スタックが氷結の解除に使われ、🍂は全て消える。sim/thermal.js と一致', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
+    it('焚きつけ: 氷結中のコマは最初の1スタックが氷結の解除に使われ、🍂は全て消える', () => {
         const mk = (): SquareInfo[] => {
             const b = emptyBoard();
             b[1] = lv('⭕', 8, 2, '❄');
@@ -1292,15 +1076,10 @@ describe('落ち葉の置き土産・焚きつけ', () => {
             return b;
         };
         const a = mk();
-        const c = mk();
-        const ra = kindling(a, [1, 5], 4);
-        const rc = sim.kindling(c, [1, 5], 4);
-        expect(ra).toEqual(rc);
-        expect(a).toEqual(c);
+        kindling(a, [1, 5], 4);
         expect(a[1].effects.filter((e) => e.effect === '🍂')).toHaveLength(0);
         expect(isFrozen(a[1])).toBe(false);
         expect(flameStacks(a[1])).toBe(1); // 2スタックのうち1つが❄の解除、残り1つが🔥
-        expect(leafDropTargets(mk(), '💙', guard)).toEqual(sim.leafDropTargets(mk(), '💙', guard));
     });
 });
 
@@ -1310,24 +1089,18 @@ describe('枯野の相席', () => {
         b[0] = sq('💙', 3);
         b[1] = sq('⭕', 3, '🔑');
         b[2] = sq('⭕', 3);
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
         const guard = (s: SquareInfo) => s.effects.some((e) => e.effect === '🔑');
         expect(leafAllTargets(b, guard)).toEqual([0, 2]);
-        expect(sim.leafAllTargets(b, guard)).toEqual([0, 2]);
     });
 });
 
 describe('落葉の衣', () => {
-    it('対象は使用者のコマ全て（🔑ロック中も含む）。敵と空きマスは対象外。sim/thermal.js と一致', () => {
+    it('対象は使用者のコマ全て（🔑ロック中も含む）。敵と空きマスは対象外', () => {
         const b = emptyBoard();
         b[0] = sq('💙', 3);
         b[1] = sq('💙', 3, '🔑');
         b[2] = sq('⭕', 3);
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sim = require('../../../sim/thermal.js');
         expect(leafCloakTargets(b, '💙')).toEqual([0, 1]);
-        expect(sim.leafCloakTargets(b, '💙')).toEqual([0, 1]);
     });
 });
 
