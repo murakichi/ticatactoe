@@ -1787,6 +1787,25 @@ describe('毒使い: 魔力が有り余るときの連打', () => {
     });
 });
 
+describe('猛毒化は毒が十分大きくなったら撃たない（毒の倍々増加で試合が終わらなくなる #204）', () => {
+    const { skillCosts } = require('./skillCosts');
+    const poison = (n: number) => Array.from({ length: n }, () => ({ effect: '☠' as const }));
+    const board = (foePoison: number) => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 6, effects: [] };
+        [0, 1, 4, 6].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: poison(foePoison) }; });
+        return b;
+    };
+    const ai = () => new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', 'you']);
+
+    it('敵の毒が少ないうちは猛毒化を撃つが、1マスの毒が32以上なら撃たない', () => {
+        const few = ai().makeMove(board(4), 40, skillCosts, 2, 5, [18, 19], false);
+        expect((few.chargeClicks ?? []).map((c) => c.skill)).toContain('onClickIntensify');
+        const many = ai().makeMove(board(32), 40, skillCosts, 2, 5, [18, 19], false);
+        expect((many.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickIntensify');
+    });
+});
+
 describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () => {
     const { skillCosts } = require('./skillCosts');
 
