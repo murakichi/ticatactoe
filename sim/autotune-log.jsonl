@@ -26,3 +26,4 @@
 {"at":"2026-10-30T02:35:32.907Z","char":"yinYangMaster","axis":"gears","round":0,"seed":2,"games":60,"candidates":48,"metric":"strong","base":0.5833,"best":{"label":"slot1→luckyPurse  [lastStand,luckyPurse]","value":0.6633,"z":2.2},"accepted":false,"why":"scan gate"}
 {"at":"2026-10-30T03:49:34.297Z","char":"yinYangMaster","axis":"knobs","round":0,"seed":1,"games":60,"candidates":19,"metric":"strong","base":0.64,"best":{"label":"SH_BLAST_MIN=6","value":0.6733,"z":0.94},"accepted":false,"why":"scan gate"}
 {"at":"2026-10-30T03:49:34.297Z","round":0,"summary":true,"accepted":0,"exploitability":0}
+{"at":"2026-10-30T06:31:29.417Z","char":"magician","axis":"gears","round":0,"seed":1,"games":60,"candidates":48,"metric":"strong","base":0.32,"best":{"label":"slot0→harvest  [harvest,ironLock]","value":0.41,"z":2.33},"accepted":false,"why":"scan gate"}
