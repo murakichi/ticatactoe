@@ -1349,7 +1349,9 @@ class AIPlayer {
         }
 
         // バッズ: コスト4で毎ターン+1マジック → 4ターン以上残りそうなら元が取れる
-        if (availableSkills.includes(2)) {
+        // 魔法使い以外は使わない: 手札から外した次善の計画と比べた実戦勝率の差が、非魔法使い合算で約 -3.7pt（n≈226, z≈-2.7。
+        // electrician -4.2 / you -5.4 / poisoner -7.1 / cryomancer -4.3 / witch -1.9。魔法使いは +5.5。sim/probe-skilluse.js --cmp ban）
+        if (availableSkills.includes(2) && this.character === 'magician') {
             const budsCost = this.calculateAICost(costs.onClickBuds, false, false, 'onClickBuds');
             const emptyCount = board.filter(sq => !sq.player).length;
             const myBuds = board.filter(sq => sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱')).length;
