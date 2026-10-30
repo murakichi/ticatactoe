@@ -30,12 +30,50 @@ const split = (name: string): { icon: string; text: string } => {
     return i < 0 ? { icon: name.slice(0, 2), text: name.slice(2) } : { icon: name.slice(0, i), text: name.slice(i + 1) };
 };
 
+const HIDDEN_KEY = 'simGraphHidden';
+// 非表示のキャラは次回も引き継ぐ（この端末だけの設定。使えない環境では覚えないだけ）
+const loadHidden = (): string[] => {
+    try {
+        const v = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? '[]');
+        return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch (e) {
+        return [];
+    }
+};
+const saveHidden = (ids: string[]) => {
+    try {
+        window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(ids));
+    } catch (e) {
+        /* 保存できなくても動く */
+    }
+};
+
 /** 有利・不利の関係を、勝つ側 → 負ける側 の矢印で描く。閉ループ（三すくみなど）に入る辺を橙で示す */
-export const MatchupGraph = ({ ids, edges, names, findLoops, minDecided }: Props) => {
+export const MatchupGraph = ({ ids: allIds, edges: allEdges, names, findLoops, minDecided }: Props) => {
     const [mode, setMode] = useState<Mode>('sig');
     const [node, setNode] = useState<string | null>(null);
     const [cycle, setCycle] = useState<number | null>(null);
+    const [hidden, setHidden] = useState<string[]>(loadHidden);
     const label = (id: string) => names[id] ?? id;
+
+    // 非表示にしたキャラは、辺も閉ループの判定からも外す（外すと崩れる循環もある）
+    const ids = useMemo(() => allIds.filter((id) => !hidden.includes(id)), [allIds, hidden]);
+    const edges = useMemo(() => allEdges.filter((e) => !hidden.includes(e.from) && !hidden.includes(e.to)), [allEdges, hidden]);
+    const toggleHidden = (id: string) => {
+        setNode(null);
+        setCycle(null);
+        setHidden((cur) => {
+            const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+            saveHidden(next);
+            return next;
+        });
+    };
+    const showAll = () => {
+        setNode(null);
+        setCycle(null);
+        setHidden([]);
+        saveHidden([]);
+    };
 
     const shown = useMemo(() => edges.filter((e) => (MODES.find((m) => m.id === mode) ?? MODES[0]).keep(e)), [edges, mode]);
     const loops = useMemo(() => findLoops(ids, shown), [findLoops, ids, shown]);
@@ -114,6 +152,20 @@ export const MatchupGraph = ({ ids, edges, names, findLoops, minDecided }: Props
                 <span className={styles.loopKey}>橙</span>
                 は閉ループ（三すくみなど。互いに勝ち負けが循環する）に入る矢印です。キャラを押すと、そのキャラが勝てる相手（緑）と負ける相手（赤）だけを強調します。
             </p>
+
+            <div className={styles.filter} role='group' aria-label='表示するキャラ'>
+                <span className={styles.filterLabel}>表示するキャラ</span>
+                {allIds.map((id) => (
+                    <button key={id} className={`${styles.chipBtn} ${hidden.includes(id) ? styles.chipOff : ''}`} aria-pressed={!hidden.includes(id)} onClick={() => toggleHidden(id)} title={hidden.includes(id) ? '押すと表示' : '押すと非表示'}>
+                        {label(id)}
+                    </button>
+                ))}
+                {hidden.length > 0 && (
+                    <button className={styles.showAll} onClick={showAll}>
+                        すべて表示
+                    </button>
+                )}
+            </div>
 
             <div className={styles.body}>
                 <svg className={styles.svg} viewBox={`0 0 ${SIZE} ${SIZE}`} role='img' aria-label='有利・不利の有向グラフ'>
