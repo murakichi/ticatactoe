@@ -71,7 +71,7 @@ exports.SKILL_CATALOG = [
     { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire', costKey: 'onClickBurnout', desc: '🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）。盤面に🔥が4つ以上あればコスト0で使えます' },
     { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds', costKey: 'onClickLeafToken', desc: '🍂付きの自陣コマをランダムに設置します（ターン1回）。自陣の🍂は相手全員のスキルコストを🍂の数だけ増やします' },
     { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds', costKey: 'onClickTwinLeafToken', desc: '🍂が2枚付いた自陣コマをランダムに設置します（ターン1回）' },
-    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds', costKey: 'onClickDoubleLeafToken', desc: '🍂付きの自陣コマをランダムに2つ設置します（ターン1回）' },
+    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds', costKey: 'onClickDoubleLeafToken', desc: '🍂付きの自陣コマをランダムに2つ設置します（ターン1回）。このターン自陣の🍂が増えていれば、コスト-2' },
     { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds', costKey: 'onClickLeafAll', desc: '盤面の全てのコマ（敵味方）に🍂を1つずつ付与します（🔑ロックと⚡無敵のコマは除く）' },
     { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds', costKey: 'onClickBonfire', desc: '敵陣の🍂をすべて取り除きます（🔑ロックと❄氷結のマスは対象外）' },
     { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds', costKey: 'onClickMulch', desc: '自陣のランダムな🍂を1枚、🌱に変えます' },
