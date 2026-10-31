@@ -28,6 +28,7 @@ const planAITurn = (ai, input, pickHailMary) => {
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
+    ai.wardActive = input.wardActive;
     // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
     ai.chargeBuffActive = input.chargeBuffActive;
     ai.oppGearCount = input.oppGearCount;
@@ -101,6 +102,8 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(c.skill);
             if (c.target !== undefined)
                 steps.push(c.target);
+            if (c.target2 !== undefined)
+                steps.push(c.target2);
         }
         steps.push(...result.skills);
         if (result.lockTargets)

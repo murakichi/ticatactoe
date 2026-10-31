@@ -1,18 +1,24 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = void 0;
+exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
+const graveSkills_1 = require("./graveSkills");
+/** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
+exports.SPARK_FREE_PLACED = 2;
+/** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
+const plantedStacksTotal = (board) => board.reduce((n, sq) => n + (0, thermal_1.budStacks)(sq) + (0, thermal_1.leafStacks)(sq), 0);
+exports.plantedStacksTotal = plantedStacksTotal;
 /**
  * 手番が endSeat から nextSeat に変わるときの更新。
  * @param gears 席ごとの装備（裸の王様で封じられている席は封じられた後の装備）
  */
 const advanceGearState = (g, r, input) => {
     const { board, symbols, gears, endSeat, nextSeat } = input;
-    const change = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], ashNext: 0, ruinNext: false, echoNext: false };
+    const change = { scorch: symbols.map(() => 0), ashGained: 0, ruinTriggered: [], wardPlace: [], ashNext: 0, ruinNext: false, echoNext: false };
     // 焦土: 終わる手番の間に、敵の🌱が🔥で消えていたら魔力
     if (r.snap && r.snapBuds) {
         symbols.forEach((sym, seat) => {
@@ -43,6 +49,17 @@ const advanceGearState = (g, r, input) => {
             }
         });
     }
+    // 毒返しの構え: 終わる手番の間に自陣のコマが破壊/乗っ取られていたら、その席にコマを置く（相手の手番ごとに1度まで）。終わる席自身の手番では減らす
+    symbols.forEach((sym, seat) => {
+        if (seat === endSeat || g.ward[seat] <= 0 || !r.snap)
+            return;
+        if ((0, graveSkills_1.wardTriggered)(r.snap, board.map((sq) => sq.player), sym))
+            change.wardPlace.push(seat);
+    });
+    if (g.wardFresh[endSeat])
+        g.wardFresh[endSeat] = false;
+    else if (g.ward[endSeat] > 0)
+        g.ward[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -58,11 +75,22 @@ const advanceGearState = (g, r, input) => {
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
+    // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
+    const plantedNow = (0, exports.plantedStacksTotal)(board);
+    g.plantPrev[nextSeat] = plantedNow > g.plantBase[endSeat];
+    g.plantBase[nextSeat] = plantedNow;
+    // 飛び火: 終わる手番の間に、その席のコマが2つ以上増えていれば（コマを置くスキルを挟んだ手番）、次の席の飛び火は無料（無料は1手番に1回まで）
+    const ownNow = (seat) => board.filter((sq) => sq.player === symbols[seat]).length;
+    g.placedPrev[nextSeat] = ownNow(endSeat) - g.placeBase[endSeat] >= exports.SPARK_FREE_PLACED;
+    g.placeBase[nextSeat] = ownNow(nextSeat);
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
     g.tokenFree[nextSeat] = false;
+    g.veil[endSeat] = false; // 夜の帳は、効いた相手の手番が終わると切れる。次の手番の席には、使われていれば効く
+    g.veil[nextSeat] = g.veilNext[nextSeat];
+    g.veilNext[nextSeat] = false;
     g.chargeBase[nextSeat] = (0, comboCost_1.ownCharges)(board, symbols[nextSeat]);
     g.echoReady[nextSeat] = g.echoNext[nextSeat];
     change.echoNext = g.echoReady[nextSeat];

@@ -60,12 +60,14 @@ const blastMod = require('./shared/blast');
 const shikiMod = require('./shared/shikigami');
 const turnMod = require('./shared/turn');
 const gearTurnMod = require('./shared/gearTurn');
+const graveMod = require('./shared/graveSkills');
 const placementMod = require('./shared/placement');
 const proliferateMod = require('./shared/proliferate');
 const tokenAfterMod = require('./shared/tokenAfter');
 const deadlockMod = require('./shared/deadlock');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
+const genericMod = require('./shared/generic');
 const giantAuraMod = require('./shared/giantAura');
 const giantTurnMod = require('./shared/giantTurn');
 // 巨人が何ラウンドに1回動くか。A/B検証用に config.giantActEvery で上書きできる（未設定なら本番の GIANT_ACT_EVERY）
@@ -374,6 +376,10 @@ function newGame(opts = {}) {
         discount: Array.from({ length: n }, () => discountMod.emptyDiscount()), // コスト軽減スキルの状態（手番内だけ有効）
         oppSkilled: fill(false), // 自分の前の手番以降に他の席がスキルを使った
         oppSkillPrev: fill(false), // 今の手番の頭の時点での oppSkilled（返し特売の0コスト条件）
+        plantPrev: fill(false), // 直前の手番に🌱🍂が増えた（火口の無料条件。撃つと消える）
+        plantBase: fill(0), // 手番開始時点の盤面の🌱🍂の総数
+        placedPrev: fill(false), // 直前の手番に相手がコマを2つ以上設置した（飛び火の無料条件。撃つと消える）
+        placeBase: fill(0), // 手番開始時点の自陣のコマ数
         echoReady: fill(false),
         echoNext: fill(false),
         // 廃墟の底力: ruinActive=割引が有効（自陣が破壊された後の、自分の次の手番の終わりまで）/ ruinPending=次の自分の手番から有効
@@ -407,10 +413,17 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        usePlunder: false,
+        useRelocate: false,
+        relocateFrom: null,
         useStash: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        veil: fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
+        veilNext: fill(false), // 夜の帳: この席の次の手番から効く
+        ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
+        wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -482,8 +495,11 @@ function costEnv(s, seat) {
         chargeBase: s.chargeBase[seat],
         shikiPlaced: s.shikiPlaced[seat],
         tokenFree: s.tokenFree[seat],
+        veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         fireBase: s.fireBase[seat],
+        plantPrev: s.plantPrev[seat],
+        placedPrev: s.placedPrev[seat],
         discount: s.discount[seat],
     };
 }
@@ -562,8 +578,9 @@ function judgeNextIsHeart(s) {
 function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
-        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase,
+        oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, chargeBase: s.chargeBase,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -600,9 +617,10 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
+    s.relocateFrom = null;
     s.useLock = 0;
 }
 function advanceTurn(s) {
@@ -641,6 +659,10 @@ function advanceTurn(s) {
     });
     if (change.ashGained > 0) bumpStat(s, 'ashOffering', change.ashGained);
     change.ruinTriggered.forEach(() => bumpStat(s, 'ruinTriggered'));
+    // 毒返しの構え: 終わった手番の間に自陣が破壊/乗っ取られた席に、ライフ4・☠付きのコマを置く
+    change.wardPlace.forEach((seat) => {
+        if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
+    });
     // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
     const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
     if (root > 0) bumpStat(s, 'frostRoot', root);
@@ -755,6 +777,22 @@ function placeMove(s, i) {
         s.useSwidden = false;
         return true;
     }
+    if (s.useRelocate) {
+        // 縮地: 動かす自陣のコマを選び、空きマスを選ぶ。選べないマスは選び直せる
+        if (genericMod.canRelocate(s.board[i], curPlayer(s))) { s.relocateFrom = i; return false; }
+        if (s.relocateFrom === null) return false;
+        if (!genericMod.relocate(s.board, s.relocateFrom, i, curPlayer(s))) return false;
+        s.useRelocate = false;
+        s.relocateFrom = null;
+        return true;
+    }
+    if (s.usePlunder) {
+        if (!genericMod.plunderTargets(s.board, curPlayer(s), s.chars).includes(i)) return false; // 対象外は選び直せる
+        genericMod.plunder(s.board, i, curPlayer(s));
+        addCorpses(s, 1);
+        s.usePlunder = false;
+        return true;
+    }
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
@@ -807,8 +845,8 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useShikigamiPlace) {
-        // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中の空きマスは選び直せる
-        if (board[i].player || thermal.emptyBlocked(board[i])) return false;
+        // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中/ロック中の空きマスは選び直せる
+        if (!shikiMod.shikigamiLandable(board[i])) return false;
         board[i] = newShikigami(curPlayer(s));
         s.shikiPlaced[s.turn] = true;
         s.useShikigamiPlace = false;
@@ -847,7 +885,7 @@ function placeMove(s, i) {
     if (lifeBanMod.moveBlocked(s.lifeBan[s.turn], s.life)) return false; // ライフ3以下のコマは置けない
     const necroActive = curChar(s) === 'necromancer' && s.remainNecro[s.turn] > 0;
     if (board[i].player && board[i].player !== curPlayer(s)) {
-        if (board[i].bind > 0 && curChar(s) !== 'giant') return false; // can't attack a bound enemy unless giant
+        if (board[i].bind > 0 && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
     if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
     // 氷結中の空きマスには誰も着手できない
@@ -862,7 +900,7 @@ function placeMove(s, i) {
     const spreadOrigins = [];
     if (decayNow) {
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は本番(decay.ts)の生成物
-        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS);
+        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS, decayMod.isCrowded(board, seatCount(s))); // 満杯の盤面は自然減衰がもう1回
         if (d.flameKills > 0) bumpStat(s, 'flameKill', d.flameKills);
         if (d.emptyLockSpawns.length > 0) bumpStat(s, 'emptyLockSpawn', d.emptyLockSpawns.length);
         for (const k of d.spreadOrigins) {
@@ -1221,7 +1259,7 @@ function onClickShikigamiFlood(s) {
     let placed = 0;
     for (let k = 0; k < s.board.length; k++) {
         const sq = s.board[k];
-        if (!sq.player && !thermal.emptyBlocked(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
+        if (shikiMod.shikigamiLandable(sq)) { s.board[k] = newShikigami(cur, 0); placed++; }
     }
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiFlood, false, false, 'onClickShikigamiFlood'), 'onClickShikigamiFlood');
     bumpMagicCount(s);
@@ -1532,6 +1570,52 @@ function onClickFreeToken(s) {
     bumpStat(s, 'freeToken');
 }
 
+// 夜の帳 (idx 98): 次の相手全員の手番の間、相手のスキルコストを+3する（自分は影響を受けない） [FAITHFUL] Game.tsx onClickNightVeil
+function nightVeilLegal() { return true; }
+function onClickNightVeil(s) {
+    const pay = calculateCost(s, costsOf(s).onClickNightVeil, false, false, 'onClickNightVeil');
+    otherSeats(s).forEach((seat) => { s.veilNext[seat] = true; });
+    spendMagic(s, pay, 'onClickNightVeil');
+    bumpMagicCount(s);
+    bumpStat(s, 'nightVeil');
+}
+// 弔い割引 (idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札）。死体が無ければ撃てない [FAITHFUL] Game.tsx onClickGraveDiscount
+const graveDiscountNow = (s) => graveMod.graveDiscountAmount(graveMod.corpseCount(baseNecromancyCost, s.necroCost[s.turn]));
+function graveDiscountLegal(s) { return graveDiscountNow(s) > 0; }
+function onClickGraveDiscount(s) {
+    const n = graveDiscountNow(s);
+    if (n === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickGraveDiscount, false, false, 'onClickGraveDiscount'), 'onClickGraveDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { next: s.discount[s.turn].next + n });
+    bumpMagicCount(s);
+    bumpStat(s, 'graveDiscount');
+}
+// 毒返しの構え (idx 100): 3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊/乗っ取られたらライフ4・☠付きの自陣コマを置く。すでに効いているときは撃てない [FAITHFUL] Game.tsx onClickPoisonWard
+function poisonWardLegal(s) { return s.ward[s.turn] <= 0; }
+function onClickPoisonWard(s) {
+    if (!poisonWardLegal(s)) return;
+    s.ward[s.turn] = graveMod.POISON_WARD_TURNS;
+    s.wardFresh[s.turn] = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonWard, false, false, 'onClickPoisonWard'), 'onClickPoisonWard');
+    bumpMagicCount(s);
+    bumpStat(s, 'poisonWard');
+}
+
+// 墓守の供物 (idx 101): 自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1 [FAITHFUL] Game.tsx onClickGraveOffering
+function graveOfferingLegal(s) { return graveMod.graveOfferingTarget(s.board, curPlayer(s)) >= 0; }
+function onClickGraveOffering(s) {
+    const at = graveMod.graveOfferingTarget(s.board, curPlayer(s));
+    if (at < 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickGraveOffering, false, false, 'onClickGraveOffering');
+    s.board[at] = newSquare();
+    addCorpses(s, 1); // ネクロマンサーの席は、コマが消える自動の墓地+1に含まれる
+    if (s.chars[s.turn] !== 'necromancer') s.necroCost[s.turn] = Math.max(0, s.necroCost[s.turn] - 1);
+    spendMagic(s, pay, 'onClickGraveOffering');
+    s.magic[s.turn] += 1;
+    bumpMagicCount(s);
+    bumpStat(s, 'graveOffering');
+}
+
 // 山焼き (idx 95): 敵のエフェクトがあるマス（敵のコマで、氷結(❄)・⚡無敵のマスは無視。🔑ロック自体は数えないが、ロックのマスの他のエフェクトは対象）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置く。トークン扱い（1手番に1度）。
 // エフェクト1つにつき3軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickBurnOff
 function burnOffTargets(s) {
@@ -1735,6 +1819,7 @@ function onClickTinder(s) {
     if (!tinderLegal(s)) return;
     s.useTinder = true;
     spendMagic(s, calculateCost(s, costsOf(s).onClickTinder, false, false, 'onClickTinder'), 'onClickTinder');
+    s.plantPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
     bumpMagicCount(s);
     bumpStat(s, 'tinder');
 }
@@ -2089,6 +2174,22 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
+// 縮地 (idx50): 自陣のコマを1つ選び、空きマスへ動かす（ライフ・エフェクトごと）。手番は続く
+function onClickRelocate(s) {
+    s.useRelocate = true;
+    s.relocateFrom = null;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickRelocate, false, false, 'onClickRelocate'), 'onClickRelocate');
+    bumpMagicCount(s);
+    bumpStat(s, 'relocate');
+}
+// 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
+function onClickPlunder(s) {
+    if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
+    s.usePlunder = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPlunder, false, false, 'onClickPlunder'), 'onClickPlunder');
+    bumpMagicCount(s);
+    bumpStat(s, 'plunder');
+}
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function onClickKimon(s) {
@@ -2210,6 +2311,18 @@ function onClickStrip(s) {
 // 火の車 (idx75): ランダムな敵マス2つに🔥+1、その後自分の手札をシャッフル（無料）。このターン敵か自陣に🔥を付与していれば0コスト（撃つとリセット）。クリック不要
 function fireWheelCandidates(s) { return thermal.fireWheelTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 function fireWheelLegal(s) { return fireWheelCandidates(s).length > 0; }
+// 飛び火 (idx97): ランダムな敵マス2つに🔥+1（火の車からシャッフルを除いたもの）。直前の手番に相手がコマを2つ以上設置していれば0コスト（撃つとリセット） [FAITHFUL] Game.tsx onClickSpark
+function onClickSpark(s) {
+    const cands = fireWheelCandidates(s);
+    if (cands.length === 0) return;
+    const pay = calculateCost(s, costsOf(s).onClickSpark, false, false, 'onClickSpark'); // 無料かは撃つ前の状態で決まる
+    const picks = randomAnyPick(cands, Math.min(thermal.FIRE_WHEEL_COUNT, cands.length), s.rng);
+    thermal.fireWheel(s.board, picks, s.size, keepBudsOf(s));
+    spendMagic(s, pay, 'onClickSpark');
+    s.placedPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
+    bumpMagicCount(s);
+    bumpStat(s, 'spark');
+}
 function onClickFireWheel(s) {
     const cands = fireWheelCandidates(s);
     if (cands.length === 0) return;
@@ -2348,7 +2461,10 @@ const SKILLS = {
     leafFrost: onClickLeafFrost,
     springWind: onClickSpringWind,
     kimon: onClickKimon,
+    plunder: onClickPlunder,
+    relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
+    spark: onClickSpark,
     strip: onClickStrip,
     chargeSeason: onClickChargeSeason,
     bristle: onClickBristle,
@@ -2390,6 +2506,10 @@ const SKILLS = {
     gather: onClickGather,
     burnOff: onClickBurnOff,
     freeToken: onClickFreeToken,
+    nightVeil: onClickNightVeil,
+    graveDiscount: onClickGraveDiscount,
+    poisonWard: onClickPoisonWard,
+    graveOffering: onClickGraveOffering,
 };
 // 一寸の虫に魂なし: 縛られた席は、ライフ3以下のコマを置くスキルを使えない（何も起きず、魔力も減らない）
 for (const key of lifeBanMod.LIFE_BAN_PLACING_KEYS) {
@@ -2420,7 +2540,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    smallFryTargets, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

@@ -29,6 +29,7 @@ const analysis = {
         { id: 'giant', fieldAvg: 0.7, strongAvg: 0.6, worst: { id: 'you', rate: 0.6, decided: 30 }, unfavorable: 0, favorable: 1, solidOpponents: 1, opponents: 1, eq: 0.97 },
         { id: 'you', fieldAvg: 0.3, strongAvg: 0.4, worst: { id: 'giant', rate: 0.2, decided: 30 }, unfavorable: 1, favorable: 0, solidOpponents: 1, opponents: 1, eq: 0.03 },
     ],
+    edges: [{ from: 'giant', to: 'you', rate: 0.8, decided: 30, lo: 0.6, significant: true }], ids: ['giant', 'you'],
     exploit: 0.004, minPairDecided: 30, solidPairs: 1, totalPairs: 1, ready: true, minDecided: 20, players: 2,
 };
 const matchups = {
@@ -47,6 +48,7 @@ const fakeLive: LiveApi = {
     verdict: () => ({ headline: 'giantが突出しています', points: ['対強豪平均の1位: giant'] }),
     maxDrift: () => 0.01,
     converged: () => convergedNow,
+    findLoops: () => ({ groups: [], cycles: [], loopEdges: [], truncated: false }),
 };
 const load = () => Promise.resolve(fakeLive);
 const rawStats = { perChar: { giant: {}, you: {} } };
@@ -76,6 +78,7 @@ describe('SimPanel', () => {
         act(() => { jest.advanceTimersByTime(500); });
         expect(aggregateCalls[0].parts).toHaveLength(ws.length);
         expect(screen.getByText('giantが突出しています')).toBeTruthy(); // 結論
+        expect(screen.getByRole('img', { name: '有利・不利の有向グラフ' })).toBeTruthy(); // 関係図
         expect(screen.getAllByText('👹 巨人', { selector: 'th[scope=row]' })).toHaveLength(3); // 結論表・キャラ別表・対面表
         expect(screen.getAllByText('67%').length).toBeGreaterThan(0); // 対面表: 巨人→あなた
         fireEvent.click(screen.getByRole('button', { name: /停止/ }));

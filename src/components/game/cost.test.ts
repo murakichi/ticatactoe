@@ -7,7 +7,7 @@ const board = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: un
 const env = (character: CharacterId, over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: [character, 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, oppSkillPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, veil: false, oppSkillPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 describe('characterCostOf（キャラ補正）', () => {
@@ -65,3 +65,25 @@ describe('calculateCostOf / tokenBindOf', () => {
         expect(tokenBindOf('you', ['lightToken'])).toBe(3);
     });
 });
+
+describe('火口の無料条件（直前の手番に🌱🍂が植えられていれば0）', () => {
+    it('plantPrev なら手番の席は0。そうでなければ通常のコスト（鍛冶師は-1）', () => {
+        expect(calculateCostOf(env('pyromancer', { plantPrev: true }), 2, false, false, 'onClickTinder')).toBe(0);
+        expect(calculateCostOf(env('pyromancer'), 2, false, false, 'onClickTinder')).toBe(1);
+    });
+    it('手番でない席には掛からない', () => {
+        expect(calculateCostOf(env('pyromancer', { plantPrev: true, turnSeat: 1 }), 2, false, false, 'onClickTinder')).toBeGreaterThan(0);
+    });
+});
+
+describe('飛び火の無料条件（直前の手番に相手がコマを2つ以上設置していれば0）', () => {
+    it('placedPrev なら手番の席は0。そうでなければ通常のコスト（鍛冶師は4-1=3）', () => {
+        expect(calculateCostOf(env('pyromancer', { placedPrev: true }), 4, false, false, 'onClickSpark')).toBe(0);
+        expect(calculateCostOf(env('pyromancer'), 4, false, false, 'onClickSpark')).toBe(3);
+        expect(calculateCostOf(env('you'), 4, false, false, 'onClickSpark')).toBe(4);
+    });
+    it('手番でない席には掛からない', () => {
+        expect(calculateCostOf(env('pyromancer', { placedPrev: true, turnSeat: 1 }), 4, false, false, 'onClickSpark')).toBeGreaterThan(0);
+    });
+});
+
