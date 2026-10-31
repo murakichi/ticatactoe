@@ -2238,7 +2238,7 @@ test('🍂落ち葉: 他の席の🍂の枚数ぶんスキルコストが上が�
     assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3 + 10);
 });
 
-test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト5/8/9・トークンはターン1回）', () => {
+test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト5/7/8・トークンはターン1回）', () => {
     const run = (key, pre) => {
         const s = game(); s.heartTurn = true; s.heartMagic = 30;
         e.SKILLS[key](s);
@@ -2249,10 +2249,10 @@ test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（
     assert.strictEqual(s.heartMagic, 30 - 5);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1]);
     s = run('twinLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 8);
+    assert.strictEqual(s.heartMagic, 30 - 7);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [2]);
     s = run('doubleLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 9);
+    assert.strictEqual(s.heartMagic, 30 - 8);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1, 1]);
     assert.strictEqual(s.board.filter((q) => q.player === '💙').length, 2);
 });
@@ -2498,11 +2498,11 @@ test('導線(コンボ)の軽減: 紅葉狩り=自陣の🍂が手番開始よ�
     // 紅葉狩り
     const a = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(3) });
     a.magic[0] = 30; a.leafBase[0] = 0;
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9);
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 8);
     a.board[0] = { player: '💙', bind: 3, effects: [LEAF] };
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 7); // 手番開始より🍂が増えた（一葉知秋など）
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 6); // 手番開始より🍂が増えた（一葉知秋など）
     a.leafBase[0] = 1;
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9); // 元からあった🍂では成立しない
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 8); // 元からあった🍂では成立しない
     // 総毛立つ
     const b = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(3) });
     b.magic[0] = 30;
