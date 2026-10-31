@@ -150,7 +150,13 @@ export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMM
  * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
-export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {};
+export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {
+    // ネクロマンサー: 特売・固有割引を残す山焼き入りの旧主案と、落葉の衣・火口・無礼講の別案。統計的な基準は満たさないが同等と見て併用する(ユーザー許可)
+    necromancer: [
+        [0, 2, 3, 6, 8, 11, 50, 53, 57, 58, 92, 95],
+        [0, 2, 6, 8, 11, 50, 58, 86, 87, 92, 95, 96],
+    ],
+};
 
 /** AI席のベースにするデッキ。主案と別案を同じ確率で選ぶ（別案が無ければ主案で、乱数は使わない） */
 export const pickRecommendedDeck = (character: CharacterId, rng: () => number = Math.random): number[] => {
