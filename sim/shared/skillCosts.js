@@ -136,7 +136,10 @@ exports.skillCosts = {
     onClickNightVeil: 3,
     onClickGraveDiscount: 1,
     onClickPoisonWard: 6,
-    onClickGraveOffering: 2, //  墓守の供物(idx 101): 自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1（実質コスト1）。ユーザー指定のコスト2
+    onClickGraveOffering: 2,
+    onClickPerfectGame: 10,
+    onClickHelper: 3,
+    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 104): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

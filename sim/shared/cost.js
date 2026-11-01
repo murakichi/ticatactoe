@@ -47,6 +47,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
     const mine = env.seat === env.turnSeat;
     if (skillKey === 'onClickShikigamiPurge' && mine && ownShikigami(env.board, env.player) >= exports.SHIKIGAMI_PURGE_FREE)
         return 0; // 供犠: 自陣の式神が3体以上なら0
+    if (skillKey === 'onClickSecondCatch' && mine && env.bigCast)
+        return 0; // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使っていれば0
     if (isToken && mine && env.tokenFree)
         return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (skillKey === 'onClickFirstFrost' && mine && (0, thermal_1.boardLeaves)(env.board) >= tokenSkills_1.FIRST_FROST_FREE_LEAVES)

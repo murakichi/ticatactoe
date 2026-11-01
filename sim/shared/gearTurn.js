@@ -7,6 +7,8 @@ const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
+const bigSkills_1 = require("./bigSkills");
+const skillCosts_1 = require("./skillCosts");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -86,6 +88,8 @@ const advanceGearState = (g, r, input) => {
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
+    g.bigCast[endSeat] = false;
+    g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
     g.tokenFree[nextSeat] = false;
     g.veil[endSeat] = false; // 夜の帳は、効いた相手の手番が終わると切れる。次の手番の席には、使われていれば効く
@@ -111,10 +115,14 @@ exports.gearCostContext = gearCostContext;
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
 const noteSkillUsed = (g, seat, skillId) => {
+    var _a;
     g.skills[seat] += 1;
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
+        if (((_a = skillCosts_1.skillCosts[skillId]) !== null && _a !== void 0 ? _a : 0) >= bigSkills_1.BIG_CAST_BASE)
+            g.bigCast[seat] = true;
         // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
         if (skillId !== 'onClickInferno') {
             g.kinds[seat].add(skillId);

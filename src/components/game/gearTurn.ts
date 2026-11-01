@@ -7,6 +7,8 @@ import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ig
 import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './thermal';
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
+import { BIG_CAST_BASE } from './bigSkills';
+import { skillCosts } from './skillCosts';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -28,6 +30,8 @@ export type GearTurnState = {
     leafBase: number[];
     darkPotUsed: boolean[];
     tokenFree: boolean[];
+    /** 柳の下に二匹目がいたの無料条件: この手番に、基礎コスト BIG_CAST_BASE 以上のスキルを使ったか */
+    bigCast: boolean[];
     chargeBase: number[];
     /** 夜の帳: veil=この席の今の手番はスキルコスト+3 / veilNext=次の手番から効く */
     veil: boolean[];
@@ -147,6 +151,8 @@ export const advanceGearState = (
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
+    g.bigCast[endSeat] = false;
+    g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
     g.tokenFree[nextSeat] = false;
     g.veil[endSeat] = false; // 夜の帳は、効いた相手の手番が終わると切れる。次の手番の席には、使われていれば効く
@@ -177,6 +183,8 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
+        if (((skillCosts as Record<string, number>)[skillId] ?? 0) >= BIG_CAST_BASE) g.bigCast[seat] = true;
         // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
         if (skillId !== 'onClickInferno') {
             g.kinds[seat].add(skillId);
