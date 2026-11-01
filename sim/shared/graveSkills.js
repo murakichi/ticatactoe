@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/graveSkills.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.placeWardPiece = exports.wardPiece = exports.wardTriggered = exports.graveDiscountAmount = exports.corpseCount = exports.POISON_WARD_LIFE = exports.POISON_WARD_TURNS = exports.GRAVE_DISCOUNT_CAP = exports.NIGHT_VEIL_SURCHARGE = void 0;
+exports.graveOfferingTarget = exports.placeWardPiece = exports.wardPiece = exports.wardTriggered = exports.graveDiscountAmount = exports.corpseCount = exports.POISON_WARD_LIFE = exports.POISON_WARD_TURNS = exports.GRAVE_DISCOUNT_CAP = exports.NIGHT_VEIL_SURCHARGE = void 0;
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 /** 夜の帳: 次の相手全員の手番の間、相手のスキルコストに足す量 */
@@ -33,3 +33,15 @@ const placeWardPiece = (board, player, pick) => {
     return at;
 };
 exports.placeWardPiece = placeWardPiece;
+/** 墓守の供物: 消す自陣のコマ。ライフが最も低いコマ（同じなら番号の小さいマス）。自陣にコマが無ければ -1 */
+const graveOfferingTarget = (board, player) => {
+    let best = -1;
+    board.forEach((sq, i) => {
+        if (sq.player !== player)
+            return;
+        if (best < 0 || sq.bind < board[best].bind)
+            best = i;
+    });
+    return best;
+};
+exports.graveOfferingTarget = graveOfferingTarget;

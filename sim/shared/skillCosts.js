@@ -106,7 +106,7 @@ exports.skillCosts = {
     // 🍂落ち葉系の汎用スキル(idx 62-68)。自陣の🍂は相手全員のスキルコストを枚数ぶん上げる。sim/engine.js と同値
     onClickLeafToken: 5,
     onClickTwinLeafToken: 7,
-    onClickDoubleLeafToken: 9,
+    onClickDoubleLeafToken: 8,
     onClickLeafAll: 5,
     onClickBonfire: 3,
     onClickMulch: 2,
@@ -136,9 +136,10 @@ exports.skillCosts = {
     onClickNightVeil: 3,
     onClickGraveDiscount: 1,
     onClickPoisonWard: 6,
+    onClickGraveOffering: 2,
     onClickPerfectGame: 10,
     onClickHelper: 3,
-    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 103): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
+    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 104): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

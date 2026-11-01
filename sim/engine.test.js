@@ -2088,7 +2088,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch']);
 });
 
 
@@ -2238,7 +2238,7 @@ test('🍂落ち葉: 他の席の🍂の枚数ぶんスキルコストが上が�
     assert.strictEqual(e.calculateCost(s, 3, false, false, 'onClickAddLife'), base + 3 + 10);
 });
 
-test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト5/7/9・トークンはターン1回）', () => {
+test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（コスト5/7/8・トークンはターン1回）', () => {
     const run = (key, pre) => {
         const s = game(); s.heartTurn = true; s.heartMagic = 30;
         e.SKILLS[key](s);
@@ -2252,7 +2252,7 @@ test('🍂落ち葉トークン3種: 自陣のコマに🍂を付けて置く（
     assert.strictEqual(s.heartMagic, 30 - 7);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [2]);
     s = run('doubleLeafToken');
-    assert.strictEqual(s.heartMagic, 30 - 9);
+    assert.strictEqual(s.heartMagic, 30 - 8);
     assert.deepStrictEqual(s.board.map(leavesOn).filter((n) => n > 0), [1, 1]);
     assert.strictEqual(s.board.filter((q) => q.player === '💙').length, 2);
 });
@@ -2498,11 +2498,11 @@ test('導線(コンボ)の軽減: 紅葉狩り=自陣の🍂が手番開始よ�
     // 紅葉狩り
     const a = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(3) });
     a.magic[0] = 30; a.leafBase[0] = 0;
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9);
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 8);
     a.board[0] = { player: '💙', bind: 3, effects: [LEAF] };
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 7); // 手番開始より🍂が増えた（一葉知秋など）
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 6); // 手番開始より🍂が増えた（一葉知秋など）
     a.leafBase[0] = 1;
-    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 9); // 元からあった🍂では成立しない
+    assert.strictEqual(price(a, 'onClickDoubleLeafToken'), 8); // 元からあった🍂では成立しない
     // 総毛立つ
     const b = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(3) });
     b.magic[0] = 30;
@@ -3415,5 +3415,28 @@ test('毒返しの構え: 使うと3手番の間効き、二重には撃てな�
     assert.strictEqual(e.poisonWardLegal(s), false);
 });
 
+test('墓守の供物: 自陣のライフが最も低いコマを消して、自分の墓地+1・魔力+1（実質コスト1）。自陣にコマが無ければ撃てない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    assert.strictEqual(e.graveOfferingLegal(s), false, '自陣にコマが無いと撃てない');
+    s.board[3] = { player: '💙', bind: 4, effects: [] };
+    s.board[5] = { player: '💙', bind: 1, effects: [] };
+    assert.strictEqual(e.graveOfferingLegal(s), true);
+    const m = s.heartMagic;
+    const grave = s.necroCost[0];
+    e.SKILLS.graveOffering(s);
+    assert.strictEqual(s.board[5].player, undefined, 'ライフが最も低いコマが消える');
+    assert.strictEqual(s.board[3].player, '💙');
+    assert.strictEqual(m - s.heartMagic, e.skillCosts.onClickGraveOffering - 1, '魔力+1が戻る');
+    assert.strictEqual(grave - s.necroCost[0], 1, '自分の墓地+1（ネクロ以外でも）');
+});
+test('墓守の供物: ネクロマンサーの墓地は二重に数えない（コマが消える自動の+1に含まれる）', () => {
+    const s = game('necromancer', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[3] = { player: '💙', bind: 2, effects: [] };
+    const grave = s.necroCost[0];
+    e.SKILLS.graveOffering(s);
+    assert.strictEqual(grave - s.necroCost[0], 1);
+});
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

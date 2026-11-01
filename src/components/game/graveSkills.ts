@@ -33,3 +33,13 @@ export const placeWardPiece = (board: SquareInfo[], player: Player, pick: (cells
     board[at] = wardPiece(player);
     return at;
 };
+
+/** 墓守の供物: 消す自陣のコマ。ライフが最も低いコマ（同じなら番号の小さいマス）。自陣にコマが無ければ -1 */
+export const graveOfferingTarget = (board: readonly SquareInfo[], player: Player): number => {
+    let best = -1;
+    board.forEach((sq, i) => {
+        if (sq.player !== player) return;
+        if (best < 0 || sq.bind < board[best].bind) best = i;
+    });
+    return best;
+};

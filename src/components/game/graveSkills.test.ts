@@ -1,6 +1,6 @@
 import { SquareInfo } from '../../types/SquareInfo';
 import { Player } from '../../types/Player';
-import { GRAVE_DISCOUNT_CAP, NIGHT_VEIL_SURCHARGE, POISON_WARD_LIFE, corpseCount, graveDiscountAmount, placeWardPiece, wardPiece, wardTriggered } from './graveSkills';
+import { GRAVE_DISCOUNT_CAP, NIGHT_VEIL_SURCHARGE, POISON_WARD_LIFE, corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, wardPiece, wardTriggered } from './graveSkills';
 import { calculateCostOf, CostEnv } from './cost';
 import { emptyDiscount, afterSkill, discountAmount, applyDiscount, isReducerSkill, GRAVE_DISCOUNT_KEY } from './discount';
 import { advanceGearState, GearTurnState, RuinState } from './gearTurn';
@@ -120,5 +120,20 @@ describe('毒返しの構え（自陣が壊される/乗っ取られたら毒付
         r.snap = m2.map((sq) => sq.player);
         c = advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 1, nextSeat: 0 });
         expect(c.wardPlace).toEqual([]);
+    });
+});
+
+describe('墓守の供物（自陣のライフが最も低いコマを消す）', () => {
+    it('ライフが最も低い自陣のコマを選ぶ。同じなら番号の小さいマス。自陣にコマが無ければ -1', () => {
+        const b = board();
+        expect(graveOfferingTarget(b, '💙')).toBe(-1);
+        b[3] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '💙', bind: 2, effects: [] };
+        b[9] = { player: '💙', bind: 2, effects: [] };
+        b[1] = { player: '⭕', bind: 0, effects: [] }; // 敵のコマは選ばない
+        expect(graveOfferingTarget(b, '💙')).toBe(5);
+    });
+    it('コストは2（魔力+1が戻るので実質1）', () => {
+        expect(skillCosts.onClickGraveOffering).toBe(2);
     });
 });

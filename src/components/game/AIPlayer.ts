@@ -18,8 +18,8 @@ import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..103)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 104;
+// 汎用スキルプールの大きさ (idx 0..104)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 105;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -44,6 +44,8 @@ const PLUNDER_CHAIN_MAX = 3;
 /** 巨人がストンプを1手番に連打する回数の上限 */
 const STOMP_CHAIN_MAX = 4;
 /** 毒使いが パンデミック/猛毒化 を撃ったあとに残しておく魔力（毒の連打で空にしない） */
+/** 猛毒化を撃たなくなる、敵の1マスの毒の数（ライフ平均は高くても10台。これ以上は倍にしても死ぬ数が変わらない） */
+const INTENSIFY_MAX_CELL_POISON = 32;
 const POISON_RICH_RESERVE = 10;
 /** 毒霧→ミアズマ: ミアズマの採点(毒が付く敵マス数＋要所)の最低値 */
 const MIST_MIASMA_MIN_SCORE = 4;
@@ -111,6 +113,9 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
 const POISON_WARD_MIN_PIECES = 3;
+/** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
+const GRAVE_OFFERING_MIN_PIECES = 3;
+const GRAVE_OFFERING_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
@@ -139,6 +144,8 @@ const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
 // 毒使い×毒花・ミアズマの調整値 (旧sim AI の BLOOM_* / MIASMA_MIN_SCORE と同値)
 const BLOOM_MAX_OWN_POISON = 3; // 自陣の毒スタックの上限
 const BLOOM_MIN_BIND = 4; // 毒を盛る自コマのライフの下限（毒の数を足した値）
+/** ミアズマの対象が氷結中のマスのとき、1マスぶんの価値に掛ける係数（毒は休眠して残り、氷結が解けたら効く） */
+const MIASMA_FROZEN_WEIGHT = 0.5;
 const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
@@ -483,12 +490,17 @@ class AIPlayer {
         return miasmaPlanOf(board, this.playerSymbol, this.characters);
     }
 
-    /** ミアズマを撃つ価値: 毒が付く敵マスの数 + リーチ列の要のコマ×2 (旧sim AI miasmaScore と同一) */
+    /** ミアズマを撃つ価値: 毒が効く敵マスの数（氷結中は MIASMA_FROZEN_WEIGHT 倍）+ リーチ列の要のコマ×2 */
     private miasmaScore(board: SquareInfo[]): number {
         const plan = this.miasmaPlan(board);
-        let critical = 0;
-        plan.forEach((_, j) => { if (this.inOppReachLine(board, j)) critical++; });
-        return plan.size + critical * 2;
+        let effective = 0, critical = 0;
+        plan.forEach((_, j) => {
+            // 氷結中の敵マスの毒は休眠する（消えはしないが、氷結が解けるまでダメージが出ない）ので半分の価値で数える
+            if (isDormant(board[j])) { effective += MIASMA_FROZEN_WEIGHT; return; }
+            effective++;
+            if (this.inOppReachLine(board, j)) critical++;
+        });
+        return effective + critical * 2;
     }
 
     /**
@@ -1518,6 +1530,15 @@ class AIPlayer {
             board.filter((sq) => sq.player === this.playerSymbol).length >= POISON_WARD_MIN_PIECES
         ) {
             spend(this.calculateAICost(costs.onClickPoisonWard, false, false, 'onClickPoisonWard'), 'onClickPoisonWard');
+        }
+
+        // 墓守の供物: ネクロマンサーが、降霊が未発動で、自陣のコマが3つ以上・死体が3体以下のとき、最も弱いコマを供物にして死体と魔力を作る
+        if (
+            availableSkills.includes(101) && this.character === 'necromancer' && necroRemain === 0 && skills.length === 0 &&
+            NECROMANCY.baseCost - necroCost <= GRAVE_OFFERING_MAX_CORPSES &&
+            board.filter((sq) => sq.player === this.playerSymbol).length >= GRAVE_OFFERING_MIN_PIECES
+        ) {
+            spend(this.calculateAICost(costs.onClickGraveOffering, false, false, 'onClickGraveOffering'), 'onClickGraveOffering');
         }
 
         // 魔力が有り余るとき: 置くコマのライフを厚くする（ライフ+3 → 2倍の順。減衰で盤面が空になる長期戦でコマが残りやすくなる）
@@ -2568,7 +2589,9 @@ class AIPlayer {
             const intensifyCost = this.calculateAICost(costs.onClickIntensify, false, true, 'onClickIntensify');
             if (availableSkills.includes(18) && magic - intensifyCost >= POISON_RICH_RESERVE) {
                 const foe = board.reduce((n, sq) => (this.isEnemy(sq.player) ? n + activePoison(sq) : n), 0);
-                if (foe >= INTENSIFY_MIN_FOE_POISON && foe > poisonCountFor(board, this.playerSymbol) + 1) {
+                // 敵の1マスの毒が十分大きい（ライフを超える）なら、もう倍にしても意味がない。🔑ロック中のコマは毒で死なないので、撃ち続けると毒が倍々に増えて試合が終わらなくなる
+                const foeMax = board.reduce((m, sq) => (this.isEnemy(sq.player) ? Math.max(m, activePoison(sq)) : m), 0);
+                if (foe >= INTENSIFY_MIN_FOE_POISON && foe > poisonCountFor(board, this.playerSymbol) + 1 && foeMax < INTENSIFY_MAX_CELL_POISON) {
                     chargeClicks.push({ skill: 'onClickIntensify' });
                     board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                     intensifyPoison(board, this.characters);
