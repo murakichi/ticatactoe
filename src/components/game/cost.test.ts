@@ -7,7 +7,16 @@ const board = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: un
 const env = (character: CharacterId, over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: [character, 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, veil: false, oppSkillPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, veil: false, oppSkillPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+});
+
+describe('柳の下に二匹目がいた', () => {
+    it('この手番に基礎コスト7以上のスキルを使っていれば0。使っていなければ6。手番でない席には掛けない', () => {
+        expect(gearCostOf(env('you'), 6, false, 'onClickSecondCatch')).toBe(6);
+        expect(gearCostOf(env('you', { bigCast: true }), 6, false, 'onClickSecondCatch')).toBe(0);
+        expect(gearCostOf(env('you', { bigCast: true, seat: 1, player: '⭕' }), 6, false, 'onClickSecondCatch')).toBe(6);
+        expect(gearCostOf(env('you', { bigCast: true }), 6, false, 'onClickStomp')).toBe(6); // ほかのスキルは変わらない
+    });
 });
 
 describe('characterCostOf（キャラ補正）', () => {
