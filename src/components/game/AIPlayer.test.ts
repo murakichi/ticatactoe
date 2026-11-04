@@ -1885,13 +1885,25 @@ describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残
         put(b, '⭕', [3, 7]);
         expect(castsPG(run(b, 10, [102, 21, 23]))).toBe(false);
     });
-    it('ためる: 即勝ちが見えて魔力があと少し足りないとき、他のスキルに魔力を使わない', () => {
+    it('ためる: 即勝ちが見えて魔力が足りず相手のリーチも無いとき、駒を置かずチャージで魔力をためる', () => {
         const b = empty();
         put(b, '💙', [0, 1, 2], true);
-        put(b, '⭕', [3, 7, 11]);
+        put(b, '⭕', [3, 10]); // 敵は塞ぐコマ1つ+別の1つ（リーチなし）
         const r = run(b, 8, [102, 21, 23]);
-        expect(r.skills ?? []).toEqual([]);
-        expect(r.chargeClicks ?? []).toEqual([]);
+        expect(r.skills).toEqual(['onClickCharge']);
+        expect(r.move).toBeNull();
+    });
+    it('ためない: 届く見込みが無い（あと7魔力以上）ときはチャージで待たない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 10]); // 敵は塞ぐコマ1つ+別の1つ（リーチなし）
+        expect(run(b, 2, [102, 21, 23]).skills).not.toContain('onClickCharge');
+    });
+    it('ためない: 相手にリーチがあるときは、チャージせず通常どおり守る', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11, 5, 6]); // 4-5-6-7 の列で敵がリーチ
+        expect(run(b, 8, [102, 21, 23]).skills).not.toContain('onClickCharge');
     });
     it('使う: 自陣が全て⚡で壊れず、敵の壊れるコマが4つ', () => {
         const b = empty();

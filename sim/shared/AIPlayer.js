@@ -94,8 +94,8 @@ const REROLL_REDUCERS = [
 ];
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
-/** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか */
-const PG_HOLD_GAP = 4;
+/** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
+const PG_HOLD_GAP = 6;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
 const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
@@ -2352,6 +2352,9 @@ class AIPlayer {
             const win = this.planPerfectGameWin(board, magic, costs, availableSkills);
             if (win !== null)
                 return { move: win.move, skills: [], chargeClicks: win.clicks, win: true };
+            // 即勝ちが見えているが魔力が足りない: 相手のリーチが無いうちは、駒を置かずチャージ(+3)で魔力をためて次の手番以降に撃つ
+            if (this.holdPG > 0 && this.opponents.every((o) => this.countReaches(board, o) === 0))
+                return { move: null, skills: ['onClickCharge'] };
         }
         // 追い剥ぎ(52): ライフ0の敵コマを自陣にする。手番は続くので、列の足りないマスがライフ0の敵コマ（と、最後の1マスの空き）だけなら、連打して着手で揃えて勝つ
         if (availableSkills.includes(52)) {
