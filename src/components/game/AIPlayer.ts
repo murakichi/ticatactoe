@@ -113,6 +113,10 @@ const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'onClickCl
 ];
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
+/** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか */
+const PG_HOLD_GAP = 4;
+/** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
+const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
 /** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
 const GRAVE_OFFERING_MIN_PIECES = 3;
@@ -182,6 +186,8 @@ class AIPlayer {
     lastSpent: number = 0;
     /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
     hypoCut: number = 0;
+    /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
+    holdPG: number = 0;
     skillKinds: Set<string> = new Set();
     /** 魔法使いの引き直し: この手番で残っている引き直し回数（Game が手番開始時に MAX_REROLLS にし、シャッフルのたび減らす） */
     rerollsLeft: number = 0;
@@ -410,6 +416,37 @@ class AIPlayer {
      * 帯電付与の対象。攻め=縦横隣接の(敵コマ数−自コマ数)、守り=ライフ0〜1の自コマが他の席のいない列で
      * 2つ以上(リーチ列なら3つ)の一部なら⚡の無敵で守る。大きいほうが MIN 以上なら撃つ。
      */
+    /**
+     * パーフェクトゲームの即勝ち計画: 撃った後の盤面で、自陣3つ+空き1つ(敵のコマが無い)の列ができれば、その空きマスと、撃つまでに払うスキル
+     * （魔力が足りなければ、届く軽減札を先に撃つ）を返す。無ければ null
+     */
+    planPerfectGameWin(board: SquareInfo[], magic: number, costs: Record<keyof SkillCosts, number>, availableSkills: number[]): { move: number; clicks: { skill: string }[] } | null {
+        const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        perfectGame(post, this.characters);
+        let move: number | null = null;
+        for (const line of geometryForCells(board.length).winLines) {
+            const mine = line.filter((i) => post[i].player === this.playerSymbol).length;
+            const empty = line.filter((i) => !post[i].player);
+            if (mine === 3 && empty.length === 1) { move = empty[0]; break; }
+        }
+        if (move === null) return null;
+        const pg = this.calculateAICost(costs.onClickPerfectGame, false, false, 'onClickPerfectGame');
+        if (magic >= pg) return { move, clicks: [{ skill: 'onClickPerfectGame' }] };
+        const reducers = [
+            { idx: 58, key: 'onClickClearance' as const, cut: 7 },
+            { idx: 60, key: 'onClickCounterMarkdown' as const, cut: 3 },
+            { idx: 53, key: 'onClickMarkdown' as const, cut: 3 },
+        ];
+        for (const r of reducers) {
+            if (!availableSkills.includes(r.idx)) continue;
+            const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+            if (magic >= rc + Math.max(1, pg - r.cut)) return { move, clicks: [{ skill: r.key }, { skill: 'onClickPerfectGame' }] };
+        }
+        // 届かない: あと PG_HOLD_GAP 以内なら、次の手番で撃てるように他のスキルの支払いを控える
+        if (magic >= pg - PG_HOLD_GAP) this.holdPG = pg;
+        return null;
+    }
+
     bestChargeOneTarget(board: SquareInfo[]): number | null {
         const size = this.sizeOf(board);
         let bestIdx: number | null = null, bestScore = 0;
@@ -1251,6 +1288,7 @@ class AIPlayer {
         }
         const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost: number, skill: string): boolean => {
+            if (this.holdPG > 0 && !PG_HOLD_FREE.includes(skill) && remaining - cost < this.holdPG) return false;
             if (reserve > 0 && (RESERVE_SKIP.includes(skill) || (this.character === 'witch' && !WITCH_LEAF_SPEND.includes(skill))) && remaining - cost < reserve) return false;
             if (remaining >= cost) { remaining -= cost; skills.push(skill); return true; }
             return false;
@@ -1411,13 +1449,13 @@ class AIPlayer {
             if (availableSkills.includes(78) && bare >= 3) {
                 spend(this.calculateAICost(costs.onClickBristle, false, false, 'onClickBristle'), 'onClickBristle');
             }
-            // パーフェクトゲーム: 全コマを壊すが、⚡の無敵コマは残る。敵の壊れるコマが3つ以上あり、自分の壊れるコマより2つ以上多いとき（敵にリーチがあるときは1つ多ければ）撃つ。
+            // パーフェクトゲーム: 全コマを壊すが、⚡の無敵コマは残る。敵の壊れるコマが3つ以上あり、自分の壊れるコマより2つ以上多いとき撃つ（自陣のリーチを敵のコマが塞いでいて、壊せば同じ手番で勝てるときは、手番の先頭で撃つ: planPerfectGameWin）。
             // 総毛立つで自陣に⚡を付けてから撃つので、先に撃つ総毛立つより後ろに置く
             if (availableSkills.includes(102)) {
                 const killed = perfectGame(board.map((sq) => ({ ...sq, effects: [...sq.effects] })), this.characters).destroyed;
                 const foe = killed.filter((i) => this.isEnemy(board[i].player)).length;
                 const mine = killed.length - foe;
-                if ((foe >= 3 && foe - mine >= 2) || (oppReaches > 0 && foe - mine >= 1)) {
+                if (foe >= 3 && foe - mine >= 2) {
                     spend(this.calculateAICost(costs.onClickPerfectGame, false, false, 'onClickPerfectGame'), 'onClickPerfectGame');
                 }
             }
@@ -2140,6 +2178,14 @@ class AIPlayer {
             if (win !== null) {
                 return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })), win: true };
             }
+        }
+
+        // パーフェクトゲーム(102): 全コマを壊した後に、残る自陣のコマ(⚡の無敵・🔑ロック)3つ+空き1つの列ができるなら、撃ってからその空きに置いて勝つ
+        // （自分のリーチを敵のコマが塞いでいる場面。ロックや⚡のコマが残るので、塞いでいる敵コマだけが消える）
+        this.holdPG = 0;
+        if (availableSkills.includes(102)) {
+            const win = this.planPerfectGameWin(board, magic, costs, availableSkills);
+            if (win !== null) return { move: win.move, skills: [], chargeClicks: win.clicks, win: true };
         }
 
         // 追い剥ぎ(52): ライフ0の敵コマを自陣にする。手番は続くので、列の足りないマスがライフ0の敵コマ（と、最後の1マスの空き）だけなら、連打して着手で揃えて勝つ

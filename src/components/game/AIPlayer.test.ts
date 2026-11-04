@@ -1847,3 +1847,74 @@ describe('縮地の連打', () => {
         expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
     });
 });
+
+describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残る全破壊）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const BOLT = { effect: '⚡' as const };
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const put = (b: SquareInfo[], who: '💙' | '⭕', cells: number[], bolt = false) => cells.forEach((i) => (b[i] = { player: who, bind: 5, effects: bolt ? [{ ...BOLT }] : [] }));
+    const run = (b: SquareInfo[], magic: number, hand: number[]) => new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'tactician']).makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    const castsPG = (r: ReturnType<typeof run>) => [...(r.skills ?? []), ...(r.chargeClicks?.map((c) => c.skill) ?? [])].includes('onClickPerfectGame');
+
+    it('使う（即勝ち）: 自陣の⚡3つの列を敵のコマが塞いでいる → 撃ってから、その空いたマスに置いて勝つ', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11]);
+        const r = run(b, 10, [102, 21, 23]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickPerfectGame']);
+        expect(r.move).toBe(3);
+    });
+    it('使う（即勝ち）: 魔力が足りなくても、大特価を先に撃てば届く', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11]);
+        const r = run(b, 7, [102, 58, 21]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickPerfectGame']);
+        expect(r.move).toBe(3);
+    });
+    it('撃たない: 塞いでいるのが🔑ロックのコマ（壊せない）なら即勝ちにならない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        b[3] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] };
+        expect(castsPG(run(b, 10, [102, 21, 23]))).toBe(false);
+    });
+    it('撃たない: 自陣の3つが⚡でなく壊れてしまう（残らない）なら即勝ちにならない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2]);
+        put(b, '⭕', [3, 7]);
+        expect(castsPG(run(b, 10, [102, 21, 23]))).toBe(false);
+    });
+    it('ためる: 即勝ちが見えて魔力があと少し足りないとき、他のスキルに魔力を使わない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11]);
+        const r = run(b, 8, [102, 21, 23]);
+        expect(r.skills ?? []).toEqual([]);
+        expect(r.chargeClicks ?? []).toEqual([]);
+    });
+    it('使う: 自陣が全て⚡で壊れず、敵の壊れるコマが4つ', () => {
+        const b = empty();
+        put(b, '💙', [5, 6, 9], true);
+        put(b, '⭕', [0, 3, 12, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(true);
+    });
+    it('使わない: 自陣の壊れるコマの方が多い（自分が損をする）', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2, 3, 4]);
+        put(b, '⭕', [10, 11, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(false);
+    });
+    it('使わない: 敵の壊れるコマが少なく（2つ以下）リーチも無い', () => {
+        const b = empty();
+        put(b, '💙', [5], true);
+        put(b, '⭕', [0, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(false);
+    });
+    it('使わない: 魔力が足りない（コスト10）', () => {
+        const b = empty();
+        put(b, '💙', [5, 6, 9], true);
+        put(b, '⭕', [0, 3, 12, 15]);
+        expect(castsPG(run(b, 6, [102, 0, 3]))).toBe(false);
+    });
+});
