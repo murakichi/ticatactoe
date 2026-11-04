@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
+const bigSkills_1 = require("./bigSkills");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -1467,6 +1468,16 @@ class AIPlayer {
             const bare = board.filter((sq) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
             if (availableSkills.includes(78) && bare >= 3) {
                 spend(this.calculateAICost(costs.onClickBristle, false, false, 'onClickBristle'), 'onClickBristle');
+            }
+            // パーフェクトゲーム: 全コマを壊すが、⚡の無敵コマは残る。敵の壊れるコマが3つ以上あり、自分の壊れるコマより2つ以上多いとき（敵にリーチがあるときは1つ多ければ）撃つ。
+            // 総毛立つで自陣に⚡を付けてから撃つので、先に撃つ総毛立つより後ろに置く
+            if (availableSkills.includes(102)) {
+                const killed = (0, bigSkills_1.perfectGame)(board.map((sq) => ({ ...sq, effects: [...sq.effects] })), this.characters).destroyed;
+                const foe = killed.filter((i) => this.isEnemy(board[i].player)).length;
+                const mine = killed.length - foe;
+                if ((foe >= 3 && foe - mine >= 2) || (oppReaches > 0 && foe - mine >= 1)) {
+                    spend(this.calculateAICost(costs.onClickPerfectGame, false, false, 'onClickPerfectGame'), 'onClickPerfectGame');
+                }
             }
         }
         // --- トークン系 ---
