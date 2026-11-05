@@ -2104,7 +2104,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop']);
 });
 
 
@@ -3614,7 +3614,7 @@ test('オブジェクト: エフェクトだけでなくダメージ系スキル
     assert.strictEqual(f.board[5].bind, 4, '火炎の付与で1ダメージ');
 });
 
-test('市場: 手番ごとに1回、シャッフルが無料（2回目は有料・手番が変わると戻る・敵の市場は働かない）', () => {
+test('市場: 手番ごとに市場の数だけシャッフルが無料（超えたら有料・手番が変わると戻る・敵の市場は働かない）', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(51) });
     s.magic[0] = 10;
     s.board[2] = { player: '⭕', bind: 5, effects: [], object: 'market' };
@@ -3624,11 +3624,16 @@ test('市場: 手番ごとに1回、シャッフルが無料（2回目は有料�
     e.shuffleHand(s);
     assert.strictEqual(s.magic[0], 9, '1回目は無料');
     e.shuffleHand(s);
-    assert.strictEqual(s.magic[0], 8, '2回目は有料');
+    assert.strictEqual(s.magic[0], 8, '市場1つ: 2回目は有料');
+    s.board[3] = { player: '💙', bind: 5, effects: [], object: 'market' };
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 8, '市場2つ: 2回目も無料');
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 7, '3回目は有料');
     s.currentTurn += 1; e.advanceTurn(s); s.currentTurn += 1; e.advanceTurn(s);
     s.magic[0] = 10;
-    e.shuffleHand(s);
-    assert.strictEqual(s.magic[0], 10, '次の自分の手番では再び無料');
+    e.shuffleHand(s); e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 10, '次の自分の手番では再び市場の数だけ無料');
 });
 
 test('聖域: 周囲の自陣のコマは着手ごとの減衰を受けない。毒沼は手番開始時に周囲の敵コマへ☠', () => {
@@ -3645,6 +3650,66 @@ test('聖域: 周囲の自陣のコマは着手ごとの減衰を受けない。
     t.board[6] = { player: '💙', bind: 5, effects: [] };
     t.currentTurn += 1; e.advanceTurn(t); // ⭕の手番開始: 毒沼が💙のコマに☠
     assert.ok(t.board[6].effects.some((x) => x.effect === '☠'));
+});
+
+test('オブジェクトのスキル: 解体・風化・地ならし・補強工事・増築・分譲（コストは基準どおり）', () => {
+    assert.deepStrictEqual(['onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate'].map((k) => e.skillCosts[k]), [4, 3, 8, 3, 4, 6]);
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(61) });
+    s.magic[0] = 99;
+    assert.strictEqual(e.objectSkillLegal(s, 'demolish'), false, '対象が無いと使えない');
+    s.board[1] = { player: '⭕', bind: 5, effects: [], object: 'fort' };
+    s.board[2] = { player: '⭕', bind: 5, effects: [], object: 'market' };
+    s.board[6] = { player: '💙', bind: 5, effects: [], object: 'fort' };
+    e.SKILLS.demolish(s);
+    assert.strictEqual(s.magic[0], 95);
+    assert.strictEqual(s.objectTool, 'demolish');
+    assert.strictEqual(e.placeMove(s, 6), false, '自陣のオブジェクトは選び直せる');
+    assert.strictEqual(e.placeMove(s, 1), true);
+    assert.strictEqual(s.board[1].player, undefined);
+    assert.strictEqual(s.objectTool, null);
+    e.SKILLS.weather(s);
+    assert.strictEqual(e.placeMove(s, 2), true);
+    assert.strictEqual(s.board[2].bind, 0);
+    assert.strictEqual(s.board[2].object, 'market');
+    e.SKILLS.expandAll(s);
+    assert.strictEqual(s.board[6].bind, 7, '即発動');
+    assert.strictEqual(s.objectTool, null);
+    e.SKILLS.duplicate(s);
+    assert.strictEqual(e.placeMove(s, 6), true);
+    assert.strictEqual(s.board.filter((sq) => sq.object === 'fort' && sq.player === '💙').length, 2);
+    e.SKILLS.levelAll(s);
+    assert.strictEqual(s.board[2].object, undefined, '地ならし: 風化したあとの敵のオブジェクトも壊す');
+});
+
+test('大工房: 設置は直前に相手がベースコスト7以上のスキルか合計7以上のマジックを使っていれば0。働いている間、ベースコスト7以上のスキルが3安い', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(71) });
+    s.magic[0] = 99; s.magic[1] = 99;
+    const price = (seat) => e.calculateCost(s, e.skillCosts.onClickWorkshop, false, false, 'onClickWorkshop');
+    assert.strictEqual(price(), 6);
+    // 💙: ベース3のスキルを2回(合計6)ではまだ足りない
+    e.spendMagic(s, 3, 'onClickStomp'); e.spendMagic(s, 3, 'onClickStomp');
+    s.currentTurn += 1; e.advanceTurn(s); // ⭕の手番
+    assert.strictEqual(price(), 6, '合計6では無料にならない');
+    // ⭕: 合計7のマジックを払う
+    e.spendMagic(s, 3, 'onClickStomp'); e.spendMagic(s, 4, 'onClickBibine');
+    s.currentTurn += 1; e.advanceTurn(s); // 💙の手番
+    assert.strictEqual(price(), 0, '直前に相手が合計7を払った');
+    s.currentTurn += 1; e.advanceTurn(s); // ⭕（何も払わず）
+    s.currentTurn += 1; e.advanceTurn(s); // 💙
+    assert.strictEqual(price(), 6, '次の手番では戻る');
+    // ベースコスト7以上のスキルを1回でも使えば無料
+    e.spendMagic(s, 1, 'onClickPerfectGame');
+    s.currentTurn += 1; e.advanceTurn(s); // ⭕の手番
+    assert.strictEqual(price(), 0, '直前に相手がベースコスト7以上のスキルを使った');
+    e.spendMagic(s, 1, 'onClickStomp');
+    s.currentTurn += 1; e.advanceTurn(s);
+    s.board[0] = { player: '💙', bind: 5, effects: [], object: 'workshop' };
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickPerfectGame, false, false, 'onClickPerfectGame'), 7, '大工房: 10 → 7');
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickSlash, false, false, 'onClickSlash'), 6, 'ベース6は変わらない');
+    // 設置スキル
+    e.SKILLS.workshop(s);
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].object, 'workshop');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

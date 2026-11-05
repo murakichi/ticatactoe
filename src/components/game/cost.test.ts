@@ -1,4 +1,5 @@
 import { CostEnv, calculateCostOf, characterCostOf, gearCostOf, tokenBindOf } from './cost';
+import { skillCosts } from './skillCosts';
 import { emptyDiscount, afterSkill } from './discount';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CharacterId } from '../../types/Character';
@@ -7,7 +8,7 @@ const board = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: un
 const env = (character: CharacterId, over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: [character, 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, bigCast: false, veil: false, oppSkillPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 describe('柳の下に二匹目がいた', () => {
@@ -96,3 +97,33 @@ describe('飛び火の無料条件（直前の手番に相手がコマを2つ以
     });
 });
 
+describe('大工房（オブジェクト）', () => {
+    const withWorkshop = (over: Partial<CostEnv> = {}): CostEnv => {
+        const b = board();
+        b[0] = { player: '💙', bind: 5, effects: [], object: 'workshop' };
+        return env('you', { board: b, ...over });
+    };
+    it('働いている間、ベースコスト7以上のスキルのコストを3軽減する。6以下は変わらない', () => {
+        // 絶対零度(10)・審判の日(11)・火の車以外の大技。ベース6のスラッシュは対象外
+        expect(calculateCostOf(withWorkshop(), skillCosts.onClickJudgeDay, false, false, 'onClickJudgeDay')).toBe(skillCosts.onClickJudgeDay - 3);
+        expect(calculateCostOf(withWorkshop(), skillCosts.onClickPerfectGame, false, false, 'onClickPerfectGame')).toBe(skillCosts.onClickPerfectGame - 3);
+        expect(calculateCostOf(withWorkshop(), skillCosts.onClickSlash, false, false, 'onClickSlash')).toBe(skillCosts.onClickSlash);
+        expect(calculateCostOf(env('you'), skillCosts.onClickPerfectGame, false, false, 'onClickPerfectGame')).toBe(skillCosts.onClickPerfectGame);
+    });
+    it('2つあっても重ならない。氷結中の大工房は働かない。相手の大工房は効かない', () => {
+        const two = withWorkshop();
+        two.board[1] = { player: '💙', bind: 5, effects: [], object: 'workshop' };
+        expect(calculateCostOf(two, 10, false, false, 'onClickPerfectGame')).toBe(7);
+        const frozen = withWorkshop();
+        frozen.board[0] = { ...frozen.board[0], effects: [{ effect: '❄' }] };
+        expect(calculateCostOf(frozen, 10, false, false, 'onClickPerfectGame')).toBe(10);
+        const enemy = withWorkshop();
+        enemy.board[0] = { ...enemy.board[0], player: '⭕' };
+        expect(calculateCostOf(enemy, 10, false, false, 'onClickPerfectGame')).toBe(10);
+    });
+    it('設置スキルは、直前に相手がベースコスト7以上のスキル/合計7以上のマジックを使っていれば0。そうでなければ通常のコスト', () => {
+        expect(calculateCostOf(env('you', { oppBigPrev: true }), skillCosts.onClickWorkshop, false, false, 'onClickWorkshop')).toBe(0);
+        expect(calculateCostOf(env('you'), skillCosts.onClickWorkshop, false, false, 'onClickWorkshop')).toBe(skillCosts.onClickWorkshop);
+        expect(calculateCostOf(env('you', { oppBigPrev: true, turnSeat: 1 }), skillCosts.onClickWorkshop, false, false, 'onClickWorkshop')).toBe(skillCosts.onClickWorkshop); // 手番でない席には掛けない
+    });
+});

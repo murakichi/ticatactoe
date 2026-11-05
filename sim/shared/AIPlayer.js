@@ -21,8 +21,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..113)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 114;
+// 汎用スキルプールの大きさ (idx 0..120)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 121;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -2973,7 +2973,7 @@ class AIPlayer {
         // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
         // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
         // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-        if ((this.character === 'electrician' || this.character === 'yinYangMaster') && availableSkills.includes(objects_1.OBJECT_SKILL_BASE_IDX) && this.ownTrees < BIG_TREE_MAX
+        if ((this.character === 'electrician' || this.character === 'yinYangMaster') && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
             && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
@@ -2991,7 +2991,7 @@ class AIPlayer {
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
         // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
-        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_SKILL_BASE_IDX + 4) && this.ownClouds < CLOUD_MAX
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.thundercloud.idx) && this.ownClouds < CLOUD_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && (0, util_1.findEmptyIndexes)(board).length >= CLOUD_MIN_EMPTY) {
             const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
