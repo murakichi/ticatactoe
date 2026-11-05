@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveMoveCell = exports.canPlaceAt = exports.planAITurn = exports.maxOppMagic = void 0;
 const AIPlayer_1 = require("./AIPlayer");
 const lifeBan_1 = require("./lifeBan");
+const decay_1 = require("./decay");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
 /** ステップ列が手番を終えない（最後が着手でもターン終了スキルでもない）なら、チャージでパスするステップを足す */
@@ -28,6 +29,7 @@ const planAITurn = (ai, input, pickHailMary) => {
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
+    ai.wardActive = input.wardActive;
     // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
     ai.chargeBuffActive = input.chargeBuffActive;
     ai.oppGearCount = input.oppGearCount;
@@ -101,6 +103,8 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(c.skill);
             if (c.target !== undefined)
                 steps.push(c.target);
+            if (c.target2 !== undefined)
+                steps.push(c.target2);
         }
         steps.push(...result.skills);
         if (result.lockTargets)
@@ -128,8 +132,8 @@ const canPlaceAt = (board, cell, player, character, characters) => {
     const sq = board[cell];
     if ((0, charge_1.isShielded)(sq, characters))
         return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
-    if (sq.player && sq.player !== player && sq.bind > 0 && character !== 'giant')
-        return false; // ライフの残った敵コマは巨人しか奪えない
+    if (sq.player && sq.player !== player && (sq.bind > 0 || (0, decay_1.isTakeProtected)(sq, characters)) && character !== 'giant')
+        return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
     if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)
         return false; // ロック中
     if ((0, thermal_1.emptyBlocked)(sq))

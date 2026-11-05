@@ -3,6 +3,7 @@
 /*
  * 本番AIの新旧を同キャラ(または指定キャラ)で対戦させる paired A/B。AI は sim/aiDriver.js と同じ形(makeMove)のモジュールを 2 つ渡す。
  * 使い方: node sim/probe-h2h.js --chars you,you --games 100 --seed 1 --modA aiDriver.js --modB aiDriver.old.js
+ *   --prod を付けると本番と同じ設定（全席が推奨デッキ・推奨ギア）。付けないとデッキなし・ギアなし（手札が全札からランダム）。
  *   旧版の用意: git show <旧コミット>:sim/shared/AIPlayer.js > sim/shared/AIPlayer.old.js（aiTurn も同様）、
  *   sed で aiDriver.js の require を '.old' に替えた sim/aiDriver.old.js を作る（gen-sim-shared.js は sim/shared を作り直すので、再生成後に取り直す）。
  * 先手は試合ごとに入れ替える。結果は最後に RESULT の JSON 1行（A=modA 側の勝/敗/分）。
@@ -17,9 +18,11 @@ const [c1, c2] = (args.chars || 'you,you').split(',');
 const games = parseInt(args.games || '100', 10), seed0 = parseInt(args.seed || '1', 10);
 const size = args.size ? parseInt(args.size, 10) : undefined;
 const maxTurns = 600;
+const PROD = !!args.prod; // --prod: 本番と同じく、全席が推奨デッキ・推奨ギア（省略するとデッキなし=手札が全札からランダム、ギアなし）
+const gearMod = require('./shared/gear');
 
 function play(chars, mods, seed) {
-    const s = engine.newGame({ chars, rng: engine.makeRng(seed), size });
+    const s = PROD ? engine.newGame({ chars, rng: engine.makeRng(seed), size, decks: true, gears: chars.map((c) => gearMod.recommendedGears(c)) }) : engine.newGame({ chars, rng: engine.makeRng(seed), size });
     let g = 0;
     while (!s.winner && g++ < maxTurns) {
         const r = mods[s.turn].makeMove(s, 'faithful');

@@ -57,10 +57,16 @@ function play(chars, cfgs, seed) {
     const s = engine.newGame({ chars, rng, size, decks: cfgs.map((c) => c.deck || null), gears: cfgs.map((c) => c.gears) });
     s.aiFlags = cfgs.map((c) => c.flags || {});
     let g = 0;
-    while (!s.winner && g++ < maxTurns) {
-        const r = cfgs[s.turn].mod.makeMove(s, 'faithful');
-        if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move);
-        else if (!r.turnEnded) engine.SKILLS.charge(s);
+    try {
+        while (!s.winner && g++ < maxTurns) {
+            const r = cfgs[s.turn].mod.makeMove(s, 'faithful');
+            if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move);
+            else if (!r.turnEnded) engine.SKILLS.charge(s);
+        }
+    } catch (e) {
+        // 効果のスタックが際限なく増えて配列が作れなくなる試合(#204)。計測全体を落とさず引き分け扱いにし、条件を記録する
+        console.error(`CRASH(引分扱い) ${e.message} chars=${chars.join(',')} gears=${cfgs.map((c) => (c.gears || []).join('+')).join(' | ')} seed=${seed} turn=${g}`);
+        return -1;
     }
     return s.winner ? engine.seatOf(s.winner) : -1;
 }

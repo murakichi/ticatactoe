@@ -115,10 +115,24 @@ function inflation(args) {
     if (args.json) return console.log(JSON.stringify(out, null, 2));
     const f = (x, d = 2) => (x == null ? 'n/a' : x.toFixed(d));
     console.log(`# 魔力インフレ  ${players}人 ${out.boardSize}x${out.boardSize}  games=${games}  AI=${mode}  seed=${baseSeed}  基準コスト=${f(out.referenceCost, 1)}`);
-    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)\n`);
+    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)`);
+    console.log('  ※従来の inflationIndex は、序盤(全試合)と後半(少数の長い試合)を混ぜて比べるので、シード違いでよく動く。下の matched を見る。');
+    const mt = out.matched;
+    if (mt && mt.index != null) {
+        console.log(`matched index = ${f(mt.index)}  95%区間 [${f(mt.ci95[0])}, ${f(mt.ci95[1])}]  (同じ ${mt.games} 試合の 序盤 と 後半${mt.lateFrom}-${mt.lateTo}手 を比較)`);
+        console.log(`  収入の伸び ${f(mt.incomeGrowth)}x  手持ちの伸び ${f(mt.stockGrowth)}x  (後半/序盤。収入=経済、手持ち=収入+AIが撃ち切れない分)`);
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`  マスの変化（盤に占める割合） 序盤 ${pc(mt.earlyChangeRate)} → 後半 ${pc(mt.lateChangeRate)}   動かない手番 序盤 ${pc(mt.earlyStillRate)} → 後半 ${pc(mt.lateStillRate)}  (魔力が余るのに盤面が動かない=撃てない/撃たない)\n`);
+    } else console.log(`matched index = n/a  (${(mt && mt.note) || ''})\n`);
     console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
     for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
         console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
+    }
+    console.log('\nマスの変化（コマの有無・持ち主・効果が変わったマス。減衰は数えない）');
+    console.log('区間(手番)    変化マス/手番  盤に占める割合  コマが動く/手番  動かない手番  魔力1あたりの変化');
+    for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(f(b.changePerTurn), 12)}  ${pad(pc(b.changeRate), 13)}  ${pad(f(b.piecesPerTurn), 14)}  ${pad(pc(b.stillRate), 11)}  ${f(b.changePerMagic)}`);
     }
 }
 
@@ -373,6 +387,17 @@ function watch(args) {
             out.push(`${pad('キャラ', 14)} ${pad('対全平均', 9)} ${pad('対強豪', 8)} ${pad('最悪対面', 20)} ${pad('不利/有利', 10)} 均衡で選ばれる確率`);
             for (const r of an.rows) {
                 out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.strongAvg == null ? 'n/a' : (r.strongAvg * 100).toFixed(1) + '%', 8)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
+            }
+            const beats = (id) => an.edges.filter((e) => e.from === id && e.significant).sort((x, y) => y.rate - x.rate).map((e) => `${e.to}(${(e.rate * 100).toFixed(0)}%)`);
+            out.push('\n## 有利関係（有意に勝ち越す相手。左が勝つ側）');
+            for (const r of an.rows) out.push(`  ${pad(r.id, 14)} > ${beats(r.id).join(' ') || '—'}`);
+            const lp = an.loops;
+            if (!lp.groups.length) out.push('閉ループ(三すくみなど): なし（有意な勝ち越しは一方向だけ）');
+            else {
+                out.push(`閉ループ(三すくみなど): ${lp.groups.length}グループ`);
+                lp.groups.forEach((g) => out.push(`  互いに勝ち負けが循環するキャラ(${g.length}): ${g.join(', ')}`));
+                lp.cycles.slice(0, 10).forEach((c) => out.push(`  ${c.length === 3 ? '三すくみ' : c.length + 'すくみ'}: ${c.join(' → ')} → ${c[0]}`));
+                if (lp.cycles.length > 10 || lp.truncated) out.push(`  ...ほか${lp.truncated ? '多数' : lp.cycles.length - 10 + '件'}`);
             }
             out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(平均の上位半分の相手だけ)で見る。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合。${an.minDecided}試合未満の対面は数えない)`);
         }

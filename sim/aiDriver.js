@@ -66,6 +66,7 @@ function inputOf(s, reroll) {
         seatCount: s.chars.length,
         lastStandReady: hasGear(s.gears[seat], 'lastStand') && !s.lastStandUsed[seat],
         tokenFree: s.tokenFree[seat],
+        wardActive: s.ward[seat] > 0,
         chargeBuffActive: s.chargeBuff[seat] > 0,
         oppGearCount: others.reduce((n, o) => n + s.gears[o].length, 0),
         oppLastStand: others.some((o) => hasGear(s.gears[o], 'lastStand') && !s.lastStandUsed[o]),
@@ -187,4 +188,4 @@ function makeMove(s) {
     return { move: null, turnEnded: true };
 }
 
-module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf };
+module.exports = { takeTurn, playTurn, playPlaceOnly, makeMove, keyOf, aiFor };

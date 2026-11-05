@@ -10,6 +10,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
 import { SkillCosts } from './skillCosts';
 import { placeBlocked, moveBlocked } from './lifeBan';
+import { isTakeProtected } from './decay';
 import { canFreeze, lockable, emptyBlocked, overwriteBlocked } from './thermal';
 import { isShielded } from './charge';
 
@@ -41,6 +42,8 @@ export type AITurnInput = {
     // --- ギア・手番内の状態（AIPlayer に毎手番セットする） ---
     lastStandReady: boolean;
     tokenFree: boolean;
+    /** 毒返しの構えが効いている（残りの手番数が1以上） */
+    wardActive: boolean;
     chargeBuffActive: boolean;
     oppGearCount: number;
     oppLastStand: boolean;
@@ -91,6 +94,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
+    ai.wardActive = input.wardActive;
     // 裸の王様の判断材料: 相手の有効なギアの数と、使える土壇場の防壁を持つ相手がいるか
     ai.chargeBuffActive = input.chargeBuffActive;
     ai.oppGearCount = input.oppGearCount;
@@ -164,6 +168,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         for (const c of result.chargeClicks) {
             steps.push(c.skill);
             if (c.target !== undefined) steps.push(c.target);
+            if (c.target2 !== undefined) steps.push(c.target2);
         }
         steps.push(...result.skills);
         if (result.lockTargets) steps.push(...result.lockTargets);
@@ -185,7 +190,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
 export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, character: CharacterId, characters: readonly CharacterId[]): boolean => {
     const sq = board[cell];
     if (isShielded(sq, characters)) return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
-    if (sq.player && sq.player !== player && sq.bind > 0 && character !== 'giant') return false; // ライフの残った敵コマは巨人しか奪えない
+    if (sq.player && sq.player !== player && (sq.bind > 0 || isTakeProtected(sq, characters)) && character !== 'giant') return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
     if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) return false; // ロック中
     if (emptyBlocked(sq)) return false; // 氷結中の空きマス
     if (sq.player === player && overwriteBlocked(sq)) return false; // 氷結中の自コマには重ねられない

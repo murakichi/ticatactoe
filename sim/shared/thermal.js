@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sowCandidates = exports.graft = exports.GRAFT_MAX = exports.budReceivers = exports.harvestBuds = exports.canBud = exports.activeBuds = exports.budStacks = exports.burnout = exports.burnoutTargets = exports.burnoutCostOf = exports.totalFlames = exports.BURNOUT_FREE_FLAMES = exports.decayTick = exports.infernoTargets = exports.INFERNO_STACKS = exports.INFERNO_COST = exports.detonate = exports.freezeAll = exports.infernoCostOf = exports.INFERNO_FREE_SKILLS = exports.FLAME_SKILL_KEYS = exports.reducedGlacierCost = exports.GLACIER_DAMAGE_PER_STACK = exports.GLACIER_BASE_COST = exports.cleanse = exports.ailmentStacks = exports.AILMENTS = exports.freeze = exports.canFreeze = exports.ignite = exports.zeroOut = exports.absorbDestroy = exports.applyDamage = exports.isEffectWarded = exports.setEffectWard = exports.burnDamageOf = exports.lockable = exports.emptyBlocked = exports.overwriteBlocked = exports.thawOne = exports.thaw = exports.isDormant = exports.flameStacks = exports.isFrozen = exports.frozenStacks = exports.FLAME_INSTANT_DAMAGE = exports.FLAME_SKILL_MULT = exports.PYROMANCER_EXTRA_BURN = exports.FLAME_BURN_DAMAGE = void 0;
 exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE = exports.leafFrostTargets = exports.fireWheel = exports.FIRE_WHEEL_COUNT = exports.fireWheelTargets = exports.kimon = exports.kimonTargets = exports.fireStacksTotal = exports.KIMON_LOCK_TURNS = exports.thunderFireVictims = exports.THUNDER_FIRE_MIN = exports.thawAll = exports.thawTargets = exports.frostfallTargets = exports.placeFrostToken = exports.randomFreezeCandidates = exports.sacrificeFlame = exports.sacrificeTargets = exports.canSacrifice = exports.placeFlameToken = exports.swidden = exports.autumn = exports.autumnTargets = exports.mulch = exports.mulchCandidates = exports.bonfire = exports.bonfireTargets = exports.placeLeafToken = exports.mogaribue = exports.canMogaribue = exports.mogaribueTargets = exports.mogaribueDamage = exports.MOGARIBUE_LIFE = exports.kindling = exports.kindlingTargets = exports.tinderTargets = exports.leafCloakTargets = exports.leafAllTargets = exports.leafDrop = exports.leafDropTargets = exports.witchCostOf = exports.boardLeaves = exports.leafSurcharge = exports.activeLeaves = exports.leafStacks = exports.sow = exports.SOW_COUNT = void 0;
 const Player_1 = require("./Player");
+const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
 /** 火炎1スタックあたりの継続ダメージ */
 exports.FLAME_BURN_DAMAGE = 2;
@@ -118,6 +119,11 @@ const ignite = (board, cells, size, n = 1, keepBuds) => {
                 thawed.add(k);
                 continue;
             }
+            // 大木・枯れた大木は、🔥を付けられると即座に壊れて空きマスになる（氷結中は上の解凍で守られる）。そのマスにはそれ以上🔥を付けない
+            if ((0, ObjectKind_1.isTree)(board[k])) {
+                board[k] = { player: undefined, bind: 0, effects: [] };
+                break;
+            }
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = (_a = keepBuds === null || keepBuds === void 0 ? void 0 : keepBuds(board[k])) !== null && _a !== void 0 ? _a : false;
             board[k] = { ...board[k], effects: [...board[k].effects.filter((e) => e.effect !== '🍂' && (guarded || e.effect !== '🌱')), { effect: '🔥' }] };
@@ -185,7 +191,7 @@ exports.GLACIER_DAMAGE_PER_STACK = 3;
 const reducedGlacierCost = (baseCost, charges, calc) => Math.max(1, calc(baseCost - charges));
 exports.reducedGlacierCost = reducedGlacierCost;
 /** 煉獄の鍛冶師のパッシブでコストが常に-1される、🔥を付与するスキル（コストキー。業火は固有スキルなので含めない）。sim/thermal.js と同じ */
-exports.FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickTinder', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
+exports.FLAME_SKILL_KEYS = new Set(['onClickIgnite', 'onClickTinder', 'onClickSpark', 'onClickFlameToken', 'onClickDoubleFlameToken', 'onClickSacrifice', 'onClickSwidden', 'onClickFireWheel']);
 /** 業火の無料権が付く、1手番に使った異なるスキルの種類数 */
 exports.INFERNO_FREE_SKILLS = 3;
 /** 業火の実コスト: 無料権（infernoReady）があれば0、なければ calc(基礎コスト)。sim/engine.js の infernoCost と同じ。
@@ -247,10 +253,10 @@ exports.infernoTargets = infernoTargets;
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-const decayTick = (sq, chars) => {
+const decayTick = (sq, chars, natural = true) => {
     let next = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next))
-        next = { ...next, bind: next.bind - 1 };
+    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next) && natural)
+        next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
     const burn = (0, exports.burnDamageOf)(next, chars);
     if (burn > 0)
         next = { ...next, bind: Math.max(0, next.bind - burn) };
@@ -382,28 +388,44 @@ exports.leafAllTargets = leafAllTargets;
 /** 落葉の衣の候補: 使用者のコマ全て（🔑ロック中も含む。🍂は自陣に不利でないため）。この中からランダムに1つに🍂を付ける */
 const leafCloakTargets = (board, me) => board.map((sq, i) => (sq.player === me ? i : -1)).filter((i) => i !== -1);
 exports.leafCloakTargets = leafCloakTargets;
-/** 火口の対象: 使用者以外のコマのうち、🌱か🍂を持ち、guarded でないもの（昇順） */
-const tinderTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && ((0, exports.budStacks)(sq) > 0 || (0, exports.leafStacks)(sq) > 0) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 火口の対象: 使用者以外のコマのうち、🌱か🍂か❄を持ち、guarded でないもの（昇順）。❄のコマは🔥で氷結が解ける */
+const tinderTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && ((0, exports.budStacks)(sq) > 0 || (0, exports.leafStacks)(sq) > 0 || (0, exports.isFrozen)(sq)) && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
 exports.tinderTargets = tinderTargets;
-/** 焚きつけの対象: 使用者以外のコマのうち、🍂を持ち、guarded でないもの（昇順） */
-const kindlingTargets = (board, player, guarded) => board.map((sq, i) => (sq.player && sq.player !== player && (0, exports.leafStacks)(sq) > 0 && !guarded(sq, i) ? i : -1)).filter((i) => i !== -1);
+/** 焚きつけで🔥に変わる、そのマスの🍂と🌱の数（keepBuds=冬至の種子のガード中のコマの🌱は燃えないので数えない） */
+const kindlingStacks = (sq, keepBuds) => ({
+    leaves: (0, exports.leafStacks)(sq),
+    buds: (keepBuds === null || keepBuds === void 0 ? void 0 : keepBuds(sq)) ? 0 : (0, exports.budStacks)(sq),
+});
+/** 焚きつけの対象: 使用者以外のコマのうち、🍂か🌱を持ち、guarded でないもの（昇順）。keepBuds のコマは🍂だけが対象 */
+const kindlingTargets = (board, player, guarded, keepBuds) => board
+    .map((sq, i) => {
+    if (!sq.player || sq.player === player || guarded(sq, i))
+        return -1;
+    const k = kindlingStacks(sq, keepBuds);
+    return k.leaves + k.buds > 0 ? i : -1;
+})
+    .filter((i) => i !== -1);
 exports.kindlingTargets = kindlingTargets;
 /**
- * 焚きつけ: 対象マスの🍂を全て取り除き、取り除いた🍂1枚につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて🔥は残りのスタックぶん、
- * 付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。変換した🍂の枚数と、解けたマスを返す。board を直接書き換える
+ * 焚きつけ: 対象マスの🍂と🌱を全て取り除き、取り除いた1つ（🍂も🌱も1つ）につき🔥を1つ付ける（ignite の規則どおり: 氷結中は❄が全解除されて
+ * 🔥は残りのスタックぶん、付与の瞬間に1ダメージ・縦横隣の氷結も解ける）。keepBuds のコマの🌱は燃えず、数えない。
+ * 変換した🍂と🌱の数と、解けたマスを返す。board を直接書き換える
  */
 const kindling = (board, cells, size, keepBuds) => {
     let leaves = 0;
+    let buds = 0;
     const thawed = [];
     for (const k of cells) {
-        const n = (0, exports.leafStacks)(board[k]);
+        const stacks = kindlingStacks(board[k], keepBuds);
+        const n = stacks.leaves + stacks.buds;
         if (n === 0)
             continue;
-        leaves += n;
-        board[k] = without(board[k], '🍂');
+        leaves += stacks.leaves;
+        buds += stacks.buds;
+        board[k] = without(board[k], '🍂', ...(stacks.buds > 0 ? ['🌱'] : []));
         thawed.push(...(0, exports.ignite)(board, [k], size, n, keepBuds).thawed);
     }
-    return { leaves, thawed };
+    return { leaves, buds, thawed };
 };
 exports.kindling = kindling;
 /** 虎落笛で自陣のコマ全てが得るライフ */
