@@ -697,7 +697,7 @@ function advanceTurn(s) {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
     // 春雷(本番 gear.ts の springThunderThaw): 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く
-    if (hasGear(s.gears[next], 'springThunder')) {
+    if (hasGear(s.gears[next], 'springThunder') || (process.env.SPRING_PASSIVE && ch === 'electrician')) { // SPRING_PASSIVE: 雷霆の固有パッシブにした場合の試験用
         const thawed = gear.springThunderThaw(s.board, sym);
         if (thawed.length > 0) bumpStat(s, 'springThunder', thawed.length);
     }
