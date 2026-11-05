@@ -759,6 +759,24 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
     const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
     const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
 
+    it('氷結中の空きマスが行0の列を塞いでいるとき、隣の敵コマを火遁で燃やして氷結を溶かせば組めるなら、その敵コマを返す（組める盤面や溶かしても組めない盤面は null）', () => {
+        const b = nearFull();
+        put(b, 0, '💙', 3);
+        b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 行0の1が氷結中の空きマス
+        const ai = mk();
+        expect(ai.floodComboWins(b)).toBe(false); // 氷結中のマスは式神にできないので列が完成しない
+        expect(ai.comboThawTarget(b)).toBe(5); // 1の真下の5(敵を優先)を燃やすと1の氷結が溶けて組める
+        const open = nearFull();
+        put(open, 0, '💙', 3);
+        expect(ai.comboThawTarget(open)).toBeNull(); // すでに組める
+        const sealed = nearFull();
+        put(sealed, 0, '💙', 3);
+        sealed[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+        sealed[5] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // 隣のコマがロック中で燃やせない
+        sealed[0] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+        expect(ai.comboThawTarget(sealed)).toBeNull();
+    });
+
     it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
         const b = emptyBoard();
         put(b, 0, '⭕', 3);

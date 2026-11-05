@@ -717,6 +717,24 @@ class AIPlayer {
         return null;
     }
 
+    /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
+    comboThawTarget(board: SquareInfo[]): number | null {
+        if (this.floodComboWins(board)) return null; // すでに組める
+        const size = this.sizeOf(board);
+        let own: number | null = null;
+        for (let n = 0; n < board.length; n++) {
+            const sq = board[n];
+            if (!sq.player || isFrozen(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (!orthoNeighbors(n, size).some((m) => emptyBlocked(board[m]))) continue; // 溶かせる氷結が隣に無い
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            ignite(post, [n], size, 1);
+            if (!this.floodComboWins(post)) continue;
+            if (this.isEnemy(sq.player)) return n;
+            if (own === null) own = n;
+        }
+        return own;
+    }
+
     /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。旧sim AI thawIgniteTarget(allowOwn) */
     thawIgniteTarget(board: SquareInfo[], k: number): number | null {
         let own: number | null = null;
@@ -2211,6 +2229,20 @@ class AIPlayer {
                 this.updateShield(post);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null) return { move: followup, skills: ['onClickIgnite'], lockTargets: [t] };
+                this.updateShield(board);
+            }
+        }
+
+        // 陰陽師: 氷結中の空きマスが百鬼夜行→式神一括の列を塞いでいるとき、火遁で隣のコマを燃やして溶かし、コンボを組める盤面にする
+        // （氷室・軍師の氷結で列が作れず、コンボ待ちのまま遅くなるのを防ぐ）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
+            const tg = this.comboThawTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                ignite(post, [tg], this.sizeOf(board), 1);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickIgnite'], lockTargets: [tg] };
                 this.updateShield(board);
             }
         }
