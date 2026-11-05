@@ -1376,7 +1376,7 @@ function onClickJudgeDay(s) {
     s.useJudgeDay = true;
 }
 function exeJudgeDay(s, i) {
-    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s), s.chars);
+    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s));
     addCorpses(s, destroyed);
     s.useMagicCount[s.turn] = 0;
     s.useJudgeDay = false;

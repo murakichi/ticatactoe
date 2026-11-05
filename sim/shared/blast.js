@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.judgeDay = exports.stomp = void 0;
 const boardGeometry_1 = require("./boardGeometry");
-const charge_1 = require("./charge");
 const thermal_1 = require("./thermal");
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
 /** ストンプ: i を中心とする範囲の敵コマ・空きマスのロックなどを全て破壊し、自陣のコマはライフ-5（氷結なら解除だけ・🔥は1.5倍）。
@@ -34,7 +33,7 @@ const stomp = (board, i, player, life) => {
 exports.stomp = stomp;
 /** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
  *  ただし氷結が身代わりになって残った中心は奪えない */
-const judgeDay = (board, i, player, chars) => {
+const judgeDay = (board, i, player) => {
     const range = (0, boardGeometry_1.geometryForCells)(board.length).judgeRange(i);
     let destroyed = 0;
     let centerSurvived = false;
@@ -45,11 +44,6 @@ const judgeDay = (board, i, player, chars) => {
         const protectedBud = sq.player === player && sq.effects.some((e) => e.effect === '🌱');
         if (locked && protectedBud)
             continue;
-        if (chars && sq.player && sq.player !== player && (0, charge_1.isShielded)(sq, chars)) {
-            if (idx === i)
-                centerSurvived = true;
-            continue;
-        } // 実験: 雷霆の⚡の無敵は審判の日も防ぐ
         const guard = (0, thermal_1.absorbDestroy)(sq);
         if (guard.blocked) {
             board[idx] = guard.sq;

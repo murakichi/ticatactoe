@@ -3,7 +3,6 @@
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
-import { PlayerCharacters, isShielded } from './charge';
 import { absorbDestroy, applyDamage, emptyBlocked } from './thermal';
 
 export type BlastResult = {
@@ -43,7 +42,7 @@ export const stomp = (board: SquareInfo[], i: number, player: Player, life: numb
 
 /** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
  *  ただし氷結が身代わりになって残った中心は奪えない */
-export const judgeDay = (board: SquareInfo[], i: number, player: Player, chars?: PlayerCharacters): BlastResult => {
+export const judgeDay = (board: SquareInfo[], i: number, player: Player): BlastResult => {
     const range = geometryForCells(board.length).judgeRange(i);
     let destroyed = 0;
     let centerSurvived = false;
@@ -53,7 +52,6 @@ export const judgeDay = (board: SquareInfo[], i: number, player: Player, chars?:
         const locked = sq.effects.some((e) => e.effect === '🔑');
         const protectedBud = sq.player === player && sq.effects.some((e) => e.effect === '🌱');
         if (locked && protectedBud) continue;
-        if (chars && sq.player && sq.player !== player && isShielded(sq, chars)) { if (idx === i) centerSurvived = true; continue; } // 実験: 雷霆の⚡の無敵は審判の日も防ぐ
         const guard = absorbDestroy(sq);
         if (guard.blocked) {
             board[idx] = guard.sq;
