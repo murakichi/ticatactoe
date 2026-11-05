@@ -23,8 +23,9 @@ export type PlacementResult = {
  * - 自分のコマ: 強化（ライフ+life+1。式神は🌱付きの自陣コマになる）
  * - 敵のコマ: ライフの差で奪取/破壊/攻撃。式神は乗っ取られると空きマスになる
  * - 空きマス: ライフ life のコマ。置かれた🔥は引き継ぐ
+ * @param asObject 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪う（false は自陣の通常のコマとして置き換える）。ライフは life
  */
-export const resolvePlacement = (cell: SquareInfo, player: Player, life: number): PlacementResult => {
+export const resolvePlacement = (cell: SquareInfo, player: Player, life: number, asObject: boolean = false): PlacementResult => {
     if (cell.player === player && isObject(cell)) {
         // 自陣のオブジェクトは、いつでも通常のコマで乗っ取れる（オブジェクトは消えて、ライフ life のコマになる。設置数の制限は無い）
         return { square: { player, bind: life, effects: [...cell.effects] }, poisonSpread: false, corpse: false, reinforced: false };
@@ -58,7 +59,7 @@ export const resolvePlacement = (cell: SquareInfo, player: Player, life: number)
             capturedFrom = undefined;
         }
         // 敵のオブジェクトはライフが0になって初めて乗っ取れる。ライフが残る攻撃（巨人・満杯の盤面）ではオブジェクトのまま。乗っ取るとオブジェクトは消え、持ち主の効果は引き継がない
-        const kept = owner === cell.player && cell.object ? { object: cell.object } : {};
+        const kept = (owner === cell.player || (asObject && owner === player)) && cell.object ? { object: cell.object } : {};
         return { square: { player: owner, bind, effects: [], ...kept }, capturedFrom, poisonSpread: calc <= 0 && activePoison(cell) > 0, corpse: calc <= 0, reinforced: false };
     }
     return { square: { player, bind: life, effects: cell.effects.filter((e) => e.effect === '🔥') }, poisonSpread: false, corpse: false, reinforced: false };

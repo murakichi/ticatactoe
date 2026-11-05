@@ -83,6 +83,22 @@ describe('オブジェクト: 乗っ取りはライフ0が条件', () => {
     });
 });
 
+describe('オブジェクト: 乗っ取り方を選ぶ', () => {
+    const dead = { ...newObject('⭕', 'fort'), bind: 0 };
+    it('既定は自陣の通常のコマとして置き換える', () => {
+        expect(resolvePlacement(dead, '💙', 4).square).toEqual({ player: '💙', bind: 4, effects: [] });
+    });
+    it('asObject なら自分のオブジェクトとして奪う（ライフは着手のライフ）', () => {
+        const r = resolvePlacement(dead, '💙', 4, true);
+        expect(r.square).toEqual({ player: '💙', bind: 4, effects: [], object: 'fort' });
+        expect(r.capturedFrom).toBe('⭕');
+    });
+    it('asObject でも、通常のコマの奪取や、ライフが残るオブジェクトの攻撃は変わらない', () => {
+        expect(resolvePlacement({ player: '⭕', bind: 0, effects: [] }, '💙', 3, true).square).toEqual({ player: '💙', bind: 3, effects: [] });
+        expect(resolvePlacement(newObject('⭕', 'fort'), '💙', 99, true).square).toEqual({ player: '⭕', bind: 0, effects: [], object: 'fort' });
+    });
+});
+
 describe('オブジェクト: 火炎', () => {
     it('大木・枯れた大木は🔥を付けられると即座に壊れる。砦などは壊れない', () => {
         const b = board();

@@ -403,6 +403,7 @@ function newGame(opts = {}) {
         useFreeze: false,
         useSucker: false,
         useShikigamiPlace: false,
+        captureAsObject: false, // 次の着手で敵のオブジェクトを乗っ取るとき、オブジェクトのまま奪う
         objectPlacing: null, // オブジェクトの設置先を選んでいる最中の種類（objects.ts）
         useShikigamiBlast: false,
         useShikigamiBless: false,
@@ -933,7 +934,8 @@ function placeMove(s, i) {
     const cur = curPlayer(s);
     const life = s.life;
     // 着手の結果（強化・奪取・破壊・攻撃・新規）は本番(placement.ts)の生成物
-    const placed = placementMod.resolvePlacement(board[i], cur, life);
+    const placed = placementMod.resolvePlacement(board[i], cur, life, !!s.captureAsObject); // captureAsObject: 敵のオブジェクトを自分のオブジェクトとして乗っ取る
+    s.captureAsObject = false;
     const placedNew = !placed.reinforced; // 静電気の季節: 補強は設置ではない
     const capturedFrom = placed.capturedFrom; // 通常の攻撃で奪取した相手のシンボル（復讐の刃）
     if (placed.poisonSpread) spreadOrigins.push(i); // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする

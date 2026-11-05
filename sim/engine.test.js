@@ -3552,5 +3552,18 @@ test('オブジェクト: 生命の泉は手番開始時のライフ期待値を
     assert.ok(diff > 1.2 && diff < 2.8, 'ライフ期待値の差はおよそ+2: ' + diff);
 });
 
+test('オブジェクト: ライフ0の敵のオブジェクトは、自分のオブジェクトとして乗っ取るか、自陣のコマとして置き換えるかを選べる', () => {
+    for (const asObject of [false, true]) {
+        const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(31) });
+        s.life = 4;
+        s.board[2] = { player: '⭕', bind: 0, effects: [], object: 'spring' };
+        s.captureAsObject = asObject;
+        assert.strictEqual(e.placeMove(s, 2), true);
+        assert.strictEqual(s.board[2].player, '💙');
+        assert.strictEqual(s.board[2].object, asObject ? 'spring' : undefined);
+        assert.strictEqual(s.captureAsObject, false, '着手のたびにリセット');
+    }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
