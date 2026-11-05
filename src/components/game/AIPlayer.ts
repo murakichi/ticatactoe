@@ -124,6 +124,8 @@ const PG_HOLD_GAP = 6;
 const BOLT_SILENCE_IDX = 113;
 /** 招き猫を置く条件: 盤面の空きの下限 / 見ざる地蔵を置く点数の下限 */
 const CAT_MIN_EMPTY = 5;
+/** 雷霆の巫が選別して置くオブジェクト（効果を個別に測るもの） */
+const SCREEN_OBJECT_KINDS = ['deadTree', 'spring', 'fort', 'sanctuary', 'market', 'mudField', 'tongueKing', 'soloSign', 'oneWord'] as const;
 const MONKEY_MIN_SCORE = 4;
 const BIG_TREE_MAX = 1;
 /** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
@@ -213,6 +215,8 @@ class AIPlayer {
     /** 自陣の働いている招き猫・見ざる地蔵の数 */
     ownCats: number = 0;
     ownMonkeys: number = 0;
+    /** 自陣の働いているオブジェクトの種類 */
+    ownObjectKinds: Set<string> = new Set();
     /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
     holdPG: number = 0;
     skillKinds: Set<string> = new Set();
@@ -2282,6 +2286,7 @@ class AIPlayer {
      */
     makeMove(...argsIn: Parameters<AIPlayer['planMove']>): AIResult {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownObjectKinds = new Set(argsIn[0].filter((sq) => sq.object && sq.player === this.playerSymbol && !isDormant(sq)).map((sq) => sq.object as string));
         this.ownCats = argsIn[0].filter((sq) => sq.object === 'luckyCat' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownMonkeys = argsIn[0].filter((sq) => sq.object === 'blindMonkey' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
@@ -2898,6 +2903,23 @@ class AIPlayer {
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
+            }
+        }
+        // 雷霆の巫のオブジェクト選別: 上のほか、手札にあるオブジェクトを1つずつ、置けるときに置く（効果は個別に測る。docs/tune/electrician.md 試行54）。
+        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あるときだけ。置くマスは大木と同じ（自分の列を潰さず、敵の列を潰せるマス）
+        if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && findEmptyIndexes(board).length >= CAT_MIN_EMPTY) {
+            for (const kind of SCREEN_OBJECT_KINDS) {
+                const def = OBJECT_DEFS[kind];
+                if (!availableSkills.includes(def.idx) || this.ownObjectKinds.has(kind)) continue;
+                const cost = this.calculateAICost(costs[def.costKey], false, false, def.costKey);
+                const cell = this.bestTreeCell(board);
+                if (cell === null || magic < cost) continue;
+                chargeClicks.push({ skill: def.costKey, target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+                break;
             }
         }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
