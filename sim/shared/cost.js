@@ -68,6 +68,9 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
     // 大工房: 働いている間、ベースコスト7以上のスキルのコスト-3（重ならない。下限1）
     if (skillKey && ((_a = skillCosts_1.skillCosts[skillKey]) !== null && _a !== void 0 ? _a : 0) >= objects_1.WORKSHOP_PARAMS.bigBase && (0, objects_1.workshopActive)(env.board, env.player) && adjusted > 1)
         adjusted = Math.max(1, adjusted - objects_1.WORKSHOP_PARAMS.cut);
+    // 招き猫: 働いている間、自分のスキルのコスト-1（下限1・重ならない）
+    if ((0, objects_1.luckyCatActive)(env.board, env.player) && adjusted > 1)
+        adjusted = Math.max(1, adjusted - objects_1.OBJECT_PARAMS.luckyCatCut);
     if (skillKey === 'onClickSpark' && mine && env.placedPrev)
         return 0; // 飛び火: 直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
     if (skillKey === 'onClickTinder' && mine && env.plantPrev)

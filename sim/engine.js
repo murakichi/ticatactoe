@@ -422,10 +422,12 @@ function newGame(opts = {}) {
         useRelocate: false,
         relocateFrom: null,
         useStash: false,
-        useBoltSilence: false,
+        useBoltSilence: 0, // あと何個の⚡を選んで払うか
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        pieceBase: fill(0), // 各席の手番開始時点の非オブジェクトのコマの数（お一人様限りの札）
+        effectSnap: null, // 手番の頭の各マスのエフェクト（見ざる地蔵・閻魔の舌）
         turnSpent: fill(0), // この手番にスキルに払ったマジックの合計（大工房の設置の無料条件）
         oppBigSeen: fill(false),
         oppBigPrev: fill(false),
@@ -565,8 +567,16 @@ function calculateCost(s, cost, isToken = false, isPoison = false, key) {
     return costMod.calculateCostOf(costEnv(s, s.turn), cost, isToken, isPoison, key);
 }
 
+// この手番に置いた新しいコマの数（手番開始時との差）。お一人様限りの札の入力
+function placedThisTurn(s) {
+    return Math.max(0, objectsMod.ownPieceCount(s.board, curPlayer(s)) - s.pieceBase[s.turn]);
+}
+// 相手のオブジェクト（一言居士・お一人様限りの札）に縛られて、そのスキルを今は使えないか（Game.tsx の restrictSkill と同じ）
+function skillRestrictedByObjects(s, key) {
+    return objectsMod.skillRestricted({ board: s.board, actor: curPlayer(s), skillKey: key, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(key), skillsThisTurn: s.gearSkills[s.turn], placedThisTurn: placedThisTurn(s) });
+}
 function calculateTokenBind(s) {
-    return costMod.tokenBindOf(curChar(s), s.gears[s.turn]);
+    return objectsMod.mudAdjustedBind(s.board, curPlayer(s), costMod.tokenBindOf(curChar(s), s.gears[s.turn])); // 泥田坊: 相手の泥田坊が働いていればトークンのライフは0
 }
 
 // 魔力ボーナスに数える🌱（休眠マスの🌱は数えない。guarded=冬至の種子で🌱だけは休眠しない）
@@ -594,7 +604,7 @@ function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
-        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
+        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
         veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
     };
     const r = {
@@ -613,6 +623,7 @@ function lastStandActiveAgainst(s, seat) {
 // 勝者の確定。初めて相手が列を揃えたとき、土壇場の防壁を持つ席がいれば、かわりにその列のマスを消滅させる（ロック・氷結を貫通）
 function settleWinner(s) {
     let w = calculateWinner(symbolsOf(s.board));
+    const byLines = !!w;
     if (w) {
         const holder = s.gears.findIndex((g, seat) => hasGear(g, 'lastStand') && !s.lastStandUsed[seat] && SYMBOLS[seat] !== w);
         if (holder >= 0) {
@@ -626,6 +637,7 @@ function settleWinner(s) {
             w = undefined;
         }
     }
+    if (!byLines) { const enc = objectsMod.encircleWinner(s.board); if (enc) w = enc.player; } // 八卦の陣（4つ並びではないので土壇場の防壁の対象外）
     s.winner = w;
 }
 
@@ -666,6 +678,10 @@ function advanceTurn(s) {
     const sym = SYMBOLS[next];
     const ch = s.chars[next];
     // 席ごとのギア・導線・廃墟の状態の更新は本番(gearTurn.ts)の生成物。魔力などは戻り値を見て足す
+    // 見ざる地蔵・閻魔の舌: 終わった手番で付いたエフェクトを処理する（手番の頭の盤面との差分。本番 objects.ts の enforceEffectRules）
+    const rules = objectsMod.enforceEffectRules(s.board, s.effectSnap, SYMBOLS[s.turn]);
+    if (rules.removed.length > 0) bumpStat(s, 'blindMonkeyRemoved', rules.removed.length);
+    if (rules.zeroed.length > 0) bumpStat(s, 'tongueKingZeroed', rules.zeroed.length);
     const change = gearTurnMod.advanceGearState(...gearTurnView(s), { board: s.board, symbols: SYMBOLS.slice(0, seatCount(s)), gears: s.gears, endSeat: s.turn, nextSeat: next });
     let scorchForNext = 0;
     change.scorch.forEach((gain, seat) => {
@@ -722,6 +738,7 @@ function advanceTurn(s) {
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;
+    s.effectSnap = objectsMod.effectSnapshot(s.board); // 次の手番の頭のエフェクト
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
     s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
 }
@@ -743,9 +760,8 @@ function placeMove(s, i) {
     }
 
     // 沈黙は雷なり: ⚡のある自陣のコマを1つ選び、⚡を1スタック払う。選べないマスは選び直せる
-    if (s.useBoltSilence) {
-        if (!exeBoltSilence(s, i)) return false;
-        s.useBoltSilence = false;
+    if (s.useBoltSilence > 0) {
+        if (!exeBoltSilence(s, i)) return false; // ⚡のない・自陣でないマスは選び直せる
         return true;
     }
 
@@ -940,6 +956,8 @@ function placeMove(s, i) {
     if (thermal.emptyBlocked(board[i])) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
     if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i])) return false;
+    // お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない
+    if (!board[i].player && objectsMod.newPieceBlocked(board, curPlayer(s), placedThisTurn(s))) return false;
 
     s.lastMoveCell = i; // 廃墟の底力: 通常の着手マス（攻撃で壊れた自コマは「スキル・エフェクトによる破壊」に数えない）
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
@@ -2386,12 +2404,12 @@ function onClickStash(s) {
     bumpMagicCount(s);
     bumpStat(s, 'stash');
 }
-// 沈黙は雷なり (idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
+// 沈黙は雷なり (idx 113): 自陣の⚡を2つ(合計2スタック。同じコマからでも可)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
 function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
-function boltSilenceLegal(s) { return boltSilenceTargets(s).length > 0; }
+function boltSilenceLegal(s) { return boltSilenceTargets(s).reduce((n, i) => n + chargeStacks(s.board[i]), 0) >= chargeMod.BOLT_SILENCE_BOLTS; }
 function onClickBoltSilence(s) {
     if (!boltSilenceLegal(s)) return;
-    s.useBoltSilence = true;
+    s.useBoltSilence = chargeMod.BOLT_SILENCE_BOLTS;
     spendMagic(s, calculateCost(s, costsOf(s).onClickBoltSilence, false, false, 'onClickBoltSilence'), 'onClickBoltSilence');
     bumpMagicCount(s);
     bumpStat(s, 'boltSilence');
@@ -2400,7 +2418,8 @@ function exeBoltSilence(s, i) {
     if (!boltSilenceTargets(s).includes(i)) return false;
     const at = s.board[i].effects.findIndex((e) => e.effect === '⚡');
     s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((_, k) => k !== at) };
-    otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
+    s.useBoltSilence -= 1;
+    if (s.useBoltSilence === 0) otherSeats(s).forEach((seat) => { s.silenced[seat] = true; }); // 払い切ったとき
     return true;
 }
 
@@ -2632,6 +2651,15 @@ const SKILLS = {
     thundercloud: (s) => onClickObject(s, 'thundercloud'),
     market: (s) => onClickObject(s, 'market'),
     workshop: (s) => onClickObject(s, 'workshop'),
+    barrierStone: (s) => onClickObject(s, 'barrierStone'),
+    amuletShrine: (s) => onClickObject(s, 'amuletShrine'),
+    luckyCat: (s) => onClickObject(s, 'luckyCat'),
+    mudField: (s) => onClickObject(s, 'mudField'),
+    tongueKing: (s) => onClickObject(s, 'tongueKing'),
+    eightTrigrams: (s) => onClickObject(s, 'eightTrigrams'),
+    soloSign: (s) => onClickObject(s, 'soloSign'),
+    oneWord: (s) => onClickObject(s, 'oneWord'),
+    blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),
@@ -2679,7 +2707,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    skillRestrictedByObjects, placedThisTurn, objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, boltSilenceLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
