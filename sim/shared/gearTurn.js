@@ -8,6 +8,7 @@ const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
+const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
@@ -88,8 +89,16 @@ const advanceGearState = (g, r, input) => {
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
-    g.marketUsed[endSeat] = false;
-    g.marketUsed[nextSeat] = false;
+    // 大工房の設置の無料条件: 終わる手番にベースコスト7以上のスキルを使った、またはスキルに合計7以上のマジックを払っていれば、他の席に伝える
+    if (g.bigCast[endSeat] || g.turnSpent[endSeat] >= objects_1.WORKSHOP_PARAMS.freeSpent)
+        g.oppBigSeen.forEach((_, i) => { if (i !== endSeat)
+            g.oppBigSeen[i] = true; });
+    g.oppBigPrev[nextSeat] = g.oppBigSeen[nextSeat];
+    g.oppBigSeen[nextSeat] = false;
+    g.turnSpent[endSeat] = 0;
+    g.turnSpent[nextSeat] = 0;
+    g.marketUsed[endSeat] = 0;
+    g.marketUsed[nextSeat] = 0;
     g.bigCast[endSeat] = false;
     g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
@@ -116,9 +125,10 @@ exports.gearCostContext = gearCostContext;
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
-const noteSkillUsed = (g, seat, skillId) => {
+const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     var _a;
     g.skills[seat] += 1;
+    g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));

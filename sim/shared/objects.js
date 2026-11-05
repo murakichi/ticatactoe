@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/objects.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.OBJECT_SKILL_BASE_IDX = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
+exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
 // オブジェクト（空きマスに設置して使う建造物）の純粋ロジック。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
 //
 // ルール
@@ -21,8 +21,6 @@ const charge_1 = require("./charge");
 const poison_1 = require("./poison");
 const shikigami_1 = require("./shikigami");
 const thermal_1 = require("./thermal");
-/** オブジェクトのスキルの先頭 idx（deck.ts の SKILL_CATALOG）。OBJECT_KINDS の順に並ぶ */
-exports.OBJECT_SKILL_BASE_IDX = 105;
 /** 効果の数値。説明文もここから描画する（説明文と実装のズレ防止） */
 exports.OBJECT_PARAMS = {
     /** 大木: 手番開始時のマジック */
@@ -31,18 +29,25 @@ exports.OBJECT_PARAMS = {
     springLife: 2,
     /** 砦: 周囲八マスの自陣コマのライフ */
     fortLife: 1,
+    /** 補強工事: 自陣のオブジェクト1つに足すライフ */
+    reinforceLife: 3,
+    /** 増築: 自陣のオブジェクト全てに足すライフ */
+    expandLife: 2,
 };
 /** 設置したときのライフ（全種類共通） */
 exports.OBJECT_LIFE = 5;
+/** 大工房: 軽減の対象になるスキルのベースコスト・軽減量・設置スキルが無料になる相手の手番の支出 */
+exports.WORKSHOP_PARAMS = { bigBase: 7, cut: 3, freeSpent: 7 };
 exports.OBJECT_DEFS = {
-    bigTree: { name: '大木', icon: '🌳', life: exports.OBJECT_LIFE, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${exports.OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
-    deadTree: { name: '枯れた大木', icon: '🪵', life: exports.OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
-    spring: { name: '生命の泉', icon: '⛲', life: exports.OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${exports.OBJECT_PARAMS.springLife}` },
-    fort: { name: '砦', icon: '🏰', life: exports.OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${exports.OBJECT_PARAMS.fortLife}` },
-    thundercloud: { name: '雷雲', icon: '🌩️', life: exports.OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
-    market: { name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに1回、シャッフル（手札の引き直し）が無料になる' },
-    sanctuary: { name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
-    poisonSwamp: { name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
+    bigTree: { idx: 105, name: '大木', icon: '🌳', life: exports.OBJECT_LIFE, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${exports.OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
+    deadTree: { idx: 106, name: '枯れた大木', icon: '🪵', life: exports.OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
+    spring: { idx: 107, name: '生命の泉', icon: '⛲', life: exports.OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${exports.OBJECT_PARAMS.springLife}` },
+    fort: { idx: 108, name: '砦', icon: '🏰', life: exports.OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${exports.OBJECT_PARAMS.fortLife}` },
+    thundercloud: { idx: 109, name: '雷雲', icon: '🌩️', life: exports.OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
+    market: { idx: 110, name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
+    sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
+    poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
+    workshop: { idx: 120, name: '大工房', icon: '🏭', life: exports.OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${exports.WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${exports.WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${exports.WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${exports.WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
 };
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 const objectLandable = (sq) => (0, shikigami_1.shikigamiLandable)(sq) && !(0, ObjectKind_1.isObject)(sq);
@@ -56,9 +61,12 @@ exports.objectLandableCells = objectLandableCells;
 /** 手番開始時に効果を発揮する、player のオブジェクトのマス（氷結中の休眠したものを除く。昇順） */
 const activeObjectCells = (board, player, kind) => board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !(0, thermal_1.isDormant)(sq) ? i : -1)).filter((i) => i !== -1);
 exports.activeObjectCells = activeObjectCells;
-/** player に働いている市場があるか（シャッフルが手番ごとに1回無料。氷結中の休眠したものは働かない） */
-const marketActive = (board, player) => (0, exports.activeObjectCells)(board, player, 'market').length > 0;
-exports.marketActive = marketActive;
+/** player に大工房が働いているか（ベースコスト7以上のスキルのコスト-3。重ならない。氷結中の休眠したものは働かない） */
+const workshopActive = (board, player) => (0, exports.activeObjectCells)(board, player, 'workshop').length > 0;
+exports.workshopActive = workshopActive;
+/** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
+const marketCount = (board, player) => (0, exports.activeObjectCells)(board, player, 'market').length;
+exports.marketCount = marketCount;
 /** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
 const sanctuaryProtected = (board) => {
     const out = board.map(() => false);
@@ -147,3 +155,99 @@ const objectTurnStart = (board, player, chars, rng = Math.random) => {
     return res;
 };
 exports.objectTurnStart = objectTurnStart;
+exports.OBJECT_SKILLS = {
+    demolish: { idx: 114, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    weather: { idx: 115, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    levelAll: { idx: 116, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    reinforce: { idx: 117, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: `自陣のオブジェクトを1つ選んで、ライフを+${exports.OBJECT_PARAMS.reinforceLife}します` },
+    expandAll: { idx: 118, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: `自陣のオブジェクトの全てのライフを+${exports.OBJECT_PARAMS.expandLife}します` },
+    duplicate: { idx: 119, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+};
+// 型の確認用（OBJECT_SKILLS の各要素が ObjectSkillDef に合うこと）
+const _check = exports.OBJECT_SKILLS;
+void _check;
+exports.OBJECT_SKILL_KEYS = Object.keys(exports.OBJECT_SKILLS);
+const enemyObjects = (board, player, chars) => board.map((sq, i) => (sq.object && sq.player && sq.player !== player && !(0, charge_1.isGuarded)(sq, chars) ? i : -1)).filter((i) => i !== -1);
+const ownObjects = (board, player) => board.map((sq, i) => (sq.object && sq.player === player ? i : -1)).filter((i) => i !== -1);
+/**
+ * マスを選ぶスキルの対象（昇順）。マスを選ばないスキルは空。
+ * 解体・風化: 敵のオブジェクト（風化はライフが残るもの）のうち🔑ロック・⚡無敵でないもの / 補強工事: 自陣のオブジェクト / 分譲: 空きマスがあるときの自陣のオブジェクト
+ */
+const objectSkillTargets = (skill, board, player, chars) => {
+    switch (skill) {
+        case 'demolish': return enemyObjects(board, player, chars);
+        case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
+        case 'reinforce': return ownObjects(board, player);
+        case 'duplicate': return (0, exports.objectLandableCells)(board).length > 0 ? ownObjects(board, player) : [];
+        default: return [];
+    }
+};
+exports.objectSkillTargets = objectSkillTargets;
+/** そのスキルを今使えるか（対象が無いと使えない） */
+const objectSkillUsable = (skill, board, player, chars) => {
+    if (exports.OBJECT_SKILLS[skill].target)
+        return (0, exports.objectSkillTargets)(skill, board, player, chars).length > 0;
+    return skill === 'levelAll' ? enemyObjects(board, player, chars).length > 0 : ownObjects(board, player).length > 0;
+};
+exports.objectSkillUsable = objectSkillUsable;
+/** 敵のオブジェクトに「壊す」を試みる。氷結中なら壊れず❄が1つ減るだけ。board を直接書き換える */
+const destroyOne = (board, i, res) => {
+    const guard = (0, thermal_1.absorbDestroy)(board[i]);
+    if (guard.blocked) {
+        board[i] = guard.sq;
+        res.blocked.push(i);
+        return;
+    }
+    board[i] = { player: undefined, bind: 0, effects: [] };
+    res.destroyed.push(i);
+};
+/**
+ * オブジェクトのスキルを実行する。マスを選ぶスキルは i に選んだマス（対象でなければ何もせず null を返す）。board を直接書き換える。
+ * @param rng 分譲の置き先の抽選用 [0,1)
+ */
+const runObjectSkill = (skill, board, player, chars, i, rng = Math.random) => {
+    const res = { destroyed: [], blocked: [], affected: [] };
+    if (exports.OBJECT_SKILLS[skill].target && !(0, exports.objectSkillTargets)(skill, board, player, chars).includes(i))
+        return null;
+    switch (skill) {
+        case 'demolish':
+            destroyOne(board, i, res);
+            break;
+        case 'weather': {
+            const guard = (0, thermal_1.absorbDestroy)(board[i]);
+            if (guard.blocked) {
+                board[i] = guard.sq;
+                res.blocked.push(i);
+            }
+            else {
+                board[i] = (0, thermal_1.zeroOut)(board[i]);
+                res.affected.push(i);
+            }
+            break;
+        }
+        case 'levelAll':
+            for (const k of enemyObjects(board, player, chars))
+                destroyOne(board, k, res);
+            break;
+        case 'reinforce':
+            board[i] = { ...board[i], bind: board[i].bind + exports.OBJECT_PARAMS.reinforceLife };
+            res.affected.push(i);
+            break;
+        case 'expandAll':
+            for (const k of ownObjects(board, player)) {
+                board[k] = { ...board[k], bind: board[k].bind + exports.OBJECT_PARAMS.expandLife };
+                res.affected.push(k);
+            }
+            break;
+        case 'duplicate': {
+            const empties = (0, exports.objectLandableCells)(board);
+            const j = empties[Math.floor(rng() * empties.length)];
+            board[j] = { ...(0, exports.newObject)(player, board[i].object), effects: board[j].effects.filter((e) => e.effect === '🔥') };
+            (0, exports.sweepBurntTrees)(board);
+            res.affected.push(j);
+            break;
+        }
+    }
+    return res;
+};
+exports.runObjectSkill = runObjectSkill;

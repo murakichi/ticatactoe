@@ -1973,3 +1973,32 @@ describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − �
         expect(run(12, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
     });
 });
+
+describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封じる', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (cryoMagic: number, bolts: boolean, hand: number[] = [113, 21, 23]) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }, { effect: '⚡' }] : [] };
+        b[1] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }] : [] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
+    };
+    it('氷室が次の手番に絶対零度（実コスト10）を撃てる魔力に届くなら、⚡の多いコマを選んで撃つ', () => {
+        const r = run(9, true);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickBoltSilence', target: 0 }]);
+    });
+    it('届かない魔力なら撃たない／自陣に⚡が無ければ撃てない', () => {
+        expect(run(4, true).chargeClicks ?? []).toEqual([]);
+        expect(run(9, false).chargeClicks ?? []).toEqual([]);
+    });
+    it('相手にリーチがあるときは撃たず、守りを優先する', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        [4, 5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] })); // 行1に敵のリーチ（7が空き）
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
+    });
+});
