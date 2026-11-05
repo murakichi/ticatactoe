@@ -2973,7 +2973,7 @@ class AIPlayer {
         // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
         // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
         // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
+        if ((this.character === 'electrician' || this.character === 'yinYangMaster') && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
             && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {

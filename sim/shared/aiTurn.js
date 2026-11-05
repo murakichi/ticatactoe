@@ -7,6 +7,10 @@ const lifeBan_1 = require("./lifeBan");
 const decay_1 = require("./decay");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
+const util_1 = require("./util");
+/** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
+/** 自分の式神を対象に撃つスキル（置いた式神がなければ撃てない） */
+const SHIKIGAMI_TARGET_SKILLS = new Set(['onClickShikigamiBlast', 'onClickShikigamiBless', 'onClickShikigamiCurse']);
 /** ステップ列が手番を終えない（最後が着手でもターン終了スキルでもない）なら、チャージでパスするステップを足す */
 const endsTurn = (steps, hasMove) => {
     const last = steps[steps.length - 1];
@@ -67,8 +71,16 @@ const planAITurn = (ai, input, pickHailMary) => {
         // 帯電拡散→帯電付与などの『スキル→対象クリック』も、置くスキルは撃てない。対象クリックも一緒に外す
         if (result.chargeClicks) {
             const kept = [];
+            // 縛りで外した『式神を置く』クリックのあとの爆破・加護・呪詛は、盤面にもとからある自分の式神にしか撃てない
+            // （置く式神も、爆破で空きマスに生まれる式神も無いので、残すと対象が不正のまま手番が進まない）
+            let placeDropped = false;
+            const ownShiki = (t) => board[t].player === ai.playerSymbol && (0, util_1.isShikigami)(board[t]);
             for (const c of result.chargeClicks) {
-                if ((0, lifeBan_1.placeBlocked)(true, c.skill, input.tokenBind))
+                if ((0, lifeBan_1.placeBlocked)(true, c.skill, input.tokenBind)) {
+                    placeDropped = true;
+                    continue;
+                }
+                if (placeDropped && c.target !== undefined && SHIKIGAMI_TARGET_SKILLS.has(c.skill) && !ownShiki(c.target))
                     continue;
                 kept.push(c);
             }
