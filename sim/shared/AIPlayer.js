@@ -3033,30 +3033,6 @@ class AIPlayer {
                 magic -= cost;
             }
         }
-        // 軍師のオブジェクト(実験): 静かな盤面で、環境変数 EXP_TA_OBJ に並べた種類を優先順に1つ置く
-        if (this.character === 'tactician' && typeof process !== 'undefined' && process.env && process.env.EXP_TA_OBJ
-            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
-            const hold = Number(process.env.EXP_TA_HOLD || 0);
-            for (const k of process.env.EXP_TA_OBJ.split(',')) {
-                const def = objects_1.OBJECT_DEFS[k];
-                if (!def || !availableSkills.includes(def.idx) || board.some((sq) => sq.object === k && sq.player === this.playerSymbol))
-                    continue;
-                const cost = this.calculateAICost(costs[def.costKey], false, false, def.costKey);
-                const cell = this.bestTreeCell(board);
-                if (cell === null)
-                    break;
-                if (magic < cost && magic >= cost - hold)
-                    this.holdPG = cost;
-                if (magic >= cost) {
-                    chargeClicks.push({ skill: def.costKey, target: cell });
-                    board = board.slice();
-                    board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
-                    magic -= cost;
-                }
-                break;
-            }
-        }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
         if (this.character === 'cryomancer') {
             const cost = (0, thermal_1.reducedGlacierCost)(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
