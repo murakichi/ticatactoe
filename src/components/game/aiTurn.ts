@@ -202,9 +202,11 @@ export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, ch
  * ⚡付き自陣コマが無敵で触れない、などで着手できなくなると、クリックが無視されて手番が進まず止まる。
  * 打てるならそのまま cell を、打てなければ今の盤面で打ち直した手を返す。打てる手が無ければ null（呼び出し側はチャージでパスする）。
  */
-export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false): number | null => {
+export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false, soloBlock: boolean = false): number | null => {
     if (moveBlocked(lifeBan, life)) return null; // ライフ3以下のコマを置けない縛り: 打てる手は無いのでチャージでパスする
+    if (soloBlock && !board[cell].player) return null; // お一人様限りの札: この手番はもう空きマスに新しいコマを置けない（チャージでパスする）
     if (canPlaceAt(board, cell, ai.playerSymbol, ai.character, characters)) return cell;
     ai.updateShield(board);
-    return ai.getBestMove(board, life);
+    const alt = ai.getBestMove(board, life);
+    return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };

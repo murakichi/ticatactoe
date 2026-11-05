@@ -8,7 +8,7 @@ import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './t
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
-import { WORKSHOP_PARAMS } from './objects';
+import { WORKSHOP_PARAMS, ownPieceCount } from './objects';
 import { skillCosts } from './skillCosts';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
@@ -33,6 +33,8 @@ export type GearTurnState = {
     tokenFree: boolean[];
     /** 柳の下に二匹目がいたの無料条件: この手番に、基礎コスト BIG_CAST_BASE 以上のスキルを使ったか */
     bigCast: boolean[];
+    /** 各席の手番開始時点の、非オブジェクトのコマの数（お一人様限りの札: この手番に置いたコマの数を数える） */
+    pieceBase: number[];
     /** この手番にスキルに払ったマジックの合計 / 自分の前の手番以降に相手がベースコスト7以上のスキルかマジック合計7以上を使ったか（大工房の設置の無料条件） */
     turnSpent: number[];
     oppBigSeen: boolean[];
@@ -162,6 +164,7 @@ export const advanceGearState = (
     if (g.bigCast[endSeat] || g.turnSpent[endSeat] >= WORKSHOP_PARAMS.freeSpent) g.oppBigSeen.forEach((_, i) => { if (i !== endSeat) g.oppBigSeen[i] = true; });
     g.oppBigPrev[nextSeat] = g.oppBigSeen[nextSeat];
     g.oppBigSeen[nextSeat] = false;
+    g.pieceBase[nextSeat] = ownPieceCount(board, symbols[nextSeat]);
     g.turnSpent[endSeat] = 0;
     g.turnSpent[nextSeat] = 0;
     g.marketUsed[endSeat] = 0;

@@ -148,12 +148,15 @@ exports.canPlaceAt = canPlaceAt;
  * ⚡付き自陣コマが無敵で触れない、などで着手できなくなると、クリックが無視されて手番が進まず止まる。
  * 打てるならそのまま cell を、打てなければ今の盤面で打ち直した手を返す。打てる手が無ければ null（呼び出し側はチャージでパスする）。
  */
-const resolveMoveCell = (ai, board, characters, life, cell, lifeBan = false) => {
+const resolveMoveCell = (ai, board, characters, life, cell, lifeBan = false, soloBlock = false) => {
     if ((0, lifeBan_1.moveBlocked)(lifeBan, life))
         return null; // ライフ3以下のコマを置けない縛り: 打てる手は無いのでチャージでパスする
+    if (soloBlock && !board[cell].player)
+        return null; // お一人様限りの札: この手番はもう空きマスに新しいコマを置けない（チャージでパスする）
     if ((0, exports.canPlaceAt)(board, cell, ai.playerSymbol, ai.character, characters))
         return cell;
     ai.updateShield(board);
-    return ai.getBestMove(board, life);
+    const alt = ai.getBestMove(board, life);
+    return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };
 exports.resolveMoveCell = resolveMoveCell;

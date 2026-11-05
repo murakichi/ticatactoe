@@ -3,7 +3,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { newShikigami } from './shikigami';
 import { decayBoard } from './decay';
-import { OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { boardWinner, effectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -359,5 +359,83 @@ describe('結界石・護符の社（陰陽師向け）', () => {
         b[4] = newShikigami('💙'); b[6] = newShikigami('💙'); b[8] = newShikigami('💙'); b[9] = newShikigami('💙');
         expect(objectTurnStart(b, '💙', chars, rngFirst).magic).toBe(OBJECT_PARAMS.shrineMagicCap);
         expect(objectTurnStart(b, '⭕', chars, rngFirst).magic).toBe(0);
+    });
+});
+
+describe('相手を縛るオブジェクト・八卦の陣', () => {
+    it('泥田坊: 相手の泥田坊が働いていれば、トークンのライフは0。自分の泥田坊や氷結中は効かない', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'mudField');
+        expect(mudAdjustedBind(b, '💙', 4)).toBe(0);
+        expect(mudAdjustedBind(b, '⭕', 4)).toBe(4);
+        b[0] = { ...b[0], effects: [{ effect: '❄' }] };
+        expect(mudAdjustedBind(b, '💙', 4)).toBe(4);
+    });
+
+    it('見ざる地蔵: 周囲八マスで手番中に増えたエフェクトを消す（元からあるものと周囲外は残る）', () => {
+        const b = board();
+        b[5] = newObject('💙', 'blindMonkey');
+        b[0] = { player: '⭕', bind: 3, effects: [{ effect: '🌱' }] };
+        b[1] = { player: '⭕', bind: 3, effects: [] };
+        b[15] = { player: '⭕', bind: 3, effects: [] };
+        const snap = effectSnapshot(b);
+        b[0] = { ...b[0], effects: [{ effect: '🌱' }, { effect: '🌱' }] }; // 1つ増えた
+        b[1] = { ...b[1], effects: [{ effect: '⚡' }] };
+        b[15] = { ...b[15], effects: [{ effect: '⚡' }] }; // 周囲外
+        const r = enforceEffectRules(b, snap, '⭕');
+        expect(r.removed).toEqual([0, 1]);
+        expect(b[0].effects).toEqual([{ effect: '🌱' }]);
+        expect(b[1].effects).toEqual([]);
+        expect(b[15].effects).toEqual([{ effect: '⚡' }]);
+    });
+
+    it('閻魔の舌: 手番の席が自分のコマに付けたエフェクトで、そのコマのライフが0になる（相手のコマに付けた分・舌が無ければ何も起きない）', () => {
+        const b = board();
+        b[0] = newObject('💙', 'tongueKing');
+        b[1] = { player: '⭕', bind: 5, effects: [] };
+        b[2] = { player: '💙', bind: 5, effects: [] };
+        const snap = effectSnapshot(b);
+        b[1] = { ...b[1], effects: [{ effect: '🌱' }] };
+        b[2] = { ...b[2], effects: [{ effect: '☠' }] }; // 舌の持ち主のコマに付けた（敵陣への攻撃）
+        const r = enforceEffectRules(b, snap, '⭕');
+        expect(r.zeroed).toEqual([1]);
+        expect(b[1].bind).toBe(0);
+        expect(b[2].bind).toBe(5);
+        const none = board();
+        none[1] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }] };
+        expect(enforceEffectRules(none, effectSnapshot(board()), '⭕').zeroed).toEqual([]);
+    });
+
+    it('八卦の陣: 周囲八マスが全て自陣のコマなら勝利。1マスでも欠ける・式神・オブジェクト・盤の端では不成立', () => {
+        const b = board();
+        b[5] = newObject('💙', 'eightTrigrams');
+        for (const k of [0, 1, 2, 4, 6, 8, 9, 10]) b[k] = { player: '💙', bind: 1, effects: [] };
+        expect(encircleWinner(b)).toEqual({ player: '💙', cells: [5, 0, 1, 2, 4, 6, 8, 9, 10] });
+        expect(boardWinner(b)).toBe('💙');
+        b[10] = { player: '⭕', bind: 1, effects: [] };
+        expect(boardWinner(b)).toBeUndefined();
+        b[10] = newShikigami('💙');
+        expect(boardWinner(b)).toBeUndefined();
+        const edge = board();
+        edge[0] = newObject('💙', 'eightTrigrams');
+        for (const k of [1, 4, 5]) edge[k] = { player: '💙', bind: 1, effects: [] };
+        expect(boardWinner(edge)).toBeUndefined();
+    });
+
+    it('お一人様限りの札と一言居士: 相手のものだけが縛る。基本操作は縛られない', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'soloSign');
+        b[1] = newObject('⭕', 'oneWord');
+        const base = { board: b, actor: '💙' as const, skillsThisTurn: 0, placedThisTurn: 0 };
+        expect(newPieceBlocked(b, '💙', 0)).toBe(false);
+        expect(newPieceBlocked(b, '💙', 1)).toBe(true);
+        expect(newPieceBlocked(b, '⭕', 1)).toBe(false);
+        expect(skillRestricted({ ...base, skillKey: 'onClickSlash' })).toBe(false);
+        expect(skillRestricted({ ...base, skillKey: 'onClickSlash', skillsThisTurn: 1 })).toBe(true);
+        expect(skillRestricted({ ...base, basic: true, skillsThisTurn: 3 })).toBe(false);
+        expect(skillRestricted({ ...base, skillKey: 'onClickDoubleToken' })).toBe(true); // 2つ置くスキルは最初から不可
+        expect(skillRestricted({ ...base, skillKey: 'onClickToken' })).toBe(false);
+        expect(skillRestricted({ ...base, skillKey: 'onClickToken', placedThisTurn: 1 })).toBe(true);
+        expect(skillRestricted({ ...base, actor: '⭕', skillKey: 'onClickDoubleToken', skillsThisTurn: 2 })).toBe(false);
     });
 });

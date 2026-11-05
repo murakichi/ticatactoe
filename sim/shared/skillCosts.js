@@ -159,7 +159,15 @@ exports.skillCosts = {
     onClickDuplicate: 6,
     onClickWorkshop: 6,
     onClickBarrierStone: 4,
-    onClickAmuletShrine: 6, //  護符の社(idx 122): 手番開始時、周囲八マスの自陣の式神1体につきマジック+1(最大+3)。基準: 大木(8・毎手番+3)と同じ上限だが、式神を並べる前提(式神設置は2〜)なので −2
+    onClickAmuletShrine: 6,
+    // 相手を縛るオブジェクト・招き猫・八卦の陣(idx 123〜129)。基準は docs/skill-cost-rules.md の「縛りのオブジェクト」
+    onClickLuckyCat: 5,
+    onClickMudField: 5,
+    onClickTongueKing: 5,
+    onClickEightTrigrams: 8,
+    onClickSoloSign: 5,
+    onClickOneWord: 6,
+    onClickBlindMonkey: 5, //   見ざる地蔵(idx 129): 周囲八マスには新しくエフェクトを付けられない。基準: 自陣を守る側にも自分が使う側にも効く範囲型。聖域(5)と同じ
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

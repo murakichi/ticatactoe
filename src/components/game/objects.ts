@@ -13,8 +13,9 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isGuarded } from './charge';
+import { LIFE_BAN_PLACING_KEYS } from './lifeBan';
 import { poisonStrike } from './poison';
-import { isShikigami } from '../../util';
+import { calculateWinner, isShikigami, lineSymbols } from '../../util';
 import { shikigamiLandable } from './shikigami';
 import { absorbDestroy, isDormant, zeroOut } from './thermal';
 
@@ -29,7 +30,7 @@ export type ObjectDef = {
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine' | 'onClickLuckyCat' | 'onClickMudField' | 'onClickTongueKing' | 'onClickEightTrigrams' | 'onClickSoloSign' | 'onClickOneWord' | 'onClickBlindMonkey';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -44,6 +45,8 @@ export const OBJECT_PARAMS = {
     fortLife: 1,
     /** 護符の社: 周囲八マスの自陣の式神1体につき手番開始時に得るマジックと、その上限 */
     shrineMagicCap: 3,
+    /** 招き猫: 持ち主のスキルコストの軽減（下限1） */
+    luckyCatCut: 1,
     /** 補強工事: 自陣のオブジェクト1つに足すライフ */
     reinforceLife: 3,
     /** 増築: 自陣のオブジェクト全てに足すライフ */
@@ -68,6 +71,13 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     workshop: { idx: 120, name: '大工房', icon: '🏭', life: OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
     barrierStone: { idx: 121, name: '結界石', icon: '🪨', life: OBJECT_LIFE, costKey: 'onClickBarrierStone', desc: '周囲八マスの自陣の式神は、時間経過のライフ減衰を受けない' },
     amuletShrine: { idx: 122, name: '護符の社', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickAmuletShrine', desc: `手番開始時、周囲八マスの自陣の式神1体につきマジック+1（最大+${OBJECT_PARAMS.shrineMagicCap}）` },
+    luckyCat: { idx: 123, name: '招き猫', icon: '🐈', life: OBJECT_LIFE, costKey: 'onClickLuckyCat', desc: `働いている間、自分のスキルのコストが${OBJECT_PARAMS.luckyCatCut}下がる（下限1・重ならない）` },
+    mudField: { idx: 124, name: '泥田坊', icon: '🌾', life: OBJECT_LIFE, costKey: 'onClickMudField', desc: '働いている間、相手がトークンで置くコマのライフが0になる（トークンは足を取られる）' },
+    tongueKing: { idx: 125, name: '閻魔の舌', icon: '👅', life: OBJECT_LIFE, costKey: 'onClickTongueKing', desc: '働いている間、相手が自分のコマにエフェクトを付けると、そのコマのライフが手番の終わりに0になる（舌を抜かれる）' },
+    eightTrigrams: { idx: 126, name: '八卦の陣', icon: '🔯', life: OBJECT_LIFE, costKey: 'onClickEightTrigrams', desc: '働いている間、周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利する。盤の端では成立しない' },
+    soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '働いている間、相手は1ターンに新しいコマを1つしか置けない（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルは使えない）' },
+    oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: OBJECT_LIFE, costKey: 'onClickOneWord', desc: '働いている間、相手は1ターンにスキルを1つしか使えない（チャージ・シャッフル・ロックは数えない）' },
+    blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲八マスには、新しくエフェクトを付けられない（手番の終わりに、その手番で付いたエフェクトが消える）' },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -82,6 +92,118 @@ export const objectLandableCells = (board: SquareInfo[]): number[] => board.map(
 /** 手番開始時に効果を発揮する、player のオブジェクトのマス（氷結中の休眠したものを除く。昇順） */
 export const activeObjectCells = (board: SquareInfo[], player: Player, kind?: ObjectKind): number[] =>
     board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !isDormant(sq) ? i : -1)).filter((i) => i !== -1);
+
+// ---- 相手を縛るオブジェクト・招き猫・八卦の陣（idx 123〜129）----
+
+/** actor の敵（持ち主が actor でない）の働いている kind のオブジェクトがあるか（氷結中の休眠したものは働かない） */
+export const enemyObjectActive = (board: SquareInfo[], actor: Player, kind: ObjectKind): boolean =>
+    board.some((sq) => sq.object === kind && !!sq.player && sq.player !== actor && !isDormant(sq));
+
+/** player に招き猫が働いているか（自分のスキルのコスト-1。重ならない） */
+export const luckyCatActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'luckyCat').length > 0;
+
+/** 泥田坊: actor の敵に働いていれば、トークンのライフは0になる */
+export const mudAdjustedBind = (board: SquareInfo[], actor: Player, bind: number): number => (enemyObjectActive(board, actor, 'mudField') ? 0 : bind);
+
+/** 各マスのエフェクトの種類（手番の頭の盤面。手番の終わりに増えたエフェクトを調べるのに使う） */
+export type EffectSnapshot = string[][];
+export const effectSnapshot = (board: SquareInfo[]): EffectSnapshot => board.map((sq) => sq.effects.map((e) => e.effect));
+
+export type EffectRuleResult = {
+    /** 見ざる地蔵に付いたエフェクトを消されたマス */
+    removed: number[];
+    /** 閻魔の舌でライフが0になったマス */
+    zeroed: number[];
+};
+
+/**
+ * 手番の終わりに、その手番で付いたエフェクト（snapshot より増えた分）に対して働くオブジェクトの規則。board を直接書き換える。
+ *  見ざる地蔵（周囲八マス・持ち主を問わず）: 増えたエフェクトを消す
+ *  閻魔の舌（持ち主の敵の手番）: 手番の席のコマに増えたエフェクトがあれば、そのコマのライフを0にする
+ * エフェクトの付与は約30か所に散らばり、付与の関数の多くはマス単位でしか呼ばれない。入口を1つにまとめる改修をせずに済むよう、手番の頭との差分で処理する
+ * （付いた瞬間のダメージ — 🔥の1ダメージ・⚡の着地ダメージ・☠の倍率 — は残る）。
+ * @param endPlayer 終わった手番の席
+ */
+export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | null, endPlayer: Player): EffectRuleResult => {
+    const res: EffectRuleResult = { removed: [], zeroed: [] };
+    if (!snap) return res;
+    const geo = geometryForCells(board.length);
+    const quiet = board.map(() => false);
+    board.forEach((sq, k) => {
+        if (sq.object !== 'blindMonkey' || !sq.player || isDormant(sq)) return;
+        for (const j of geo.surroundRange(k)) quiet[j] = true;
+    });
+    const tongue = enemyObjectActive(board, endPlayer, 'tongueKing');
+    board.forEach((sq, k) => {
+        if (sq.effects.length === 0) return;
+        const left = new Map<string, number>();
+        for (const e of snap[k] ?? []) left.set(e, (left.get(e) ?? 0) + 1);
+        const added: number[] = [];
+        sq.effects.forEach((e, idx) => {
+            const n = left.get(e.effect) ?? 0;
+            if (n > 0) left.set(e.effect, n - 1);
+            else added.push(idx);
+        });
+        if (added.length === 0) return;
+        if (quiet[k]) {
+            board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
+            res.removed.push(k);
+        } else if (tongue && sq.player === endPlayer && !sq.object) {
+            board[k] = { ...sq, bind: 0 };
+            res.zeroed.push(k);
+        }
+    });
+    return res;
+};
+
+/** 八卦の陣で勝つ席と、その陣のマス（中心と周囲八マス）。周囲が八マス揃わない端のマスでは成立しない。いなければ undefined */
+export const encircleWinner = (board: SquareInfo[]): { player: Player; cells: number[] } | undefined => {
+    const geo = geometryForCells(board.length);
+    for (let k = 0; k < board.length; k++) {
+        const sq = board[k];
+        if (sq.object !== 'eightTrigrams' || !sq.player || isDormant(sq)) continue;
+        const ring = geo.surroundRange(k);
+        if (ring.length === 8 && ring.every((j) => board[j].player === sq.player && !board[j].object && !isShikigami(board[j]))) return { player: sq.player, cells: [k, ...ring] };
+    }
+    return undefined;
+};
+
+/** 盤面の勝者: 4つ並び、なければ八卦の陣 */
+export const boardWinner = (board: SquareInfo[]): Player | undefined => calculateWinner(lineSymbols(board)) ?? encircleWinner(board)?.player;
+
+/** お一人様限りの札: コマを2つ以上置くスキル（1つでも使うと札に反する） */
+export const ONE_PIECE_MULTI_KEYS: ReadonlySet<string> = new Set([
+    'onClickDoubleToken', 'onClickBothToken', 'onClickDoubleChargeToken', 'onClickDoubleFlameToken', 'onClickDoubleFrostToken', 'onClickDoubleLeafToken', 'onClickBothLeafToken',
+    'onClickShikigamiFlood', 'onClickTotalAssault', 'onClickNecromancy',
+]);
+
+/** player が非オブジェクトのコマを持つ数 */
+export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !sq.object).length;
+
+/** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
+export const newPieceBlocked = (board: SquareInfo[], actor: Player, placedThisTurn: number): boolean =>
+    placedThisTurn >= 1 && enemyObjectActive(board, actor, 'soloSign');
+
+export type SkillRestrictInput = {
+    board: SquareInfo[];
+    actor: Player;
+    /** コストキー(onClickXxx)。基本操作（チャージ・シャッフル・ロック）は渡さず basic を true にする */
+    skillKey?: string;
+    basic?: boolean;
+    skillsThisTurn: number;
+    placedThisTurn: number;
+};
+
+/** 相手のオブジェクトに縛られて、そのスキルを今は使えないか（一言居士: 1ターン1スキル／お一人様限りの札: コマを置くスキルを制限） */
+export const skillRestricted = (i: SkillRestrictInput): boolean => {
+    if (i.basic) return false;
+    if (i.skillsThisTurn >= 1 && enemyObjectActive(i.board, i.actor, 'oneWord')) return true;
+    if (i.skillKey && enemyObjectActive(i.board, i.actor, 'soloSign')) {
+        if (ONE_PIECE_MULTI_KEYS.has(i.skillKey)) return true;
+        if (i.placedThisTurn >= 1 && LIFE_BAN_PLACING_KEYS.has(i.skillKey)) return true;
+    }
+    return false;
+};
 
 /** player に大工房が働いているか（ベースコスト7以上のスキルのコスト-3。重ならない。氷結中の休眠したものは働かない） */
 export const workshopActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'workshop').length > 0;
