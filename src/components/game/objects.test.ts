@@ -71,6 +71,18 @@ describe('オブジェクト: 乗っ取り', () => {
     });
 });
 
+describe('オブジェクト: 乗っ取りはライフ0が条件', () => {
+    it('ライフを削り切る攻撃でも、敵のオブジェクトはライフ0になるだけで乗っ取れない。次の着手で乗っ取れる', () => {
+        const r = resolvePlacement(newObject('⭕', 'fort'), '💙', 99);
+        expect(r.square).toEqual({ player: '⭕', bind: 0, effects: [], object: 'fort' });
+        expect(r.capturedFrom).toBeUndefined();
+        expect(r.corpse).toBe(false);
+        const t = resolvePlacement(r.square, '💙', 2);
+        expect(t.square).toEqual({ player: '💙', bind: 2, effects: [] });
+        expect(t.capturedFrom).toBe('⭕');
+    });
+});
+
 describe('オブジェクト: 火炎', () => {
     it('大木・枯れた大木は🔥を付けられると即座に壊れる。砦などは壊れない', () => {
         const b = board();

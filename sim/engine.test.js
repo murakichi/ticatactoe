@@ -3503,7 +3503,18 @@ test('オブジェクト: 自陣のオブジェクトは通常のコマで乗っ
     t.life = 4;
     t.board[2] = { player: '⭕', bind: 3, effects: [], object: 'spring' };
     assert.strictEqual(e.placeMove(t, 2), false, 'ライフが残る敵のオブジェクトには着手できない');
+    t.giantHit = true;
+    t.board[2].bind = 1;
+    t.life = 9;
+    const g = e.newGame({ chars: ['giant', 'you'], rng: e.makeRng(27) });
+    g.life = 9;
+    g.board[2] = { player: '⭕', bind: 3, effects: [], object: 'spring' };
+    assert.strictEqual(e.placeMove(g, 2), true);
+    assert.strictEqual(g.board[2].player, '⭕', '巨人でもライフが残る敵のオブジェクトは乗っ取れない');
+    assert.strictEqual(g.board[2].object, 'spring');
+    assert.strictEqual(g.board[2].bind, 0);
     t.board[2].bind = 0;
+    t.life = 4;
     assert.strictEqual(e.placeMove(t, 2), true);
     assert.strictEqual(t.board[2].player, '💙');
     assert.strictEqual(t.board[2].object, undefined);

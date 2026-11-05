@@ -34,6 +34,10 @@ export const resolvePlacement = (cell: SquareInfo, player: Player, life: number)
         const effects = isShikigami(cell) ? [...cell.effects.filter((e) => e.effect !== '📜'), { effect: '🌱' as const }] : [...cell.effects];
         return { square: { player, bind: cell.bind + life + 1, effects }, poisonSpread: false, corpse: false, reinforced: true };
     }
+    if (cell.player && cell.object && cell.bind > 0 && cell.bind - life + 1 <= 0) {
+        // 敵のオブジェクトはライフが0でないと乗っ取れない。ライフを削り切る攻撃（巨人・満杯の盤面）でも、ライフが0になるだけでオブジェクトは残る
+        return { square: { player: cell.player, bind: 0, effects: [], object: cell.object }, poisonSpread: false, corpse: false, reinforced: false };
+    }
     if (cell.player) {
         const calc = cell.bind - life + (cell.bind > 0 ? 1 : 0);
         let owner: Player | undefined = cell.player;
