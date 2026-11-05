@@ -300,6 +300,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
     magician: [['spellWard', 'harvest']], // 主案 spellWard,luckyPurse との差 -0.7pt（seed92/200 51.6 vs 52.3）で同程度
     yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
+    necromancer: [['luckyPurse', 'lastStand'], ['spellWard', 'lastStand']], // 主案 vengeance,lastStand 42.2に対し 43.8 / 42.3（seed90/150, 対強豪）で同程度。spellWard は対poisoner 16→41%（毒ダメージを防ぐ）。docs/tune/necromancer.md 試行40
     electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 

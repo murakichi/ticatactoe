@@ -251,6 +251,7 @@ exports.recommendedGears = recommendedGears;
 exports.ALT_RECOMMENDED_GEARS = {
     magician: [['spellWard', 'harvest']],
     yinYangMaster: [['lastStand', 'luckyPurse']],
+    necromancer: [['luckyPurse', 'lastStand'], ['spellWard', 'lastStand']],
     electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
