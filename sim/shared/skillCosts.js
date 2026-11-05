@@ -148,7 +148,26 @@ exports.skillCosts = {
     onClickThundercloud: 5,
     onClickMarket: 3,
     onClickSanctuary: 5,
-    onClickPoisonSwamp: 5, //   毒沼(idx 112): 手番開始時、周囲八マスのランダムな敵コマに☠。基準: ☠(単価2) × 期待3手番 = 6、ランダム選択 −1。敵だけを選ぶので自傷の割引は掛けない
+    onClickPoisonSwamp: 5,
+    onClickBoltSilence: 4,
+    // オブジェクトを壊す・強くするスキル(idx 114〜119)。基準は docs/skill-cost-rules.md の「オブジェクトを壊す・強くするスキル」
+    onClickDemolish: 4,
+    onClickWeather: 3,
+    onClickLevelAll: 8,
+    onClickReinforce: 3,
+    onClickExpandAll: 4,
+    onClickDuplicate: 6,
+    onClickWorkshop: 6,
+    onClickBarrierStone: 4,
+    onClickAmuletShrine: 6,
+    // 相手を縛るオブジェクト・招き猫・八卦の陣(idx 123〜129)。基準は docs/skill-cost-rules.md の「縛りのオブジェクト」
+    onClickLuckyCat: 5,
+    onClickMudField: 5,
+    onClickTongueKing: 5,
+    onClickEightTrigrams: 8,
+    onClickSoloSign: 5,
+    onClickOneWord: 6,
+    onClickBlindMonkey: 5, //   見ざる地蔵(idx 129): 周囲八マスには新しくエフェクトを付けられない。基準: 自陣を守る側にも自分が使う側にも効く範囲型。聖域(5)と同じ
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

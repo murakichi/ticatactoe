@@ -11,6 +11,8 @@ const graveSkills_1 = require("./graveSkills");
 const comboCost_1 = require("./comboCost");
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
+const objects_1 = require("./objects");
+const skillCosts_1 = require("./skillCosts");
 const tokenSkills_1 = require("./tokenSkills");
 const thermal_1 = require("./thermal");
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
@@ -44,11 +46,14 @@ const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
 exports.characterCostOf = characterCostOf;
 /** @param withLeaf 敵の🍂の増加分を、ギアの補正・割引より先に足す。characterCostOf が足し済みのときは false */
 const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
+    var _a;
     const mine = env.seat === env.turnSeat;
     if (skillKey === 'onClickShikigamiPurge' && mine && ownShikigami(env.board, env.player) >= exports.SHIKIGAMI_PURGE_FREE)
         return 0; // 供犠: 自陣の式神が3体以上なら0
     if (skillKey === 'onClickSecondCatch' && mine && env.bigCast)
         return 0; // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使っていれば0
+    if (skillKey === 'onClickWorkshop' && mine && env.oppBigPrev)
+        return 0; // 大工房の設置: 直前に相手がベースコスト7以上のスキル/合計7以上のマジックを使っていれば0
     if (isToken && mine && env.tokenFree)
         return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (skillKey === 'onClickFirstFrost' && mine && (0, thermal_1.boardLeaves)(env.board) >= tokenSkills_1.FIRST_FROST_FREE_LEAVES)
@@ -60,6 +65,12 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
     // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1
     if (mine && env.characters[env.seat] === 'yinYangMaster' && (env.shikiPlaced || (!!skillKey && exports.SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1)
         adjusted -= 1;
+    // 大工房: 働いている間、ベースコスト7以上のスキルのコスト-3（重ならない。下限1）
+    if (skillKey && ((_a = skillCosts_1.skillCosts[skillKey]) !== null && _a !== void 0 ? _a : 0) >= objects_1.WORKSHOP_PARAMS.bigBase && (0, objects_1.workshopActive)(env.board, env.player) && adjusted > 1)
+        adjusted = Math.max(1, adjusted - objects_1.WORKSHOP_PARAMS.cut);
+    // 招き猫: 働いている間、自分のスキルのコスト-1（下限1・重ならない）
+    if ((0, objects_1.luckyCatActive)(env.board, env.player) && adjusted > 1)
+        adjusted = Math.max(1, adjusted - objects_1.OBJECT_PARAMS.luckyCatCut);
     if (skillKey === 'onClickSpark' && mine && env.placedPrev)
         return 0; // 飛び火: 直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
     if (skillKey === 'onClickTinder' && mine && env.plantPrev)

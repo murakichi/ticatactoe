@@ -1973,3 +1973,79 @@ describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − �
         expect(run(12, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
     });
 });
+
+describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封じる', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (cryoMagic: number, bolts: boolean, hand: number[] = [113, 21, 23]) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }, { effect: '⚡' }] : [] };
+        b[1] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }] : [] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
+    };
+    it('氷室が次の手番に絶対零度（実コスト10）を撃てる魔力に届くなら、⚡の多いコマを選んで撃つ', () => {
+        const r = run(9, true);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickBoltSilence', target: 0, target2: 0 }]); // 2スタックのコマから2個払う
+    });
+    it('⚡が合計1つしか無ければ撃てない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
+    });
+    it('届かない魔力なら撃たない／自陣に⚡が無ければ撃てない', () => {
+        expect(run(4, true).chargeClicks ?? []).toEqual([]);
+        expect(run(9, false).chargeClicks ?? []).toEqual([]);
+    });
+    it('相手にリーチがあるときは撃たず、守りを優先する', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        [4, 5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] })); // 行1に敵のリーチ（7が空き）
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
+    });
+});
+
+describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const run = (b: SquareInfo[], magic: number, hand: number[]) =>
+        new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'tactician']).makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    it('雷雲（idx 109）: 周囲八マスに敵のコマが2つ以上あるマスに立てる', () => {
+        const b = empty();
+        [5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        const r = run(b, 6, [109, 21, 23]);
+        const click = (r.chargeClicks ?? []).find((c) => c.skill === 'onClickThundercloud');
+        expect(click).toBeDefined();
+        expect([0, 1, 2, 4, 7, 8, 9, 10].includes(click!.target as number)).toBe(true); // 敵(5,6)の隣のマス
+    });
+    it('雷雲: 周囲に敵のコマが1つしか立てられるマスが無ければ撃たない／魔力が足りなければ撃たない', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        expect((run(b, 6, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+        const b2 = empty();
+        [5, 6].forEach((i) => (b2[i] = { player: '⭕', bind: 5, effects: [] }));
+        expect((run(b2, 3, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+    });
+    it('大木（idx 105）は撃たない（対強豪で悪化: 魔力8を貯める間の損が回収できない。docs/tune/electrician.md 試行52）', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        expect((run(b, 12, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBigTree');
+    });
+    it('オブジェクトのマスは AI から『置けない空きマス』に見え、自陣のコマとして列に数えられない', () => {
+        const b = empty();
+        b[0] = { player: '💙', bind: 5, effects: [], object: 'bigTree' };
+        [1, 2, 3].forEach((i) => (b[i] = { player: '💙', bind: 5, effects: [] }));
+        // 行0は 大木(オブジェクト)+3コマ。オブジェクトは列に数えないので勝ち筋のリーチではない（誤認して0に置こうとしない）
+        const r = run(b, 2, [21, 23, 22]);
+        expect(r.move).not.toBe(0);
+    });
+});
