@@ -39,6 +39,21 @@ describe('審判の日', () => {
         expect(b[4].player).toBeUndefined();
         expect(b[3].player).toBe('⭕');
     });
+    it('雷霆の巫の⚡無敵のコマは壊さない（chars を渡したとき）。⚡のない雷霆のコマと、雷霆以外の⚡のコマは壊す', () => {
+        const chars = ['magician', 'electrician'] as const; // 💙=魔法使い, ⭕=雷霆の巫
+        const b = board();
+        b[4] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] }; // 雷霆の⚡: 無敵
+        b[6] = { player: '⭕', bind: 3, effects: [] }; // 雷霆の⚡なし: 壊れる
+        const r = judgeDay(b, 5, '💙', chars as any);
+        expect(b[4].player).toBe('⭕');
+        expect(b[6].player).toBeUndefined();
+        expect(r.destroyed).toBe(1);
+        // chars を渡さない従来の呼び出しは変わらない
+        const c = board();
+        c[4] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+        judgeDay(c, 5, '💙');
+        expect(c[4].player).toBeUndefined();
+    });
     it('中心の敵コマを氷結が守ったら、中心は奪えない', () => {
         const b = board();
         b[5] = { player: '⭕', bind: 7, effects: [{ effect: '❄' }] };
