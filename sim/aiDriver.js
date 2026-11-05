@@ -44,6 +44,8 @@ function aiFor(s, seat) {
     return ai;
 }
 
+const banned = (s, seat) => (s.aiFlags && s.aiFlags[seat] ? s.aiFlags[seat].ban : undefined);
+
 function inputOf(s, reroll) {
     const seat = s.turn;
     const others = E.otherSeats(s, seat);
@@ -53,7 +55,7 @@ function inputOf(s, reroll) {
         seat,
         magic: s.magic,
         costs: E.costsOf(s, seat),
-        hand: s.skills,
+        hand: banned(s, seat) === undefined ? s.skills : s.skills.filter((i) => i !== banned(s, seat)), // probe-top --scan audit: flags.ban の札はAIに見せない(使用禁止)
         life: s.life,
         tokenUsed: s.usedTokenThisTurn,
         necroRemain: s.remainNecro[seat],

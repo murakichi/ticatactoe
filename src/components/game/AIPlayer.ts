@@ -117,6 +117,8 @@ const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
+/** 魔法使いが手札に固定する札: 縮地・特売・返し特売・一寸の虫に魂なし */
+const MAGICIAN_HOLD = [50, 53, 60, 92];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
@@ -1252,7 +1254,7 @@ class AIPlayer {
             && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch')) {
             return [92];
         }
-        if (this.character === 'giant' || this.character === 'magician') {
+        if (this.character === 'giant') {
             return [];
         }
         let myPieces = 0, oppPieces = 0, empties = 0;
@@ -1278,7 +1280,9 @@ class AIPlayer {
             // 対魔女の新スキル(初霜93・吹き寄せ94・山焼き95)は、引いたら先に手札に固定する (旧sim AI の lockNew=1)
             (this.facesWitchNow() && (idx === 93 || idx === 94 || idx === 95)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            (this.character === 'magician' && budsIdx.includes(idx)) ||
+            // 魔法使い: 縮地(50)・特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
+            // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
+            (this.character === 'magician' && MAGICIAN_HOLD.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
@@ -3137,7 +3141,8 @@ class AIPlayer {
             }
             // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止め、鍛冶師の🔥もロック中のコマには付かない。ロックしておけば防げるので、氷室・鍛冶師が相手のときは
             // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。旧sim AI lockFirstCryo=2: 対氷室 10→20%, lockFirstPyro=2: 対鍛冶師 33〜37→47〜51%）
-            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer' || this.characters[seatOf(o)] === 'pyromancer')) {
+            // 氷室が相手のときは先にロックしない: 手札固定(縮地・特売・返し特売・一寸の虫)を入れた後は、ロックに魔力を回すほうが裏目（対氷室 35.0→66.0%, seed151/300。LC=0）。鍛冶師は先にロックが最良（81.7 vs 71.0/70.7, seed152/300）
+            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'pyromancer')) {
                 const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
                 const afford = lockCost > 0 ? Math.floor(magic / lockCost) : CRYO_LOCK_MAX;
                 const cells: number[] = [];

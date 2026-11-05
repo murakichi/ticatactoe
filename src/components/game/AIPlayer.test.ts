@@ -1536,6 +1536,20 @@ describe('魔法使いは軍師が相手のとき、純増2の審判の日は撃
     });
 });
 
+describe('魔法使いは縮地・特売・返し特売・一寸の虫を手札に固定する', () => {
+    const locks = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'tactician']).chooseLocks(emptyBoard(), 5, 5, hand);
+    it('縮地(50)と特売(53)が手札にあれば固定する', () => {
+        expect(locks([50, 53, 2])).toEqual(expect.arrayContaining([50, 53]));
+    });
+    it('返し特売(60)・一寸の虫に魂なし(92)も固定対象（固定は最大2枚）', () => {
+        expect(locks([60, 92, 13])).toEqual(expect.arrayContaining([60, 92]));
+        expect(locks([50, 53, 60]).length).toBeLessThanOrEqual(2);
+    });
+    it('バッズ系(2)は固定しない（序盤の空きが多くても優先固定ではなく、固定対象の札が先頭に来る）', () => {
+        expect(locks([2, 50, 13])[0]).toBe(50);
+    });
+});
+
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
     // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
     const board = () => {
@@ -1554,10 +1568,8 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
         return [...(r.lockTargets ?? []), ...(r.chargeClicks ?? []).map((c) => c.target)];
     };
 
-    it('氷室が相手なら、🌱付きのコマを先頭に自陣のコマを全てロックする', () => {
-        const targets = lockTargetsOf('cryomancer');
-        expect(targets[0]).toBe(0);
-        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    it('氷室が相手のときは先にロックしない（手札固定を入れた後は、ロックに魔力を回すと裏目: 対氷室 35.0→66.0%）', () => {
+        expect(lockTargetsOf('cryomancer')).toEqual([]);
     });
     it('鍛冶師（🔥はロック中のコマに付かない）が相手のときも同じく全てロックする', () => {
         const targets = lockTargetsOf('pyromancer');
