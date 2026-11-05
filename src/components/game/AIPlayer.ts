@@ -3141,7 +3141,8 @@ class AIPlayer {
             }
             // 氷室の番人は『ロックされていない🌱付きのコマ』を凍らせて魔力を止め、鍛冶師の🔥もロック中のコマには付かない。ロックしておけば防げるので、氷室・鍛冶師が相手のときは
             // 審判の日より先に自陣のコマを全てロックする（🌱付きを先に、次に🌱の無いコマ。旧sim AI lockFirstCryo=2: 対氷室 10→20%, lockFirstPyro=2: 対鍛冶師 33〜37→47〜51%）
-            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'cryomancer' || this.characters[seatOf(o)] === 'pyromancer')) {
+            // 氷室が相手のときは先にロックしない: 手札固定(縮地・特売・返し特売・一寸の虫)を入れた後は、ロックに魔力を回すほうが裏目（対氷室 35.0→66.0%, seed151/300。LC=0）。鍛冶師は先にロックが最良（81.7 vs 71.0/70.7, seed152/300）
+            if (this.character === 'magician' && this.opponents.some((o) => this.characters[seatOf(o)] === 'pyromancer')) {
                 const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
                 const afford = lockCost > 0 ? Math.floor(magic / lockCost) : CRYO_LOCK_MAX;
                 const cells: number[] = [];

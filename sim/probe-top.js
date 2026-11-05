@@ -128,12 +128,15 @@ if (args.worker) {
 /**
  * --cache <dir> 指定時はタスクを小分け(--chunk、既定12)にして結果をファイルに保存する。
  * コンテナ再起動などで途切れても、同じコマンドを打ち直せば済んだ分は読み込んで再開する。
- * キーは (タスク・変種・games・seed・size・オプション・sim/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
+ * キーは (タスク・変種・games・seed・size・オプション・sim/*.js と sim/shared/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
  */
 function simHash() {
     const h = require('crypto').createHash('sha1');
     const dir = __dirname;
     for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
+    // 本番AI・ルールの生成物(sim/shared/*.js)も含める。含めないと AIPlayer.ts を変えても古い結果がキャッシュから返る
+    const shared = require('path').join(dir, 'shared');
+    if (require('fs').existsSync(shared)) for (const f of require('fs').readdirSync(shared).filter((x) => x.endsWith('.js')).sort()) h.update('shared/' + f + require('fs').readFileSync(require('path').join(shared, f)));
     if (args.modA) h.update(require('fs').readFileSync(args.modA));
     return h.digest('hex');
 }
