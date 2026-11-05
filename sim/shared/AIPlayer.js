@@ -800,6 +800,37 @@ class AIPlayer {
         }
         return null;
     }
+    /** 陰陽師: 砕氷（❄1つにつき3ダメージ）で壊せる、氷結中の敵コマのうち、壊すと列が空くもの。壊すと百鬼夜行→式神一括が組めるコマを最優先、無ければ敵が並びかけている列に乗るコマ。無ければ null */
+    yinShatterTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const comboNow = this.floodComboWins(board);
+        let best = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || (0, util_1.isShikigami)(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            if (stacks === 0 || stacks * thermal_1.SHATTER_DAMAGE_PER_STACK < sq.bind)
+                return; // 壊し切れない
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            post[i] = { player: undefined, bind: 0, effects: [] };
+            let val = 0;
+            if (!comboNow && this.floodComboWins(post))
+                val += 100; // 壊すとコンボが組める
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                if (line.every((j) => board[j].player !== this.playerSymbol))
+                    val += foes; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        });
+        return best;
+    }
     /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
     comboThawTarget(board) {
         if (this.floodComboWins(board))
@@ -2474,6 +2505,18 @@ class AIPlayer {
                 if (followup !== null)
                     return { move: followup, skills: ['onClickIgnite'], lockTargets: [t] };
                 this.updateShield(board);
+            }
+        }
+        // 陰陽師: 砕氷(47)で、氷室・軍師の氷結で守られたコマを壊す（❄の数×3ダメージ。壊すとコンボが組める／敵の並びが崩れるコマを優先）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
+            const tg = this.yinShatterTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                (0, thermal_1.shatter)(post, tg);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                this.updateShield(board);
+                return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickShatter', target: tg }] };
             }
         }
         // 陰陽師: 氷結中の空きマスが百鬼夜行→式神一括の列を塞いでいるとき、火遁で隣のコマを燃やして溶かし、コンボを組める盤面にする
