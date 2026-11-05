@@ -17,6 +17,7 @@ import { corpseCount, graveDiscountAmount } from './graveSkills';
 import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
+import { newObject, objectLandable } from './objects';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..112)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -2416,6 +2417,37 @@ class AIPlayer {
                 const followup = this.getBestMove(post, life);
                 if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [poisoned] };
                 this.updateShield(board);
+            }
+        }
+        // 氷室の番人: 大木(105)を置いて毎手番のマジックを増やす（実験: 環境変数 OBJ_TREE=最大本数, OBJ_TREE_RESERVE=置いたあとに残す魔力）。火炎で即壊れるので鍛冶師が相手のときは置かない
+        const treeMax = Number((globalThis as any).process?.env?.OBJ_TREE ?? 0);
+        if (treeMax > 0 && this.character === 'cryomancer' && threatSquares.length === 0 && availableSkills.includes(105)
+            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')) {
+            const treeCost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
+            const owned = board.filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol).length;
+            if (owned < treeMax && magic >= treeCost + Number((globalThis as any).process?.env?.OBJ_TREE_RESERVE ?? 2)) {
+                // 置く先: 自分の勝ち筋に使わない（敵のコマが入っていて自コマが無い列に多く乗る）マス
+                let cell = -1;
+                let best = -Infinity;
+                board.forEach((sq, i) => {
+                    if (!objectLandable(sq)) return;
+                    let v = 0;
+                    for (const line of geometryForCells(board.length).winLines) {
+                        if (!line.includes(i)) continue;
+                        const mine = line.filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+                        const foes = line.filter((j) => this.isEnemy(board[j].player) && !board[j].object).length;
+                        v += foes > 0 && mine === 0 ? 1 : -1 - mine;
+                    }
+                    if (v > best) { best = v; cell = i; }
+                });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    post[cell] = newObject(this.playerSymbol, 'bigTree');
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null) return { move: followup, skills: ['onClickBigTree'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
             }
         }
         // 氷室の番人: 対陰陽師。百鬼夜行は氷結中の空きマスを飛ばすので、陰陽師の魔力が12以上のとき、自コマも氷結も入っていない列の空きマスを

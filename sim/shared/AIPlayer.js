@@ -19,6 +19,7 @@ const graveSkills_1 = require("./graveSkills");
 const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
+const objects_1 = require("./objects");
 const charge_1 = require("./charge");
 // 汎用スキルプールの大きさ (idx 0..112)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 exports.SKILL_POOL_SIZE = 113;
@@ -2396,7 +2397,7 @@ class AIPlayer {
         return total;
     }
     planMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
         // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
@@ -2595,6 +2596,43 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 氷室の番人: 大木(105)を置いて毎手番のマジックを増やす（実験: 環境変数 OBJ_TREE=最大本数, OBJ_TREE_RESERVE=置いたあとに残す魔力）。火炎で即壊れるので鍛冶師が相手のときは置かない
+        const treeMax = Number((_d = (_c = (_b = globalThis.process) === null || _b === void 0 ? void 0 : _b.env) === null || _c === void 0 ? void 0 : _c.OBJ_TREE) !== null && _d !== void 0 ? _d : 0);
+        if (treeMax > 0 && this.character === 'cryomancer' && threatSquares.length === 0 && availableSkills.includes(105)
+            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')) {
+            const treeCost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
+            const owned = board.filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol).length;
+            if (owned < treeMax && magic >= treeCost + Number((_g = (_f = (_e = globalThis.process) === null || _e === void 0 ? void 0 : _e.env) === null || _f === void 0 ? void 0 : _f.OBJ_TREE_RESERVE) !== null && _g !== void 0 ? _g : 2)) {
+                // 置く先: 自分の勝ち筋に使わない（敵のコマが入っていて自コマが無い列に多く乗る）マス
+                let cell = -1;
+                let best = -Infinity;
+                board.forEach((sq, i) => {
+                    if (!(0, objects_1.objectLandable)(sq))
+                        return;
+                    let v = 0;
+                    for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+                        if (!line.includes(i))
+                            continue;
+                        const mine = line.filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+                        const foes = line.filter((j) => this.isEnemy(board[j].player) && !board[j].object).length;
+                        v += foes > 0 && mine === 0 ? 1 : -1 - mine;
+                    }
+                    if (v > best) {
+                        best = v;
+                        cell = i;
+                    }
+                });
+                if (cell !== -1) {
+                    const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                    post[cell] = (0, objects_1.newObject)(this.playerSymbol, 'bigTree');
+                    this.updateShield(post);
+                    const followup = this.getBestMove(post, life);
+                    if (followup !== null)
+                        return { move: followup, skills: ['onClickBigTree'], lockTargets: [cell] };
+                    this.updateShield(board);
+                }
+            }
+        }
         // 氷室の番人: 対陰陽師。百鬼夜行は氷結中の空きマスを飛ばすので、陰陽師の魔力が12以上のとき、自コマも氷結も入っていない列の空きマスを
         // 最も多くの列に乗るものから1つ凍らせる（旧sim AI F.antiFlood=13。対陰陽師 seed1-3/400 で 31〜36% → 49〜53%。常時や魔力7では悪化）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
@@ -2629,7 +2667,7 @@ class AIPlayer {
         // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（旧sim AI F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const necro = this.opponents.find((o) => this.characterOf(o) === 'necromancer');
-            if (necro && 10 - ((_b = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _b !== void 0 ? _b : 10) >= 1) {
+            if (necro && 10 - ((_h = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _h !== void 0 ? _h : 10) >= 1) {
                 const score = new Map();
                 for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
                     if (line.some((i) => board[i].player === this.playerSymbol))
