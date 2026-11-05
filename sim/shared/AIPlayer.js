@@ -109,7 +109,7 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 /** 検証用: 雷霆の巫が選別して置くオブジェクト / 盤面の空きの下限 */
 const CAT_MIN_EMPTY = 5;
-const SCREEN_OBJECT_KINDS = ['tongueKing', 'soloSign', 'oneWord'];
+const SCREEN_OBJECT_KINDS = ['mudField', 'tongueKing', 'soloSign', 'oneWord'];
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
