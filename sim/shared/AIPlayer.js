@@ -103,6 +103,9 @@ const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
 /** 沈黙は雷なりの札の idx（deck.ts の SKILL_CATALOG） */
 const BOLT_SILENCE_IDX = 113;
+/** 招き猫を置く条件: 盤面の空きの下限 / 見ざる地蔵を置く点数の下限 */
+const CAT_MIN_EMPTY = 5;
+const MONKEY_MIN_SCORE = 4;
 const BIG_TREE_MAX = 1;
 /** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
 const CLOUD_MAX = 1;
@@ -187,6 +190,9 @@ class AIPlayer {
         this.ownClouds = 0;
         /** 自陣の働いている毒沼の数 */
         this.ownSwamps = 0;
+        /** 自陣の働いている招き猫・見ざる地蔵の数 */
+        this.ownCats = 0;
+        this.ownMonkeys = 0;
         /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
         this.holdPG = 0;
         this.skillKinds = new Set();
@@ -497,6 +503,34 @@ class AIPlayer {
                     score -= mine * 3; // 自陣の列を潰さない
                 if (mine === 0 && foes === 0)
                     score -= 0.5; // 空の列も少し惜しい
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    }
+    /** 見ざる地蔵を置くマス: 周囲八マスに、自陣の列（敵のコマが無く、自陣のコマが2つ以上ある列）の空きマスや自陣のコマが多いマス（点数 MONKEY_MIN_SCORE 以上）。無ければ null */
+    bestMonkeyCell(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const live = new Set();
+        for (const line of geo.winLines) {
+            const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+            const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+            if (mine >= 2 && foes === 0)
+                line.forEach((j) => live.add(j));
+        }
+        let best = null;
+        let bestScore = MONKEY_MIN_SCORE - 1;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            let score = 0;
+            for (const j of geo.surroundRange(i)) {
+                if (!live.has(j))
+                    continue;
+                score += board[j].player === this.playerSymbol ? 1 : 2; // 凍らされて困るのは、これから置く空きマス
             }
             if (score > bestScore) {
                 bestScore = score;
@@ -2455,6 +2489,8 @@ class AIPlayer {
      */
     makeMove(...argsIn) {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownCats = argsIn[0].filter((sq) => sq.object === 'luckyCat' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownMonkeys = argsIn[0].filter((sq) => sq.object === 'blindMonkey' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
@@ -3028,6 +3064,35 @@ class AIPlayer {
             const cell = this.bestCloudCell(board);
             if (cell !== null && magic >= cost) {
                 chargeClicks.push({ skill: 'onClickPoisonSwamp', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+            }
+        }
+        // 招き猫（雷霆の巫）: 働いている間、自分のスキルのコストが1下がる。魔力が律速でスキルを毎手番1〜2回撃つ雷霆は、早めに置くほど回収できる（コスト5）。
+        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あるときだけ。置くマスは大木と同じ（自分の列を潰さず、敵の列を潰せるマス）
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.luckyCat.idx) && this.ownCats < 1
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= CAT_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickLuckyCat, false, false, 'onClickLuckyCat');
+            const cell = this.bestTreeCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickLuckyCat', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+            }
+        }
+        // 見ざる地蔵（雷霆の巫）: 周囲八マスには新しくエフェクトを付けられない。氷室の番人は❄で自陣のリーチの要のマスを凍らせて塞ぐので、
+        // 氷室の番人が相手のときだけ、自陣の列が集まるマスに置いて❄を防ぐ
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.blindMonkey.idx) && this.ownMonkeys < 1
+            && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
+            && this.opponents.every((o) => this.countReaches(board, o) === 0)
+            && (0, util_1.findEmptyIndexes)(board).length >= CAT_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickBlindMonkey, false, false, 'onClickBlindMonkey');
+            const cell = this.bestMonkeyCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickBlindMonkey', target: cell });
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
