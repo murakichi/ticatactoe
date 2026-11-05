@@ -3565,5 +3565,28 @@ test('オブジェクト: ライフ0の敵のオブジェクトは、自分の�
     }
 });
 
+test('オブジェクト: エフェクトだけでなくダメージ系スキルも通常のコマと同じように受ける（スラッシュでライフ0・ストンプ/審判の日/パーフェクトゲームで破壊・火炎で1ダメージ）', () => {
+    const obj = (bind = 5) => ({ player: '⭕', bind, effects: [], object: 'fort' });
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(41) });
+    s.magic[0] = 99;
+    s.board[3] = obj();
+    e.SKILLS.slash(s); // 右上→左下の斜め: ライフを0にする
+    assert.strictEqual(s.board[3].bind, 0);
+    assert.strictEqual(s.board[3].object, 'fort', 'ライフ0になるだけで、乗っ取るまでオブジェクトのまま');
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(42) });
+    t.board[5] = obj();
+    require('./shared/blast').stomp(t.board, 5, '💙', 3);
+    assert.strictEqual(t.board[5].object, undefined, 'ストンプで敵のオブジェクトは破壊される');
+    const u = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(43) });
+    u.magic[0] = 99;
+    u.board[5] = obj();
+    e.SKILLS.perfectGame(u);
+    assert.strictEqual(u.board[5].player, undefined);
+    const f = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(44) });
+    f.board[5] = obj();
+    require('./shared/thermal').ignite(f.board, [5], 4);
+    assert.strictEqual(f.board[5].bind, 4, '火炎の付与で1ダメージ');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
