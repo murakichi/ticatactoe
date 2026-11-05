@@ -5,7 +5,7 @@
 - 強豪リスト(基準線を取った時点で固定): electrician,cryomancer,poisoner,witch,yinYangMaster(魔法使い自身は除く。`--strong` で復元)
 - 基準線: 対強豪平均 **61.9% / 1位** / 2位 electrician 54.4%(基本, seed3/200)。条件2(`--envDeck pick --oppGears pick`) 62.5% / 1位 / 2位 electrician 52.9%(seed3/200)。field 67.3%、不利な対面 0、最悪対面は対陰陽師 44〜47%
 - 関連 issue: #339 魔法使いの調整案(本件) / #315 spellWard 追試(解決・コメント済み) / #124 lastStand 調整 / #333 巨人ストンプ
-- 連続不採用回数: 2(洗練に入ってから: 試行48・49。試行50は別案追加で数えない)
+- 連続不採用回数: 3(洗練に入ってから: 試行48・49・51)
 - 状態: refining(2026-11-05 トップ到達。完了判定の2条件とも1位。洗練中)
 
 ## 順位(master 25fe0f2 取り込み後, 新sim, seed3/100)
@@ -14,6 +14,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 51 | strategy(AI) 手札固定の枚数・組合せ(洗練) | 固定の上限2→3/1、固定対象に活力特売56を足す(強豪5体 seed211/150, 基準62.4): 上限3 60.1 / 上限1 61.7 / 上限3+56追加 58.5 / 56を92の次に追加(上限2) 60.4 | 不採用(全て基準以下)。現行 [50,53,60,92]・上限2 が最適。連続不採用 3 |
 | 50 | gear 別案探し(probe-altgear) | トップ到達時の必須手順。主案 [spellWard,luckyPurse] に対し(全相手 seed201/150): lastStand,luckyPurse +2.3・lastStand,sturdy +1.2・sturdy,ironLock -4.0・vengeance,ironLock -5.5 | **別案に追加** [lastStand,luckyPurse](主案以上)。ALT は [spellWard,harvest]・[lastStand,luckyPurse] の2パターン。連続不採用は進めない |
 | 49 | deck 1枚近傍(洗練) | 強豪5体 seed202/60 60近傍、基準64.7: 最良 -11+75火の車 69.0(+4.3, z<1)、-47+100毒返しの構え 68.3 | 不採用(閾値未満)。連続不採用 2 |
 | 48 | gear 1枠近傍(洗練) | 強豪5体 seed203/60、基準62.3: slot1→lastStand 66.0(+3.7)・slot0→lastStand 65.7・harvest 65.3 | 不採用(閾値未満)。連続不採用 1 |
