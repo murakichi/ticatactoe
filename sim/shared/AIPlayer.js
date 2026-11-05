@@ -11,6 +11,7 @@ const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
+const objects_1 = require("./objects");
 const blast_1 = require("./blast");
 const decay_2 = require("./decay");
 const generic_1 = require("./generic");
@@ -78,6 +79,10 @@ const SH_SMALL_FRY_MIN = 1; // 一寸の虫に魂なし(92)を撃つ最低の破
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
 const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
 const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
+// オブジェクト運用 (#399)。OBJECT_ENABLED が空なら使わない（従来どおり）。優先順に並べる
+const OBJECT_ENABLED = (typeof process !== 'undefined' && process.env && process.env.AI_OBJECTS ? process.env.AI_OBJECTS.split(',') : []);
+const OBJECT_RESERVE = 2; // 置いたあとに残す魔力
+const OBJECT_MAX = 2; // 同時に持つ自陣のオブジェクトの数
 /** トークン扱いのスキル（1手番に1回） */
 const TOKEN_SKILL_KEYS = new Set([
     'onClickToken', 'onClickDoubleToken', 'onClickBudsToken', 'onClickBothToken', 'onClickPoisonToken', 'onClickFlameToken', 'onClickDoubleFlameToken',
@@ -2167,6 +2172,50 @@ class AIPlayer {
         }
         return v;
     }
+    /** 置くオブジェクト。静かな盤面(双方リーチ無し)で、魔力が足りて(置いたあとに OBJECT_RESERVE 残る)、同じ種類・総数が上限未満のものを、優先順(OBJECT_ORDER)に1つ */
+    planObject(board, magic, costs, availableSkills) {
+        if (!OBJECT_ENABLED.length)
+            return null;
+        if (this.opponents.some((o) => this.countReaches(board, o) > 0) || this.countReaches(board, this.playerSymbol) > 0)
+            return null;
+        const mine = board.filter((sq) => sq.player === this.playerSymbol && (0, util_1.isObject)(sq));
+        if (mine.length >= OBJECT_MAX)
+            return null;
+        for (const kind of OBJECT_ENABLED) {
+            const def = objects_1.OBJECT_DEFS[kind];
+            const idx = objects_1.OBJECT_SKILL_BASE_IDX + OBJECT_KINDS.indexOf(kind);
+            if (!availableSkills.includes(idx) || mine.some((sq) => sq.object === kind))
+                continue;
+            if (magic - this.calculateAICost(costs[def.costKey], false, false, def.costKey) < OBJECT_RESERVE)
+                continue;
+            return { kind, key: def.costKey };
+        }
+        return null;
+    }
+    /** オブジェクトを置くマス: 自分の最良の列を潰さない(bestOwnLineCount が低い)ことを第一に、周囲に効く種類は周囲の自陣(砦・聖域)/敵(毒沼・雷雲は自陣でも可・枯れた大木)を数える。着手予定のマスは避ける */
+    bestObjectCell(board, kind, avoid) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null, bestV = -Infinity;
+        board.forEach((sq, i) => {
+            if (i === avoid || !(0, objects_1.objectLandable)(sq) || this.shield.has(i))
+                return;
+            const around = geo.surroundRange(i);
+            const own = around.filter((j) => board[j].player === this.playerSymbol && !(0, util_1.isObject)(board[j])).length;
+            const foe = around.filter((j) => this.isEnemy(board[j].player)).length;
+            let v = -3 * this.bestOwnLineCount(board, i);
+            if (kind === 'fort' || kind === 'sanctuary')
+                v += own;
+            else if (kind === 'poisonSwamp' || kind === 'deadTree')
+                v += foe;
+            else if (kind === 'thundercloud')
+                v += own - foe * 0.5;
+            if (v > bestV) {
+                bestV = v;
+                best = i;
+            }
+        });
+        return best;
+    }
     bestShikigamiCell(board) {
         let best = null, bestV = -1;
         board.forEach((sq, i) => {
@@ -2763,6 +2812,14 @@ class AIPlayer {
                 const followup = this.getBestMove(postBoard, life);
                 return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
             }
+        }
+        // オブジェクト(105〜112): 相手にも自分にもリーチが無い静かな手番に、手札のオブジェクトを空きマスに置く (#399)
+        const objPlan = this.planObject(board, magic, costs, availableSkills);
+        if (objPlan) {
+            const followup = this.getBestMove(board, life);
+            const cell = followup === null ? null : this.bestObjectCell(board, objPlan.kind, followup);
+            if (cell !== null)
+                return { move: followup, skills: [objPlan.key], stompTarget: cell };
         }
         // 鬼門封じ: 敵のラインの要（3つ揃いなど）のコマを破壊して、その空きマスを3ターンロックする。自分に勝ち手があるときは温存 (旧sim AI と同一)
         if (availableSkills.includes(74) &&
