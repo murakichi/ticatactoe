@@ -94,7 +94,7 @@ const REROLL_REDUCERS = [
 ];
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
-/** 氷室の番人の絶対零度のコスト / 夜の帳が相手のスキルに足すコスト */
+/** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
@@ -1363,11 +1363,14 @@ class AIPlayer {
             }
             return false;
         };
-        // 夜の帳×対氷室: 氷室の番人の絶対零度（コスト10。⚡の無敵を一斉に止める）を、撃てる魔力に届く手番だけ先回りで遅らせる。
-        // 次の手番の魔力が 10〜12 のとき +3 で届かなくなる（13以上なら遅らせられない）。他のスキルより先に払う（トークンで魔力を使い切ると撃てない）
+        // 夜の帳×対氷室: 氷室の番人の絶対零度（⚡の無敵を一斉に止める）を、撃てる魔力に届く手番だけ先回りで遅らせる。
+        // 絶対零度の実コストは 10 − 氷結が作られた回数（下限1）。回数は相手から見えないので、盤面の❄の数で見積もる。
+        // 次の手番の魔力が実コスト以上で、+3 しても届かなくならない（実コスト+3未満）ときだけ撃つ。他のスキルより先に払う（トークンで魔力を使い切ると撃てない）
         if (this.character === 'electrician' && availableSkills.includes(98)) {
+            const frost = board.reduce((n, sq) => n + (0, thermal_1.frozenStacks)(sq), 0);
+            const glacierCost = Math.max(1, GLACIER_COST - frost);
             const nextCryoMagic = this.opponents.filter((o) => this.characters[(0, Player_1.seatOf)(o)] === 'cryomancer').map((o) => { var _a; return ((_a = seatMagic[(0, Player_1.seatOf)(o)]) !== null && _a !== void 0 ? _a : 0) + 1; });
-            if (nextCryoMagic.some((m) => m >= GLACIER_COST && m < GLACIER_COST + NIGHT_VEIL_RAISE)) {
+            if (nextCryoMagic.some((m) => m >= glacierCost && m < glacierCost + NIGHT_VEIL_RAISE)) {
                 spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
             }
         }

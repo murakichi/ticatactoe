@@ -1931,22 +1931,27 @@ describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残
     });
 });
 
-describe('雷霆AI: 夜の帳で氷室の絶対零度（コスト10）を遅らせる', () => {
+describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − 氷結の数）を遅らせる', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
-    const run = (cryoMagic: number, hand: number[]) => {
+    const FRZ = { effect: '❄' as const };
+    const run = (cryoMagic: number, frost: number, hand: number[]) => {
         const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
         const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
         b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
-        b[5] = { player: '⭕', bind: 5, effects: [] };
+        b[5] = { player: '⭕', bind: 5, effects: Array.from({ length: frost }, () => ({ ...FRZ })) };
         return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
     };
-    it('氷室の次の手番の魔力が10〜12に届くなら、夜の帳を撃つ', () => {
-        expect(run(9, [98, 21, 23]).skills).toContain('onClickNightVeil');
-        expect(run(11, [98, 21, 23]).skills).toContain('onClickNightVeil');
+    it('氷結が無ければ実コスト10: 氷室の次の手番の魔力が10〜12に届くなら撃つ', () => {
+        expect(run(9, 0, [98, 21, 23]).skills).toContain('onClickNightVeil');
+        expect(run(11, 0, [98, 21, 23]).skills).toContain('onClickNightVeil');
     });
-    it('届かない（9未満）か、+3でも遅らせられない（13以上）なら撃たない', () => {
-        expect(run(5, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
-        expect(run(12, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+    it('氷結が増えると実コストが下がり、その分だけ低い魔力でも撃つ（❄4つ → 実コスト6）', () => {
+        expect(run(5, 4, [98, 21, 23]).skills).toContain('onClickNightVeil');
+        expect(run(5, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+    });
+    it('届かない（実コスト未満）か、+3でも遅らせられない（実コスト+3以上）なら撃たない', () => {
+        expect(run(5, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+        expect(run(12, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
     });
 });
