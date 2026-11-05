@@ -133,6 +133,15 @@ test('ジャマーは自陣に⚡のコマが無いと撃てない（魔力を�
     assert.strictEqual(duel.apply(s, c, 'h 26'), null); // ⚡のコマがあれば撃てる
 });
 
+test('コスト0の軽減札（返し特売）も効果ありと扱う（魔力も盤面も変わらないが、軽減とライフが変わる）', () => {
+    const c = cfg({ me: 'electrician', opp: 'cryomancer', seat: 0, seed: 31, deck: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94] });
+    const s = duel.replay(c).s;
+    s.skills = [60, 21, 23];
+    s.magic[0] = 0;
+    const err = duel.apply(s, c, 'h 60'); // 直前の相手のスキルが無ければ2コスト。魔力不足は別の理由で止まる
+    assert.ok(!err || /魔力不足/.test(err), String(err));
+});
+
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
