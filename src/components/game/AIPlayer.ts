@@ -10,6 +10,7 @@ import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, ca
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { OBJECT_DEFS, OBJECT_SKILL_BASE_IDX, objectLandable } from './objects';
+import { ObjectKind, OBJECT_KINDS } from '../../types/ObjectKind';
 import { stomp as stompOf } from './blast';
 import { canHitBound, isTakeProtected } from './decay';
 import { plunderTargets as plunderTargetsOf, canRelocate, isPlaceable } from './generic';

@@ -12,6 +12,7 @@ const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const objects_1 = require("./objects");
+const ObjectKind_1 = require("./ObjectKind");
 const blast_1 = require("./blast");
 const decay_2 = require("./decay");
 const generic_1 = require("./generic");
@@ -2183,7 +2184,7 @@ class AIPlayer {
             return null;
         for (const kind of OBJECT_ENABLED) {
             const def = objects_1.OBJECT_DEFS[kind];
-            const idx = objects_1.OBJECT_SKILL_BASE_IDX + OBJECT_KINDS.indexOf(kind);
+            const idx = objects_1.OBJECT_SKILL_BASE_IDX + ObjectKind_1.OBJECT_KINDS.indexOf(kind);
             if (!availableSkills.includes(idx) || mine.some((sq) => sq.object === kind))
                 continue;
             if (magic - this.calculateAICost(costs[def.costKey], false, false, def.costKey) < OBJECT_RESERVE)
