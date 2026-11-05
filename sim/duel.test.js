@@ -25,7 +25,7 @@ test('不正な操作は適用されず理由が返る（置けないマス・�
     const c = cfg({ actions: ['p 5'] });
     assert.ok(duel.replay(c, ['p 99']).failed);
     assert.ok(/手札にない/.test(duel.replay(c, ['h 75']).failed.err));
-    const hand = duel.replay(c).s.skills.find((i) => duel.costOf(duel.replay(c).s, duel.IDX_SKILL[i]) > duel.replay(c).s.magic[0]);
+    const hand = duel.replay(c).s.skills.filter((i) => duel.IDX_SKILL[i]).find((i) => duel.costOf(duel.replay(c).s, duel.IDX_SKILL[i]) > duel.replay(c).s.magic[0]);
     if (hand !== undefined) assert.ok(/魔力不足/.test(duel.replay(c, [`h ${hand}`]).failed.err));
 });
 

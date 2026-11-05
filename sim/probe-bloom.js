@@ -8,7 +8,7 @@
  *   BLOOM_AI=0 で毒使いの毒花専用行動を無効化（装備だけの効果を測る対照）
  */
 const engine = require('./engine');
-const ai = require('./aiSelect');
+const ai = require('./aiDriver');
 
 const games = parseInt(process.argv[2] || '200', 10);
 const seed = parseInt(process.argv[3] || '1', 10);

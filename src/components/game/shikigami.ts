@@ -17,6 +17,10 @@ export const SHIKIGAMI_BLESS_LIFE = 3;
 /** 式神の呪詛: エフェクトの乗った敵コマ1つに付ける☠の数 */
 export const SHIKIGAMI_CURSE_STACKS = 2;
 
+/** 式神（百鬼夜行・式神設置・爆破で空きマスに生まれる式神）を置けるマスか: 空きで、氷結中でも🔑ロック中でもない（ロック中の空きマスには通常の着手もできない） */
+export const shikigamiLandable = (sq: SquareInfo): boolean =>
+    !sq.player && !emptyBlocked(sq) && !(sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0);
+
 export const newShikigami = (player: Player, bind: number = SHIKIGAMI_LIFE): SquareInfo => ({ player, bind, effects: [{ effect: '📜' }] });
 
 const empty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [] });
@@ -55,7 +59,7 @@ export const blast = (board: SquareInfo[], i: number, player: Player, chars: Pla
     for (const j of geometryForCells(board.length).surroundRange(i)) {
         const sq = board[j];
         if (!sq.player) {
-            if (!emptyBlocked(sq)) { board[j] = newShikigami(player); affected.push(j); }
+            if (shikigamiLandable(sq)) { board[j] = newShikigami(player); affected.push(j); }
             continue;
         }
         if (sq.player === player || isGuarded(sq, chars)) continue;

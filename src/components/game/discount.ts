@@ -20,7 +20,9 @@ export const STASH_KEY = 'onClickStash';
 /** 式神割引: 2＋盤面の式神の数だけ、次に打つスキルを軽減する。軽減量が可変なので、へそくりと同じく表には入れず軽減札として別に扱う */
 export const SHIKIGAMI_DISCOUNT_KEY = 'onClickShikigamiDiscount';
 export const SHIKIGAMI_DISCOUNT_BASE = 2;
-export const isReducerSkill = (key: string): boolean => isDiscountSkill(key) || key === SPRING_WIND_KEY || key === STASH_KEY || key === SHIKIGAMI_DISCOUNT_KEY;
+/** 弔い割引: 墓地の死体の数（上限 GRAVE_DISCOUNT_CAP）だけ、次に打つスキルを軽減する。軽減量が可変なので、式神割引と同じく軽減札として別に扱う */
+export const GRAVE_DISCOUNT_KEY = 'onClickGraveDiscount';
+export const isReducerSkill = (key: string): boolean => isDiscountSkill(key) || key === SPRING_WIND_KEY || key === STASH_KEY || key === SHIKIGAMI_DISCOUNT_KEY || key === GRAVE_DISCOUNT_KEY;
 
 /** 軽減札のコストキー → 効果 */
 export const DISCOUNT_SKILLS = {
@@ -41,7 +43,7 @@ export const EFFECT_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickInjection', 'onClickIntensify', 'onClickPandemic', 'onClickPoisonMist',
     'onClickChargeOne', 'onClickChargeArea', 'onClickChargeRandom',
     'onClickFreeze', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostfall',
-    'onClickIgnite', 'onClickTinder', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
+    'onClickIgnite', 'onClickTinder', 'onClickSpark', 'onClickSacrifice', 'onClickSucker', 'onClickWindborne', 'onClickDarkPot',
     'onClickShikigamiCurse',
 ]);
 /** 各キャラの固有スキル（コストキー） */
@@ -64,7 +66,7 @@ export const applyDiscount = (cost: number, amount: number): number => (cost <= 
 
 /** スキルを打ったあとの状態。軽減札なら効果を足し、それ以外なら「次に打つスキル」の軽減を消費する */
 export const afterSkill = (d: Discount, key: string): Discount => {
-    if (key === SPRING_WIND_KEY || key === STASH_KEY || key === SHIKIGAMI_DISCOUNT_KEY) return d; // 軽減量は解除した氷結／除去した⚡の数で決まるので、呼び出し側が turn / next に足す
+    if (key === SPRING_WIND_KEY || key === STASH_KEY || key === SHIKIGAMI_DISCOUNT_KEY || key === GRAVE_DISCOUNT_KEY) return d; // 軽減量は解除した氷結／除去した⚡の数で決まるので、呼び出し側が turn / next に足す
     if (isDiscountSkill(key)) {
         const e: Partial<Record<'next' | 'effect' | 'token' | 'unique' | 'life', number>> = DISCOUNT_SKILLS[key];
         return {

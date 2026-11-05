@@ -7,7 +7,7 @@
  * 席0/席1を交互に先手にし、キャラ構成 chars[0]=テスト席。skill 名は engine.SKILLS のキー。
  */
 const engine = require('./engine');
-const ai = require('./aiSelect');
+const ai = require('./aiDriver');
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].slice(2)] = process.argv[i + 1];
 const [c1, c2] = (args.chars || 'you,you').split(',');

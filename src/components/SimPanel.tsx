@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MAX_PLAYERS } from '../types/Player';
 import { range } from '../util';
 import { MIN_BOARD_SIZE, MAX_BOARD_SIZE, boardSizeFor } from './game/boardGeometry';
+import { MatchupGraph } from './MatchupGraph';
 import styles from './SimPanel.module.css';
 
-import { Analysis, Conv, LiveApi, Matchups, RawStats, Summary, Verdict, loadLive } from './simLive';
+import { Analysis, Conv, Edge, LiveApi, Loops, Matchups, RawStats, Summary, Verdict, loadLive } from './simLive';
 
 type Snapshot = { summary: Summary; matchups: Matchups; analysis: (Analysis & { verdict: Verdict }) | null; drift: number | null; elapsed: number; jobs: number };
 type Status = 'idle' | 'running' | 'stopped' | 'converged' | 'error';
@@ -42,6 +43,12 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
     const timer = useRef<number | undefined>(undefined);
     const finish = useRef<((s: Status) => void) | null>(null);
     const runId = useRef<number>(0);
+    // 集計に使う live.js（関係図の閉ループ検出にも使う）。読み込み前・失敗時は空の結果を返す
+    const liveRef = useRef<LiveApi | null>(null);
+    const graphLoops = useCallback<(ids: string[], edges: Edge[]) => Loops>(
+        (ids, edges) => (liveRef.current ? liveRef.current.findLoops(ids, edges) : { groups: [], cycles: [], loopEdges: [], truncated: false }),
+        []
+    );
 
     const terminate = () => {
         workers.current.forEach((w) => w.terminate());
@@ -74,6 +81,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
             return;
         }
         if (id !== runId.current) return; // 読み込み中に止めた・画面を離れた
+        liveRef.current = live;
         // 計算は端末のコアぶんの Worker で分担する（画面が重くならないよう1つ空ける）
         const jobs = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
         const seed = Math.floor(Math.random() * 1e6);
@@ -221,6 +229,15 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
                     </div>
 
                     {snap!.analysis && <Conclusion an={snap!.analysis} label={label} />}
+                    {snap!.analysis?.edges && snap!.analysis.ids && (
+                        <MatchupGraph
+                            ids={snap!.analysis.rows.map((r) => r.id)}
+                            edges={snap!.analysis.edges}
+                            names={names}
+                            findLoops={graphLoops}
+                            minDecided={snap!.analysis.minDecided}
+                        />
+                    )}
 
                     <h3 className={styles.sub}>キャラ別勝率（出場1回あたり・均等なら {pct(s.fair)}）</h3>
                     <div className={styles.scroll}>

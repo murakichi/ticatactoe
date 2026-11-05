@@ -1038,14 +1038,15 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         expect(b[0].effects).toEqual([]);
     });
 
-    it('火口: 🌱か🍂を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
+    it('火口: 🌱か🍂か❄を持つ敵コマだけが対象（自陣・🔑・何も無いコマは対象外）。🔥は🌱🍂を焼く', () => {
         const b = emptyBoard();
         b[0] = lv('💙', 3, 1);
         b[1] = lv('⭕', 8, 1);
         b[2] = lv('⭕', 8, 1, '🔑');
         b[3] = sq('⭕', 8);
         b[4] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }] };
-        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4]);
+        b[5] = { player: '⭕', bind: 8, effects: [{ effect: '❄' }] }; // ❄のコマも対象（🔥で氷結が解ける）
+        expect(tinderTargets(b, '💙', guard)).toEqual([1, 4, 5]);
         const post = b.map((q) => ({ ...q, effects: [...q.effects] }));
         ignite(post, [4], 4, 1);
         expect(post[4].effects.some((e) => e.effect === '🌱')).toBe(false);
@@ -1065,6 +1066,24 @@ describe('落ち葉の置き土産・焚きつけ', () => {
         expect(flameStacks(b[1])).toBe(3);
         expect(b[0].effects).toHaveLength(1);
         expect(b[2].effects).toHaveLength(2);
+    });
+
+    it('焚きつけ: 敵の🌱も🔥に変わる（1つにつき🔥1つ）。冬至の種子のガード中のコマの🌱は対象外', () => {
+        const b = emptyBoard();
+        b[1] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }, { effect: '🌱' }, { effect: '🍂' }] };
+        b[2] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }] }; // ガード中: 🌱だけなので対象外
+        b[3] = { player: '⭕', bind: 8, effects: [{ effect: '🌱' }, { effect: '🍂' }] }; // ガード中: 🍂だけ燃える
+        b[4] = { player: '💙', bind: 8, effects: [{ effect: '🌱' }] }; // 自陣は対象外
+        const keep = (sq: SquareInfo) => sq === b[2] || sq === b[3];
+        expect(kindlingTargets(b, '💙', guard, keep)).toEqual([1, 3]);
+        const r = kindling(b, [1, 3], 4, keep);
+        expect(r.leaves).toBe(2);
+        expect(r.buds).toBe(2);
+        expect(flameStacks(b[1])).toBe(3);
+        expect(b[1].effects.filter((e) => e.effect === '🌱' || e.effect === '🍂')).toHaveLength(0);
+        expect(flameStacks(b[3])).toBe(1);
+        expect(b[3].effects.filter((e) => e.effect === '🌱')).toHaveLength(1);
+        expect(b[4].effects).toHaveLength(1);
     });
 
     it('焚きつけ: 氷結中のコマは最初の1スタックが氷結の解除に使われ、🍂は全て消える', () => {

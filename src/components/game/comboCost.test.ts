@@ -48,6 +48,14 @@ describe('導線(コンボ)の軽減', () => {
         expect(comboCut('onClickSmallFry', board, '💙', 0, new Set())).toBe(3);
         expect(comboFloor('onClickSmallFry')).toBe(1);
     });
+    test('焚きつけ: 盤面の🍂1枚につき3・🌱1つにつき2（敵味方・空きマスとも）。下限1', () => {
+        const LEAF2 = { effect: '🍂' as const };
+        const BUD = { effect: '🌱' as const };
+        const board = [sq('💙', [BUD, LEAF2]), sq('⭕', [LEAF2, LEAF2]), sq(undefined, [BUD])];
+        expect(comboCut('onClickKindling', board, '💙', 0, new Set())).toBe(3 * 3 + 2 * 2);
+        expect(comboCut('onClickKindling', [sq('💙')], '💙', 0, new Set())).toBe(0);
+        expect(comboFloor('onClickKindling')).toBe(1);
+    });
     test('対象外のスキルは常に0', () => {
         expect(comboCut('onClickToken', [sq('💙')], '💙', 0, new Set(CHARGE_GRANT_KEYS))).toBe(0);
         expect(comboCut(undefined, [sq('💙')], '💙', 0, new Set())).toBe(0);

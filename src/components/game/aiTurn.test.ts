@@ -12,7 +12,7 @@ const chars: CharacterId[] = ['you', 'you'];
 const input = (board: SquareInfo[], over: Partial<AITurnInput> = {}): AITurnInput => ({
     board, characters: chars, seat: 0, magic: [3, 3], costs: skillCosts, hand: [0, 1, 2], life: 5, tokenUsed: false,
     necroRemain: 0, necroCosts: [11, 11], necroPay: 11, judgeDayCost: 99, totalAssaultCost: 99, proliferate: false,
-    placements: 0, seatCount: 2, lastStandReady: false, tokenFree: false, chargeBuffActive: false, oppGearCount: 0, oppLastStand: false,
+    placements: 0, seatCount: 2, lastStandReady: false, tokenFree: false, wardActive: false, chargeBuffActive: false, oppGearCount: 0, oppLastStand: false,
     yinYangMode: 'ying', silenced: false, glacierPending: false, glacierCharge: 0, budGuard: false, infernoReady: false,
     skillKinds: new Set(), rerollsLeft: 0, discountActive: false, lifeBan: false, tokenBind: 5, ...over,
 });

@@ -22,7 +22,14 @@ export type Analysis = {
     ready: boolean;
     minDecided: number;
     players: number;
+    edges?: Edge[];
+    ids?: string[];
+    loops?: Loops;
 };
+/** 有利・不利の有向グラフの辺。勝つ側 from → 負ける側 to。significant = 勝つ側の勝率の95%区間の下限が50%超 */
+export type Edge = { from: string; to: string; rate: number; decided: number; lo: number; significant: boolean };
+/** 閉ループ（三すくみなど）。groups=互いに行き来できるキャラの集まり、cycles=具体的な循環、loopEdges=閉ループに入る辺('from>to') */
+export type Loops = { groups: string[][]; cycles: string[][]; loopEdges: string[]; truncated: boolean };
 export type Verdict = { headline: string; points: string[] };
 export type Conv = { window: number; eps: number; minGames: number };
 
@@ -35,6 +42,7 @@ export type LiveApi = {
     summarize(st: RawStats): Summary;
     matchups(st: RawStats): Matchups;
     analyze(st: RawStats): Analysis | null;
+    findLoops(ids: string[], edges: Edge[], opts?: { maxLen?: number; maxCount?: number }): Loops;
     verdict(an: Analysis | null): Verdict;
     maxDrift(st: RawStats, window: number): number | null;
     converged(st: RawStats, conv: Conv): boolean;

@@ -7,8 +7,8 @@ description: Pit the game's built-in AIs against each other (headless, no browse
 
 > **2026-10 更新 (#289)**: sim の既定AIは本番の `AIPlayer.ts` そのもの（`sim/shared/` の生成物を `sim/aiDriver.js` が動かす）。
 > AIを直すのは `AIPlayer.ts`（と、手番の流れなら `aiTurn.ts`）だけでよく、ts を直したら `node scripts/gen-sim-shared.js` を実行する。
-> 旧 sim 版AI（`sim/ai.js` の `F.xxx` ノブ・`--mode faithful/capture`・`probe-ai.js`・`SIM_AI=legacy`）は廃止予定で、「sim で測ってから本番へ移植」の手順は不要。
-> 改修前後の比較は `git stash` / 別ブランチで同一seedの `probe-top.js` などを回す。以下に `sim/ai.js` 前提の記述が残っていたら、上の方針で読み替える。
+> 旧 sim 版AI（`sim/ai.js` の `F.xxx` ノブ・`--mode faithful/capture`・`probe-ai.js`・`SIM_AI=legacy`）は #307 で削除した。「sim で測ってから本番へ移植」の手順は無い。
+> 改修前後の比較は、改修前の checkout（`git worktree add ../before <rev>`）と改修後で、同一seedの `probe-top.js` などを回して比べる。以下に `sim/ai.js` / `F.xxx` / `probe-ai.js` 前提の記述が残っていたら、この方針で読み替える。
 
 Headless AI-vs-AI analysis + improvement loop for this tic-tac-toe variant.
 Everything runs through `sim/` (zero-dependency Node — **never use Playwright/the
