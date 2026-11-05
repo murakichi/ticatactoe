@@ -3,7 +3,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { perfectGame } from './bigSkills';
-import { OBJECT_SKILL_BASE_IDX } from './objects';
+import { OBJECT_DEFS } from './objects';
 import { calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -20,8 +20,8 @@ import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..113)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 114;
+// 汎用スキルプールの大きさ (idx 0..129)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 130;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -119,10 +119,17 @@ const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
+/** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
+/** 沈黙は雷なりの札の idx（deck.ts の SKILL_CATALOG） */
+const BOLT_SILENCE_IDX = 113;
+const BIG_TREE_MAX = 1;
 /** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
 const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
+const BIG_TREE_MIN_EMPTY = 6;
+/** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
+const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
 const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
@@ -194,6 +201,8 @@ class AIPlayer {
     lastSpent: number = 0;
     /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
     hypoCut: number = 0;
+    /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
+    ownTrees: number = 0;
     /** 自陣の働いている雷雲の数 */
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
@@ -488,6 +497,27 @@ class AIPlayer {
             const need = ch === 'cryomancer' ? Math.max(1, GLACIER_COST - frost) : EXCLUSIVE_MIN_MAGIC[ch ?? 'you'] ?? Infinity;
             return (seatMagic[seat] ?? 0) + 1 >= need;
         });
+    }
+
+    /** 大木を置くマス: 敵の列（敵のコマがあり自陣のコマが無い列）を潰せて、自陣の列（自陣のコマがあり敵のコマが無い列）を潰さないマス。置ける空きマスが無ければ null */
+    bestTreeCell(board: SquareInfo[]): number | null {
+        const lines = geometryForCells(board.length).winLines;
+        let best: number | null = null;
+        let bestScore = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || emptyBlocked(sq)) return;
+            let score = 0;
+            for (const line of lines) {
+                if (!line.includes(i)) continue;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                if (foes > 0 && mine === 0) score += foes * 2; // 敵の列を潰す
+                if (mine > 0 && foes === 0) score -= mine * 3; // 自陣の列を潰さない
+                if (mine === 0 && foes === 0) score -= 0.5; // 空の列も少し惜しい
+            }
+            if (score > bestScore) { bestScore = score; best = i; }
+        });
+        return best;
     }
 
     /** 雷雲を置くマス: 周囲八マスに敵のコマ（⚡の無敵・🔑でない）が CLOUD_MIN_FOES 個以上あるマスのうち、敵が多く自陣が少ないもの。無ければ null */
@@ -2225,6 +2255,7 @@ class AIPlayer {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         const args: Parameters<AIPlayer['planMove']> = argsIn[0].some((sq) => isObject(sq))
             ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as Parameters<AIPlayer['planMove']>
             : argsIn;
@@ -2741,7 +2772,7 @@ class AIPlayer {
         }
         // 沈黙は雷なり（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
         // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
-        if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        if (this.character === 'electrician' && availableSkills.includes(BOLT_SILENCE_IDX) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
             const total = board.reduce((n, sq) => (sq.player === this.playerSymbol && !isDormant(sq) ? n + chargeStacks(sq) : n), 0);
             if (total >= BOLT_SILENCE_BOLTS && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
@@ -2763,9 +2794,27 @@ class AIPlayer {
                 }
             }
         }
+        // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
+        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
+        // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
+            && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
+            const cell = this.bestTreeCell(board);
+            // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
+            if (cell !== null && magic < cost && magic >= cost - BIG_TREE_HOLD_GAP) this.holdPG = cost;
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickBigTree', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
+                magic -= cost;
+            }
+        }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
         // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
-        if (this.character === 'electrician' && availableSkills.includes(OBJECT_SKILL_BASE_IDX + 4) && this.ownClouds < CLOUD_MAX
+        if (this.character === 'electrician' && availableSkills.includes(OBJECT_DEFS.thundercloud.idx) && this.ownClouds < CLOUD_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && findEmptyIndexes(board).length >= CLOUD_MIN_EMPTY) {
             const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
@@ -2778,8 +2827,8 @@ class AIPlayer {
             }
         }
         // 毒沼（雷霆の巫）: 手番開始のたび、周囲八マスの敵のコマのランダムな1つに☠。ライフ0で奪われない雷霆は、削れて0になった敵コマを一方的に奪える。
-        // 敵のコマが2つ以上隣り合うマスに立てる。相手にリーチが無く、自分に勝ち筋が無いときだけ（雷雲と同じ考え方）
-        if (this.character === 'electrician' && availableSkills.includes(OBJECT_SKILL_BASE_IDX + 7) && this.ownSwamps < CLOUD_MAX
+        // 敵のコマが2つ以上隣り合うマスに立てる。相手にリーチが無く、自分に勝ち筋が無いときだけ（雷雲と同じ考え方。測定は差なし: docs/tune/electrician.md 試行53）
+        if (this.character === 'electrician' && availableSkills.includes(OBJECT_DEFS.poisonSwamp.idx) && this.ownSwamps < CLOUD_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && findEmptyIndexes(board).length >= CLOUD_MIN_EMPTY) {
             const cost = this.calculateAICost(costs.onClickPoisonSwamp, false, false, 'onClickPoisonSwamp');
