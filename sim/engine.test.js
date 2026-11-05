@@ -3454,7 +3454,7 @@ test('墓守の供物: ネクロマンサーの墓地は二重に数えない（
     e.SKILLS.graveOffering(s);
     assert.strictEqual(grave - s.necroCost[0], 1);
 });
-test('帯電サイレンス: ⚡のある自陣のコマを選んで⚡を1スタック払い、相手全員が次の手番スキルを使えない。⚡が無いと撃てない（コスト4）', () => {
+test('沈黙は雷なり: ⚡のある自陣のコマを選んで⚡を1スタック払い、相手全員が次の手番スキルを使えない。⚡が無いと撃てない（コスト4）', () => {
     const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
     s.magic[0] = 30;
     assert.strictEqual(e.boltSilenceLegal(s), false);

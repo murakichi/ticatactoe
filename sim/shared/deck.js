@@ -113,7 +113,7 @@ exports.SKILL_CATALOG = [
     { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに1回、シャッフル（手札の引き直し）が無料になります' },
     { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
     { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
-    { idx: 113, name: '帯電サイレンス', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を1つ選んで1スタック取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）' },
+    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を1つ選んで1スタック取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;

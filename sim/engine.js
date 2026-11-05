@@ -736,7 +736,7 @@ function placeMove(s, i) {
         return true;
     }
 
-    // 帯電サイレンス: ⚡のある自陣のコマを1つ選び、⚡を1スタック払う。選べないマスは選び直せる
+    // 沈黙は雷なり: ⚡のある自陣のコマを1つ選び、⚡を1スタック払う。選べないマスは選び直せる
     if (s.useBoltSilence) {
         if (!exeBoltSilence(s, i)) return false;
         s.useBoltSilence = false;
@@ -2359,7 +2359,7 @@ function onClickStash(s) {
     bumpMagicCount(s);
     bumpStat(s, 'stash');
 }
-// 帯電サイレンス (idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
+// 沈黙は雷なり (idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
 function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
 function boltSilenceLegal(s) { return boltSilenceTargets(s).length > 0; }
 function onClickBoltSilence(s) {

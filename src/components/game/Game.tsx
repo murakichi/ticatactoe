@@ -1729,13 +1729,13 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
-    // 帯電サイレンス: 自陣の⚡を1つ選んで1スタック払い、相手全員が次の手番スキルを使えなくなる（自陣に⚡が無いと使えない）
+    // 沈黙は雷なり: 自陣の⚡を1つ選んで1スタック払い、相手全員が次の手番スキルを使えなくなる（自陣に⚡が無いと使えない）
     const [useBoltSilence, setUseBoltSilence] = useState<boolean>(false);
     const boltSilenceTargets = (): number[] =>
         currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
     const onClickBoltSilence = () => {
         if (boltSilenceTargets().length === 0) return;
-        addLog('「帯電サイレンス」を使用（⚡のある自陣のコマを選択）');
+        addLog('「沈黙は雷なり」を使用（⚡のある自陣のコマを選択）');
         setUseBoltSilence(true);
         spendMagic(calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence'), true, true, 'onClickBoltSilence');
     };
@@ -3655,7 +3655,7 @@ export const Game = (props: GameProps) => {
         : useThunderFire
         ? '雷のない所に火は立たぬ'
         : useBoltSilence
-        ? '帯電サイレンス'
+        ? '沈黙は雷なり'
         : useStash
         ? '雷神のへそくり'
         : useJudgeDay
@@ -3827,7 +3827,7 @@ export const Game = (props: GameProps) => {
         { idx: 92, onClick: onClickSmallFry, buttonText: `一寸の虫に魂なし-${calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry')}`, paragraph: `敵のライフ3以下のコマを全て破壊します（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）\n相手全員は次の手番の終わりまで、ライフ3以下のコマを置けません（トークン・式神などのスキルも含む）\n盤面のコマの数だけコストが下がります（最低1）`, disabled: checkSkillDisable(seatCosts.onClickSmallFry, false, false, 'onClickSmallFry') },
         { idx: 102, onClick: onClickPerfectGame, buttonText: `パーフェクトゲーム-${calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame')}`, paragraph: `盤面のコマを敵味方とも全て破壊します\n🔑ロック・⚡無敵のコマは壊れず、氷結中のコマは❄が1つ減るだけです`, disabled: checkSkillDisable(seatCosts.onClickPerfectGame, false, false, 'onClickPerfectGame') || !currentBoard.some((sq) => sq.player) },
         { idx: 103, onClick: onClickHelper, buttonText: `超助っ人-${calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper')}`, paragraph: `🔥❄⚡☠🌱🍂のうちランダムな1つを付けた、ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickHelper, true, false, 'onClickHelper') },
-        { idx: 113, onClick: onClickBoltSilence, buttonText: `帯電サイレンス-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を1つ取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || boltSilenceTargets().length === 0 },
+        { idx: 113, onClick: onClickBoltSilence, buttonText: `沈黙は雷なり-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を1つ取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || boltSilenceTargets().length === 0 },
         { idx: 104, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, paragraph: `自分のデッキから、基礎コスト${SECOND_CATCH_MAX_BASE}以下で今撃てるスキルをランダムに1つ、コストを払わず発動します\nこのターンに基礎コスト7以上のスキルを使っていれば、0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
         // オブジェクト(idx 105-109): 空きマスを選んで設置する。OBJECT_KINDS の順が idx の順（deck.ts の SKILL_CATALOG と同じ）
         ...OBJECT_KINDS.map((kind, n) => ({

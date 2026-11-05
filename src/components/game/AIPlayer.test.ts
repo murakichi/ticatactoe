@@ -1974,7 +1974,7 @@ describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − �
     });
 });
 
-describe('雷霆AI: 帯電サイレンスで相手の固有スキルの手番を封じる', () => {
+describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封じる', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const run = (cryoMagic: number, bolts: boolean, hand: number[] = [113, 21, 23]) => {

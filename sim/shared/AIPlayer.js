@@ -423,7 +423,7 @@ class AIPlayer {
             this.holdPG = pg;
         return null;
     }
-    /** 帯電サイレンスで⚡を払うコマ: 自陣の⚡のコマのうち、自陣のリーチ列に入っていないものを優先し、⚡の多いものを選ぶ（無ければ null） */
+    /** 沈黙は雷なりで⚡を払うコマ: 自陣の⚡のコマのうち、自陣のリーチ列に入っていないものを優先し、⚡の多いものを選ぶ（無ければ null） */
     boltSilenceTarget(board) {
         const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
         const inReach = new Set();
@@ -2887,7 +2887,7 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
-        // 帯電サイレンス（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
+        // 沈黙は雷なり（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
         // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
         if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
