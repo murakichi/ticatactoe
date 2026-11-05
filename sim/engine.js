@@ -421,6 +421,7 @@ function newGame(opts = {}) {
         useRelocate: false,
         relocateFrom: null,
         useStash: false,
+        useBoltSilence: false,
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
@@ -626,7 +627,7 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.relocateFrom = null;
@@ -732,6 +733,13 @@ function placeMove(s, i) {
     if (s.useThunderFire) {
         if (!exeThunderFire(s, i)) return false; // ⚡のないマス・守られた他人のコマは選び直せる
         s.useThunderFire = false;
+        return true;
+    }
+
+    // 沈黙は雷なり: ⚡のある自陣のコマを1つ選び、⚡を1スタック払う。選べないマスは選び直せる
+    if (s.useBoltSilence) {
+        if (!exeBoltSilence(s, i)) return false;
+        s.useBoltSilence = false;
         return true;
     }
 
@@ -2351,6 +2359,24 @@ function onClickStash(s) {
     bumpMagicCount(s);
     bumpStat(s, 'stash');
 }
+// 沈黙は雷なり (idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
+function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function boltSilenceLegal(s) { return boltSilenceTargets(s).length > 0; }
+function onClickBoltSilence(s) {
+    if (!boltSilenceLegal(s)) return;
+    s.useBoltSilence = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickBoltSilence, false, false, 'onClickBoltSilence'), 'onClickBoltSilence');
+    bumpMagicCount(s);
+    bumpStat(s, 'boltSilence');
+}
+function exeBoltSilence(s, i) {
+    if (!boltSilenceTargets(s).includes(i)) return false;
+    const at = s.board[i].effects.findIndex((e) => e.effect === '⚡');
+    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((_, k) => k !== at) };
+    otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
+    return true;
+}
+
 function exeStash(s, i) {
     if (!stashTargets(s).includes(i)) return false;
     const n = chargeStacks(s.board[i]);
@@ -2538,6 +2564,7 @@ const SKILLS = {
     bristle: onClickBristle,
     release: onClickRelease,
     stash: onClickStash,
+    boltSilence: onClickBoltSilence,
     thunderFire: onClickThunderFire,
     darkPot: onClickDarkPot,
     chargeHeal: onClickChargeHeal,
@@ -2619,7 +2646,7 @@ function renderBoard(s) {
 
 module.exports = {
     objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
-    tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
+    tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, boltSilenceLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,
     blessTargets, curseTargets, purgeTargets, SHIKIGAMI_PURGE_FREE, smallFryDestroyable,
