@@ -9,7 +9,6 @@ import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
-import { OBJECT_DEFS, OBJECT_SKILL_BASE_IDX, objectLandable } from './objects';
 import { stomp as stompOf } from './blast';
 import { canHitBound, isTakeProtected } from './decay';
 import { plunderTargets as plunderTargetsOf, canRelocate, isPlaceable } from './generic';
@@ -81,11 +80,6 @@ const SH_SMALL_FRY_MIN = 1; // 一寸の虫に魂なし(92)を撃つ最低の破
 const SH_RESERVE = 9; // 式神を置いたあとに残しておく魔力（爆破の準備）
 const NO_DIG_53_MIN = 8; // 71/73 が揃い 53 だけ無いとき、この魔力以上なら53を探さずチャージで13を目指す
 const SH_COMBO_REAL = 1; // 式神一括コンボの列に最低限必要な通常コマ数
-
-// オブジェクト運用 (#399)。OBJECT_ENABLED が空なら使わない（従来どおり）。優先順に並べる
-const OBJECT_ENABLED: ObjectKind[] = (typeof process !== 'undefined' && process.env && process.env.AI_OBJECTS ? process.env.AI_OBJECTS.split(',') : []) as ObjectKind[];
-const OBJECT_RESERVE = 2; // 置いたあとに残す魔力
-const OBJECT_MAX = 2; // 同時に持つ自陣のオブジェクトの数
 
 /** トークン扱いのスキル（1手番に1回） */
 const TOKEN_SKILL_KEYS: ReadonlySet<string> = new Set([
@@ -2012,40 +2006,6 @@ class AIPlayer {
         return v;
     }
 
-    /** 置くオブジェクト。静かな盤面(双方リーチ無し)で、魔力が足りて(置いたあとに OBJECT_RESERVE 残る)、同じ種類・総数が上限未満のものを、優先順(OBJECT_ORDER)に1つ */
-    private planObject(board: SquareInfo[], magic: number, costs: Record<keyof SkillCosts, number>, availableSkills: number[]): { kind: ObjectKind; key: keyof SkillCosts } | null {
-        if (!OBJECT_ENABLED.length) return null;
-        if (this.opponents.some((o) => this.countReaches(board, o) > 0) || this.countReaches(board, this.playerSymbol) > 0) return null;
-        const mine = board.filter((sq) => sq.player === this.playerSymbol && isObject(sq));
-        if (mine.length >= OBJECT_MAX) return null;
-        for (const kind of OBJECT_ENABLED) {
-            const def = OBJECT_DEFS[kind];
-            const idx = OBJECT_SKILL_BASE_IDX + OBJECT_KINDS.indexOf(kind);
-            if (!availableSkills.includes(idx) || mine.some((sq) => sq.object === kind)) continue;
-            if (magic - this.calculateAICost(costs[def.costKey], false, false, def.costKey) < OBJECT_RESERVE) continue;
-            return { kind, key: def.costKey };
-        }
-        return null;
-    }
-
-    /** オブジェクトを置くマス: 自分の最良の列を潰さない(bestOwnLineCount が低い)ことを第一に、周囲に効く種類は周囲の自陣(砦・聖域)/敵(毒沼・雷雲は自陣でも可・枯れた大木)を数える。着手予定のマスは避ける */
-    private bestObjectCell(board: SquareInfo[], kind: ObjectKind, avoid: number): number | null {
-        const geo = geometryForCells(board.length);
-        let best: number | null = null, bestV = -Infinity;
-        board.forEach((sq, i) => {
-            if (i === avoid || !objectLandable(sq) || this.shield.has(i)) return;
-            const around = geo.surroundRange(i);
-            const own = around.filter((j) => board[j].player === this.playerSymbol && !isObject(board[j])).length;
-            const foe = around.filter((j) => this.isEnemy(board[j].player)).length;
-            let v = -3 * this.bestOwnLineCount(board, i);
-            if (kind === 'fort' || kind === 'sanctuary') v += own;
-            else if (kind === 'poisonSwamp' || kind === 'deadTree') v += foe;
-            else if (kind === 'thundercloud') v += own - foe * 0.5;
-            if (v > bestV) { bestV = v; best = i; }
-        });
-        return best;
-    }
-
     private bestShikigamiCell(board: SquareInfo[]): number | null {
         let best: number | null = null, bestV = -1;
         board.forEach((sq, i) => {
@@ -2620,14 +2580,6 @@ class AIPlayer {
                 const followup = this.getBestMove(postBoard, life);
                 return { move: followup, skills: ['onClickInjection'], stompTarget: inj.index };
             }
-        }
-
-        // オブジェクト(105〜112): 相手にも自分にもリーチが無い静かな手番に、手札のオブジェクトを空きマスに置く (#399)
-        const objPlan = this.planObject(board, magic, costs, availableSkills);
-        if (objPlan) {
-            const followup = this.getBestMove(board, life);
-            const cell = followup === null ? null : this.bestObjectCell(board, objPlan.kind, followup);
-            if (cell !== null) return { move: followup, skills: [objPlan.key], stompTarget: cell };
         }
 
         // 鬼門封じ: 敵のラインの要（3つ揃いなど）のコマを破壊して、その空きマスを3ターンロックする。自分に勝ち手があるときは温存 (旧sim AI と同一)
