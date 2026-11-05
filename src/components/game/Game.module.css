@@ -30,6 +30,54 @@
     animation: boardShake 520ms var(--ease);
 }
 
+/* 巨人が普通に置いたときの軽い揺れ(ストンプなどの大きな揺れの1/3ほど)。A/B は連続で置いても再生し直すための同内容の2つ */
+.shakeLightA {
+    animation: boardShakeLightA 300ms var(--ease);
+}
+
+.shakeLightB {
+    animation: boardShakeLightB 300ms var(--ease);
+}
+
+@keyframes boardShakeLightA {
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+    25% {
+        transform: translate(-3px, 2px);
+    }
+    50% {
+        transform: translate(3px, -2px);
+    }
+    75% {
+        transform: translate(-2px, 1px);
+    }
+}
+
+@keyframes boardShakeLightB {
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+    25% {
+        transform: translate(-3px, 2px);
+    }
+    50% {
+        transform: translate(3px, -2px);
+    }
+    75% {
+        transform: translate(-2px, 1px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shakeLightA,
+    .shakeLightB {
+        animation: none;
+    }
+}
+
 @keyframes boardShake {
     0%,
     100% {
