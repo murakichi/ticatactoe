@@ -887,7 +887,7 @@ export const Game = (props: GameProps) => {
                 addCorpses(r.destroyed.length);
             }
             // 春雷: 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く（gear.ts）
-            if (hasGear(gearsBySeat[seatOf(nextSymbol)], 'springThunder')) {
+            if (hasGear(gearsBySeat[seatOf(nextSymbol)], 'springThunder') || characters[seatOf(nextSymbol)] === 'electrician') { // 雷霆の巫は固有パッシブとして常に働く
                 const thawed = springThunderThaw(turnBoard, nextSymbol);
                 if (thawed.length > 0) {
                     addLog(`春雷が${thawed.map(posName).join('・')}の❄を1つ解いた`);

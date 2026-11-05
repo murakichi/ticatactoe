@@ -3789,5 +3789,23 @@ test('招き猫（sim）: 自分のスキルコスト-1', () => {
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'), before - 1);
 });
 
+test('雷霆の巫の固有パッシブ: 手番開始時、自陣のリーチの4つ目が氷結した空きマスなら❄を1つ解く。雷霆以外は解けない', () => {
+    const FRZ = { effect: '❄' };
+    const setup = (c0) => {
+        const s = e.newGame({ chars: [c0, 'you'], rng: e.makeRng(5) });
+        [0, 1, 2].forEach((i) => (s.board[i] = { player: '💙', bind: 5, effects: [] }));
+        s.board[3] = { player: undefined, bind: 0, effects: [{ ...FRZ }, { ...FRZ }] }; // ❄2つ
+        return s;
+    };
+    const frozen = (s) => s.board[3].effects.filter((x) => x.effect === '❄').length;
+    const s = setup('electrician');
+    e.SKILLS.charge(s); // 手番を終えて相手へ
+    e.SKILLS.charge(s); // 相手が終えて自分へ戻る → 自分の手番開始
+    assert.strictEqual(frozen(s), 1);
+    const o = setup('giant');
+    e.SKILLS.charge(o);
+    e.SKILLS.charge(o);
+    assert.strictEqual(frozen(o), 2);
+});
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
