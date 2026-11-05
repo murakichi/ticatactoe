@@ -203,6 +203,7 @@ class AIPlayer {
     hypoCut: number = 0;
     /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
     ownTrees: number = 0;
+    ownOneWord: number = 0;
     /** 自陣の働いている雷雲の数 */
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
@@ -2256,6 +2257,7 @@ class AIPlayer {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownOneWord = argsIn[0].filter((sq) => sq.object === 'oneWord' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         const args: Parameters<AIPlayer['planMove']> = argsIn[0].some((sq) => isObject(sq))
             ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as Parameters<AIPlayer['planMove']>
             : argsIn;
@@ -2809,6 +2811,19 @@ class AIPlayer {
                 chargeClicks.push({ skill: 'onClickBigTree', target: cell });
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
+                magic -= cost;
+            }
+        }
+        // 一言居士（陰陽師）: 働いている間、相手は1手番にスキルを1つしか使えない（電気・軍師のコンボを封じる）。大木と同じ条件・同じマスの選び方で1つだけ立てる
+        if (this.character === 'yinYangMaster' && availableSkills.includes(OBJECT_DEFS.oneWord.idx) && this.ownOneWord < 1
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickOneWord, false, false, 'onClickOneWord');
+            const cell = this.bestTreeCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickOneWord', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
             }
         }
