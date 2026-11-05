@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/objects.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.OBJECT_SKILL_BASE_IDX = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
+exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.OBJECT_SKILL_BASE_IDX = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
 // オブジェクト（空きマスに設置して使う建造物）の純粋ロジック。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
 //
 // ルール
@@ -40,7 +40,7 @@ exports.OBJECT_DEFS = {
     spring: { name: '生命の泉', icon: '⛲', life: exports.OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${exports.OBJECT_PARAMS.springLife}` },
     fort: { name: '砦', icon: '🏰', life: exports.OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${exports.OBJECT_PARAMS.fortLife}` },
     thundercloud: { name: '雷雲', icon: '🌩️', life: exports.OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
-    market: { name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに1回、シャッフル（手札の引き直し）が無料になる' },
+    market: { name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
     sanctuary: { name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
     poisonSwamp: { name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
 };
@@ -56,9 +56,9 @@ exports.objectLandableCells = objectLandableCells;
 /** 手番開始時に効果を発揮する、player のオブジェクトのマス（氷結中の休眠したものを除く。昇順） */
 const activeObjectCells = (board, player, kind) => board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !(0, thermal_1.isDormant)(sq) ? i : -1)).filter((i) => i !== -1);
 exports.activeObjectCells = activeObjectCells;
-/** player に働いている市場があるか（シャッフルが手番ごとに1回無料。氷結中の休眠したものは働かない） */
-const marketActive = (board, player) => (0, exports.activeObjectCells)(board, player, 'market').length > 0;
-exports.marketActive = marketActive;
+/** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
+const marketCount = (board, player) => (0, exports.activeObjectCells)(board, player, 'market').length;
+exports.marketCount = marketCount;
 /** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
 const sanctuaryProtected = (board) => {
     const out = board.map(() => false);

@@ -110,7 +110,7 @@ exports.SKILL_CATALOG = [
     { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスを選んで生命の泉を設置します。手番開始時のライフ期待値+2' },
     { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスを選んで砦を設置します。手番開始時、周囲八マスの自陣のコマのライフ+1' },
     { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスを選んで雷雲を設置します。手番開始時、周囲八マスのコマのランダムな1つに⚡を付けます' },
-    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに1回、シャッフル（手札の引き直し）が無料になります' },
+    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になります' },
     { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
     { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
 ];

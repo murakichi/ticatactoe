@@ -53,7 +53,7 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     spring: { name: '生命の泉', icon: '⛲', life: OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
     fort: { name: '砦', icon: '🏰', life: OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
     thundercloud: { name: '雷雲', icon: '🌩️', life: OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
-    market: { name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに1回、シャッフル（手札の引き直し）が無料になる' },
+    market: { name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
     sanctuary: { name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
     poisonSwamp: { name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
 };
@@ -71,8 +71,8 @@ export const objectLandableCells = (board: SquareInfo[]): number[] => board.map(
 export const activeObjectCells = (board: SquareInfo[], player: Player, kind?: ObjectKind): number[] =>
     board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !isDormant(sq) ? i : -1)).filter((i) => i !== -1);
 
-/** player に働いている市場があるか（シャッフルが手番ごとに1回無料。氷結中の休眠したものは働かない） */
-export const marketActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'market').length > 0;
+/** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
+export const marketCount = (board: SquareInfo[], player: Player): number => activeObjectCells(board, player, 'market').length;
 
 /** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
 export const sanctuaryProtected = (board: SquareInfo[]): boolean[] => {

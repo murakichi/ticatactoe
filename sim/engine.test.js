@@ -3588,7 +3588,7 @@ test('オブジェクト: エフェクトだけでなくダメージ系スキル
     assert.strictEqual(f.board[5].bind, 4, '火炎の付与で1ダメージ');
 });
 
-test('市場: 手番ごとに1回、シャッフルが無料（2回目は有料・手番が変わると戻る・敵の市場は働かない）', () => {
+test('市場: 手番ごとに市場の数だけシャッフルが無料（超えたら有料・手番が変わると戻る・敵の市場は働かない）', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(51) });
     s.magic[0] = 10;
     s.board[2] = { player: '⭕', bind: 5, effects: [], object: 'market' };
@@ -3598,11 +3598,16 @@ test('市場: 手番ごとに1回、シャッフルが無料（2回目は有料�
     e.shuffleHand(s);
     assert.strictEqual(s.magic[0], 9, '1回目は無料');
     e.shuffleHand(s);
-    assert.strictEqual(s.magic[0], 8, '2回目は有料');
+    assert.strictEqual(s.magic[0], 8, '市場1つ: 2回目は有料');
+    s.board[3] = { player: '💙', bind: 5, effects: [], object: 'market' };
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 8, '市場2つ: 2回目も無料');
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 7, '3回目は有料');
     s.currentTurn += 1; e.advanceTurn(s); s.currentTurn += 1; e.advanceTurn(s);
     s.magic[0] = 10;
-    e.shuffleHand(s);
-    assert.strictEqual(s.magic[0], 10, '次の自分の手番では再び無料');
+    e.shuffleHand(s); e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 10, '次の自分の手番では再び市場の数だけ無料');
 });
 
 test('聖域: 周囲の自陣のコマは着手ごとの減衰を受けない。毒沼は手番開始時に周囲の敵コマへ☠', () => {

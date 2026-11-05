@@ -424,7 +424,7 @@ function newGame(opts = {}) {
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
-        marketUsed: fill(false), // 市場の無料シャッフルをこの手番に使った
+        marketUsed: fill(0), // 市場の無料シャッフルをこの手番に使った回数
         bigCast: fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: fill(false), // 夜の帳: この席の次の手番から効く
@@ -545,9 +545,9 @@ function spendMagic(s, amount, skillId) {
 }
 // シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
 function shuffleHand(s) {
-    // 市場: 手番ごとに1回、シャッフルが無料（本番 Game.tsx の onClickShuffle と同じ）
-    const free = objectsMod.marketActive(s.board, curPlayer(s)) && !s.marketUsed[s.turn];
-    if (free) { s.marketUsed[s.turn] = true; bumpStat(s, 'marketFree'); } else s.magic[s.turn] -= costsOf(s).onClickShuffle;
+    // 市場: 手番ごとに、働いている市場の数だけシャッフルが無料（本番 Game.tsx の onClickShuffle と同じ）
+    const free = s.marketUsed[s.turn] < objectsMod.marketCount(s.board, curPlayer(s));
+    if (free) { s.marketUsed[s.turn]++; bumpStat(s, 'marketFree'); } else s.magic[s.turn] -= costsOf(s).onClickShuffle;
     s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
     s.useMagicCount[s.turn]++;
 }

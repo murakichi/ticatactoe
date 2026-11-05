@@ -13,7 +13,7 @@ import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './tu
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
-import { marketActive, OBJECT_DEFS, OBJECT_KINDS, OBJECT_SKILL_BASE_IDX, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { marketCount, OBJECT_DEFS, OBJECT_KINDS, OBJECT_SKILL_BASE_IDX, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
@@ -181,7 +181,7 @@ export const Game = (props: GameProps) => {
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         tokenFree: Array<boolean>(seatCount).fill(false), // 無礼講: この手番、トークン系スキルのコストが0
-        marketUsed: Array<boolean>(seatCount).fill(false), // 市場の無料シャッフルをこの手番に使った
+        marketUsed: Array<number>(seatCount).fill(0), // 市場の無料シャッフルをこの手番に使った回数
         bigCast: Array<boolean>(seatCount).fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の次の手番から効く
@@ -1331,8 +1331,8 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife'), true, true, 'onClickAddLife');
     };
 
-    // 市場: 手番ごとに1回、シャッフルが無料
-    const marketFree = marketActive(currentBoard, currentTurnPlayer) && !gearTurn.current.marketUsed[turnSeat];
+    // 市場: 手番ごとに、働いている市場の数だけシャッフルが無料
+    const marketFree = gearTurn.current.marketUsed[turnSeat] < marketCount(currentBoard, currentTurnPlayer);
     const shuffleCost = marketFree ? 0 : seatCosts.onClickShuffle;
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
@@ -1340,7 +1340,7 @@ export const Game = (props: GameProps) => {
         // 手札はデッキ（12枚）から引く
         setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills));
         if (marketFree) {
-            gearTurn.current.marketUsed[turnSeat] = true;
+            gearTurn.current.marketUsed[turnSeat]++;
             addLog('市場でシャッフルが無料になった');
         }
         spendMagic(shuffleCost, true, false);
@@ -3543,7 +3543,7 @@ export const Game = (props: GameProps) => {
             shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
             tokenFree: Array<boolean>(seatCount).fill(false),
-            marketUsed: Array<boolean>(seatCount).fill(false),
+            marketUsed: Array<number>(seatCount).fill(0),
             bigCast: Array<boolean>(seatCount).fill(false),
             veil: Array<boolean>(seatCount).fill(false),
             veilNext: Array<boolean>(seatCount).fill(false),

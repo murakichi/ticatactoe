@@ -2,7 +2,7 @@ import { CharacterId } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { decayBoard } from './decay';
-import { OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketActive, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -202,12 +202,14 @@ describe('オブジェクト: 手番開始時の効果', () => {
 });
 
 describe('市場・聖域・毒沼', () => {
-    it('市場: 働いている（氷結中でない）持ち主にだけ働く', () => {
+    it('市場: 働いている（氷結中でない）持ち主の分だけ数える。複数あれば数だけ', () => {
         const b = board();
         b[0] = newObject('💙', 'market');
         b[1] = { ...newObject('⭕', 'market'), effects: [{ effect: '❄' }] };
-        expect(marketActive(b, '💙')).toBe(true);
-        expect(marketActive(b, '⭕')).toBe(false);
+        expect(marketCount(b, '💙')).toBe(1);
+        expect(marketCount(b, '⭕')).toBe(0);
+        b[2] = newObject('💙', 'market');
+        expect(marketCount(b, '💙')).toBe(2);
     });
 
     it('聖域: 周囲八マスの自陣のコマだけが守られる（敵のコマ・周囲外・氷結中の聖域は守らない）', () => {
