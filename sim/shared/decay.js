@@ -1,7 +1,8 @@
 // 自動生成: src/components/game/decay.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
+exports.isTakeProtected = exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
+const Player_1 = require("./Player");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -71,3 +72,9 @@ exports.decayBoard = decayBoard;
  */
 const canHitBound = (character, board, seatCount) => character === 'giant' || (0, exports.isCrowded)(board, seatCount);
 exports.canHitBound = canHitBound;
+/**
+ * 雷霆の巫のコマは、ライフが0になっても着手で奪われない（ライフの残ったコマと同じ扱い。巨人と満杯の盤面だけが奪える）。
+ * ライフ0の自コマを敵に取られて列を完成されるのが負けの大半だったため（ユーザー指示 2026-11-05）
+ */
+const isTakeProtected = (sq, chars) => !!sq.player && sq.bind <= 0 && chars[(0, Player_1.seatOf)(sq.player)] === 'electrician';
+exports.isTakeProtected = isTakeProtected;
