@@ -303,7 +303,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
-    magician: [['spellWard', 'harvest']], // 主案 spellWard,luckyPurse との差 -0.7pt（seed92/200 51.6 vs 52.3）で同程度
+    magician: [['spellWard', 'harvest'], ['lastStand', 'luckyPurse']], // 主案 spellWard,luckyPurse との差 harvest -0.7pt（seed92/200）・lastStand,luckyPurse +2.3pt（probe-altgear seed201/150）で同等
     yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
