@@ -141,3 +141,7 @@
 
 ### 試行62d: 全部入り・envDeck varied を別seed(29)で再測定
 対強豪: **electrician 1位 56.2%**（field 66.5%, 不利0/7, 最悪 giant 46%）/ magician 54.8%。GAP は **1.4pt**（seed13 は 5.8pt）で、1位は維持するが2位との差は100試合では誤差内。field では 6.4pt 差。結論: 全部入りなら電気使いは複数seedで1位だが、対強豪の差は 1.4〜5.8pt とばらつく。magician がほぼ並ぶ。
+
+### 試行62e: 全部入り・envDeck varied を seed41/53 でも再測定（100試合/ペア）
+seed41: **magician 60.4% 1位**、electrician 56.8% 2位（差 -3.6pt）。seed53: **electrician 62.6% 1位**、magician 57.0%（+5.6pt）。
+4seed の対強豪（electrician − 2位 or 1位）: seed13 +5.8 / seed29 +1.4 / seed41 -3.6 / seed53 +5.6 → 平均 +2.3pt、1位が3/4。電気使いは magician と首位を争う関係で、『全部入りなら確実に1位』とは言えない（『上位2強の一角』が正確）。不利な対面は4seedとも 0〜（最悪は pyromancer 41%）。
