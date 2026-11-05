@@ -1885,7 +1885,7 @@ class AIPlayer {
             const need = line.filter((c) => board[c].player !== this.playerSymbol);
             if (need.length === 0 || need.length > cap || (best && need.length >= best.centers.length)) continue;
             const nb = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            for (const c of need) stompOf(nb, c, this.playerSymbol, life);
+            for (const c of need) stompOf(nb, c, this.playerSymbol, life, this.seatCharacters() as CharacterId[]);
             if (line.every((c) => nb[c].player === this.playerSymbol)) best = { centers: need, board: nb };
         }
         return best;
@@ -1929,7 +1929,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board: SquareInfo[], i: number, player: Player, life: number): SquareInfo[] {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        stompOf(nb, i, player, life);
+        stompOf(nb, i, player, life, this.seatCharacters() as CharacterId[]);
         return nb;
     }
 

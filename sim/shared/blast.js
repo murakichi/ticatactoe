@@ -8,7 +8,7 @@ const thermal_1 = require("./thermal");
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
 /** ストンプ: i を中心とする範囲の敵コマ・空きマスのロックなどを全て破壊し、自陣のコマはライフ-5（氷結なら解除だけ・🔥は1.5倍）。
  *  中心が空きマス（氷結中でない）なら、自分のコマ（ライフ life）を置く */
-const stomp = (board, i, player, life) => {
+const stomp = (board, i, player, life, chars) => {
     const range = (0, boardGeometry_1.geometryForCells)(board.length).stompRange(i);
     let destroyed = 0;
     const broken = [];
@@ -17,6 +17,8 @@ const stomp = (board, i, player, life) => {
             board[idx] = (0, thermal_1.applyDamage)(board[idx], 5, 'skill').sq;
             continue;
         }
+        if (chars && board[idx].player && (0, charge_1.isShielded)(board[idx], chars))
+            continue; // 雷霆の⚡の無敵はストンプも防ぐ
         const guard = (0, thermal_1.absorbDestroy)(board[idx]);
         if (guard.blocked) {
             board[idx] = guard.sq; // 氷結が身代わりになる

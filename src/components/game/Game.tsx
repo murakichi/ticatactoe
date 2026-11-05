@@ -1880,7 +1880,7 @@ export const Game = (props: GameProps) => {
 
     // ストンプの破壊範囲 (クリックしたマスの周囲1マス)
     const exeStomp = (i: number, currentBoard: SquareInfo[]) => {
-        const { range, destroyed, broken } = stompOf(currentBoard, i, currentTurnPlayer, life);
+        const { range, destroyed, broken } = stompOf(currentBoard, i, currentTurnPlayer, life, characters);
         addCorpses(destroyed);
         addLog(`${posName(i)}を中心にストンプを実行`);
         flashCells(range);

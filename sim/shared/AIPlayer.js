@@ -2004,7 +2004,7 @@ class AIPlayer {
                 continue;
             const nb = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             for (const c of need)
-                (0, blast_1.stomp)(nb, c, this.playerSymbol, life);
+                (0, blast_1.stomp)(nb, c, this.playerSymbol, life, this.seatCharacters());
             if (line.every((c) => nb[c].player === this.playerSymbol))
                 best = { centers: need, board: nb };
         }
@@ -2051,7 +2051,7 @@ class AIPlayer {
     /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
     simulateStomp(board, i, player, life) {
         const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
-        (0, blast_1.stomp)(nb, i, player, life);
+        (0, blast_1.stomp)(nb, i, player, life, this.seatCharacters());
         return nb;
     }
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */

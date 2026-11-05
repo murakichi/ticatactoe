@@ -62,3 +62,21 @@ describe('審判の日', () => {
         expect(b[5].player).toBe('⭕');
     });
 });
+
+describe('ストンプと雷霆の⚡の無敵', () => {
+    it('chars を渡すと、⚡付きの雷霆の巫のコマは壊れない（⚡なしは壊れる）', () => {
+        const b = board();
+        b[0] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+        b[1] = { player: '⭕', bind: 3, effects: [] };
+        const r = stomp(b, 5, '💙', 6, ['giant', 'electrician']);
+        expect(b[0].player).toBe('⭕');
+        expect(b[1].player).toBeUndefined();
+        expect(r.destroyed).toBe(1);
+    });
+    it('chars を渡さなければ従来どおり⚡付きも壊れる', () => {
+        const b = board();
+        b[0] = { player: '⭕', bind: 3, effects: [{ effect: '⚡' }] };
+        stomp(b, 5, '💙', 6);
+        expect(b[0].player).toBeUndefined();
+    });
+});

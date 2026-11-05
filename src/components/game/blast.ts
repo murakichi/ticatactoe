@@ -19,7 +19,7 @@ const empty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [] });
 
 /** ストンプ: i を中心とする範囲の敵コマ・空きマスのロックなどを全て破壊し、自陣のコマはライフ-5（氷結なら解除だけ・🔥は1.5倍）。
  *  中心が空きマス（氷結中でない）なら、自分のコマ（ライフ life）を置く */
-export const stomp = (board: SquareInfo[], i: number, player: Player, life: number): BlastResult => {
+export const stomp = (board: SquareInfo[], i: number, player: Player, life: number, chars?: PlayerCharacters): BlastResult => {
     const range = geometryForCells(board.length).stompRange(i);
     let destroyed = 0;
     const broken: number[] = [];
@@ -28,6 +28,7 @@ export const stomp = (board: SquareInfo[], i: number, player: Player, life: numb
             board[idx] = applyDamage(board[idx], 5, 'skill').sq;
             continue;
         }
+        if (chars && board[idx].player && isShielded(board[idx], chars)) continue; // 雷霆の⚡の無敵はストンプも防ぐ
         const guard = absorbDestroy(board[idx]);
         if (guard.blocked) {
             board[idx] = guard.sq; // 氷結が身代わりになる

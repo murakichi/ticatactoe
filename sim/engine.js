@@ -1361,7 +1361,7 @@ function onClickStomp(s) {
     spendMagic(s, gearCost(s, costsOf(s).onClickStomp, false, s.turn, 'onClickStomp'), 'onClickStomp');
 }
 function exeStomp(s, i) {
-    const { destroyed } = blastMod.stomp(s.board, i, curPlayer(s), s.life);
+    const { destroyed } = blastMod.stomp(s.board, i, curPlayer(s), s.life, s.chars);
     addCorpses(s, destroyed);
     s.useStomp = false;
 }
