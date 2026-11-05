@@ -1,7 +1,7 @@
 // 通常の着手（コマを置く・強化する・相手のコマを攻撃する）の結果と、蘇生中の吸収。Game.tsx（onCellClick）と sim/engine.js（placeMove）が同じ関数を呼ぶ (#289)。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { isShikigami } from '../../util';
+import { isObject, isShikigami } from '../../util';
 import { NECROMANCY } from './turn';
 import { activePoison } from './poison';
 
@@ -25,6 +25,10 @@ export type PlacementResult = {
  * - 空きマス: ライフ life のコマ。置かれた🔥は引き継ぐ
  */
 export const resolvePlacement = (cell: SquareInfo, player: Player, life: number): PlacementResult => {
+    if (cell.player === player && isObject(cell)) {
+        // 自陣のオブジェクトは、いつでも通常のコマで乗っ取れる（オブジェクトは消えて、ライフ life のコマになる。設置数の制限は無い）
+        return { square: { player, bind: life, effects: [...cell.effects] }, poisonSpread: false, corpse: false, reinforced: false };
+    }
     if (cell.player === player) {
         // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
         const effects = isShikigami(cell) ? [...cell.effects.filter((e) => e.effect !== '📜'), { effect: '🌱' as const }] : [...cell.effects];
@@ -49,7 +53,9 @@ export const resolvePlacement = (cell: SquareInfo, player: Player, life: number)
             bind = 0;
             capturedFrom = undefined;
         }
-        return { square: { player: owner, bind, effects: [] }, capturedFrom, poisonSpread: calc <= 0 && activePoison(cell) > 0, corpse: calc <= 0, reinforced: false };
+        // 敵のオブジェクトはライフが0になって初めて乗っ取れる。ライフが残る攻撃（巨人・満杯の盤面）ではオブジェクトのまま。乗っ取るとオブジェクトは消え、持ち主の効果は引き継がない
+        const kept = owner === cell.player && cell.object ? { object: cell.object } : {};
+        return { square: { player: owner, bind, effects: [], ...kept }, capturedFrom, poisonSpread: calc <= 0 && activePoison(cell) > 0, corpse: calc <= 0, reinforced: false };
     }
     return { square: { player, bind: life, effects: cell.effects.filter((e) => e.effect === '🔥') }, poisonSpread: false, corpse: false, reinforced: false };
 };

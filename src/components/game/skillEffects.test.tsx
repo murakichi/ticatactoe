@@ -87,6 +87,12 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSmallFry: 'smallFry',
     onClickPerfectGame: 'tsunami',
     onClickHelper: 'token',
+    // オブジェクト(設置先を選ぶ): 設置の演出はトークンと同じ。バナーはオブジェクト名(Game.tsx の exeObjectPlace)
+    onClickBigTree: 'token',
+    onClickDeadTree: 'token',
+    onClickSpring: 'token',
+    onClickFort: 'token',
+    onClickThundercloud: 'token',
     onClickFirstFrost: 'firstFrost',
     onClickGather: 'gather',
     onClickBurnOff: 'burnOff',

@@ -105,6 +105,11 @@ exports.SKILL_CATALOG = [
     { idx: 102, name: 'パーフェクトゲーム', icon: '🎳', category: 'attack', costKey: 'onClickPerfectGame', desc: '盤面のコマを敵味方とも全て破壊します（🔑ロック・⚡無敵のコマは除き、氷結中のコマは❄が1つ減るだけ）' },
     { idx: 103, name: '超助っ人', icon: '🦸', category: 'token', costKey: 'onClickHelper', desc: '🔥❄⚡☠🌱🍂のうちランダムな1つを付けたコマを、自陣のランダムな空きマスに置きます（ターン1回）' },
     { idx: 104, name: '柳の下に二匹目がいた', icon: '🐟', category: 'support', costKey: 'onClickSecondCatch', desc: '自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動します。この手番に基礎コスト7以上のスキルを使っていれば0コストで使えます' },
+    { idx: 105, name: '大木', icon: '🌳', category: 'object', costKey: 'onClickBigTree', desc: '空きマスを選んで大木を設置します。手番開始時にマジック+3（🔥を付けられると即座に壊れます）。オブジェクトは列に数えず、ライフは時間で減りません' },
+    { idx: 106, name: '枯れた大木', icon: '🪵', category: 'object', costKey: 'onClickDeadTree', desc: '空きマスを選んで枯れた大木を設置します。手番開始時、周囲八マスのコマのランダムな1つに🍂を付けます（🔥を付けられると即座に壊れます）' },
+    { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスを選んで生命の泉を設置します。手番開始時のライフ期待値+2' },
+    { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスを選んで砦を設置します。手番開始時、周囲八マスの自陣のコマのライフ+1' },
+    { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスを選んで雷雲を設置します。手番開始時、周囲八マスのコマのランダムな1つに⚡を付けます' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
@@ -210,6 +215,7 @@ exports.CATEGORY_ORDER = [
     { id: 'ice', label: '氷結' },
     { id: 'fire', label: '火炎' },
     { id: 'shikigami', label: '式神' },
+    { id: 'object', label: 'オブジェクト' },
     { id: 'basic', label: '基本' },
 ];
 /** スキルの基礎コスト（キャラ補正・ギア補正の前の値） */

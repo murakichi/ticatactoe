@@ -54,6 +54,7 @@ const discountMod = require('./shared/discount');
 const comboMod = require('./shared/comboCost');
 const lifeBanMod = require('./shared/lifeBan');
 const bigMod = require('./shared/bigSkills');
+const objectsMod = require('./shared/objects');
 const darkPotMod = require('./shared/darkPot');
 const thermal = require('./shared/thermal');
 const poisonMod = require('./shared/poison');
@@ -402,6 +403,7 @@ function newGame(opts = {}) {
         useFreeze: false,
         useSucker: false,
         useShikigamiPlace: false,
+        objectPlacing: null, // オブジェクトの設置先を選んでいる最中の種類（objects.ts）
         useShikigamiBlast: false,
         useShikigamiBless: false,
         useShikigamiCurse: false,
@@ -460,7 +462,7 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
 
 // 式神(📜)は列の並びに数えない
 const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
-const symbolsOf = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
+const symbolsOf = (board) => board.map((x) => (isShikigami(x) || x.object ? undefined : x.player)); // 式神・オブジェクトは列に数えない
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
@@ -625,6 +627,7 @@ function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.relocateFrom = null;
     s.useLock = 0;
+    s.objectPlacing = null;
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
@@ -666,6 +669,12 @@ function advanceTurn(s) {
     change.wardPlace.forEach((seat) => {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
+    // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
+    const burntTrees = objectsMod.sweepBurntTrees(s.board);
+    const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
+    if (burntTrees.length > 0) bumpStat(s, 'objectBurnt', burntTrees.length);
+    if (objRes.magic > 0) bumpStat(s, 'objectMagic', objRes.magic);
+    if (objRes.leaves.length + objRes.charged.length + objRes.fortified.length > 0) bumpStat(s, 'objectEffect', objRes.leaves.length + objRes.charged.length + objRes.fortified.length);
     // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
     const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
     if (root > 0) bumpStat(s, 'frostRoot', root);
@@ -680,6 +689,7 @@ function advanceTurn(s) {
         standBonus: lastStandActiveAgainst(s, next), // 土壇場の防壁: 発動後は相手の手番開始時に+2
         scorch: scorchForNext, // 焦土(上で計算)
         root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
+        objects: objRes.magic, // 大木
     });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
@@ -697,7 +707,7 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;
@@ -847,6 +857,15 @@ function placeMove(s, i) {
         exePandemic(s, i);
         return true;
     }
+    if (s.objectPlacing) {
+        // オブジェクト: 空きマスに設置する。埋まっている/氷結中/ロック中のマスは選び直せる [FAITHFUL] Game.tsx exeObjectPlace
+        if (!objectsMod.objectLandable(board[i])) return false;
+        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing), effects: board[i].effects.filter((e) => e.effect === '🔥') };
+        objectsMod.sweepBurntTrees(board);
+        bumpStat(s, 'objectPlaced');
+        s.objectPlacing = null;
+        return true;
+    }
     if (s.useShikigamiPlace) {
         // 陰: 任意の空きマスに式神を置く。埋まっている/氷結中/ロック中の空きマスは選び直せる
         if (!shikiMod.shikigamiLandable(board[i])) return false;
@@ -926,7 +945,7 @@ function placeMove(s, i) {
         s.useBuds = [false, 0];
     }
 
-    board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects };
+    board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
 
     // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
     const vengeanceGained = {};
@@ -1697,6 +1716,15 @@ function onClickPerfectGame(s) {
     bumpMagicCount(s);
     bumpStat(s, 'perfectGame');
     bumpStat(s, 'perfectGameDestroyed', r.destroyed.length);
+}
+// オブジェクト (idx 105-109): 空きマスを選んで設置する。効果は手番開始時（advanceTurn） [FAITHFUL] Game.tsx onClickObject
+function objectLegal(s) { return objectsMod.objectLandableCells(s.board).length > 0; }
+function onClickObject(s, kind) {
+    const def = objectsMod.OBJECT_DEFS[kind];
+    s.objectPlacing = kind;
+    spendMagic(s, calculateCost(s, costsOf(s)[def.costKey], false, false, def.costKey), def.costKey);
+    bumpMagicCount(s);
+    bumpStat(s, 'object_' + kind);
 }
 // 超助っ人 (idx 103): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを自陣のランダムな空きマスに置く（トークン扱い・ターン1回） [FAITHFUL] Game.tsx onClickHelper
 function onClickHelper(s) {
@@ -2538,6 +2566,11 @@ const SKILLS = {
     clearance: (s) => useDiscountSkill(s, 'onClickClearance'),
     smallFry: onClickSmallFry,
     perfectGame: onClickPerfectGame,
+    bigTree: (s) => onClickObject(s, 'bigTree'),
+    deadTree: (s) => onClickObject(s, 'deadTree'),
+    spring: (s) => onClickObject(s, 'spring'),
+    fort: (s) => onClickObject(s, 'fort'),
+    thundercloud: (s) => onClickObject(s, 'thundercloud'),
     helper: onClickHelper,
     firstFrost: onClickFirstFrost,
     gather: onClickGather,
@@ -2577,7 +2610,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

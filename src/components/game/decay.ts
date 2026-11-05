@@ -1,6 +1,7 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isObject } from '../../types/ObjectKind';
 import { GEAR_PARAMS } from './gear';
 import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
 
@@ -32,7 +33,7 @@ export const isCrowded = (board: SquareInfo[], seatCount: number): boolean =>
 
 /** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
 export const crowdedDecay = (sq: SquareInfo): SquareInfo =>
-    (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !isFrozen(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+    (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !isFrozen(sq) && !isObject(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
 export type DecayResult = {
     /** 🔥の継続ダメージを受けたマス（演出用） */
     burnCells: number[];

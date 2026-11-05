@@ -20,8 +20,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..104)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 105;
+// 汎用スキルプールの大きさ (idx 0..109)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 110;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -709,7 +709,7 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
-            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx])))
+            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
                 continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
@@ -762,8 +762,8 @@ class AIPlayer {
     countReaches(board, player) {
         let reaches = 0;
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let my = 0, op = 0, blocked = false;
             for (const idx of line) {
                 const sq = board[idx];
@@ -818,8 +818,8 @@ class AIPlayer {
     findThreatSquares(board, player) {
         const threats = [];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];

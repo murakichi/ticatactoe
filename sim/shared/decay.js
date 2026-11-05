@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTakeProtected = exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
 const Player_1 = require("./Player");
+const ObjectKind_1 = require("./ObjectKind");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -26,7 +27,7 @@ exports.CROWDED_DECAY_MIN_PLAYERS = 3;
 const isCrowded = (board, seatCount) => seatCount >= exports.CROWDED_DECAY_MIN_PLAYERS && board.filter((sq) => !sq.player && !(0, thermal_1.emptyBlocked)(sq)).length <= Math.floor(board.length / exports.CROWDED_EMPTY_DIVISOR);
 exports.isCrowded = isCrowded;
 /** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
-const crowdedDecay = (sq) => (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+const crowdedDecay = (sq) => (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && !(0, ObjectKind_1.isObject)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
 exports.crowdedDecay = crowdedDecay;
 /**
  * ライフの減衰を盤面全体に1回進める（着手のたび、または手番が1周するごと。shouldDecay）。

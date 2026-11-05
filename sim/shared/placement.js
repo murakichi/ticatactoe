@@ -12,6 +12,10 @@ const poison_1 = require("./poison");
  * - 空きマス: ライフ life のコマ。置かれた🔥は引き継ぐ
  */
 const resolvePlacement = (cell, player, life) => {
+    if (cell.player === player && (0, util_1.isObject)(cell)) {
+        // 自陣のオブジェクトは、いつでも通常のコマで乗っ取れる（オブジェクトは消えて、ライフ life のコマになる。設置数の制限は無い）
+        return { square: { player, bind: life, effects: [...cell.effects] }, poisonSpread: false, corpse: false, reinforced: false };
+    }
     if (cell.player === player) {
         // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
         const effects = (0, util_1.isShikigami)(cell) ? [...cell.effects.filter((e) => e.effect !== '📜'), { effect: '🌱' }] : [...cell.effects];
@@ -37,7 +41,9 @@ const resolvePlacement = (cell, player, life) => {
             bind = 0;
             capturedFrom = undefined;
         }
-        return { square: { player: owner, bind, effects: [] }, capturedFrom, poisonSpread: calc <= 0 && (0, poison_1.activePoison)(cell) > 0, corpse: calc <= 0, reinforced: false };
+        // 敵のオブジェクトはライフが0になって初めて乗っ取れる。ライフが残る攻撃（巨人・満杯の盤面）ではオブジェクトのまま。乗っ取るとオブジェクトは消え、持ち主の効果は引き継がない
+        const kept = owner === cell.player && cell.object ? { object: cell.object } : {};
+        return { square: { player: owner, bind, effects: [], ...kept }, capturedFrom, poisonSpread: calc <= 0 && (0, poison_1.activePoison)(cell) > 0, corpse: calc <= 0, reinforced: false };
     }
     return { square: { player, bind: life, effects: cell.effects.filter((e) => e.effect === '🔥') }, poisonSpread: false, corpse: false, reinforced: false };
 };

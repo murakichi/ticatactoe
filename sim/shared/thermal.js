@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sowCandidates = exports.graft = exports.GRAFT_MAX = exports.budReceivers = exports.harvestBuds = exports.canBud = exports.activeBuds = exports.budStacks = exports.burnout = exports.burnoutTargets = exports.burnoutCostOf = exports.totalFlames = exports.BURNOUT_FREE_FLAMES = exports.decayTick = exports.infernoTargets = exports.INFERNO_STACKS = exports.INFERNO_COST = exports.detonate = exports.freezeAll = exports.infernoCostOf = exports.INFERNO_FREE_SKILLS = exports.FLAME_SKILL_KEYS = exports.reducedGlacierCost = exports.GLACIER_DAMAGE_PER_STACK = exports.GLACIER_BASE_COST = exports.cleanse = exports.ailmentStacks = exports.AILMENTS = exports.freeze = exports.canFreeze = exports.ignite = exports.zeroOut = exports.absorbDestroy = exports.applyDamage = exports.isEffectWarded = exports.setEffectWard = exports.burnDamageOf = exports.lockable = exports.emptyBlocked = exports.overwriteBlocked = exports.thawOne = exports.thaw = exports.isDormant = exports.flameStacks = exports.isFrozen = exports.frozenStacks = exports.FLAME_INSTANT_DAMAGE = exports.FLAME_SKILL_MULT = exports.PYROMANCER_EXTRA_BURN = exports.FLAME_BURN_DAMAGE = void 0;
 exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE = exports.leafFrostTargets = exports.fireWheel = exports.FIRE_WHEEL_COUNT = exports.fireWheelTargets = exports.kimon = exports.kimonTargets = exports.fireStacksTotal = exports.KIMON_LOCK_TURNS = exports.thunderFireVictims = exports.THUNDER_FIRE_MIN = exports.thawAll = exports.thawTargets = exports.frostfallTargets = exports.placeFrostToken = exports.randomFreezeCandidates = exports.sacrificeFlame = exports.sacrificeTargets = exports.canSacrifice = exports.placeFlameToken = exports.swidden = exports.autumn = exports.autumnTargets = exports.mulch = exports.mulchCandidates = exports.bonfire = exports.bonfireTargets = exports.placeLeafToken = exports.mogaribue = exports.canMogaribue = exports.mogaribueTargets = exports.mogaribueDamage = exports.MOGARIBUE_LIFE = exports.kindling = exports.kindlingTargets = exports.tinderTargets = exports.leafCloakTargets = exports.leafAllTargets = exports.leafDrop = exports.leafDropTargets = exports.witchCostOf = exports.boardLeaves = exports.leafSurcharge = exports.activeLeaves = exports.leafStacks = exports.sow = exports.SOW_COUNT = void 0;
 const Player_1 = require("./Player");
+const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
 /** 火炎1スタックあたりの継続ダメージ */
 exports.FLAME_BURN_DAMAGE = 2;
@@ -117,6 +118,11 @@ const ignite = (board, cells, size, n = 1, keepBuds) => {
                 board[k] = (0, exports.thaw)(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
                 thawed.add(k);
                 continue;
+            }
+            // 大木・枯れた大木は、🔥を付けられると即座に壊れて空きマスになる（氷結中は上の解凍で守られる）。そのマスにはそれ以上🔥を付けない
+            if ((0, ObjectKind_1.isTree)(board[k])) {
+                board[k] = { player: undefined, bind: 0, effects: [] };
+                break;
             }
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = (_a = keepBuds === null || keepBuds === void 0 ? void 0 : keepBuds(board[k])) !== null && _a !== void 0 ? _a : false;
@@ -249,8 +255,8 @@ exports.infernoTargets = infernoTargets;
  */
 const decayTick = (sq, chars) => {
     let next = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next))
-        next = { ...next, bind: next.bind - 1 };
+    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next))
+        next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない
     const burn = (0, exports.burnDamageOf)(next, chars);
     if (burn > 0)
         next = { ...next, bind: Math.max(0, next.bind - burn) };
