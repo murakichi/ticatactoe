@@ -143,7 +143,7 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     tactician: [3, 9, 11, 45, 46, 50, 64, 92, 93, 94, 95, 96],
     magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 71, 72, 73, 92],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92], // 百鬼夜行(73)→バーンアウト(61): コンボ待ちをやめる。対強豪平均 3シードで +4.6/+4.9/+2.3（氷室 37→57、ネクロ 36→59、軍師 24→33。巨人 84→31 は悪化）
     necromancer: [2, 3, 6, 8, 11, 22, 40, 50, 58, 89, 92, 95],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 50],
     electrician: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94],
@@ -201,7 +201,7 @@ export const AI_DECK_SWAPS = 3;
  * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
  */
 export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
-    yinYangMaster: [53, 71, 73],
+    yinYangMaster: [53, 71],
 };
 
 /**
