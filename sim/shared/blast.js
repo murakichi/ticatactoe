@@ -32,7 +32,7 @@ const stomp = (board, i, player, life) => {
     return { range, destroyed, broken };
 };
 exports.stomp = stomp;
-/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス（と、雷霆の巫の⚡無敵のコマ。chars を渡したとき）以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
+/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
  *  ただし氷結が身代わりになって残った中心は奪えない */
 const judgeDay = (board, i, player, chars) => {
     const range = (0, boardGeometry_1.geometryForCells)(board.length).judgeRange(i);
@@ -49,7 +49,7 @@ const judgeDay = (board, i, player, chars) => {
             if (idx === i)
                 centerSurvived = true;
             continue;
-        } // 雷霆の⚡の無敵は審判の日も防ぐ
+        } // 実験: 雷霆の⚡の無敵は審判の日も防ぐ
         const guard = (0, thermal_1.absorbDestroy)(sq);
         if (guard.blocked) {
             board[idx] = guard.sq;
