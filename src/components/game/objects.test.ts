@@ -2,7 +2,7 @@ import { CharacterId } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { decayBoard } from './decay';
-import { OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketActive, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -198,5 +198,54 @@ describe('オブジェクト: 手番開始時の効果', () => {
         const before = JSON.stringify(b);
         objectTurnStart(b, '💙', chars, rngFirst);
         expect(JSON.stringify(b)).toBe(before);
+    });
+});
+
+describe('市場・聖域・毒沼', () => {
+    it('市場: 働いている（氷結中でない）持ち主にだけ働く', () => {
+        const b = board();
+        b[0] = newObject('💙', 'market');
+        b[1] = { ...newObject('⭕', 'market'), effects: [{ effect: '❄' }] };
+        expect(marketActive(b, '💙')).toBe(true);
+        expect(marketActive(b, '⭕')).toBe(false);
+    });
+
+    it('聖域: 周囲八マスの自陣のコマだけが守られる（敵のコマ・周囲外・氷結中の聖域は守らない）', () => {
+        const b = board();
+        b[5] = newObject('💙', 'sanctuary');
+        b[0] = { player: '💙', bind: 3, effects: [] };
+        b[1] = { player: '⭕', bind: 3, effects: [] };
+        b[15] = { player: '💙', bind: 3, effects: [] };
+        const p = sanctuaryProtected(b);
+        expect(p[0]).toBe(true);
+        expect(p[1]).toBe(false);
+        expect(p[15]).toBe(false);
+        b[5] = { ...b[5], effects: [{ effect: '❄' }] };
+        expect(sanctuaryProtected(b)[0]).toBe(false);
+    });
+
+    it('聖域: 守られたコマは時間経過のライフ減衰（満杯の追加分も）を受けないが、🔥の継続ダメージは受ける', () => {
+        const b = board();
+        b[5] = newObject('💙', 'sanctuary');
+        b[0] = { player: '💙', bind: 5, effects: [] }; // 守られる
+        b[3] = { player: '💙', bind: 5, effects: [] }; // 周囲外
+        b[4] = { player: '💙', bind: 5, effects: [{ effect: '🔥' }] }; // 守られるが🔥は別
+        decayBoard(b, -1, chars, ['💙', '⭕'], true);
+        expect(b[0].bind).toBe(5);
+        expect(b[3].bind).toBeLessThan(5);
+        expect(b[4].bind).toBeLessThan(5);
+    });
+
+    it('毒沼: 周囲八マスの敵のコマのランダムな1つに☠（自陣のコマ・🔑ロックのコマには付けない）', () => {
+        const b = board();
+        b[5] = newObject('💙', 'poisonSwamp');
+        b[0] = { player: '💙', bind: 3, effects: [] };
+        b[1] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] };
+        b[2] = { player: '⭕', bind: 3, effects: [] };
+        const r = objectTurnStart(b, '💙', chars, rngFirst);
+        expect(r.poisoned).toEqual([2]);
+        expect(b[2].effects).toEqual([{ effect: '☠' }]);
+        expect(b[0].effects).toEqual([]);
+        expect(b[1].effects).toEqual([{ effect: '🔑' }]);
     });
 });

@@ -3,6 +3,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isObject } from '../../types/ObjectKind';
 import { GEAR_PARAMS } from './gear';
+import { sanctuaryProtected } from './objects';
 import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
 
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -54,10 +55,11 @@ export type DecayResult = {
  */
 export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false): DecayResult => {
     const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const sanctuary = sanctuaryProtected(board); // 聖域に守られたマスは自然減衰（満杯の追加分も）を受けない
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if (burnDamageOf(before, chars) > 0) res.burnCells.push(k);
-        const sq = decayTick(crowded ? crowdedDecay(before) : before, chars); // 満杯の盤面は自然減衰がもう1回
+        const sq = decayTick(crowded && !sanctuary[k] ? crowdedDecay(before) : before, chars, !sanctuary[k]); // 満杯の盤面は自然減衰がもう1回
         board[k] = sq;
         if (before.player && !sq.player) {
             res.flameKills++;

@@ -145,7 +145,10 @@ exports.skillCosts = {
     onClickDeadTree: 5,
     onClickSpring: 5,
     onClickFort: 6,
-    onClickThundercloud: 5, //  雷雲(idx 109): 手番開始時、周囲八マスのランダムなコマに⚡。基準: ⚡2×期待3手番−ランダム選択1−自傷の恐れ1
+    onClickThundercloud: 5,
+    onClickMarket: 3,
+    onClickSanctuary: 5,
+    onClickPoisonSwamp: 5, //   毒沼(idx 112): 手番開始時、周囲八マスのランダムな敵コマに☠。基準: ☠(単価2) × 期待3手番 = 6、ランダム選択 −1。敵だけを選ぶので自傷の割引は掛けない
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

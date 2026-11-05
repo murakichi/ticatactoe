@@ -13,6 +13,7 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isGuarded } from './charge';
+import { poisonStrike } from './poison';
 import { shikigamiLandable } from './shikigami';
 import { isDormant } from './thermal';
 
@@ -28,7 +29,7 @@ export type ObjectDef = {
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -52,6 +53,9 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     spring: { name: '生命の泉', icon: '⛲', life: OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
     fort: { name: '砦', icon: '🏰', life: OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
     thundercloud: { name: '雷雲', icon: '🌩️', life: OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
+    market: { name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに1回、シャッフル（手札の引き直し）が無料になる' },
+    sanctuary: { name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
+    poisonSwamp: { name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -66,6 +70,20 @@ export const objectLandableCells = (board: SquareInfo[]): number[] => board.map(
 /** 手番開始時に効果を発揮する、player のオブジェクトのマス（氷結中の休眠したものを除く。昇順） */
 export const activeObjectCells = (board: SquareInfo[], player: Player, kind?: ObjectKind): number[] =>
     board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !isDormant(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** player に働いている市場があるか（シャッフルが手番ごとに1回無料。氷結中の休眠したものは働かない） */
+export const marketActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'market').length > 0;
+
+/** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
+export const sanctuaryProtected = (board: SquareInfo[]): boolean[] => {
+    const out = board.map(() => false);
+    const geo = geometryForCells(board.length);
+    board.forEach((sq, k) => {
+        if (sq.object !== 'sanctuary' || !sq.player || isDormant(sq)) return;
+        for (const j of geo.surroundRange(k)) if (board[j].player === sq.player) out[j] = true;
+    });
+    return out;
+};
 
 /** player の働いている生命の泉1つにつき、その手番のライフ期待値に足す値の合計 */
 export const objectLifeBonus = (board: SquareInfo[], player: Player): number => activeObjectCells(board, player, 'spring').length * OBJECT_PARAMS.springLife;
@@ -91,6 +109,8 @@ export type ObjectTurnResult = {
     charged: number[];
     /** ライフが増えたマス（砦） */
     fortified: number[];
+    /** ☠を付けられたマス（毒沼） */
+    poisoned: number[];
 };
 
 /** 枯れた大木・雷雲の標的にできるコマ: 周囲八マスのコマのうち、🔑ロック・⚡無敵でないもの */
@@ -105,7 +125,7 @@ const randomTargets = (board: SquareInfo[], k: number, chars: PlayerCharacters):
  * @param rng [0,1) を返す乱数。sim が種付きの乱数を渡す
  */
 export const objectTurnStart = (board: SquareInfo[], player: Player, chars: PlayerCharacters, rng: () => number = Math.random): ObjectTurnResult => {
-    const res: ObjectTurnResult = { magic: 0, leaves: [], charged: [], fortified: [] };
+    const res: ObjectTurnResult = { magic: 0, leaves: [], charged: [], fortified: [], poisoned: [] };
     const geo = geometryForCells(board.length);
     for (const k of activeObjectCells(board, player)) {
         switch (board[k].object) {
@@ -126,6 +146,14 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = addCharge(board[j], chars);
                 res.charged.push(j);
+                break;
+            }
+            case 'poisonSwamp': {
+                const cands = geo.surroundRange(k).filter((j) => !!board[j].player && board[j].player !== player && !isGuarded(board[j], chars));
+                if (cands.length === 0) break;
+                const j = cands[Math.floor(rng() * cands.length)];
+                board[j] = poisonStrike({ ...board[j], effects: [...board[j].effects, { effect: '☠' }] }, chars);
+                res.poisoned.push(j);
                 break;
             }
             case 'fort':

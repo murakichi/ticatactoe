@@ -88,6 +88,8 @@ const advanceGearState = (g, r, input) => {
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
+    g.marketUsed[endSeat] = false;
+    g.marketUsed[nextSeat] = false;
     g.bigCast[endSeat] = false;
     g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる

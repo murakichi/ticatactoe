@@ -287,9 +287,9 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => {
+export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next) && !isObject(next)) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない
+    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）

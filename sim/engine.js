@@ -424,6 +424,7 @@ function newGame(opts = {}) {
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        marketUsed: fill(false), // 市場の無料シャッフルをこの手番に使った
         bigCast: fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: fill(false), // 夜の帳: この席の次の手番から効く
@@ -544,7 +545,9 @@ function spendMagic(s, amount, skillId) {
 }
 // シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
 function shuffleHand(s) {
-    s.magic[s.turn] -= costsOf(s).onClickShuffle;
+    // 市場: 手番ごとに1回、シャッフルが無料（本番 Game.tsx の onClickShuffle と同じ）
+    const free = objectsMod.marketActive(s.board, curPlayer(s)) && !s.marketUsed[s.turn];
+    if (free) { s.marketUsed[s.turn] = true; bumpStat(s, 'marketFree'); } else s.magic[s.turn] -= costsOf(s).onClickShuffle;
     s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
     s.useMagicCount[s.turn]++;
 }
@@ -585,7 +588,7 @@ function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
-        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, chargeBase: s.chargeBase,
+        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
         veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
     };
     const r = {
@@ -675,7 +678,7 @@ function advanceTurn(s) {
     const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
     if (burntTrees.length > 0) bumpStat(s, 'objectBurnt', burntTrees.length);
     if (objRes.magic > 0) bumpStat(s, 'objectMagic', objRes.magic);
-    if (objRes.leaves.length + objRes.charged.length + objRes.fortified.length > 0) bumpStat(s, 'objectEffect', objRes.leaves.length + objRes.charged.length + objRes.fortified.length);
+    if (objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length > 0) bumpStat(s, 'objectEffect', objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length);
     // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
     const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
     if (root > 0) bumpStat(s, 'frostRoot', root);
@@ -2573,6 +2576,9 @@ const SKILLS = {
     spring: (s) => onClickObject(s, 'spring'),
     fort: (s) => onClickObject(s, 'fort'),
     thundercloud: (s) => onClickObject(s, 'thundercloud'),
+    market: (s) => onClickObject(s, 'market'),
+    sanctuary: (s) => onClickObject(s, 'sanctuary'),
+    poisonSwamp: (s) => onClickObject(s, 'poisonSwamp'),
     helper: onClickHelper,
     firstFrost: onClickFirstFrost,
     gather: onClickGather,
