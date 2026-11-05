@@ -2710,9 +2710,10 @@ class AIPlayer {
         const placeEnv = String((_d = (_c = (_b = globalThis.process) === null || _b === void 0 ? void 0 : _b.env) === null || _c === void 0 ? void 0 : _c.OBJ_PLACE) !== null && _d !== void 0 ? _d : '');
         if (placeEnv && this.character === 'cryomancer' && threatSquares.length === 0) {
             const OBJ_CARDS = {
-                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner', 'electrician', 'tactician', 'giant', 'magician', 'you'] },
-                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'tactician', 'necromancer'] },
+                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner'] },
+                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'necromancer'] },
                 129: { key: 'onClickBlindMonkey', kind: 'blindMonkey', vs: ['pyromancer', 'poisoner', 'witch', 'electrician'] },
+                125: { key: 'onClickTongueKing', kind: 'tongueKing', vs: ['witch', 'magician'] },
             };
             for (const idxStr of placeEnv.split(',')) {
                 const idx = Number(idxStr);
@@ -2724,7 +2725,7 @@ class AIPlayer {
                 if (board.some((sq) => sq.object === def.kind && sq.player === this.playerSymbol))
                     continue; // 同じ種類は1つまで
                 const cost = this.calculateAICost(costs[def.key], false, false, def.key);
-                if (magic < cost + 1)
+                if (magic < cost + 2)
                     continue;
                 let cell = -1;
                 let best = -Infinity;
@@ -2757,6 +2758,8 @@ class AIPlayer {
                 });
                 if (cell === -1)
                     continue;
+                if (def.kind === 'blindMonkey' && (0, boardGeometry_1.geometryForCells)(board.length).surroundRange(cell).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length < 2)
+                    continue; // 守る自コマが2つ未満なら置かない
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                 post[cell] = (0, objects_2.newObject)(this.playerSymbol, def.kind);
                 this.updateShield(post);

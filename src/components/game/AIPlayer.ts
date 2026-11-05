@@ -2516,10 +2516,11 @@ class AIPlayer {
         // 氷室の番人: 縛り・守りのオブジェクトを置く（実験: 環境変数 OBJ_PLACE=置く札のidxをカンマ区切り。例 128,127,129）
         const placeEnv = String((globalThis as any).process?.env?.OBJ_PLACE ?? '');
         if (placeEnv && this.character === 'cryomancer' && threatSquares.length === 0) {
-            const OBJ_CARDS: Record<number, { key: string; kind: 'oneWord' | 'soloSign' | 'blindMonkey'; vs: string[] }> = {
-                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner', 'electrician', 'tactician', 'giant', 'magician', 'you'] },
-                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'tactician', 'necromancer'] },
+            const OBJ_CARDS: Record<number, { key: string; kind: 'oneWord' | 'soloSign' | 'blindMonkey' | 'tongueKing'; vs: string[] }> = {
+                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner'] },
+                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'necromancer'] },
                 129: { key: 'onClickBlindMonkey', kind: 'blindMonkey', vs: ['pyromancer', 'poisoner', 'witch', 'electrician'] },
+                125: { key: 'onClickTongueKing', kind: 'tongueKing', vs: ['witch', 'magician'] },
             };
             for (const idxStr of placeEnv.split(',')) {
                 const idx = Number(idxStr);
@@ -2528,7 +2529,7 @@ class AIPlayer {
                 if (!this.opponents.some((o) => def.vs.includes(this.characterOf(o) as string))) continue;
                 if (board.some((sq) => sq.object === def.kind && sq.player === this.playerSymbol)) continue; // 同じ種類は1つまで
                 const cost = this.calculateAICost((costs as any)[def.key], false, false, def.key);
-                if (magic < cost + 1) continue;
+                if (magic < cost + 2) continue;
                 let cell = -1;
                 let best = -Infinity;
                 board.forEach((sq, i) => {
@@ -2549,6 +2550,7 @@ class AIPlayer {
                     if (v > best) { best = v; cell = i; }
                 });
                 if (cell === -1) continue;
+                if (def.kind === 'blindMonkey' && geometryForCells(board.length).surroundRange(cell).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length < 2) continue; // 守る自コマが2つ未満なら置かない
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                 post[cell] = newObject(this.playerSymbol, def.kind);
                 this.updateShield(post);
