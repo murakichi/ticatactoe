@@ -31,7 +31,7 @@ import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTarget
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather, FIRST_FROST_FREE_LEAVES } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
@@ -808,7 +808,7 @@ export const Game = (props: GameProps) => {
         setUseSacrifice(false);
         setUseKimon(false);
         setUseStash(false);
-        setUseBoltSilence(false);
+        setUseBoltSilence(0);
         setUseThunderFire(false);
         setUseFrostArea(false);
         setUseIcicle(false);
@@ -998,7 +998,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         // 雷神のへそくり: ⚡のある自陣のコマを選ぶ。無敵マスでも自分のものは選べる（雷霆の巫の⚡マスはすべて無敵なので、無敵の早期リターンより前に判定する）
-        if (useBoltSilence) {
+        if (useBoltSilence > 0) {
             if (!boltSilenceTargets().includes(i)) return; // ⚡のない・自陣でないマスは選び直せる
             exeBoltSilence(i);
             return;
@@ -1793,13 +1793,14 @@ export const Game = (props: GameProps) => {
     };
 
     // 沈黙は雷なり: 自陣の⚡を1つ選んで1スタック払い、相手全員が次の手番スキルを使えなくなる（自陣に⚡が無いと使えない）
-    const [useBoltSilence, setUseBoltSilence] = useState<boolean>(false);
+    const [useBoltSilence, setUseBoltSilence] = useState<number>(0); // あと何個の⚡を選んで払うか（0=使っていない）
     const boltSilenceTargets = (): number[] =>
         currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const boltSilenceLegal = (): boolean => boltSilenceTargets().reduce((n, i) => n + chargeStacks(currentBoard[i]), 0) >= BOLT_SILENCE_BOLTS;
     const onClickBoltSilence = () => {
-        if (boltSilenceTargets().length === 0) return;
-        addLog('「沈黙は雷なり」を使用（⚡のある自陣のコマを選択）');
-        setUseBoltSilence(true);
+        if (!boltSilenceLegal()) return;
+        addLog(`「沈黙は雷なり」を使用（⚡のある自陣のコマを選んで⚡を${BOLT_SILENCE_BOLTS}個払う）`);
+        setUseBoltSilence(BOLT_SILENCE_BOLTS);
         spendMagic(calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence'), true, true, 'onClickBoltSilence');
     };
     const exeBoltSilence = (i: number) => {
@@ -1807,11 +1808,16 @@ export const Game = (props: GameProps) => {
         const at = board[i].effects.findIndex((e) => e.effect === '⚡');
         if (at === -1) return;
         board[i] = { ...board[i], effects: board[i].effects.filter((_, k) => k !== at) };
-        addLog(`${posName(i)}の⚡1個を払い、相手は次の手番スキルを使えない`);
         flashCells([i]);
-        playEffect('silence');
-        otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
-        setUseBoltSilence(false);
+        const left = useBoltSilence - 1;
+        setUseBoltSilence(left);
+        if (left === 0) {
+            addLog(`${posName(i)}の⚡を払い切った。相手は次の手番スキルを使えない`);
+            playEffect('silence');
+            otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+        } else {
+            addLog(`${posName(i)}の⚡1個を払った（あと${left}個）`);
+        }
         setCurrentBoard(board);
     };
 
@@ -3938,7 +3944,7 @@ export const Game = (props: GameProps) => {
         { idx: 92, onClick: onClickSmallFry, buttonText: `一寸の虫に魂なし-${calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry')}`, paragraph: `敵のライフ3以下のコマを全て破壊します（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）\n相手全員は次の手番の終わりまで、ライフ3以下のコマを置けません（トークン・式神などのスキルも含む）\n盤面のコマの数だけコストが下がります（最低1）`, disabled: checkSkillDisable(seatCosts.onClickSmallFry, false, false, 'onClickSmallFry') },
         { idx: 102, onClick: onClickPerfectGame, buttonText: `パーフェクトゲーム-${calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame')}`, paragraph: `盤面のコマを敵味方とも全て破壊します\n🔑ロック・⚡無敵のコマは壊れず、氷結中のコマは❄が1つ減るだけです`, disabled: checkSkillDisable(seatCosts.onClickPerfectGame, false, false, 'onClickPerfectGame') || !currentBoard.some((sq) => sq.player) },
         { idx: 103, onClick: onClickHelper, buttonText: `超助っ人-${calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper')}`, paragraph: `🔥❄⚡☠🌱🍂のうちランダムな1つを付けた、ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickHelper, true, false, 'onClickHelper') },
-        { idx: 113, onClick: onClickBoltSilence, buttonText: `沈黙は雷なり-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を1つ取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || boltSilenceTargets().length === 0 },
+        { idx: 113, onClick: onClickBoltSilence, buttonText: `沈黙は雷なり-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, paragraph: `⚡のある自陣のコマを選んで⚡を${BOLT_SILENCE_BOLTS}個取り除き（同じコマから2個でも可）、相手全員が次の手番、スキルを使えなくなります（自陣の⚡が合計${BOLT_SILENCE_BOLTS}個ないと使えません）`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || !boltSilenceLegal() },
         { idx: 104, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, paragraph: `自分のデッキから、基礎コスト${SECOND_CATCH_MAX_BASE}以下で今撃てるスキルをランダムに1つ、コストを払わず発動します\nこのターンに基礎コスト7以上のスキルを使っていれば、0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
         // オブジェクトを壊す・強くするスキル(idx 114-119)
         ...OBJECT_SKILL_KEYS.map((skill) => ({

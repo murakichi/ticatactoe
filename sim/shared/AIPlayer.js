@@ -101,6 +101,8 @@ const NIGHT_VEIL_RAISE = 3;
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
+/** 沈黙は雷なりの札の idx（deck.ts の SKILL_CATALOG） */
+const BOLT_SILENCE_IDX = 113;
 const BIG_TREE_MAX = 1;
 /** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
 const CLOUD_MAX = 1;
@@ -183,6 +185,8 @@ class AIPlayer {
         this.ownTrees = 0;
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
+        /** 自陣の働いている毒沼の数 */
+        this.ownSwamps = 0;
         /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
         this.holdPG = 0;
         this.skillKinds = new Set();
@@ -2451,6 +2455,7 @@ class AIPlayer {
      */
     makeMove(...argsIn) {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
@@ -2958,22 +2963,33 @@ class AIPlayer {
         }
         // 沈黙は雷なり（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
         // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
-        if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        if (this.character === 'electrician' && availableSkills.includes(BOLT_SILENCE_IDX) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
-            const target = this.boltSilenceTarget(board);
-            if (target !== null && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
-                chargeClicks.push({ skill: 'onClickBoltSilence', target });
-                board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                const at = board[target].effects.findIndex((e) => e.effect === '⚡');
-                board[target] = { ...board[target], effects: board[target].effects.filter((_, k) => k !== at) };
-                magic -= cost;
-                this.updateShield(board);
+            const total = board.reduce((n, sq) => (sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq) ? n + (0, charge_1.chargeStacks)(sq) : n), 0);
+            if (total >= charge_1.BOLT_SILENCE_BOLTS && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
+                // ⚡を払うコマを1つずつ選ぶ（払うたびに盤面を更新して、同じコマから2個になってもよい）
+                const targets = [];
+                let b = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                for (let k = 0; k < charge_1.BOLT_SILENCE_BOLTS; k++) {
+                    const t = this.boltSilenceTarget(b);
+                    if (t === null)
+                        break;
+                    targets.push(t);
+                    const at = b[t].effects.findIndex((e) => e.effect === '⚡');
+                    b[t] = { ...b[t], effects: b[t].effects.filter((_, j) => j !== at) };
+                }
+                if (targets.length === charge_1.BOLT_SILENCE_BOLTS) {
+                    chargeClicks.push({ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }); // スキル→1個目のマス→2個目のマスの順にクリックする
+                    board = b;
+                    magic -= cost;
+                    this.updateShield(board);
+                }
             }
         }
         // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
         // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
         // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-        if ((this.character === 'electrician' || this.character === 'yinYangMaster') && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
+        if (this.character === 'yinYangMaster' && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
             && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
@@ -2998,6 +3014,20 @@ class AIPlayer {
             const cell = this.bestCloudCell(board);
             if (cell !== null && magic >= cost) {
                 chargeClicks.push({ skill: 'onClickThundercloud', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+            }
+        }
+        // 毒沼（雷霆の巫）: 手番開始のたび、周囲八マスの敵のコマのランダムな1つに☠。ライフ0で奪われない雷霆は、削れて0になった敵コマを一方的に奪える。
+        // 敵のコマが2つ以上隣り合うマスに立てる。相手にリーチが無く、自分に勝ち筋が無いときだけ（雷雲と同じ考え方。測定は差なし: docs/tune/electrician.md 試行53）
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.poisonSwamp.idx) && this.ownSwamps < CLOUD_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= CLOUD_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickPoisonSwamp, false, false, 'onClickPoisonSwamp');
+            const cell = this.bestCloudCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickPoisonSwamp', target: cell });
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;

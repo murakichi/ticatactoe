@@ -422,7 +422,7 @@ function newGame(opts = {}) {
         useRelocate: false,
         relocateFrom: null,
         useStash: false,
-        useBoltSilence: false,
+        useBoltSilence: 0, // あと何個の⚡を選んで払うか
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
@@ -760,9 +760,8 @@ function placeMove(s, i) {
     }
 
     // 沈黙は雷なり: ⚡のある自陣のコマを1つ選び、⚡を1スタック払う。選べないマスは選び直せる
-    if (s.useBoltSilence) {
-        if (!exeBoltSilence(s, i)) return false;
-        s.useBoltSilence = false;
+    if (s.useBoltSilence > 0) {
+        if (!exeBoltSilence(s, i)) return false; // ⚡のない・自陣でないマスは選び直せる
         return true;
     }
 
@@ -2405,12 +2404,12 @@ function onClickStash(s) {
     bumpMagicCount(s);
     bumpStat(s, 'stash');
 }
-// 沈黙は雷なり (idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
+// 沈黙は雷なり (idx 113): 自陣の⚡を2つ(合計2スタック。同じコマからでも可)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
 function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
-function boltSilenceLegal(s) { return boltSilenceTargets(s).length > 0; }
+function boltSilenceLegal(s) { return boltSilenceTargets(s).reduce((n, i) => n + chargeStacks(s.board[i]), 0) >= chargeMod.BOLT_SILENCE_BOLTS; }
 function onClickBoltSilence(s) {
     if (!boltSilenceLegal(s)) return;
-    s.useBoltSilence = true;
+    s.useBoltSilence = chargeMod.BOLT_SILENCE_BOLTS;
     spendMagic(s, calculateCost(s, costsOf(s).onClickBoltSilence, false, false, 'onClickBoltSilence'), 'onClickBoltSilence');
     bumpMagicCount(s);
     bumpStat(s, 'boltSilence');
@@ -2419,7 +2418,8 @@ function exeBoltSilence(s, i) {
     if (!boltSilenceTargets(s).includes(i)) return false;
     const at = s.board[i].effects.findIndex((e) => e.effect === '⚡');
     s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((_, k) => k !== at) };
-    otherSeats(s).forEach((seat) => { s.silenced[seat] = true; });
+    s.useBoltSilence -= 1;
+    if (s.useBoltSilence === 0) otherSeats(s).forEach((seat) => { s.silenced[seat] = true; }); // 払い切ったとき
     return true;
 }
 

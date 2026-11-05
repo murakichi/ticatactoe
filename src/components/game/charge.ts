@@ -15,6 +15,9 @@ export type PlayerCharacters = readonly CharacterId[];
 const charOf = (chars: PlayerCharacters, player: Player): CharacterId | undefined => chars[seatOf(player)];
 
 /** ⚡の個数（スタック数） */
+/** 沈黙は雷なり: 払う⚡の数（自陣の⚡が合計でこれ以上ないと使えない） */
+export const BOLT_SILENCE_BOLTS = 2;
+
 export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '⚡').length;
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');

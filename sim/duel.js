@@ -184,6 +184,7 @@ function apply(s, cfg, act) {
         if (pendingOf(s).length) return `対象マスの指定待ち（${pendingOf(s).join(',')}）。p N で指定してください`;
         // 対象マスが一つも無い『対象選択型』は撃たせない（撃つと魔力を払って対象待ちで固まる。本番ではボタンが押せない）
         if (name === 'jammer' && !s.board.some((_, i) => chargeMod.canJam(s.board, i, engine.curPlayer(s), s.chars))) return 'ジャマーは自陣に⚡のコマが無いと撃てません（対象なし）';
+        if (name === 'boltSilence' && !engine.boltSilenceLegal(s)) return '沈黙は雷なりは自陣の⚡が合計2個ないと撃てません（対象なし）';
         const before = JSON.stringify([s.magic, s.board.length, s.discount, s.life]);
         SKILLS[name](s);
         if (JSON.stringify([s.magic, s.board.length, s.discount, s.life]) === before && !pendingOf(s).length && name !== 'charge') return `${name} は効果なし（対象がない等）`;
