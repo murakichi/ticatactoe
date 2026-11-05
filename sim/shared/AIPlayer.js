@@ -100,15 +100,10 @@ const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
-/** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
-const BIG_TREE_MAX = 1;
 /** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
 const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
-const BIG_TREE_MIN_EMPTY = 6;
-/** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
-const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
 const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
@@ -179,8 +174,6 @@ class AIPlayer {
         this.lastSpent = 0;
         /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
         this.hypoCut = 0;
-        /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
-        this.ownTrees = 0;
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
         /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
@@ -472,34 +465,6 @@ class AIPlayer {
             const need = ch === 'cryomancer' ? Math.max(1, GLACIER_COST - frost) : (_a = EXCLUSIVE_MIN_MAGIC[ch !== null && ch !== void 0 ? ch : 'you']) !== null && _a !== void 0 ? _a : Infinity;
             return ((_b = seatMagic[seat]) !== null && _b !== void 0 ? _b : 0) + 1 >= need;
         });
-    }
-    /** 大木を置くマス: 敵の列（敵のコマがあり自陣のコマが無い列）を潰せて、自陣の列（自陣のコマがあり敵のコマが無い列）を潰さないマス。置ける空きマスが無ければ null */
-    bestTreeCell(board) {
-        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
-        let best = null;
-        let bestScore = -Infinity;
-        board.forEach((sq, i) => {
-            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
-                return;
-            let score = 0;
-            for (const line of lines) {
-                if (!line.includes(i))
-                    continue;
-                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
-                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
-                if (foes > 0 && mine === 0)
-                    score += foes * 2; // 敵の列を潰す
-                if (mine > 0 && foes === 0)
-                    score -= mine * 3; // 自陣の列を潰さない
-                if (mine === 0 && foes === 0)
-                    score -= 0.5; // 空の列も少し惜しい
-            }
-            if (score > bestScore) {
-                bestScore = score;
-                best = i;
-            }
-        });
-        return best;
     }
     /** 雷雲を置くマス: 周囲八マスに敵のコマ（⚡の無敵・🔑でない）が CLOUD_MIN_FOES 個以上あるマスのうち、敵が多く自陣が少ないもの。無ければ null */
     bestCloudCell(board) {
@@ -2452,7 +2417,6 @@ class AIPlayer {
     makeMove(...argsIn) {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
@@ -2979,25 +2943,6 @@ class AIPlayer {
                     magic -= cost;
                     this.updateShield(board);
                 }
-            }
-        }
-        // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
-        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
-        // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_SKILL_BASE_IDX) && this.ownTrees < BIG_TREE_MAX
-            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
-            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
-            const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
-            const cell = this.bestTreeCell(board);
-            // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
-            if (cell !== null && magic < cost && magic >= cost - BIG_TREE_HOLD_GAP)
-                this.holdPG = cost;
-            if (cell !== null && magic >= cost) {
-                chargeClicks.push({ skill: 'onClickBigTree', target: cell });
-                board = board.slice();
-                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
-                magic -= cost;
             }
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、

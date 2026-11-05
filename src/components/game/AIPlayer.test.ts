@@ -2011,7 +2011,7 @@ describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封
     });
 });
 
-describe('雷霆AI: オブジェクト（大木・雷雲）を設置する', () => {
+describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
     const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
@@ -2034,12 +2034,11 @@ describe('雷霆AI: オブジェクト（大木・雷雲）を設置する', () 
         [5, 6].forEach((i) => (b2[i] = { player: '⭕', bind: 5, effects: [] }));
         expect((run(b2, 3, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
     });
-    it('大木（idx 105）: 魔力がコストに届いていて、相手にリーチが無く空きが十分あれば立てる。届かなければ立てない', () => {
+    it('大木（idx 105）は撃たない（対強豪で悪化: 魔力8を貯める間の損が回収できない。docs/tune/electrician.md 試行52）', () => {
         const b = empty();
         b[5] = { player: '⭕', bind: 5, effects: [] };
         b[0] = { player: '💙', bind: 5, effects: [] };
-        expect((run(b, 9, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).toContain('onClickBigTree');
-        expect((run(b, 3, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBigTree');
+        expect((run(b, 12, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBigTree');
     });
     it('オブジェクトのマスは AI から『置けない空きマス』に見え、自陣のコマとして列に数えられない', () => {
         const b = empty();
