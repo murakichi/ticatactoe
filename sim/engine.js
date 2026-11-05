@@ -425,6 +425,9 @@ function newGame(opts = {}) {
         useThunderFire: false,
         leafBase: fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線）
         tokenFree: fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        turnSpent: fill(0), // この手番にスキルに払ったマジックの合計（大工房の設置の無料条件）
+        oppBigSeen: fill(false),
+        oppBigPrev: fill(false),
         marketUsed: fill(0), // 市場の無料シャッフルをこの手番に使った回数
         bigCast: fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
@@ -503,6 +506,7 @@ function costEnv(s, seat) {
         shikiPlaced: s.shikiPlaced[seat],
         tokenFree: s.tokenFree[seat],
         bigCast: s.bigCast[seat],
+        oppBigPrev: s.oppBigPrev[seat],
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         fireBase: s.fireBase[seat],
@@ -520,11 +524,11 @@ function armWard(s) {
     thermal.setEffectWard((sq) => hasGear(s.gears[SYMBOLS.indexOf(sq.player)], 'spellWard') && s.gearSkills[s.turn] > 0);
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
-function noteSkillUsed(s, skillId) {
+function noteSkillUsed(s, skillId, paid = 0) {
     armWard(s);
     const [g] = gearTurnView(s);
     g.infernoReady = s.infernoReady;
-    gearTurnMod.noteSkillUsed(g, s.turn, skillId);
+    gearTurnMod.noteSkillUsed(g, s.turn, skillId, paid);
     s.oppSkilled = g.oppSkilled; // 作り直された配列を戻す
 }
 /** 収穫: エフェクトをn個付与したぶん魔力を得る（上限あり） */
@@ -542,7 +546,7 @@ function spendMagic(s, amount, skillId) {
         bumpStat(s, 'luckyFree');
     }
     s.magic[s.turn] -= amount;
-    noteSkillUsed(s, skillId);
+    noteSkillUsed(s, skillId, amount);
 }
 // シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
 function shuffleHand(s) {
@@ -589,7 +593,7 @@ function gearTurnView(s) {
     const g = {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
-        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
+        leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
         veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
     };
     const r = {
@@ -2600,6 +2604,7 @@ const SKILLS = {
     fort: (s) => onClickObject(s, 'fort'),
     thundercloud: (s) => onClickObject(s, 'thundercloud'),
     market: (s) => onClickObject(s, 'market'),
+    workshop: (s) => onClickObject(s, 'workshop'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),

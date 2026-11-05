@@ -20,16 +20,15 @@ import { absorbDestroy, isDormant, zeroOut } from './thermal';
 export { OBJECT_KINDS, isObject, isTree };
 export type { ObjectKind };
 
-/** オブジェクトのスキルの先頭 idx（deck.ts の SKILL_CATALOG）。OBJECT_KINDS の順に並ぶ */
-export const OBJECT_SKILL_BASE_IDX = 105;
-
 export type ObjectDef = {
+    /** 設置スキルの idx（deck.ts の SKILL_CATALOG） */
+    idx: number;
     name: string;
     icon: string;
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -51,15 +50,19 @@ export const OBJECT_PARAMS = {
 /** 設置したときのライフ（全種類共通） */
 export const OBJECT_LIFE = 5;
 
+/** 大工房: 軽減の対象になるスキルのベースコスト・軽減量・設置スキルが無料になる相手の手番の支出 */
+export const WORKSHOP_PARAMS = { bigBase: 7, cut: 3, freeSpent: 7 } as const;
+
 export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
-    bigTree: { name: '大木', icon: '🌳', life: OBJECT_LIFE, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
-    deadTree: { name: '枯れた大木', icon: '🪵', life: OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
-    spring: { name: '生命の泉', icon: '⛲', life: OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
-    fort: { name: '砦', icon: '🏰', life: OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
-    thundercloud: { name: '雷雲', icon: '🌩️', life: OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
-    market: { name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
-    sanctuary: { name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
-    poisonSwamp: { name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
+    bigTree: { idx: 105, name: '大木', icon: '🌳', life: OBJECT_LIFE, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
+    deadTree: { idx: 106, name: '枯れた大木', icon: '🪵', life: OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
+    spring: { idx: 107, name: '生命の泉', icon: '⛲', life: OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
+    fort: { idx: 108, name: '砦', icon: '🏰', life: OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
+    thundercloud: { idx: 109, name: '雷雲', icon: '🌩️', life: OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
+    market: { idx: 110, name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
+    sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
+    poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
+    workshop: { idx: 119, name: '大工房', icon: '🏭', life: OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -74,6 +77,9 @@ export const objectLandableCells = (board: SquareInfo[]): number[] => board.map(
 /** 手番開始時に効果を発揮する、player のオブジェクトのマス（氷結中の休眠したものを除く。昇順） */
 export const activeObjectCells = (board: SquareInfo[], player: Player, kind?: ObjectKind): number[] =>
     board.map((sq, i) => (sq.player === player && sq.object && (kind === undefined || sq.object === kind) && !isDormant(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** player に大工房が働いているか（ベースコスト7以上のスキルのコスト-3。重ならない。氷結中の休眠したものは働かない） */
+export const workshopActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'workshop').length > 0;
 
 /** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
 export const marketCount = (board: SquareInfo[], player: Player): number => activeObjectCells(board, player, 'market').length;

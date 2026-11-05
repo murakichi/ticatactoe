@@ -13,7 +13,7 @@ import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './tu
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
-import { OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, OBJECT_SKILL_BASE_IDX, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
@@ -181,6 +181,9 @@ export const Game = (props: GameProps) => {
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         tokenFree: Array<boolean>(seatCount).fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        turnSpent: Array<number>(seatCount).fill(0), // この手番にスキルに払ったマジックの合計
+        oppBigSeen: Array<boolean>(seatCount).fill(false),
+        oppBigPrev: Array<boolean>(seatCount).fill(false), // 大工房の設置の無料条件
         marketUsed: Array<number>(seatCount).fill(0), // 市場の無料シャッフルをこの手番に使った回数
         bigCast: Array<boolean>(seatCount).fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
@@ -230,6 +233,7 @@ export const Game = (props: GameProps) => {
         shikiPlaced: gearTurn.current.shikiPlaced[seat],
         tokenFree: gearTurn.current.tokenFree[seat],
         bigCast: gearTurn.current.bigCast[seat],
+        oppBigPrev: gearTurn.current.oppBigPrev[seat],
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         fireBase: gearTurn.current.fireBase[seat],
@@ -451,6 +455,7 @@ export const Game = (props: GameProps) => {
             case 'onClickReinforce': onClickObjectSkill('reinforce'); break;
             case 'onClickExpandAll': onClickObjectSkill('expandAll'); break;
             case 'onClickDuplicate': onClickObjectSkill('duplicate'); break;
+            case 'onClickWorkshop': onClickObject('workshop'); break;
             case 'onClickMarket': onClickObject('market'); break;
             case 'onClickSanctuary': onClickObject('sanctuary'); break;
             case 'onClickPoisonSwamp': onClickObject('poisonSwamp'); break;
@@ -664,7 +669,7 @@ export const Game = (props: GameProps) => {
                 addLog('幸運の財布でコストが0になった');
                 gearTrigger('luckyPurse', 'コスト0');
             }
-            noteSkillUsed(gearTurn.current, turnSeat, skillId);
+            noteSkillUsed(gearTurn.current, turnSeat, skillId, pay);
             // 四連の極意: この回数に達したので、次のスキルは無料
             if (hasGear(turnGears, 'quadMastery') && gearTurn.current.skills[turnSeat] === GEAR_PARAMS.quadCount) gearTrigger('quadMastery', '次のスキルが無料');
         }
@@ -3591,6 +3596,9 @@ export const Game = (props: GameProps) => {
             shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
             tokenFree: Array<boolean>(seatCount).fill(false),
+            turnSpent: Array<number>(seatCount).fill(0),
+            oppBigSeen: Array<boolean>(seatCount).fill(false),
+            oppBigPrev: Array<boolean>(seatCount).fill(false),
             marketUsed: Array<number>(seatCount).fill(0),
             bigCast: Array<boolean>(seatCount).fill(false),
             veil: Array<boolean>(seatCount).fill(false),
@@ -3854,8 +3862,8 @@ export const Game = (props: GameProps) => {
             disabled: checkSkillDisable(seatCosts[OBJECT_SKILLS[skill].costKey], false, false, OBJECT_SKILLS[skill].costKey) || !objectSkillUsable(skill, currentBoard, currentTurnPlayer, characters),
         })),
         // オブジェクト(idx 105-109): 空きマスを選んで設置する。OBJECT_KINDS の順が idx の順（deck.ts の SKILL_CATALOG と同じ）
-        ...OBJECT_KINDS.map((kind, n) => ({
-            idx: OBJECT_SKILL_BASE_IDX + n,
+        ...OBJECT_KINDS.map((kind) => ({
+            idx: OBJECT_DEFS[kind].idx,
             onClick: () => onClickObject(kind),
             buttonText: `${OBJECT_DEFS[kind].name}-${calculateCost(seatCosts[OBJECT_DEFS[kind].costKey], false, false, currentTurnPlayer, OBJECT_DEFS[kind].costKey)}`,
             paragraph: `空きマスを選んで${OBJECT_DEFS[kind].name}（ライフ${OBJECT_DEFS[kind].life}）を設置します\n${OBJECT_DEFS[kind].desc}\nオブジェクトは列に数えず、ライフは時間で減りません。自陣のオブジェクトはいつでも通常のコマで乗っ取れます`,

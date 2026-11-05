@@ -119,6 +119,7 @@ exports.SKILL_CATALOG = [
     { idx: 116, name: '補強工事', icon: '🏗️', category: 'object', costKey: 'onClickReinforce', desc: '自陣のオブジェクトを1つ選んで、ライフを+3します。対象が無いと使えません' },
     { idx: 117, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
     { idx: 118, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+    { idx: 119, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;

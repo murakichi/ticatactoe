@@ -8,6 +8,7 @@ import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './t
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
+import { WORKSHOP_PARAMS } from './objects';
 import { skillCosts } from './skillCosts';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
@@ -32,6 +33,10 @@ export type GearTurnState = {
     tokenFree: boolean[];
     /** 柳の下に二匹目がいたの無料条件: この手番に、基礎コスト BIG_CAST_BASE 以上のスキルを使ったか */
     bigCast: boolean[];
+    /** この手番にスキルに払ったマジックの合計 / 自分の前の手番以降に相手がベースコスト7以上のスキルかマジック合計7以上を使ったか（大工房の設置の無料条件） */
+    turnSpent: number[];
+    oppBigSeen: boolean[];
+    oppBigPrev: boolean[];
     /** 市場の無料シャッフルをこの手番に使った回数（市場の数を上限に無料） */
     marketUsed: number[];
     chargeBase: number[];
@@ -153,6 +158,12 @@ export const advanceGearState = (
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
+    // 大工房の設置の無料条件: 終わる手番にベースコスト7以上のスキルを使った、またはスキルに合計7以上のマジックを払っていれば、他の席に伝える
+    if (g.bigCast[endSeat] || g.turnSpent[endSeat] >= WORKSHOP_PARAMS.freeSpent) g.oppBigSeen.forEach((_, i) => { if (i !== endSeat) g.oppBigSeen[i] = true; });
+    g.oppBigPrev[nextSeat] = g.oppBigSeen[nextSeat];
+    g.oppBigSeen[nextSeat] = false;
+    g.turnSpent[endSeat] = 0;
+    g.turnSpent[nextSeat] = 0;
     g.marketUsed[endSeat] = 0;
     g.marketUsed[nextSeat] = 0;
     g.bigCast[endSeat] = false;
@@ -182,8 +193,9 @@ export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, tu
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
-export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, seat: number, skillId?: string): void => {
+export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, seat: number, skillId?: string, paid: number = 0): void => {
     g.skills[seat] += 1;
+    g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
