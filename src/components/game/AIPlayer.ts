@@ -6,6 +6,7 @@ import { perfectGame } from './bigSkills';
 import { calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
+import { objectLandable, OBJECT_DEFS, OBJECT_SKILL_BASE_IDX, OBJECT_KINDS } from './objects';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
@@ -1280,6 +1281,35 @@ class AIPlayer {
     }
 
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
+    /** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、泉・大木は盤の隅に近いマス。置けなければ null */
+    planObject(board: SquareInfo[], left: number, costs: any, availableSkills: number[]): { kind: (typeof OBJECT_KINDS)[number]; cell: number } | null {
+        const geo = geometryForCells(board.length);
+        const size = Math.round(Math.sqrt(board.length));
+        const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
+        if (mine < 2) return null;
+        const order = ['sanctuary', 'fort', 'spring', 'bigTree'] as const;
+        for (const kind of order) {
+            const idx = OBJECT_SKILL_BASE_IDX + OBJECT_KINDS.indexOf(kind);
+            if (!availableSkills.includes(idx)) continue;
+            if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind)) continue;
+            const cost = this.calculateAICost(costs[OBJECT_DEFS[kind].costKey], false, false, OBJECT_DEFS[kind].costKey);
+            if (left - cost < 1) continue;
+            let best = -1;
+            let bestScore = -1;
+            for (let i = 0; i < board.length; i++) {
+                if (!objectLandable(board[i])) continue;
+                const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+                const r = Math.floor(i / size);
+                const c = i % size;
+                const edge = Math.abs(r - (size - 1) / 2) + Math.abs(c - (size - 1) / 2);
+                const score = kind === 'sanctuary' || kind === 'fort' ? (near >= 2 ? near : -1) : edge;
+                if (score > bestScore) { bestScore = score; best = i; }
+            }
+            if (best >= 0) return { kind, cell: best };
+        }
+        return null;
+    }
+
     chooseSkills(
         board: SquareInfo[],
         magic: number,
@@ -3072,6 +3102,18 @@ class AIPlayer {
         }
         this.hypoCut = 0;
         const skills = planned;
+
+        // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木を自陣の近くに1つずつ設置する。
+        // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
+        if (this.character === 'necromancer' && !skills.some(s => TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const pick = this.planObject(board, magic - this.lastSpent, costs, availableSkills);
+            if (pick) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[pick.cell] = { player: this.playerSymbol, bind: OBJECT_DEFS[pick.kind].life, effects: post[pick.cell].effects.filter((e) => e.effect === '🔥'), object: pick.kind };
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills, chargeClicks: [...(chargeResult ?? []), { skill: OBJECT_DEFS[pick.kind].costKey, target: pick.cell }] };
+            }
+        }
 
         // ターン終了スキルの場合は手を打たない
         if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
