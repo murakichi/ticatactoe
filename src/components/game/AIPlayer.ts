@@ -3,7 +3,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { perfectGame } from './bigSkills';
-import { calculateWinner, findEmptyIndexes, isShikigami, lineSymbols } from '../../util';
+import { calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
@@ -19,8 +19,8 @@ import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..104)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 105;
+// 汎用スキルプールの大きさ (idx 0..112)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 113;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -678,7 +678,7 @@ class AIPlayer {
 
         for (const line of geometryForCells(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
-            if (line.some((idx) => emptyBlocked(board[idx]) || isShikigami(board[idx]))) continue;
+            if (line.some((idx) => emptyBlocked(board[idx]) || isShikigami(board[idx]) || isObject(board[idx]))) continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
             const enemiesInLine = new Set<Player>();
@@ -728,7 +728,7 @@ class AIPlayer {
     countReaches(board: SquareInfo[], player: Player): number {
         let reaches = 0;
         for (const line of geometryForCells(board.length).winLines) {
-            if (line.some((idx) => isShikigami(board[idx]))) continue; // 式神は列に数えない
+            if (line.some((idx) => isShikigami(board[idx]) || isObject(board[idx]))) continue; // 式神・オブジェクトは列に数えない
             let my = 0, op = 0, blocked = false;
             for (const idx of line) {
                 const sq = board[idx];
@@ -816,7 +816,7 @@ class AIPlayer {
     findThreatSquares(board: SquareInfo[], player: Player): number[] {
         const threats: number[] = [];
         for (const line of geometryForCells(board.length).winLines) {
-            if (line.some((idx) => isShikigami(board[idx]))) continue; // 式神は列に数えない
+            if (line.some((idx) => isShikigami(board[idx]) || isObject(board[idx]))) continue; // 式神・オブジェクトは列に数えない
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];

@@ -19,6 +19,7 @@ import { CharacterId } from '../../types/Character';
 import { Effect } from '../../types/Effect';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isObject, isTree } from '../../types/ObjectKind';
 import { orthoNeighbors } from './boardGeometry';
 
 /** 火炎1スタックあたりの継続ダメージ */
@@ -143,6 +144,11 @@ export const ignite = (
                 board[k] = thaw(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
                 thawed.add(k);
                 continue;
+            }
+            // 大木・枯れた大木は、🔥を付けられると即座に壊れて空きマスになる（氷結中は上の解凍で守られる）。そのマスにはそれ以上🔥を付けない
+            if (isTree(board[k])) {
+                board[k] = { player: undefined, bind: 0, effects: [] };
+                break;
             }
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = keepBuds?.(board[k]) ?? false;
@@ -281,9 +287,9 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => {
+export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
+    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）

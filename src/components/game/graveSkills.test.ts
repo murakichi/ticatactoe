@@ -22,7 +22,7 @@ const mkState = (): [GearTurnState, RuinState] => {
     return [
         {
             skills: z(0), echoReady: f(), echoNext: f(), kinds: [new Set(), new Set()], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: f(), oppSkillPrev: f(),
-            shikiPlaced: f(), fireBase: z(0), plantPrev: f(), plantBase: z(0), placedPrev: f(), placeBase: z(0), leafBase: z(0), darkPotUsed: f(), tokenFree: f(), bigCast: f(), chargeBase: z(0),
+            shikiPlaced: f(), fireBase: z(0), plantPrev: f(), plantBase: z(0), placedPrev: f(), placeBase: z(0), leafBase: z(0), darkPotUsed: f(), tokenFree: f(), bigCast: f(), marketUsed: f(), chargeBase: z(0),
             veil: f(), veilNext: f(), ward: z(0), wardFresh: f(),
         },
         { active: f(), pending: f(), snap: null, snapBuds: null, snapFlames: null, ashActive: z(0), ashPending: z(0), lastMove: null },

@@ -85,6 +85,11 @@
     --cat: #c9a66b;
 }
 
+/* オブジェクト(🌳🏰など): 石と木の灰緑 */
+.object {
+    --cat: #8fae8b;
+}
+
 .card:hover:not(:disabled) {
     background: var(--color-surface-3);
     transform: translateY(-2px);

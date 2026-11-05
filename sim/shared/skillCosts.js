@@ -139,7 +139,16 @@ exports.skillCosts = {
     onClickGraveOffering: 2,
     onClickPerfectGame: 10,
     onClickHelper: 3,
-    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 104): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
+    onClickSecondCatch: 6,
+    // オブジェクト（objects.ts）。空きマスを選んで設置する。基準は docs/skill-cost-rules.md の「オブジェクトの算出」
+    onClickBigTree: 8,
+    onClickDeadTree: 5,
+    onClickSpring: 5,
+    onClickFort: 6,
+    onClickThundercloud: 5,
+    onClickMarket: 3,
+    onClickSanctuary: 5,
+    onClickPoisonSwamp: 5, //   毒沼(idx 112): 手番開始時、周囲八マスのランダムな敵コマに☠。基準: ☠(単価2) × 期待3手番 = 6、ランダム選択 −1。敵だけを選ぶので自傷の割引は掛けない
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

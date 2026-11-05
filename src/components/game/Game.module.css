@@ -818,3 +818,31 @@
         text-align: center;
     }
 }
+
+/* オブジェクトの乗っ取り方を選ぶダイアログ */
+.dialogBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 240px;
+    padding: var(--space-4);
+    border-radius: 12px;
+    background: var(--color-surface-2, #222);
+    color: var(--color-text, #fff);
+    text-align: center;
+}
+
+.dialog p {
+    margin: 0 0 var(--space-2);
+    font-weight: 700;
+}
