@@ -128,3 +128,22 @@ describe('AIPlayer が返すスキル名の実行側の対応', () => {
         expect(missing).toEqual([]);
     });
 });
+
+describe('雷霆の巫のランダム帯電トークン (#429)', () => {
+    it('撃ったあとに着地後の盤で着手を選び直す（計画の最後が aiReplan で、着手は積まない）', () => {
+        const chs: CharacterId[] = ['electrician', 'cryomancer'];
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 5, effects: [] };
+        b[0] = { player: '⭕', bind: 6, effects: [] };
+        b[12] = { player: '⭕', bind: 5, effects: [] };
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], chs);
+        const plan = planAITurn(ai, input(b, { characters: chs, magic: [9, 2], hand: [23, 22, 58], life: 5, seatCount: 2 }), () => 'onClickIgnite');
+        expect(plan.kind).toBe('queue');
+        if (plan.kind === 'queue') {
+            expect(plan.steps[plan.steps.length - 1]).toBe('aiReplan');
+            expect(plan.steps.some((st) => st === 'onClickDoubleChargeToken' || st === 'onClickChargeToken')).toBe(true);
+            expect(plan.steps.some((st) => typeof st === 'number')).toBe(false);
+        }
+    });
+});
+
