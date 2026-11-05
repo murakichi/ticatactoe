@@ -20,8 +20,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..105)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 106;
+// 汎用スキルプールの大きさ (idx 0..113)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 114;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -745,7 +745,7 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
-            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx])))
+            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
                 continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
@@ -798,8 +798,8 @@ class AIPlayer {
     countReaches(board, player) {
         let reaches = 0;
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let my = 0, op = 0, blocked = false;
             for (const idx of line) {
                 const sq = board[idx];
@@ -836,6 +836,60 @@ class AIPlayer {
         }
         return null;
     }
+    /** 陰陽師: 砕氷（❄1つにつき3ダメージ）で壊せる、氷結中の敵コマのうち、壊すと列が空くもの。壊すと百鬼夜行→式神一括が組めるコマを最優先、無ければ敵が並びかけている列に乗るコマ。無ければ null */
+    yinShatterTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const comboNow = this.floodComboWins(board);
+        let best = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || (0, util_1.isShikigami)(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            if (stacks === 0 || stacks * thermal_1.SHATTER_DAMAGE_PER_STACK < sq.bind)
+                return; // 壊し切れない
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            post[i] = { player: undefined, bind: 0, effects: [] };
+            let val = 0;
+            if (!comboNow && this.floodComboWins(post))
+                val += 100; // 壊すとコンボが組める
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                if (line.every((j) => board[j].player !== this.playerSymbol))
+                    val += foes; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        });
+        return best;
+    }
+    /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
+    comboThawTarget(board) {
+        if (this.floodComboWins(board))
+            return null; // すでに組める
+        const size = this.sizeOf(board);
+        let own = null;
+        for (let n = 0; n < board.length; n++) {
+            const sq = board[n];
+            if (!sq.player || (0, thermal_1.isFrozen)(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            if (!(0, charge_1.orthoNeighbors)(n, size).some((m) => (0, thermal_1.emptyBlocked)(board[m])))
+                continue; // 溶かせる氷結が隣に無い
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            (0, thermal_1.ignite)(post, [n], size, 1);
+            if (!this.floodComboWins(post))
+                continue;
+            if (this.isEnemy(sq.player))
+                return n;
+            if (own === null)
+                own = n;
+        }
+        return own;
+    }
     /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。旧sim AI thawIgniteTarget(allowOwn) */
     thawIgniteTarget(board, k) {
         let own = null;
@@ -854,8 +908,8 @@ class AIPlayer {
     findThreatSquares(board, player) {
         const threats = [];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];
@@ -2489,6 +2543,32 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 陰陽師: 砕氷(47)で、氷室・軍師の氷結で守られたコマを壊す（❄の数×3ダメージ。壊すとコンボが組める／敵の並びが崩れるコマを優先）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
+            const tg = this.yinShatterTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                (0, thermal_1.shatter)(post, tg);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                this.updateShield(board);
+                return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickShatter', target: tg }] };
+            }
+        }
+        // 陰陽師: 氷結中の空きマスが百鬼夜行→式神一括の列を塞いでいるとき、火遁で隣のコマを燃やして溶かし、コンボを組める盤面にする
+        // （氷室・軍師の氷結で列が作れず、コンボ待ちのまま遅くなるのを防ぐ）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
+            const tg = this.comboThawTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                (0, thermal_1.ignite)(post, [tg], this.sizeOf(board), 1);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: ['onClickIgnite'], lockTargets: [tg] };
+                this.updateShield(board);
+            }
+        }
         // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（旧sim AI の floodHold=2）
         const holdFlood = !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
             && magic < this.comboPlan(board, costs, availableSkills).total;
@@ -2809,7 +2889,7 @@ class AIPlayer {
         }
         // 帯電サイレンス（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
         // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
-        if (this.character === 'electrician' && availableSkills.includes(105) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
             const target = this.boltSilenceTarget(board);
             if (target !== null && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {

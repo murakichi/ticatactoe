@@ -140,7 +140,16 @@ exports.skillCosts = {
     onClickPerfectGame: 10,
     onClickHelper: 3,
     onClickSecondCatch: 6,
-    onClickBoltSilence: 4, //    帯電サイレンス(idx 105): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。汎用サイレンス(5)に⚡1つ(単価2)を足した実質6でR6を満たす。⚡が無ければ使えない
+    // オブジェクト（objects.ts）。空きマスを選んで設置する。基準は docs/skill-cost-rules.md の「オブジェクトの算出」
+    onClickBigTree: 8,
+    onClickDeadTree: 5,
+    onClickSpring: 5,
+    onClickFort: 6,
+    onClickThundercloud: 5,
+    onClickMarket: 3,
+    onClickSanctuary: 5,
+    onClickPoisonSwamp: 5,
+    onClickBoltSilence: 4, //    帯電サイレンス(idx 113): 自陣の⚡を1つ(1スタック)払って、相手全員が次の手番スキルを使えなくなる。汎用サイレンス(5)に⚡1つ(単価2)を足した実質6でR6を満たす。⚡が無ければ使えない
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

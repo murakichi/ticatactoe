@@ -32,6 +32,8 @@ export type GearTurnState = {
     tokenFree: boolean[];
     /** 柳の下に二匹目がいたの無料条件: この手番に、基礎コスト BIG_CAST_BASE 以上のスキルを使ったか */
     bigCast: boolean[];
+    /** 市場の無料シャッフルをこの手番に使ったか */
+    marketUsed: boolean[];
     chargeBase: number[];
     /** 夜の帳: veil=この席の今の手番はスキルコスト+3 / veilNext=次の手番から効く */
     veil: boolean[];
@@ -151,6 +153,8 @@ export const advanceGearState = (
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = ownLeaves(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
+    g.marketUsed[endSeat] = false;
+    g.marketUsed[nextSeat] = false;
     g.bigCast[endSeat] = false;
     g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる

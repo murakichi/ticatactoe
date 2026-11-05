@@ -759,6 +759,24 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
     const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
     const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
 
+    it('氷結中の空きマスが行0の列を塞いでいるとき、隣の敵コマを火遁で燃やして氷結を溶かせば組めるなら、その敵コマを返す（組める盤面や溶かしても組めない盤面は null）', () => {
+        const b = nearFull();
+        put(b, 0, '💙', 3);
+        b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 行0の1が氷結中の空きマス
+        const ai = mk();
+        expect(ai.floodComboWins(b)).toBe(false); // 氷結中のマスは式神にできないので列が完成しない
+        expect(ai.comboThawTarget(b)).toBe(5); // 1の真下の5(敵を優先)を燃やすと1の氷結が溶けて組める
+        const open = nearFull();
+        put(open, 0, '💙', 3);
+        expect(ai.comboThawTarget(open)).toBeNull(); // すでに組める
+        const sealed = nearFull();
+        put(sealed, 0, '💙', 3);
+        sealed[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+        sealed[5] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // 隣のコマがロック中で燃やせない
+        sealed[0] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+        expect(ai.comboThawTarget(sealed)).toBeNull();
+    });
+
     it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
         const b = emptyBoard();
         put(b, 0, '⭕', 3);
@@ -1959,7 +1977,7 @@ describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − �
 describe('雷霆AI: 帯電サイレンスで相手の固有スキルの手番を封じる', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
-    const run = (cryoMagic: number, bolts: boolean, hand: number[] = [105, 21, 23]) => {
+    const run = (cryoMagic: number, bolts: boolean, hand: number[] = [113, 21, 23]) => {
         const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
         const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
         b[0] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }, { effect: '⚡' }] : [] };
@@ -1980,7 +1998,7 @@ describe('雷霆AI: 帯電サイレンスで相手の固有スキルの手番を
         const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
         b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
         [4, 5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] })); // 行1に敵のリーチ（7が空き）
-        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [105, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
         expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
     });
 });
