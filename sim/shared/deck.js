@@ -121,6 +121,15 @@ exports.SKILL_CATALOG = [
     { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
     { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
     { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
+    { idx: 121, name: '結界石', icon: '🪨', category: 'object', costKey: 'onClickBarrierStone', desc: '空きマスを選んで結界石を設置します。周囲八マスの自陣の式神は、時間経過のライフ減衰を受けません' },
+    { idx: 122, name: '護符の社', icon: '⛩️', category: 'object', costKey: 'onClickAmuletShrine', desc: '空きマスを選んで護符の社を設置します。手番開始時、周囲八マスの自陣の式神1体につきマジック+1を得ます（最大+3）' },
+    { idx: 123, name: '招き猫', icon: '🐈', category: 'object', costKey: 'onClickLuckyCat', desc: '空きマスを選んで招き猫を設置します。働いている間、自分のスキルのコストが1下がります（下限1・重ならない）' },
+    { idx: 124, name: '泥田坊', icon: '🌾', category: 'object', costKey: 'onClickMudField', desc: '空きマスを選んで泥田坊を設置します。働いている間、相手がトークンで置くコマのライフが0になります' },
+    { idx: 125, name: '閻魔の舌', icon: '👅', category: 'object', costKey: 'onClickTongueKing', desc: '空きマスを選んで閻魔の舌を設置します。働いている間、相手が自分のコマにエフェクトを付けると、そのコマのライフが手番の終わりに0になります' },
+    { idx: 126, name: '八卦の陣', icon: '🔯', category: 'object', costKey: 'onClickEightTrigrams', desc: '空きマスを選んで八卦の陣を設置します。周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利します。盤の端では成立しません' },
+    { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスを選んでお一人様限りの札を設置します。働いている間、相手は1ターンに新しいコマを1つしか置けません（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルも使えません）' },
+    { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスを選んで一言居士を設置します。働いている間、相手は1ターンにスキルを1つしか使えません（チャージ・シャッフル・ロックは数えません）' },
+    { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスを選んで見ざる地蔵を設置します。周囲八マスには新しくエフェクトを付けられません（手番の終わりに、その手番で付いたエフェクトが消えます）' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;

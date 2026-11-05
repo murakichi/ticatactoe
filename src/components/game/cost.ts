@@ -10,7 +10,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { comboCut, comboFloor } from './comboCost';
 import { Discount, applyDiscount, discountAmount } from './discount';
 import { CostContext, Gears, adjustCostByGear, gearTokenBindDelta } from './gear';
-import { WORKSHOP_PARAMS, workshopActive } from './objects';
+import { OBJECT_PARAMS, WORKSHOP_PARAMS, luckyCatActive, workshopActive } from './objects';
 import { skillCosts } from './skillCosts';
 import { FIRST_FROST_FREE_LEAVES } from './tokenSkills';
 import { FLAME_SKILL_KEYS, boardLeaves, fireStacksTotal, leafSurcharge, witchCostOf } from './thermal';
@@ -97,6 +97,8 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     if (mine && env.characters[env.seat] === 'yinYangMaster' && (env.shikiPlaced || (!!skillKey && SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1) adjusted -= 1;
     // 大工房: 働いている間、ベースコスト7以上のスキルのコスト-3（重ならない。下限1）
     if (skillKey && ((skillCosts as Record<string, number>)[skillKey] ?? 0) >= WORKSHOP_PARAMS.bigBase && workshopActive(env.board, env.player) && adjusted > 1) adjusted = Math.max(1, adjusted - WORKSHOP_PARAMS.cut);
+    // 招き猫: 働いている間、自分のスキルのコスト-1（下限1・重ならない）
+    if (luckyCatActive(env.board, env.player) && adjusted > 1) adjusted = Math.max(1, adjusted - OBJECT_PARAMS.luckyCatCut);
     if (skillKey === 'onClickSpark' && mine && env.placedPrev) return 0; // 飛び火: 直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0

@@ -95,6 +95,7 @@ const advanceGearState = (g, r, input) => {
             g.oppBigSeen[i] = true; });
     g.oppBigPrev[nextSeat] = g.oppBigSeen[nextSeat];
     g.oppBigSeen[nextSeat] = false;
+    g.pieceBase[nextSeat] = (0, objects_1.ownPieceCount)(board, symbols[nextSeat]);
     g.turnSpent[endSeat] = 0;
     g.turnSpent[nextSeat] = 0;
     g.marketUsed[endSeat] = 0;

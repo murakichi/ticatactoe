@@ -127,3 +127,27 @@ describe('大工房（オブジェクト）', () => {
         expect(calculateCostOf(env('you', { oppBigPrev: true, turnSeat: 1 }), skillCosts.onClickWorkshop, false, false, 'onClickWorkshop')).toBe(skillCosts.onClickWorkshop); // 手番でない席には掛けない
     });
 });
+
+describe('招き猫（オブジェクト）', () => {
+    const withCat = (over: Partial<CostEnv> = {}): CostEnv => {
+        const b = board();
+        b[0] = { player: '💙', bind: 5, effects: [], object: 'luckyCat' };
+        return env('you', { board: b, ...over });
+    };
+    it('働いている間、自分のスキルのコストが1下がる（下限1・コスト1以下は変わらない）', () => {
+        expect(calculateCostOf(withCat(), 4, false, false, 'onClickBibine')).toBe(3);
+        expect(calculateCostOf(withCat(), 1, false, false, 'onClickShuffle')).toBe(1);
+        expect(calculateCostOf(env('you'), 4, false, false, 'onClickBibine')).toBe(4);
+    });
+    it('2つあっても重ならない。氷結中・相手の招き猫は効かない', () => {
+        const two = withCat();
+        two.board[1] = { player: '💙', bind: 5, effects: [], object: 'luckyCat' };
+        expect(calculateCostOf(two, 4, false, false, 'onClickBibine')).toBe(3);
+        const frozen = withCat();
+        frozen.board[0] = { ...frozen.board[0], effects: [{ effect: '❄' }] };
+        expect(calculateCostOf(frozen, 4, false, false, 'onClickBibine')).toBe(4);
+        const enemy = withCat();
+        enemy.board[0] = { ...enemy.board[0], player: '⭕' };
+        expect(calculateCostOf(enemy, 4, false, false, 'onClickBibine')).toBe(4);
+    });
+});
