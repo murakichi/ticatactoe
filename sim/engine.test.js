@@ -692,7 +692,7 @@ test('本番のAI(aiDriver): 2〜4人戦が最後まで進み、手番が止ま�
     const { runGame } = require('./run');
     const cases = [['witch', 'giant'], ['poisoner', 'magician'], ['magician', 'cryomancer'], ['cryomancer', 'poisoner'], ['you', 'tactician', 'electrician'], ['cryomancer', 'pyromancer', 'yinYangMaster', 'necromancer']];
     cases.forEach((chars, k) => {
-        const r = runGame(chars, e.makeRng(200 + k), 'prod', undefined, null, { deck: true, gears: true }); // seed 100+k では陰陽師の爆破対象が空きマスで行き詰まる(#未起票。旧デッキでも別seedで再現)
+        const r = runGame(chars, e.makeRng(100 + k), 'prod', undefined, null, { deck: true, gears: true }); // 縛り(一寸の虫)で式神設置を外したのに爆破が残って行き詰まる不具合の回帰(seed 104/107/111/115/134/137)
         assert.ok(r.turns > 3, chars.join('/') + ' が進んだ');
         assert.ok(!(r.stats.aiStall > 0), `${chars.join('/')}: 行き詰まり ${r.stats.aiStall}`);
     });
