@@ -331,7 +331,10 @@ function main() {
         if (s.winner || s.turn !== cfg.seat) return show(cfg, res);
         s.aiFlags = [{}, {}];
         const r = mod.makeMove(s, 'faithful');
-        console.log(`既定AIなら: ${r.turnEnded ? '(スキルで手番終了)' : r.move == null ? 'チャージ' : '着手 ' + r.move}（状態は保存しません。手札で使ったスキルはこの表示に含まれません）`);
+        console.log(`既定AIなら: ${r.turnEnded ? '(スキルで手番終了)' : r.move == null ? 'チャージ' : '着手 ' + r.move}（状態は保存しません）`);
+        // makeMove は1手番を最後まで進めるので、AIが実際に打った後の盤を表示する（使ったスキル・着手が見える）
+        console.log('AIが手番を終えた後の盤:');
+        show(cfg, { ...res, s });
         return;
     }
     throw new Error(`unknown subcommand ${sub}`);
