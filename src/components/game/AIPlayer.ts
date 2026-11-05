@@ -207,6 +207,8 @@ class AIPlayer {
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
     ownSwamps: number = 0;
+    /** 自陣の働いている大工房があるか */
+    ownWorkshop: boolean = false;
     /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
     holdPG: number = 0;
     skillKinds: Set<string> = new Set();
@@ -2253,6 +2255,7 @@ class AIPlayer {
      */
     makeMove(...argsIn: Parameters<AIPlayer['planMove']>): AIResult {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownWorkshop = argsIn[0].some((sq) => sq.object === 'workshop' && sq.player === this.playerSymbol && !isDormant(sq));
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
@@ -2835,6 +2838,19 @@ class AIPlayer {
             const cell = this.bestCloudCell(board);
             if (cell !== null && magic >= cost) {
                 chargeClicks.push({ skill: 'onClickPoisonSwamp', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+            }
+        }
+        // 大工房（雷霆の巫）: 働いている間、ベースコスト7以上のスキルが3軽減される（固有の帯電拡散が7→4）。検証用: 相手にリーチも自分に勝ち筋も無いときに置く
+        if (this.character === 'electrician' && availableSkills.includes(OBJECT_DEFS.workshop.idx) && !this.ownWorkshop
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && findEmptyIndexes(board).length >= 5) {
+            const cost = this.calculateAICost(costs.onClickWorkshop, false, false, 'onClickWorkshop');
+            const cell = this.bestTreeCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickWorkshop', target: cell });
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
