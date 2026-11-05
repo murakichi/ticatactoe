@@ -789,7 +789,7 @@ export const Game = (props: GameProps) => {
         setUseShikigamiCurse(false);
         setUseShikigamiPurge(false);
         setObjectPlacing(null);
-        setCaptureAsObject(false);
+        setCaptureChoice(null);
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
         let scorchForNext = 0;
         let objectMagicForNext = 0; // 手番開始時のオブジェクト（大木）の魔力
@@ -928,7 +928,8 @@ export const Game = (props: GameProps) => {
         setSkills(reshuffledSkills(deckBySeat[judgeNextSeat()], lockedSkills[judgeNextSeat()]));
     }, [history, currentTurn]);
 
-    const onCellClick = (i: number) => {
+    // asObject: 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣のコマで置き換え）。人間の手番で未指定なら選択ダイアログを出す
+    const onCellClick = (i: number, asObject?: boolean) => {
         if (hailMarySpin) return;
         setPreviewCells([]);
         // 雷のない所に火は立たぬ: ⚡のあるコマを選ぶ。無敵マスでも自分のものは選べる（無敵の早期リターンより前に判定する）
@@ -1150,6 +1151,12 @@ export const Game = (props: GameProps) => {
             return;
         }
 
+        if (asObject === undefined && !currentAI && currentBoard[i].object && currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer && currentBoard[i].bind <= 0) {
+            setCaptureChoice(i);
+            return;
+        }
+        setCaptureChoice(null);
+
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
         playSfx('place');
         // 巨人は普通に置いただけでも、盤面が軽く揺れる(重さの表現)。毎回再生し直すため、A/B の2種を交互に使う
@@ -1186,8 +1193,7 @@ export const Game = (props: GameProps) => {
         }
 
         // 着手の結果（強化・奪取・破壊・攻撃・新規）は placement.ts で sim と共有
-        const placed = resolvePlacement(nextBoard[i], currentTurnPlayer, life, captureAsObject);
-        if (captureAsObject) setCaptureAsObject(false);
+        const placed = resolvePlacement(nextBoard[i], currentTurnPlayer, life, !!asObject);
         const capturedFrom = placed.capturedFrom; // 通常の攻撃で奪取した相手（復讐の刃）
         if (placed.poisonSpread) spreadOrigins.push(i); // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
         if (placed.corpse) addCorpses(1); // 敵味方問わずコマが奪われる/消えるたびに墓地+1
@@ -1808,9 +1814,8 @@ export const Game = (props: GameProps) => {
     const ownShikigami = (): number[] => ownShikigamiCells(currentBoard, currentTurnPlayer);
     // オブジェクト(idx 105-109): 空きマスを選んで設置する。列に数えず、ライフは減らない。効果は手番開始時（下の [currentTurn] の effect）。仕様は objects.ts
     const [objectPlacing, setObjectPlacing] = useState<ObjectKind | null>(null);
-    // 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣の通常のコマで置き換える）。着手のたびにリセット
-    const [captureAsObject, setCaptureAsObject] = useState<boolean>(false);
-    const capturableObjects = currentBoard.some((sq) => sq.object && sq.player && sq.player !== currentTurnPlayer && sq.bind <= 0);
+    // 敵のオブジェクト（ライフ0）を乗っ取る着手の選択ダイアログが開いているマス
+    const [captureChoice, setCaptureChoice] = useState<number | null>(null);
     const onClickObject = (kind: ObjectKind) => {
         const def = OBJECT_DEFS[kind];
         addLog(`「${def.name}」を使用（空きマスを選択）`);
@@ -1826,7 +1831,7 @@ export const Game = (props: GameProps) => {
         flashCells([i]);
         playEffect('token', i, [i], OBJECT_DEFS[objectPlacing].name);
         setObjectPlacing(null);
-        setCaptureAsObject(false);
+        setCaptureChoice(null);
         setCurrentBoard(board);
     };
     const onClickShikigamiPlace = () => {
@@ -3483,7 +3488,7 @@ export const Game = (props: GameProps) => {
         setUseShikigamiCurse(false);
         setUseShikigamiPurge(false);
         setObjectPlacing(null);
-        setCaptureAsObject(false);
+        setCaptureChoice(null);
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseFrostArea(false);
@@ -3801,11 +3806,19 @@ export const Game = (props: GameProps) => {
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
                     {skillAnnounce && <div className={styles.announce}>{skillAnnounce}</div>}
-                    {capturableObjects && !winner && (
-                        <label className={styles.announce}>
-                            <input type="checkbox" checked={captureAsObject} onChange={(e) => setCaptureAsObject(e.target.checked)} />
-                            敵のオブジェクトを乗っ取るとき、自分のオブジェクトにする（外すと自陣のコマにする）
-                        </label>
+                    {captureChoice !== null && currentBoard[captureChoice]?.object && (
+                        <div className={styles.dialogBackdrop} onClick={() => setCaptureChoice(null)}>
+                            <div className={styles.dialog} role="dialog" aria-label="オブジェクトの乗っ取り" onClick={(e) => e.stopPropagation()}>
+                                <p>
+                                    {posName(captureChoice)}の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}（{currentBoard[captureChoice].player}）を乗っ取ります
+                                </p>
+                                <button onClick={() => onCellClick(captureChoice, false)}>自陣のコマにする</button>
+                                <button onClick={() => onCellClick(captureChoice, true)}>
+                                    自分の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}にする
+                                </button>
+                                <button onClick={() => setCaptureChoice(null)}>キャンセル</button>
+                            </div>
+                        </div>
                     )}
                     {useIcicle && icicleCell !== null && (
                         <div className={styles.announce}>
