@@ -404,6 +404,7 @@ function newGame(opts = {}) {
         useSucker: false,
         useShikigamiPlace: false,
         captureAsObject: false, // 次の着手で敵のオブジェクトを乗っ取るとき、オブジェクトのまま奪う
+        objectTool: null, // 解体/補強工事の対象を選んでいる最中（'demolish' | 'reinforce'）
         objectPlacing: null, // オブジェクトの設置先を選んでいる最中の種類（objects.ts）
         useShikigamiBlast: false,
         useShikigamiBless: false,
@@ -632,6 +633,7 @@ function clearPendingTargets(s) {
     s.relocateFrom = null;
     s.useLock = 0;
     s.objectPlacing = null;
+    s.objectTool = null;
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
@@ -859,6 +861,14 @@ function placeMove(s, i) {
     }
     if (s.usePandemic) {
         exePandemic(s, i);
+        return true;
+    }
+    if (s.objectTool) {
+        // オブジェクトのスキル（解体・風化・補強工事・分譲）: 対象のマスを選ぶ。対象でないマスは選び直せる [FAITHFUL] Game.tsx exeObjectTool
+        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng);
+        if (!r) return false;
+        bumpStat(s, 'objectSkill_' + s.objectTool);
+        s.objectTool = null;
         return true;
     }
     if (s.objectPlacing) {
@@ -1731,6 +1741,19 @@ function onClickObject(s, kind) {
     bumpMagicCount(s);
     bumpStat(s, 'object_' + kind);
 }
+// オブジェクトのスキル (idx 113〜118): 解体・風化・補強工事・分譲は使ってから対象のマスを選ぶ。地ならし・増築は即座に発動する [FAITHFUL] Game.tsx onClickObjectSkill
+function objectSkillLegal(s, skill) { return objectsMod.objectSkillUsable(skill, s.board, curPlayer(s), s.chars); }
+function onClickObjectSkill(s, skill) {
+    const def = objectsMod.OBJECT_SKILLS[skill];
+    const cost = calculateCost(s, costsOf(s)[def.costKey], false, false, def.costKey);
+    if (def.target) s.objectTool = skill;
+    else {
+        objectsMod.runObjectSkill(skill, s.board, curPlayer(s), s.chars, -1, s.rng);
+    }
+    spendMagic(s, cost, def.costKey);
+    bumpMagicCount(s);
+    bumpStat(s, 'objectSkill_' + skill);
+}
 // 超助っ人 (idx 103): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを自陣のランダムな空きマスに置く（トークン扱い・ターン1回） [FAITHFUL] Game.tsx onClickHelper
 function onClickHelper(s) {
     const empties = findEmptyIndexes(s.board);
@@ -2577,6 +2600,12 @@ const SKILLS = {
     fort: (s) => onClickObject(s, 'fort'),
     thundercloud: (s) => onClickObject(s, 'thundercloud'),
     market: (s) => onClickObject(s, 'market'),
+    demolish: (s) => onClickObjectSkill(s, 'demolish'),
+    weather: (s) => onClickObjectSkill(s, 'weather'),
+    levelAll: (s) => onClickObjectSkill(s, 'levelAll'),
+    reinforce: (s) => onClickObjectSkill(s, 'reinforce'),
+    expandAll: (s) => onClickObjectSkill(s, 'expandAll'),
+    duplicate: (s) => onClickObjectSkill(s, 'duplicate'),
     sanctuary: (s) => onClickObject(s, 'sanctuary'),
     poisonSwamp: (s) => onClickObject(s, 'poisonSwamp'),
     helper: onClickHelper,
@@ -2618,7 +2647,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

@@ -148,7 +148,14 @@ exports.skillCosts = {
     onClickThundercloud: 5,
     onClickMarket: 3,
     onClickSanctuary: 5,
-    onClickPoisonSwamp: 5, //   毒沼(idx 112): 手番開始時、周囲八マスのランダムな敵コマに☠。基準: ☠(単価2) × 期待3手番 = 6、ランダム選択 −1。敵だけを選ぶので自傷の割引は掛けない
+    onClickPoisonSwamp: 5,
+    // オブジェクトを壊す・強くするスキル(idx 113〜118)。基準は docs/skill-cost-rules.md の「オブジェクトを壊す・強くするスキル」
+    onClickDemolish: 4,
+    onClickWeather: 3,
+    onClickLevelAll: 8,
+    onClickReinforce: 3,
+    onClickExpandAll: 4,
+    onClickDuplicate: 6, //     分譲(idx 118): 自陣のオブジェクトを複製してランダムな空きマスに置く。基準: オブジェクトの設置は3〜8（平均5）、複製元を選べる(+1)がランダム置き(−1)で、写し身(4)より重い設置物のぶん上乗せ
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

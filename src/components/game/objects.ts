@@ -15,7 +15,7 @@ import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isGuarded } from './charge';
 import { poisonStrike } from './poison';
 import { shikigamiLandable } from './shikigami';
-import { isDormant } from './thermal';
+import { absorbDestroy, isDormant, zeroOut } from './thermal';
 
 export { OBJECT_KINDS, isObject, isTree };
 export type { ObjectKind };
@@ -42,6 +42,10 @@ export const OBJECT_PARAMS = {
     springLife: 2,
     /** 砦: 周囲八マスの自陣コマのライフ */
     fortLife: 1,
+    /** 補強工事: 自陣のオブジェクト1つに足すライフ */
+    reinforceLife: 3,
+    /** 増築: 自陣のオブジェクト全てに足すライフ */
+    expandLife: 2,
 } as const;
 
 /** 設置したときのライフ（全種類共通） */
@@ -165,6 +169,129 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 break;
             default:
                 break;
+        }
+    }
+    return res;
+};
+
+// ---- オブジェクトを壊す・強くするスキル（汎用スキル idx 113〜118）----
+// 壊す: 解体(敵のオブジェクト1つを壊す)・風化(敵のオブジェクト1つのライフを0にする)・地ならし(敵のオブジェクトを全て壊す)
+// 強くする: 補強工事(自陣のオブジェクト1つのライフ+3)・増築(自陣のオブジェクト全てのライフ+2)・分譲(自陣のオブジェクト1つを複製してランダムな空きマスに置く)
+
+export type ObjectSkillDef = {
+    idx: number;
+    name: string;
+    icon: string;
+    costKey: 'onClickDemolish' | 'onClickWeather' | 'onClickLevelAll' | 'onClickReinforce' | 'onClickExpandAll' | 'onClickDuplicate';
+    /** true なら使ってからマスを選ぶ。false なら即座に発動する */
+    target: boolean;
+    desc: string;
+};
+
+export const OBJECT_SKILLS = {
+    demolish: { idx: 113, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    weather: { idx: 114, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    levelAll: { idx: 115, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    reinforce: { idx: 116, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: `自陣のオブジェクトを1つ選んで、ライフを+${OBJECT_PARAMS.reinforceLife}します` },
+    expandAll: { idx: 117, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: `自陣のオブジェクトの全てのライフを+${OBJECT_PARAMS.expandLife}します` },
+    duplicate: { idx: 118, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+} as const;
+
+// 型の確認用（OBJECT_SKILLS の各要素が ObjectSkillDef に合うこと）
+const _check: Record<string, ObjectSkillDef> = OBJECT_SKILLS;
+void _check;
+
+export type ObjectSkill = keyof typeof OBJECT_SKILLS;
+export const OBJECT_SKILL_KEYS = Object.keys(OBJECT_SKILLS) as ObjectSkill[];
+
+const enemyObjects = (board: SquareInfo[], player: Player, chars: PlayerCharacters): number[] =>
+    board.map((sq, i) => (sq.object && sq.player && sq.player !== player && !isGuarded(sq, chars) ? i : -1)).filter((i) => i !== -1);
+const ownObjects = (board: SquareInfo[], player: Player): number[] =>
+    board.map((sq, i) => (sq.object && sq.player === player ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * マスを選ぶスキルの対象（昇順）。マスを選ばないスキルは空。
+ * 解体・風化: 敵のオブジェクト（風化はライフが残るもの）のうち🔑ロック・⚡無敵でないもの / 補強工事: 自陣のオブジェクト / 分譲: 空きマスがあるときの自陣のオブジェクト
+ */
+export const objectSkillTargets = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters): number[] => {
+    switch (skill) {
+        case 'demolish': return enemyObjects(board, player, chars);
+        case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
+        case 'reinforce': return ownObjects(board, player);
+        case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player) : [];
+        default: return [];
+    }
+};
+
+/** そのスキルを今使えるか（対象が無いと使えない） */
+export const objectSkillUsable = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters): boolean => {
+    if (OBJECT_SKILLS[skill].target) return objectSkillTargets(skill, board, player, chars).length > 0;
+    return skill === 'levelAll' ? enemyObjects(board, player, chars).length > 0 : ownObjects(board, player).length > 0;
+};
+
+export type ObjectSkillResult = {
+    /** 壊れたマス */
+    destroyed: number[];
+    /** 氷結が身代わりになって守られたマス */
+    blocked: number[];
+    /** ライフが変わった・置かれたなど、効果が及んだマス */
+    affected: number[];
+};
+
+/** 敵のオブジェクトに「壊す」を試みる。氷結中なら壊れず❄が1つ減るだけ。board を直接書き換える */
+const destroyOne = (board: SquareInfo[], i: number, res: ObjectSkillResult): void => {
+    const guard = absorbDestroy(board[i]);
+    if (guard.blocked) {
+        board[i] = guard.sq;
+        res.blocked.push(i);
+        return;
+    }
+    board[i] = { player: undefined, bind: 0, effects: [] };
+    res.destroyed.push(i);
+};
+
+/**
+ * オブジェクトのスキルを実行する。マスを選ぶスキルは i に選んだマス（対象でなければ何もせず null を返す）。board を直接書き換える。
+ * @param rng 分譲の置き先の抽選用 [0,1)
+ */
+export const runObjectSkill = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters, i: number, rng: () => number = Math.random): ObjectSkillResult | null => {
+    const res: ObjectSkillResult = { destroyed: [], blocked: [], affected: [] };
+    if (OBJECT_SKILLS[skill].target && !objectSkillTargets(skill, board, player, chars).includes(i)) return null;
+    switch (skill) {
+        case 'demolish':
+            destroyOne(board, i, res);
+            break;
+        case 'weather': {
+            const guard = absorbDestroy(board[i]);
+            if (guard.blocked) {
+                board[i] = guard.sq;
+                res.blocked.push(i);
+            } else {
+                board[i] = zeroOut(board[i]);
+                res.affected.push(i);
+            }
+            break;
+        }
+        case 'levelAll':
+            for (const k of enemyObjects(board, player, chars)) destroyOne(board, k, res);
+            break;
+        case 'reinforce':
+            board[i] = { ...board[i], bind: board[i].bind + OBJECT_PARAMS.reinforceLife };
+            res.affected.push(i);
+            break;
+        case 'expandAll':
+            for (const k of ownObjects(board, player)) {
+                board[k] = { ...board[k], bind: board[k].bind + OBJECT_PARAMS.expandLife };
+                res.affected.push(k);
+            }
+            break;
+        case 'duplicate': {
+            const empties = objectLandableCells(board);
+            const j = empties[Math.floor(rng() * empties.length)];
+            board[j] = { ...newObject(player, board[i].object as ObjectKind), effects: board[j].effects.filter((e) => e.effect === '🔥') };
+            sweepBurntTrees(board);
+            res.affected.push(j);
+            break;
         }
     }
     return res;

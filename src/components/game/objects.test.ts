@@ -2,7 +2,7 @@ import { CharacterId } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { decayBoard } from './decay';
-import { OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -249,5 +249,84 @@ describe('市場・聖域・毒沼', () => {
         expect(b[2].effects).toEqual([{ effect: '☠' }]);
         expect(b[0].effects).toEqual([]);
         expect(b[1].effects).toEqual([{ effect: '🔑' }]);
+    });
+});
+
+describe('オブジェクトを壊す・強くするスキル', () => {
+    const run = (skill: Parameters<typeof runObjectSkill>[0], b: SquareInfo[], i = -1, player: '💙' | '⭕' = '💙') => runObjectSkill(skill, b, player, chars, i, rngFirst);
+
+    it('6種類あり、マスを選ぶのは解体・風化・補強工事・分譲、即発動は地ならし・増築', () => {
+        expect(OBJECT_SKILL_KEYS.filter((k) => OBJECT_SKILLS[k].target)).toEqual(['demolish', 'weather', 'reinforce', 'duplicate']);
+        expect(OBJECT_SKILL_KEYS.filter((k) => !OBJECT_SKILLS[k].target)).toEqual(['levelAll', 'expandAll']);
+    });
+
+    it('解体: 敵のオブジェクトだけが対象。壊すと空きマスになる。氷結中は❄が1つ減るだけ。🔑ロックは対象外', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'fort');
+        b[1] = { ...newObject('⭕', 'bigTree'), effects: [{ effect: '❄' }] };
+        b[2] = { ...newObject('⭕', 'spring'), effects: [{ effect: '🔑' }] };
+        b[3] = newObject('💙', 'fort'); // 自陣
+        b[4] = { player: '⭕', bind: 3, effects: [] }; // 通常のコマ
+        expect(objectSkillTargets('demolish', b, '💙', chars)).toEqual([0, 1]);
+        expect(run('demolish', b, 3)).toBeNull(); // 自陣は選べない
+        const r = run('demolish', b, 0)!;
+        expect(r.destroyed).toEqual([0]);
+        expect(b[0]).toEqual({ player: undefined, bind: 0, effects: [] });
+        const f = run('demolish', b, 1)!;
+        expect(f.blocked).toEqual([1]);
+        expect(b[1].object).toBe('bigTree');
+        expect(b[1].effects).toEqual([]);
+    });
+
+    it('風化: ライフが残る敵のオブジェクトのライフを0にする（壊れない）。ライフ0のものは対象外', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'fort');
+        b[1] = { ...newObject('⭕', 'fort'), bind: 0 };
+        expect(objectSkillTargets('weather', b, '💙', chars)).toEqual([0]);
+        run('weather', b, 0);
+        expect(b[0].bind).toBe(0);
+        expect(b[0].object).toBe('fort');
+        expect(b[0].player).toBe('⭕');
+    });
+
+    it('地ならし: 敵のオブジェクトを全て壊す（自陣・通常のコマ・ロック中は残る）', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'fort');
+        b[1] = newObject('⭕', 'market');
+        b[2] = newObject('💙', 'fort');
+        b[3] = { ...newObject('⭕', 'spring'), effects: [{ effect: '🔑' }] };
+        b[4] = { player: '⭕', bind: 3, effects: [] };
+        expect(objectSkillUsable('levelAll', b, '💙', chars)).toBe(true);
+        const r = run('levelAll', b)!;
+        expect(r.destroyed).toEqual([0, 1]);
+        expect(b[2].object).toBe('fort');
+        expect(b[3].object).toBe('spring');
+        expect(b[4].player).toBe('⭕');
+        expect(objectSkillUsable('levelAll', board(), '💙', chars)).toBe(false);
+    });
+
+    it('補強工事: 自陣のオブジェクト1つのライフ+3。増築: 自陣のオブジェクト全てのライフ+2', () => {
+        const b = board();
+        b[0] = newObject('💙', 'fort');
+        b[1] = newObject('💙', 'market');
+        b[2] = newObject('⭕', 'fort');
+        expect(objectSkillTargets('reinforce', b, '💙', chars)).toEqual([0, 1]);
+        run('reinforce', b, 0);
+        expect(b[0].bind).toBe(OBJECT_DEFS.fort.life + OBJECT_PARAMS.reinforceLife);
+        const r = run('expandAll', b)!;
+        expect(r.affected).toEqual([0, 1]);
+        expect(b[1].bind).toBe(OBJECT_DEFS.market.life + OBJECT_PARAMS.expandLife);
+        expect(b[2].bind).toBe(OBJECT_DEFS.fort.life); // 敵のオブジェクトは変わらない
+    });
+
+    it('分譲: 自陣のオブジェクトと同じ種類を、ライフ5でランダムな空きマスに置く。空きマスが無ければ使えない', () => {
+        const b = board();
+        b[0] = { ...newObject('💙', 'bigTree'), bind: 9 };
+        const r = run('duplicate', b, 0)!;
+        expect(r.affected).toEqual([1]); // rng=0 で先頭の空きマス
+        expect(b[1]).toEqual(newObject('💙', 'bigTree'));
+        expect(b[0].bind).toBe(9);
+        const full = board().map((_, i) => ({ ...newObject('💙', 'fort'), bind: 5 + i % 1 }));
+        expect(objectSkillUsable('duplicate', full, '💙', chars)).toBe(false);
     });
 });
