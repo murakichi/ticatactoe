@@ -9,7 +9,7 @@ const objects_1 = require("./objects");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
-const objects_1 = require("./objects");
+const objects_2 = require("./objects");
 const thermal_1 = require("./thermal");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
@@ -1466,16 +1466,16 @@ class AIPlayer {
         return r ? { discount: r.key } : null;
     }
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
-    /** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、泉・大木は盤の隅に近いマス。置けなければ null */
+    /** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、それ以外は盤の隅に近いマス。置けなければ null */
     planObject(board, left, costs, availableSkills) {
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
         const size = Math.round(Math.sqrt(board.length));
         const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
         if (mine < 2)
             return null;
-        const order = ['sanctuary', 'fort', 'spring', 'bigTree'];
+        const order = ['sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'];
         for (const kind of order) {
-            const idx = objects_1.OBJECT_SKILL_BASE_IDX + objects_1.OBJECT_KINDS.indexOf(kind);
+            const idx = objects_1.OBJECT_DEFS[kind].idx;
             if (!availableSkills.includes(idx))
                 continue;
             if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind))
@@ -1486,7 +1486,7 @@ class AIPlayer {
             let best = -1;
             let bestScore = -1;
             for (let i = 0; i < board.length; i++) {
-                if (!(0, objects_1.objectLandable)(board[i]))
+                if (!(0, objects_2.objectLandable)(board[i]))
                     continue;
                 const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
                 const r = Math.floor(i / size);
