@@ -121,6 +121,18 @@ test('見落とし防止: フォーク（勝ち手が2つ）は fork=true。duel
     assert.ok(!duel.replay(c, ['p! 10']).failed);
 });
 
+test('ジャマーは自陣に⚡のコマが無いと撃てない（魔力を払って対象待ちで固まるのを防ぐ）', () => {
+    const c = cfg({ me: 'electrician', opp: 'cryomancer', seat: 0, seed: 21, deck: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94] });
+    const s = duel.replay(c).s;
+    s.skills = [26, 21, 23];
+    s.magic[0] = 9;
+    const err = duel.apply(s, c, 'h 26');
+    assert.ok(err && /ジャマーは自陣に⚡/.test(err), String(err));
+    assert.strictEqual(s.magic[0], 9); // 魔力は払われない
+    s.board[5] = { player: e.symbolOfSeat(0), bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(duel.apply(s, c, 'h 26'), null); // ⚡のコマがあれば撃てる
+});
+
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
