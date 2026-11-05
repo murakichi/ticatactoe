@@ -19,6 +19,12 @@
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
 - 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
+## 診断(2026-11-05) 対氷室(cryomancer)に勝てない理由
+- 実測: 氷室の絶対零度(固有・全コマ氷結, コスト10)を無効にすると、雷霆の対氷室勝率が 41.0% → 65.0%(seed9/200, `NOGLACIER` で engine.SKILLS.glacier を空にした差。無効化では氷室の魔力が減らないので、実際の差はこれ以上)。差の約24ptが絶対零度。
+- 機構: `isShielded` は氷結中(休眠)のコマの⚡無敵を働かせない。絶対零度は⚡のコマにも❄を付けるので、盤面の⚡の無敵を一斉に止める(コマ自体は壊れず、四目の数にも入る)。
+- 氷室AIの使用(probe-usage, 氷室推奨デッキ/ギア, seed9/150): 絶対零度 0.69回/試合(56%の試合)、ロック 1.70回、氷結トークン 1.02回、二重氷結トークン 0.73回、一寸の虫 0.49回。
+- 雷霆側の手段(未検証): サイレンス(28, コスト5)は絶対零度の手番を1回遅らせるだけで、AIの条件(`EXCLUSIVE_MIN_MAGIC.cryomancer=7`)は実コスト10より早く撃ってしまう。夜の帳(98)は絶対零度を13にして遅らせる。絶対零度の前に勝つ(四目を急ぐ)のが本筋。
+
 ## 診断(2026-10-29, master bb03be8, seed3/200, sim/ai.js 廃止後=本番AI)
 - 対強豪平均: 1 yinYangMaster 58.9 / 2 witch 54.4 / 3 tactician 52.7 / 4 cryomancer 45.1 / **5 electrician 45.0** (field 50.2) / 6 pyromancer 43.9。1位との差 13.9pt。
 - 雷霆の対面: pyromancer 31%(最悪) / cryomancer 44.5 / tactician 45 / giant 45 / poisoner 45.5 / witch 50 / yinYang 54.5。
