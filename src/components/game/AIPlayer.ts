@@ -18,7 +18,7 @@ import { corpseCount, graveDiscountAmount } from './graveSkills';
 import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
-import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
+import { BOLT_SILENCE_BOLTS, chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..113)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 export const SKILL_POOL_SIZE = 114;
@@ -2722,7 +2722,7 @@ class AIPlayer {
         // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
         // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
         // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
-        const chargeClicks: { skill: string; target?: number }[] = [];
+        const chargeClicks: { skill: string; target?: number; target2?: number }[] = [];
         const chargeCost = (base: number) => reducedChargeCost(base, board, (c) => this.calculateAICost(c));
         if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const spreadCost = chargeCost(costs.onClickChargeSpread);
@@ -2769,46 +2769,24 @@ class AIPlayer {
         // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
         if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
-            const target = this.boltSilenceTarget(board);
-            if (target !== null && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
-                chargeClicks.push({ skill: 'onClickBoltSilence', target });
-                board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                const at = board[target].effects.findIndex((e) => e.effect === '⚡');
-                board[target] = { ...board[target], effects: board[target].effects.filter((_, k) => k !== at) };
-                magic -= cost;
-                this.updateShield(board);
-            }
-        }
-        // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
-        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
-        // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-        if (this.character === 'electrician' && availableSkills.includes(OBJECT_SKILL_BASE_IDX) && this.ownTrees < BIG_TREE_MAX
-            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
-            && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
-            const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
-            const cell = this.bestTreeCell(board);
-            // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
-            if (cell !== null && magic < cost && magic >= cost - BIG_TREE_HOLD_GAP) this.holdPG = cost;
-            if (cell !== null && magic >= cost) {
-                chargeClicks.push({ skill: 'onClickBigTree', target: cell });
-                board = board.slice();
-                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
-                magic -= cost;
-            }
-        }
-        // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
-        // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
-        if (this.character === 'electrician' && availableSkills.includes(OBJECT_SKILL_BASE_IDX + 4) && this.ownClouds < CLOUD_MAX
-            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-            && findEmptyIndexes(board).length >= CLOUD_MIN_EMPTY) {
-            const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
-            const cell = this.bestCloudCell(board);
-            if (cell !== null && magic >= cost) {
-                chargeClicks.push({ skill: 'onClickThundercloud', target: cell });
-                board = board.slice();
-                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
-                magic -= cost;
+            const total = board.reduce((n, sq) => (sq.player === this.playerSymbol && !isDormant(sq) ? n + chargeStacks(sq) : n), 0);
+            if (total >= BOLT_SILENCE_BOLTS && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
+                // ⚡を払うコマを1つずつ選ぶ（払うたびに盤面を更新して、同じコマから2個になってもよい）
+                const targets: number[] = [];
+                let b = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                for (let k = 0; k < BOLT_SILENCE_BOLTS; k++) {
+                    const t = this.boltSilenceTarget(b);
+                    if (t === null) break;
+                    targets.push(t);
+                    const at = b[t].effects.findIndex((e) => e.effect === '⚡');
+                    b[t] = { ...b[t], effects: b[t].effects.filter((_, j) => j !== at) };
+                }
+                if (targets.length === BOLT_SILENCE_BOLTS) {
+                    chargeClicks.push({ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }); // スキル→1個目のマス→2個目のマスの順にクリックする
+                    board = b;
+                    magic -= cost;
+                    this.updateShield(board);
+                }
             }
         }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）

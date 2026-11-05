@@ -1987,7 +1987,15 @@ describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封
     };
     it('氷室が次の手番に絶対零度（実コスト10）を撃てる魔力に届くなら、⚡の多いコマを選んで撃つ', () => {
         const r = run(9, true);
-        expect(r.chargeClicks).toEqual([{ skill: 'onClickBoltSilence', target: 0 }]);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickBoltSilence', target: 0, target2: 0 }]); // 2スタックのコマから2個払う
+    });
+    it('⚡が合計1つしか無ければ撃てない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
     });
     it('届かない魔力なら撃たない／自陣に⚡が無ければ撃てない', () => {
         expect(run(4, true).chargeClicks ?? []).toEqual([]);

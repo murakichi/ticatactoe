@@ -3454,30 +3454,47 @@ test('墓守の供物: ネクロマンサーの墓地は二重に数えない（
     e.SKILLS.graveOffering(s);
     assert.strictEqual(grave - s.necroCost[0], 1);
 });
-test('沈黙は雷なり: ⚡のある自陣のコマを選んで⚡を1スタック払い、相手全員が次の手番スキルを使えない。⚡が無いと撃てない（コスト4）', () => {
+test('沈黙は雷なり: 自陣の⚡を2つ(同じコマからでも可)選んで払い、払い切ったとき相手全員が次の手番スキルを使えない。⚡が合計2つ無いと撃てない（コスト4）', () => {
     const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
     s.magic[0] = 30;
     assert.strictEqual(e.boltSilenceLegal(s), false);
     e.SKILLS.boltSilence(s); // ⚡が無いので何も起きない（魔力も払わない）
     assert.strictEqual(s.magic[0], 30);
-    assert.strictEqual(s.useBoltSilence, false);
-    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] }; // 2スタック: 1つだけ払う
-    s.board[1] = { player: '💙', bind: 4, effects: [] };
-    s.board[2] = { player: '⭕', bind: 4, effects: [BOLT] };
+    assert.strictEqual(s.useBoltSilence, 0);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] }; // 2スタック
+    s.board[1] = { player: '💙', bind: 4, effects: [BOLT] };
+    s.board[2] = { player: '⭕', bind: 4, effects: [BOLT, BOLT, BOLT] }; // 敵の⚡は数えない・選べない
     assert.strictEqual(e.boltSilenceLegal(s), true);
     assert.strictEqual(e.skillCosts.onClickBoltSilence, 4);
     e.SKILLS.boltSilence(s);
     assert.strictEqual(s.magic[0], 26);
-    assert.strictEqual(s.useBoltSilence, true);
-    assert.strictEqual(e.placeMove(s, 1), false); // ⚡のない自陣は選び直せる
+    assert.strictEqual(s.useBoltSilence, 2);
+    assert.strictEqual(e.placeMove(s, 3), false); // ⚡のない自陣(空き)は選び直せる
     assert.strictEqual(e.placeMove(s, 2), false); // 敵のコマは選べない
-    assert.strictEqual(s.silenced[1], false);
-    assert.strictEqual(e.placeMove(s, 0), true);
-    assert.strictEqual(s.useBoltSilence, false);
-    assert.strictEqual(boltsOn(s.board[0]), 1); // 1スタックだけ払う
-    assert.strictEqual(boltsOn(s.board[2]), 1); // 敵の⚡はそのまま
+    assert.strictEqual(e.placeMove(s, 0), true); // 1個目
+    assert.strictEqual(s.useBoltSilence, 1);
+    assert.strictEqual(s.silenced[1], false); // まだ払い切っていない
+    assert.strictEqual(e.placeMove(s, 1), true); // 2個目（別のコマから）
+    assert.strictEqual(s.useBoltSilence, 0);
+    assert.strictEqual(boltsOn(s.board[0]), 1);
+    assert.strictEqual(boltsOn(s.board[1]), 0);
+    assert.strictEqual(boltsOn(s.board[2]), 3); // 敵の⚡はそのまま
     assert.strictEqual(s.silenced[1], true);
     assert.strictEqual(s.silenced[0], false); // 自分は封じられない
+});
+
+test('沈黙は雷なり: ⚡が合計1つでは撃てない。1つのコマに2スタックあれば同じコマを2回選べる', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
+    s.magic[0] = 30;
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT] };
+    assert.strictEqual(e.boltSilenceLegal(s), false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] };
+    assert.strictEqual(e.boltSilenceLegal(s), true);
+    e.SKILLS.boltSilence(s);
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(boltsOn(s.board[0]), 0);
+    assert.strictEqual(s.silenced[1], true);
 });
 
 
