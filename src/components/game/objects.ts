@@ -14,6 +14,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isGuarded } from './charge';
 import { poisonStrike } from './poison';
+import { isShikigami } from '../../util';
 import { shikigamiLandable } from './shikigami';
 import { absorbDestroy, isDormant, zeroOut } from './thermal';
 
@@ -28,7 +29,7 @@ export type ObjectDef = {
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -41,6 +42,8 @@ export const OBJECT_PARAMS = {
     springLife: 2,
     /** 砦: 周囲八マスの自陣コマのライフ */
     fortLife: 1,
+    /** 護符の社: 周囲八マスの自陣の式神1体につき手番開始時に得るマジックと、その上限 */
+    shrineMagicCap: 3,
     /** 補強工事: 自陣のオブジェクト1つに足すライフ */
     reinforceLife: 3,
     /** 増築: 自陣のオブジェクト全てに足すライフ */
@@ -63,6 +66,8 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
     poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
     workshop: { idx: 120, name: '大工房', icon: '🏭', life: OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
+    barrierStone: { idx: 121, name: '結界石', icon: '🪨', life: OBJECT_LIFE, costKey: 'onClickBarrierStone', desc: '周囲八マスの自陣の式神は、時間経過のライフ減衰を受けない' },
+    amuletShrine: { idx: 122, name: '護符の社', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickAmuletShrine', desc: `手番開始時、周囲八マスの自陣の式神1体につきマジック+1（最大+${OBJECT_PARAMS.shrineMagicCap}）` },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -84,13 +89,16 @@ export const workshopActive = (board: SquareInfo[], player: Player): boolean => 
 /** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
 export const marketCount = (board: SquareInfo[], player: Player): number => activeObjectCells(board, player, 'market').length;
 
-/** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
+/** 減衰から守られているマス: 働いている聖域の周囲八マスにある持ち主のコマ全て、働いている結界石の周囲八マスにある持ち主の式神。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない */
 export const sanctuaryProtected = (board: SquareInfo[]): boolean[] => {
     const out = board.map(() => false);
     const geo = geometryForCells(board.length);
     board.forEach((sq, k) => {
-        if (sq.object !== 'sanctuary' || !sq.player || isDormant(sq)) return;
-        for (const j of geo.surroundRange(k)) if (board[j].player === sq.player) out[j] = true;
+        if ((sq.object !== 'sanctuary' && sq.object !== 'barrierStone') || !sq.player || isDormant(sq)) return;
+        for (const j of geo.surroundRange(k)) {
+            if (board[j].player !== sq.player) continue;
+            if (sq.object === 'sanctuary' || isShikigami(board[j])) out[j] = true;
+        }
     });
     return out;
 };
@@ -156,6 +164,11 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = addCharge(board[j], chars);
                 res.charged.push(j);
+                break;
+            }
+            case 'amuletShrine': {
+                const shikigami = geo.surroundRange(k).filter((j) => board[j].player === player && isShikigami(board[j])).length;
+                res.magic += Math.min(OBJECT_PARAMS.shrineMagicCap, shikigami);
                 break;
             }
             case 'poisonSwamp': {

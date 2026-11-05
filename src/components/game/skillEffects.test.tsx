@@ -98,6 +98,8 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSanctuary: 'token',
     onClickPoisonSwamp: 'token',
     onClickWorkshop: 'token',
+    onClickBarrierStone: 'token',
+    onClickAmuletShrine: 'token',
     onClickDemolish: 'tsunami',
     onClickWeather: 'tsunami',
     onClickLevelAll: 'tsunami',

@@ -1,6 +1,7 @@
 import { CharacterId } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
+import { newShikigami } from './shikigami';
 import { decayBoard } from './decay';
 import { OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
@@ -328,5 +329,35 @@ describe('オブジェクトを壊す・強くするスキル', () => {
         expect(b[0].bind).toBe(9);
         const full = board().map((_, i) => ({ ...newObject('💙', 'fort'), bind: 5 + i % 1 }));
         expect(objectSkillUsable('duplicate', full, '💙', chars)).toBe(false);
+    });
+});
+
+describe('結界石・護符の社（陰陽師向け）', () => {
+    it('結界石: 周囲八マスの自陣の式神だけ減衰を受けない（通常のコマ・敵の式神・周囲外の式神は減る）', () => {
+        const b = board();
+        b[5] = newObject('💙', 'barrierStone');
+        b[0] = newShikigami('💙'); // 守られる
+        b[1] = { player: '💙', bind: 5, effects: [] }; // 通常のコマ
+        b[2] = newShikigami('⭕'); // 敵の式神
+        b[15] = newShikigami('💙'); // 周囲外
+        expect(sanctuaryProtected(b)).toEqual(b.map((_, i) => i === 0));
+        decayBoard(b, -1, chars, ['💙', '⭕'], false);
+        expect(b[0].bind).toBe(2);
+        expect(b[1].bind).toBeLessThan(5);
+        expect(b[2].bind).toBeLessThan(2);
+        expect(b[15].bind).toBeLessThan(2);
+    });
+
+    it('護符の社: 周囲八マスの自陣の式神1体につきマジック+1、最大+3。通常のコマ・敵の式神・周囲外は数えない', () => {
+        const b = board();
+        b[5] = newObject('💙', 'amuletShrine');
+        b[0] = newShikigami('💙');
+        b[1] = { player: '💙', bind: 5, effects: [] };
+        b[2] = newShikigami('⭕');
+        b[15] = newShikigami('💙');
+        expect(objectTurnStart(b, '💙', chars, rngFirst).magic).toBe(1);
+        b[4] = newShikigami('💙'); b[6] = newShikigami('💙'); b[8] = newShikigami('💙'); b[9] = newShikigami('💙');
+        expect(objectTurnStart(b, '💙', chars, rngFirst).magic).toBe(OBJECT_PARAMS.shrineMagicCap);
+        expect(objectTurnStart(b, '⭕', chars, rngFirst).magic).toBe(0);
     });
 });

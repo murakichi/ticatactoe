@@ -19,6 +19,7 @@ Object.defineProperty(exports, "isTree", { enumerable: true, get: function () { 
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const poison_1 = require("./poison");
+const util_1 = require("./util");
 const shikigami_1 = require("./shikigami");
 const thermal_1 = require("./thermal");
 /** 効果の数値。説明文もここから描画する（説明文と実装のズレ防止） */
@@ -29,6 +30,8 @@ exports.OBJECT_PARAMS = {
     springLife: 2,
     /** 砦: 周囲八マスの自陣コマのライフ */
     fortLife: 1,
+    /** 護符の社: 周囲八マスの自陣の式神1体につき手番開始時に得るマジックと、その上限 */
+    shrineMagicCap: 3,
     /** 補強工事: 自陣のオブジェクト1つに足すライフ */
     reinforceLife: 3,
     /** 増築: 自陣のオブジェクト全てに足すライフ */
@@ -48,6 +51,8 @@ exports.OBJECT_DEFS = {
     sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
     poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
     workshop: { idx: 120, name: '大工房', icon: '🏭', life: exports.OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${exports.WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${exports.WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${exports.WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${exports.WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
+    barrierStone: { idx: 121, name: '結界石', icon: '🪨', life: exports.OBJECT_LIFE, costKey: 'onClickBarrierStone', desc: '周囲八マスの自陣の式神は、時間経過のライフ減衰を受けない' },
+    amuletShrine: { idx: 122, name: '護符の社', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickAmuletShrine', desc: `手番開始時、周囲八マスの自陣の式神1体につきマジック+1（最大+${exports.OBJECT_PARAMS.shrineMagicCap}）` },
 };
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 const objectLandable = (sq) => (0, shikigami_1.shikigamiLandable)(sq) && !(0, ObjectKind_1.isObject)(sq);
@@ -67,16 +72,19 @@ exports.workshopActive = workshopActive;
 /** player に働いている市場の数（手番ごとに、この回数だけシャッフルが無料。氷結中の休眠したものは数えない） */
 const marketCount = (board, player) => (0, exports.activeObjectCells)(board, player, 'market').length;
 exports.marketCount = marketCount;
-/** 聖域に守られているマス: 働いている聖域の周囲八マスにある、その聖域の持ち主のコマ。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない。昇順 */
+/** 減衰から守られているマス: 働いている聖域の周囲八マスにある持ち主のコマ全て、働いている結界石の周囲八マスにある持ち主の式神。時間経過のライフ減衰（自然減衰・満杯の追加減衰）を受けない */
 const sanctuaryProtected = (board) => {
     const out = board.map(() => false);
     const geo = (0, boardGeometry_1.geometryForCells)(board.length);
     board.forEach((sq, k) => {
-        if (sq.object !== 'sanctuary' || !sq.player || (0, thermal_1.isDormant)(sq))
+        if ((sq.object !== 'sanctuary' && sq.object !== 'barrierStone') || !sq.player || (0, thermal_1.isDormant)(sq))
             return;
-        for (const j of geo.surroundRange(k))
-            if (board[j].player === sq.player)
+        for (const j of geo.surroundRange(k)) {
+            if (board[j].player !== sq.player)
+                continue;
+            if (sq.object === 'sanctuary' || (0, util_1.isShikigami)(board[j]))
                 out[j] = true;
+        }
     });
     return out;
 };
@@ -129,6 +137,11 @@ const objectTurnStart = (board, player, chars, rng = Math.random) => {
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = (0, charge_1.addCharge)(board[j], chars);
                 res.charged.push(j);
+                break;
+            }
+            case 'amuletShrine': {
+                const shikigami = geo.surroundRange(k).filter((j) => board[j].player === player && (0, util_1.isShikigami)(board[j])).length;
+                res.magic += Math.min(exports.OBJECT_PARAMS.shrineMagicCap, shikigami);
                 break;
             }
             case 'poisonSwamp': {

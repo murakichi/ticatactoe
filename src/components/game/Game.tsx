@@ -457,6 +457,8 @@ export const Game = (props: GameProps) => {
             case 'onClickExpandAll': onClickObjectSkill('expandAll'); break;
             case 'onClickDuplicate': onClickObjectSkill('duplicate'); break;
             case 'onClickWorkshop': onClickObject('workshop'); break;
+            case 'onClickBarrierStone': onClickObject('barrierStone'); break;
+            case 'onClickAmuletShrine': onClickObject('amuletShrine'); break;
             case 'onClickMarket': onClickObject('market'); break;
             case 'onClickSanctuary': onClickObject('sanctuary'); break;
             case 'onClickPoisonSwamp': onClickObject('poisonSwamp'); break;
@@ -866,7 +868,7 @@ export const Game = (props: GameProps) => {
                 addLog(`🔥で${burnt.map(posName).join('・')}のオブジェクトが燃え尽きた`);
                 flashCells(burnt);
             }
-            if (objRes.magic > 0) addLog(`${nextSymbol}の大木で魔力+${objRes.magic}`);
+            if (objRes.magic > 0) addLog(`${nextSymbol}のオブジェクト（大木・護符の社）で魔力+${objRes.magic}`);
             if (objRes.leaves.length > 0) addLog(`枯れた大木が${objRes.leaves.map(posName).join('・')}に🍂を付けた`);
             if (objRes.charged.length > 0) addLog(`雷雲が${objRes.charged.map(posName).join('・')}に⚡を付けた`);
             if (objRes.poisoned.length > 0) addLog(`毒沼が${objRes.poisoned.map(posName).join('・')}に☠を付けた`);
