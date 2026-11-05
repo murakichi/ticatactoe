@@ -23,6 +23,8 @@ type SkillButtonProps = {
     inputBlocked?: boolean;
     /** 「説明をすべて開く/閉じる」の状態。変わるたびに、このカードの説明の開閉もそろえる */
     expandAll?: boolean;
+    /** 相手のオブジェクト（一言居士・お一人様限りの札）に縛られて使えないか。ボタンの文言（名前-コスト）で判定する */
+    restrict?: (buttonText: string) => boolean;
 }
 
 export const SkillButton = (props: SkillButtonProps) => {
@@ -52,7 +54,7 @@ export const SkillButton = (props: SkillButtonProps) => {
                 <button
                     className={classes}
                     onClick={props.onClick}
-                    disabled={props.disabled || props.inputBlocked}
+                    disabled={props.disabled || props.inputBlocked || (props.restrict?.(props.buttonText) ?? false)}
                     onMouseEnter={props.onHoverStart}
                     onMouseLeave={props.onHoverEnd}
                     aria-label={props.buttonText}

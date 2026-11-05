@@ -13,8 +13,12 @@ import { placeBlocked, moveBlocked } from './lifeBan';
 import { isTakeProtected } from './decay';
 import { canFreeze, lockable, emptyBlocked, overwriteBlocked } from './thermal';
 import { isShielded } from './charge';
+import { isShikigami } from '../../util';
 
 /** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
+/** 自分の式神を対象に撃つスキル（置いた式神がなければ撃てない） */
+const SHIKIGAMI_TARGET_SKILLS = new Set(['onClickShikigamiBlast', 'onClickShikigamiBless', 'onClickShikigamiCurse']);
+
 export type AIStep = string | number;
 
 export type AITurnInput = {
@@ -133,8 +137,13 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         // 帯電拡散→帯電付与などの『スキル→対象クリック』も、置くスキルは撃てない。対象クリックも一緒に外す
         if (result.chargeClicks) {
             const kept: typeof result.chargeClicks = [];
+            // 縛りで外した『式神を置く』クリックのあとの爆破・加護・呪詛は、盤面にもとからある自分の式神にしか撃てない
+            // （置く式神も、爆破で空きマスに生まれる式神も無いので、残すと対象が不正のまま手番が進まない）
+            let placeDropped = false;
+            const ownShiki = (t: number) => board[t].player === ai.playerSymbol && isShikigami(board[t]);
             for (const c of result.chargeClicks) {
-                if (placeBlocked(true, c.skill, input.tokenBind)) continue;
+                if (placeBlocked(true, c.skill, input.tokenBind)) { placeDropped = true; continue; }
+                if (placeDropped && c.target !== undefined && SHIKIGAMI_TARGET_SKILLS.has(c.skill) && !ownShiki(c.target)) continue;
                 kept.push(c);
             }
             result.chargeClicks = kept;
@@ -202,9 +211,11 @@ export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, ch
  * ⚡付き自陣コマが無敵で触れない、などで着手できなくなると、クリックが無視されて手番が進まず止まる。
  * 打てるならそのまま cell を、打てなければ今の盤面で打ち直した手を返す。打てる手が無ければ null（呼び出し側はチャージでパスする）。
  */
-export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false): number | null => {
+export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false, soloBlock: boolean = false): number | null => {
     if (moveBlocked(lifeBan, life)) return null; // ライフ3以下のコマを置けない縛り: 打てる手は無いのでチャージでパスする
+    if (soloBlock && !board[cell].player) return null; // お一人様限りの札: この手番はもう空きマスに新しいコマを置けない（チャージでパスする）
     if (canPlaceAt(board, cell, ai.playerSymbol, ai.character, characters)) return cell;
     ai.updateShield(board);
-    return ai.getBestMove(board, life);
+    const alt = ai.getBestMove(board, life);
+    return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };

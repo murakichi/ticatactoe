@@ -15,6 +15,9 @@ export type PlayerCharacters = readonly CharacterId[];
 const charOf = (chars: PlayerCharacters, player: Player): CharacterId | undefined => chars[seatOf(player)];
 
 /** ⚡の個数（スタック数） */
+/** 沈黙は雷なり: 払う⚡の数（自陣の⚡が合計でこれ以上ないと使えない） */
+export const BOLT_SILENCE_BOLTS = 2;
+
 export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '⚡').length;
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
@@ -191,7 +194,7 @@ export const applyJammer = (board: SquareInfo[], i: number, size: number, curren
     const damaged = jammerTargets(board, i, size, current);
     const zeroed: number[] = [];
     for (const j of damaged) {
-        // ジャマーの電気ダメージも氷結を貫通する
+        // 氷結中のコマは jammerTargets で除外済み（ジャマーのダメージは氷結中のマスに通らない）。ここに来るのは氷結していないコマだけ
         board[j] = applyDamage(board[j], stacks, 'electric').sq;
         if (board[j].bind === 0) zeroed.push(j);
     }
