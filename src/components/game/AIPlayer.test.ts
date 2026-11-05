@@ -1568,10 +1568,8 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
         return [...(r.lockTargets ?? []), ...(r.chargeClicks ?? []).map((c) => c.target)];
     };
 
-    it('氷室が相手なら、🌱付きのコマを先頭に自陣のコマを全てロックする', () => {
-        const targets = lockTargetsOf('cryomancer');
-        expect(targets[0]).toBe(0);
-        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    it('氷室が相手のときは先にロックしない（手札固定を入れた後は、ロックに魔力を回すと裏目: 対氷室 35.0→66.0%）', () => {
+        expect(lockTargetsOf('cryomancer')).toEqual([]);
     });
     it('鍛冶師（🔥はロック中のコマに付かない）が相手のときも同じく全てロックする', () => {
         const targets = lockTargetsOf('pyromancer');
