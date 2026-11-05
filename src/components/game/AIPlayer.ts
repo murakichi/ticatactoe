@@ -18,7 +18,6 @@ import { corpseCount, graveDiscountAmount } from './graveSkills';
 import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_LIFE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
-import { newObject, objectLandable } from './objects';
 import { BOLT_SILENCE_BOLTS, chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
 // 汎用スキルプールの大きさ (idx 0..129)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
@@ -2510,52 +2509,6 @@ class AIPlayer {
                 this.updateShield(post);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [poisoned] };
-                this.updateShield(board);
-            }
-        }
-        // 氷室の番人: 縛り・守りのオブジェクトを置く（実験: 環境変数 OBJ_PLACE=置く札のidxをカンマ区切り。例 128,127,129）
-        const placeEnv = String((globalThis as any).process?.env?.OBJ_PLACE ?? '');
-        if (placeEnv && this.character === 'cryomancer' && threatSquares.length === 0) {
-            const OBJ_CARDS: Record<number, { key: string; kind: 'oneWord' | 'soloSign' | 'blindMonkey' | 'tongueKing'; vs: string[] }> = {
-                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner'] },
-                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'necromancer'] },
-                129: { key: 'onClickBlindMonkey', kind: 'blindMonkey', vs: ['pyromancer', 'poisoner', 'witch', 'electrician'] },
-                125: { key: 'onClickTongueKing', kind: 'tongueKing', vs: ['witch', 'magician'] },
-            };
-            for (const idxStr of placeEnv.split(',')) {
-                const idx = Number(idxStr);
-                const def = OBJ_CARDS[idx];
-                if (!def || !availableSkills.includes(idx)) continue;
-                if (!this.opponents.some((o) => def.vs.includes(this.characterOf(o) as string))) continue;
-                if (board.some((sq) => sq.object === def.kind && sq.player === this.playerSymbol)) continue; // 同じ種類は1つまで
-                const cost = this.calculateAICost((costs as any)[def.key], false, false, def.key);
-                if (magic < cost + 2) continue;
-                let cell = -1;
-                let best = -Infinity;
-                board.forEach((sq, i) => {
-                    if (!objectLandable(sq)) return;
-                    let v = 0;
-                    if (def.kind === 'blindMonkey') {
-                        // 周囲八マスの自陣のコマが多いマス（守る範囲）
-                        for (const j of geometryForCells(board.length).surroundRange(i)) if (board[j].player === this.playerSymbol && !board[j].object) v += 2;
-                        for (const j of geometryForCells(board.length).surroundRange(i)) if (!board[j].player) v += 0.5;
-                    } else {
-                        for (const line of geometryForCells(board.length).winLines) {
-                            if (!line.includes(i)) continue;
-                            const mine = line.filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
-                            const foes = line.filter((j) => this.isEnemy(board[j].player) && !board[j].object).length;
-                            v += foes > 0 && mine === 0 ? 1 : -1 - mine;
-                        }
-                    }
-                    if (v > best) { best = v; cell = i; }
-                });
-                if (cell === -1) continue;
-                if (def.kind === 'blindMonkey' && geometryForCells(board.length).surroundRange(cell).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length < 2) continue; // 守る自コマが2つ未満なら置かない
-                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                post[cell] = newObject(this.playerSymbol, def.kind);
-                this.updateShield(post);
-                const followup = this.getBestMove(post, life);
-                if (followup !== null) return { move: followup, skills: [def.key], lockTargets: [cell] };
                 this.updateShield(board);
             }
         }
