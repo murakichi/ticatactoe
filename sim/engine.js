@@ -696,6 +696,11 @@ function advanceTurn(s) {
     change.wardPlace.forEach((seat) => {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
+    // 春雷(本番 gear.ts の springThunderThaw): 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く
+    if (hasGear(s.gears[next], 'springThunder')) {
+        const thawed = gear.springThunderThaw(s.board, sym);
+        if (thawed.length > 0) bumpStat(s, 'springThunder', thawed.length);
+    }
     // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
     const burntTrees = objectsMod.sweepBurntTrees(s.board);
     const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
