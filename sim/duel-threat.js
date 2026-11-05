@@ -7,8 +7,10 @@
  *   decayed=true: 自分の着手の直後の減衰(ライフ-1)と毒(1スタック=-1)を織り込む。置いた直後に相手が奪えるコマを拾う。
  */
 const engine = require('./engine');
-const thermal = require('./thermal');
-const { geometryForCells } = require('./geometry');
+const thermal = require('./shared/thermal');
+const decayMod = require('./shared/decay');
+const chargeMod = require('./shared/charge');
+const { geometryForCells } = require('./shared/boardGeometry');
 
 const hasEff = (sq, e) => sq.effects.some((x) => x.effect === e);
 
@@ -18,6 +20,7 @@ function takeable(s, board, i, by, decayed) {
     if (!sq.player) return !hasEff(sq, '🔑') && !thermal.emptyBlocked(sq);
     if (sq.player === by) return false;
     if (engine.isGuarded(s, sq) || thermal.isFrozen(sq)) return false;
+    if (decayMod.isTakeProtected(sq, s.chars || [])) return false; // 雷霆の巫のコマはライフ0でも奪われない
     let bind = sq.bind;
     if (decayed) {
         bind -= 1;
@@ -42,11 +45,13 @@ function winCells(s, board, by, decayed) {
     return out;
 }
 
-/** me が cell に置いた後の盤(置けない・奪えないマスなら null)。ライフは s.life */
+/** me が cell に置いた後の盤(置けない・奪えないマスなら null)。ライフは s.life。隣の⚡の発火も反映する */
 function afterPlace(s, board, cell, me) {
     if (!takeable(s, board, cell, me, false)) return null;
     const nb = board.map((q) => ({ player: q.player, bind: q.bind, effects: q.effects.slice() }));
     nb[cell] = { player: me, bind: s.life, effects: [] };
+    // 着手マスの隣にある⚡は発火して消える（隣の敵コマにはダメージ）。自陣の⚡の隣に置くと、その無敵が外れて奪えるコマになる
+    chargeMod.fireCharges(nb, cell, Math.round(Math.sqrt(nb.length)), s.chars || []);
     return nb;
 }
 

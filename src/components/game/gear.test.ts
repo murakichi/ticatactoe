@@ -227,85 +227,6 @@ describe('ランダム付与', () => {
     });
 });
 
-describe('sim/gear.js（ヘッドレス版の複製）と一致する', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const simGear = require('../../../sim/gear');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const simEngine = require('../../../sim/engine');
-
-    it('ギアのID一覧と数値パラメータが同じ', () => {
-        expect(simGear.GEAR_IDS).toEqual(GEAR_IDS);
-        expect(simGear.GEAR_PARAMS).toEqual(GEAR_PARAMS);
-    });
-
-    it('下位キャラ向けギアの補助関数が同じ結果を返す', () => {
-        const sq = (player: string | undefined, ...effects: string[]) => ({ player, effects: effects.map((effect) => ({ effect })) });
-        const board = [sq('⭕', '🌱', '🔥'), sq('💙', '🌱', '❄'), sq('⭕', '🌱', '🌱', '❄'), sq(undefined)];
-        expect(simGear.budCounts(board)).toEqual(budCounts(board));
-        expect(simGear.burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙')).toBe(burnedBudCount(['⭕', '💙', '⭕', undefined], [3, 1, 2, 0], board, '💙'));
-        expect(simGear.frozenBudCount(board)).toBe(frozenBudCount(board));
-        expect(simGear.flameCounts(board)).toEqual(flameCounts(board));
-        expect(simGear.ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙')).toBe(ignitedCount(['⭕', '💙', '⭕', undefined], [0, 0, 0, 0], board, '💙'));
-        for (const n of [0, 1, 2, 3, 5, 10]) {
-            expect(simGear.scorchGain(n)).toBe(scorchGain(n));
-            expect(simGear.rootGain(n)).toBe(rootGain(n));
-        }
-    });
-
-    it('新ギアの補助関数が同じ結果を返す', () => {
-        const sq = (player: string | undefined, ...effects: string[]) => ({ player, bind: 0, effects: effects.map((effect) => ({ effect })) });
-        const board = [sq('💙', '☠', '🌱'), sq('💙', '🔥'), sq('⭕', '☠', '🔥'), sq(undefined)];
-        for (const p of ['💙', '⭕']) {
-            expect(simGear.countVarietySquares(board, p)).toBe(countVarietySquares(board, p));
-            expect(simGear.countAilmentKinds(board, p)).toBe(countAilmentKinds(board, p));
-        }
-        expect(simGear.lostCells(['💙', '⭕'], [undefined, '⭕'], '💙', null)).toEqual(lostCells(['💙', '⭕'], [undefined, '⭕'], '💙', null));
-        expect(simGear.EXCLUSIVE_SKILL_KEYS).toEqual(EXCLUSIVE_SKILL_KEYS);
-        for (const g of [['ailmentPact'], ['ruinSurge'], ['ailmentPact', 'ruinSurge']]) {
-            for (const key of ['onClickShuffle', 'onClickStomp', undefined]) {
-                for (const base of [1, 3, 6]) {
-                    expect(simGear.adjustCostByGear(base, g, ctx(0, false, 2, true), false, key)).toBe(adjustCostByGear(base, g as never[], ctx(0, false, 2, true), false, key));
-                }
-            }
-        }
-    });
-
-    it('枠数・補正関数が同じ結果を返す', () => {
-        for (const c of ['you', 'giant', 'poisoner']) expect(simGear.gearSlotsFor(c)).toBe(gearSlotsFor(c as never));
-        const sets = [[], ['sturdy'], ['titanCost'], ['gambler', 'ironLock'], ['reinforce', 'lightToken'], ['afterglow', 'chainDiscount', 'quadMastery']];
-        for (const g of sets) {
-            const gs = g as never[];
-            expect(simGear.gearLifeBonus(gs)).toBe(gearLifeBonus(gs));
-            expect(simGear.gearLifeStd(gs, 3)).toBe(gearLifeStd(gs, 3));
-            expect(simGear.gearLockBind(gs)).toBe(gearLockBind(gs));
-            expect(simGear.gearTokenBindDelta(gs)).toBe(gearTokenBindDelta(gs));
-            for (let used = 0; used < 7; used++) {
-                for (const echo of [false, true]) {
-                    for (const token of [false, true]) {
-                        for (const base of [0, 1, 2, 4, 9]) {
-                            expect(simGear.adjustCostByGear(base, gs, ctx(used, echo), token)).toBe(adjustCostByGear(base, gs, ctx(used, echo), token));
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    it('価格破壊: 同じ乱数列なら同じコスト表になる（skillCosts のキーも一致）', () => {
-        expect(Object.keys(simEngine.skillCosts)).toEqual(Object.keys(skillCosts));
-        const mk = () => {
-            let seed = 99;
-            return () => {
-                seed = (seed * 16807) % 2147483647;
-                return seed / 2147483647;
-            };
-        };
-        const a = applyPriceOffsets(skillCosts, rollPriceOffsets(mk()));
-        for (const [base, off] of [[4, -4], [2, -3], [1, -3], [1, 2], [6, 4]]) expect(simGear.priceShift(base, off)).toBe(priceShift(base, off));
-        const b = simGear.applyPriceOffsets(simEngine.skillCosts, simGear.rollPriceOffsets(simEngine.skillCosts, mk()));
-        for (const k of PRICEABLE_KEYS) expect(b[k]).toBe(a[k]);
-    });
-});
 
 describe('AIが選ぶギア', () => {
     it('枠数以内・重複なし・存在するギアだけ', () => {
@@ -318,12 +239,6 @@ describe('AIが選ぶギア', () => {
         }
     });
 
-    it('sim/gear.js の複製と一致する', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const simGear = require('../../../sim/gear');
-        expect(simGear.RECOMMENDED_GEARS).toEqual(RECOMMENDED_GEARS);
-        expect(simGear.ALT_RECOMMENDED_GEARS).toEqual(ALT_RECOMMENDED_GEARS);
-    });
 
     it('別案は枠数以内・重複なし・存在するギアだけ、pickは主案か別案のどれか', () => {
         for (const c of Object.keys(ALT_RECOMMENDED_GEARS) as (keyof typeof ALT_RECOMMENDED_GEARS)[]) {

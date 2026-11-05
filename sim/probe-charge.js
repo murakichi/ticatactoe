@@ -12,7 +12,7 @@
  *  - 手番ごとの平均 ⚡マス数 と 無敵(固まった自駒)数、⚡が1個以上盤上にあった手番の割合
  */
 const engine = require('./engine');
-const ai = require('./ai');
+const ai = require('./aiDriver');
 
 const games = parseInt(process.argv[2] || '100', 10);
 const baseSeed = parseInt(process.argv[3] || '1', 10);

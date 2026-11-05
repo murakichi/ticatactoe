@@ -129,7 +129,7 @@ export const gearDefOf = (id: GearId): GearDef => GEARS.find((g) => g.id === id)
 /** 装備できる枠数。固有スキルの無い「あなた」だけ3枠 */
 export const gearSlotsFor = (character: CharacterId): number => (character === 'you' ? 3 : 2);
 
-type Gears = readonly GearId[] | undefined;
+export type Gears = readonly GearId[] | undefined;
 export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.includes(id);
 
 /** ライフ平均への加算（頑健 / 剛腕の代償） */
@@ -278,15 +278,15 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['lastStand', 'ironLock'],
+    magician: ['spellWard', 'ironLock'],
     giant: ['lastStand', 'sturdy'],
-    yinYangMaster: ['lastStand', 'afterglow'],
+    yinYangMaster: ['lastStand', 'chainDiscount'], // 対強豪平均 42→46%（3シード各400: seed2 +5.5/seed8 +5.0/seed21 +3.7。氷室 21→36%）。旧: lastStand,afterglow
     necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'spellWard'], // 余韻+呪詛除け(sim/gear.js と同じ。tune-top #41)
+    pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 
@@ -298,7 +298,8 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
-    electrician: [['afterglow', 'harvest']], // 主案 lightToken,harvest と同等（docs/tune/electrician.md 試行19）
+    yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
+    electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
