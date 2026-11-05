@@ -1,8 +1,11 @@
 // 自動生成: src/components/game/decay.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
+exports.isTakeProtected = exports.canHitBound = exports.decayBoard = exports.crowdedDecay = exports.isCrowded = exports.CROWDED_DECAY_MIN_PLAYERS = exports.CROWDED_EMPTY_DIVISOR = exports.shouldDecay = exports.DECAY_PER_ROUND_MIN_PLAYERS = void 0;
+const Player_1 = require("./Player");
+const ObjectKind_1 = require("./ObjectKind");
 const gear_1 = require("./gear");
+const objects_1 = require("./objects");
 const thermal_1 = require("./thermal");
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
 // 2人戦は従来どおり「着手のたび」。3人以上は人数が増えるほど1周あたりの減衰が増えてコマがすぐ0になる
@@ -25,7 +28,7 @@ exports.CROWDED_DECAY_MIN_PLAYERS = 3;
 const isCrowded = (board, seatCount) => seatCount >= exports.CROWDED_DECAY_MIN_PLAYERS && board.filter((sq) => !sq.player && !(0, thermal_1.emptyBlocked)(sq)).length <= Math.floor(board.length / exports.CROWDED_EMPTY_DIVISOR);
 exports.isCrowded = isCrowded;
 /** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
-const crowdedDecay = (sq) => (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+const crowdedDecay = (sq) => (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && !(0, ObjectKind_1.isObject)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
 exports.crowdedDecay = crowdedDecay;
 /**
  * ライフの減衰を盤面全体に1回進める（着手のたび、または手番が1周するごと。shouldDecay）。
@@ -36,11 +39,12 @@ exports.crowdedDecay = crowdedDecay;
  */
 const decayBoard = (board, moveCell, chars, symbols, crowded = false) => {
     const res = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const sanctuary = (0, objects_1.sanctuaryProtected)(board); // 聖域に守られたマスは自然減衰（満杯の追加分も）を受けない
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if ((0, thermal_1.burnDamageOf)(before, chars) > 0)
             res.burnCells.push(k);
-        const sq = (0, thermal_1.decayTick)(crowded ? (0, exports.crowdedDecay)(before) : before, chars); // 満杯の盤面は自然減衰がもう1回
+        const sq = (0, thermal_1.decayTick)(crowded && !sanctuary[k] ? (0, exports.crowdedDecay)(before) : before, chars, !sanctuary[k]); // 満杯の盤面は自然減衰がもう1回
         board[k] = sq;
         if (before.player && !sq.player) {
             res.flameKills++;
@@ -71,3 +75,9 @@ exports.decayBoard = decayBoard;
  */
 const canHitBound = (character, board, seatCount) => character === 'giant' || (0, exports.isCrowded)(board, seatCount);
 exports.canHitBound = canHitBound;
+/**
+ * 雷霆の巫のコマは、ライフが0になっても着手で奪われない（ライフの残ったコマと同じ扱い。巨人と満杯の盤面だけが奪える）。
+ * ライフ0の自コマを敵に取られて列を完成されるのが負けの大半だったため（ユーザー指示 2026-11-05）
+ */
+const isTakeProtected = (sq, chars) => !!sq.player && sq.bind <= 0 && chars[(0, Player_1.seatOf)(sq.player)] === 'electrician';
+exports.isTakeProtected = isTakeProtected;

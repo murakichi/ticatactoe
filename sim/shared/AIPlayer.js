@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
+const bigSkills_1 = require("./bigSkills");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -19,8 +20,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..104)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 105;
+// 汎用スキルプールの大きさ (idx 0..112)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 113;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -93,6 +94,13 @@ const REROLL_REDUCERS = [
 ];
 /** 夜の帳: 相手の魔力がこの値以上で、他に撃つものが無いとき撃つ（相手が次の手番に高いスキルを撃てそうなとき）。毒返しの構え: 自陣のコマがこの数以上あるとき撃つ */
 const NIGHT_VEIL_OPP_MAGIC = 7;
+/** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
+const GLACIER_COST = 10;
+const NIGHT_VEIL_RAISE = 3;
+/** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
+const PG_HOLD_GAP = 6;
+/** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
+const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
 /** 墓守の供物: 自陣のコマがこの数以上で、死体がこの数以下のとき撃つ */
 const GRAVE_OFFERING_MIN_PIECES = 3;
@@ -161,6 +169,8 @@ class AIPlayer {
         this.lastSpent = 0;
         /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
         this.hypoCut = 0;
+        /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
+        this.holdPG = 0;
         this.skillKinds = new Set();
         /** 魔法使いの引き直し: この手番で残っている引き直し回数（Game が手番開始時に MAX_REROLLS にし、シャッフルのたび減らす） */
         this.rerollsLeft = 0;
@@ -375,6 +385,44 @@ class AIPlayer {
      * 帯電付与の対象。攻め=縦横隣接の(敵コマ数−自コマ数)、守り=ライフ0〜1の自コマが他の席のいない列で
      * 2つ以上(リーチ列なら3つ)の一部なら⚡の無敵で守る。大きいほうが MIN 以上なら撃つ。
      */
+    /**
+     * パーフェクトゲームの即勝ち計画: 撃った後の盤面で、自陣3つ+空き1つ(敵のコマが無い)の列ができれば、その空きマスと、撃つまでに払うスキル
+     * （魔力が足りなければ、届く軽減札を先に撃つ）を返す。無ければ null
+     */
+    planPerfectGameWin(board, magic, costs, availableSkills) {
+        const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        (0, bigSkills_1.perfectGame)(post, this.characters);
+        let move = null;
+        for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+            const mine = line.filter((i) => post[i].player === this.playerSymbol).length;
+            const empty = line.filter((i) => !post[i].player);
+            if (mine === 3 && empty.length === 1) {
+                move = empty[0];
+                break;
+            }
+        }
+        if (move === null)
+            return null;
+        const pg = this.calculateAICost(costs.onClickPerfectGame, false, false, 'onClickPerfectGame');
+        if (magic >= pg)
+            return { move, clicks: [{ skill: 'onClickPerfectGame' }] };
+        const reducers = [
+            { idx: 58, key: 'onClickClearance', cut: 7 },
+            { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
+            { idx: 53, key: 'onClickMarkdown', cut: 3 },
+        ];
+        for (const r of reducers) {
+            if (!availableSkills.includes(r.idx))
+                continue;
+            const rc = this.calculateAICost(costs[r.key], false, false, r.key);
+            if (magic >= rc + Math.max(1, pg - r.cut))
+                return { move, clicks: [{ skill: r.key }, { skill: 'onClickPerfectGame' }] };
+        }
+        // 届かない: あと PG_HOLD_GAP 以内なら、次の手番で撃てるように他のスキルの支払いを控える
+        if (magic >= pg - PG_HOLD_GAP)
+            this.holdPG = pg;
+        return null;
+    }
     bestChargeOneTarget(board) {
         const size = this.sizeOf(board);
         let bestIdx = null, bestScore = 0;
@@ -661,7 +709,7 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
-            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx])))
+            if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
                 continue;
             let myCount = 0, oppCount = 0, myBindSum = 0, oppBindSum = 0;
             // 敵が1人だけのラインでのみ脅威として数える（複数の敵が混在するラインは互いに潰し合う）
@@ -714,8 +762,8 @@ class AIPlayer {
     countReaches(board, player) {
         let reaches = 0;
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let my = 0, op = 0, blocked = false;
             for (const idx of line) {
                 const sq = board[idx];
@@ -752,6 +800,60 @@ class AIPlayer {
         }
         return null;
     }
+    /** 陰陽師: 砕氷（❄1つにつき3ダメージ）で壊せる、氷結中の敵コマのうち、壊すと列が空くもの。壊すと百鬼夜行→式神一括が組めるコマを最優先、無ければ敵が並びかけている列に乗るコマ。無ければ null */
+    yinShatterTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const comboNow = this.floodComboWins(board);
+        let best = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || (0, util_1.isShikigami)(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            if (stacks === 0 || stacks * thermal_1.SHATTER_DAMAGE_PER_STACK < sq.bind)
+                return; // 壊し切れない
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            post[i] = { player: undefined, bind: 0, effects: [] };
+            let val = 0;
+            if (!comboNow && this.floodComboWins(post))
+                val += 100; // 壊すとコンボが組める
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                if (line.every((j) => board[j].player !== this.playerSymbol))
+                    val += foes; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        });
+        return best;
+    }
+    /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
+    comboThawTarget(board) {
+        if (this.floodComboWins(board))
+            return null; // すでに組める
+        const size = this.sizeOf(board);
+        let own = null;
+        for (let n = 0; n < board.length; n++) {
+            const sq = board[n];
+            if (!sq.player || (0, thermal_1.isFrozen)(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            if (!(0, charge_1.orthoNeighbors)(n, size).some((m) => (0, thermal_1.emptyBlocked)(board[m])))
+                continue; // 溶かせる氷結が隣に無い
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            (0, thermal_1.ignite)(post, [n], size, 1);
+            if (!this.floodComboWins(post))
+                continue;
+            if (this.isEnemy(sq.player))
+                return n;
+            if (own === null)
+                own = n;
+        }
+        return own;
+    }
     /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。旧sim AI thawIgniteTarget(allowOwn) */
     thawIgniteTarget(board, k) {
         let own = null;
@@ -770,8 +872,8 @@ class AIPlayer {
     findThreatSquares(board, player) {
         const threats = [];
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            if (line.some((idx) => (0, util_1.isShikigami)(board[idx])))
-                continue; // 式神は列に数えない
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue; // 式神・オブジェクトは列に数えない
             let pCount = 0, oCount = 0, emptyIdx = -1;
             for (const idx of line) {
                 const sq = board[idx];
@@ -880,8 +982,8 @@ class AIPlayer {
                     moves.push(i);
             }
             else if (this.isEnemy(sq.player)) {
-                // bind=0の敵マスは無条件で乗っ取り可能
-                if (sq.bind <= 0) {
+                // bind=0の敵マスは無条件で乗っ取り可能（雷霆の巫のコマは除く）
+                if (sq.bind <= 0 && !(0, decay_2.isTakeProtected)(sq, this.characters)) {
                     moves.push(i);
                 }
                 else if ((0, decay_2.canHitBound)(this.character, board, this.opponents.length + 1)) {
@@ -927,7 +1029,7 @@ class AIPlayer {
                     moves.push(i);
             }
             else if (sq.player !== player) {
-                if (sq.bind <= 0)
+                if (sq.bind <= 0 && !(0, decay_2.isTakeProtected)(sq, this.characters))
                     moves.push(i);
             }
         }
@@ -1097,7 +1199,7 @@ class AIPlayer {
                 score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
             }
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
-            if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
+            if (this.isEnemy(board[i].player) && board[i].bind <= 0 && !(0, decay_2.isTakeProtected)(board[i], this.characters)) {
                 score += 30;
                 // 氷室の番人はネクロが相手のとき奪取を避ける（奪取は敵味方問わずネクロの墓地+1＝降霊の召喚数とコスト減）。
                 // 旧sim AI noCapNecro=100: 対ネクロ +5〜+11pt (seed1-3、各300〜400試合)
@@ -1304,6 +1406,8 @@ class AIPlayer {
         }
         const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost, skill) => {
+            if (this.holdPG > 0 && !PG_HOLD_FREE.includes(skill) && remaining - cost < this.holdPG)
+                return false;
             if (reserve > 0 && (RESERVE_SKIP.includes(skill) || (this.character === 'witch' && !WITCH_LEAF_SPEND.includes(skill))) && remaining - cost < reserve)
                 return false;
             if (remaining >= cost) {
@@ -1313,6 +1417,17 @@ class AIPlayer {
             }
             return false;
         };
+        // 夜の帳×対氷室: 氷室の番人の絶対零度（⚡の無敵を一斉に止める）を、撃てる魔力に届く手番だけ先回りで遅らせる。
+        // 絶対零度の実コストは 10 − 氷結が作られた回数（下限1）。回数は相手から見えないので、盤面の❄の数で見積もる。
+        // 次の手番の魔力が実コスト以上で、+3 しても届かなくならない（実コスト+3未満）ときだけ撃つ。他のスキルより先に払う（トークンで魔力を使い切ると撃てない）
+        if (this.character === 'electrician' && availableSkills.includes(98)) {
+            const frost = board.reduce((n, sq) => n + (0, thermal_1.frozenStacks)(sq), 0);
+            const glacierCost = Math.max(1, GLACIER_COST - frost);
+            const nextCryoMagic = this.opponents.filter((o) => this.characters[(0, Player_1.seatOf)(o)] === 'cryomancer').map((o) => { var _a; return ((_a = seatMagic[(0, Player_1.seatOf)(o)]) !== null && _a !== void 0 ? _a : 0) + 1; });
+            if (nextCryoMagic.some((m) => m >= glacierCost && m < glacierCost + NIGHT_VEIL_RAISE)) {
+                spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
+            }
+        }
         // --- 固有スキル (相手リーチがなければ積極的に使う) ---
         if (oppReaches === 0) {
             // ネクロマンサー蘇生: 墓地が貯まり召喚が見込める or 吸収対象が複数いるなら発動
@@ -1467,6 +1582,16 @@ class AIPlayer {
             const bare = board.filter((sq) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && !sq.effects.some((e) => e.effect === '⚡')).length;
             if (availableSkills.includes(78) && bare >= 3) {
                 spend(this.calculateAICost(costs.onClickBristle, false, false, 'onClickBristle'), 'onClickBristle');
+            }
+            // パーフェクトゲーム: 全コマを壊すが、⚡の無敵コマは残る。敵の壊れるコマが3つ以上あり、自分の壊れるコマより2つ以上多いとき撃つ（自陣のリーチを敵のコマが塞いでいて、壊せば同じ手番で勝てるときは、手番の先頭で撃つ: planPerfectGameWin）。
+            // 総毛立つで自陣に⚡を付けてから撃つので、先に撃つ総毛立つより後ろに置く
+            if (availableSkills.includes(102)) {
+                const killed = (0, bigSkills_1.perfectGame)(board.map((sq) => ({ ...sq, effects: [...sq.effects] })), this.characters).destroyed;
+                const foe = killed.filter((i) => this.isEnemy(board[i].player)).length;
+                const mine = killed.length - foe;
+                if (foe >= 3 && foe - mine >= 2) {
+                    spend(this.calculateAICost(costs.onClickPerfectGame, false, false, 'onClickPerfectGame'), 'onClickPerfectGame');
+                }
             }
         }
         // --- トークン系 ---
@@ -2288,6 +2413,17 @@ class AIPlayer {
                 return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })), win: true };
             }
         }
+        // パーフェクトゲーム(102): 全コマを壊した後に、残る自陣のコマ(⚡の無敵・🔑ロック)3つ+空き1つの列ができるなら、撃ってからその空きに置いて勝つ
+        // （自分のリーチを敵のコマが塞いでいる場面。ロックや⚡のコマが残るので、塞いでいる敵コマだけが消える）
+        this.holdPG = 0;
+        if (availableSkills.includes(102)) {
+            const win = this.planPerfectGameWin(board, magic, costs, availableSkills);
+            if (win !== null)
+                return { move: win.move, skills: [], chargeClicks: win.clicks, win: true };
+            // 即勝ちが見えているが魔力が足りない: 相手のリーチが無いうちは、駒を置かずチャージ(+3)で魔力をためて次の手番以降に撃つ
+            if (this.holdPG > 0 && this.opponents.every((o) => this.countReaches(board, o) === 0))
+                return { move: null, skills: ['onClickCharge'] };
+        }
         // 追い剥ぎ(52): ライフ0の敵コマを自陣にする。手番は続くので、列の足りないマスがライフ0の敵コマ（と、最後の1マスの空き）だけなら、連打して着手で揃えて勝つ
         if (availableSkills.includes(52)) {
             const plunderCost = this.calculateAICost(costs.onClickPlunder, false, false, 'onClickPlunder');
@@ -2368,6 +2504,32 @@ class AIPlayer {
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
                     return { move: followup, skills: ['onClickIgnite'], lockTargets: [t] };
+                this.updateShield(board);
+            }
+        }
+        // 陰陽師: 砕氷(47)で、氷室・軍師の氷結で守られたコマを壊す（❄の数×3ダメージ。壊すとコンボが組める／敵の並びが崩れるコマを優先）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
+            const tg = this.yinShatterTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                (0, thermal_1.shatter)(post, tg);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                this.updateShield(board);
+                return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickShatter', target: tg }] };
+            }
+        }
+        // 陰陽師: 氷結中の空きマスが百鬼夜行→式神一括の列を塞いでいるとき、火遁で隣のコマを燃やして溶かし、コンボを組める盤面にする
+        // （氷室・軍師の氷結で列が作れず、コンボ待ちのまま遅くなるのを防ぐ）
+        if (this.character === 'yinYangMaster' && availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
+            const tg = this.comboThawTarget(board);
+            if (tg !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                (0, thermal_1.ignite)(post, [tg], this.sizeOf(board), 1);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: ['onClickIgnite'], lockTargets: [tg] };
                 this.updateShield(board);
             }
         }

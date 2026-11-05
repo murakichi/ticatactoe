@@ -1,7 +1,9 @@
 import { CharacterId } from '../../types/Character';
-import { Player } from '../../types/Player';
+import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isObject } from '../../types/ObjectKind';
 import { GEAR_PARAMS } from './gear';
+import { sanctuaryProtected } from './objects';
 import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
 
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -32,7 +34,7 @@ export const isCrowded = (board: SquareInfo[], seatCount: number): boolean =>
 
 /** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
 export const crowdedDecay = (sq: SquareInfo): SquareInfo =>
-    (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !isFrozen(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+    (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !isFrozen(sq) && !isObject(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
 export type DecayResult = {
     /** 🔥の継続ダメージを受けたマス（演出用） */
     burnCells: number[];
@@ -53,10 +55,11 @@ export type DecayResult = {
  */
 export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false): DecayResult => {
     const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const sanctuary = sanctuaryProtected(board); // 聖域に守られたマスは自然減衰（満杯の追加分も）を受けない
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if (burnDamageOf(before, chars) > 0) res.burnCells.push(k);
-        const sq = decayTick(crowded ? crowdedDecay(before) : before, chars); // 満杯の盤面は自然減衰がもう1回
+        const sq = decayTick(crowded && !sanctuary[k] ? crowdedDecay(before) : before, chars, !sanctuary[k]); // 満杯の盤面は自然減衰がもう1回
         board[k] = sq;
         if (before.player && !sq.player) {
             res.flameKills++;
@@ -86,3 +89,10 @@ export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonl
  */
 export const canHitBound = (character: CharacterId | undefined, board: SquareInfo[], seatCount: number): boolean =>
     character === 'giant' || isCrowded(board, seatCount);
+
+/**
+ * 雷霆の巫のコマは、ライフが0になっても着手で奪われない（ライフの残ったコマと同じ扱い。巨人と満杯の盤面だけが奪える）。
+ * ライフ0の自コマを敵に取られて列を完成されるのが負けの大半だったため（ユーザー指示 2026-11-05）
+ */
+export const isTakeProtected = (sq: SquareInfo, chars: readonly (CharacterId | undefined)[]): boolean =>
+    !!sq.player && sq.bind <= 0 && chars[seatOf(sq.player)] === 'electrician';

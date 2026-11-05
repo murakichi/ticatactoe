@@ -771,6 +771,22 @@ test('雷霆の巫パッシブ: 雷霆の巫以外の⚡付きコマは通常ど
     assert.strictEqual(s.board[3].player, '💙');
 });
 
+test('雷霆の巫パッシブ: ⚡の無い自陣マスも、ライフ0で奪われない（巨人と満杯の盤面は奪える。他のキャラは従来どおり奪える）', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.life = 9;
+    s.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(s, 3), false);
+    assert.strictEqual(s.board[3].player, '⭕');
+    const g = game('giant', 'electrician');
+    g.heartTurn = true; g.life = 9;
+    g.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(g, 3), true); // 巨人は奪える
+    const o = game('you', 'poisoner');
+    o.heartTurn = true; o.life = 9;
+    o.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(o, 3), true); // 雷霆の巫以外は従来どおり
+});
+
 test('雷霆の巫の弱点: ⚡付き自陣マスは自分でも触れない(強化もできない)', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.life = 5;
@@ -2088,7 +2104,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp']);
 });
 
 
@@ -3438,5 +3454,172 @@ test('墓守の供物: ネクロマンサーの墓地は二重に数えない（
     e.SKILLS.graveOffering(s);
     assert.strictEqual(grave - s.necroCost[0], 1);
 });
+
+test('オブジェクト: スキルで空きマスを選んで設置（コスト基準どおり）。埋まったマスは選び直せる。列には数えない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(21) });
+    s.magic[0] = 30;
+    assert.deepStrictEqual([e.skillCosts.onClickBigTree, e.skillCosts.onClickDeadTree, e.skillCosts.onClickSpring, e.skillCosts.onClickFort, e.skillCosts.onClickThundercloud], [8, 5, 5, 6, 5]);
+    assert.strictEqual(e.objectLegal(s), true);
+    e.SKILLS.fort(s);
+    assert.strictEqual(s.magic[0], 30 - 6);
+    s.board[3] = { player: '⭕', bind: 1, effects: [] };
+    assert.strictEqual(e.placeMove(s, 3), false, '埋まったマスは選び直せる');
+    assert.strictEqual(s.objectPlacing, 'fort');
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.objectPlacing, null);
+    assert.strictEqual(s.board[5].object, 'fort');
+    assert.strictEqual(s.board[5].player, '💙');
+    for (const k of [0, 1, 2]) s.board[k] = { player: '💙', bind: 1, effects: [] };
+    s.board[3] = { player: '💙', bind: 1, effects: [], object: 'fort' };
+    assert.strictEqual(e.calculateWinner(e.symbolsOf(s.board)), undefined, 'オブジェクトは列に数えない');
+});
+
+test('オブジェクト: 手番開始時の効果（大木のマジック・砦のライフ・泉のライフ期待値）は持ち主の手番にだけ働く', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(22) });
+    s.board[5] = { player: '💙', bind: 4, effects: [], object: 'bigTree' };
+    s.board[6] = { player: '💙', bind: 6, effects: [], object: 'fort' };
+    s.board[7] = { player: '💙', bind: 2, effects: [] };
+    const magicBefore = s.magic[1];
+    s.currentTurn += 1; e.advanceTurn(s); // 💙 → ⭕ の手番。⭕ にはオブジェクトが無い
+    assert.strictEqual(s.board[7].bind, 2, '敵の手番開始では砦は働かない');
+    assert.strictEqual(s.magic[1] - magicBefore, 1 + 0, '標準の+1だけ');
+    const m0 = s.magic[0];
+    s.currentTurn += 1; e.advanceTurn(s); // ⭕ → 💙 の手番
+    assert.strictEqual(s.magic[0] - m0, 1 + 3, '標準の+1と大木の+3');
+    assert.strictEqual(s.board[7].bind, 3, '砦: 周囲の自陣コマのライフ+1');
+    assert.strictEqual(s.board[5].bind, 5, '隣の大木も自陣のコマなので砦で+1（減衰では減らない）');
+    assert.strictEqual(s.board[6].bind, 6, '砦自身のライフは増減しない');
+});
+
+test('オブジェクト: 自陣のオブジェクトは通常のコマで乗っ取れる。敵のものはライフ0になるまで乗っ取れない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(23) });
+    s.life = 4;
+    s.board[1] = { player: '💙', bind: 6, effects: [], object: 'fort' };
+    assert.strictEqual(e.placeMove(s, 1), true);
+    assert.strictEqual(s.board[1].object, undefined);
+    assert.strictEqual(s.board[1].player, '💙');
+    assert.strictEqual(s.board[1].bind, 4);
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(24) });
+    t.life = 4;
+    t.board[2] = { player: '⭕', bind: 3, effects: [], object: 'spring' };
+    assert.strictEqual(e.placeMove(t, 2), false, 'ライフが残る敵のオブジェクトには着手できない');
+    t.giantHit = true;
+    t.board[2].bind = 1;
+    t.life = 9;
+    const g = e.newGame({ chars: ['giant', 'you'], rng: e.makeRng(27) });
+    g.life = 9;
+    g.board[2] = { player: '⭕', bind: 3, effects: [], object: 'spring' };
+    assert.strictEqual(e.placeMove(g, 2), true);
+    assert.strictEqual(g.board[2].player, '⭕', '巨人でもライフが残る敵のオブジェクトは乗っ取れない');
+    assert.strictEqual(g.board[2].object, 'spring');
+    assert.strictEqual(g.board[2].bind, 0);
+    t.board[2].bind = 0;
+    t.life = 4;
+    assert.strictEqual(e.placeMove(t, 2), true);
+    assert.strictEqual(t.board[2].player, '💙');
+    assert.strictEqual(t.board[2].object, undefined);
+});
+
+test('オブジェクト: ライフは減衰しない。大木は🔥で即壊れ、砦は壊れない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(25) });
+    s.life = 4;
+    s.board[0] = { player: '⭕', bind: 3, effects: [], object: 'spring' };
+    s.board[1] = { player: '⭕', bind: 3, effects: [] };
+    s.board[10] = { player: '💙', bind: 1, effects: [] };
+    e.placeMove(s, 15); // 2人戦は着手のたびに減衰
+    assert.strictEqual(s.board[0].bind, 3);
+    assert.ok(s.board[1].bind < 3);
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(26) });
+    t.board[4] = { player: '💙', bind: 3, effects: [], object: 'bigTree' };
+    t.board[5] = { player: '💙', bind: 6, effects: [], object: 'fort' };
+    e.SKILLS; // 参照だけ（ignite は shared/thermal）
+    const thermal = require('./shared/thermal');
+    thermal.ignite(t.board, [4, 5], 4);
+    assert.strictEqual(t.board[4].player, undefined);
+    assert.strictEqual(t.board[5].object, 'fort');
+});
+
+test('オブジェクト: 生命の泉は手番開始時のライフ期待値を+2する（泉のある席のライフが平均で高い）', () => {
+    let withSpring = 0, without = 0, n = 0;
+    for (let seed = 1; seed <= 120; seed++) {
+        const a = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(seed) });
+        const b = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(seed) });
+        b.board[0] = { player: '💙', bind: 4, effects: [], object: 'spring' };
+        for (const g of [a, b]) { g.currentTurn += 1; e.advanceTurn(g); g.currentTurn += 1; e.advanceTurn(g); }
+        withSpring += b.life; without += a.life; n++;
+    }
+    const diff = (withSpring - without) / n;
+    assert.ok(diff > 1.2 && diff < 2.8, 'ライフ期待値の差はおよそ+2: ' + diff);
+});
+
+test('オブジェクト: ライフ0の敵のオブジェクトは、自分のオブジェクトとして乗っ取るか、自陣のコマとして置き換えるかを選べる', () => {
+    for (const asObject of [false, true]) {
+        const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(31) });
+        s.life = 4;
+        s.board[2] = { player: '⭕', bind: 0, effects: [], object: 'spring' };
+        s.captureAsObject = asObject;
+        assert.strictEqual(e.placeMove(s, 2), true);
+        assert.strictEqual(s.board[2].player, '💙');
+        assert.strictEqual(s.board[2].object, asObject ? 'spring' : undefined);
+        assert.strictEqual(s.captureAsObject, false, '着手のたびにリセット');
+    }
+});
+
+test('オブジェクト: エフェクトだけでなくダメージ系スキルも通常のコマと同じように受ける（スラッシュでライフ0・ストンプ/審判の日/パーフェクトゲームで破壊・火炎で1ダメージ）', () => {
+    const obj = (bind = 5) => ({ player: '⭕', bind, effects: [], object: 'fort' });
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(41) });
+    s.magic[0] = 99;
+    s.board[3] = obj();
+    e.SKILLS.slash(s); // 右上→左下の斜め: ライフを0にする
+    assert.strictEqual(s.board[3].bind, 0);
+    assert.strictEqual(s.board[3].object, 'fort', 'ライフ0になるだけで、乗っ取るまでオブジェクトのまま');
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(42) });
+    t.board[5] = obj();
+    require('./shared/blast').stomp(t.board, 5, '💙', 3);
+    assert.strictEqual(t.board[5].object, undefined, 'ストンプで敵のオブジェクトは破壊される');
+    const u = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(43) });
+    u.magic[0] = 99;
+    u.board[5] = obj();
+    e.SKILLS.perfectGame(u);
+    assert.strictEqual(u.board[5].player, undefined);
+    const f = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(44) });
+    f.board[5] = obj();
+    require('./shared/thermal').ignite(f.board, [5], 4);
+    assert.strictEqual(f.board[5].bind, 4, '火炎の付与で1ダメージ');
+});
+
+test('市場: 手番ごとに1回、シャッフルが無料（2回目は有料・手番が変わると戻る・敵の市場は働かない）', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(51) });
+    s.magic[0] = 10;
+    s.board[2] = { player: '⭕', bind: 5, effects: [], object: 'market' };
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 9, '敵の市場は働かない');
+    s.board[1] = { player: '💙', bind: 5, effects: [], object: 'market' };
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 9, '1回目は無料');
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 8, '2回目は有料');
+    s.currentTurn += 1; e.advanceTurn(s); s.currentTurn += 1; e.advanceTurn(s);
+    s.magic[0] = 10;
+    e.shuffleHand(s);
+    assert.strictEqual(s.magic[0], 10, '次の自分の手番では再び無料');
+});
+
+test('聖域: 周囲の自陣のコマは着手ごとの減衰を受けない。毒沼は手番開始時に周囲の敵コマへ☠', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(52) });
+    s.life = 4;
+    s.board[5] = { player: '⭕', bind: 5, effects: [], object: 'sanctuary' };
+    s.board[4] = { player: '⭕', bind: 5, effects: [] }; // 守られる
+    s.board[15] = { player: '⭕', bind: 5, effects: [] }; // 守られない
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[4].bind, 5);
+    assert.ok(s.board[15].bind < 5);
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(53) });
+    t.board[5] = { player: '⭕', bind: 5, effects: [], object: 'poisonSwamp' };
+    t.board[6] = { player: '💙', bind: 5, effects: [] };
+    t.currentTurn += 1; e.advanceTurn(t); // ⭕の手番開始: 毒沼が💙のコマに☠
+    assert.ok(t.board[6].effects.some((x) => x.effect === '☠'));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

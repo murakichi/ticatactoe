@@ -759,6 +759,24 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
     const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
     const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
 
+    it('氷結中の空きマスが行0の列を塞いでいるとき、隣の敵コマを火遁で燃やして氷結を溶かせば組めるなら、その敵コマを返す（組める盤面や溶かしても組めない盤面は null）', () => {
+        const b = nearFull();
+        put(b, 0, '💙', 3);
+        b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 行0の1が氷結中の空きマス
+        const ai = mk();
+        expect(ai.floodComboWins(b)).toBe(false); // 氷結中のマスは式神にできないので列が完成しない
+        expect(ai.comboThawTarget(b)).toBe(5); // 1の真下の5(敵を優先)を燃やすと1の氷結が溶けて組める
+        const open = nearFull();
+        put(open, 0, '💙', 3);
+        expect(ai.comboThawTarget(open)).toBeNull(); // すでに組める
+        const sealed = nearFull();
+        put(sealed, 0, '💙', 3);
+        sealed[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
+        sealed[5] = { player: '⭕', bind: 3, effects: [{ effect: '🔑' }] }; // 隣のコマがロック中で燃やせない
+        sealed[0] = { player: '💙', bind: 3, effects: [{ effect: '🔑' }] };
+        expect(ai.comboThawTarget(sealed)).toBeNull();
+    });
+
     it('陰で魔力に余裕があれば、敵コマの近くに式神を置く', () => {
         const b = emptyBoard();
         put(b, 0, '⭕', 3);
@@ -1845,5 +1863,113 @@ describe('縮地の連打', () => {
         expect(r.chargeClicks).toEqual([{ skill: 'onClickRelocate', target: 12, target2: 2 }]);
         expect(r.move).toBe(3);
         expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
+    });
+});
+
+describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残る全破壊）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const BOLT = { effect: '⚡' as const };
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const put = (b: SquareInfo[], who: '💙' | '⭕', cells: number[], bolt = false) => cells.forEach((i) => (b[i] = { player: who, bind: 5, effects: bolt ? [{ ...BOLT }] : [] }));
+    const run = (b: SquareInfo[], magic: number, hand: number[]) => new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'tactician']).makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    const castsPG = (r: ReturnType<typeof run>) => [...(r.skills ?? []), ...(r.chargeClicks?.map((c) => c.skill) ?? [])].includes('onClickPerfectGame');
+
+    it('使う（即勝ち）: 自陣の⚡3つの列を敵のコマが塞いでいる → 撃ってから、その空いたマスに置いて勝つ', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11]);
+        const r = run(b, 10, [102, 21, 23]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickPerfectGame']);
+        expect(r.move).toBe(3);
+    });
+    it('使う（即勝ち）: 魔力が足りなくても、大特価を先に撃てば届く', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11]);
+        const r = run(b, 7, [102, 58, 21]);
+        expect(r.chargeClicks?.map((c) => c.skill)).toEqual(['onClickClearance', 'onClickPerfectGame']);
+        expect(r.move).toBe(3);
+    });
+    it('撃たない: 塞いでいるのが🔑ロックのコマ（壊せない）なら即勝ちにならない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        b[3] = { player: '⭕', bind: 5, effects: [{ effect: '🔑' }] };
+        expect(castsPG(run(b, 10, [102, 21, 23]))).toBe(false);
+    });
+    it('撃たない: 自陣の3つが⚡でなく壊れてしまう（残らない）なら即勝ちにならない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2]);
+        put(b, '⭕', [3, 7]);
+        expect(castsPG(run(b, 10, [102, 21, 23]))).toBe(false);
+    });
+    it('ためる: 即勝ちが見えて魔力が足りず相手のリーチも無いとき、駒を置かずチャージで魔力をためる', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 10]); // 敵は塞ぐコマ1つ+別の1つ（リーチなし）
+        const r = run(b, 8, [102, 21, 23]);
+        expect(r.skills).toEqual(['onClickCharge']);
+        expect(r.move).toBeNull();
+    });
+    it('ためない: 届く見込みが無い（あと7魔力以上）ときはチャージで待たない', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 10]); // 敵は塞ぐコマ1つ+別の1つ（リーチなし）
+        expect(run(b, 2, [102, 21, 23]).skills).not.toContain('onClickCharge');
+    });
+    it('ためない: 相手にリーチがあるときは、チャージせず通常どおり守る', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2], true);
+        put(b, '⭕', [3, 7, 11, 5, 6]); // 4-5-6-7 の列で敵がリーチ
+        expect(run(b, 8, [102, 21, 23]).skills).not.toContain('onClickCharge');
+    });
+    it('使う: 自陣が全て⚡で壊れず、敵の壊れるコマが4つ', () => {
+        const b = empty();
+        put(b, '💙', [5, 6, 9], true);
+        put(b, '⭕', [0, 3, 12, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(true);
+    });
+    it('使わない: 自陣の壊れるコマの方が多い（自分が損をする）', () => {
+        const b = empty();
+        put(b, '💙', [0, 1, 2, 3, 4]);
+        put(b, '⭕', [10, 11, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(false);
+    });
+    it('使わない: 敵の壊れるコマが少なく（2つ以下）リーチも無い', () => {
+        const b = empty();
+        put(b, '💙', [5], true);
+        put(b, '⭕', [0, 15]);
+        expect(castsPG(run(b, 10, [102, 0, 3]))).toBe(false);
+    });
+    it('使わない: 魔力が足りない（コスト10）', () => {
+        const b = empty();
+        put(b, '💙', [5, 6, 9], true);
+        put(b, '⭕', [0, 3, 12, 15]);
+        expect(castsPG(run(b, 6, [102, 0, 3]))).toBe(false);
+    });
+});
+
+describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − 氷結の数）を遅らせる', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const FRZ = { effect: '❄' as const };
+    const run = (cryoMagic: number, frost: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        b[5] = { player: '⭕', bind: 5, effects: Array.from({ length: frost }, () => ({ ...FRZ })) };
+        return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
+    };
+    it('氷結が無ければ実コスト10: 氷室の次の手番の魔力が10〜12に届くなら撃つ', () => {
+        expect(run(9, 0, [98, 21, 23]).skills).toContain('onClickNightVeil');
+        expect(run(11, 0, [98, 21, 23]).skills).toContain('onClickNightVeil');
+    });
+    it('氷結が増えると実コストが下がり、その分だけ低い魔力でも撃つ（❄4つ → 実コスト6）', () => {
+        expect(run(5, 4, [98, 21, 23]).skills).toContain('onClickNightVeil');
+        expect(run(5, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+    });
+    it('届かない（実コスト未満）か、+3でも遅らせられない（実コスト+3以上）なら撃たない', () => {
+        expect(run(5, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+        expect(run(12, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
     });
 });

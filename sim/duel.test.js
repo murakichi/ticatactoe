@@ -61,13 +61,23 @@ test('見落とし防止: 相手の3連の空き1マスが勝ち手として検�
     assert.deepStrictEqual(cells(threat.winCells(s, s.board, OP, false)), [8]);
 });
 
-test('見落とし防止: ライフ0の自駒は奪取されるので勝ち手に含まれ、ライフが残る駒は含まれない', () => {
+test('見落とし防止: ライフ0の自駒は奪取されるので勝ち手に含まれ、ライフが残る駒は含まれない（雷霆の巫以外）', () => {
     const s = fresh();
+    s.chars = ['poisoner', 'cryomancer']; // 雷霆の巫のコマはライフ0でも奪われない（下のテスト）
     [0, 4, 12].forEach((i) => put(s, i, OP));
     put(s, 8, ME, 0);
     assert.deepStrictEqual(cells(threat.winCells(s, s.board, OP, false)), [8]);
     put(s, 8, ME, 3);
     assert.deepStrictEqual(threat.winCells(s, s.board, OP, false), []);
+});
+
+test('雷霆の巫のコマは、ライフ0でも着手で奪われない（勝ち手に含まれない）', () => {
+    const s = fresh();
+    s.chars = ['electrician', 'cryomancer'];
+    [0, 4, 12].forEach((i) => put(s, i, OP));
+    put(s, 8, ME, 0);
+    assert.deepStrictEqual(threat.winCells(s, s.board, OP, false), []);
+    assert.strictEqual(threat.takeable(s, s.board, 8, OP, true), false);
 });
 
 test('見落とし防止: 着手後の減衰・毒でライフが尽きる駒は decayed=true のときだけ勝ち手に含まれる', () => {
