@@ -1930,3 +1930,23 @@ describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残
         expect(castsPG(run(b, 6, [102, 0, 3]))).toBe(false);
     });
 });
+
+describe('雷霆AI: 夜の帳で氷室の絶対零度（コスト10）を遅らせる', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (cryoMagic: number, hand: number[]) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
+    };
+    it('氷室の次の手番の魔力が10〜12に届くなら、夜の帳を撃つ', () => {
+        expect(run(9, [98, 21, 23]).skills).toContain('onClickNightVeil');
+        expect(run(11, [98, 21, 23]).skills).toContain('onClickNightVeil');
+    });
+    it('届かない（9未満）か、+3でも遅らせられない（13以上）なら撃たない', () => {
+        expect(run(5, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+        expect(run(12, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+    });
+});
