@@ -19,8 +19,8 @@ import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..104)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 105;
+// 汎用スキルプールの大きさ (idx 0..105)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 106;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -448,6 +448,37 @@ class AIPlayer {
         // 届かない: あと PG_HOLD_GAP 以内なら、次の手番で撃てるように他のスキルの支払いを控える
         if (magic >= pg - PG_HOLD_GAP) this.holdPG = pg;
         return null;
+    }
+
+    /** 帯電サイレンスで⚡を払うコマ: 自陣の⚡のコマのうち、自陣のリーチ列に入っていないものを優先し、⚡の多いものを選ぶ（無ければ null） */
+    boltSilenceTarget(board: SquareInfo[]): number | null {
+        const lines = geometryForCells(board.length).winLines;
+        const inReach = new Set<number>();
+        for (const line of lines) {
+            const mine = line.filter((i) => board[i].player === this.playerSymbol);
+            if (mine.length >= 3 && line.every((i) => !board[i].player || board[i].player === this.playerSymbol)) mine.forEach((i) => inReach.add(i));
+        }
+        let best: number | null = null;
+        let bestKey = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || isDormant(sq)) return;
+            const n = chargeStacks(sq);
+            if (n === 0) return;
+            const key = (inReach.has(i) ? 0 : 100) + n;
+            if (key > bestKey) { best = i; bestKey = key; }
+        });
+        return best;
+    }
+
+    /** 相手のだれかが、次の手番に固有スキルを撃てそうな魔力に届いているか（氷室の番人は絶対零度の実コスト = 10 − 盤面の❄の数で見積もる） */
+    opponentsCanCastBig(board: SquareInfo[], seatMagic: number[]): boolean {
+        const frost = board.reduce((n, sq) => n + frozenStacks(sq), 0);
+        return this.opponents.some((o) => {
+            const seat = seatOf(o);
+            const ch = this.characters[seat];
+            const need = ch === 'cryomancer' ? Math.max(1, GLACIER_COST - frost) : EXCLUSIVE_MIN_MAGIC[ch ?? 'you'] ?? Infinity;
+            return (seatMagic[seat] ?? 0) + 1 >= need;
+        });
     }
 
     bestChargeOneTarget(board: SquareInfo[]): number | null {
@@ -2604,6 +2635,20 @@ class AIPlayer {
                 board = board.slice();
                 applyJammer(board, target, this.sizeOf(board), this.playerSymbol);
                 magic -= this.calculateAICost(costs.onClickJammer, false, false, 'onClickJammer');
+                this.updateShield(board);
+            }
+        }
+        // 帯電サイレンス（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
+        // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
+        if (this.character === 'electrician' && availableSkills.includes(105) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
+            const target = this.boltSilenceTarget(board);
+            if (target !== null && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
+                chargeClicks.push({ skill: 'onClickBoltSilence', target });
+                board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                const at = board[target].effects.findIndex((e) => e.effect === '⚡');
+                board[target] = { ...board[target], effects: board[target].effects.filter((_, k) => k !== at) };
+                magic -= cost;
                 this.updateShield(board);
             }
         }

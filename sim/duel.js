@@ -42,7 +42,7 @@ const IDX_SKILL = {
     56: 'vitalMarkdown', 57: 'uniqueDiscount', 58: 'clearance', 60: 'counterMarkdown', 61: 'burnout', 62: 'leafToken',
     63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'leafAll', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
-    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
+    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 105: 'boltSilence', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
     84: 'leafDrop', 85: 'kindling', 86: 'leafCloak', 87: 'tinder', 92: 'smallFry', 93: 'firstFrost', 94: 'gather',
     95: 'burnOff', 96: 'freeToken', 97: 'spark', 98: 'nightVeil', 99: 'graveDiscount', 100: 'poisonWard', 101: 'graveOffering', 102: 'perfectGame', 103: 'helper',
 };
@@ -111,7 +111,7 @@ function build(cfg) {
 
 const PENDING = ['useLock', 'useStomp', 'useJudgeDay', 'useInjection', 'usePandemic', 'useBuds', 'useChargeOne', 'useChargeSpread', 'useChargeArea',
     'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter', 'useSwidden', 'useKimon', 'useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze',
-    'useSucker', 'useIgnite', 'useSacrifice', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
+    'useSucker', 'useIgnite', 'useSacrifice', 'useStash', 'useBoltSilence', 'useThunderFire', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
 const pendingOf = (s) => PENDING.filter((k) => { const v = s[k]; return Array.isArray(v) ? v[0] : !!v; });
 
 function wrapSkills(log) {

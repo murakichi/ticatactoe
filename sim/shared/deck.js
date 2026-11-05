@@ -105,6 +105,7 @@ exports.SKILL_CATALOG = [
     { idx: 102, name: 'パーフェクトゲーム', icon: '🎳', category: 'attack', costKey: 'onClickPerfectGame', desc: '盤面のコマを敵味方とも全て破壊します（🔑ロック・⚡無敵のコマは除き、氷結中のコマは❄が1つ減るだけ）' },
     { idx: 103, name: '超助っ人', icon: '🦸', category: 'token', costKey: 'onClickHelper', desc: '🔥❄⚡☠🌱🍂のうちランダムな1つを付けたコマを、自陣のランダムな空きマスに置きます（ターン1回）' },
     { idx: 104, name: '柳の下に二匹目がいた', icon: '🐟', category: 'support', costKey: 'onClickSecondCatch', desc: '自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動します。この手番に基礎コスト7以上のスキルを使っていれば0コストで使えます' },
+    { idx: 105, name: '帯電サイレンス', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を1つ選んで1スタック取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
