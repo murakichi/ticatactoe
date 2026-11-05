@@ -62,7 +62,7 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     market: { idx: 110, name: '市場', icon: '🏪', life: OBJECT_LIFE, costKey: 'onClickMarket', desc: '手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になる' },
     sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲八マスの自陣のコマは、時間経過のライフ減衰を受けない' },
     poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲八マスの敵のコマのうちランダムな1つに☠を付ける' },
-    workshop: { idx: 119, name: '大工房', icon: '🏭', life: OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
+    workshop: { idx: 120, name: '大工房', icon: '🏭', life: OBJECT_LIFE, costKey: 'onClickWorkshop', desc: `働いている間、ベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルのコストを${WORKSHOP_PARAMS.cut}軽減する（重ならない）。設置スキルは、直前の相手の手番にベースコスト${WORKSHOP_PARAMS.bigBase}以上のスキルが使われたか、スキルに合計${WORKSHOP_PARAMS.freeSpent}以上のマジックが払われていたら0コスト` },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -180,7 +180,7 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
     return res;
 };
 
-// ---- オブジェクトを壊す・強くするスキル（汎用スキル idx 113〜118）----
+// ---- オブジェクトを壊す・強くするスキル（汎用スキル idx 114〜119）----
 // 壊す: 解体(敵のオブジェクト1つを壊す)・風化(敵のオブジェクト1つのライフを0にする)・地ならし(敵のオブジェクトを全て壊す)
 // 強くする: 補強工事(自陣のオブジェクト1つのライフ+3)・増築(自陣のオブジェクト全てのライフ+2)・分譲(自陣のオブジェクト1つを複製してランダムな空きマスに置く)
 
@@ -195,12 +195,12 @@ export type ObjectSkillDef = {
 };
 
 export const OBJECT_SKILLS = {
-    demolish: { idx: 113, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
-    weather: { idx: 114, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
-    levelAll: { idx: 115, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
-    reinforce: { idx: 116, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: `自陣のオブジェクトを1つ選んで、ライフを+${OBJECT_PARAMS.reinforceLife}します` },
-    expandAll: { idx: 117, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: `自陣のオブジェクトの全てのライフを+${OBJECT_PARAMS.expandLife}します` },
-    duplicate: { idx: 118, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+    demolish: { idx: 114, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    weather: { idx: 115, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    levelAll: { idx: 116, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）' },
+    reinforce: { idx: 117, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: `自陣のオブジェクトを1つ選んで、ライフを+${OBJECT_PARAMS.reinforceLife}します` },
+    expandAll: { idx: 118, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: `自陣のオブジェクトの全てのライフを+${OBJECT_PARAMS.expandLife}します` },
+    duplicate: { idx: 119, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
 } as const;
 
 // 型の確認用（OBJECT_SKILLS の各要素が ObjectSkillDef に合うこと）

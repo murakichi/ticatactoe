@@ -2104,7 +2104,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop']);
 });
 
 
@@ -3454,6 +3454,32 @@ test('墓守の供物: ネクロマンサーの墓地は二重に数えない（
     e.SKILLS.graveOffering(s);
     assert.strictEqual(grave - s.necroCost[0], 1);
 });
+test('沈黙は雷なり: ⚡のある自陣のコマを選んで⚡を1スタック払い、相手全員が次の手番スキルを使えない。⚡が無いと撃てない（コスト4）', () => {
+    const s = e.newGame({ chars: ['electrician', 'you'], rng: e.makeRng(17) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.boltSilenceLegal(s), false);
+    e.SKILLS.boltSilence(s); // ⚡が無いので何も起きない（魔力も払わない）
+    assert.strictEqual(s.magic[0], 30);
+    assert.strictEqual(s.useBoltSilence, false);
+    s.board[0] = { player: '💙', bind: 4, effects: [BOLT, BOLT] }; // 2スタック: 1つだけ払う
+    s.board[1] = { player: '💙', bind: 4, effects: [] };
+    s.board[2] = { player: '⭕', bind: 4, effects: [BOLT] };
+    assert.strictEqual(e.boltSilenceLegal(s), true);
+    assert.strictEqual(e.skillCosts.onClickBoltSilence, 4);
+    e.SKILLS.boltSilence(s);
+    assert.strictEqual(s.magic[0], 26);
+    assert.strictEqual(s.useBoltSilence, true);
+    assert.strictEqual(e.placeMove(s, 1), false); // ⚡のない自陣は選び直せる
+    assert.strictEqual(e.placeMove(s, 2), false); // 敵のコマは選べない
+    assert.strictEqual(s.silenced[1], false);
+    assert.strictEqual(e.placeMove(s, 0), true);
+    assert.strictEqual(s.useBoltSilence, false);
+    assert.strictEqual(boltsOn(s.board[0]), 1); // 1スタックだけ払う
+    assert.strictEqual(boltsOn(s.board[2]), 1); // 敵の⚡はそのまま
+    assert.strictEqual(s.silenced[1], true);
+    assert.strictEqual(s.silenced[0], false); // 自分は封じられない
+});
+
 
 test('オブジェクト: スキルで空きマスを選んで設置（コスト基準どおり）。埋まったマスは選び直せる。列には数えない', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(21) });

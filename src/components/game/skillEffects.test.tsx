@@ -46,6 +46,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickRandomCast: { own: 'picked.idx' },
     onClickSecondCatch: { own: 'second.idx' },
     onClickSilence: 'silence',
+    onClickBoltSilence: 'silence',
     onClickFreeze: 'freeze',
     onClickFrostArea: 'freeze',
     onClickIcicle: 'freeze',

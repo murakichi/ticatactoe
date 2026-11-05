@@ -5,6 +5,7 @@ exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = export
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const bigSkills_1 = require("./bigSkills");
+const objects_1 = require("./objects");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -20,8 +21,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..119)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 120;
+// 汎用スキルプールの大きさ (idx 0..120)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 121;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -99,6 +100,15 @@ const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
+/** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
+const BIG_TREE_MAX = 1;
+/** 雷雲を立てる条件: 自陣の雷雲の上限 / 盤面の空きの下限 / 周囲八マスの敵のコマの下限 */
+const CLOUD_MAX = 1;
+const CLOUD_MIN_EMPTY = 4;
+const CLOUD_MIN_FOES = 2;
+const BIG_TREE_MIN_EMPTY = 6;
+/** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
+const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
 const PG_HOLD_FREE = ['onClickPerfectGame', 'onClickClearance', 'onClickCounterMarkdown', 'onClickMarkdown'];
 const POISON_WARD_MIN_PIECES = 3;
@@ -169,6 +179,10 @@ class AIPlayer {
         this.lastSpent = 0;
         /** 軽減札を撃った場合を仮定した「次に打つスキル」の軽減量（計画の比較中だけ使う） */
         this.hypoCut = 0;
+        /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
+        this.ownTrees = 0;
+        /** 自陣の働いている雷雲の数 */
+        this.ownClouds = 0;
         /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
         this.holdPG = 0;
         this.skillKinds = new Set();
@@ -422,6 +436,91 @@ class AIPlayer {
         if (magic >= pg - PG_HOLD_GAP)
             this.holdPG = pg;
         return null;
+    }
+    /** 沈黙は雷なりで⚡を払うコマ: 自陣の⚡のコマのうち、自陣のリーチ列に入っていないものを優先し、⚡の多いものを選ぶ（無ければ null） */
+    boltSilenceTarget(board) {
+        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
+        const inReach = new Set();
+        for (const line of lines) {
+            const mine = line.filter((i) => board[i].player === this.playerSymbol);
+            if (mine.length >= 3 && line.every((i) => !board[i].player || board[i].player === this.playerSymbol))
+                mine.forEach((i) => inReach.add(i));
+        }
+        let best = null;
+        let bestKey = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || (0, thermal_1.isDormant)(sq))
+                return;
+            const n = (0, charge_1.chargeStacks)(sq);
+            if (n === 0)
+                return;
+            const key = (inReach.has(i) ? 0 : 100) + n;
+            if (key > bestKey) {
+                best = i;
+                bestKey = key;
+            }
+        });
+        return best;
+    }
+    /** 相手のだれかが、次の手番に固有スキルを撃てそうな魔力に届いているか（氷室の番人は絶対零度の実コスト = 10 − 盤面の❄の数で見積もる） */
+    opponentsCanCastBig(board, seatMagic) {
+        const frost = board.reduce((n, sq) => n + (0, thermal_1.frozenStacks)(sq), 0);
+        return this.opponents.some((o) => {
+            var _a, _b;
+            const seat = (0, Player_1.seatOf)(o);
+            const ch = this.characters[seat];
+            const need = ch === 'cryomancer' ? Math.max(1, GLACIER_COST - frost) : (_a = EXCLUSIVE_MIN_MAGIC[ch !== null && ch !== void 0 ? ch : 'you']) !== null && _a !== void 0 ? _a : Infinity;
+            return ((_b = seatMagic[seat]) !== null && _b !== void 0 ? _b : 0) + 1 >= need;
+        });
+    }
+    /** 大木を置くマス: 敵の列（敵のコマがあり自陣のコマが無い列）を潰せて、自陣の列（自陣のコマがあり敵のコマが無い列）を潰さないマス。置ける空きマスが無ければ null */
+    bestTreeCell(board) {
+        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
+        let best = null;
+        let bestScore = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            let score = 0;
+            for (const line of lines) {
+                if (!line.includes(i))
+                    continue;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                if (foes > 0 && mine === 0)
+                    score += foes * 2; // 敵の列を潰す
+                if (mine > 0 && foes === 0)
+                    score -= mine * 3; // 自陣の列を潰さない
+                if (mine === 0 && foes === 0)
+                    score -= 0.5; // 空の列も少し惜しい
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    }
+    /** 雷雲を置くマス: 周囲八マスに敵のコマ（⚡の無敵・🔑でない）が CLOUD_MIN_FOES 個以上あるマスのうち、敵が多く自陣が少ないもの。無ければ null */
+    bestCloudCell(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestScore = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            const around = geo.surroundRange(i);
+            const foes = around.filter((j) => this.isEnemy(board[j].player) && !(0, charge_1.isGuarded)(board[j], this.characters) && board[j].bind > 0).length;
+            const mine = around.filter((j) => board[j].player === this.playerSymbol).length;
+            if (foes < CLOUD_MIN_FOES)
+                return;
+            const score = foes * 2 - mine * 0.5;
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
     }
     bestChargeOneTarget(board) {
         const size = this.sizeOf(board);
@@ -2350,7 +2449,13 @@ class AIPlayer {
      * 1手番の計画。魔力が大きく余っているのに使う額が少ない計画なら、手札を引き直す（引き直し回数を超えて RICH_EXTRA_REROLLS 回まで。
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
-    makeMove(...args) {
+    makeMove(...argsIn) {
+        // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
+            ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
+            : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
         if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS)
@@ -2849,6 +2954,53 @@ class AIPlayer {
                 (0, charge_1.applyJammer)(board, target, this.sizeOf(board), this.playerSymbol);
                 magic -= this.calculateAICost(costs.onClickJammer, false, false, 'onClickJammer');
                 this.updateShield(board);
+            }
+        }
+        // 沈黙は雷なり（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
+        // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
+        if (this.character === 'electrician' && availableSkills.includes(113) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+            const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
+            const target = this.boltSilenceTarget(board);
+            if (target !== null && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
+                chargeClicks.push({ skill: 'onClickBoltSilence', target });
+                board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                const at = board[target].effects.findIndex((e) => e.effect === '⚡');
+                board[target] = { ...board[target], effects: board[target].effects.filter((_, k) => k !== at) };
+                magic -= cost;
+                this.updateShield(board);
+            }
+        }
+        // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
+        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
+        // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < BIG_TREE_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
+            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
+            const cell = this.bestTreeCell(board);
+            // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
+            if (cell !== null && magic < cost && magic >= cost - BIG_TREE_HOLD_GAP)
+                this.holdPG = cost;
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickBigTree', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
+                magic -= cost;
+            }
+        }
+        // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
+        // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.thundercloud.idx) && this.ownClouds < CLOUD_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= CLOUD_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
+            const cell = this.bestCloudCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickThundercloud', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
             }
         }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）

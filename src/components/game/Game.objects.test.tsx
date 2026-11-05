@@ -65,7 +65,7 @@ describe('オブジェクト（ブラウザ版）', () => {
         expect(cells(container)[2].querySelector('.life')?.textContent).toBe('7');
     });
     it('補強工事: 使ってから自陣のオブジェクトを選ぶとライフ+3。対象でないマスは選び直せる', () => {
-        const deck = [0, 1, 2, 3, 4, 5, 6, 7, 8, 105, 116, 118]; // 手札は末尾から 分譲・補強工事・大木
+        const deck = [0, 1, 2, 3, 4, 5, 6, 7, 8, 105, 117, 119]; // 手札は末尾から 分譲・補強工事・大木
         const { container } = render(<Game players={[{ character: 'you', isAI: false, deck }, { character: 'you', isAI: false, deck }]} />);
         const btn = (re: RegExp) => screen.getByRole('button', { name: re }) as HTMLButtonElement;
         let free = 15;
