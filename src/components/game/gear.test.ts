@@ -259,3 +259,34 @@ describe('AIが選ぶギア', () => {
         expect(pickRecommendedGears('tactician', () => 0.99)).toEqual(recommendedGears('tactician'));
     });
 });
+
+describe('春雷（springThunderThaw）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { springThunderThaw } = require('./gear');
+    const empty = () => Array.from({ length: 16 }, () => ({ player: undefined as any, bind: 0, effects: [] as any[] }));
+    const mine = (b: any[], cells: number[]) => cells.forEach((i) => (b[i] = { player: '💙', bind: 3, effects: [] }));
+    it('自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く', () => {
+        const b = empty();
+        mine(b, [0, 1, 2]);
+        b[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }, { effect: '❄' }] }; // ❄が2つ
+        expect(springThunderThaw(b, '💙')).toEqual([3]);
+        expect(b[3].effects.filter((e: any) => e.effect === '❄').length).toBe(1); // 1つだけ解く
+        expect(springThunderThaw(b, '💙')).toEqual([3]);
+        expect(b[3].effects.length).toBe(0); // 2回目で解けきる
+    });
+    it('敵のコマが入った列・リーチでない列・凍っていない空きマスは対象外', () => {
+        const b = empty();
+        mine(b, [0, 1]);
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 2つしか無い列
+        expect(springThunderThaw(b, '💙')).toEqual([]);
+        const c = empty();
+        mine(c, [0, 1, 2]);
+        c[3] = { player: undefined, bind: 0, effects: [] }; // 凍っていない空き
+        expect(springThunderThaw(c, '💙')).toEqual([]);
+        const d = empty();
+        mine(d, [0, 1]);
+        d[2] = { player: '⭕', bind: 3, effects: [] };
+        d[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 敵のコマが入った列
+        expect(springThunderThaw(d, '💙')).toEqual([]);
+    });
+});

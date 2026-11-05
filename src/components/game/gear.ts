@@ -1,5 +1,8 @@
 import { CharacterId } from '../../types/Character';
 import { SkillCosts, skillCosts } from './skillCosts';
+import { Player } from '../../types/Player';
+import { SquareInfo } from '../../types/SquareInfo';
+import { geometryForCells } from './boardGeometry';
 
 /**
  * ギア: キャラ選択時に装備する追加パッシブ。長所と短所がセットのものが多い。
@@ -28,6 +31,7 @@ export type GearId =
     | 'ailmentPact'
     | 'ruinSurge'
     | 'lastStand'
+    | 'springThunder'
     | 'scorchedEarth'
     | 'ashOffering'
     | 'frostRoot'
@@ -120,6 +124,7 @@ export const GEARS: GearDef[] = [
     { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠している🌱（敵味方問わず）1つにつき魔力+${P.rootMagic}` },
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
+    { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
@@ -300,7 +305,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
     magician: [['spellWard', 'harvest']], // 主案 spellWard,luckyPurse との差 -0.7pt（seed92/200 51.6 vs 52.3）で同程度
     yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
-    electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
+    electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
@@ -311,3 +316,22 @@ export const pickRecommendedGears = (character: CharacterId, rng: () => number =
 
 /** トークン系スキルが付けるエフェクト（伝播・収穫の対象） */
 export type TokenEffect = '🌱' | '☠' | '⚡';
+
+/**
+ * 春雷: player の自陣のリーチ（3つ＋空き1。敵のコマが無い列）の4つ目が氷結した空きマスなら、その❄を1つ解く。解いたマスを返す。
+ * 手番開始時に呼ぶ。board を直接書き換える。氷室の番人が凍らせて塞ぐ『要のマス』を、1手番に1つ解いて完成させる
+ */
+export const springThunderThaw = (board: SquareInfo[], player: Player): number[] => {
+    const thawed: number[] = [];
+    for (const line of geometryForCells(board.length).winLines) {
+        const mine = line.filter((i) => board[i].player === player).length;
+        const foes = line.filter((i) => board[i].player && board[i].player !== player).length;
+        const blocked = line.filter((i) => !board[i].player && board[i].effects.some((e) => e.effect === '❄'));
+        if (mine !== 3 || foes !== 0 || blocked.length !== 1 || thawed.includes(blocked[0])) continue;
+        const k = blocked[0];
+        const at = board[k].effects.findIndex((e) => e.effect === '❄');
+        board[k] = { ...board[k], effects: board[k].effects.filter((_, j) => j !== at) };
+        thawed.push(k);
+    }
+    return thawed;
+};

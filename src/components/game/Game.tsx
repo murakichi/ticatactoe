@@ -46,6 +46,7 @@ import {
     GEAR_PARAMS,
     gearDefOf,
     hasGear,
+    springThunderThaw,
     gearLifeBonus,
     gearLifeStd,
     gearLockBind,
@@ -884,6 +885,15 @@ export const Game = (props: GameProps) => {
                     playEffect('glacierBurst', undefined, r.damaged);
                 }
                 addCorpses(r.destroyed.length);
+            }
+            // 春雷: 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く（gear.ts）
+            if (hasGear(gearsBySeat[seatOf(nextSymbol)], 'springThunder')) {
+                const thawed = springThunderThaw(turnBoard, nextSymbol);
+                if (thawed.length > 0) {
+                    addLog(`春雷が${thawed.map(posName).join('・')}の❄を1つ解いた`);
+                    flashCells(thawed);
+                    gearTrigger('springThunder', `${thawed.map(posName).join('・')}の❄を解く`);
+                }
             }
             // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（objects.ts。魔力とライフの分は下の手番開始の計算に足す）
             const objBoard = turnBoard.slice();
