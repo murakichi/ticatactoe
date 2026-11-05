@@ -113,7 +113,7 @@ exports.SKILL_CATALOG = [
     { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になります' },
     { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
     { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
-    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を1つ選んで1スタック取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）' },
+    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を2つ選んで取り除き（同じコマから2個でも可）、相手全員が次の手番、スキルを使えなくなります（自陣の⚡が合計2個ないと使えません）' },
     { idx: 114, name: '解体', icon: '🧨', category: 'object', costKey: 'onClickDemolish', desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
     { idx: 115, name: '風化', icon: '🌫️', category: 'object', costKey: 'onClickWeather', desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ）。対象が無いと使えません' },
     { idx: 116, name: '地ならし', icon: '🚜', category: 'object', costKey: 'onClickLevelAll', desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
@@ -121,6 +121,15 @@ exports.SKILL_CATALOG = [
     { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
     { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
     { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
+    { idx: 121, name: '結界石', icon: '🪨', category: 'object', costKey: 'onClickBarrierStone', desc: '空きマスを選んで結界石を設置します。周囲八マスの自陣の式神は、時間経過のライフ減衰を受けません' },
+    { idx: 122, name: '護符の社', icon: '⛩️', category: 'object', costKey: 'onClickAmuletShrine', desc: '空きマスを選んで護符の社を設置します。手番開始時、周囲八マスの自陣の式神1体につきマジック+1を得ます（最大+3）' },
+    { idx: 123, name: '招き猫', icon: '🐈', category: 'object', costKey: 'onClickLuckyCat', desc: '空きマスを選んで招き猫を設置します。働いている間、自分のスキルのコストが1下がります（下限1・重ならない）' },
+    { idx: 124, name: '泥田坊', icon: '🌾', category: 'object', costKey: 'onClickMudField', desc: '空きマスを選んで泥田坊を設置します。働いている間、相手がトークンで置くコマのライフが0になります' },
+    { idx: 125, name: '閻魔の舌', icon: '👅', category: 'object', costKey: 'onClickTongueKing', desc: '空きマスを選んで閻魔の舌を設置します。働いている間、相手が自分のコマにエフェクトを付けると、そのコマのライフが手番の終わりに0になります' },
+    { idx: 126, name: '八卦の陣', icon: '🔯', category: 'object', costKey: 'onClickEightTrigrams', desc: '空きマスを選んで八卦の陣を設置します。周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利します。盤の端では成立しません' },
+    { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスを選んでお一人様限りの札を設置します。働いている間、相手は1ターンに新しいコマを1つしか置けません（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルも使えません）' },
+    { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスを選んで一言居士を設置します。働いている間、相手は1ターンにスキルを1つしか使えません（チャージ・シャッフル・ロックは数えません）' },
+    { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスを選んで見ざる地蔵を設置します。周囲八マスには新しくエフェクトを付けられません（手番の終わりに、その手番で付いたエフェクトが消えます）' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
@@ -135,7 +144,7 @@ exports.RECOMMENDED_DECKS = {
     tactician: [3, 9, 11, 45, 46, 50, 64, 92, 93, 94, 95, 96],
     magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 71, 72, 73, 92],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92],
     necromancer: [2, 3, 6, 8, 11, 22, 40, 50, 58, 89, 92, 95],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 50],
     electrician: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94],
@@ -153,6 +162,8 @@ exports.recommendedDeck = recommendedDeck;
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 exports.ALT_RECOMMENDED_DECKS = {
+    // 陰陽師: 主案の8(オピウム)を大木(105)に替えた案。魔力+3/手番を立てる。対強豪平均 +1.6/+1.7（seed12/300・seed33/600）で主案以上だが統計的な採用基準は満たさないので別案にする
+    yinYangMaster: [[0, 2, 3, 5, 6, 105, 10, 53, 61, 71, 72, 92]],
     // ネクロマンサー: 特売・固有割引を残す山焼き入りの旧主案と、落葉の衣・火口・無礼講の別案。統計的な基準は満たさないが同等と見て併用する(ユーザー許可)
     necromancer: [
         [0, 2, 3, 6, 8, 11, 50, 53, 57, 58, 92, 95],
@@ -191,7 +202,7 @@ exports.AI_DECK_SWAPS = 3;
  * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
  */
 exports.CORE_CARDS = {
-    yinYangMaster: [53, 71, 73],
+    yinYangMaster: [53, 71],
 };
 /**
  * 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキ（主案か別案）をベースに、AI_DECK_SWAPS 枚をデッキ外のスキルとランダムに入れ替える。

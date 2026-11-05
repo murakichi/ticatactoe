@@ -92,11 +92,11 @@ describe('デッキ', () => {
         expect(variedAIDeck('you', lcg(1), 0)).toEqual(recommendedDeck('you')); // 入れ替え0なら推奨そのまま
     });
 
-    it('variedAIDeck: 核のカード(CORE_CARDS)は入れ替えない（陰陽師は 特売/式神一括/百鬼夜行 が常に残る）', () => {
+    it('variedAIDeck: 核のカード(CORE_CARDS)は入れ替えない（陰陽師は 特売/式神一括 が常に残る）', () => {
         for (let seed = 1; seed <= 60; seed++) {
             const d = variedAIDeck('yinYangMaster', lcg(seed));
             expect(isValidDeck(d)).toBe(true);
-            [53, 71, 73].forEach((c) => expect(d).toContain(c));
+            [53, 71].forEach((c) => expect(d).toContain(c));
         }
     });
 
