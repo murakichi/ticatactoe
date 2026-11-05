@@ -124,9 +124,17 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスを選んで生命の泉を設置します。手番開始時のライフ期待値+2' },
     { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスを選んで砦を設置します。手番開始時、周囲八マスの自陣のコマのライフ+1' },
     { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスを選んで雷雲を設置します。手番開始時、周囲八マスのコマのランダムな1つに⚡を付けます' },
-    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに1回、シャッフル（手札の引き直し）が無料になります' },
+    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になります' },
     { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
     { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
+    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を1つ選んで1スタック取り除き、相手全員が次の手番、スキルを使えなくなります（自陣に⚡が無いと使えません）' },
+    { idx: 114, name: '解体', icon: '🧨', category: 'object', costKey: 'onClickDemolish', desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
+    { idx: 115, name: '風化', icon: '🌫️', category: 'object', costKey: 'onClickWeather', desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ）。対象が無いと使えません' },
+    { idx: 116, name: '地ならし', icon: '🚜', category: 'object', costKey: 'onClickLevelAll', desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
+    { idx: 117, name: '補強工事', icon: '🏗️', category: 'object', costKey: 'onClickReinforce', desc: '自陣のオブジェクトを1つ選んで、ライフを+3します。対象が無いと使えません' },
+    { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
+    { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+    { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

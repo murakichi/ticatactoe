@@ -148,7 +148,16 @@ exports.skillCosts = {
     onClickThundercloud: 5,
     onClickMarket: 3,
     onClickSanctuary: 5,
-    onClickPoisonSwamp: 5, //   毒沼(idx 112): 手番開始時、周囲八マスのランダムな敵コマに☠。基準: ☠(単価2) × 期待3手番 = 6、ランダム選択 −1。敵だけを選ぶので自傷の割引は掛けない
+    onClickPoisonSwamp: 5,
+    onClickBoltSilence: 4,
+    // オブジェクトを壊す・強くするスキル(idx 114〜119)。基準は docs/skill-cost-rules.md の「オブジェクトを壊す・強くするスキル」
+    onClickDemolish: 4,
+    onClickWeather: 3,
+    onClickLevelAll: 8,
+    onClickReinforce: 3,
+    onClickExpandAll: 4,
+    onClickDuplicate: 6,
+    onClickWorkshop: 6, //      大工房(idx 120): 働いている間ベースコスト7以上のスキルのコスト-3（重ならない）。設置は直前の相手の手番にベースコスト7以上のスキルか合計7以上のマジックが使われていれば0（反応型の導線）。基準: 大技を期待2回撃って6得、導線で最大-2が許されるので6
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

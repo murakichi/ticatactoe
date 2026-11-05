@@ -164,7 +164,7 @@ const applyJammer = (board, i, size, current) => {
     const damaged = (0, exports.jammerTargets)(board, i, size, current);
     const zeroed = [];
     for (const j of damaged) {
-        // ジャマーの電気ダメージも氷結を貫通する
+        // 氷結中のコマは jammerTargets で除外済み（ジャマーのダメージは氷結中のマスに通らない）。ここに来るのは氷結していないコマだけ
         board[j] = (0, thermal_1.applyDamage)(board[j], stacks, 'electric').sq;
         if (board[j].bind === 0)
             zeroed.push(j);
