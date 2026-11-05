@@ -97,6 +97,21 @@ const SKILL_CATALOG = [
     { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds' },
     { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds' },
     { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack' },
+    { idx: 93, name: '初霜', icon: '🧊', category: 'ice' },
+    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire' },
+    { idx: 96, name: '無礼講', icon: '🎉', category: 'support' },
+    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外）。直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
+    { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
+    { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
+    { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
+    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1を得ます（コマが消えるので、ネクロマンサーはさらに自動で墓地が貯まる仕組みと二重には数えません）' },
 ];
 
 
@@ -106,16 +121,16 @@ const CATALOG_SIZE = SKILL_CATALOG.length;
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
-    tactician: [3, 4, 9, 11, 16, 21, 23, 37, 45, 46, 12, 28],
-    magician: [2, 3, 4, 9, 10, 11, 12, 13, 35, 53, 56, 60],
+    tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
+    magician: [2, 9, 10, 11, 13, 35, 47, 53, 56, 60, 78, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 12, 71, 72, 73, 53],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
-    electrician: [21, 22, 23, 24, 26, 28, 49, 50, 51, 52, 53, 58],
-    cryomancer: [3, 8, 12, 28, 41, 42, 43, 44, 45, 46, 47, 48],
-    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 61],
-    witch: [0, 3, 5, 8, 12, 28, 44, 53, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)は置き土産(84)より強い(tune-top: 環境勝率 61.4→65.0%, seed2/200)
+    electrician: [21, 22, 23, 24, 26, 28, 50, 51, 52, 53, 58, 60],
+    cryomancer: [92, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
+    pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
+    witch: [5, 8, 12, 28, 44, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
@@ -148,10 +163,10 @@ function randomDeck(rng = Math.random) {
     return out.sort((a, b) => a - b);
 }
 
-/** AIが何も指定しないときのランダム入れ替えの枚数（推奨デッキの12枚中） */
+/** variedAIDeck(ストレステスト用)のランダム入れ替えの枚数（推奨デッキの12枚中） */
 const AI_DECK_SWAPS = 3;
 
-/** AIのデッキ: 推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ） */
+/** 【ストレステスト専用。本番のAIデッキには使わない】推奨デッキをベースに swaps 枚をデッキ外のスキルとランダムに入れ替える（rng 呼び出し順は deck.ts と同じ）。本番のAI席は pickRecommendedDeck（主案/別案の選択のみ） */
 /** キャラの勝ち筋になる核のカード。AIの入れ替えデッキでも入れ替えない（deck.ts の CORE_CARDS の複製） */
 const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
 

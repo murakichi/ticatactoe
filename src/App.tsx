@@ -19,7 +19,7 @@ import {
     randomDeck,
     recommendedDeck,
     saveDeck,
-    variedAIDeck,
+    pickRecommendedDeck,
 } from './components/game/deck';
 import { SimPanel } from './components/SimPanel';
 import styles from './App.module.css';
@@ -51,7 +51,7 @@ const CHARACTERS: CharacterDef[] = [
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージと、⚡が乗った時点の2ダメージ（雷霆以外のコマが受ける）は受けない。ライフ平均${L.electrician}。固有:帯電拡散`,
+        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージと、⚡が乗った時点の2ダメージ（雷霆以外のコマが受ける）は受けない。自分のコマはライフが0になっても着手で奪われない（巨人と満杯の盤面を除く）。ライフ平均${L.electrician}。固有:帯電拡散`,
     },
     {
         id: 'cryomancer',
@@ -110,12 +110,12 @@ export const App = () => {
             })
         );
     // 開始時に席の設定を確定する。ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）。
-    // デッキを指定していない席は推奨デッキ。ただしAI席は推奨デッキをベースに一部をランダムに入れ替える
+    // デッキを指定していない席は推奨デッキ。AI席は推奨デッキの主案と別案(複数パターン)からひとつ選ぶだけで、カードをランダムに入れ替えない
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p) => {
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: pickRecommendedGears(p.character) } : p;
             if (isValidDeck(p.deck)) return withGears;
-            return { ...withGears, deck: p.isAI ? variedAIDeck(p.character) : recommendedDeck(p.character) };
+            return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
     // デッキを自分で組んだ席が不正（12枚でない）なら開始できない
     const invalidDeckSeat = players.slice(0, playerCount).findIndex((p) => p.deck !== undefined && !isValidDeck(p.deck));

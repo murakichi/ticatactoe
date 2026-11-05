@@ -1,6 +1,7 @@
 import React from 'react';
 import { SquareInfo } from '../../types/SquareInfo';
 import { seatOf } from '../../types/Player';
+import { OBJECT_DEFS } from './objects';
 import styles from './Square.module.css';
 
 type SquareProps = {
@@ -46,6 +47,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     if (props.shielded) classes.push(styles.shielded);
     else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
     if (info.effects.some((e) => e.effect === '📜')) classes.push(styles.shikigami);
+    if (info.object) classes.push(styles.object);
     if (frozen) classes.push(styles.frozen);
     if (burning) classes.push(styles.burning);
 
@@ -63,6 +65,11 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
             onMouseLeave={props.onHoverEnd}
         >
             {props.showMark && info.player && <span className={styles.mark}>{info.player}</span>}
+            {info.object && (
+                <span className={styles.objectIcon} title={`${OBJECT_DEFS[info.object].name}: ${OBJECT_DEFS[info.object].desc}`}>
+                    {OBJECT_DEFS[info.object].icon}
+                </span>
+            )}
             {showLife && <span className={styles.life}>{info.bind}</span>}
             {Object.keys(counts).length > 0 && (
                 <span className={styles.effects}>

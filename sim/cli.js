@@ -5,12 +5,12 @@
  * Terminal front-end for the headless game engine.
  *
  *   node sim/cli.js play  [--me 💙|⭕] [--mychar you] [--aichar you] [--seed N]
- *   node sim/cli.js sim   [--games 500] [--mode faithful|capture] [--seed N] [--pair you,giant]
- *   node sim/cli.js auto  [--hchar you] [--cchar you] [--seed N] [--mode faithful]   (watch one AIvsAI game)
+ *   node sim/cli.js sim   [--games 500] [--mode prod] [--seed N] [--pair you,giant]
+ *   node sim/cli.js auto  [--hchar you] [--cchar you] [--seed N] [--mode prod]   (watch one AIvsAI game)
  *
  * 多人数 (2〜8人。盤面は人数で 4x4〜7x7。issue #32):
- *   node sim/cli.js sim     --players 4 [--games 300] [--chars you,giant,..] [--mode faithful] [--seed N]
- *   node sim/cli.js metrics --players 4 [--games 300] [--mode faithful] [--seed N]   (JSON)
+ *   node sim/cli.js sim     --players 4 [--games 300] [--chars you,giant,..] [--mode prod] [--seed N]
+ *   node sim/cli.js metrics --players 4 [--games 300] [--mode prod] [--seed N]   (JSON)
  *   node sim/cli.js auto    --chars you,giant,poisoner [--seed N]
  *   --size N で盤面の一辺(4〜10)を人数と無関係に指定（sim/metrics/auto。省略時は人数に応じた既定）
  *
@@ -20,7 +20,7 @@
 
 const readline = require('readline');
 const engine = require('./engine');
-const ai = require('./ai');
+const aiDriver = require('./aiDriver');
 const inflationMod = require('./inflation');
 const live = require('./live');
 const { runGame, pickChars } = require('./run');
@@ -40,7 +40,7 @@ function parseArgs(argv) {
 }
 
 // ---------- batch simulation (balance analysis) ----------
-// 2人戦用。hmode/cmode let the two sides use different AIs (for AI-strength benchmarking).
+// 2人戦用
 function runOneGame(hchar, cchar, rng, hmode, cmode) {
     if (cmode === undefined) cmode = hmode;
     return runGame([hchar, cchar], rng, [hmode, cmode]);
@@ -81,7 +81,7 @@ function multiSim(args) {
     const players = parseInt(args.players, 10);
     if (!(players >= 2 && players <= MAX_PLAYERS)) throw new Error(`--players must be 2..${MAX_PLAYERS}`);
     const games = parseInt(args.games || '300', 10);
-    const m = computeMultiMetrics(players, games, args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
+    const m = computeMultiMetrics(players, games, args.mode || 'prod', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
     const se = (p) => Math.sqrt((p * (1 - p)) / Math.max(1, games * (1 - m.drawRate)));
     console.log(`# ${players}人戦 (${m.boardSize}x${m.boardSize})  games=${games}  AI=${m.mode}  seed=${m.seed}  chars=${Array.isArray(m.chars) ? m.chars.join(',') : 'random'}`);
     console.log(`減衰: ${players >= m.decayPerRoundMinPlayers ? '手番1周ごとに1回' : '着手のたび'}   均等なら各席 ${(100 / players).toFixed(1)}%\n`);
@@ -98,7 +98,7 @@ function multiSim(args) {
 function inflation(args) {
     const players = parseInt(args.players || '2', 10);
     const games = parseInt(args.games || '200', 10);
-    const mode = args.mode || 'faithful';
+    const mode = args.mode || 'prod';
     const baseSeed = parseInt(args.seed || '1', 10);
     const size = args.size ? parseInt(args.size, 10) : undefined;
     const fixed = args.chars ? args.chars.split(',') : null;
@@ -115,16 +115,30 @@ function inflation(args) {
     if (args.json) return console.log(JSON.stringify(out, null, 2));
     const f = (x, d = 2) => (x == null ? 'n/a' : x.toFixed(d));
     console.log(`# 魔力インフレ  ${players}人 ${out.boardSize}x${out.boardSize}  games=${games}  AI=${mode}  seed=${baseSeed}  基準コスト=${f(out.referenceCost, 1)}`);
-    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)\n`);
+    console.log(`inflationIndex = ${f(out.inflationIndex)}  (後半 stockToEffCost / 序盤 stockToEffCost。1付近=均衡、大=膨らむ)`);
+    console.log('  ※従来の inflationIndex は、序盤(全試合)と後半(少数の長い試合)を混ぜて比べるので、シード違いでよく動く。下の matched を見る。');
+    const mt = out.matched;
+    if (mt && mt.index != null) {
+        console.log(`matched index = ${f(mt.index)}  95%区間 [${f(mt.ci95[0])}, ${f(mt.ci95[1])}]  (同じ ${mt.games} 試合の 序盤 と 後半${mt.lateFrom}-${mt.lateTo}手 を比較)`);
+        console.log(`  収入の伸び ${f(mt.incomeGrowth)}x  手持ちの伸び ${f(mt.stockGrowth)}x  (後半/序盤。収入=経済、手持ち=収入+AIが撃ち切れない分)`);
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`  マスの変化（盤に占める割合） 序盤 ${pc(mt.earlyChangeRate)} → 後半 ${pc(mt.lateChangeRate)}   動かない手番 序盤 ${pc(mt.earlyStillRate)} → 後半 ${pc(mt.lateStillRate)}  (魔力が余るのに盤面が動かない=撃てない/撃たない)\n`);
+    } else console.log(`matched index = n/a  (${(mt && mt.note) || ''})\n`);
     console.log('区間(手番)    手番数   収入/手番  手持ち  撃数/手番  実効コスト  財布/実効  支出/収入  持ち越し率');
     for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
         console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(b.turns, 7)}  ${pad(f(b.income), 9)}  ${pad(f(b.stock), 6)}  ${pad(f(b.skillsPerTurn), 8)}  ${pad(f(b.effCost), 9)}  ${pad(f(b.stockToEffCost), 8)}  ${pad(f(b.spendRatio), 9)}  ${b.hoardRate == null ? 'n/a' : (b.hoardRate * 100).toFixed(1) + '%'}`);
+    }
+    console.log('\nマスの変化（コマの有無・持ち主・効果が変わったマス。減衰は数えない）');
+    console.log('区間(手番)    変化マス/手番  盤に占める割合  コマが動く/手番  動かない手番  魔力1あたりの変化');
+    for (const b of [{ ...out.overall, from: '全体', to: '' }, ...out.buckets]) {
+        const pc = (x) => (x == null ? 'n/a' : (x * 100).toFixed(1) + '%');
+        console.log(`${pad(b.to === '' ? '全体' : `${b.from}-${b.to}`, 12)}  ${pad(f(b.changePerTurn), 12)}  ${pad(pc(b.changeRate), 13)}  ${pad(f(b.piecesPerTurn), 14)}  ${pad(pc(b.stillRate), 11)}  ${f(b.changePerMagic)}`);
     }
 }
 
 function multiMetrics(args) {
     const players = parseInt(args.players, 10);
-    const m = computeMultiMetrics(players, parseInt(args.games || '300', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
+    const m = computeMultiMetrics(players, parseInt(args.games || '300', 10), args.mode || 'prod', parseInt(args.seed || '1', 10), args.chars ? args.chars.split(',') : null, args.size ? parseInt(args.size, 10) : null);
     if (args.tag) m.tag = args.tag;
     console.log(JSON.stringify(m, null, 2));
     if (args.log) {
@@ -136,7 +150,7 @@ function multiMetrics(args) {
 function sim(args) {
     if (args.players && (parseInt(args.players, 10) !== 2 || args.size)) return multiSim(args);
     const games = parseInt(args.games || '500', 10);
-    const mode = args.mode || 'faithful';
+    const mode = args.mode || 'prod';
     const baseSeed = parseInt(args.seed || '1', 10);
     const pairs = args.pair ? [args.pair.split(',')] : crossProduct(CHARACTERS, CHARACTERS);
 
@@ -228,7 +242,7 @@ function computeMetrics(games, mode, baseSeed) {
 }
 function metrics(args) {
     if (args.players && (parseInt(args.players, 10) !== 2 || args.size)) return multiMetrics(args);
-    const m = computeMetrics(parseInt(args.games || '800', 10), args.mode || 'faithful', parseInt(args.seed || '1', 10));
+    const m = computeMetrics(parseInt(args.games || '800', 10), args.mode || 'prod', parseInt(args.seed || '1', 10));
     if (args.tag) m.tag = args.tag;
     console.log(JSON.stringify(m, null, 2));
     if (args.log) {
@@ -238,44 +252,10 @@ function metrics(args) {
     }
 }
 
-// ---------- bench: AI strength ----------
-function headToHead(games, charH, charC, modeH, modeC, baseSeed) {
-    let hw = 0, cw = 0, d = 0;
-    for (let g = 0; g < games; g++) {
-        const rng = engine.makeRng(baseSeed * 7919 + g + hash(modeH + modeC + charH + charC));
-        const r = runOneGame(charH, charC, rng, modeH, modeC);
-        if (r.winner === HEART) hw++; else if (r.winner === CIRCLE) cw++; else d++;
-    }
-    return { hw, cw, d, games };
-}
-// strength of `mode` = win-rate vs pure-random, averaged over playing first & second (char fixed).
-function strengthVsRandom(games, mode, char, baseSeed) {
-    const a = headToHead(games, char, char, mode, 'random', baseSeed);     // mode first
-    const b = headToHead(games, char, char, 'random', mode, baseSeed + 1); // mode second
-    const w = a.hw + b.cw, l = a.cw + b.hw, dd = a.d + b.d, tot = games * 2;
-    return { winRate: (w) / tot, lossRate: l / tot, drawRate: dd / tot, wExclDraw: w + l ? w / (w + l) : null };
-}
-function bench(args) {
-    const games = parseInt(args.games || '1500', 10);
-    const char = args.char || 'you';
-    const seed = parseInt(args.seed || '1', 10);
-    console.log(`# AI strength bench  games=${games}/side  char=${char}  seed=${seed}\n`);
-    for (const mode of ['random', 'faithful', 'capture']) {
-        const s = strengthVsRandom(games, mode, char, seed);
-        console.log(`${pad(mode, 9)} vs random:  win ${pct(s.winRate * 100, 100)}  loss ${pct(s.lossRate * 100, 100)}  draw ${pct(s.drawRate * 100, 100)}  (win ex-draw ${s.wExclDraw == null ? 'n/a' : (s.wExclDraw * 100).toFixed(1) + '%'})`);
-    }
-    console.log('');
-    const h2h = headToHead(games, char, char, 'capture', 'faithful', seed);
-    const h2h2 = headToHead(games, char, char, 'faithful', 'capture', seed + 1);
-    const capW = h2h.hw + h2h2.cw, faiW = h2h.cw + h2h2.hw, dd = h2h.d + h2h2.d, tot = games * 2;
-    console.log(`head-to-head capture vs faithful (${char}): capture ${pct(capW, tot)}  faithful ${pct(faiW, tot)}  draw ${pct(dd, tot)}`);
-    console.log('\n強さの目安: 対randomの「win ex-draw」が高いほど強い。capture>faithful なら捕獲考慮が有効。');
-}
-
 // ---------- watch one AI vs AI game ----------
 function auto(args) {
     const chars = args.chars ? args.chars.split(',') : [args.hchar || 'you', args.cchar || 'you'];
-    const mode = args.mode || 'faithful';
+    const mode = args.mode || 'prod';
     const rng = engine.makeRng(parseInt(args.seed || '1', 10));
     const s = engine.newGame({ chars, rng, size: args.size ? parseInt(args.size, 10) : undefined });
     console.log(chars.map((c, seat) => `AI(${c}) ${SYMBOLS[seat]}`).join('  vs  ') + `   mode=${mode}  board=${s.size}x${s.size}\n`);
@@ -283,14 +263,9 @@ function auto(args) {
     const limit = Math.max(400, 200 * chars.length);
     while (!s.winner && guard++ < limit) {
         const who = engine.curPlayer(s);
-        const result = ai.makeMove(s, mode);
-        if (result.turnEnded) {
-            console.log(`turn ${s.currentTurn - 1}: ${who} used turn-ending skill`);
-            continue;
-        }
-        if (result.move === null) { console.log('-- no moves: draw --'); break; }
-        engine.placeMove(s, result.move);
-        console.log(`turn ${s.currentTurn - 1}: ${who} -> ${result.move}`);
+        const turn = s.currentTurn;
+        aiDriver.playTurn(s);
+        console.log(`turn ${turn}: ${who} played`);
     }
     console.log('\n' + engine.renderBoard(s));
     console.log(s.winner ? `Winner: ${s.winner}` : 'Draw');
@@ -303,7 +278,7 @@ function play(args) {
     // simpler: explicit
     const heartChar = meSym === HEART ? (args.mychar || 'you') : (args.aichar || 'you');
     const circleChar = meSym === CIRCLE ? (args.mychar || 'you') : (args.aichar || 'you');
-    const mode = args.mode || 'capture';
+    const mode = args.mode || 'prod';
     const s = engine.newGame({ heartChar, circleChar, seed: parseInt(args.seed || '1', 10) });
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -323,11 +298,8 @@ function play(args) {
     function aiTurnsIfNeeded() {
         let guard = 0;
         while (!s.winner && engine.curPlayer(s) !== meSym && guard++ < 50) {
-            const result = ai.makeMove(s, mode);
-            if (result.turnEnded) { console.log(`AI ${engine.curPlayer(s)} used turn-ending skill`); continue; }
-            if (result.move === null) break;
-            console.log(`AI ${engine.curPlayer(s)} plays ${result.move}`);
-            engine.placeMove(s, result.move);
+            console.log(`AI ${engine.curPlayer(s)} plays`);
+            aiDriver.playTurn(s);
         }
     }
 
@@ -368,23 +340,27 @@ function play(args) {
 function watch(args) {
     const players = parseInt(args.players || '2', 10);
     if (!(players >= 2 && players <= MAX_PLAYERS)) throw new Error(`--players must be 2..${MAX_PLAYERS}`);
-    const mode = args.mode || 'faithful';
+    const mode = args.mode || 'prod';
     const baseSeed = parseInt(args.seed || String(Date.now() % 100000), 10);
     const size = args.size ? parseInt(args.size, 10) : undefined;
     const fixed = args.chars ? args.chars.split(',') : null;
     const maxGames = args.max ? parseInt(args.max, 10) : Infinity;
     const everyMs = parseFloat(args.interval || '1') * 1000;       // 画面更新の間隔
-    const ckEvery = parseInt(args.checkpoint || '200', 10);        // 勝率スナップショットを積む間隔(ゲーム数)
+    // 勝率スナップショットを積む間隔(ゲーム数)。1対1は全組を1周する長さ(110)の倍数にして、周回の途中に偏らないようにする
+    const ckEvery = parseInt(args.checkpoint || (players === 2 && !args.chars ? '220' : '200'), 10);
     const conv = args.forever ? null : {
         window: parseInt(args.window || '10', 10),                 // 直近何スナップショットを見るか
         eps: parseFloat(args.eps || '0.5') / 100,                  // その間の勝率の動きの許容幅(pt)
         minGames: parseInt(args['min-games'] || '2000', 10),
     };
-    const stats = live.createStats(CHARACTERS, players);
-    const pickRng = engine.makeRng(baseSeed * 2654435 + players);
+    const jobs = Math.max(1, parseInt(args.jobs || String(require('os').cpus().length), 10)); // 並列数（worker_threads）
+    const agg = live.createAggregator(CHARACTERS, players, ckEvery);
+    let stats = live.aggregate(agg, []);
     const tty = process.stdout.isTTY;
     const t0 = Date.now();
-    let lastDraw = 0, g = 0;
+    let lastDraw = 0;
+    // 既定は本番AIと同じ装備。--no-gear でギアなし、--no-skill でスキルを使わない（置くだけ）
+    const runOpts = { deck: !args['no-skill'], gears: !args['no-gear'], skills: !args['no-skill'] };
     const boardN = size != null ? size : engine.boardSizeFor(players);
 
     const render = (final) => {
@@ -392,7 +368,7 @@ function watch(args) {
         const sec = (Date.now() - t0) / 1000;
         const drift = live.maxDrift(stats, conv ? conv.window : 10);
         const out = [];
-        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : 'random'}`);
+        out.push(`# watch  ${players}人 ${boardN}x${boardN}  AI=${mode}  seed=${baseSeed}  chars=${fixed ? fixed.join(',') : players === 2 ? '全組を順に' : 'random'}  並列=${jobs}  スキル=${runOpts.skills ? 'あり' : 'なし'}  ギア=${runOpts.gears ? 'あり' : 'なし'}`);
         out.push(`games=${sm.games}  ${(sm.games / Math.max(sec, 0.001)).toFixed(1)}局/秒  経過 ${sec.toFixed(0)}s  draw ${(sm.drawRate * 100).toFixed(1)}%  avgTurns ${sm.avgTurns.toFixed(1)}`);
         out.push(`勝率の変動幅(直近${conv ? conv.window : 10}回の最大-最小): ${drift == null ? 'n/a' : (drift * 100).toFixed(2) + 'pt'}${conv ? `  (<=${(conv.eps * 100).toFixed(2)}pt かつ ${conv.minGames}局以上で自動停止)` : '  (--forever: 自動停止なし)'}`);
         out.push('');
@@ -402,6 +378,29 @@ function watch(args) {
         }
         out.push('');
         out.push(`席別勝率(引き分け除く, 均等=${(sm.fair * 100).toFixed(1)}%): ` + sm.seatWinRate.map((p, i) => `${SYMBOLS[i]}${p == null ? 'n/a' : (p * 100).toFixed(1) + '%'}`).join('  '));
+        const an = live.analyze(stats);
+        if (an) {
+            const v = live.verdict(an);
+            out.push('\n## 結論: 何が強いか');
+            out.push(v.headline);
+            v.points.forEach((x) => out.push(`  - ${x}`));
+            out.push(`${pad('キャラ', 14)} ${pad('対全平均', 9)} ${pad('対強豪', 8)} ${pad('最悪対面', 20)} ${pad('不利/有利', 10)} 均衡で選ばれる確率`);
+            for (const r of an.rows) {
+                out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.strongAvg == null ? 'n/a' : (r.strongAvg * 100).toFixed(1) + '%', 8)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
+            }
+            const beats = (id) => an.edges.filter((e) => e.from === id && e.significant).sort((x, y) => y.rate - x.rate).map((e) => `${e.to}(${(e.rate * 100).toFixed(0)}%)`);
+            out.push('\n## 有利関係（有意に勝ち越す相手。左が勝つ側）');
+            for (const r of an.rows) out.push(`  ${pad(r.id, 14)} > ${beats(r.id).join(' ') || '—'}`);
+            const lp = an.loops;
+            if (!lp.groups.length) out.push('閉ループ(三すくみなど): なし（有意な勝ち越しは一方向だけ）');
+            else {
+                out.push(`閉ループ(三すくみなど): ${lp.groups.length}グループ`);
+                lp.groups.forEach((g) => out.push(`  互いに勝ち負けが循環するキャラ(${g.length}): ${g.join(', ')}`));
+                lp.cycles.slice(0, 10).forEach((c) => out.push(`  ${c.length === 3 ? '三すくみ' : c.length + 'すくみ'}: ${c.join(' → ')} → ${c[0]}`));
+                if (lp.cycles.length > 10 || lp.truncated) out.push(`  ...ほか${lp.truncated ? '多数' : lp.cycles.length - 10 + '件'}`);
+            }
+            out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(平均の上位半分の相手だけ)で見る。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合。${an.minDecided}試合未満の対面は数えない)`);
+        }
         if (final || args.matrix) {
             const mu = live.matchups(stats);
             const ids = sm.rows.map((r) => r.id);
@@ -419,12 +418,20 @@ function watch(args) {
         console.log(out.join('\n'));
     };
 
+    const workers = [];
+    const latest = new Array(jobs).fill(null);
+    const finals = new Array(jobs).fill(false);
+    let finished = false;
     const finish = (why) => {
+        if (finished) return;
+        finished = true;
+        stats = live.aggregate(agg, latest);
+        workers.forEach((w) => w.terminate());
         render(true);
         console.log(`\n停止: ${why}`);
         if (args.log) {
             const sm = live.summarize(stats);
-            require('fs').appendFileSync(args.log, JSON.stringify({ players, mode, seed: baseSeed, stopReason: why, ...sm, matchups: live.matchups(stats) }) + '\n');
+            require('fs').appendFileSync(args.log, JSON.stringify({ players, mode, seed: baseSeed, stopReason: why, ...sm, matchups: live.matchups(stats), analysis: live.analyze(stats) }) + '\n');
             console.error(`(appended to ${args.log})`);
         }
         process.exit(0);
@@ -432,23 +439,22 @@ function watch(args) {
     process.on('SIGINT', () => finish('ユーザー操作 (Ctrl-C)'));
     process.on('SIGTERM', () => finish('SIGTERM'));
 
-    // イベントループを塞がないよう 50ms 分ずつ回して setImmediate で譲る
-    const tick = () => {
-        const end = Date.now() + 50;
-        while (Date.now() < end && g < maxGames) {
-            const chars = pickChars(players, fixed, pickRng);
-            const rng = engine.makeRng(baseSeed * 1000003 + g * 7919 + players);
-            const r = runGame(chars, rng, mode, size);
-            live.record(stats, chars, r);
-            g++;
-            if (g % ckEvery === 0) live.checkpoint(stats);
-        }
-        if (g >= maxGames) return finish(`--max ${maxGames} 局に到達`);
+    // ゲーム番号 g を worker k が k, k+jobs, ... の順に担当する（結果は g だけで決まるので並列数に依らない）
+    const { Worker } = require('worker_threads');
+    for (let k = 0; k < jobs; k++) {
+        const w = new Worker(require('path').join(__dirname, 'watch-worker.js'), {
+            workerData: { players, size, mode, seed: baseSeed, fixedChars: fixed, skills: runOpts.skills, gears: runOpts.gears, offset: k, stride: jobs, maxGames: Number.isFinite(maxGames) ? maxGames : null },
+        });
+        w.on('message', (m) => { latest[k] = m.stats; if (m.type === 'final') finals[k] = true; });
+        w.on('error', (e) => { console.error(e); process.exit(1); });
+        workers.push(w);
+    }
+    setInterval(() => {
+        stats = live.aggregate(agg, latest);
+        if (finals.every(Boolean)) return finish(`--max ${maxGames} 局に到達`);
         if (conv && live.converged(stats, conv)) return finish('勝率が収束');
         if (Date.now() - lastDraw >= everyMs) { lastDraw = Date.now(); if (tty || everyMs >= 1000) render(false); }
-        setImmediate(tick);
-    };
-    tick();
+    }, 100);
 }
 
 // ---------- dispatch ----------
@@ -460,21 +466,19 @@ else if (sub === 'watch') watch(args);
 else if (sub === 'play') play(args);
 else if (sub === 'inflation') inflation(args);
 else if (sub === 'metrics') metrics(args);
-else if (sub === 'bench') bench(args);
 else {
     console.log(`tictactoe headless CLI
-  node sim/cli.js play    [--me 💙|⭕] [--mychar C] [--aichar C] [--mode capture] [--seed N]
-  node sim/cli.js sim     [--games 500] [--mode faithful|capture|random] [--seed N] [--pair h,c]
-  node sim/cli.js auto    [--hchar C] [--cchar C] [--mode faithful] [--seed N]
-  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
+  node sim/cli.js play    [--me 💙|⭕] [--mychar C] [--aichar C] [--mode prod] [--seed N]
+  node sim/cli.js sim     [--games 500] [--mode prod] [--seed N] [--pair h,c]
+  node sim/cli.js auto    [--hchar C] [--cchar C] [--mode prod] [--seed N]
+  node sim/cli.js watch   [--players 2] [--size N] [--chars a,b] [--forever] [--max N] [--matrix] [--no-gear] [--no-skill] [--jobs N] [--eps 0.5] [--log f]   # 止める/収束するまで対戦し続け統計表示
   node sim/cli.js inflation [--players N] [--games 200] [--size N] [--chars ..] [--bucket 50] [--json]   # 魔力インフレ指標
-  node sim/cli.js metrics [--games 800] [--mode faithful] [--seed N]   # balance snapshot as JSON
-  node sim/cli.js bench   [--games 1500] [--char you] [--seed N]       # AI strength vs random / head-to-head
+  node sim/cli.js metrics [--games 800] [--mode prod] [--seed N]   # balance snapshot as JSON
   node sim/cli.js sim     --players N [--games 300] [--chars a,b,..]   # 多人数(2〜8人)の席別・キャラ別勝率
   node sim/cli.js metrics --players N [--games 300] [--seed N]         # 多人数のJSON
   node sim/cli.js auto    --chars a,b,c [--seed N]                     # 多人数の1試合を観戦
   (多人数系は --size N で盤面の一辺(4〜10)を指定できる)
 
 characters: ${CHARACTERS.join(', ')}
-modes: faithful (=AIPlayer.ts同一), capture (捕獲考慮), random (ランダム基準)`);
+AI: 本番の AIPlayer.ts そのもの（sim/shared の生成物を sim/aiDriver.js が動かす）`);
 }

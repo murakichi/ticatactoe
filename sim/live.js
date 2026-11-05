@@ -94,4 +94,242 @@ function converged(st, { window, eps, minGames }) {
     return d != null && d <= eps;
 }
 
-module.exports = { createStats, record, matchups, summarize, checkpoint, maxDrift, converged };
+// ---------- 「何が強いか」の総合分析 ----------
+// 平均勝率だけでは、相手を見てキャラを選べる場合の強さ（苦手な相手がいると選ばれない）が分からない。
+// そこで、同じ対面表から次の4つを出す。
+//   fieldAvg   : 対全キャラ平均。相手が全キャラ均等に出る場合の勝率（probe-top の「環境勝率」と同じ）
+//   strongAvg  : 対強豪平均。fieldAvg は弱いキャラを大勝するだけで上がるので、平均勝率の上位半分の相手(自分除く)だけで平均した勝率
+//   worst      : 最悪対面。出会う確率が低くても、カウンターが1体いるだけで選ばれにくくなる
+//   unfavorable: 有意に負け越す対面の数（勝率の95%区間の上限が50%未満）。favorable は逆（下限が50%超）
+//   eq         : 相手が最適に選ぶときの均衡の選択確率（対称ゼロ和ゲームのナッシュ均衡）。
+//                0に近いキャラは「他に上位互換がいる」、1体に集中すれば「そのキャラを出せば済む」
+// 勝率は同卓した試合のうち「どちらかが勝った試合」の中の割合（引き分け・第三者の勝ちは除く）。
+// 3人以上では第三者が絡むので、この分析は2人戦の読みが基本で、多人数では参考値。
+
+// Wilson 95% 区間（n が小さい対面でも 0/1 に張り付かない）
+function wilson(w, n) {
+    if (!n) return { lo: null, hi: null };
+    const p = w / n, z2 = Z95 * Z95, den = 1 + z2 / n;
+    const mid = (p + z2 / (2 * n)) / den, h = (Z95 * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / den;
+    return { lo: Math.max(0, mid - h), hi: Math.min(1, mid + h) };
+}
+
+// 対称ゼロ和ゲーム(A[i][j] = -A[j][i], 値は0)の均衡を乗法的重み更新の平均で近似する。
+// exploit = 均衡戦略に対する最良応答の利得（0に近いほど収束している）
+function solveSymmetric(A, iters = 4000) {
+    const n = A.length;
+    let x = Array(n).fill(1 / n);
+    const avg = Array(n).fill(0);
+    const eta = 2 * Math.sqrt(Math.log(Math.max(n, 2)) / iters);
+    for (let t = 0; t < iters; t++) {
+        for (let i = 0; i < n; i++) avg[i] += x[i];
+        const nx = x.map((xi, i) => xi * Math.exp(eta * A[i].reduce((a, v, j) => a + v * x[j], 0)));
+        const sum = nx.reduce((a, v) => a + v, 0);
+        x = nx.map((v) => v / sum);
+    }
+    const sum = avg.reduce((a, v) => a + v, 0);
+    const eq = avg.map((v) => v / sum);
+    const exploit = Math.max(...A.map((row) => row.reduce((a, v, j) => a + v * eq[j], 0)));
+    return { eq, exploit };
+}
+
+const READY_SHARE = 0.9; // 結論を出すのに必要な、minDecided に届いた対面(組)の割合
+const MIN_DECIDED = 20; // 最悪対面・有利/不利に数える最低試合数（これ未満の対面は誤差が大きすぎる）
+
+function analyze(st, { minDecided = MIN_DECIDED } = {}) {
+    const ids = Object.entries(st.perChar).filter(([, a]) => a.appearances > 0).map(([id]) => id);
+    if (ids.length < 2) return null;
+    const mu = matchups(st);
+    const cell = (x, y) => {
+        const c = mu[x] && mu[x][y];
+        const d = c ? c.wins + c.losses : 0;
+        return { w: c ? c.wins : 0, d, rate: d ? c.wins / d : null, ...wilson(c ? c.wins : 0, d) };
+    };
+    // 先に素朴な平均を出し、その上位半分を「強豪」とする（弱いキャラを大勝して平均が上がるのを避けるため）
+    const plain = Object.fromEntries(ids.map((x) => {
+        const rs = ids.filter((y) => y !== x).map((y) => cell(x, y).rate).filter((r) => r != null);
+        return [x, rs.length ? rs.reduce((a, r) => a + r, 0) / rs.length : 0];
+    }));
+    const strong = new Set([...ids].sort((a, b) => plain[b] - plain[a]).slice(0, Math.ceil(ids.length / 2)));
+    const rows = ids.map((x) => {
+        const cs = ids.filter((y) => y !== x).map((y) => ({ y, ...cell(x, y) }));
+        const seen = cs.filter((c) => c.rate != null);
+        const solid = cs.filter((c) => c.d >= minDecided);
+        const worstC = solid.length ? solid.reduce((a, c) => (c.rate < a.rate ? c : a)) : null;
+        return {
+            id: x,
+            strongAvg: (() => { const ss = seen.filter((c) => strong.has(c.y)); return ss.length ? ss.reduce((a, c) => a + c.rate, 0) / ss.length : null; })(),
+            fieldAvg: seen.length ? seen.reduce((a, c) => a + c.rate, 0) / seen.length : null,
+            worst: worstC ? { id: worstC.y, rate: worstC.rate, decided: worstC.d } : null,
+            unfavorable: solid.filter((c) => c.hi < 0.5).length,
+            favorable: solid.filter((c) => c.lo > 0.5).length,
+            solidOpponents: solid.length,
+            opponents: cs.length,
+        };
+    });
+    // 均衡用の行列: 少数試合の対面は50%側へ寄せる（+1勝+1敗の仮想データ）。A[i][j] = -A[j][i] になる
+    const A = ids.map((x) => ids.map((y) => { if (x === y) return 0; const c = cell(x, y); return (c.w + 1) / (c.d + 2) - 0.5; }));
+    const { eq, exploit } = solveSymmetric(A);
+    rows.forEach((r, i) => { r.eq = eq[i]; });
+    rows.sort((a, b) => b.eq - a.eq || (b.strongAvg || 0) - (a.strongAvg || 0));
+    const pairs = [];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push(cell(ids[i], ids[j]).d);
+    // 引き分け（打ち切り）が多い組があると、全組が minDecided に届くのを待つといつまでも結論が出ない。
+    // 届いていない組は最悪対面・有利/不利の数から除いてあるので、9割の組が届けば結論を出す
+    const solidPairs = pairs.filter((d) => d >= minDecided).length;
+    const ready = solidPairs >= Math.ceil(pairs.length * READY_SHARE);
+    const edges = advantageEdges(ids, cell, minDecided);
+    return { rows, edges, ids, loops: findLoops(ids, edges.filter((e) => e.significant)), strong: [...strong], exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
+}
+
+// 有利・不利の有向グラフ。勝つ側 from → 負ける側 to。minDecided 試合以上ある組だけで、勝率がちょうど50%の組は辺を作らない。
+// significant = 勝つ側の勝率の95%区間(Wilson)の下限が50%超（偶然では説明しにくい差）。そうでない辺は「傾向」
+function advantageEdges(ids, cell, minDecided) {
+    const edges = [];
+    for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+            const c = cell(ids[i], ids[j]);
+            if (c.d < minDecided || c.rate === 0.5) continue;
+            const aWins = c.rate > 0.5;
+            const [from, to] = aWins ? [ids[i], ids[j]] : [ids[j], ids[i]];
+            const rate = aWins ? c.rate : 1 - c.rate;
+            const lo = aWins ? c.lo : 1 - c.hi;
+            edges.push({ from, to, rate, decided: c.d, lo, significant: lo > 0.5 });
+        }
+    }
+    return edges;
+}
+
+// 勝ち負けの閉ループ（三すくみ a→b→c→a や、もっと長い循環）。edges（勝つ側→負ける側）でできる有向グラフから求める。
+//   groups    : 互いに行き来できるキャラの集まり（強連結成分。2キャラ以上）。ここに入る辺は、必ずどこかの閉ループの一部
+//   cycles    : 具体的な循環（長さ maxLen まで、id 列。各循環は ids の並びで最小のキャラから1回だけ数える）
+//   loopEdges : 閉ループに入っている辺（'from>to'）。長さ maxLen を超える循環の辺も含む
+//   truncated : maxCount で打ち切ったか
+// 長いループは「一強がいない・相性で選ぶ余地がある」ことの目印で、1体が全員に勝つ（辺が出るだけ）状態とは区別できる
+function findLoops(ids, edges, { maxLen = 5, maxCount = 40 } = {}) {
+    const idx = new Map(ids.map((id, i) => [id, i]));
+    const adj = ids.map(() => []);
+    for (const e of edges) if (idx.has(e.from) && idx.has(e.to)) adj[idx.get(e.from)].push(idx.get(e.to));
+    // Tarjan 法で強連結成分
+    const n = ids.length, index = Array(n).fill(-1), low = Array(n).fill(0), on = Array(n).fill(false), comp = Array(n).fill(-1);
+    const stack = [], comps = [];
+    let counter = 0;
+    const visit = (v) => {
+        index[v] = low[v] = counter++; stack.push(v); on[v] = true;
+        for (const w of adj[v]) {
+            if (index[w] === -1) { visit(w); low[v] = Math.min(low[v], low[w]); }
+            else if (on[w]) low[v] = Math.min(low[v], index[w]);
+        }
+        if (low[v] === index[v]) {
+            const c = [];
+            let w;
+            do { w = stack.pop(); on[w] = false; comp[w] = comps.length; c.push(w); } while (w !== v);
+            comps.push(c);
+        }
+    };
+    for (let v = 0; v < n; v++) if (index[v] === -1) visit(v);
+    const groups = comps.filter((c) => c.length >= 2).map((c) => c.slice().sort((a, b) => a - b).map((i) => ids[i])).sort((a, b) => b.length - a.length);
+    const loopEdges = edges.filter((e) => idx.has(e.from) && idx.has(e.to) && comp[idx.get(e.from)] === comp[idx.get(e.to)] && comps[comp[idx.get(e.from)]].length >= 2).map((e) => e.from + '>' + e.to);
+    // 具体的な循環: 開始点より大きい番号だけを通り、同じ成分の中で開始点へ戻る
+    const cycles = [];
+    let truncated = false;
+    const path = [];
+    const dfs = (start, v) => {
+        for (const w of adj[v]) {
+            if (cycles.length >= maxCount) { truncated = true; return; }
+            if (w === start) { cycles.push(path.map((i) => ids[i])); continue; }
+            if (w < start || comp[w] !== comp[start] || path.includes(w) || path.length >= maxLen) continue;
+            path.push(w); dfs(start, w); path.pop();
+        }
+    };
+    for (let start = 0; start < n && !truncated; start++) {
+        if (comps[comp[start]].length < 2) continue;
+        path.length = 0; path.push(start); dfs(start, start);
+    }
+    cycles.sort((a, b) => a.length - b.length);
+    return { groups, cycles, loopEdges, truncated };
+}
+
+// 分析から日本語の結論を作る。何を根拠にしたかを points に1行ずつ残す
+function verdict(an, label = (id) => id) {
+    if (!an) return { headline: 'データが足りません', points: [] };
+    const top = (key, dir = 1) => an.rows.filter((r) => r[key] != null).reduce((a, r) => (a == null || dir * r[key] > dir * a[key] ? r : a), null);
+    const topEq = top('eq'), topAvg = top('strongAvg');
+    const topWorst = an.rows.filter((r) => r.worst).reduce((a, r) => (a == null || r.worst.rate > a.worst.rate ? r : a), null);
+    const pts = [];
+    const f = (x) => `${(x * 100).toFixed(1)}%`;
+    let headline;
+    const allSame = topWorst && topEq.id === topAvg.id && topEq.id === topWorst.id;
+    if (!an.ready) {
+        headline = `まだ標本が少なく結論は出せません（${an.minDecided}試合に届いた対面は ${an.solidPairs}/${an.totalPairs}。${Math.round(READY_SHARE * 100)}%に届くまで）`;
+    } else if (allSame && topEq.unfavorable === 0 && topEq.eq >= 0.5) {
+        headline = `${label(topEq.id)}が突出しています（対強豪平均・最悪対面・均衡のすべてで1位、有意な不利対面なし）`;
+    } else if (topEq.eq >= 0.5) {
+        headline = `実質的に${label(topEq.id)}が最強です（相手を見て選ぶと${f(topEq.eq)}がこのキャラに集中）`;
+    } else if (topAvg.id !== topEq.id) {
+        headline = `対強豪平均の1位は${label(topAvg.id)}ですが、相手を見て選ぶなら${label(topEq.id)}が最有力です`;
+    } else {
+        headline = `突出したキャラはいません（均衡の選択確率が分散）。最有力は${label(topEq.id)}`;
+    }
+    pts.push(`対強豪平均(平均勝率の上位半分の相手だけ)の1位: ${label(topAvg.id)} ${f(topAvg.strongAvg)}`);
+    if (topWorst) pts.push(`最悪対面が最も良い: ${label(topWorst.id)}（最悪でも ${f(topWorst.worst.rate)}・対${label(topWorst.worst.id)}）`);
+    pts.push(`均衡の選択確率の1位: ${label(topEq.id)} ${f(topEq.eq)}（最良応答の利得 ${(an.exploit * 100).toFixed(2)}pt。0に近いほど収束）`);
+    const dead = an.rows.filter((r) => r.eq < 0.01).length;
+    pts.push(`均衡でほぼ選ばれない（1%未満）: ${dead}/${an.rows.length}キャラ`);
+    if (an.players >= 3) pts.push('3人以上では第三者が勝つ試合が混ざるので、この分析は参考値です（2人戦での読みが基本）');
+    return { headline, points: pts };
+}
+
+// probe-top のように「ペアごとの勝敗数」だけが分かる計測から、analyze に渡せる統計を組み立てる（2人戦）。
+// pairs = [{ a, b, w, l }]（a から見た勝ち・負け。引き分けは除く）
+function statsFromPairs(chars, pairs) {
+    const st = createStats(chars, 2);
+    for (const c of chars) st.perChar[c].appearances = 1;
+    for (const { a, b, w, l } of pairs) {
+        const [x, y, xw, yw] = a < b ? [a, b, w, l] : [b, a, l, w];
+        st.vs[x + '|' + y] = { a: x, b: y, meets: w + l, aWins: xw, bWins: yw };
+    }
+    return st;
+}
+
+// ---------- 1対1の組み合わせ / 並列集計 ----------
+// 1対1は、キャラをランダムに引かず「異なる2キャラ（席順つき）」の全組を線形に1周し、それを繰り返す。
+// どの組も先手・後手とも同じ回数になり、全組の試合数が最速で揃う（ランダムだと偏って、最少の対面が増えにくい）。
+// 同じ組でもライフ・AIのデッキに乱数が入るので、周回ごとに結果は変わる。同キャラ対戦は対面表に入らないので除く。
+function roundRobinPairs(ids) {
+    const out = [];
+    for (const a of ids) for (const b of ids) if (a !== b) out.push([a, b]);
+    return out;
+}
+
+// 複数ワーカーの createStats を足し合わせる（履歴は持たない）。ワーカーごとの累計を渡す
+function mergeStats(ids, players, parts) {
+    const st = createStats(ids, players);
+    for (const p of parts) {
+        if (!p) continue;
+        st.games += p.games; st.draws += p.draws; st.turns += p.turns;
+        p.seatWins.forEach((w, i) => { st.seatWins[i] += w; });
+        for (const [id, a] of Object.entries(p.perChar)) {
+            const t = st.perChar[id] || (st.perChar[id] = { appearances: 0, wins: 0, turnsWon: 0 });
+            t.appearances += a.appearances; t.wins += a.wins; t.turnsWon += a.turnsWon;
+        }
+        for (const [k, m] of Object.entries(p.vs)) {
+            const t = st.vs[k] || (st.vs[k] = { a: m.a, b: m.b, meets: 0, aWins: 0, bWins: 0 });
+            t.meets += m.meets; t.aWins += m.aWins; t.bWins += m.bWins;
+        }
+    }
+    return st;
+}
+
+// 並列で回すときの集計役。ワーカーの累計を足して、ckEvery 局ごとに勝率のスナップショットを積む（収束判定用）
+function createAggregator(ids, players, ckEvery) {
+    return { ids, players, ckEvery, next: ckEvery, history: [] };
+}
+function aggregate(agg, parts) {
+    const st = mergeStats(agg.ids, agg.players, parts);
+    st.history = agg.history;
+    if (st.games >= agg.next) { checkpoint(st); agg.next = (Math.floor(st.games / agg.ckEvery) + 1) * agg.ckEvery; }
+    return st;
+}
+
+module.exports = { findLoops, roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
