@@ -109,6 +109,8 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
+/** 結界石・護符の社（陰陽師）: 周囲八マスに自陣の式神がこの数以上いるマスに置く */
+const SH_OBJECT_MIN_SHIKI = 2;
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
 const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
@@ -183,6 +185,7 @@ class AIPlayer {
         this.hypoCut = 0;
         /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
         this.ownTrees = 0;
+        this.ownShikiObjects = 0; // 盤面の自陣の結界石・護符の社
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
         /** 自陣の働いている毒沼の数 */
@@ -500,6 +503,22 @@ class AIPlayer {
             }
             if (score > bestScore) {
                 bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    }
+    /** 結界石・護符の社を置くマス: 周囲八マスの自陣の式神が SH_OBJECT_MIN_SHIKI 体以上あるマスのうち最多のもの。無ければ null */
+    bestShikigamiObjectCell(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestScore = 0;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            const n = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && (0, util_1.isShikigami)(board[j])).length;
+            if (n >= SH_OBJECT_MIN_SHIKI && n > bestScore) {
+                bestScore = n;
                 best = i;
             }
         });
@@ -2458,6 +2477,7 @@ class AIPlayer {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownShikiObjects = argsIn[0].filter((sq) => (sq.object === 'barrierStone' || sq.object === 'amuletShrine') && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
@@ -3003,6 +3023,24 @@ class AIPlayer {
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
                 magic -= cost;
+            }
+        }
+        // 結界石・護符の社（陰陽師）: 周囲に自陣の式神が2体以上いるマスに立てる（結界石=式神が減衰しない、護符の社=式神1体につきマジック+1）。
+        // 相手にリーチが無く、自分に勝ち筋が無いときだけ。どちらか1つ（デッキに入っている方）
+        if (this.character === 'yinYangMaster' && this.ownShikiObjects < 1
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0) {
+            for (const def of [objects_1.OBJECT_DEFS.amuletShrine, objects_1.OBJECT_DEFS.barrierStone]) {
+                if (!availableSkills.includes(def.idx))
+                    continue;
+                const cost = this.calculateAICost(costs[def.costKey], false, false, def.costKey);
+                const cell = this.bestShikigamiObjectCell(board);
+                if (cell !== null && magic >= cost) {
+                    chargeClicks.push({ skill: def.costKey, target: cell });
+                    board = board.slice();
+                    board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                    magic -= cost;
+                    break;
+                }
             }
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
