@@ -280,7 +280,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     tactician: ['lastStand', 'priceWreck'],
     magician: ['spellWard', 'ironLock'],
     giant: ['lastStand', 'sturdy'],
-    yinYangMaster: ['lastStand', 'afterglow'],
+    yinYangMaster: ['lastStand', 'chainDiscount'], // 対強豪平均 42→46%（3シード各400: seed2 +5.5/seed8 +5.0/seed21 +3.7。氷室 21→36%）。旧: lastStand,afterglow
     necromancer: ['vengeance', 'lastStand'],
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
@@ -298,6 +298,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
+    yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
     electrician: [['lightToken', 'afterglow']], // 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
