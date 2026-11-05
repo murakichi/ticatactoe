@@ -30,6 +30,20 @@ export const UNIQUE_EFFECT_TYPES = [
     'bristle',
     'darkPot',
     'strip',
+    // 式神・氷・火・落ち葉などの、新作スキル(専用の演出を持たせる)
+    'tinder',
+    'scrollBless',
+    'scrollCurse',
+    'scrollDiscount',
+    'scrollPurge',
+    'smallFry',
+    'firstFrost',
+    'gather',
+    'burnOff',
+    'freeToken',
+    'leafDrop',
+    'leafCloak',
+    'kindling',
 ] as const;
 
 export const isUniqueEffect = (type: string): boolean => (UNIQUE_EFFECT_TYPES as readonly string[]).includes(type);
@@ -539,6 +553,229 @@ export const renderUniqueEffect = (effect: SkillEffect, size: number): React.Rea
                     {DIRS_8.map((d, i) => fly(`dust-${i}`, MID, radial(MID, d, 30), '💨', 560 + i * 40, 600))}
                     {pop('naked', MID, '🙈', 1200)}
                     {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'tinder': {
+            // 火口: 火の粉が1つ舞い降り、枯れ葉や新芽に燃え移って、ぼっと燃え上がる
+            return (
+                <>
+                    {fly('spark', { x: target.x - 10, y: -4 }, target, '✨', 0, 600)}
+                    {pop('catch', target, '🔥', 560, styles.bigPop)}
+                    {ring('ring-0', target, 580, '#ff7a2f', 3.4)}
+                    {ring('ring-1', target, 700, '#ffc24a', 4.4)}
+                    {DIRS_8.map((d, i) => fly(`ember-${i}`, target, radial(target, d, 9), '🔥', 640 + i * 25, 500))}
+                    {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'scrollBless': {
+            // 式神の加護: 札が金色に光って燃え尽き、その光が自陣のコマへ降り注いでライフが増える
+            const pts = cells.filter((k) => k !== effect.index).slice(0, 24).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {pop('scroll', target, '📜', 0, styles.bigPop)}
+                    {ring('ring-0', target, 250, '#ffd966', 3)}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`b-${k}`}>
+                            {beam(`ray-${k}`, target, p, 350 + k * 60, '#ffd966', 4, 350)}
+                            {fly(`light-${k}`, target, p, '✨', 350 + k * 60, 600)}
+                            {pop(`up-${k}`, p, '🌟', 900 + k * 60)}
+                        </React.Fragment>
+                    ))}
+                    {rise('✨', 'bless')}
+                </>
+            );
+        }
+        case 'scrollCurse': {
+            // 式神の呪詛: 札が黒く燃え、呪いの帯が敵のコマへ這い寄って☠が刻まれる
+            const pts = cells.filter((k) => k !== effect.index).slice(0, 24).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1500ms' }} />
+                    <div className={base.haze} style={{ background: 'rgba(90, 20, 120, 0.45)' }} />
+                    {pop('scroll', target, '📜', 0, styles.bigPop)}
+                    {ring('ring-0', target, 250, '#8a4fd6', 3)}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`c-${k}`}>
+                            {beam(`curse-${k}`, target, p, 350 + k * 60, '#6b21a8', 5, 400)}
+                            {fly(`mist-${k}`, target, p, '👁️', 350 + k * 60, 650)}
+                            {pop(`skull-${k}`, p, '☠', 950 + k * 60, styles.bigPop)}
+                        </React.Fragment>
+                    ))}
+                    {rise('☠', 'curse')}
+                </>
+            );
+        }
+        case 'scrollDiscount': {
+            // 式神割引: 札が雨のように降り、値札(🏷️)がぽんと付いて、次のスキルが安くなる
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {fall('📜', 'scroll')}
+                    {pop('tag', MID, '🏷️', 300, styles.bigPop)}
+                    {ring('ring-0', MID, 350, '#ffd966', 5)}
+                    {[0, 1, 2, 3, 4, 5].map((k) => fly(`coin-${k}`, MID, { x: 24 + k * 10, y: 78 - (k % 2) * 8 }, '🪙', 600 + k * 70, 600))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'scrollPurge': {
+            // 式神の供犠: 札が供物として燃え上がり、その炎が黒い光線になって敵のコマのライフを奪う
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1400ms' }} />
+                    {pop('scroll', target, '📜', 0, styles.bigPop)}
+                    {pop('fire', target, '🔥', 250, styles.bigPop)}
+                    {ring('ring-0', target, 300, '#ff4d79', 4)}
+                    {ring('ring-1', target, 450, '#8a4fd6', 5)}
+                    {DIRS_8.map((d, i) => beam(`ray-${i}`, target, radial(target, d, 14), 350, '#ff4d79', 5, 400))}
+                    {pop('skull', target, '💀', 700, styles.bigPop)}
+                    {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'smallFry': {
+            // 一寸の虫に魂なし: 小さな虫が盤面を横切り、ライフ3以下の敵のコマが次々とぷちっと潰れて魂が昇る
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1400ms' }} />
+                    {fly('bug', { x: -6, y: 50 }, { x: 106, y: 50 }, '🐛', 0, 900)}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`f-${k}`}>
+                            {pop(`bug-${k}`, p, '🐛', 250 + k * 55)}
+                            {pop(`squash-${k}`, p, '💥', 500 + k * 55)}
+                            {fly(`soul-${k}`, p, { x: p.x, y: p.y - 14 }, '👻', 600 + k * 55, 700)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '🐛', 200, styles.bigPop)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'firstFrost': {
+            // 初霜: 朝の冷え込みで霜が降り、敵の枯れ葉(🍂)が凍りついて、盤面に新芽が1つ顔を出す
+            const frozen = cells.filter((k) => k !== effect.index).slice(0, 24).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraIce}`} />
+                    <div className={base.haze} style={{ background: 'rgba(186, 230, 253, 0.4)' }} />
+                    {fall('❄', 'frost')}
+                    {frozen.map((p, k) => (
+                        <React.Fragment key={`z-${k}`}>
+                            {pop(`leaf-${k}`, p, '🍂', 200 + k * 55)}
+                            {pop(`ice-${k}`, p, '🧊', 650 + k * 55, styles.bigPop)}
+                            {ring(`ring-${k}`, p, 650 + k * 55, '#7dd3fc', 2.6)}
+                        </React.Fragment>
+                    ))}
+                    {effect.index !== undefined && pop('sprout', target, '🌱', 1000, styles.bigPop)}
+                </>
+            );
+        }
+        case 'gather': {
+            // 吹き寄せ: 風が盤面を吹き抜け、あちこちのエフェクトが1つのマスへ吹き寄せられる
+            const sources: Pt[] = [
+                { x: 8, y: 12 },
+                { x: 90, y: 10 },
+                { x: 10, y: 88 },
+                { x: 88, y: 90 },
+                { x: 50, y: 6 },
+                { x: 6, y: 50 },
+                { x: 94, y: 50 },
+                { x: 50, y: 94 },
+            ];
+            const icons = ['🔥', '❄', '⚡', '☠', '🌱', '🍂', '🔥', '⚡'];
+            return (
+                <>
+                    {[16, 32, 48, 64, 80].map((y, k) => fly(`wind-${k}`, { x: -4, y }, { x: 104, y: y + 6 }, '🍃', k * 90, 900))}
+                    {sources.map((src, k) => fly(`item-${k}`, src, target, icons[k], 250 + k * 70, 700))}
+                    {pop('land', target, '🌀', 900, styles.bigPop)}
+                    {ring('ring-0', target, 900, '#b9f0c8', 4)}
+                    {rise('🍃', 'leaf')}
+                </>
+            );
+        }
+        case 'burnOff': {
+            // 山焼き: 下から炎の帯が盤面をなめるように走り、エフェクトのあるマスに火柱が立つ。焼け跡に杭(🔑)が打たれる
+            const pts = cells.filter((k) => k !== effect.index).slice(0, 40).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.heat} />
+                    <div className={styles.fireFrame} />
+                    {[88, 70, 52, 34, 16].map((y, k) => beam(`line-${k}`, { x: 0, y }, { x: 100, y }, k * 130, '#ff7a2f', 10, 450))}
+                    {pts.map((p, k) => (
+                        <span key={`pillar-${k}`} className={styles.pillar} style={pos(p, { animationDelay: `${300 + (k % 10) * 70}ms` })}>
+                            🔥
+                        </span>
+                    ))}
+                    {effect.index !== undefined && pop('stake', target, '🔑', 1000, styles.bigPop)}
+                    {rise('🔥', 'ember')}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'freeToken': {
+            // 無礼講: 紙吹雪とクラッカーで宴会が始まり、コストが0(ただ)になる
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    <div className={styles.flashAt} style={{ background: '#fff44f' }} />
+                    {pop('party', MID, '🎉', 0, styles.bigPop)}
+                    {pop('beer-l', { x: 22, y: 62 }, '🍻', 250, styles.bigPop)}
+                    {pop('zero', { x: 78, y: 62 }, '🆓', 350, styles.bigPop)}
+                    {ring('ring-0', MID, 100, '#ffd966', 6)}
+                    {fall('🎊', 'confetti')}
+                    {fall('🎉', 'party')}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'leafDrop': {
+            // 落ち葉の置き土産: 木の葉が1枚、ひらひらと揺れながら舞い降りて、マスにそっと積もる
+            const p = cells.length > 0 ? center(cells[0], size) : MID;
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {[0, 1, 2, 3].map((k) => fly(`drift-${k}`, { x: p.x + (k % 2 ? 12 : -12), y: -4 }, { x: p.x + (k % 2 ? -4 : 4), y: p.y - 6 }, '🍃', k * 150, 900))}
+                    {fly('leaf', { x: p.x - 6, y: -4 }, p, '🍂', 100, 1000)}
+                    {pop('land', p, '🍂', 1000, styles.bigPop)}
+                    {ring('ring-0', p, 1000, '#e8a24a', 3.4)}
+                    {rise('🍂', 'leaf')}
+                </>
+            );
+        }
+        case 'leafCloak': {
+            // 落葉の衣: 舞い散る木の葉がマスの周りを取り巻き、衣のように包み込む
+            const p = cells.length > 0 ? center(cells[0], size) : MID;
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {DIRS_8.map((d, i) => fly(`orbit-${i}`, radial(p, d, 14), p, '🍂', i * 70, 800))}
+                    {DIRS_8.map((d, i) => pop(`wrap-${i}`, radial(p, d, 5), '🍂', 650 + i * 40))}
+                    {ring('ring-0', p, 700, '#e8a24a', 3.4)}
+                    {ring('ring-1', p, 850, '#ffd966', 4.4)}
+                    {pop('cloak', p, '🛡️', 900, styles.bigPop)}
+                    {rise('🍂', 'leaf')}
+                </>
+            );
+        }
+        case 'kindling': {
+            // 焚きつけ: 敵の枯れ葉に火が移り、ぱちぱちと燃え上がって、炎に変わる
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={base.haze} style={{ background: 'rgba(255, 140, 40, 0.3)' }} />
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`k-${k}`}>
+                            {pop(`leaf-${k}`, p, '🍂', k * 60)}
+                            {pop(`fire-${k}`, p, '🔥', 350 + k * 60, styles.bigPop)}
+                            {ring(`ring-${k}`, p, 350 + k * 60, '#ff7a2f', 2.6)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '🔥', 200, styles.bigPop)}
+                    {rise('🔥', 'ember')}
                 </>
             );
         }
