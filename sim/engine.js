@@ -696,20 +696,10 @@ function advanceTurn(s) {
     change.wardPlace.forEach((seat) => {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
-    // 実験(THAW_HACK=1): 雷霆の巫の手番開始時、自陣のリーチ(3つ+空き1)の4つ目が凍った空きマスなら、その❄を1つ解く
-    if (process.env.THAW_HACK && ch === 'electrician') {
-        const geo = geometryOf(s.size);
-        for (const line of geo.winLines) {
-            const mine = line.filter((i) => s.board[i].player === sym).length;
-            const foes = line.filter((i) => s.board[i].player && s.board[i].player !== sym).length;
-            const emptyFrozen = line.filter((i) => !s.board[i].player && s.board[i].effects.some((e) => e.effect === '❄'));
-            if (mine === 3 && foes === 0 && emptyFrozen.length === 1) {
-                const k = emptyFrozen[0];
-                const at = s.board[k].effects.findIndex((e) => e.effect === '❄');
-                s.board[k] = { ...s.board[k], effects: s.board[k].effects.filter((_, j) => j !== at) };
-                bumpStat(s, 'thawHack');
-            }
-        }
+    // 春雷(本番 gear.ts の springThunderThaw): 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く
+    if (hasGear(s.gears[next], 'springThunder')) {
+        const thawed = gear.springThunderThaw(s.board, sym);
+        if (thawed.length > 0) bumpStat(s, 'springThunder', thawed.length);
     }
     // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
     const burntTrees = objectsMod.sweepBurntTrees(s.board);
