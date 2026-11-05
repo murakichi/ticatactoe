@@ -3235,6 +3235,37 @@ class AIPlayer {
             }
         }
         this.hypoCut = 0;
+        // 軍師のオブジェクト(実験): 通常の支払いを済ませたあとの余剰魔力で置く。撃つ前に置くと招き猫・大工房の軽減が同じ手番の支払いにも効く
+        if (this.character === 'tactician' && !holdNoSpend && typeof process !== 'undefined' && process.env && process.env.EXP_TA_OBJ) {
+            const kinds = process.env.EXP_TA_OBJ.split(',') as (keyof typeof OBJECT_DEFS)[];
+            const quiet = this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0;
+            const wantBy = (k: string): boolean => {
+                const foes = this.opponents.map((o) => this.characterOf(o));
+                if (k === 'oneWord') return foes.some((c) => ['electrician', 'magician', 'cryomancer', 'witch', 'yinYangMaster'].includes(c as string));
+                if (k === 'mudField') return foes.some((c) => ['electrician', 'witch', 'magician', 'poisoner', 'cryomancer'].includes(c as string));
+                return true;
+            };
+            if (quiet && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+                const spent = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
+                const left = magic - this.lastSpent;
+                void spent;
+                for (const k of kinds) {
+                    const def = OBJECT_DEFS[k];
+                    if (!def || !availableSkills.includes(def.idx) || !wantBy(k) || board.some((sq) => sq.object === k && sq.player === this.playerSymbol)) continue;
+                    const cost = this.calculateAICost(costs[def.costKey], false, false, def.costKey);
+                    const mv = this.getBestMove(board, life);
+                    const cell = this.bestTreeCell(board.map((sq, i) => (i === mv ? { ...sq, player: this.playerSymbol } : sq)));
+                    if (cell === null || left < cost) continue;
+                    chargeClicks.push({ skill: def.costKey, target: cell });
+                    chargeResult = chargeClicks;
+                    magic -= cost;
+                    board = board.slice();
+                    board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                    planned = [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
+                    break;
+                }
+            }
+        }
         const skills = planned;
 
         // ターン終了スキルの場合は手を打たない
