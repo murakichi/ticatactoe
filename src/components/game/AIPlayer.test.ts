@@ -2010,3 +2010,43 @@ describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封
         expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
     });
 });
+
+describe('雷霆AI: オブジェクト（大木・雷雲）を設置する', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const run = (b: SquareInfo[], magic: number, hand: number[]) =>
+        new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'tactician']).makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    it('雷雲（idx 109）: 周囲八マスに敵のコマが2つ以上あるマスに立てる', () => {
+        const b = empty();
+        [5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        const r = run(b, 6, [109, 21, 23]);
+        const click = (r.chargeClicks ?? []).find((c) => c.skill === 'onClickThundercloud');
+        expect(click).toBeDefined();
+        expect([0, 1, 2, 4, 7, 8, 9, 10].includes(click!.target as number)).toBe(true); // 敵(5,6)の隣のマス
+    });
+    it('雷雲: 周囲に敵のコマが1つしか立てられるマスが無ければ撃たない／魔力が足りなければ撃たない', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        expect((run(b, 6, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+        const b2 = empty();
+        [5, 6].forEach((i) => (b2[i] = { player: '⭕', bind: 5, effects: [] }));
+        expect((run(b2, 3, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+    });
+    it('大木（idx 105）: 魔力がコストに届いていて、相手にリーチが無く空きが十分あれば立てる。届かなければ立てない', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        expect((run(b, 9, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).toContain('onClickBigTree');
+        expect((run(b, 3, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBigTree');
+    });
+    it('オブジェクトのマスは AI から『置けない空きマス』に見え、自陣のコマとして列に数えられない', () => {
+        const b = empty();
+        b[0] = { player: '💙', bind: 5, effects: [], object: 'bigTree' };
+        [1, 2, 3].forEach((i) => (b[i] = { player: '💙', bind: 5, effects: [] }));
+        // 行0は 大木(オブジェクト)+3コマ。オブジェクトは列に数えないので勝ち筋のリーチではない（誤認して0に置こうとしない）
+        const r = run(b, 2, [21, 23, 22]);
+        expect(r.move).not.toBe(0);
+    });
+});

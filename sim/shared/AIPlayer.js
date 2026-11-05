@@ -5,6 +5,7 @@ exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = export
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const bigSkills_1 = require("./bigSkills");
+const objects_1 = require("./objects");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -2978,6 +2979,39 @@ class AIPlayer {
                     magic -= cost;
                     this.updateShield(board);
                 }
+            }
+        }
+        // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
+        // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
+        // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_SKILL_BASE_IDX) && this.ownTrees < BIG_TREE_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
+            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
+            const cell = this.bestTreeCell(board);
+            // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
+            if (cell !== null && magic < cost && magic >= cost - BIG_TREE_HOLD_GAP)
+                this.holdPG = cost;
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickBigTree', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
+                magic -= cost;
+            }
+        }
+        // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
+        // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
+        if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_SKILL_BASE_IDX + 4) && this.ownClouds < CLOUD_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= CLOUD_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
+            const cell = this.bestCloudCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickThundercloud', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
             }
         }
         // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
