@@ -196,6 +196,8 @@ class AIPlayer {
     hypoCut: number = 0;
     /** 自陣の働いている雷雲の数 */
     ownClouds: number = 0;
+    /** 自陣の働いている毒沼の数 */
+    ownSwamps: number = 0;
     /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
     holdPG: number = 0;
     skillKinds: Set<string> = new Set();
@@ -2221,6 +2223,7 @@ class AIPlayer {
      */
     makeMove(...argsIn: Parameters<AIPlayer['planMove']>): AIResult {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
+        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         const args: Parameters<AIPlayer['planMove']> = argsIn[0].some((sq) => isObject(sq))
             ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as Parameters<AIPlayer['planMove']>
@@ -2769,6 +2772,20 @@ class AIPlayer {
             const cell = this.bestCloudCell(board);
             if (cell !== null && magic >= cost) {
                 chargeClicks.push({ skill: 'onClickThundercloud', target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+            }
+        }
+        // 毒沼（雷霆の巫）: 手番開始のたび、周囲八マスの敵のコマのランダムな1つに☠。ライフ0で奪われない雷霆は、削れて0になった敵コマを一方的に奪える。
+        // 敵のコマが2つ以上隣り合うマスに立てる。相手にリーチが無く、自分に勝ち筋が無いときだけ（雷雲と同じ考え方）
+        if (this.character === 'electrician' && availableSkills.includes(OBJECT_SKILL_BASE_IDX + 7) && this.ownSwamps < CLOUD_MAX
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && findEmptyIndexes(board).length >= CLOUD_MIN_EMPTY) {
+            const cost = this.calculateAICost(costs.onClickPoisonSwamp, false, false, 'onClickPoisonSwamp');
+            const cell = this.bestCloudCell(board);
+            if (cell !== null && magic >= cost) {
+                chargeClicks.push({ skill: 'onClickPoisonSwamp', target: cell });
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
