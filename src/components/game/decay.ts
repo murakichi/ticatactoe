@@ -2,7 +2,7 @@ import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { GEAR_PARAMS } from './gear';
-import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
+import { burnDamageOf, decayParts, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
 
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
 // 2人戦は従来どおり「着手のたび」。3人以上は人数が増えるほど1周あたりの減衰が増えてコマがすぐ0になる
@@ -42,6 +42,8 @@ export type DecayResult = {
     spreadOrigins: number[];
     /** 空蔵のロックが切れて、持ち主のコマが生えたマス */
     emptyLockSpawns: number[];
+    /** コマが受けたダメージの内訳(実際に減ったライフ)。natural=自然減衰(満杯の追加分を含む)、burn=🔥、poison=☠。ダメージの表示用 */
+    damage: { cell: number; natural: number; burn: number; poison: number }[];
 };
 
 /**
@@ -52,12 +54,19 @@ export type DecayResult = {
  * @param moveCell この着手のマス（毒で消える扱いから外す。着手でないなら -1）
  */
 export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false): DecayResult => {
-    const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [], damage: [] };
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if (burnDamageOf(before, chars) > 0) res.burnCells.push(k);
-        const sq = decayTick(crowded ? crowdedDecay(before) : before, chars); // 満杯の盤面は自然減衰がもう1回
+        const crowdedBefore = crowded ? crowdedDecay(before) : before; // 満杯の盤面は自然減衰がもう1回
+        const parts = decayParts(crowdedBefore, chars);
+        const sq = parts.sq;
         board[k] = sq;
+        // コマが受けたダメージ(自然減衰は満杯の追加分も含む)。ロックだけのマスは対象外
+        if (before.player) {
+            const natural = parts.natural + (before.bind - crowdedBefore.bind);
+            if (natural + parts.burn + parts.poison > 0) res.damage.push({ cell: k, natural, burn: parts.burn, poison: parts.poison });
+        }
         if (before.player && !sq.player) {
             res.flameKills++;
             continue;

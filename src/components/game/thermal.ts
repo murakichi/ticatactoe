@@ -281,17 +281,35 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => {
+export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => decayParts(sq, chars).sq;
+
+/** decayTick で減ったライフの内訳(実際に減った量)。natural=自然減衰、burn=🔥の継続ダメージ、poison=☠の継続ダメージ */
+export type DecayParts = { sq: SquareInfo; natural: number; burn: number; poison: number };
+
+/** decayTick と同じ計算で、ライフが何でいくつ減ったかも返す(ダメージの表示用。減った量は実際に減った分で、0未満にはならない) */
+export const decayParts = (sq: SquareInfo, chars: readonly CharacterId[]): DecayParts => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) next = { ...next, bind: next.bind - 1 };
+    const parts = { natural: 0, burn: 0, poison: 0 };
+    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) {
+        next = { ...next, bind: next.bind - 1 };
+        parts.natural = 1;
+    }
     const burn = burnDamageOf(next, chars);
-    if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
+    if (burn > 0) {
+        const bind = Math.max(0, next.bind - burn);
+        parts.burn = next.bind - bind;
+        next = { ...next, bind };
+    }
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { player: undefined, bind: 0, effects: [] };
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { sq: { player: undefined, bind: 0, effects: [] }, ...parts };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
-    if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
-    return next;
+    if (poison > 0 && next.bind > 0) {
+        const r = applyDamage(next, poison, 'poison');
+        parts.poison = next.bind - r.sq.bind;
+        next = r.sq;
+    }
+    return { sq: next, ...parts };
 };
 
 // ---- バーンアウト（汎用スキル）----

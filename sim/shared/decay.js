@@ -35,13 +35,21 @@ exports.crowdedDecay = crowdedDecay;
  * @param moveCell この着手のマス（毒で消える扱いから外す。着手でないなら -1）
  */
 const decayBoard = (board, moveCell, chars, symbols, crowded = false) => {
-    const res = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const res = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [], damage: [] };
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if ((0, thermal_1.burnDamageOf)(before, chars) > 0)
             res.burnCells.push(k);
-        const sq = (0, thermal_1.decayTick)(crowded ? (0, exports.crowdedDecay)(before) : before, chars); // 満杯の盤面は自然減衰がもう1回
+        const crowdedBefore = crowded ? (0, exports.crowdedDecay)(before) : before; // 満杯の盤面は自然減衰がもう1回
+        const parts = (0, thermal_1.decayParts)(crowdedBefore, chars);
+        const sq = parts.sq;
         board[k] = sq;
+        // コマが受けたダメージ(自然減衰は満杯の追加分も含む)。ロックだけのマスは対象外
+        if (before.player) {
+            const natural = parts.natural + (before.bind - crowdedBefore.bind);
+            if (natural + parts.burn + parts.poison > 0)
+                res.damage.push({ cell: k, natural, burn: parts.burn, poison: parts.poison });
+        }
         if (before.player && !sq.player) {
             res.flameKills++;
             continue;

@@ -15,8 +15,9 @@ import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
-import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
+import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType, DamageEffect, DamagePop } from './BoardEffects';
 import { isUniqueEffect } from './UniqueEffects';
+import { buildDamagePops } from './damagePops';
 import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
@@ -267,12 +268,34 @@ export const Game = (props: GameProps) => {
     };
     // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
     const [boardBurst, setBoardBurst] = useState<BurstEffect | null>(null);
+    // コマが受けたダメージの表示(赤字の -n)。原因の分かるもの(🔥☠⚡)は、着手の処理の中で hint に積み、
+    // 盤面が更新されたときに、前の盤面とのライフの差と突き合わせて表示する(差のうち原因の分からない分=自然減衰・攻撃・スキルは絵文字なし)
+    const [boardDamage, setBoardDamage] = useState<DamageEffect | null>(null);
+    const damageHints = useRef<Map<number, { icon?: string; amount: number }[]>>(new Map());
+    const addDamageHint = (cell: number, icon: string | undefined, amount: number) => {
+        if (amount <= 0) return;
+        damageHints.current.set(cell, [...(damageHints.current.get(cell) ?? []), { icon, amount }]);
+    };
+    const prevBoardRef = useRef<SquareInfo[] | null>(null);
     const playBurst = (type: BurstType, cells: number[]) => {
         if (cells.length === 0) return;
         playSfx(type);
         setBoardBurst((prev) => ({ type, cells, nonce: (prev?.nonce ?? 0) + 1 }));
         setTimeout(() => setBoardBurst(null), 1200);
     };
+    const damageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        const prev = prevBoardRef.current;
+        prevBoardRef.current = currentBoard;
+        const hints = damageHints.current;
+        damageHints.current = new Map();
+        if (!prev) return;
+        const items = buildDamagePops(prev, currentBoard, hints);
+        if (items.length === 0) return;
+        setBoardDamage((p) => ({ items, nonce: (p?.nonce ?? 0) + 1 }));
+        if (damageTimer.current) clearTimeout(damageTimer.current);
+        damageTimer.current = setTimeout(() => setBoardDamage(null), 1500);
+    }, [currentBoard]);
     // ギアの発動を知らせる(盤面上端のチップ + 効果音)。スキルの盤面演出とは別枠なので、同時に起きても上書きしない。
     // 同じギア・同じ文言が短時間に続いたら1つにまとめる(StrictMode の二重実行や、同じ手の中の連続発動で、チップが並びすぎないように)
     const [gearToasts, setGearToasts] = useState<GearToast[]>([]);
@@ -1125,6 +1148,12 @@ export const Game = (props: GameProps) => {
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は decay.ts で sim と共有
         const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols, isCrowded(nextBoard, seatCount)) : null; // 満杯の盤面は自然減衰がもう1回
         const burnCells = decayed?.burnCells ?? [];
+        // 受けたダメージの内訳(自然減衰は絵文字なし、🔥と☠は絵文字付き)
+        decayed?.damage.forEach((d) => {
+            addDamageHint(d.cell, undefined, d.natural);
+            addDamageHint(d.cell, '🔥', d.burn);
+            addDamageHint(d.cell, '☠', d.poison);
+        });
         if (decayed) {
             spreadOrigins.push(...decayed.spreadOrigins);
             poisonVanished = decayed.spreadOrigins.length;
@@ -1216,7 +1245,9 @@ export const Game = (props: GameProps) => {
         }
 
         // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ（蘇生の吸収より前）
+        const bindsBeforeFire = nextBoard.map((sq) => sq.bind);
         const fire = fireCharges(nextBoard, i, geo.size, characters, gearsBySeat.map((g) => hasGear(g, 'conduction')));
+        fire.damaged.forEach((n) => addDamageHint(n, '⚡', bindsBeforeFire[n] - nextBoard[n].bind));
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);
@@ -3440,6 +3471,8 @@ export const Game = (props: GameProps) => {
         setPreviewCells([]);
         setBoardEffect(null);
         setBoardBurst(null);
+        setBoardDamage(null);
+        damageHints.current = new Map();
         setLockedSkillsAll(Array.from({ length: seatCount }, () => []));
         // ギア: 手番内のスキル使用状況をリセットし、価格破壊のコスト表を引き直す
         gearTurn.current = {
@@ -3753,7 +3786,7 @@ export const Game = (props: GameProps) => {
                             onCellHover={aiTurn ? undefined : onCellHover}
                             onCellLeave={onCellLeave}
                         />
-                        <BoardEffects effect={boardEffect} burst={boardBurst} size={geo.size} />
+                        <BoardEffects effect={boardEffect} burst={boardBurst} damage={boardDamage} size={geo.size} />
                         {winner && <VictoryEffect key={winner} winner={winner} seat={seatOf(winner)} />}
                         <GearToasts toasts={gearToasts} />
                         {hailMarySpin && (

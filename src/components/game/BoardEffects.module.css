@@ -930,3 +930,53 @@
         animation-duration: 1ms;
     }
 }
+
+/* コマが受けたダメージ: 赤字で小さく「-n」。効果(🔥☠⚡)によるものは絵文字付き。下から浮かんで消える */
+.damagePop {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    color: #ff4d5e;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+    text-shadow: 0 0 2px #000, 0 1px 2px #000, 0 0 4px #000;
+    opacity: 0;
+    animation: damagePopFloat 1300ms ease-out forwards;
+}
+
+@keyframes damagePopFloat {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -30%);
+    }
+    15% {
+        opacity: 1;
+        transform: translate(-50%, -60%);
+    }
+    70% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -140%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .damagePop {
+        animation: damagePopFade 1300ms linear forwards;
+    }
+
+    @keyframes damagePopFade {
+        0%,
+        70% {
+            opacity: 1;
+            transform: translate(-50%, -60%);
+        }
+        100% {
+            opacity: 0;
+            transform: translate(-50%, -60%);
+        }
+    }
+}
