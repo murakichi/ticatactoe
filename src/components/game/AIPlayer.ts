@@ -1369,7 +1369,7 @@ class AIPlayer {
 
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
     /** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、それ以外は盤の隅に近いマス。置けなければ null */
-    planObject(board: SquareInfo[], left: number, costs: any, availableSkills: number[]): { kind: (typeof OBJECT_KINDS)[number]; cell: number } | null {
+    planObject(board: SquareInfo[], left: number, costs: any, availableSkills: number[], heavyReady: boolean): { kind: (typeof OBJECT_KINDS)[number]; cell: number } | null {
         const geo = geometryForCells(board.length);
         const size = Math.round(Math.sqrt(board.length));
         const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
@@ -1379,6 +1379,9 @@ class AIPlayer {
             const idx = OBJECT_DEFS[kind].idx;
             if (!availableSkills.includes(idx)) continue;
             if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind)) continue;
+            // 大工房はベースコスト7以上の札(降霊・一寸の虫)を撃てる見込みがあるときだけ。一言居士はスキルを連打する相手がいるときだけ
+            if (kind === 'workshop' && !heavyReady) continue;
+            if (kind === 'oneWord' && !this.opponents.some((o) => ['cryomancer', 'poisoner', 'witch', 'tactician', 'magician', 'pyromancer'].includes(this.characterOf(o)))) continue;
             const cost = this.calculateAICost(costs[OBJECT_DEFS[kind].costKey], false, false, OBJECT_DEFS[kind].costKey);
             if (left - cost < 1) continue;
             let best = -1;
@@ -3270,7 +3273,7 @@ class AIPlayer {
         // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木を自陣の近くに1つずつ設置する。
         // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
         if (this.character === 'necromancer' && !skills.some(s => TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
-            const pick = this.planObject(board, magic - this.lastSpent, costs, availableSkills);
+            const pick = this.planObject(board, magic - this.lastSpent, costs, availableSkills, availableSkills.includes(92) || (necroRemain === 0 && NECROMANCY.baseCost - necroCost >= 2));
             if (pick) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                 post[pick.cell] = { player: this.playerSymbol, bind: OBJECT_DEFS[pick.kind].life, effects: post[pick.cell].effects.filter((e) => e.effect === '🔥'), object: pick.kind };
