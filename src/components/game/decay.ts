@@ -1,5 +1,5 @@
 import { CharacterId } from '../../types/Character';
-import { Player } from '../../types/Player';
+import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { GEAR_PARAMS } from './gear';
 import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
@@ -86,3 +86,10 @@ export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonl
  */
 export const canHitBound = (character: CharacterId | undefined, board: SquareInfo[], seatCount: number): boolean =>
     character === 'giant' || isCrowded(board, seatCount);
+
+/**
+ * 雷霆の巫のコマは、ライフが0になっても着手で奪われない（ライフの残ったコマと同じ扱い。巨人と満杯の盤面だけが奪える）。
+ * ライフ0の自コマを敵に取られて列を完成されるのが負けの大半だったため（ユーザー指示 2026-11-05）
+ */
+export const isTakeProtected = (sq: SquareInfo, chars: readonly (CharacterId | undefined)[]): boolean =>
+    !!sq.player && sq.bind <= 0 && chars[seatOf(sq.player)] === 'electrician';

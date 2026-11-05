@@ -928,8 +928,8 @@ class AIPlayer {
                     moves.push(i);
             }
             else if (this.isEnemy(sq.player)) {
-                // bind=0の敵マスは無条件で乗っ取り可能
-                if (sq.bind <= 0) {
+                // bind=0の敵マスは無条件で乗っ取り可能（雷霆の巫のコマは除く）
+                if (sq.bind <= 0 && !(0, decay_2.isTakeProtected)(sq, this.characters)) {
                     moves.push(i);
                 }
                 else if ((0, decay_2.canHitBound)(this.character, board, this.opponents.length + 1)) {
@@ -975,7 +975,7 @@ class AIPlayer {
                     moves.push(i);
             }
             else if (sq.player !== player) {
-                if (sq.bind <= 0)
+                if (sq.bind <= 0 && !(0, decay_2.isTakeProtected)(sq, this.characters))
                     moves.push(i);
             }
         }
@@ -1145,7 +1145,7 @@ class AIPlayer {
                 score += YY_COVER_WEIGHT * (this.coveredLines(simBoard) - this.coveredLines(board));
             }
             // bind=0の敵マス乗っ取りボーナス（捕獲の戦術価値は墓地1個の損より大きいと実測で判明したため対ネクロでも維持）
-            if (this.isEnemy(board[i].player) && board[i].bind <= 0) {
+            if (this.isEnemy(board[i].player) && board[i].bind <= 0 && !(0, decay_2.isTakeProtected)(board[i], this.characters)) {
                 score += 30;
                 // 氷室の番人はネクロが相手のとき奪取を避ける（奪取は敵味方問わずネクロの墓地+1＝降霊の召喚数とコスト減）。
                 // 旧sim AI noCapNecro=100: 対ネクロ +5〜+11pt (seed1-3、各300〜400試合)

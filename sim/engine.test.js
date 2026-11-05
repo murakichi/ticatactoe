@@ -771,6 +771,22 @@ test('雷霆の巫パッシブ: 雷霆の巫以外の⚡付きコマは通常ど
     assert.strictEqual(s.board[3].player, '💙');
 });
 
+test('雷霆の巫パッシブ: ⚡の無い自陣マスも、ライフ0で奪われない（巨人と満杯の盤面は奪える。他のキャラは従来どおり奪える）', () => {
+    const s = game('you', 'electrician');
+    s.heartTurn = true; s.life = 9;
+    s.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(s, 3), false);
+    assert.strictEqual(s.board[3].player, '⭕');
+    const g = game('giant', 'electrician');
+    g.heartTurn = true; g.life = 9;
+    g.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(g, 3), true); // 巨人は奪える
+    const o = game('you', 'poisoner');
+    o.heartTurn = true; o.life = 9;
+    o.board[3] = { player: '⭕', bind: 0, effects: [] };
+    assert.strictEqual(e.placeMove(o, 3), true); // 雷霆の巫以外は従来どおり
+});
+
 test('雷霆の巫の弱点: ⚡付き自陣マスは自分でも触れない(強化もできない)', () => {
     const s = game('electrician', 'you');
     s.heartTurn = true; s.life = 5;
