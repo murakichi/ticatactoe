@@ -43,12 +43,15 @@ export const OBJECT_PARAMS = {
     fortLife: 1,
 } as const;
 
+/** 設置したときのライフ（全種類共通） */
+export const OBJECT_LIFE = 5;
+
 export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
-    bigTree: { name: '大木', icon: '🌳', life: 3, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
-    deadTree: { name: '枯れた大木', icon: '🪵', life: 3, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
-    spring: { name: '生命の泉', icon: '⛲', life: 4, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
-    fort: { name: '砦', icon: '🏰', life: 6, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
-    thundercloud: { name: '雷雲', icon: '🌩️', life: 3, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
+    bigTree: { name: '大木', icon: '🌳', life: OBJECT_LIFE, costKey: 'onClickBigTree', desc: `手番開始時、マジック+${OBJECT_PARAMS.bigTreeMagic}。🔥を付けられると即座に壊れる` },
+    deadTree: { name: '枯れた大木', icon: '🪵', life: OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに🍂を付ける。🔥を付けられると即座に壊れる' },
+    spring: { name: '生命の泉', icon: '⛲', life: OBJECT_LIFE, costKey: 'onClickSpring', desc: `手番開始時のライフ期待値+${OBJECT_PARAMS.springLife}` },
+    fort: { name: '砦', icon: '🏰', life: OBJECT_LIFE, costKey: 'onClickFort', desc: `手番開始時、周囲八マスの自陣のコマのライフ+${OBJECT_PARAMS.fortLife}` },
+    thundercloud: { name: '雷雲', icon: '🌩️', life: OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲八マスのコマのうちランダムな1つに⚡を付ける' },
 };
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
