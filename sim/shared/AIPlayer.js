@@ -20,6 +20,7 @@ const graveSkills_1 = require("./graveSkills");
 const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
+const objects_2 = require("./objects");
 const charge_1 = require("./charge");
 // 汎用スキルプールの大きさ (idx 0..129)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 exports.SKILL_POOL_SIZE = 130;
@@ -2506,7 +2507,7 @@ class AIPlayer {
         return total;
     }
     planMove(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, judgeCost = 99, assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost, necroCosts = []) {
-        var _a, _b;
+        var _a, _b, _c, _d, _e;
         this.necroActive = necroRemain > 0;
         this.updateShield(board);
         // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
@@ -2705,6 +2706,66 @@ class AIPlayer {
                 this.updateShield(board);
             }
         }
+        // 氷室の番人: 縛り・守りのオブジェクトを置く（実験: 環境変数 OBJ_PLACE=置く札のidxをカンマ区切り。例 128,127,129）
+        const placeEnv = String((_d = (_c = (_b = globalThis.process) === null || _b === void 0 ? void 0 : _b.env) === null || _c === void 0 ? void 0 : _c.OBJ_PLACE) !== null && _d !== void 0 ? _d : '');
+        if (placeEnv && this.character === 'cryomancer' && threatSquares.length === 0) {
+            const OBJ_CARDS = {
+                128: { key: 'onClickOneWord', kind: 'oneWord', vs: ['yinYangMaster', 'necromancer', 'pyromancer', 'witch', 'poisoner', 'electrician', 'tactician', 'giant', 'magician', 'you'] },
+                127: { key: 'onClickSoloSign', kind: 'soloSign', vs: ['yinYangMaster', 'witch', 'tactician', 'necromancer'] },
+                129: { key: 'onClickBlindMonkey', kind: 'blindMonkey', vs: ['pyromancer', 'poisoner', 'witch', 'electrician'] },
+            };
+            for (const idxStr of placeEnv.split(',')) {
+                const idx = Number(idxStr);
+                const def = OBJ_CARDS[idx];
+                if (!def || !availableSkills.includes(idx))
+                    continue;
+                if (!this.opponents.some((o) => def.vs.includes(this.characterOf(o))))
+                    continue;
+                if (board.some((sq) => sq.object === def.kind && sq.player === this.playerSymbol))
+                    continue; // 同じ種類は1つまで
+                const cost = this.calculateAICost(costs[def.key], false, false, def.key);
+                if (magic < cost + 1)
+                    continue;
+                let cell = -1;
+                let best = -Infinity;
+                board.forEach((sq, i) => {
+                    if (!(0, objects_2.objectLandable)(sq))
+                        return;
+                    let v = 0;
+                    if (def.kind === 'blindMonkey') {
+                        // 周囲八マスの自陣のコマが多いマス（守る範囲）
+                        for (const j of (0, boardGeometry_1.geometryForCells)(board.length).surroundRange(i))
+                            if (board[j].player === this.playerSymbol && !board[j].object)
+                                v += 2;
+                        for (const j of (0, boardGeometry_1.geometryForCells)(board.length).surroundRange(i))
+                            if (!board[j].player)
+                                v += 0.5;
+                    }
+                    else {
+                        for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+                            if (!line.includes(i))
+                                continue;
+                            const mine = line.filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+                            const foes = line.filter((j) => this.isEnemy(board[j].player) && !board[j].object).length;
+                            v += foes > 0 && mine === 0 ? 1 : -1 - mine;
+                        }
+                    }
+                    if (v > best) {
+                        best = v;
+                        cell = i;
+                    }
+                });
+                if (cell === -1)
+                    continue;
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[cell] = (0, objects_2.newObject)(this.playerSymbol, def.kind);
+                this.updateShield(post);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: [def.key], lockTargets: [cell] };
+                this.updateShield(board);
+            }
+        }
         // 氷室の番人: 対陰陽師。百鬼夜行は氷結中の空きマスを飛ばすので、陰陽師の魔力が12以上のとき、自コマも氷結も入っていない列の空きマスを
         // 最も多くの列に乗るものから1つ凍らせる（旧sim AI F.antiFlood=13。対陰陽師 seed1-3/400 で 31〜36% → 49〜53%。常時や魔力7では悪化）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
@@ -2739,7 +2800,7 @@ class AIPlayer {
         // ネクロのコマがあり自コマが無い列の空きマスを1つ先に凍らせる（旧sim AI F.antiSummon=1, antiSummonMax=1。対ネクロ seed1-3/400 で +5〜+11pt）
         if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
             const necro = this.opponents.find((o) => this.characterOf(o) === 'necromancer');
-            if (necro && 10 - ((_b = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _b !== void 0 ? _b : 10) >= 1) {
+            if (necro && 10 - ((_e = necroCosts[(0, Player_1.seatOf)(necro)]) !== null && _e !== void 0 ? _e : 10) >= 1) {
                 const score = new Map();
                 for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
                     if (line.some((i) => board[i].player === this.playerSymbol))
