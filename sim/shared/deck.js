@@ -142,7 +142,7 @@ exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
 exports.RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 50],
     tactician: [3, 9, 11, 45, 46, 50, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
+    magician: [2, 9, 10, 13, 35, 47, 50, 53, 56, 60, 92, 103],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92],
     necromancer: [2, 3, 6, 8, 11, 22, 40, 50, 58, 89, 92, 95],
