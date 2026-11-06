@@ -1736,12 +1736,14 @@ class AIPlayer {
             if (remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2))
                 spend(vsCost, 'onClickVacantSeal');
         }
-        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 払えれば撃つ（自分の手番は着手が先になるので、自分にリーチがあるときは撃たない）。
         // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
         if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
             const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
             const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
-            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost))))
+            // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
+            // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
+            if (remaining >= sealCost)
                 spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
