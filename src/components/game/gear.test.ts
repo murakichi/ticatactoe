@@ -298,6 +298,7 @@ describe('「あなた」の相手別ギア', () => {
         expect(recommendedGearsAgainst('you', ['poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
         expect(recommendedGearsAgainst('you', ['poisoner', 'poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
         expect(recommendedGearsAgainst('you', ['poisoner', 'giant'])).toEqual(recommendedGears('you'));
+        expect(recommendedGearsAgainst('you', ['magician'])).toEqual(['lastStand', 'sturdy', 'luckyPurse']);
         expect(recommendedGearsAgainst('you', ['giant'])).toEqual(recommendedGears('you'));
         expect(recommendedGearsAgainst('magician', ['poisoner'])).toEqual(recommendedGears('magician'));
     });
