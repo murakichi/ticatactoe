@@ -63,6 +63,7 @@ import {
 import { Status } from './Status';
 import styles from './Game.module.css';
 import { playSfx } from '../../sound';
+import { usePendingMode } from './pendingMode';
 import { useBoardEffects, useGearToasts, useSkillStrip, useSoundToggle } from './usePresentation';
 
 
@@ -640,6 +641,8 @@ export const Game = (props: GameProps) => {
         gearTrigger('harvest', `魔力+${gain}`);
     };
 
+    // マス選択などの「構え」の状態。同時に構えるのは1つだけなので、1つの状態で持つ（useXxx / setUseXxx は個別に読み書きできる形で渡す）
+    const { flag: pendingFlag, setMode: setPendingMode } = usePendingMode();
     const [useToken, setUseToken] = useState<boolean>(false);
     const [useTokenCount, setUseTokenCountAt, setUseTokenCountAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     useEffect(() => {
@@ -1425,7 +1428,7 @@ export const Game = (props: GameProps) => {
         toxicBloom(board, [t]);
     };
     const [useInjection, setUseInjection] = useState<number>(0);
-    const [usePandemic, setUsePandemic] = useState<boolean>(false);
+    const [usePandemic, setUsePandemic] = pendingFlag('pandemic');
     // ミアズマの実コスト: 基礎 - 自陣の毒の数、毒使い割引(-1)、下限は MIASMA_MIN_COST
     const miasmaCost = (player: Player = currentTurnPlayer): number =>
         Math.max(MIASMA_MIN_COST, calculateCost(costTableFor(seatOf(player)).onClickMiasma - poisonCount(player), false, true, player, 'onClickMiasma'));
@@ -1668,7 +1671,7 @@ export const Game = (props: GameProps) => {
 
     // 雷のない所に火は立たぬ: ⚡のあるコマを1つ選んで破壊し（氷結中なら❄-1だけ）、周囲8マスの敵コマのうち2〜全部をランダムに選んで🔥を1つずつ付ける。
     // 選べるのは⚡のあるコマ。自分の無敵マスは選べるが、🔑ロック中のコマと他人の無敵マスは選べない
-    const [useThunderFire, setUseThunderFire] = useState<boolean>(false);
+    const [useThunderFire, setUseThunderFire] = pendingFlag('thunderFire');
     const thunderFireTargets = (): number[] => thunderFireTargetsOf(currentBoard, currentTurnPlayer, characters);
     const onClickThunderFire = () => {
         addLog('「雷のない所に火は立たぬ」を使用（⚡のあるコマを選択）');
@@ -1700,7 +1703,7 @@ export const Game = (props: GameProps) => {
     };
 
     // 雷神のへそくり: 自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1する（軽減後は最低1）
-    const [useStash, setUseStash] = useState<boolean>(false);
+    const [useStash, setUseStash] = pendingFlag('stash');
     const stashTargets = (): number[] => stashTargetsOf(currentBoard, currentTurnPlayer);
     const onClickStash = () => {
         addLog('「雷神のへそくり」を使用（⚡のある自陣のコマを選択）');
@@ -1789,7 +1792,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickProliferate, false, false, currentTurnPlayer, 'onClickProliferate'), true, true, 'onClickProliferate');
     };
 
-    const [useStomp, setUseStomp] = useState<boolean>(false);
+    const [useStomp, setUseStomp] = pendingFlag('stomp');
     const onClickStomp = () => {
         addLog('「ストンプ」を使用（マスを選択）');
         setUseStomp(true);
@@ -1810,7 +1813,7 @@ export const Game = (props: GameProps) => {
 
     const baseJudgeDayCost = seatCosts.onClickJudgeDay;
     const judgeDayCost = gearCost(judgeDayBase(baseJudgeDayCost, useMagicCount[turnSeat]), turnSeat, false, 'onClickJudgeDay');
-    const [useJudgeDay, setUseJudgeDay] = useState<boolean>(false);
+    const [useJudgeDay, setUseJudgeDay] = pendingFlag('judgeDay');
     const onClickJudgeDay = () => {
         addLog('「審判の日」を使用（マスを選択）');
         spendMagic(judgeDayCost, false, true, 'onClickJudgeDay');
@@ -1846,11 +1849,11 @@ export const Game = (props: GameProps) => {
 
     // 式神(📜): 紙の分身。ライフ2で列には数えない。自分で補強すると🌱付きの自陣コマ、相手に乗っ取られると空きマスになる。
     // 陰: 任意の空きマスに置く(コスト2) / 陽: 自分の式神を1つ選んで爆破(コスト4)。sim/engine.js の SHIKIGAMI_* と同値
-    const [useShikigamiPlace, setUseShikigamiPlace] = useState<boolean>(false);
-    const [useShikigamiBlast, setUseShikigamiBlast] = useState<boolean>(false);
-    const [useShikigamiBless, setUseShikigamiBless] = useState<boolean>(false);
-    const [useShikigamiCurse, setUseShikigamiCurse] = useState<boolean>(false);
-    const [useShikigamiPurge, setUseShikigamiPurge] = useState<boolean>(false);
+    const [useShikigamiPlace, setUseShikigamiPlace] = pendingFlag('shikigamiPlace');
+    const [useShikigamiBlast, setUseShikigamiBlast] = pendingFlag('shikigamiBlast');
+    const [useShikigamiBless, setUseShikigamiBless] = pendingFlag('shikigamiBless');
+    const [useShikigamiCurse, setUseShikigamiCurse] = pendingFlag('shikigamiCurse');
+    const [useShikigamiPurge, setUseShikigamiPurge] = pendingFlag('shikigamiPurge');
     const ownShikigami = (): number[] => ownShikigamiCells(currentBoard, currentTurnPlayer);
     // オブジェクト(idx 105-109): 空きマスを選んで設置する。列に数えず、ライフは減らない。効果は手番開始時（下の [currentTurn] の effect）。仕様は objects.ts
     const [objectPlacing, setObjectPlacing] = useState<ObjectKind | null>(null);
@@ -2493,10 +2496,10 @@ export const Game = (props: GameProps) => {
     };
 
     // --- 帯電（雷霆の巫） ---
-    const [useChargeOne, setUseChargeOne] = useState<boolean>(false);
-    const [useChargeSpread, setUseChargeSpread] = useState<boolean>(false);
-    const [useChargeArea, setUseChargeArea] = useState<boolean>(false);
-    const [useJammer, setUseJammer] = useState<boolean>(false);
+    const [useChargeOne, setUseChargeOne] = pendingFlag('chargeOne');
+    const [useChargeSpread, setUseChargeSpread] = pendingFlag('chargeSpread');
+    const [useChargeArea, setUseChargeArea] = pendingFlag('chargeArea');
+    const [useJammer, setUseJammer] = pendingFlag('jammer');
     // 帯電付与・帯電拡散の実コスト: 基礎 - 盤面の⚡の数（キャラ補正後）、下限は CHARGE_MIN_COST (#43)
     const chargeOneCost = (player: Player = currentTurnPlayer): number =>
         reducedChargeCost(seatCosts.onClickChargeOne, currentBoard, (c) => calculateCost(c, false, false, player, 'onClickChargeOne'));
@@ -2579,9 +2582,9 @@ export const Game = (props: GameProps) => {
 
 
     // --- 氷結・火炎（thermal.ts。氷室の番人・煉獄の鍛冶師） ---
-    const [useFreeze, setUseFreeze] = useState<boolean>(false);
-    const [useIgnite, setUseIgnite] = useState<boolean>(false);
-    const [useTinder, setUseTinder] = useState<boolean>(false);
+    const [useFreeze, setUseFreeze] = pendingFlag('freeze');
+    const [useIgnite, setUseIgnite] = pendingFlag('ignite');
+    const [useTinder, setUseTinder] = pendingFlag('tinder');
     // 氷結: 選んだコマに❄を付与する（敵味方どちらでも。付与しただけではダメージは出ない）
     const onClickFreeze = () => {
         addLog('「氷結」を使用（コマを選択）');
@@ -2624,7 +2627,7 @@ export const Game = (props: GameProps) => {
         spendMagic(cost, false, true, 'onClickGlacier');
     };
     // --- バッズ系の汎用スキル（idx 33-36） ---
-    const [useSucker, setUseSucker] = useState<boolean>(false);
+    const [useSucker, setUseSucker] = pendingFlag('sucker');
     // 刈り入れ前夜: 自陣の🌱を全部刈り取り、その数だけ魔力を得る（クリック不要・手番は続く）
     const ownBudTotal = (): number => currentBoard.reduce((n, sq) => (sq.player === currentTurnPlayer ? n + activeBuds(sq, budGuard[turnSeat]) : n), 0);
     const onClickHarvestEve = () => {
@@ -2715,7 +2718,7 @@ export const Game = (props: GameProps) => {
         setUseToken(true);
     };
     // 焼畑: 🌱を持つマス（敵味方どちらでも）を選ぶと、その🌱を全て同じ数の🔥に変える
-    const [useSwidden, setUseSwidden] = useState<boolean>(false);
+    const [useSwidden, setUseSwidden] = pendingFlag('swidden');
     const onClickSwidden = () => {
         addLog('「焼畑」を使用（🌱のあるマスを選択）');
         setUseSwidden(true);
@@ -2735,8 +2738,8 @@ export const Game = (props: GameProps) => {
     };
 
     // --- 汎用スキル（idx 49-52）: 慈雨・縮地・写し身・追い剥ぎ ---
-    const [useClone, setUseClone] = useState<boolean>(false);
-    const [usePlunder, setUsePlunder] = useState<boolean>(false);
+    const [useClone, setUseClone] = pendingFlag('clone');
+    const [usePlunder, setUsePlunder] = pendingFlag('plunder');
     // 慈雨: 自陣の全コマのライフ+1（クリック不要・手番は続く）
     // 福引き(idx 59): 自分のデッキから、基礎コスト3以下で今撃てるスキルをランダムに1つ、コストを払わず発動する（手札に出ていないスキルも対象）
     const lotteryPool = () =>
@@ -2920,11 +2923,11 @@ export const Game = (props: GameProps) => {
     };
 
     // --- 氷結系の汎用スキル（idx 41-48）。作った❄は1個ずつ絶対零度のコスト軽減に数える ---
-    const [useFrostArea, setUseFrostArea] = useState<boolean>(false);
-    const [useIcicle, setUseIcicle] = useState<boolean>(false);
+    const [useFrostArea, setUseFrostArea] = pendingFlag('frostArea');
+    const [useIcicle, setUseIcicle] = pendingFlag('icicle');
     const [icicleCell, setIcicleCell] = useState<number | null>(null);
-    const [useFreezeSpread, setUseFreezeSpread] = useState<boolean>(false);
-    const [useShatter, setUseShatter] = useState<boolean>(false);
+    const [useFreezeSpread, setUseFreezeSpread] = pendingFlag('freezeSpread');
+    const [useShatter, setUseShatter] = pendingFlag('shatter');
     // cells のうち氷結を付けられるマスに❄を付け、数えて演出する。作れた数を返す
     // 雷霆の巫の⚡無敵のコマは、状態異常（氷結）の対象にならない（毒霧・パンデミックなどと同じ）
     const notShielded = (cells: number[]): number[] => cells.filter((k) => !isShielded(currentBoard[k], characters));
@@ -3060,7 +3063,7 @@ export const Game = (props: GameProps) => {
     };
 
     // 殉火（仮名）: 自陣のコマを1つ選んでライフをゼロにし、そのライフ以下の敵のコマ全てに🔥を付ける。手番は続く
-    const [useSacrifice, setUseSacrifice] = useState<boolean>(false);
+    const [useSacrifice, setUseSacrifice] = pendingFlag('sacrifice');
     const sacrificeCandidates = (): number[] => sacrificeCandidatesOf(currentBoard, currentTurnPlayer, characters);
     const onClickSacrifice = () => {
         addLog('「殉火」を使用（犠牲にする自陣のコマを選択）');
@@ -3081,7 +3084,7 @@ export const Game = (props: GameProps) => {
     };
 
     // 鬼門封じ: 敵のコマを1つ選んで破壊する（氷結中は❄-1だけ）。破壊して空きマスになったら3ターンロックする。🔑ロック・⚡無敵のコマは選べない
-    const [useKimon, setUseKimon] = useState<boolean>(false);
+    const [useKimon, setUseKimon] = pendingFlag('kimon');
     // 落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ付ける（🔑ロック・⚡無敵は除く）。クリック不要・手番は続く
     const leafDropCandidates = (): number[] => leafDropTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
     const onClickLeafDrop = () => {
@@ -3576,40 +3579,17 @@ export const Game = (props: GameProps) => {
         setGearOffAll(Array(seatCount).fill(false));
         setChargeBuffAll(Array(seatCount).fill(0));
         setProliferateCountAll(zeros());
-        setUseStomp(false);
-        setUseJudgeDay(false);
+        setPendingMode(null); // 構えを全て外す
         setUseBuds([false, 0]);
         setUseLock(0);
         setUseInjection(0);
-        setUsePandemic(false);
-        setUseChargeOne(false);
-        setUseChargeSpread(false);
-        setUseChargeArea(false);
-        setUseJammer(false);
-        setUseFreeze(false);
-        setUseIgnite(false);
-        setUseTinder(false);
         setGlacierPendingAll(Array(seatCount).fill(false));
         setGlacierChargeAll(Array(seatCount).fill(0));
         setBudGuardAll(Array(seatCount).fill(false));
-        setUseSucker(false);
-        setUseShikigamiPlace(false);
-        setUseShikigamiBlast(false);
-        setUseShikigamiBless(false);
-        setUseShikigamiCurse(false);
-        setUseShikigamiPurge(false);
         setObjectPlacing(null);
         setObjectTool(null);
         setCaptureChoice(null);
-        setUseSwidden(false);
-        setUseSacrifice(false);
-        setUseFrostArea(false);
-        setUseClone(false);
-        setUsePlunder(false);
-        setUseIcicle(false);
         setIcicleCell(null);
-        setUseFreezeSpread(false);
-        setUseShatter(false);
         setRemainNecroAll(zeros());
         setNecroCostAll(Array(seatCount).fill(baseNecromancyCost));
         setPendingAIMove(null);
