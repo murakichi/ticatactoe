@@ -50,7 +50,8 @@ const blast = (board, i, player, chars) => {
         }
         if (sq.player === player || (0, charge_1.isGuarded)(sq, chars))
             continue;
-        const hit = (0, thermal_1.applyDamage)(sq, exports.SHIKIGAMI_BLAST_DAMAGE, 'skill');
+        const target = process.env.FP && (0, thermal_1.isFrozen)(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '❄') } : sq; // 検証用: 氷結を貫通する上限の見積もり
+        const hit = (0, thermal_1.applyDamage)(target, exports.SHIKIGAMI_BLAST_DAMAGE, 'skill');
         if (hit.blocked) {
             board[j] = hit.sq;
             broken.push(j);

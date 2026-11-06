@@ -5,7 +5,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, isGuarded } from './charge';
 import { addPoison } from './poison';
-import { applyDamage, emptyBlocked } from './thermal';
+import { applyDamage, emptyBlocked, isFrozen } from './thermal';
 import { isShikigami } from '../../util';
 
 /** 式神を置いたときのライフ */
@@ -63,7 +63,8 @@ export const blast = (board: SquareInfo[], i: number, player: Player, chars: Pla
             continue;
         }
         if (sq.player === player || isGuarded(sq, chars)) continue;
-        const hit = applyDamage(sq, SHIKIGAMI_BLAST_DAMAGE, 'skill');
+        const target = process.env.FP && isFrozen(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '❄') } : sq; // 検証用: 氷結を貫通する上限の見積もり
+        const hit = applyDamage(target, SHIKIGAMI_BLAST_DAMAGE, 'skill');
         if (hit.blocked) { board[j] = hit.sq; broken.push(j); continue; }
         affected.push(j);
         if (hit.sq.bind < 1) { board[j] = empty(); destroyed++; }
