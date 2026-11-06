@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch', 'keysmith'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -67,6 +67,7 @@ const placementMod = require('./shared/placement');
 const proliferateMod = require('./shared/proliferate');
 const tokenAfterMod = require('./shared/tokenAfter');
 const deadlockMod = require('./shared/deadlock');
+const keysmithMod = require('./shared/keysmith');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
 const genericMod = require('./shared/generic');
@@ -957,7 +958,7 @@ function placeMove(s, i) {
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if ((board[i].bind > 0 || decayMod.isTakeProtected(board[i], s.chars)) && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
-    if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
+    if (keysmithMod.lockBlocksPlacement(board[i], curChar(s))) return false; // 鍵師は空きマスのロックを無視して置ける
     // 氷結中の空きマスには誰も着手できない
     if (thermal.emptyBlocked(board[i])) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
@@ -2541,6 +2542,22 @@ function onClickMogaribue(s) {
     bumpStat(s, 'mogaribueDamage', r.damage * r.hit.length);
 }
 
+// 封鎖の断（鍵師・#439）: 自陣7・空きマス2のロック、敵のロックを解除して解除数ぶんダメージ。ターン終了 [FAITHFUL] Game.tsx onClickSeal
+function sealCost(s) {
+    const n = keysmithMod.sealReleaseCells(s.board, curPlayer(s)).length;
+    return calculateCost(s, keysmithMod.sealBaseCost(costsOf(s).onClickSeal, n), false, false, 'onClickSeal');
+}
+function onClickSeal(s) {
+    const cost = sealCost(s);
+    const r = keysmithMod.seal(s.board, curPlayer(s), s.chars);
+    spendMagic(s, cost, 'onClickSeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'seal');
+    bumpStat(s, 'sealRelease', r.released.length);
+    bumpStat(s, 'sealDamage', r.damage * r.hit.length);
+    endTurn(s);
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -2640,6 +2657,7 @@ const SKILLS = {
     windborne: onClickWindborne,
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
+    seal: onClickSeal,
     burnout: onClickBurnout,
     markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
     effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
@@ -2722,5 +2740,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, sealCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

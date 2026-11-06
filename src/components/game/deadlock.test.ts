@@ -8,17 +8,17 @@ describe('膠着の打開', () => {
         expect(isDeadlocked(7, 1, 2)).toBe(true);
         expect(isDeadlocked(10, 1, 4)).toBe(false);
     });
-    it('氷結は❄を1つ解き、ロックは残りライフを1減らす（0で外れる）。他のマスは変えない', () => {
+    it('氷結は❄を1つ解き、ロックはスタックを1減らす（0で外れる）。ライフは変えない。他のマスは変えない', () => {
         const b: SquareInfo[] = [
             { player: undefined, bind: 0, effects: [{ effect: '❄' }, { effect: '❄' }] },
-            { player: '⭕', bind: 2, effects: [{ effect: '🔑' }] },
-            { player: '⭕', bind: 1, effects: [{ effect: '🔑' }, { effect: '🍂' }] },
+            { player: '⭕', bind: 2, effects: [{ effect: '🔑', stack: 2 }] },
+            { player: '⭕', bind: 1, effects: [{ effect: '🔑', stack: 1 }, { effect: '🍂' }] },
             { player: '💙', bind: 5, effects: [] },
         ];
         expect(breakDeadlock(b)).toEqual([0, 1, 2]);
         expect(b[0].effects).toEqual([{ effect: '❄' }]);
-        expect(b[1]).toEqual({ player: '⭕', bind: 1, effects: [{ effect: '🔑' }] });
-        expect(b[2]).toEqual({ player: '⭕', bind: 0, effects: [{ effect: '🍂' }] });
+        expect(b[1]).toEqual({ player: '⭕', bind: 2, effects: [{ effect: '🔑', stack: 1 }] });
+        expect(b[2]).toEqual({ player: '⭕', bind: 1, effects: [{ effect: '🍂' }] });
         expect(b[3].bind).toBe(5);
     });
 });

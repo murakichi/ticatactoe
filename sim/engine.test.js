@@ -309,7 +309,9 @@ test('巨人のオーラ: 周囲8マスの敵コマが壊れ、周囲8マス全�
     assert.strictEqual(s.board[mine].bind, 2);
     for (const j of around) {
         assert.ok(s.board[j].effects.some((x) => x.effect === '🔑'), `マス${j}がロックされる`);
-        if (j !== mine) assert.strictEqual(s.board[j].bind, 1);
+        // ロックはライフを変えずスタックで数える (#438)。空きマスと壊れたマスは1、自陣のコマはライフ分
+        if (j !== mine) assert.strictEqual(s.board[j].bind, 0);
+        assert.strictEqual(s.board[j].effects.find((x) => x.effect === '🔑').stack, j === mine ? 2 : 1);
     }
     // 相手の手番: ロック中のマスには置けない
     assert.strictEqual(e.placeMove(s, enemy), false);
@@ -2377,8 +2379,9 @@ test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は�
     e.SKILLS.kimon(s);
     assert.strictEqual(e.placeMove(s, 0), true);
     assert.strictEqual(s.board[0].player, undefined);
-    assert.strictEqual(s.board[0].bind, 3);
+    assert.strictEqual(s.board[0].bind, 0);
     assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '🔑').length, 1);
+    assert.strictEqual(s.board[0].effects.find((x) => x.effect === '🔑').stack, 3); // 3ターンのロック
 });
 
 test('火の車: ランダムな敵2マスに🔥、手札をシャッフル。このターン敵か自陣に🔥を付与していれば0コスト、撃つとリセット', () => {
@@ -3787,6 +3790,44 @@ test('招き猫（sim）: 自分のスキルコスト-1', () => {
     const before = e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine');
     s.board[0] = { player: '💙', bind: 5, effects: [], object: 'luckyCat' };
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'), before - 1);
+});
+
+
+// ---- 鍵師 (#439) ----
+test('鍵師: 空きマスのロックを無視して置ける。他キャラは置けない', () => {
+    const s = game('keysmith', 'you');
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 2 }] };
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].player, '💙');
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔑')); // 置いたコマにはロックが残らない
+    const t = game('you', 'keysmith');
+    t.board[5] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 2 }] };
+    assert.strictEqual(e.placeMove(t, 5), false);
+});
+
+test('鍵師: ロック系スキルはコスト-1（ロック2→1）。他のキャラは変わらない', () => {
+    const s = game('keysmith', 'you');
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickAddLife, false, false, 'onClickAddLife'), e.skillCosts.onClickAddLife);
+    const t = game('you', 'keysmith');
+    assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock);
+});
+
+test('鍵師: 封鎖の断は自陣7・空きマス2をロックしてターン終了。敵のロックを解除し、敵陣にダメージ。敵の次の着手は空きマスに置けない', () => {
+    const s = game('keysmith', 'you');
+    s.magic[0] = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🔑', stack: 3 }] };
+    assert.strictEqual(e.sealCost(s), 8); // 基礎10 - 解除できる敵のロック1つ = 9、鍵師のロック系 -1 で 8
+    const turn = s.turn;
+    e.SKILLS.seal(s);
+    assert.strictEqual(s.magic[0], 30 - 8);
+    assert.notStrictEqual(s.turn, turn, 'ターンが終わる');
+    assert.strictEqual(s.board[0].effects.find((x) => x.effect === '🔑').stack, 7);
+    assert.strictEqual(s.board[2].effects.find((x) => x.effect === '🔑').stack, 2);
+    assert.ok(!s.board[1].effects.some((x) => x.effect === '🔑'));
+    assert.strictEqual(s.board[1].bind, 3);
+    assert.strictEqual(e.placeMove(s, 2), false); // 敵(⭕)は空きマスに置けない
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

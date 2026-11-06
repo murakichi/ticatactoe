@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/AIPlayer.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
+exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const bigSkills_1 = require("./bigSkills");
@@ -10,6 +10,8 @@ const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
+const lock_1 = require("./lock");
+const keysmith_1 = require("./keysmith");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const blast_1 = require("./blast");
@@ -85,7 +87,7 @@ const TOKEN_SKILL_KEYS = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
     'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
 ]);
-exports.TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
+exports.TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal'];
 // 魔法使いの引き直しに使う軽減札（撃つ優先順。旧sim AI の DISCOUNT_REDUCERS と同順）。cut は次に打つスキルの軽減量
 const REROLL_REDUCERS = [
     { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
@@ -126,6 +128,11 @@ const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (旧sim AI の EL_MAX / EL_MIN_VALUE / EL_DENY) */
 exports.EMPTY_LOCK_MAX = 2;
 const EMPTY_LOCK_MIN_VALUE = 10;
+/** 鍵師が空きマスをロックする価値の下限。自分の列が3つ目になる手（40）以上に絞る。10（空蔵と同じ）だと撃ち過ぎで、対 you 35%→50%（各60試合, seed2000）。80だと37% */
+exports.KEYSMITH_LOCK_MIN_VALUE = 40;
+/** 鍵師が自陣のコマをロックして守る条件: ライフがこの値以下（奪われる直前）で、列づくりの価値がこの値以上 */
+exports.KEYSMITH_OWN_LOCK_MAX_BIND = 1; // 3や無制限に広げると対 you 58%→43〜48%（各60試合, seed2000）。ロックの撃ち過ぎで魔力を食う
+exports.KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
 /** 火遁で魔法使いの🌱を優先して燃やす重み（旧sim AI の igniteBud） */
 const IGNITE_BUD_WEIGHT = 6;
 const EMPTY_LOCK_DENY = 2;
@@ -243,10 +250,51 @@ class AIPlayer {
     characterOf(player) {
         return player === this.playerSymbol ? this.character : this.characters[(0, Player_1.seatOf)(player)];
     }
+    /**
+     * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
+     * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
+     */
+    bestOwnLockTarget(board) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = exports.KEYSMITH_OWN_LOCK_MIN_VALUE - 1e-9;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > exports.KEYSMITH_OWN_LOCK_MAX_BIND || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let mine = 0;
+                let foreign = 0;
+                for (const idx of line) {
+                    const p = board[idx].player;
+                    if (p === this.playerSymbol)
+                        mine++;
+                    else if (p)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(mine, 4)];
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
     /** 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数 (旧sim AI myEmptyLocks) */
     myEmptyLocks(board) {
+        // 鍵師のロックは持ち主を記録しない（空蔵ではない）ので、誰が掛けたかを問わず、ロック中の空きマスを数える
+        if (this.character === 'keysmith')
+            return board.filter((sq) => !sq.player && !sq.object && sq.effects.some((e) => e.effect === '🔑')).length;
         const owner = (0, Player_1.seatOf)(this.playerSymbol) + 1;
-        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === owner)).length;
+        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.owner === owner)).length;
     }
     /** 空蔵: ロックしておく空きマス。自分の列の要になるマス、または敵の列を止められるマスのうち価値が最大のもの。なければ null
      * (旧sim AI bestEmptyLockTarget と同一。EL_MIN_VALUE=10, EL_DENY=2) */
@@ -254,7 +302,7 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
         let bestIdx = null;
-        let bestVal = EMPTY_LOCK_MIN_VALUE - 1e-9;
+        let bestVal = (this.character === 'keysmith' ? exports.KEYSMITH_LOCK_MIN_VALUE : EMPTY_LOCK_MIN_VALUE) - 1e-9;
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (sq.player || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(i))
@@ -877,7 +925,7 @@ class AIPlayer {
                 else if (sq.player)
                     op++;
                 // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
-                else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0))
+                else if ((0, thermal_1.emptyBlocked)(sq) || (0, keysmith_1.lockBlocksPlacement)(sq, this.characterOf(player)))
                     blocked = true;
             }
             if (my === 3 && op === 0 && !blocked)
@@ -986,7 +1034,7 @@ class AIPlayer {
                     pCount++;
                 else if (sq.player)
                     oCount++;
-                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) && !(0, thermal_1.emptyBlocked)(sq))
+                else if (!sq.player && !(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -1003,11 +1051,10 @@ class AIPlayer {
     decayBoard(board, skip) {
         return board.map((sq, k) => {
             const hadPoison = !(0, thermal_1.isDormant)(sq) && sq.effects.some((e) => e.effect === '☠');
-            const next = (0, thermal_1.decayTick)(sq, this.characters);
-            const effects = next.bind === 0 ? next.effects.filter((e) => e.effect !== '🔑') : next.effects;
-            if (hadPoison && next.bind === 0 && next.player && k !== skip)
+            const next = (0, lock_1.tickLock)((0, thermal_1.decayTick)(sq, this.characters)).sq; // ロックはスタックが尽きたら外れる (#438)
+            if (hadPoison && next.bind === 0 && next.player && k !== skip && !(0, lock_1.isLocked)(next))
                 return { player: undefined, bind: 0, effects: [] };
-            return { ...next, effects };
+            return next;
         });
     }
     /**
@@ -1027,7 +1074,7 @@ class AIPlayer {
             const sq = sim[j];
             if ((0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔑'))
                 continue;
-            sim[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+            sim[j] = (0, lock_1.addLock)(sq, Math.max(sq.bind, 1));
         }
         return sim;
     }
@@ -1079,11 +1126,11 @@ class AIPlayer {
             if (this.shield.has(i))
                 continue;
             // ロック済みかつbind>0はスキップ
-            if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if (!sq.player) {
                 // 空きマス (ロックされていない)
-                if (!sq.effects.some(e => e.effect === '🔑') && !(0, thermal_1.emptyBlocked)(sq))
+                if (!(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     moves.push(i);
             }
             else if (this.isEnemy(sq.player)) {
@@ -1110,7 +1157,7 @@ class AIPlayer {
             const sq = board[i];
             if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0)
                 continue;
-            if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if ((0, thermal_1.overwriteBlocked)(sq))
                 continue;
@@ -1127,10 +1174,10 @@ class AIPlayer {
             const sq = board[i];
             if (this.shield.has(i))
                 continue;
-            if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if (!sq.player) {
-                if (!sq.effects.some(e => e.effect === '🔑') && !(0, thermal_1.emptyBlocked)(sq))
+                if (!(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     moves.push(i);
             }
             else if (sq.player !== player) {
@@ -1628,6 +1675,14 @@ class AIPlayer {
             if (skills.length === 0 && isLosing && availableSkills.includes(7) && opponentMagic >= 6) {
                 spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
+        }
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
+        if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
+            const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
+            const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
+            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost))))
+                spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
             const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
@@ -2347,7 +2402,7 @@ class AIPlayer {
                         }
                         else if (sq.player)
                             bad = true;
-                        else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) || this.shield.has(idx))
+                        else if ((0, thermal_1.emptyBlocked)(sq) || (0, keysmith_1.lockBlocksPlacement)(sq, this.character) || this.shield.has(idx))
                             bad = true;
                         else
                             empties.push(idx);
@@ -2884,7 +2939,7 @@ class AIPlayer {
             this.countReaches(board, this.playerSymbol) === 0) {
             const target = this.findKimonTarget(board, 50);
             if (target !== null) {
-                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 3, effects: [{ effect: '🔑' }] } : sq));
+                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 0, effects: [(0, lock_1.lockEffect)(3)] } : sq));
                 return { move: this.getBestMove(postBoard, life), skills: ['onClickKimon'], stompTarget: target };
             }
         }
@@ -3397,14 +3452,27 @@ class AIPlayer {
         }
         // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
         // ロック中は敵も置けないので敵の列を止める効果もある（旧sim AI の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
-        if (this.hasEmptyLock &&
+        // 鍵師: ライフが尽きかけの、列づくりに効いている自陣のコマをロックして守る（1手番に1つ。ロック中のコマは奪われない）
+        if (this.character === 'keysmith' &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
+            const own = this.bestOwnLockTarget(board);
+            if (own !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[own] = (0, lock_1.addLock)(post[own], 6);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
+            }
+        }
+        // 鍵師は空きマスのロックを無視して置けるので、ギアが無くても常にこの判断を行う（敵だけが置けない空きマスを作る）
+        if ((this.hasEmptyLock || this.character === 'keysmith') &&
             this.countReaches(board, this.playerSymbol) === 0 &&
             magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock') &&
             this.myEmptyLocks(board) < exports.EMPTY_LOCK_MAX) {
             const target = this.bestEmptyLockTarget(board);
             if (target !== null) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                post[target] = { ...post[target], bind: Math.max(post[target].bind, 1), effects: [...post[target].effects, { effect: '🔑', value: (0, Player_1.seatOf)(this.playerSymbol) + 1 }] };
+                post[target] = (0, lock_1.addLock)(post[target], 6, this.character === 'keysmith' ? undefined : (0, Player_1.seatOf)(this.playerSymbol) + 1);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
                     return { move: followup, skills: ['onClickUseLock'], lockTargets: [target] };
