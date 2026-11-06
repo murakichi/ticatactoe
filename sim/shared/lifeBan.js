@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.smallFry = exports.smallFryTargets = exports.moveBlocked = exports.placeBlocked = exports.placedLifeOf = exports.LIFE_BAN_PLACING_KEYS = exports.LIFE_BAN_MAX = void 0;
 const charge_1 = require("./charge");
-const util_1 = require("./util");
 const thermal_1 = require("./thermal");
 /** このライフ以下のコマが破壊され、縛られた席はこのライフ以下のコマを置けない */
 exports.LIFE_BAN_MAX = 3;
@@ -33,7 +32,7 @@ exports.placeBlocked = placeBlocked;
 const moveBlocked = (banned, life) => banned && life <= exports.LIFE_BAN_MAX;
 exports.moveBlocked = moveBlocked;
 /** player から見た、破壊できる敵コマ: ライフ LIFE_BAN_MAX 以下で、🔑ロック・無敵に守られていない */
-const smallFryTargets = (board, player, chars) => board.map((sq, i) => (sq.player && sq.player !== player && sq.bind <= exports.LIFE_BAN_MAX && !(0, charge_1.isGuarded)(sq, chars) && !(process.env.NOSF && (0, util_1.isShikigami)(sq)) ? i : -1)).filter((i) => i !== -1);
+const smallFryTargets = (board, player, chars) => board.map((sq, i) => (sq.player && sq.player !== player && sq.bind <= exports.LIFE_BAN_MAX && !(0, charge_1.isGuarded)(sq, chars) ? i : -1)).filter((i) => i !== -1);
 exports.smallFryTargets = smallFryTargets;
 /**
  * ライフ3以下の敵コマを全て破壊する（board を直接書き換える）。氷結中のコマは壊れず❄が1つ減るだけ（absorbDestroy）。

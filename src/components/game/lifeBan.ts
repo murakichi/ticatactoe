@@ -4,7 +4,6 @@ import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isGuarded } from './charge';
-import { isShikigami } from '../../util';
 import { absorbDestroy } from './thermal';
 
 /** このライフ以下のコマが破壊され、縛られた席はこのライフ以下のコマを置けない */
@@ -37,7 +36,7 @@ export const moveBlocked = (banned: boolean, life: number): boolean => banned &&
 
 /** player から見た、破壊できる敵コマ: ライフ LIFE_BAN_MAX 以下で、🔑ロック・無敵に守られていない */
 export const smallFryTargets = (board: SquareInfo[], player: Player, chars: readonly CharacterId[]): number[] =>
-    board.map((sq, i) => (sq.player && sq.player !== player && sq.bind <= LIFE_BAN_MAX && !isGuarded(sq, chars) && !(process.env.NOSF && isShikigami(sq)) ? i : -1)).filter((i) => i !== -1);
+    board.map((sq, i) => (sq.player && sq.player !== player && sq.bind <= LIFE_BAN_MAX && !isGuarded(sq, chars) ? i : -1)).filter((i) => i !== -1);
 
 /**
  * ライフ3以下の敵コマを全て破壊する（board を直接書き換える）。氷結中のコマは壊れず❄が1つ減るだけ（absorbDestroy）。
