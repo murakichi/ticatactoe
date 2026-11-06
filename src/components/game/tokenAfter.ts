@@ -3,7 +3,8 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, isGuarded } from './charge';
-import { Gears, TokenEffect, gearLockBind, hasGear } from './gear';
+import { Gears, TokenEffect, gearLockStack, hasGear } from './gear';
+import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { lockable } from './thermal';
 
@@ -15,8 +16,7 @@ export const applyLockAt = (board: SquareInfo[], idx: number, gears: Gears, turn
     const sq = board[idx];
     if (!lockable(sq)) return false;
     const owner = hasGear(gears, 'emptyLock') && !sq.player ? turnSeat + 1 : undefined;
-    const lockBind = gearLockBind(gears);
-    board[idx] = { ...sq, effects: [...sq.effects, owner ? { effect: '🔑' as const, value: owner } : { effect: '🔑' as const }], bind: sq.bind < lockBind ? lockBind : sq.bind };
+    board[idx] = addLock(sq, gearLockStack(gears), owner); // ライフは変えず、ロックのスタックを足す (#438)
     return true;
 };
 

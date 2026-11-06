@@ -6,6 +6,7 @@ exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE 
 const Player_1 = require("./Player");
 const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
+const lock_1 = require("./lock");
 /** 火炎1スタックあたりの継続ダメージ */
 exports.FLAME_BURN_DAMAGE = 2;
 /** 煉獄の鍛冶師のパッシブ: 敵（持ち主以外）が火炎ダメージを受けるとき追加で与えるダメージ */
@@ -257,7 +258,7 @@ exports.infernoTargets = infernoTargets;
  */
 const decayTick = (sq, chars, natural = true) => {
     let next = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next) && natural)
+    if (next.player && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next) && natural)
         next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
     const burn = (0, exports.burnDamageOf)(next, chars);
     if (burn > 0)
@@ -617,7 +618,7 @@ const kimon = (board, cell) => {
         board[cell] = (0, exports.thawOne)(board[cell]);
         return { destroyed: false, thawed: true, locked: false };
     }
-    board[cell] = { player: undefined, bind: exports.KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    board[cell] = { player: undefined, bind: 0, effects: [(0, lock_1.lockEffect)(exports.KIMON_LOCK_TURNS)] };
     return { destroyed: true, thawed: false, locked: true };
 };
 exports.kimon = kimon;

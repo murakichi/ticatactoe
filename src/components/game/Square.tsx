@@ -53,7 +53,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
 
     // 効果を記号ごとに集計してバッジ表示 (🌱×3 など)
     const counts: Record<string, number> = {};
-    for (const e of info.effects) counts[e.effect] = (counts[e.effect] ?? 0) + 1;
+    for (const e of info.effects) counts[e.effect] = (counts[e.effect] ?? 0) + (e.effect === '🔑' ? e.stack ?? 1 : 1); // 🔑は残りターン数（スタック）を出す (#438)
 
     const showLife = info.player !== undefined || info.bind > 0;
 

@@ -47,15 +47,15 @@ test('剛腕の代償: 全スキルのコスト+3', () => {
     assert.strictEqual(e.calculateCost(s, 4, true), 7);
 });
 
-test('堅牢の鍵: ロックのライフが9になる（通常は6）', () => {
+test('堅牢の鍵: ロックが9ターンになる（通常は6）', () => {
     const s = game([['ironLock'], []]);
     s.useLock = 1;
     e.placeMove(s, 5);
-    assert.strictEqual(s.board[5].bind, 9);
+    assert.strictEqual(s.board[5].effects[0].stack, 9);
     const t = game([[], []]);
     t.useLock = 1;
     e.placeMove(t, 5);
-    assert.strictEqual(t.board[5].bind, 6);
+    assert.strictEqual(t.board[5].effects[0].stack, 6);
 });
 
 test('空蔵: 空きマスのロックが切れると自陣のコマ(ライフ1)になる', () => {
@@ -63,7 +63,7 @@ test('空蔵: 空きマスのロックが切れると自陣のコマ(ライフ1)
     s.useLock = 1;
     e.placeMove(s, 5);
     assert.strictEqual(s.board[5].player, undefined);
-    assert.strictEqual(s.board[5].effects[0].value, 1);
+    assert.strictEqual(s.board[5].effects[0].owner, 1);
     const others = [0, 1, 2, 3, 4, 6, 7, 8];
     for (let k = 0; k < 6; k++) assert.ok(e.placeMove(s, others[k]));
     assert.strictEqual(s.board[5].player, H);
@@ -170,7 +170,7 @@ test('道連れの鍵: トークンを置くと確率でロックが付く（乱
     e.SKILLS.token(s);
     const sq = s.board.find((x) => x.player === H);
     assert.ok(sq.effects.some((x) => x.effect === '🔑'));
-    assert.strictEqual(sq.bind, 6);
+    assert.strictEqual(sq.effects.find((x) => x.effect === '🔑').stack, 6);
 });
 
 test('道連れの鍵: 外れたらロックは付かない', () => {
