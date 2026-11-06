@@ -3792,5 +3792,43 @@ test('招き猫（sim）: 自分のスキルコスト-1', () => {
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'), before - 1);
 });
 
+
+// ---- 鍵師 (#439) ----
+test('鍵師: 空きマスのロックを無視して置ける。他キャラは置けない', () => {
+    const s = game('keysmith', 'you');
+    s.board[5] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 2 }] };
+    assert.strictEqual(e.placeMove(s, 5), true);
+    assert.strictEqual(s.board[5].player, '💙');
+    assert.ok(!s.board[5].effects.some((x) => x.effect === '🔑')); // 置いたコマにはロックが残らない
+    const t = game('you', 'keysmith');
+    t.board[5] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 2 }] };
+    assert.strictEqual(e.placeMove(t, 5), false);
+});
+
+test('鍵師: ロック系スキルはコスト-1（ロック2→1）。他のキャラは変わらない', () => {
+    const s = game('keysmith', 'you');
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickAddLife, false, false, 'onClickAddLife'), e.skillCosts.onClickAddLife);
+    const t = game('you', 'keysmith');
+    assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock);
+});
+
+test('鍵師: 封鎖の断は自陣7・空きマス2をロックしてターン終了。敵のロックを解除し、敵陣にダメージ。敵の次の着手は空きマスに置けない', () => {
+    const s = game('keysmith', 'you');
+    s.magic[0] = 30;
+    s.board[0] = { player: '💙', bind: 3, effects: [] };
+    s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🔑', stack: 3 }] };
+    assert.strictEqual(e.sealCost(s), 8); // 基礎10 - 解除できる敵のロック1つ = 9、鍵師のロック系 -1 で 8
+    const turn = s.turn;
+    e.SKILLS.seal(s);
+    assert.strictEqual(s.magic[0], 30 - 8);
+    assert.notStrictEqual(s.turn, turn, 'ターンが終わる');
+    assert.strictEqual(s.board[0].effects.find((x) => x.effect === '🔑').stack, 7);
+    assert.strictEqual(s.board[2].effects.find((x) => x.effect === '🔑').stack, 2);
+    assert.ok(!s.board[1].effects.some((x) => x.effect === '🔑'));
+    assert.strictEqual(s.board[1].bind, 3);
+    assert.strictEqual(e.placeMove(s, 2), false); // 敵(⭕)は空きマスに置けない
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
