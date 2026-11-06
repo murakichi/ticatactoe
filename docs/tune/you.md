@@ -31,10 +31,13 @@
 | 7 | gear(対yinYang/keysmith) | lastStand で延命 | yinYang +11.7pt、keysmith +9.0pt(seed2/400) | 採用 |
 | 6 | gear(対necro/tactician/giant) | 8通りの triple | 現推奨が最良か差なし | 不採用 |
 | 5 | deck(対necro) swap1 30近傍 80試合 | 1枚差し替え | 最良でも base -1.3pt(全てノイズ) | 不採用 |
+| 9 | deck(対electrician/cryo/pyro/witch) | 相手の勝ち筋に当たる札 | 全てノイズ内(上記) | 不採用 |
 | 4 | deck(共通) swap2 24近傍 40試合 | 一寸の虫(92) 等 | 最良 +1.7pt(12.5 vs 10.8, z<1) | 不採用(要追試: 92入れ) |
 | 3 | gear(共通) triple 6通り 60試合 | lastStand,spellWard,sturdy 等 | 最良 9.4%±2.7 vs 6.8%(seed違い) | 不採用(対強豪で+1.5pt/z基準に届かず) |
 
 ## 不採用にした案
+- 相手別デッキ(electrician/cryomancer/pyromancer/witch、各150試合 seed1、現行ギア): 相手の勝ち筋に当たる札(ジャマー26・火遁31・砕氷47・焚き火の唄66・焚きつけ85・血清17・毒返し100・鬼門封じ74・一寸の虫92・特売53)を5通りずつ。最良でも electrician 0→5.3%(26+92)、cryomancer 9.3→12.0%(6→53)、witch 4.7→8.0%(12→92)、pyromancer は全て0〜0.7%。いずれも SE(±3〜5)内でノイズ。対pyromancer は札では動かない。
+- 一寸の虫(92)を6と入れ替え(8相手×150試合 seed2): 対強豪… 7.8→8.7%(+0.9pt)、field 6.2→7.5(+1.3)。採用基準の+1.5ptに届かず保留(要追試)。
 - 対magician のデッキに氷結(30)・範囲氷結(41)・火口(87)・一寸の虫(92)を入れる(他キャラの対魔法使い策の流用): 12.0→0.7〜8.7%(afterglow,vengeance,sturdy, seed1/150)。AI が「あなた」ではそれらを活かせず、入れるだけでは悪化。手札固定(pyromancer の火口固定 37→58%)が要るので、固定とセットで再測定する。
 - 全相手共通の gear/deck 1設定の探索: 上記のとおりノイズ内。相手別に分けて測る方針に切り替え(ユーザー指示)。
 - 共通ギアを lastStand 系にする: necromancer/tactician で大幅悪化(necro 30→13〜17%、tactician 18.7→6〜9%)。
