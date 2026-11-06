@@ -130,6 +130,10 @@ exports.SKILL_CATALOG = [
     { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスを選んでお一人様限りの札を設置します。働いている間、相手は1ターンに新しいコマを1つしか置けません（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルも使えません）' },
     { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスを選んで一言居士を設置します。働いている間、相手は1ターンにスキルを1つしか使えません（チャージ・シャッフル・ロックは数えません）' },
     { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスを選んで見ざる地蔵を設置します。周囲八マスには新しくエフェクトを付けられません（手番の終わりに、その手番で付いたエフェクトが消えます）' },
+    { idx: 130, name: '錠前荒らし', icon: '🔓', category: 'control', costKey: 'onClickLockRaid', desc: '敵陣のロックを1つランダムに解除し、そのコマに🔥・☠・⚡のどれかをランダムに付与します。直前の相手ターンにロックが使われていたら0コスト' },
+    { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマに乗っているロックのスタックを全て+2します' },
+    { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
+    { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
 ];
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
 exports.CATALOG_SIZE = exports.SKILL_CATALOG.length;
