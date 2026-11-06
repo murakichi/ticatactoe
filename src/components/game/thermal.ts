@@ -21,6 +21,7 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isObject, isTree } from '../../types/ObjectKind';
 import { orthoNeighbors } from './boardGeometry';
+import { lockEffect } from './lock';
 
 /** 火炎1スタックあたりの継続ダメージ */
 export const FLAME_BURN_DAMAGE = 2;
@@ -292,7 +293,7 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
  */
 export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
+    if (next.player && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
     const burn = burnDamageOf(next, chars);
     if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
@@ -688,7 +689,7 @@ export const kimon = (board: SquareInfo[], cell: number): { destroyed: boolean; 
         board[cell] = thawOne(board[cell]);
         return { destroyed: false, thawed: true, locked: false };
     }
-    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    board[cell] = { player: undefined, bind: 0, effects: [lockEffect(KIMON_LOCK_TURNS)] };
     return { destroyed: true, thawed: false, locked: true };
 };
 

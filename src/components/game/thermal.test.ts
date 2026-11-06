@@ -896,7 +896,7 @@ describe('鬼門封じ / 火の車', () => {
         const b = board();
         b[0] = sq('⭕', 5, '☠', '🌱');
         expect(kimon(b, 0)).toEqual({ destroyed: true, thawed: false, locked: true });
-        expect(b[0]).toEqual({ player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] });
+        expect(b[0]).toEqual({ player: undefined, bind: 0, effects: [{ effect: '🔑', stack: KIMON_LOCK_TURNS }] }); // ライフは変えず、ロックのスタックで3ターン
         expect(KIMON_LOCK_TURNS).toBe(3);
         const f = board();
         f[2] = sq('⭕', 5, '❄', '❄');
