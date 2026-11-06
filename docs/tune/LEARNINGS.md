@@ -66,7 +66,12 @@
 
 ## 相性・環境の傾向
 
-(まだ無し)
+- **対X の対策(他キャラが同じ相手に困るときの参考。2026-11-06 you、sim `--target you --opp X`、基本は現推奨 luckyPurse,titanCost,sturdy との比較):**
+  - **対 poisoner**: ギア `lastStand,spellWard,sturdy` で 10.3→37.3%(seed2/300、3席目を luckyPurse に替えても 29.7%、spellWard 無しの lastStand,sturdy,luckyPurse は 14.0%)。**呪詛除け(spellWard)が毒を止める本命**で、lastStand が上乗せ。毒使いに負け越すキャラは spellWard を先に試す価値(seed1/60 でも 38% で再現)。
+  - **対 yinYangMaster**: `lastStand,sturdy,luckyPurse` で 9.3→21.0%(seed2/400)。lastStand が式神の勝ち筋(列完成)を1回吸収して延命する。
+  - **対 keysmith**: `lastStand,sturdy,luckyPurse` で 31.8→40.8%(seed2/400)。
+  - **対 necromancer / tactician**: 現推奨(titanCost: ライフ+3)が測った8通りの中で最良(necro 30%、tactician 18.7%)。lastStand 系は逆に悪化(necro 12.7〜16.7%、tactician 6〜9%)。**lastStand が効く相手と悪化する相手は分かれる**ので、全相手共通で決めない(seed1/150)。
+  - 最下位キャラ(固有スキル無しの you)は、全相手共通の1設定の探索だとどれもノイズ内(対強豪 6.8%±2.0 → 9.4%±2.7、60〜100試合)だが、**相手を1キャラに絞ると +10〜27pt の差が出る**。低勝率のキャラは相手別に絞って測るほうが速い。
 
 ## AI / エンジンのクセ
 
