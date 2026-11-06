@@ -419,6 +419,7 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        useLockConvert: false, // 錠の転換（汎用 idx 134）: ロックのかかったマスを選んで解除し、スタックを自分のライフに足す
         usePlunder: false,
         useRelocate: false,
         relocateFrom: null,
@@ -653,7 +654,7 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useLockConvert', 'usePlunder', 'useRelocate', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.relocateFrom = null;
@@ -857,6 +858,11 @@ function placeMove(s, i) {
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
+        return true;
+    }
+    if (s.useLockConvert) {
+        if (!exeLockConvert(s, i)) return false; // ロックの無いマスは選び直せる
+        s.useLockConvert = false;
         return true;
     }
     if (s.useSacrifice) {
@@ -2332,6 +2338,20 @@ function onClickPlunder(s) {
 }
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+// 錠の転換 (idx 134): ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す [FAITHFUL] Game.tsx onClickLockConvert
+function lockConvertCandidates(s) { return keysmithMod.lockConvertCells(s.board); }
+function onClickLockConvert(s) {
+    if (lockConvertCandidates(s).length === 0) return;
+    s.useLockConvert = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockConvert, false, false, 'onClickLockConvert'), 'onClickLockConvert');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockConvert');
+}
+function exeLockConvert(s, i) {
+    if (!lockConvertCandidates(s).includes(i)) return false;
+    s.life += keysmithMod.lockConvert(s.board, i);
+    return true;
+}
 function onClickKimon(s) {
     if (kimonCandidates(s).length === 0) return;
     s.useKimon = true;
@@ -2711,6 +2731,7 @@ const SKILLS = {
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
+    lockConvert: onClickLockConvert,
     lockRaid: onClickLockRaid,
     lockExtend: onClickLockExtend,
     lockBlessing: onClickLockBlessing,

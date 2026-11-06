@@ -2,7 +2,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { CharacterId } from '../../types/Character';
 import { addLock, isLocked, lockStack } from './lock';
 import {
-    BLESSING_STACK, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_OWN_STACK, VACANT_SEAL_STACK, blessPlacedPiece, lockBlocksPlacement, lockExtend, lockRaid, lockRaidCells,
+    BLESSING_STACK, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_OWN_STACK, VACANT_SEAL_STACK, blessPlacedPiece, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockRaid, lockRaidCells,
     opponentReaches, reachCount, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells,
 } from './keysmith';
 import { canPlaceAt } from './aiTurn';
@@ -97,6 +97,21 @@ describe('鍵師 (#439)', () => {
             const p = blessPlacedPiece(sq({ player: '💙', bind: 4 }));
             expect(p.bind).toBe(4);
             expect(lockStack(p)).toBe(BLESSING_STACK);
+        });
+        it('錠の転換: 自分のロック・敵のロック・ロック中の空きマスのどれでも解除でき、解除したスタックの合計を返す。ライフは変えない', () => {
+            const b = row([addLock(sq({ player: '💙', bind: 3 }), 4), addLock(sq({ player: '⭕', bind: 3 }), 6), addLock(sq(), 2), { player: '💙', bind: 3 }]);
+            expect(lockConvertCells(b)).toEqual([0, 1, 2]);
+            expect(lockConvert(b, 1)).toBe(6);
+            expect(isLocked(b[1])).toBe(false);
+            expect(b[1].bind).toBe(3);
+            expect(lockConvert(b, 0)).toBe(4);
+            expect(lockConvert(b, 2)).toBe(2);
+            expect(lockConvert(b, 3)).toBe(0); // ロックの無いマスは何も起きない
+            expect(lockConvert(b, 1)).toBe(0); // 解除済み
+        });
+        it('錠の転換: 重ねがけして合計したスタックをまとめて返す', () => {
+            const b = row([addLock(addLock(sq({ player: '⭕', bind: 3 }), 6), 6)]);
+            expect(lockConvert(b, 0)).toBe(12);
         });
         it('錠前荒らし: ロックの乗った敵のコマを1つ解除し🔥・☠・⚡のどれか1つを付ける。対象が無ければ null', () => {
             const empty = row([{ player: '⭕', bind: 3 }]);
