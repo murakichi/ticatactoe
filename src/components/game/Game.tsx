@@ -65,47 +65,14 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { GameProps, CHARACTER_NAMES } from './gameTypes';
+export type { PlayerConfig } from './gameTypes';
 import { useSeatArray } from './useSeatArray';
 import { useBoardEffects, useGearToasts, useSkillStrip, useSoundToggle } from './usePresentation';
 
 
 // 盤面を揺らすスキル演出
 const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno', 'bulwark', 'glacier', 'shikigamiBlast', 'miasma'];
-
-export type PlayerConfig = {
-    character: CharacterId;
-    isAI: boolean;
-    /** 装備するギア（省略時はなし） */
-    gears?: GearId[];
-    /** デッキ（手札3枠を引く汎用スキルの idx、DECK_SIZE枚）。省略・不正ならキャラの推奨デッキ */
-    deck?: number[];
-};
-
-type GameProps = {
-    /** 席順(= 手番順)。先頭が先手。2〜8人 */
-    players: PlayerConfig[];
-    /** 盤面の一辺のマス数(4〜10)。省略時は人数に応じた既定 */
-    boardSize?: number;
-    /** 指定すると、盤面の操作列に「キャラ選択に戻る」ボタンが出る */
-    onBackToSetup?: () => void;
-};
-
-const CHARACTER_NAMES: Record<CharacterId, string> = {
-    you: 'あなた',
-    tactician: '軍師',
-    magician: '魔法使い',
-    fighter: '戦士',
-    healer: 'ヒーラー',
-    giant: '巨人',
-    yinYangMaster: '陰陽師',
-    necromancer: 'ネクロマンサー',
-    poisoner: '毒使い',
-    electrician: '雷霆の巫',
-    cryomancer: '氷室の番人',
-    pyromancer: '煉獄の鍛冶師',
-    witch: '凩の魔女',
-    keysmith: '鍵師',
-};
 
 const AVATAR_CLASSES = [
     styles.avatarHeart,
