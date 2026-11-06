@@ -3,7 +3,7 @@
 - 最後に検証したmaster: 55043be
 - 現在の推奨設定(共通): gears=[luckyPurse,titanCost,sturdy] deck=[0,2,3,5,6,8,10,11,12,28,32,52]
 - 相手別の専用ギア(`gear.ts` `COUNTER_GEARS_FOR_YOU`。相手が1キャラのときだけ AI 席の「あなた」が使う): poisoner=[lastStand,spellWard,sturdy] / magician・keysmith・yinYangMaster=[lastStand,sturdy,luckyPurse]
-- 相手別の専用デッキ(`deck.ts` `COUNTER_DECKS_FOR_YOU` + `AIPlayer.ts` `YOU_HOLD_VS` で一寸の虫(92)/火口(87)を引いたら手札に固定): magician・witch=[0,2,3,5,8,10,11,28,32,52,87,92] / cryomancer・electrician=[0,2,3,5,8,10,11,12,28,32,52,92]
+- 相手別の専用デッキ(`deck.ts` `COUNTER_DECKS_FOR_YOU` + `AIPlayer.ts` `YOU_HOLD_VS` で一寸の虫(92)/火口(87)を引いたら手札に固定): magician・witch=[0,2,3,5,8,10,11,28,32,52,87,92] / cryomancer・electrician=[0,2,3,5,8,10,11,12,28,32,52,92] / tactician=[0,2,3,5,8,10,11,28,32,52,74,92]（74,92を固定）
 - 強豪リスト(固定): electrician,magician,cryomancer,tactician,poisoner,giant
 - 基準線: 対強豪平均 6.8%±2.0 (field 11.0%) / 12位(最下位) (--target you seed1/100)。対キャラ別: tactician18 magician3 giant7 yinYang9 necro32 poisoner7 electrician0 cryo6 pyro0 witch3 keysmith36
 - 連続不採用回数: 0
@@ -25,10 +25,10 @@
 | electrician | 0.0% | 現行ギア+専用デッキ(92固定) | 23.7%±4.8(seed2/300) | 採用 |
 | magician(デッキ追加) | 11.0%(専用ギアのみ) | +専用デッキ(87,92固定) | 14.7%±4.0(seed2/300) | 採用(小) |
 | pyromancer | 0.3% | 92固定 | 0.3% | 変更なし |
-| necromancer | 30.0% | (現推奨が最良。測った8通り) | lastStand系 12.7〜16.7% | 変更なし |
-| tactician | 18.7% | (現推奨が最良。測った8通り) | lastStand系 6〜9% | 変更なし |
-| giant | 8.7% | 差なし(harvest,lightToken,sturdy も 8.7%) | — | 変更なし |
-| pyromancer | 0% | ギア・デッキ・固定いずれも差なし | 0〜0.7% | 変更なし |
+| tactician | 17.0% | 現行ギア+専用デッキ(92,74固定) | 29.0%±5.1(seed2/300。seed1/150 でも 18.7→34.7) | 採用 |
+| necromancer | 30.0% | ギアは現推奨が最良(lastStand系 12.7〜16.7%)。92/74/53の固定デッキも 26.7〜31.3% | 差なし | 変更なし |
+| giant | 6.3% | 鬼門封じ(74)入りデッキ+固定 | 9.7%±3.4(seed2/300、+3.4でz<1) | 不採用(ノイズ内) |
+| pyromancer | 0% | ギア・デッキ(92/74/53固定、氷結30/41/45/46で自陣を凍らせる固定)いずれも差なし | 0〜2% | 変更なし(どの手も届かない。環境1位級の鍛冶師に対しては現行の手札では勝ち筋が無い) |
 
 ## 試行ログ(新しい順)
 | # | 軸 | 仮説 | 結果 | 採否 |

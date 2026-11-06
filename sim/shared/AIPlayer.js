@@ -100,13 +100,14 @@ const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
 /**
  * 「あなた」が相手キャラ別に手札へ固定する札。他キャラの対策札(一寸の虫=魔女・氷室対策、火口=魔法使い・魔女対策)を、
- * 引いたら固定して毎手番使えるようにする（対応する専用デッキは deck.ts COUNTER_DECKS_FOR_YOU。seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%、対魔法使い 11.0→14.7%）。相手が1キャラだけのときに限る（固定が裏目の相手がいるため。docs/tune/you.md）
+ * 引いたら固定して毎手番使えるようにする（対応する専用デッキは deck.ts COUNTER_DECKS_FOR_YOU。seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%、対魔法使い 11.0→14.7%、対軍師 17.0→29.0%）。相手が1キャラだけのときに限る（固定が裏目の相手がいるため。docs/tune/you.md）
  */
 exports.YOU_HOLD_VS = {
     magician: [87, 92],
     witch: [92, 87],
     cryomancer: [92],
     electrician: [92],
+    tactician: [92, 74],
 };
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 const MAGICIAN_HOLD = [53, 60, 92];

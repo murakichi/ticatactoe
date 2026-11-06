@@ -202,6 +202,7 @@ export const COUNTER_DECKS_FOR_YOU: Partial<Record<CharacterId, number[]>> = {
     witch: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
     cryomancer: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
     electrician: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    tactician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 74, 92], // 一寸の虫(92)+鬼門封じ(74)を固定。対軍師 17.0→29.0%（seed2/300）
 };
 
 /** character の推奨デッキ。「あなた」は相手が1キャラで専用デッキがあればそれ */

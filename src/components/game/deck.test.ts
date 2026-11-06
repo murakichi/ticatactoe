@@ -183,6 +183,7 @@ describe('「あなた」の相手別デッキ', () => {
         expect(recommendedDeckAgainst('you', ['witch', 'witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
         expect(recommendedDeckAgainst('you', ['witch', 'giant'])).toEqual(recommendedDeck('you'));
         expect(recommendedDeckAgainst('you', ['giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['tactician'])).toEqual(COUNTER_DECKS_FOR_YOU.tactician);
         expect(recommendedDeckAgainst('magician', ['witch'])).toEqual(recommendedDeck('magician'));
     });
 });
