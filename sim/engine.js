@@ -921,6 +921,10 @@ function placeMove(s, i) {
         if (!objectsMod.objectLandable(board[i])) return false;
         board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing), effects: board[i].effects.filter((e) => e.effect === '🔥') };
         objectsMod.sweepBurntTrees(board);
+        if (s.objectPlacing === 'unlockStone') { // 解錠の碑: 設置したとき周囲八マスのロックを全て解除する（本番 objects.ts の releaseAroundStone）
+            const freed = objectsMod.releaseAroundStone(board, i);
+            if (freed.length > 0) bumpStat(s, 'unlockStoneFreed', freed.length);
+        }
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
         return true;
@@ -2741,6 +2745,7 @@ const SKILLS = {
     soloSign: (s) => onClickObject(s, 'soloSign'),
     oneWord: (s) => onClickObject(s, 'oneWord'),
     blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
+    unlockStone: (s) => onClickObject(s, 'unlockStone'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),

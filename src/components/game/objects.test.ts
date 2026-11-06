@@ -3,7 +3,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { newShikigami } from './shikigami';
 import { decayBoard } from './decay';
-import { boardWinner, effectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { boardWinner, effectSnapshot, enforceEffectRules, releaseAroundStone, encircleWinner, mudAdjustedBind, newPieceBlocked, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -437,5 +437,43 @@ describe('相手を縛るオブジェクト・八卦の陣', () => {
         expect(skillRestricted({ ...base, skillKey: 'onClickToken' })).toBe(false);
         expect(skillRestricted({ ...base, skillKey: 'onClickToken', placedThisTurn: 1 })).toBe(true);
         expect(skillRestricted({ ...base, actor: '⭕', skillKey: 'onClickDoubleToken', skillsThisTurn: 2 })).toBe(false);
+    });
+});
+
+describe('解錠の碑（仮称）', () => {
+    const lock = (sq: SquareInfo): SquareInfo => ({ ...sq, effects: [...sq.effects, { effect: '🔑' as const, stack: 3 }] });
+    it('設置したとき、周囲八マスのロックを全て解除する（持ち主を問わず）。周囲の外は触らない', () => {
+        const b: SquareInfo[] = Array.from({ length: 25 }, () => ({ bind: 0, player: undefined, effects: [] }));
+        b[6] = lock({ bind: 3, player: '💙', effects: [] });   // 周囲(自陣)
+        b[8] = lock({ bind: 3, player: '⭕', effects: [] });   // 周囲(敵)
+        b[18] = lock({ bind: 0, player: undefined, effects: [] }); // 周囲(空きマス)
+        b[0] = lock({ bind: 3, player: '⭕', effects: [] });   // 周囲の外
+        b[12] = newObject('💙', 'unlockStone');
+        const freed = releaseAroundStone(b, 12);
+        expect(freed).toEqual([6, 8, 18]);
+        expect(b[6].effects).toEqual([]); expect(b[8].effects).toEqual([]); expect(b[18].effects).toEqual([]);
+        expect(b[0].effects.some((e) => e.effect === '🔑')).toBe(true);
+    });
+    it('働いている間、周囲八マスに手番中に付いたロックは手番の終わりに消える。氷結中は働かない', () => {
+        const mk = (): SquareInfo[] => {
+            const b: SquareInfo[] = Array.from({ length: 25 }, () => ({ bind: 0, player: undefined, effects: [] }));
+            b[12] = newObject('💙', 'unlockStone');
+            b[6] = { bind: 3, player: '💙', effects: [] };
+            b[0] = { bind: 3, player: '💙', effects: [] };
+            return b;
+        };
+        const b = mk();
+        const snap = effectSnapshot(b);
+        b[6] = lock(b[6]); b[0] = lock(b[0]);
+        const r = enforceEffectRules(b, snap, '💙');
+        expect(r.removed).toEqual([6]);
+        expect(b[6].effects.some((e) => e.effect === '🔑')).toBe(false);
+        expect(b[0].effects.some((e) => e.effect === '🔑')).toBe(true); // 周囲の外は掛けられる
+        const f = mk();
+        f[12] = { ...f[12], effects: [{ effect: '❄' as const, stack: 1 }] }; // 氷結中=休眠
+        const snap2 = effectSnapshot(f);
+        f[6] = lock(f[6]);
+        enforceEffectRules(f, snap2, '💙');
+        expect(f[6].effects.some((e) => e.effect === '🔑')).toBe(true);
     });
 });

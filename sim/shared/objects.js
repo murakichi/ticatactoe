@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/objects.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
+exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.releaseAroundStone = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
 // オブジェクト（空きマスに設置して使う建造物）の純粋ロジック。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
 //
 // ルール
@@ -22,6 +22,7 @@ const lifeBan_1 = require("./lifeBan");
 const poison_1 = require("./poison");
 const util_1 = require("./util");
 const shikigami_1 = require("./shikigami");
+const lock_1 = require("./lock");
 const thermal_1 = require("./thermal");
 /** 効果の数値。説明文もここから描画する（説明文と実装のズレ防止） */
 exports.OBJECT_PARAMS = {
@@ -62,6 +63,7 @@ exports.OBJECT_DEFS = {
     eightTrigrams: { idx: 126, name: '八卦の陣', icon: '🔯', life: exports.OBJECT_LIFE, costKey: 'onClickEightTrigrams', desc: '働いている間、周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利する。盤の端では成立しない' },
     soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: exports.OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '働いている間、相手は1ターンに新しいコマを1つしか置けない（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルは使えない）' },
     oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: exports.OBJECT_LIFE, costKey: 'onClickOneWord', desc: '働いている間、相手は1ターンにスキルを1つしか使えない（チャージ・シャッフル・ロックは数えない）' },
+    unlockStone: { idx: 134, name: '解錠の碑（仮称）', icon: '🗝️', life: exports.OBJECT_LIFE, costKey: 'onClickUnlockStone', desc: '設置したとき、周囲八マスのロックを全て解除する。働いている間、周囲八マスには新しくロックを掛けられない（手番の終わりに、その手番で付いたロックが消える）' },
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: exports.OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲八マスには、新しくエフェクトを付けられない（手番の終わりに、その手番で付いたエフェクトが消える）' },
 };
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
@@ -70,6 +72,19 @@ exports.objectLandable = objectLandable;
 /** 種類 kind のオブジェクト。player のものとして、種類ごとのライフで置く */
 const newObject = (player, kind) => ({ player, bind: exports.OBJECT_DEFS[kind].life, effects: [], object: kind });
 exports.newObject = newObject;
+/** 解錠の碑を cell に設置したとき: 周囲八マスの🔑ロックを全て解除する（持ち主を問わず）。解除したマスを返す。board を直接書き換える */
+const releaseAroundStone = (board, cell) => {
+    const freed = [];
+    for (const j of (0, boardGeometry_1.geometryForCells)(board.length).surroundRange(cell)) {
+        const cleared = (0, lock_1.clearLock)(board[j]);
+        if (cleared !== board[j]) {
+            board[j] = cleared;
+            freed.push(j);
+        }
+    }
+    return freed;
+};
+exports.releaseAroundStone = releaseAroundStone;
 /** 設置先に選べるマス全て（昇順） */
 const objectLandableCells = (board) => board.map((sq, i) => ((0, exports.objectLandable)(sq) ? i : -1)).filter((i) => i !== -1);
 exports.objectLandableCells = objectLandableCells;
@@ -108,6 +123,14 @@ const enforceEffectRules = (board, snap, endPlayer) => {
         for (const j of geo.surroundRange(k))
             quiet[j] = true;
     });
+    // 解錠の碑: 周囲八マスには新しくロックを掛けられない（持ち主を問わず）
+    const unlocked = board.map(() => false);
+    board.forEach((sq, k) => {
+        if (sq.object !== 'unlockStone' || !sq.player || (0, thermal_1.isDormant)(sq))
+            return;
+        for (const j of geo.surroundRange(k))
+            unlocked[j] = true;
+    });
     const tongue = (0, exports.enemyObjectActive)(board, endPlayer, 'tongueKing');
     board.forEach((sq, k) => {
         var _a, _b;
@@ -129,6 +152,10 @@ const enforceEffectRules = (board, snap, endPlayer) => {
             return;
         if (quiet[k]) {
             board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
+            res.removed.push(k);
+        }
+        else if (unlocked[k] && added.some((idx) => sq.effects[idx].effect === '🔑')) {
+            board[k] = { ...sq, effects: sq.effects.filter((e, idx) => !(added.includes(idx) && e.effect === '🔑')) };
             res.removed.push(k);
         }
         else if (tongue && sq.player === endPlayer && !sq.object) {

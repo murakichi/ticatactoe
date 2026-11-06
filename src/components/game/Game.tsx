@@ -14,7 +14,7 @@ import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './tu
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
-import { boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, releaseAroundStone, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
@@ -480,6 +480,7 @@ export const Game = (props: GameProps) => {
             case 'onClickSoloSign': onClickObject('soloSign'); break;
             case 'onClickOneWord': onClickObject('oneWord'); break;
             case 'onClickBlindMonkey': onClickObject('blindMonkey'); break;
+            case 'onClickUnlockStone': onClickObject('unlockStone'); break;
             case 'onClickLockRaid': onClickLockRaid(); break;
             case 'onClickLockExtend': onClickLockExtend(); break;
             case 'onClickLockBlessing': onClickLockBlessing(); break;
@@ -2003,6 +2004,10 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         board[i] = { ...newObject(currentTurnPlayer, objectPlacing), effects: currentBoard[i].effects.filter((e) => e.effect === '🔥') }; // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
         sweepBurntTrees(board);
+        if (objectPlacing === 'unlockStone') { // 解錠の碑: 設置したとき周囲八マスのロックを全て解除する
+            const freed = releaseAroundStone(board, i);
+            if (freed.length > 0) addLog(`解錠の碑が${freed.map(posName).join('・')}のロックを解除した`);
+        }
         addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
         flashCells([i]);
         playEffect('token', i, [i], OBJECT_DEFS[objectPlacing].name);

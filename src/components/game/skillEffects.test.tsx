@@ -107,6 +107,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSoloSign: 'token',
     onClickOneWord: 'token',
     onClickBlindMonkey: 'token',
+    onClickUnlockStone: 'token',
     onClickLockRaid: 'lock',
     onClickLockExtend: 'lock',
     onClickLockBlessing: 'auraGreen',

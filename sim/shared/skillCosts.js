@@ -168,13 +168,14 @@ exports.skillCosts = {
     onClickTongueKing: 5,
     onClickEightTrigrams: 8,
     onClickSoloSign: 5,
-    onClickOneWord: 6,
+    onClickOneWord: 2,
     onClickBlindMonkey: 5,
     // 鍵師向けの汎用スキル（#439, idx 130〜133）。コストは docs/skill-cost-rules.md の基準から（日記 2026-11-06）
     onClickLockRaid: 4,
     onClickLockExtend: 5,
     onClickLockBlessing: 4,
-    onClickVacantSeal: 10, //     空き家封じ(idx 133): 空きマス全てを2スタックでロック。相手のリーチ1つにつき-3（下限1）。盤面全体は重く基本10（R7）
+    onClickVacantSeal: 10,
+    onClickUnlockStone: 2, //     解錠の碑(idx 134。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2。解除=錠前荒らし級の価値、設置のライフ5は他のオブジェクトと同じ）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

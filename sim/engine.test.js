@@ -2107,7 +2107,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop', 'onClickBarrierStone', 'onClickAmuletShrine', 'onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey', 'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop', 'onClickBarrierStone', 'onClickAmuletShrine', 'onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey', 'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickUnlockStone']);
 });
 
 
@@ -3752,7 +3752,7 @@ test('結界石・護符の社: 式神が減衰しない／式神の数だけ手
 });
 
 test('縛りのオブジェクト（sim）: 泥田坊でトークンのライフ0／お一人様限りの札でトークンのあとは置けない／一言居士で2つ目のスキルが使えない', () => {
-    assert.deepStrictEqual(['onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey'].map((k) => e.skillCosts[k]), [5, 5, 5, 8, 5, 6, 5]);
+    assert.deepStrictEqual(['onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey'].map((k) => e.skillCosts[k]), [5, 5, 5, 8, 5, 2, 5]);
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(91) });
     s.life = 4; s.magic[0] = 99;
     s.board[15] = { player: '⭕', bind: 5, effects: [], object: 'mudField' };
@@ -3784,6 +3784,24 @@ test('八卦の陣（sim）: 周囲八マスを自陣のコマで囲うと勝利
     t.board[6] = { player: '⭕', bind: 3, effects: [{ effect: '🌱' }] };
     t.currentTurn += 1; e.advanceTurn(t);
     assert.deepStrictEqual(t.board[6].effects, [], '見ざる地蔵');
+});
+
+test('解錠の碑（sim）: 設置で周囲八マスのロックを解除し、働いている間は周囲に新しくロックできない。コスト2', () => {
+    assert.strictEqual(e.skillCosts.onClickUnlockStone, 2);
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(95) });
+    s.heartTurn = true; s.heartMagic = 20;
+    s.board[5] = { player: '⭕', bind: 3, effects: [{ effect: '🔑', stack: 3 }] };
+    e.SKILLS.unlockStone(s);
+    assert.strictEqual(e.placeMove(s, 6), true);
+    assert.strictEqual(s.board[6].object, 'unlockStone');
+    assert.deepStrictEqual(s.board[5].effects, [], '周囲のロックが解除される');
+    const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(96) });
+    t.board[6] = { player: '💙', bind: 5, effects: [], object: 'unlockStone' };
+    t.board[5] = { player: '⭕', bind: 3, effects: [] };
+    t.effectSnap = require('./shared/objects').effectSnapshot(t.board);
+    t.board[5] = { player: '⭕', bind: 3, effects: [{ effect: '🔑', stack: 2 }] };
+    t.currentTurn += 1; e.advanceTurn(t);
+    assert.deepStrictEqual(t.board[5].effects, [], '周囲に付いたロックは手番の終わりに消える');
 });
 
 test('招き猫（sim）: 自分のスキルコスト-1', () => {
