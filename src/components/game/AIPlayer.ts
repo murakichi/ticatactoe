@@ -131,8 +131,6 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
-/** 陰陽師が雷霆の巫と戦うとき、相手が2つ並べた列に着手するボーナス（検証用の環境変数 EB） */
-const ELECTRICIAN_BURST_COVER = Number(process.env.EB ?? 0);
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
 const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
@@ -1182,9 +1180,6 @@ class AIPlayer {
         // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（旧sim AI F.floodCover と同じ。対陰陽師 11→28%）
         const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
         const floodLines = floodCover ? geometryForCells(board.length).winLines : [];
-        // 陰陽師: 雷霆の巫は盤面に2つ並んだ列を、ダブル帯電トークン(2個)＋着手で1手番に完成させる。2つ並びの列の空きマスに先に自コマを置く
-        const burstFoes = this.character === 'yinYangMaster' ? this.opponents.filter((o) => this.characterOf(o) === 'electrician') : [];
-        const burstCover = burstFoes.length > 0 ? ELECTRICIAN_BURST_COVER : 0;
 
         for (const i of candidates) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
@@ -1195,12 +1190,6 @@ class AIPlayer {
             const reaches = this.countReaches(simBoard, this.playerSymbol);
             if (reaches >= 2) score += 200;        // フォーク
             else if (reaches === 1) score += 40;   // シングルリーチ作成も評価
-            if (burstCover) {
-                for (const line of geometryForCells(board.length).winLines) {
-                    if (!line.includes(i) || line.some((j) => board[j].player === this.playerSymbol || isShikigami(board[j]) || isObject(board[j]))) continue;
-                    if (line.filter((j) => burstFoes.includes(board[j].player as Player)).length === 2) score += burstCover;
-                }
-            }
 
             // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
             // (旧sim AI yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%。氷室の番人も同様: yyCoverCryo 対陰陽師 +4.6〜+17.4pt, seed1-3)
