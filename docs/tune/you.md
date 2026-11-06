@@ -3,6 +3,7 @@
 - 最後に検証したmaster: 55043be
 - 現在の推奨設定(共通): gears=[luckyPurse,titanCost,sturdy] deck=[0,2,3,5,6,8,10,11,12,28,32,52]
 - 相手別の専用ギア(`gear.ts` `COUNTER_GEARS_FOR_YOU`。相手が1キャラのときだけ AI 席の「あなた」が使う): poisoner=[lastStand,spellWard,sturdy] / magician・keysmith・yinYangMaster=[lastStand,sturdy,luckyPurse]
+- 相手別の専用デッキ(`deck.ts` `COUNTER_DECKS_FOR_YOU` + `AIPlayer.ts` `YOU_HOLD_VS` で一寸の虫(92)/火口(87)を引いたら手札に固定): magician・witch=[0,2,3,5,8,10,11,28,32,52,87,92] / cryomancer・electrician=[0,2,3,5,8,10,11,12,28,32,52,92]
 - 強豪リスト(固定): electrician,magician,cryomancer,tactician,poisoner,giant
 - 基準線: 対強豪平均 6.8%±2.0 (field 11.0%) / 12位(最下位) (--target you seed1/100)。対キャラ別: tactician18 magician3 giant7 yinYang9 necro32 poisoner7 electrician0 cryo6 pyro0 witch3 keysmith36
 - 連続不採用回数: 0
@@ -19,10 +20,15 @@
 | yinYangMaster | 9.3% | lastStand,sturdy,luckyPurse | 21.0%±4.0(seed2/400) | 採用 |
 | keysmith | 31.8% | lastStand,sturdy,luckyPurse | 40.8%±4.8(seed2/400) | 採用 |
 | magician | 3.3% | lastStand,sturdy,luckyPurse | 11.0%±3.5(seed2/300。seed1/150 でも 2.7→10.7) | 採用 |
+| witch | 2.7% | 現行ギア+専用デッキ(87,92固定) | 30.3%±5.2(seed2/300。seed1/150 でも 11.3→22.7) | 採用 |
+| cryomancer | 8.0% | 現行ギア+専用デッキ(92固定) | 24.0%±4.8(seed2/300) | 採用 |
+| electrician | 0.0% | 現行ギア+専用デッキ(92固定) | 23.7%±4.8(seed2/300) | 採用 |
+| magician(デッキ追加) | 11.0%(専用ギアのみ) | +専用デッキ(87,92固定) | 14.7%±4.0(seed2/300) | 採用(小) |
+| pyromancer | 0.3% | 92固定 | 0.3% | 変更なし |
 | necromancer | 30.0% | (現推奨が最良。測った8通り) | lastStand系 12.7〜16.7% | 変更なし |
 | tactician | 18.7% | (現推奨が最良。測った8通り) | lastStand系 6〜9% | 変更なし |
 | giant | 8.7% | 差なし(harvest,lightToken,sturdy も 8.7%) | — | 変更なし |
-| electrician / cryomancer / pyromancer / witch | 0〜9% | ギアでは差なし(8通り、0〜9%、witch 4〜6%) | — | 変更なし。デッキ側の手が要る |
+| pyromancer | 0% | ギア・デッキ・固定いずれも差なし | 0〜0.7% | 変更なし |
 
 ## 試行ログ(新しい順)
 | # | 軸 | 仮説 | 結果 | 採否 |
@@ -31,6 +37,7 @@
 | 7 | gear(対yinYang/keysmith) | lastStand で延命 | yinYang +11.7pt、keysmith +9.0pt(seed2/400) | 採用 |
 | 6 | gear(対necro/tactician/giant) | 8通りの triple | 現推奨が最良か差なし | 不採用 |
 | 5 | deck(対necro) swap1 30近傍 80試合 | 1枚差し替え | 最良でも base -1.3pt(全てノイズ) | 不採用 |
+| 10 | strategy+deck(対witch/氷室/雷霆/魔法使い) | 92/87 を入れて引いたら手札に固定(AIPlayer YOU_HOLD_VS) | 固定なし→あり(seed1/150): magician 7.3→14.0, witch 11.3→22.7, cryo 7.3→20.7, elec 4.7→22.0。seed2/300 で再現 | 採用 |
 | 9 | deck(対electrician/cryo/pyro/witch) | 相手の勝ち筋に当たる札 | 全てノイズ内(上記) | 不採用 |
 | 4 | deck(共通) swap2 24近傍 40試合 | 一寸の虫(92) 等 | 最良 +1.7pt(12.5 vs 10.8, z<1) | 不採用(要追試: 92入れ) |
 | 3 | gear(共通) triple 6通り 60試合 | lastStand,spellWard,sturdy 等 | 最良 9.4%±2.7 vs 6.8%(seed違い) | 不採用(対強豪で+1.5pt/z基準に届かず) |
@@ -43,6 +50,6 @@
 - 共通ギアを lastStand 系にする: necromancer/tactician で大幅悪化(necro 30→13〜17%、tactician 18.7→6〜9%)。
 
 ## 次に試す候補
-- electrician/cryomancer/pyromancer/witch はギアで動かない。デッキ側: 対魔法使い・対氷室で他キャラが効いた手(氷結札・火口の手札固定、サイレンス固定)を、手札固定とセットで試す。
+- 対pyromancer(全て0%)。対necromancer/tactician のデッキ側。専用デッキにしたキャラ(witch/氷室/雷霆)のギア再スキャン。固定する札の追加(87/92以外)。
 - 対poisoner のデッキ近傍(実行した swap1 30近傍の結果は未回収。再実行)、対yinYang のデッキ。
 - 人間が「あなた」を選ぶセットアップ画面に、相手別の推奨ギアを出す(未実装。AI席の「あなた」のみ反映)。

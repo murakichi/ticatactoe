@@ -11,6 +11,8 @@ import {
     MAX_SAVED_DECKS,
     SAVED_DECKS_KEY,
     recommendedDeck,
+    recommendedDeckAgainst,
+    COUNTER_DECKS_FOR_YOU,
     isValidDeck,
     resolveDeck,
     randomDeck,
@@ -171,5 +173,16 @@ describe('保存したデッキ', () => {
         const failing: DeckStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
         expect(saveDeck('x', recommendedDeck('you'), failing)).toBeNull();
         expect(loadSavedDecks(undefined)).toEqual([]);
+    });
+});
+
+describe('「あなた」の相手別デッキ', () => {
+    it('専用デッキはすべて有効で、相手が1キャラのときだけ使う', () => {
+        for (const d of Object.values(COUNTER_DECKS_FOR_YOU)) expect(isValidDeck(d)).toBe(true);
+        expect(recommendedDeckAgainst('you', ['witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
+        expect(recommendedDeckAgainst('you', ['witch', 'witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
+        expect(recommendedDeckAgainst('you', ['witch', 'giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('magician', ['witch'])).toEqual(recommendedDeck('magician'));
     });
 });

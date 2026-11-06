@@ -20,6 +20,7 @@ import {
     recommendedDeck,
     saveDeck,
     pickRecommendedDeck,
+    recommendedDeckAgainst,
 } from './components/game/deck';
 import { SimPanel } from './components/SimPanel';
 import styles from './App.module.css';
@@ -123,6 +124,7 @@ export const App = () => {
             const aiGears = () => (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: aiGears() } : p;
             if (isValidDeck(p.deck)) return withGears;
+            if (p.character === 'you') return { ...withGears, deck: recommendedDeckAgainst(p.character, others) };
             return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
     // デッキを自分で組んだ席が不正（12枚でない）なら開始できない
