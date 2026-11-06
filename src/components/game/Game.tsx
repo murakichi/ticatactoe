@@ -66,9 +66,10 @@ import { useSkillDispatch } from './useSkillDispatch';
 import { useCellClick } from './useCellClick';
 import { useGameControls } from './useGameControls';
 import { GameProps, CHARACTER_NAMES } from './gameTypes';
-export type { PlayerConfig } from './gameTypes';
 import { useSeatArray } from './useSeatArray';
 import { useBoardEffects, useGearToasts, useSkillStrip, useSoundToggle } from './usePresentation';
+
+export type { PlayerConfig } from './gameTypes';
 
 
 // 盤面を揺らすスキル演出
