@@ -3,7 +3,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { perfectGame } from './bigSkills';
-import { OBJECT_DEFS } from './objects';
+import { OBJECT_DEFS, objectLandable, releaseAroundStone } from './objects';
 import { calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -423,6 +423,21 @@ class AIPlayer {
     }
 
     /** 火口(idx 87)の対象: 🌱か🍂か❄を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
+    /** 解錠の碑(134)を置くマス: 周囲八マスの🔑ロック中の敵コマが最も多い、設置できる空きマス（2コ以上。同数なら中央寄り）。無ければ null */
+    private bestUnlockStoneCell(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestScore = 1;
+        board.forEach((sq, k) => {
+            if (!objectLandable(sq)) return;
+            const ring = geo.surroundRange(k);
+            const locked = ring.filter((j) => this.isEnemy(board[j].player) && !board[j].object && board[j].effects.some((e) => e.effect === '🔑')).length;
+            const score = locked * 10 + ring.length; // 同数なら周囲が多い(中央寄り)ほうを選ぶ
+            if (locked >= 2 && score > bestScore) { bestScore = score; best = k; }
+        });
+        return best;
+    }
+
     private bestTinderTarget(board: SquareInfo[]): number | null {
         const geo = geometryForCells(board.length);
         const guardedCell = (sq: SquareInfo, i: number) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
@@ -1375,7 +1390,9 @@ class AIPlayer {
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
-            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
+            (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch'))) ||
+            // 鍛冶師: 相手に魔法使いがいるとき、解錠の碑(134)を手札に固定する（魔法使いのロックで火遁が通らない）
+            (this.character === 'pyromancer' && idx === 134 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'magician'));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
@@ -3189,6 +3206,19 @@ class AIPlayer {
                 && lockRaidCells(board, this.playerSymbol).length > 0) {
                 chargeClicks.push({ skill: 'onClickLockRaid' });
                 magic -= raidCost;
+            }
+            // 解錠の碑(134。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないときに置く
+            const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
+            if (!necroFoe && availableSkills.includes(134) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
+                && !(worth && magic >= infernoNow() && magic - stoneCost < infernoNow())) {
+                const cell = this.bestUnlockStoneCell(board);
+                if (cell !== null) {
+                    chargeClicks.push({ skill: 'onClickUnlockStone', target: cell });
+                    board = board.slice();
+                    board[cell] = { player: this.playerSymbol, bind: OBJECT_DEFS.unlockStone.life, effects: [], object: 'unlockStone' };
+                    releaseAroundStone(board, cell);
+                    magic -= stoneCost;
+                }
             }
             // 飛び火(ランダムな敵2マスに🔥。直前の手番に相手が2コマ以上設置していれば無料)。火遁より🔥が多く付くので先に撃つ。対象は撃つ時に決まるので盤面は更新しない
             const sparkCost = this.calculateAICost(costs.onClickSpark, false, false, 'onClickSpark');
