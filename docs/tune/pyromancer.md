@@ -40,6 +40,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 61 | gear(余韻と組む第2枠の再走査、新master。seed4/100) | [afterglow,springThunder] 36.0 / [afterglow,luckyPurse] 36.7 / [afterglow,lastStand] 37.2(対電気 52、対陰陽師 58 だが対氷室 66・対witch 18)。主案は同条件で約39.7(seed4/200) | いずれも主案以下 | 不採用 |
 | 60 | deck(ギア[afterglow,emberVein]での1枚差し替え24近傍, seed61/40試合, ±6) | 上位: 3→131ロックの増築 44.2 / 3→88 43.8 / 56→94 42.9 / 87→20 42.1。下位 38.3〜 | 基準(同ギア約38〜40%)に対し最良 +4〜6 だが SE±6・24候補の閾値 z 3.0 に遠い(勝者の呪い)。再測定に進めない | 不採用 |
 | 59 | #58 の追試(seed4/200) | [afterglow,vengeance] 39.7%(±2.4) vs [afterglow,emberVein] 38.0%(対魔法使い 14→37、対氷室 81→63、対軍師 62→52、対巨人 77→91) | 主案を上回らない(-1.7)。熾火の脈は相手別に入れ替わるだけで対強豪平均は伸びない。別案にも入れない(-1.5pt超) | 不採用 |
 | 58 | ルール変更(ユーザー指示)+新ギア | 業火が敵陣のロックを先に解除してから🔥を付ける。新ギア 熾火の脈(emberVein: 手番開始時、盤面の🔥の数だけ魔力+1)を追加。seed3/100 `--target`、強豪6体: 主案[afterglow,vengeance] 41.0% / [afterglow,emberVein] 40.3%(対魔法使い 12→43、対witch 28→20、対氷室 82→58、対軍師 70→55) / [emberVein,vengeance] 31.3 / [spellWard,emberVein] 23.2 / emberVein+harvest 22.5・lastStand 26.0・ironLock 21.3・luckyPurse 30.2・chainDiscount 21.2 | 余韻が相方でないと大きく悪化。[afterglow,emberVein] は主案と同水準(-0.7)で相手別に大きく入れ替わるだけ。追試なし(要: 別seed200)。主案は変更せず | 追試で不採用(下記#59) |
