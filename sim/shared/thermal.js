@@ -109,10 +109,12 @@ exports.zeroOut = zeroOut;
  * 氷結中のマスなら🔥は付かず代わりに❄が全スタック解除される。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
  * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
  */
-const ignite = (board, cells, size, n = 1, keepBuds) => {
+const ignite = (board, cells, size, n = 1, keepBuds, immune) => {
     var _a;
     const thawed = new Set();
     for (const k of cells) {
+        if (immune === null || immune === void 0 ? void 0 : immune(board[k]))
+            continue; // 帯電中の雷霆の巫のコマには🔥が付かない
         for (let c = 0; c < n; c++) {
             if ((0, exports.isFrozen)(board[k])) {
                 board[k] = (0, exports.thaw)(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
@@ -152,11 +154,11 @@ exports.ignite = ignite;
 const canFreeze = (sq) => !hasLock(sq) && (0, exports.flameStacks)(sq) === 0;
 exports.canFreeze = canFreeze;
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-const freeze = (board, cells) => {
+const freeze = (board, cells, immune) => {
     const done = [];
     for (const k of cells) {
-        if (!(0, exports.canFreeze)(board[k]))
-            continue;
+        if (!(0, exports.canFreeze)(board[k]) || (immune === null || immune === void 0 ? void 0 : immune(board[k])))
+            continue; // 帯電中の雷霆の巫のコマには❄が付かない
         board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] }; // 🌱は消えないが、氷結中は休眠する（activeBuds）
         done.push(k);
     }
@@ -199,7 +201,7 @@ exports.INFERNO_FREE_SKILLS = 3;
 const infernoCostOf = (baseCost, infernoReady, calc) => infernoReady ? 0 : calc(baseCost);
 exports.infernoCostOf = infernoCostOf;
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-const freezeAll = (board) => (0, exports.freeze)(board, board.map((_, i) => i));
+const freezeAll = (board, immune) => (0, exports.freeze)(board, board.map((_, i) => i), immune);
 exports.freezeAll = freezeAll;
 /**
  * 絶対零度の発動（使用者 me の次の手番開始時）: me 以外のコマのうち❄が付いているマスに、スタック数×3ダメージ
