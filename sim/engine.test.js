@@ -1058,7 +1058,7 @@ test('氷結: オピウムは氷結が身代わりになる（ライフはその
     assert.strictEqual(s.board[6].bind, 2);
 });
 
-test('氷結: スラッシュ・ストンプ・審判の日・式神の爆破も氷結が身代わりになる', () => {
+test('氷結: スラッシュ・ストンプ・式神の爆破は氷結が身代わりになる（審判の日は氷結ごと破壊する）', () => {
     const anti = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(1) });
     const idx = require('./shared/boardGeometry').geometryOf(anti.size).antiDiagonal[1];
     anti.heartTurn = true; anti.heartMagic = 20;
@@ -1081,9 +1081,8 @@ test('氷結: スラッシュ・ストンプ・審判の日・式神の爆破も
     m.heartTurn = true; m.heartMagic = 30;
     m.board[5] = { player: '⭕', bind: 4, effects: [FRZ] };
     e.SKILLS.judgeDay(m);
-    e.placeMove(m, 5); // 中心が氷結の敵コマ → 身代わりで残り、中心は奪えない
-    assert.strictEqual(m.board[5].player, '⭕');
-    assert.strictEqual(m.board[5].effects.length, 0);
+    e.placeMove(m, 5); // 中心が氷結の敵コマ → 審判の日は氷結ごと破壊し(全エフェクト-99→99ダメージ)、中心は自分のコマ
+    assert.strictEqual(m.board[5].player, '💙');
 
     const y = game('yinYangMaster', 'you');
     y.heartTurn = true; y.heartMagic = 30; y.yy[0] = 'yang';
@@ -3847,6 +3846,18 @@ test('鍵師: 封鎖の断は自陣7・空きマス2をロックしてターン�
     assert.ok(!s.board[1].effects.some((x) => x.effect === '🔑'));
     assert.strictEqual(s.board[1].bind, 3);
     assert.strictEqual(e.placeMove(s, 2), false); // 敵(⭕)は空きマスに置けない
+});
+
+test('審判の日の処理順: 空きマスのロックが外れ、敵のロック付きコマはロックごと破壊される', () => {
+    const m = game('magician', 'you');
+    m.heartTurn = true; m.heartMagic = 30;
+    m.board[4] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+    m.board[6] = { player: '⭕', bind: 4, effects: [{ effect: '🔑', stack: 6 }] };
+    e.SKILLS.judgeDay(m);
+    e.placeMove(m, 5);
+    assert.deepStrictEqual(m.board[4].effects, []);
+    assert.strictEqual(m.board[6].player, undefined);
+    assert.strictEqual(m.board[5].player, '💙');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

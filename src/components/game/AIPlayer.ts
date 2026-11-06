@@ -12,7 +12,7 @@ import { addLock, isLocked, lockEffect, tickLock } from './lock';
 import { lockBlocksPlacement, sealBaseCost, sealReleaseCells, seal } from './keysmith';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
-import { stomp as stompOf } from './blast';
+import { stomp as stompOf, judgeDay as judgeDayOf, judgeDayVictims } from './blast';
 import { canHitBound, isTakeProtected } from './decay';
 import { plunderTargets as plunderTargetsOf, canRelocate, isPlaceable } from './generic';
 import { NECROMANCY } from './turn';
@@ -1983,20 +1983,12 @@ class AIPlayer {
 
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
     findJudgeTarget(board: SquareInfo[]): number | null {
-        const geo = geometryForCells(board.length);
         let bestIdx: number | null = null, bestNet = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
-            let enemy = 0, mine = 0;
-            for (const idx of geo.judgeRange(i)) {
-                const sq = board[idx];
-                const locked = sq.effects.some(e => e.effect === '🔑');
-                const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
-                if (locked && protectedBud) continue;
-                if (isFrozen(sq)) continue; // 氷結中は❄1つが身代わりになり、敵も自陣も壊れない
-                if (this.isEnemy(sq.player)) enemy++;
-                else if (sq.player === this.playerSymbol) mine++;
-            }
+            const victims = judgeDayVictims(board, i, this.playerSymbol); // blast.ts の judgeDay と同じ処理で壊れるコマを数える
+            const enemy = victims.filter((v) => this.isEnemy(v.owner)).length;
+            const mine = victims.length - enemy;
             const net = enemy - mine;
             if (net > bestNet) { bestNet = net; bestIdx = i; }
         }
@@ -2025,17 +2017,10 @@ class AIPlayer {
         let bestIdx: number | null = null, bestNet = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i)) continue;
-            let enemy = 0, mine = 0;
-            const gone = new Set<number>();
-            for (const idx of geo.judgeRange(i)) {
-                const sq = board[idx];
-                const locked = sq.effects.some(e => e.effect === '🔑');
-                const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
-                if (locked && protectedBud) continue;
-                if (isFrozen(sq)) continue;
-                if (this.isEnemy(sq.player)) { enemy++; gone.add(idx); }
-                else if (sq.player === me) mine++;
-            }
+            const victims = judgeDayVictims(board, i, me);
+            const gone = new Set<number>(victims.filter((v) => this.isEnemy(v.owner)).map((v) => v.cell));
+            const enemy = gone.size;
+            const mine = victims.length - enemy;
             if (!reachLines.every((line) => line.some((idx) => gone.has(idx)))) continue;
             if (enemy - mine > bestNet) { bestNet = enemy - mine; bestIdx = i; }
         }
@@ -2051,14 +2036,18 @@ class AIPlayer {
             if (this.shield.has(i)) continue;
             const nb = board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
             let killed = 0;
-            for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
-                const sq = nb[idx];
-                if (kind === 'stomp' && sq.player === me) { nb[idx] = applyDamage(sq, 5, 'skill').sq; continue; }
-                if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱')) continue;
-                const guard = absorbDestroy(sq);
-                if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
-                if (this.isEnemy(sq.player)) killed++;
-                nb[idx] = { player: undefined, bind: 0, effects: [] };
+            if (kind === 'judge') {
+                killed = judgeDayVictims(board, i, me).filter((v) => this.isEnemy(v.owner)).length;
+                judgeDayOf(nb, i, me); // blast.ts の judgeDay と同じ処理
+            } else {
+                for (const idx of geo.stompRange(i)) {
+                    const sq = nb[idx];
+                    if (sq.player === me) { nb[idx] = applyDamage(sq, 5, 'skill').sq; continue; }
+                    const guard = absorbDestroy(sq);
+                    if (guard.blocked) { nb[idx] = guard.sq; continue; } // 氷結は❄1つが身代わりになる
+                    if (this.isEnemy(sq.player)) killed++;
+                    nb[idx] = { player: undefined, bind: 0, effects: [] };
+                }
             }
             if (!nb[i].player) nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
             const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;

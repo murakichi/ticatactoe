@@ -374,16 +374,16 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         expect(nb[6].effects).toHaveLength(0);
     });
 
-    it('findJudgeTarget: 氷結中の敵は数えず、氷結中の自コマは壊れない扱い', () => {
+    it('findJudgeTarget: 氷結中の敵も数える（氷結は身代わりにならない）。バッズのある敵は数えない', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
         frozen(b, 9, '⭕');
         const mage = new AIPlayer('💙', 'magician', ['⭕']);
-        expect(mage.findJudgeTarget(b)).toBeNull();
-        put(b, 4, '⭕');
-        put(b, 7, '⭕');
         expect(mage.findJudgeTarget(b)).not.toBeNull();
+        const c = emptyBoard();
+        [5, 6, 9].forEach((i) => { c[i] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] }; });
+        expect(mage.findJudgeTarget(c)).toBeNull();
     });
 
     it('findRescueCenter: 氷結中の敵コマは壊せたものとして数えない', () => {

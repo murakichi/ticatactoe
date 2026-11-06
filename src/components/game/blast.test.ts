@@ -39,12 +39,13 @@ describe('審判の日', () => {
         expect(b[4].player).toBeUndefined();
         expect(b[3].player).toBe('⭕');
     });
-    it('中心の敵コマを氷結が守ったら、中心は奪えない', () => {
+    it('中心の氷結中の敵コマも、氷結ごと破壊されて中心に置ける（氷結は身代わりにならない）', () => {
         const b = board();
         b[5] = { player: '⭕', bind: 7, effects: [{ effect: '❄' }] };
         const r = judgeDay(b, 5, '💙');
         expect(r.broken).toEqual([5]);
-        expect(b[5].player).toBe('⭕');
+        expect(r.destroyed).toBe(1);
+        expect(b[5].player).toBe('💙');
     });
 });
 
@@ -73,11 +74,78 @@ describe('審判の日で置いたマスはロック付き', () => {
         expect(b[5].player).toBe('💙');
         expect(r.destroyed).toBe(1);
     });
-    it('中心の敵コマを氷結が守ったときは置かれないのでロックも付かない', () => {
+    it('中心の敵コマにバッズが付いていたら置かれない（ロックも付かない）', () => {
         const b = board();
-        b[5] = { player: '⭕', bind: 7, effects: [{ effect: '❄' }] };
+        b[5] = { player: '⭕', bind: 7, effects: [{ effect: '🌱' }] };
         judgeDay(b, 5, '💙', { gears: [], seat: 0 });
         expect(b[5].player).toBe('⭕');
         expect(b[5].effects.some((e) => e.effect === '🔑')).toBe(false);
+    });
+});
+
+describe('審判の日の処理順（敵味方問わず、バッズのないマス: すべてのエフェクト-99→99ダメージ→0は破壊）', () => {
+    const LK = (stack: number) => ({ effect: '🔑' as const, stack });
+    it('空きマス: ロック・氷結・炎など全てのエフェクトが外れる', () => {
+        const b = board();
+        b[4] = { player: undefined, bind: 0, effects: [LK(6)] };
+        b[6] = { player: undefined, bind: 0, effects: [{ effect: '❄' }, { effect: '❄' }] };
+        b[1] = { player: undefined, bind: 0, effects: [{ effect: '🔥' }, LK(2)] };
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4].effects).toEqual([]);
+        expect(b[6].effects).toEqual([]);
+        expect(b[1].effects).toEqual([]);
+        expect(r.broken).toEqual([6]); // 氷結が解けたマス
+    });
+    it('敵陣: ロック付きのコマ（ライフ0でも）は全エフェクトが外れて破壊される。破壊した数が返る', () => {
+        const b = board();
+        b[4] = { player: '⭕', bind: 5, effects: [LK(9)] };
+        b[6] = { player: '⭕', bind: 0, effects: [LK(1)] };
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4]).toEqual({ player: undefined, bind: 0, effects: [] });
+        expect(b[6]).toEqual({ player: undefined, bind: 0, effects: [] });
+        expect(r.destroyed).toBe(2);
+    });
+    it('敵陣: オブジェクトも破壊される', () => {
+        const b = board();
+        b[4] = { player: '⭕', bind: 5, effects: [], object: 'bigTree' };
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4]).toEqual({ player: undefined, bind: 0, effects: [] });
+        expect(r.destroyed).toBe(1);
+    });
+    it('敵陣: 氷結中・ロック付き・⚡のコマも全エフェクトが外れて破壊される（氷結は身代わりにならない）', () => {
+        const b = board();
+        b[4] = { player: '⭕', bind: 5, effects: [{ effect: '❄' }, { effect: '❄' }, LK(6), { effect: '⚡' }] };
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4].player).toBeUndefined();
+        expect(r.broken).toEqual([4]);
+        expect(r.destroyed).toBe(1);
+    });
+    it('バッズのあるマスは敵味方問わず対象外（コマもロックもそのまま）', () => {
+        const b = board();
+        b[4] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, LK(6)] }; // 敵のバッズ付き
+        b[6] = { player: '💙', bind: 5, effects: [{ effect: '🌱' }] }; // 自陣のバッズ付き（ロックなし）
+        b[1] = { player: '⭕', bind: 5, effects: [{ effect: '🌱' }, { effect: '❄' }] }; // 氷結中でもそのまま
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4].player).toBe('⭕');
+        expect(b[4].effects).toEqual([{ effect: '🌱' }, LK(6)]);
+        expect(b[6].player).toBe('💙');
+        expect(b[1].effects).toEqual([{ effect: '🌱' }, { effect: '❄' }]);
+        expect(r.destroyed).toBe(0);
+    });
+    it('自陣のバッズのないコマは、ロック付きでも破壊される', () => {
+        const b = board();
+        b[4] = { player: '💙', bind: 5, effects: [LK(6)] };
+        b[6] = { player: '💙', bind: 5, effects: [] };
+        const r = judgeDay(b, 5, '💙');
+        expect(b[4].player).toBeUndefined();
+        expect(b[6].player).toBeUndefined();
+        expect(r.destroyed).toBe(2);
+    });
+    it('中心: 氷結中・ロック付きの空きマスにも置ける（エフェクトは全て外れ、新しい🔑を掛ける）', () => {
+        const b = board();
+        b[5] = { player: undefined, bind: 0, effects: [{ effect: '❄' }, LK(9)] };
+        judgeDay(b, 5, '💙', { gears: [], seat: 0 });
+        expect(b[5].player).toBe('💙');
+        expect(b[5].effects).toEqual([{ effect: '🌱' }, LK(6)]);
     });
 });
