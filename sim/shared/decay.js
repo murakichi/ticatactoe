@@ -5,6 +5,7 @@ exports.isTakeProtected = exports.canHitBound = exports.decayBoard = exports.cro
 const Player_1 = require("./Player");
 const ObjectKind_1 = require("./ObjectKind");
 const gear_1 = require("./gear");
+const lock_1 = require("./lock");
 const objects_1 = require("./objects");
 const thermal_1 = require("./thermal");
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
@@ -27,8 +28,11 @@ exports.CROWDED_DECAY_MIN_PLAYERS = 3;
 /** 置ける空きマス（コマが無く、氷結・ロックで塞がれていない）が少なく、追加の自然減衰をかけるか */
 const isCrowded = (board, seatCount) => seatCount >= exports.CROWDED_DECAY_MIN_PLAYERS && board.filter((sq) => !sq.player && !(0, thermal_1.emptyBlocked)(sq)).length <= Math.floor(board.length / exports.CROWDED_EMPTY_DIVISOR);
 exports.isCrowded = isCrowded;
-/** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
-const crowdedDecay = (sq) => (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && !(0, ObjectKind_1.isObject)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+/** 満杯の追加減衰: コマのライフを1減らし、🔑ロックのスタックも1減らす（切れるのは通常の減衰のとき）。氷結中・ライフ0・オブジェクトはライフが対象外 */
+const crowdedDecay = (sq) => {
+    const aged = sq.player && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && !(0, ObjectKind_1.isObject)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+    return (0, lock_1.lockStack)(aged) > 1 ? (0, lock_1.tickLock)(aged).sq : aged;
+};
 exports.crowdedDecay = crowdedDecay;
 /**
  * ライフの減衰を盤面全体に1回進める（着手のたび、または手番が1周するごと。shouldDecay）。
@@ -52,16 +56,16 @@ const decayBoard = (board, moveCell, chars, symbols, crowded = false) => {
         }
         const poison = (0, thermal_1.isEffectWarded)(sq) ? 0 : sq.effects.filter((e) => e.effect === '☠').length; // 術中の加護
         // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
-        const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
-        if (sq.bind === 0)
-            sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
-        if ((expiredLock === null || expiredLock === void 0 ? void 0 : expiredLock.value) != null && !sq.player) {
-            board[k] = { player: symbols[expiredLock.value - 1], bind: gear_1.GEAR_PARAMS.emptyLockLife, effects: [] };
+        const ticked = (0, lock_1.tickLock)(sq);
+        sq.effects = ticked.sq.effects;
+        const expiredLock = ticked.expired;
+        if ((expiredLock === null || expiredLock === void 0 ? void 0 : expiredLock.owner) != null && !sq.player) {
+            board[k] = { player: symbols[expiredLock.owner - 1], bind: gear_1.GEAR_PARAMS.emptyLockLife, effects: [] };
             res.emptyLockSpawns.push(k);
             continue;
         }
         // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
-        if (poison > 0 && sq.bind === 0 && sq.player && k !== moveCell) {
+        if (poison > 0 && sq.bind === 0 && sq.player && k !== moveCell && !(0, lock_1.isLocked)(sq)) { // ロック中のコマは毒で消えない
             res.spreadOrigins.push(k);
             board[k] = { player: undefined, bind: 0, effects: [] };
         }
