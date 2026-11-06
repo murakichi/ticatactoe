@@ -31,7 +31,7 @@ import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder } from './ge
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, stashTargets as stashTargetsOf, bristleTargets as bristleTargetsOf, boltSilenceTargets as boltSilenceTargetsOf, chargeHealTargets, thunderFireTargets as thunderFireTargetsOf } from './charge';
 import { ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
@@ -39,7 +39,7 @@ import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE 
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, isDormant, activeBuds, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, activeBuds, emptyBlocked, cleanse, sacrificeCandidates as sacrificeCandidatesOf, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -1655,8 +1655,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason'), true, true, 'onClickChargeSeason');
     };
     // 総毛立つ: 自陣の全てのコマ（🔑ロック中を除く）に⚡を1つずつ付ける。雷霆の巫以外は乗った時点でダメージを受ける
-    const bristleTargets = (): number[] =>
-        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && !sq.effects.some((e) => e.effect === '🔑') ? i : -1)).filter((i) => i !== -1);
+    const bristleTargets = (): number[] => bristleTargetsOf(currentBoard, currentTurnPlayer);
     const onClickBristle = () => {
         const cells = bristleTargets();
         if (cells.length === 0) return;
@@ -1670,10 +1669,7 @@ export const Game = (props: GameProps) => {
     // 雷のない所に火は立たぬ: ⚡のあるコマを1つ選んで破壊し（氷結中なら❄-1だけ）、周囲8マスの敵コマのうち2〜全部をランダムに選んで🔥を1つずつ付ける。
     // 選べるのは⚡のあるコマ。自分の無敵マスは選べるが、🔑ロック中のコマと他人の無敵マスは選べない
     const [useThunderFire, setUseThunderFire] = useState<boolean>(false);
-    const thunderFireTargets = (): number[] =>
-        currentBoard
-            .map((sq, i) => (sq.player && chargeStacks(sq) > 0 && !sq.effects.some((e) => e.effect === '🔑') && (sq.player === currentTurnPlayer || !isShielded(sq, characters)) ? i : -1))
-            .filter((i) => i !== -1);
+    const thunderFireTargets = (): number[] => thunderFireTargetsOf(currentBoard, currentTurnPlayer, characters);
     const onClickThunderFire = () => {
         addLog('「雷のない所に火は立たぬ」を使用（⚡のあるコマを選択）');
         setUseThunderFire(true);
@@ -1705,8 +1701,7 @@ export const Game = (props: GameProps) => {
 
     // 雷神のへそくり: 自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1する（軽減後は最低1）
     const [useStash, setUseStash] = useState<boolean>(false);
-    const stashTargets = (): number[] =>
-        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const stashTargets = (): number[] => stashTargetsOf(currentBoard, currentTurnPlayer);
     const onClickStash = () => {
         addLog('「雷神のへそくり」を使用（⚡のある自陣のコマを選択）');
         setUseStash(true);
@@ -1728,8 +1723,7 @@ export const Game = (props: GameProps) => {
 
     // 沈黙は雷なり: 自陣の⚡を1つ選んで1スタック払い、相手全員が次の手番スキルを使えなくなる（自陣に⚡が無いと使えない）
     const [useBoltSilence, setUseBoltSilence] = useState<number>(0); // あと何個の⚡を選んで払うか（0=使っていない）
-    const boltSilenceTargets = (): number[] =>
-        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const boltSilenceTargets = (): number[] => boltSilenceTargetsOf(currentBoard, currentTurnPlayer);
     const boltSilenceLegal = (): boolean => boltSilenceTargets().reduce((n, i) => n + chargeStacks(currentBoard[i]), 0) >= BOLT_SILENCE_BOLTS;
     const onClickBoltSilence = () => {
         if (!boltSilenceLegal()) return;
@@ -2297,7 +2291,7 @@ export const Game = (props: GameProps) => {
     };
 
     // 雷を食らわば皿まで: ⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2する。この手番に付与した⚡の数だけコスト軽減（撃つとリセット）
-    const chargeHealCells = (): number[] => currentBoard.map((sq, k) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 && !isDormant(sq) ? k : -1)).filter((k) => k !== -1);
+    const chargeHealCells = (): number[] => chargeHealTargets(currentBoard, currentTurnPlayer);
     const onClickChargeHeal = () => {
         const board = currentBoard.slice();
         const r = healCharged(board, currentTurnPlayer);
@@ -3067,10 +3061,7 @@ export const Game = (props: GameProps) => {
 
     // 殉火（仮名）: 自陣のコマを1つ選んでライフをゼロにし、そのライフ以下の敵のコマ全てに🔥を付ける。手番は続く
     const [useSacrifice, setUseSacrifice] = useState<boolean>(false);
-    const sacrificeCandidates = (): number[] =>
-        currentBoard
-            .map((sq, i) => (canSacrifice(sq, currentTurnPlayer) && sacrificeTargets(currentBoard, sq.bind, currentTurnPlayer, characters).length > 0 ? i : -1))
-            .filter((i) => i !== -1);
+    const sacrificeCandidates = (): number[] => sacrificeCandidatesOf(currentBoard, currentTurnPlayer, characters);
     const onClickSacrifice = () => {
         addLog('「殉火」を使用（犠牲にする自陣のコマを選択）');
         setUseSacrifice(true);

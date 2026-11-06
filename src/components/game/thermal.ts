@@ -599,6 +599,10 @@ export const canSacrifice = (sq: SquareInfo, me: SquareInfo['player']): boolean 
 export const sacrificeTargets = (board: SquareInfo[], threshold: number, me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
     infernoTargets(board, me, chars).filter((i) => board[i].bind <= threshold);
 
+/** 殉火で犠牲にできる自陣のコマ: ライフが残り、🔑ロックがなく、焼ける敵が1つ以上いるもの */
+export const sacrificeCandidates = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
+    board.map((sq, i) => (canSacrifice(sq, me) && sacrificeTargets(board, sq.bind, me, chars).length > 0 ? i : -1)).filter((i) => i !== -1);
+
 /**
  * 殉火: cell の自陣のコマのライフをゼロにして、そのライフ(threshold)以下の敵コマ全てに🔥を1スタック付ける
  * （ignite の規則どおり。氷結中のマスは氷結が全解除されて🔥は付かない）。board を直接書き換える。sim/thermal.js の sacrificeFlame と同じ

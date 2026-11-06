@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged, ownChargedCells, stashTargets, boltSilenceTargets, bristleTargets, chargeHealTargets, thunderFireTargets } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -487,5 +487,51 @@ describe('雷を食らわば皿まで(healCharged)', () => {
     it('対象が無ければ何も変えない', () => {
         const board = emptyBoard();
         expect(healCharged(board, '💙')).toEqual({ healed: [], total: 0 });
+    });
+});
+
+// Game.tsx と sim/engine.js が共有する、対象マス選びの純粋関数
+describe('帯電スキルの対象マス（Game / sim 共有）', () => {
+    const lock = (b: SquareInfo[], i: number): void => { b[i] = { ...b[i], effects: [...b[i].effects, { effect: '🔑' }] }; };
+
+    it('へそくり・沈黙は雷なりは、⚡のある自陣のマスだけ', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true);
+        put(b, 1, '💙', 4, false);
+        put(b, 2, '⭕', 4, true);
+        expect(ownChargedCells(b, '💙')).toEqual([0]);
+        expect(stashTargets(b, '💙')).toEqual([0]);
+        expect(boltSilenceTargets(b, '💙')).toEqual([0]);
+    });
+
+    it('総毛立つは、ロックされていない自陣のマス（⚡の有無は問わない）', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true);
+        put(b, 1, '💙', 4, false);
+        put(b, 2, '💙', 4, false);
+        put(b, 3, '⭕', 4, false);
+        lock(b, 2);
+        expect(bristleTargets(b, '💙')).toEqual([0, 1]);
+    });
+
+    it('雷を食らわば皿まで: ⚡の自陣マス。休眠中（氷結中）は除く', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true);
+        put(b, 1, '💙', 4, true);
+        b[1] = { ...b[1], effects: [...b[1].effects, { effect: '❄' }] };
+        expect(chargeHealTargets(b, '💙')).toEqual([0]);
+    });
+
+    it('雷のない所に火は立たぬ: ⚡のあるコマ。ロック中と、敵の無敵マスは除く', () => {
+        const b = emptyBoard();
+        put(b, 0, '💙', 4, true); // 自分の⚡
+        put(b, 1, '⭕', 4, true); // 敵の⚡（⭕=雷霆の巫なので無敵）
+        put(b, 2, '💙', 4, true);
+        lock(b, 2); // ロック中
+        put(b, 3, '⭕', 4, false); // ⚡なし
+        expect(thunderFireTargets(b, '💙', chars)).toEqual([0]);
+        // 自分が雷霆の巫なら自分のマスは対象、敵(you)のマスも⚡があれば対象
+        const c: PlayerCharacters = ['you', 'tactician'];
+        expect(thunderFireTargets(b, '💙', c)).toEqual([0, 1]);
     });
 });

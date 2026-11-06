@@ -1551,7 +1551,7 @@ function onClickDarkPot(s) {
 // 雷を食らわば皿まで (idx 83): ⚡が効いている（休眠中でない）自陣のコマのライフを、⚡のスタック1つにつき+2する。⚡のコマが無ければ使えない。
 // この手番に付与した⚡の数だけコスト軽減（撃つとリセット） [FAITHFUL] Game.tsx onClickChargeHeal
 const CHARGE_HEAL = 2;
-function chargeHealCells(s) { return s.board.map((sq, k) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 && !thermal.isDormant(sq) ? k : -1)).filter((k) => k !== -1); }
+function chargeHealCells(s) { return chargeMod.chargeHealTargets(s.board, curPlayer(s)); }
 function chargeHealLegal(s) { return chargeHealCells(s).length > 0; }
 function onClickChargeHeal(s) {
     const cells = chargeHealCells(s);
@@ -2276,14 +2276,7 @@ function onClickSwidden(s) {
     bumpStat(s, 'swidden');
 }
 // 殉火 (idx40・仮名): 自コマ（ライフ>0・🔑なし）を選ぶと、そのライフをゼロにして、ライフがそれ以下の敵コマ全てに🔥を1つ。対象の敵が0なら使えない
-function sacrificeCandidates(s) {
-    const me = curPlayer(s);
-    const out = [];
-    s.board.forEach((sq, i) => {
-        if (sq.player === me && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑') && thermal.sacrificeTargets(s.board, sq.bind, me, s.chars).length > 0) out.push(i);
-    });
-    return out;
-}
+function sacrificeCandidates(s) { return thermal.sacrificeCandidates(s.board, curPlayer(s), s.chars); }
 function exeSacrifice(s, i) {
     if (!sacrificeCandidates(s).includes(i)) return false;
     const r = thermal.sacrificeFlame(s.board, i, curPlayer(s), s.chars, s.size, keepBudsOf(s));
@@ -2331,7 +2324,7 @@ function onClickChargeSeason(s) {
     bumpStat(s, 'chargeSeason');
 }
 // 総毛立つ (idx78): 自陣の全コマ（🔑ロック中を除く）に⚡を1つずつ。対象が無ければ使えない
-function bristleTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && !sq.effects.some((e) => e.effect === '🔑') ? i : -1)).filter((i) => i !== -1); }
+function bristleTargets(s) { return chargeMod.bristleTargets(s.board, curPlayer(s)); }
 function bristleLegal(s) { return bristleTargets(s).length > 0; }
 function onClickBristle(s) {
     const cells = bristleTargets(s);
@@ -2361,10 +2354,7 @@ function onClickRelease(s) {
 
 // 雷のない所に火は立たぬ (idx81): ⚡のあるコマ（自分の無敵マスは可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊（氷結中なら❄-1だけで火は燃え移らない）し、
 // 周囲8マスの敵コマ（守られていないもの）のうち2〜全部をランダムに選んで🔥+1。⚡のあるコマが無ければ使えない
-function thunderFireTargets(s) {
-    const me = curPlayer(s);
-    return s.board.map((sq, i) => (sq.player && chargeStacks(sq) > 0 && !sq.effects.some((e) => e.effect === '🔑') && (sq.player === me || !isShielded(s, sq)) ? i : -1)).filter((i) => i !== -1);
-}
+function thunderFireTargets(s) { return chargeMod.thunderFireTargets(s.board, curPlayer(s), s.chars); }
 function thunderFireLegal(s) { return thunderFireTargets(s).length > 0; }
 function onClickThunderFire(s) {
     if (!thunderFireLegal(s)) return;
@@ -2390,7 +2380,7 @@ function exeThunderFire(s, i) {
 }
 
 // 雷神のへそくり (idx80): ⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコスト-1（軽減札）。⚡のある自陣のコマが無ければ使えない
-function stashTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function stashTargets(s) { return chargeMod.stashTargets(s.board, curPlayer(s)); }
 function stashLegal(s) { return stashTargets(s).length > 0; }
 function onClickStash(s) {
     if (!stashLegal(s)) return;
@@ -2400,7 +2390,7 @@ function onClickStash(s) {
     bumpStat(s, 'stash');
 }
 // 沈黙は雷なり (idx 113): 自陣の⚡を2つ(合計2スタック。同じコマからでも可)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
-function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function boltSilenceTargets(s) { return chargeMod.boltSilenceTargets(s.board, curPlayer(s)); }
 function boltSilenceLegal(s) { return boltSilenceTargets(s).reduce((n, i) => n + chargeStacks(s.board[i]), 0) >= chargeMod.BOLT_SILENCE_BOLTS; }
 function onClickBoltSilence(s) {
     if (!boltSilenceLegal(s)) return;

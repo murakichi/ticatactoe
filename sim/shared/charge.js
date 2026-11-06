@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/charge.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeStacks = exports.BOLT_SILENCE_BOLTS = exports.orthoNeighbors = void 0;
+exports.thunderFireTargets = exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeHealTargets = exports.bristleTargets = exports.boltSilenceTargets = exports.stashTargets = exports.ownChargedCells = exports.chargeStacks = exports.BOLT_SILENCE_BOLTS = exports.orthoNeighbors = void 0;
 const Player_1 = require("./Player");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -14,6 +14,18 @@ exports.BOLT_SILENCE_BOLTS = 2;
 const chargeStacks = (sq) => sq.effects.filter((e) => e.effect === '⚡').length;
 exports.chargeStacks = chargeStacks;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
+const cellsWhere = (board, pred) => board.map((sq, i) => (pred(sq) ? i : -1)).filter((i) => i !== -1);
+/** ⚡のある自陣のマス（雷神のへそくり・沈黙は雷なりの対象） */
+const ownChargedCells = (board, me) => cellsWhere(board, (sq) => sq.player === me && (0, exports.chargeStacks)(sq) > 0);
+exports.ownChargedCells = ownChargedCells;
+exports.stashTargets = exports.ownChargedCells;
+exports.boltSilenceTargets = exports.ownChargedCells;
+/** ロックされていない自陣のマス（総毛立つの対象） */
+const bristleTargets = (board, me) => cellsWhere(board, (sq) => sq.player === me && !hasLock(sq));
+exports.bristleTargets = bristleTargets;
+/** ライフを回復できる⚡の自陣マス（雷を食らわば皿まで。休眠中は除く） */
+const chargeHealTargets = (board, me) => cellsWhere(board, (sq) => sq.player === me && (0, exports.chargeStacks)(sq) > 0 && !(0, thermal_1.isDormant)(sq));
+exports.chargeHealTargets = chargeHealTargets;
 /** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 const isShielded = (sq, chars) => !!sq.player && charOf(chars, sq.player) === 'electrician' && (0, exports.chargeStacks)(sq) > 0 && !(0, thermal_1.isDormant)(sq); // 休眠マス（氷結中・火炎中）は⚡が休眠して無敵も働かない
 exports.isShielded = isShielded;
@@ -213,3 +225,6 @@ const healCharged = (board, player) => {
     return { healed, total };
 };
 exports.healCharged = healCharged;
+/** 雷のない所に火は立たぬの対象: ⚡のあるコマ（ロック中は除く。敵の無敵マスは除く） */
+const thunderFireTargets = (board, me, chars) => cellsWhere(board, (sq) => !!sq.player && (0, exports.chargeStacks)(sq) > 0 && !hasLock(sq) && (sq.player === me || !(0, exports.isShielded)(sq, chars)));
+exports.thunderFireTargets = thunderFireTargets;

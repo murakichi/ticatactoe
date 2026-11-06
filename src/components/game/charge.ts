@@ -22,6 +22,17 @@ export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) =>
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
 
+const cellsWhere = (board: SquareInfo[], pred: (sq: SquareInfo) => boolean): number[] => board.map((sq, i) => (pred(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** ⚡のある自陣のマス（雷神のへそくり・沈黙は雷なりの対象） */
+export const ownChargedCells = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0);
+export const stashTargets = ownChargedCells;
+export const boltSilenceTargets = ownChargedCells;
+/** ロックされていない自陣のマス（総毛立つの対象） */
+export const bristleTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && !hasLock(sq));
+/** ライフを回復できる⚡の自陣マス（雷を食らわば皿まで。休眠中は除く） */
+export const chargeHealTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0 && !isDormant(sq));
+
 /** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 export const isShielded = (sq: SquareInfo, chars: PlayerCharacters): boolean =>
     !!sq.player && charOf(chars, sq.player) === 'electrician' && chargeStacks(sq) > 0 && !isDormant(sq); // 休眠マス（氷結中・火炎中）は⚡が休眠して無敵も働かない
@@ -236,3 +247,7 @@ export const healCharged = (board: SquareInfo[], player: Player | undefined): { 
     });
     return { healed, total };
 };
+
+/** 雷のない所に火は立たぬの対象: ⚡のあるコマ（ロック中は除く。敵の無敵マスは除く） */
+export const thunderFireTargets = (board: SquareInfo[], me: Player, chars: PlayerCharacters): number[] =>
+    cellsWhere(board, (sq) => !!sq.player && chargeStacks(sq) > 0 && !hasLock(sq) && (sq.player === me || !isShielded(sq, chars)));
