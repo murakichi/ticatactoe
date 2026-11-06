@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.judgeDay = exports.stomp = void 0;
 const boardGeometry_1 = require("./boardGeometry");
+const tokenAfter_1 = require("./tokenAfter");
 const thermal_1 = require("./thermal");
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
 /** ストンプ: i を中心とする範囲の敵コマ・空きマスのロックなどを全て破壊し、自陣のコマはライフ-5（氷結なら解除だけ・🔥は1.5倍）。
@@ -31,9 +32,9 @@ const stomp = (board, i, player, life) => {
     return { range, destroyed, broken };
 };
 exports.stomp = stomp;
-/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
+/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分の🌱付きコマ（🔑ロック付き。ライフ2・🌱）になる。
  *  ただし氷結が身代わりになって残った中心は奪えない */
-const judgeDay = (board, i, player) => {
+const judgeDay = (board, i, player, lock) => {
     const range = (0, boardGeometry_1.geometryForCells)(board.length).judgeRange(i);
     let destroyed = 0;
     let centerSurvived = false;
@@ -56,8 +57,12 @@ const judgeDay = (board, i, player) => {
             destroyed++;
         board[idx] = empty();
     }
-    if (!centerSurvived)
+    if (!centerSurvived) {
         board[i] = { player, bind: 2, effects: [{ effect: '🌱' }] };
+        // 置いたマスは🔑ロック付き（期間は堅牢の鍵で延びる）。自陣の🌱付きの🔑マスは次の審判の日でも壊れない
+        if (lock)
+            (0, tokenAfter_1.applyLockAt)(board, i, lock.gears, lock.seat);
+    }
     return { range, destroyed, broken };
 };
 exports.judgeDay = judgeDay;

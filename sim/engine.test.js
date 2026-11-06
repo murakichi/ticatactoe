@@ -3789,5 +3789,24 @@ test('招き猫（sim）: 自分のスキルコスト-1', () => {
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'), before - 1);
 });
 
+test('審判の日で置いたマスは🔑ロック付き（堅牢の鍵で期間が延びる）', () => {
+    const m = game('magician', 'you');
+    m.heartTurn = true; m.heartMagic = 30;
+    m.board[6] = { player: '⭕', bind: 3, effects: [] };
+    e.SKILLS.judgeDay(m);
+    e.placeMove(m, 5);
+    assert.strictEqual(m.board[5].player, '💙');
+    assert.deepStrictEqual(m.board[5].effects.map((x) => x.effect), ['🌱', '🔑']);
+    assert.strictEqual(m.board[5].bind, 6);
+    assert.strictEqual(m.board[6].player, undefined);
+
+    const g = game('magician', 'you');
+    g.heartTurn = true; g.heartMagic = 30;
+    g.gears[0] = ['ironLock', 'luckyPurse'];
+    e.SKILLS.judgeDay(g);
+    e.placeMove(g, 5);
+    assert.strictEqual(g.board[5].bind, 9);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

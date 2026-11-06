@@ -47,3 +47,37 @@ describe('審判の日', () => {
         expect(b[5].player).toBe('⭕');
     });
 });
+
+describe('審判の日で置いたマスはロック付き', () => {
+    it('中心は🌱＋🔑のロック付きで置かれ、期間は通常のロック(6)。ロック引数が無ければ従来どおり（🔑なし）', () => {
+        const b = board();
+        judgeDay(b, 5, '💙', { gears: [], seat: 0 });
+        expect(b[5].player).toBe('💙');
+        expect(b[5].effects).toEqual([{ effect: '🌱' }, { effect: '🔑' }]);
+        expect(b[5].bind).toBe(6);
+        const b2 = board();
+        judgeDay(b2, 5, '💙');
+        expect(b2[5].effects).toEqual([{ effect: '🌱' }]);
+        expect(b2[5].bind).toBe(2);
+    });
+    it('堅牢の鍵があればロックの期間が延びる(9)', () => {
+        const b = board();
+        judgeDay(b, 5, '💙', { gears: ['ironLock', 'luckyPurse'], seat: 0 });
+        expect(b[5].bind).toBe(9);
+    });
+    it('置いたコマ(🌱＋🔑)は、次の審判の日で自分が撃っても壊れない', () => {
+        const b = board();
+        judgeDay(b, 5, '💙', { gears: [], seat: 0 });
+        b[6] = { player: '⭕', bind: 3, effects: [] };
+        const r = judgeDay(b, 6, '💙', { gears: [], seat: 0 });
+        expect(b[5].player).toBe('💙');
+        expect(r.destroyed).toBe(1);
+    });
+    it('中心の敵コマを氷結が守ったときは置かれないのでロックも付かない', () => {
+        const b = board();
+        b[5] = { player: '⭕', bind: 7, effects: [{ effect: '❄' }] };
+        judgeDay(b, 5, '💙', { gears: [], seat: 0 });
+        expect(b[5].player).toBe('⭕');
+        expect(b[5].effects.some((e) => e.effect === '🔑')).toBe(false);
+    });
+});

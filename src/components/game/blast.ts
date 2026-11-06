@@ -3,6 +3,8 @@
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
+import { Gears } from './gear';
+import { applyLockAt } from './tokenAfter';
 import { absorbDestroy, applyDamage, emptyBlocked } from './thermal';
 
 export type BlastResult = {
@@ -40,9 +42,9 @@ export const stomp = (board: SquareInfo[], i: number, player: Player, life: numb
     return { range, destroyed, broken };
 };
 
-/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分のコマ（ライフ2・🌱）になる。
+/** 審判の日: i を中心とする十字の範囲を、自陣の🌱付きの🔑ロックマス以外すべて破壊する（敵味方問わず）。中心は自分の🌱付きコマ（🔑ロック付き。ライフ2・🌱）になる。
  *  ただし氷結が身代わりになって残った中心は奪えない */
-export const judgeDay = (board: SquareInfo[], i: number, player: Player): BlastResult => {
+export const judgeDay = (board: SquareInfo[], i: number, player: Player, lock?: { gears: Gears; seat: number }): BlastResult => {
     const range = geometryForCells(board.length).judgeRange(i);
     let destroyed = 0;
     let centerSurvived = false;
@@ -62,6 +64,10 @@ export const judgeDay = (board: SquareInfo[], i: number, player: Player): BlastR
         if (sq.player) destroyed++;
         board[idx] = empty();
     }
-    if (!centerSurvived) board[i] = { player, bind: 2, effects: [{ effect: '🌱' }] };
+    if (!centerSurvived) {
+        board[i] = { player, bind: 2, effects: [{ effect: '🌱' }] };
+        // 置いたマスは🔑ロック付き（期間は堅牢の鍵で延びる）。自陣の🌱付きの🔑マスは次の審判の日でも壊れない
+        if (lock) applyLockAt(board, i, lock.gears, lock.seat);
+    }
     return { range, destroyed, broken };
 };

@@ -1904,7 +1904,7 @@ export const Game = (props: GameProps) => {
 
     const exeJudgeDay = (i: number) => {
         const board = currentBoard.slice();
-        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer);
+        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer, { gears: turnGears, seat: turnSeat });
         addCorpses(destroyed);
 
         setUseMagicCountAt(turnSeat, 0);
