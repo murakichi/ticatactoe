@@ -233,7 +233,7 @@ exports.randomGears = randomGears;
 exports.RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['lastStand', 'luckyPurse'],
+    magician: ['spellWard', 'luckyPurse'],
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'chainDiscount'],
     necromancer: ['vengeance', 'lastStand'],

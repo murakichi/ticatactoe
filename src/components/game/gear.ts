@@ -283,7 +283,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['lastStand', 'luckyPurse'], // 土壇場の防壁＋幸運の財布（旧主案 spellWard,luckyPurse から。対強豪5体 seed301/300: 60.3→66.8、seed302/300: 61.4→64.7、seed233/200: 61.9→68.9。docs/tune/magician.md 試行56・#432）
+    magician: ['spellWard', 'luckyPurse'], // 旧主案に戻す: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'chainDiscount'], // 対強豪平均 42→46%（3シード各400: seed2 +5.5/seed8 +5.0/seed21 +3.7。氷室 21→36%）。旧: lastStand,afterglow
     necromancer: ['vengeance', 'lastStand'],
