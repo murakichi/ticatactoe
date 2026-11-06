@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/AIPlayer.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
+exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const bigSkills_1 = require("./bigSkills");
@@ -128,6 +128,11 @@ const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (旧sim AI の EL_MAX / EL_MIN_VALUE / EL_DENY) */
 exports.EMPTY_LOCK_MAX = 2;
 const EMPTY_LOCK_MIN_VALUE = 10;
+/** 鍵師が空きマスをロックする価値の下限。自分の列が3つ目になる手（40）以上に絞る。10（空蔵と同じ）だと撃ち過ぎで、対 you 35%→50%（各60試合, seed2000）。80だと37% */
+exports.KEYSMITH_LOCK_MIN_VALUE = 40;
+/** 鍵師が自陣のコマをロックして守る条件: ライフがこの値以下（奪われる直前）で、列づくりの価値がこの値以上 */
+exports.KEYSMITH_OWN_LOCK_MAX_BIND = 1; // 3や無制限に広げると対 you 58%→43〜48%（各60試合, seed2000）。ロックの撃ち過ぎで魔力を食う
+exports.KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
 /** 火遁で魔法使いの🌱を優先して燃やす重み（旧sim AI の igniteBud） */
 const IGNITE_BUD_WEIGHT = 6;
 const EMPTY_LOCK_DENY = 2;
@@ -245,8 +250,49 @@ class AIPlayer {
     characterOf(player) {
         return player === this.playerSymbol ? this.character : this.characters[(0, Player_1.seatOf)(player)];
     }
+    /**
+     * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
+     * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
+     */
+    bestOwnLockTarget(board) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = exports.KEYSMITH_OWN_LOCK_MIN_VALUE - 1e-9;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > exports.KEYSMITH_OWN_LOCK_MAX_BIND || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let mine = 0;
+                let foreign = 0;
+                for (const idx of line) {
+                    const p = board[idx].player;
+                    if (p === this.playerSymbol)
+                        mine++;
+                    else if (p)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(mine, 4)];
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
     /** 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数 (旧sim AI myEmptyLocks) */
     myEmptyLocks(board) {
+        // 鍵師のロックは持ち主を記録しない（空蔵ではない）ので、誰が掛けたかを問わず、ロック中の空きマスを数える
+        if (this.character === 'keysmith')
+            return board.filter((sq) => !sq.player && !sq.object && sq.effects.some((e) => e.effect === '🔑')).length;
         const owner = (0, Player_1.seatOf)(this.playerSymbol) + 1;
         return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.owner === owner)).length;
     }
@@ -256,7 +302,7 @@ class AIPlayer {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
         let bestIdx = null;
-        let bestVal = EMPTY_LOCK_MIN_VALUE - 1e-9;
+        let bestVal = (this.character === 'keysmith' ? exports.KEYSMITH_LOCK_MIN_VALUE : EMPTY_LOCK_MIN_VALUE) - 1e-9;
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (sq.player || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(i))
@@ -3406,14 +3452,27 @@ class AIPlayer {
         }
         // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
         // ロック中は敵も置けないので敵の列を止める効果もある（旧sim AI の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
-        if (this.hasEmptyLock &&
+        // 鍵師: ライフが尽きかけの、列づくりに効いている自陣のコマをロックして守る（1手番に1つ。ロック中のコマは奪われない）
+        if (this.character === 'keysmith' &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
+            const own = this.bestOwnLockTarget(board);
+            if (own !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[own] = (0, lock_1.addLock)(post[own], 6);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
+            }
+        }
+        // 鍵師は空きマスのロックを無視して置けるので、ギアが無くても常にこの判断を行う（敵だけが置けない空きマスを作る）
+        if ((this.hasEmptyLock || this.character === 'keysmith') &&
             this.countReaches(board, this.playerSymbol) === 0 &&
             magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock') &&
             this.myEmptyLocks(board) < exports.EMPTY_LOCK_MAX) {
             const target = this.bestEmptyLockTarget(board);
             if (target !== null) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                post[target] = (0, lock_1.addLock)(post[target], 6, (0, Player_1.seatOf)(this.playerSymbol) + 1);
+                post[target] = (0, lock_1.addLock)(post[target], 6, this.character === 'keysmith' ? undefined : (0, Player_1.seatOf)(this.playerSymbol) + 1);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
                     return { move: followup, skills: ['onClickUseLock'], lockTargets: [target] };
