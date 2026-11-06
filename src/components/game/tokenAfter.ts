@@ -2,8 +2,8 @@
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
-import { PlayerCharacters, isGuarded } from './charge';
-import { Gears, TokenEffect, gearLockStack, hasGear } from './gear';
+import { PlayerCharacters, isGuarded, addCharge } from './charge';
+import { Gears, TokenEffect, GEAR_PARAMS, gearLockStack, hasGear } from './gear';
 import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { lockable } from './thermal';
@@ -40,4 +40,47 @@ export const propagate = (board: SquareInfo[], idx: number, effect: TokenEffect,
     const spread = { ...board[j], effects: [...board[j].effects, { effect }] };
     board[j] = effect === '☠' ? poisonStrike(spread, chars) : spread;
     return j;
+};
+
+export interface TokenAfterOptions {
+    /** 置いた側のシンボルと席 */
+    player: Player;
+    turnSeat: number;
+    /** 置いた席のギア */
+    gears: Gears;
+    chars: PlayerCharacters;
+    /** 置いた席の静電気の季節の残りターン数 */
+    chargeBuff: number;
+    rng: () => number;
+}
+
+export interface TokenAfterResult {
+    /** 収穫に渡す「付与したエフェクト数」 */
+    granted: number;
+    /** 道連れの鍵が働いた */
+    locked: boolean;
+    /** 伝播が広がったマス（広がらなければ null） */
+    spreadTo: number | null;
+}
+
+/**
+ * トークン系スキルでコマを置いた後の盤面処理を、順序ごと1か所にまとめたもの（Game.tsx と sim/engine.js が呼ぶ）。
+ * 順序: 静電気の季節(⚡。収穫・伝播には数えない) → 道連れの鍵(確率でロック。乱数はここで1回) → 伝播(effect があるときだけ)。
+ * board を直接書き換える。ログ・演出・統計は呼び出し側が結果を見てつける。effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined
+ */
+export const afterTokenPlaced = (board: SquareInfo[], idx: number, effect: TokenEffect | undefined, o: TokenAfterOptions): TokenAfterResult => {
+    let granted = effect ? 1 : 0;
+    if (o.chargeBuff > 0 && board[idx].player === o.player) board[idx] = addCharge(board[idx], o.chars);
+    let locked = false;
+    if (hasGear(o.gears, 'bindingLock') && o.rng() < GEAR_PARAMS.bindingLockChance) {
+        applyLockAt(board, idx, o.gears, o.turnSeat);
+        granted += 1;
+        locked = true;
+    }
+    let spreadTo: number | null = null;
+    if (effect && hasGear(o.gears, 'propagate')) {
+        spreadTo = propagate(board, idx, effect, o.player, o.chars, o.rng);
+        if (spreadTo !== null) granted += 1;
+    }
+    return { granted, locked, spreadTo };
 };

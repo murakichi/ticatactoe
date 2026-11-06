@@ -8,7 +8,7 @@ import AIPlayer, { MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
-import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
+import { applyLockAt, afterTokenPlaced as afterTokenPlacedOf } from './tokenAfter';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
@@ -1398,26 +1398,18 @@ export const Game = (props: GameProps) => {
     // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
     const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
-        let granted = effect ? 1 : 0;
-        // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
-        if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
-        if (hasGear(turnGears, 'bindingLock') && Math.random() < GEAR_PARAMS.bindingLockChance) {
-            applyLock(board, idx);
-            granted += 1;
+        const r = afterTokenPlacedOf(board, idx, effect, { player: currentTurnPlayer, turnSeat, gears: turnGears, chars: characters, chargeBuff: chargeBuff[turnSeat], rng: Math.random });
+        if (r.locked) {
             addLog(`道連れの鍵: ${posName(idx)}にロックが付いた`);
             gearTrigger('bindingLock', 'ロック付与');
             playBurst('gearKey', [idx]);
         }
-        if (effect && hasGear(turnGears, 'propagate')) {
-            const j = propagateEffect(board, idx, effect, currentTurnPlayer, characters);
-            if (j !== null) {
-                granted += 1;
-                addLog(`伝播: ${posName(j)}に${effect}が広がった`);
-                gearTrigger('propagate', `${effect}が広がった`);
-                playBurst('gearSpread', [j]);
-            }
+        if (effect && r.spreadTo !== null) {
+            addLog(`伝播: ${posName(r.spreadTo)}に${effect}が広がった`);
+            gearTrigger('propagate', `${effect}が広がった`);
+            playBurst('gearSpread', [r.spreadTo]);
         }
-        return granted;
+        return r.granted;
     };
     // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与する（毒拡散パッシブ）
     const spreadPoisonAround = (board: SquareInfo[], idx: number) => {

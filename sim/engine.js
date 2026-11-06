@@ -257,22 +257,10 @@ function toxicBloom(s, cells) {
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
 function afterTokenPlaced(s, idx, effect) {
-    // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
-    if (s.chargeBuff[s.turn] > 0 && s.board[idx].player === curPlayer(s)) addCharge(s, idx);
-    const g = s.gears[s.turn];
-    let granted = effect ? 1 : 0;
-    if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
-        applyLock(s, idx);
-        granted += 1;
-        bumpStat(s, 'bindingLock');
-    }
-    if (effect && hasGear(g, 'propagate')) {
-        if (tokenAfterMod.propagate(s.board, idx, effect, curPlayer(s), s.chars, s.rng) !== null) {
-            granted += 1;
-            bumpStat(s, 'propagate');
-        }
-    }
-    return granted;
+    const r = tokenAfterMod.afterTokenPlaced(s.board, idx, effect, { player: curPlayer(s), turnSeat: s.turn, gears: s.gears[s.turn], chars: s.chars, chargeBuff: s.chargeBuff[s.turn], rng: s.rng });
+    if (r.locked) bumpStat(s, 'bindingLock');
+    if (r.spreadTo !== null) bumpStat(s, 'propagate');
+    return r.granted;
 }
 // 復讐の刃: 魔力の増減を席ごとに記録するための上限つき加算
 function vengeanceGain(s, seat, gained) {
