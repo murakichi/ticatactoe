@@ -26,8 +26,8 @@ const giantAura = (board, range, me, chars) => {
     }
     for (const j of range) {
         const sq = board[j];
-        if (!(0, thermal_1.lockable)(sq) || sq.effects.some((e) => e.effect === '🔑'))
-            continue;
+        if (!(0, thermal_1.lockable)(sq) || sq.effects.some((e) => e.effect === '🔑') || (0, charge_1.isShielded)(sq, chars))
+            continue; // 帯電中の雷霆の巫のコマにはロックも付かない
         board[j] = (0, lock_1.addLock)(sq, Math.max(sq.bind, 1)); // 旧仕様（ライフが尽きるまで）と同じ長さのロック
         locked.push(j);
     }

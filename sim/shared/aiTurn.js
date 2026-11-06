@@ -8,6 +8,8 @@ const decay_1 = require("./decay");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
 const util_1 = require("./util");
+/** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
+const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
 /** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
 /** 自分の式神を対象に撃つスキル（置いた式神がなければ撃てない） */
 const SHIKIGAMI_TARGET_SKILLS = new Set(['onClickShikigamiBlast', 'onClickShikigamiBless', 'onClickShikigamiCurse']);
@@ -126,6 +128,10 @@ const planAITurn = (ai, input, pickHailMary) => {
         if (result.move !== null)
             steps.push(result.move);
         return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
+    }
+    // 雷霆の巫のランダム帯電トークン(21/23)は着地位置が撃つまで分からない。撃ってから、着地後の盤で着手を選び直す (#429)
+    if (!result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        return { kind: 'queue', steps: [...result.skills, 'aiReplan'], locks };
     }
     const clicks = [];
     if (result.lockTargets)

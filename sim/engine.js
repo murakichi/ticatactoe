@@ -166,7 +166,7 @@ function surroundRange(s, i) {
 }
 // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与（毒拡散パッシブ）
 function spreadPoisonAround(board, idx, rng, s) {
-    const targets = surroundRange(s, idx).filter((j) => board[j].player);
+    const targets = surroundRange(s, idx).filter((j) => board[j].player && !isShielded(s, board[j]));
     if (!targets.length) return;
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
@@ -696,6 +696,11 @@ function advanceTurn(s) {
     change.wardPlace.forEach((seat) => {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
+    // 春雷(本番 gear.ts の springThunderThaw): 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く
+    if (hasGear(s.gears[next], 'springThunder')) {
+        const thawed = gear.springThunderThaw(s.board, sym);
+        if (thawed.length > 0) bumpStat(s, 'springThunder', thawed.length);
+    }
     // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
     const burntTrees = objectsMod.sweepBurntTrees(s.board);
     const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
@@ -880,6 +885,7 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useInjection > 0) {
+        if (isShielded(s, board[i])) return false;
         board[i].effects.push({ effect: '☠' });
         poisonStrike(s, board[i]);
         harvestMagic(s, 1);
@@ -1960,7 +1966,7 @@ function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
     const cost = glacierCost(s);
     s.glacierCharge[s.turn] = 0; // 自身の freezeAll で付く❄は数えない
-    const done = thermal.freezeAll(s.board);
+    const done = thermal.freezeAll(s.board, (sq) => isShielded(s, sq)); // 帯電中の雷霆の巫のコマは凍らない
     s.glacierPending[s.turn] = true;
     spendMagic(s, cost, 'onClickGlacier');
     bumpStat(s, 'glacier');
@@ -2045,7 +2051,7 @@ function chargeGlacier(s, made) {
     for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made;
 }
 function freezeCells(s, cells) {
-    const made = thermal.freeze(s.board, cells).length;
+    const made = thermal.freeze(s.board, cells, (sq) => isShielded(s, sq)).length;
     chargeGlacier(s, made);
     return made;
 }
