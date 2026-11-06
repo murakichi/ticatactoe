@@ -894,7 +894,8 @@ class AIPlayer {
     }
     /** 業火を撃つ価値があるか: ライフが残る敵コマが3個以上（旧sim AI と同方針） */
     shouldInferno(board) {
-        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
+        // 業火は敵陣のロックを先に解除して🔥を付けるので、🔑中のコマも数える（ロックで守る魔法使い対策）
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0).length >= 3;
     }
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
     isEnemy(player) {
