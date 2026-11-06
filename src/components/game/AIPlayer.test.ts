@@ -971,6 +971,63 @@ describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先に
     });
 });
 
+describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 行0に💙が2つ(0,1)あり、2が空き(3つ並びの要)。相手のリーチは無い
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[1] = { player: '💙', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (character: 'keysmith' | 'you', magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false); // 空蔵ギアなし
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('ギアが無くても、自分の列の要になる空きマスをロックする。ロックしたマスに置く手を選ぶ', () => {
+        const r = run('keysmith', 6);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toHaveLength(1);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+        expect(r.move).not.toBeNull();
+    });
+    it('鍵師でなければ、空蔵が無いのでロックしない', () => {
+        expect(run('you', 6).lockTargets).toBeUndefined();
+    });
+    it('魔力がロックのコストに足りなければロックしない', () => {
+        expect(run('keysmith', 0).lockTargets).toBeUndefined();
+    });
+    it('ロック中の空きマスが上限(2)に達していればかけない（誰が掛けたかを問わず数える）', () => {
+        const b = board();
+        b[8] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+        b[9] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+        expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
+    });
+    it('ライフが尽きかけ（1以下）の、列づくりに効いている自陣のコマを先にロックして守る', () => {
+        const b = board();
+        b[0] = { player: '💙', bind: 1, effects: [] }; // 奪われる直前
+        const r = run('keysmith', 6, b);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([0]);
+    });
+    it('ライフに余裕のある自陣のコマは、空きマスのロックを優先する（自陣のコマはロックしない）', () => {
+        const r = run('keysmith', 6);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+    });
+    it('すでにロック中の自陣のコマには重ねてロックしない', () => {
+        const b = board();
+        b[0] = { player: '💙', bind: 1, effects: [{ effect: '🔑', stack: 5 }] };
+        expect(run('keysmith', 6, b).lockTargets?.includes(0) ?? false).toBe(false);
+    });
+    it('価値の低いマスはロックしない（コマが1つだけの盤面）', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
+    });
+});
+
 describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
