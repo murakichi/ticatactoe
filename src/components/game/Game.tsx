@@ -3,27 +3,25 @@ import AIPlayer from './AIPlayer';
 import { CharacterId } from '../../types/Character';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { range, calculateWinner, isShikigami, lineSymbols, findEmptyIndexes } from '../../util';
-import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, lockBlocksPlacement, lockExtendCells, lockRaidCells, vacantSealCells } from './keysmith';
+import { range, isShikigami, findEmptyIndexes } from '../../util';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, lockExtendCells, lockRaidCells, vacantSealCells } from './keysmith';
 import { proliferateUpkeep } from './turn';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE } from './shikigami';
-import { encircleWinner, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandable, objectLandableCells } from './objects';
-import { calculateCostOf, SHIKIGAMI_PURGE_FREE } from './cost';
+import { ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandable, objectLandableCells } from './objects';
+import { SHIKIGAMI_PURGE_FREE } from './cost';
 import { SkillEffectType } from './BoardEffects';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf } from './boardGeometry';
-import { canHitBound, isTakeProtected } from './decay';
 import { resolveDeck, SKILL_CATALOG, skillOf } from './deck';
 import { parseSkillText } from './skillMeta';
 import { cloneTargets, plunderTargets } from './generic';
 import { lateMagicBonus } from './lateMagic';
-import { seatForTurn } from './giantTurn';
-import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, connectedPieces, boardChargeCount, canJam, jammerTargets, isFullyCharged, applyOverload } from './charge';
+import { BOLT_SILENCE_BOLTS, isGuarded, shieldedCells, connectedPieces, boardChargeCount, canJam, jammerTargets, isFullyCharged, applyOverload } from './charge';
 import { firstFrostTargets } from './tokenSkills';
 import { placeBlocked } from './lifeBan';
 import { SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { graveOfferingTarget, POISON_WARD_TURNS } from './graveSkills';
 import { SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, sacrificeTargets, budStacks, budReceivers, sowCandidates, infernoTargets, canFreeze, overwriteBlocked, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, setEffectWard, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, sacrificeTargets, budStacks, budReceivers, sowCandidates, infernoTargets, canFreeze, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, setEffectWard, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
 import { skillCosts, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -35,7 +33,6 @@ import {
 } from './gear';
 import { Status } from './Status';
 import styles from './Game.module.css';
-import { playSfx } from '../../sound';
 import { useBasicSkills } from './useBasicSkills';
 import { useBlastSkills } from './useBlastSkills';
 import { useShikigamiSkills } from './useShikigamiSkills';
@@ -44,6 +41,7 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { useTurnDerived } from './useTurnDerived';
 import { useGearRuntime } from './useGearRuntime';
 import { useSeatResources } from './useSeatResources';
 import { PlayerPanel } from './PlayerPanel';
@@ -338,66 +336,7 @@ export const Game = (props: GameProps) => {
     const { onClickCryoFreeze, onClickShatter, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickCleanse, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickSacrifice, onClickRandomFreeze, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickInferno, onClickMogaribue, onClickSeal, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, setUseSacrifice, setUseKimon, setUseFrostArea, setUseIcicle, setUseFreezeSpread, setUseShatter, exeFreeze, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, exeTinder, exeIgnite, notShielded, infernoCost, mogaribueCost, sealCost, kimonCandidates, sacrificeCandidates, ownAilmentCells, onClickFrostArea, onClickIcicle, onClickFreezeSpread, onClickSpringWind, fireWheelGuard, vacantSealCost, leafDropCandidates, kindlingCandidates, leafCloakCandidates, icicleCell, exeIcicle } = useFrostLockSkills({ pendingFlag, currentBoard, characters, bumpGlacierCharge, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, currentTurnPlayer, geo, posName, putTokens, setUseToken, addCorpses, playBurst, gearTurn, turnSeat, keepBuds, setSkills, reshuffledSkills, deckBySeat, currentLockedSkills, setUseFreeze, costTableFor, setCurrentTurn, currentTurn, setUseTinder, setUseIgnite }, late);
     const { executeSkillForAI } = useSkillDispatch({ lifeBan, turnSeat, calculateTokenBind, currentBoard, currentTurnPlayer, gearTurn, placedThisTurn, exeHailMary, onClickToken, onClickDoubleToken, onClickBudsToken, onClickBothToken, onClickBuds, onClickDoubleBuds, onClickSlash, onClickBackSlash, onClickOpium, onClickCharge, onClickTsunami, onClickAddLife, onClickBibine, onClickWalpurgisNight, onClickTotalAssault, onClickNecromancy, currentCharacter, onClickCryoFreeze, onClickUseLock, onClickUseDoubleLock, onClickUseTripleLock, onClickStomp, onClickPlunder, onClickShatter, onClickJudgeDay, onClickProliferate, onClickSerum, onClickIntensify, onClickPandemic, onClickInjection, onClickMiasma, onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickSilence, onClickStrip, onClickChargeSeason, onClickBristle, onClickRelease, onClickStash, onClickBoltSilence, onClickThunderFire, onClickDarkPot, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickPoisonMist, onClickGlacier, onClickCleanse, onClickHarvestEve, onClickSolstice, onClickSucker, onClickToggleYingYang, onClickShikigamiPlace, onClickShikigamiBlast, onClickShikigamiBless, onClickShikigamiCurse, onClickShikigamiPurge, onClickShikigamiDiscount, onClickShikigamiAll, onClickShikigamiRandom, onClickShikigamiFlood, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickObjectSkill, onClickObject, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickGraveOffering, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickSacrifice, onClickBoost, onClickRandomFreeze, onClickPoisonToken, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickIgnite, onClickTinder, onClickInferno, onClickMogaribue, onClickSeal, onClickRandomCast, onClickBurnout, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, onClickBonfire, onClickMulch, onClickAutumn, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, onClickShuffle, runAIMove, onClickDiscount }, late);
     const { onCellClick } = useCellClick({ hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn }, late);
-
-    // 次の手番の席。巨人は2ターンに1回しか動かない（並びは giantTurn.ts。currentTurn だけで決まる）
-    const judgeNextSeat = (): number => seatForTurn(currentTurn, characters, turnSeat);
-
-    const checkSkillDisable = (cost: number, isToken: boolean = false, isPoison: boolean = false, skillKey?: string): boolean => {
-        const calculatedCost: number = calculateCost(cost, isToken, isPoison, currentTurnPlayer, skillKey);
-        return magic[turnSeat] < calculatedCost || (isToken && useToken);
-    };
-
-    // player 省略時は手番プレイヤー。パネルで非手番側のコストを出すために指定できる。
-    // 増加分（キャラの加算・敵の🍂）を先に足し、減少分（キャラの割引・魔女のパッシブ・ギア・割引スキル）をそのあとに掛ける。
-    // characterCost が増加分→キャラの減少分、gearCost がギアの補正と割引スキル。下限1は減少のたびに掛かる
-    const calculateCost = (cost: number, isToken: boolean = false, isPoison: boolean = false, player: Player = currentTurnPlayer, skillKey?: string) =>
-        calculateCostOf(costEnvFor(seatOf(player)), cost, isToken, isPoison, skillKey);
-
-    // 土壇場の防壁が発動する勝利は、列が消えるまで勝ちとして扱わない
-    // 八卦の陣の勝利は4つ並びではないので、土壇場の防壁（列を消す）の対象にならない
-    const lineWinner = calculateWinner(lineSymbols(currentBoard));
-    const encircle = encircleWinner(currentBoard);
-    const rawWinner = lineWinner ?? encircle?.player;
-    const winner = rawWinner && (!lineWinner || lastStandHolderFor(rawWinner) < 0) ? rawWinner : undefined;
-    // AIの手番の間は、人間の操作(マス・スキル・ロック切替)を受け付けない。AIは onCellClick/executeSkillForAI を直接呼ぶので影響しない
-    const aiTurn = currentAI !== null && !winner;
-    stallRef.current = { turn: currentTurn, over: !!winner || currentAI === null, queued: pendingAIMove !== null, spinning: hailMarySpin !== null, charge: onClickCharge };
-    // 勝ちを決めた列(複数同時に揃ったら全部)。盤面で光らせる
-    const winCells = winner
-        ? lineWinner
-            ? Array.from(new Set(geo.winLines.filter((line) => line.every((idx) => lineSymbols(currentBoard)[idx] === winner)).flat()))
-            : encircle?.cells ?? []
-        : [];
-    const currentNecroCost = necroCost[turnSeat];
-    const currentNecroRemain = remainNecro[turnSeat];
-
-    // 勝者が確定したら勝利数を1回だけ加算する
-    useEffect(() => {
-        if (winner) {
-            setWinsAt(seatOf(winner), (w) => w + 1);
-            playSfx('win');
-        }
-    }, [winner]);
-
-    // サイレンス中に置けるマスが無い（絶対零度の氷結で全マスが塞がれた等）と進行不能になるので、自動でパスする
-    const canPlaceAt = (i: number): boolean => {
-        const sq = currentBoard[i];
-        if (isShielded(sq, characters)) return false;
-        if (sq.player && sq.player !== currentTurnPlayer && (sq.bind > 0 || isTakeProtected(sq, characters)) && !canHitBound(currentCharacter, currentBoard, seatCount)) return false;
-        if (lockBlocksPlacement(sq, currentCharacter)) return false;
-        if (emptyBlocked(sq)) return false;
-        if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
-        return true;
-    };
-    const mustPass = !winner && !rawWinner && silenced[turnSeat] && !currentBoard.some((_, i) => canPlaceAt(i));
-    useEffect(() => {
-        if (!mustPass || hailMarySpin) return;
-        const timer = setTimeout(() => {
-            addLog('サイレンス中で置ける場所がないため自動でパス');
-            setCurrentTurn(currentTurn + 1);
-        }, 600);
-        return () => clearTimeout(timer);
-    }, [mustPass, currentTurn, hailMarySpin]);
+    const { calculateCost, judgeNextSeat, winner, checkSkillDisable, currentNecroCost, currentNecroRemain, aiTurn, winCells } = useTurnDerived({ currentTurn, characters, turnSeat, currentTurnPlayer, magic, useToken, costEnvFor, currentBoard, lastStandHolderFor, currentAI, stallRef, pendingAIMove, hailMarySpin, onClickCharge, geo, necroCost, remainNecro, setWinsAt, currentCharacter, seatCount, silenced, addLog, setCurrentTurn }, late);
 
     // 継続中スキルの残りターン数を返す
     const continuousEffects = (seat: number): string[] => {
