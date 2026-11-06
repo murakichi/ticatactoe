@@ -23,8 +23,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..129)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 130;
+// 汎用スキルプールの大きさ (idx 0..133)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 134;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -1675,6 +1675,15 @@ class AIPlayer {
             if (skills.length === 0 && isLosing && availableSkills.includes(7) && opponentMagic >= 6) {
                 spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
+        }
+        // 空き家封じ（汎用 idx 133・ターンは続く）: 敵にリーチがあるとき、空きマス全てを2ターンロックして敵の次の手を止める。相手のリーチ1つにつきコスト-3
+        // なので、リーチが多いほど安い。鍵師は空きマスのロックを無視して置けるので、撃ったあとにそのまま自分の手を打てる。自分にリーチがあるなら着手が先
+        if (skills.length === 0 && availableSkills.includes(133) && oppReaches >= 1 && this.countReaches(board, this.playerSymbol) === 0) {
+            const reaches = (0, keysmith_1.opponentReaches)(board, this.playerSymbol, this.seatCharacters());
+            const vsCost = this.calculateAICost((0, keysmith_1.vacantSealBaseCost)(costs.onClickVacantSeal, reaches), false, false, 'onClickVacantSeal');
+            // 鍵師以外は自分も置けなくなる（空きマスが全部ロック）ので、敵のリーチが2つ以上（1手で塞げない）のときだけ撃つ
+            if (remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2))
+                spend(vsCost, 'onClickVacantSeal');
         }
         // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
         // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
