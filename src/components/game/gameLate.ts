@@ -1,3 +1,4 @@
+import { YingYangMode } from '../../types/Character';
 import React from 'react';
 import { Player } from '../../types/Player';
 
@@ -35,4 +36,26 @@ export interface GameLate {
     poisonCount: (player: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
     remainNecro: number[];
     setRemainNecroAt: (seat: number, value: number | ((prev: number) => number)) => void;
+    executeSkillForAI: (skill: string) => void;
+    life: number;
+    lifeBan: boolean[];
+    placedThisTurn: number;
+    onCellClick: (i: number, asObject?: boolean | undefined) => void;
+    onClickCharge: () => void;
+    magic: number[];
+    skills: number[];
+    useToken: boolean;
+    necroCost: number[];
+    judgeDayCost: number;
+    totalAssaultCost: number;
+    proliferate: boolean[];
+    chargeBuff: number[];
+    currentYinYangMode: YingYangMode | undefined;
+    silenced: boolean[];
+    glacierPending: boolean[];
+    glacierCharge: number[];
+    budGuard: boolean[];
+    calculateTokenBind: () => number;
+    hailMaryChoices: { name: string; run: () => void; }[];
+    setLockedSkillsAt: (seat: number, value: number[] | ((prev: number[]) => number[])) => void;
 }
