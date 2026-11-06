@@ -7,7 +7,7 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
-import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
+import { advanceGearState, gearCostContext, noteShuffleKind, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
@@ -1438,6 +1438,7 @@ export const Game = (props: GameProps) => {
             addLog('市場でシャッフルが無料になった');
         }
         spendMagic(shuffleCost, true, false);
+        noteShuffleKind(gearTurn.current, turnSeat); // 業火の無料権の種類カウントに数える
     };
 
     const onClickBibine = () => {

@@ -9,7 +9,7 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { addLock, isLocked, lockEffect, tickLock } from './lock';
-import { lockBlocksPlacement, opponentReaches, sealBaseCost, sealReleaseCells, seal, vacantSealBaseCost } from './keysmith';
+import { lockRaidCells, lockBlocksPlacement, opponentReaches, sealBaseCost, sealReleaseCells, seal, vacantSealBaseCost } from './keysmith';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { stomp as stompOf } from './blast';
@@ -3180,6 +3180,14 @@ class AIPlayer {
                     this.updateShield(board);
                     magic -= tinderCost;
                 }
+            }
+            // 錠前荒らし(130): 敵のロックを1つ外して🔥☠⚡のどれかを付ける。直前の相手ターンにロックが使われていれば無料。ロックの多い相手(魔法使い等)に撃つ
+            const raidCost = this.calculateAICost(costs.onClickLockRaid, false, false, 'onClickLockRaid');
+            if (!necroFoe && availableSkills.includes(130) && !this.skillKinds.has('onClickLockRaid') && !chargeClicks.some((c) => c.skill === 'onClickLockRaid') && magic >= raidCost
+                && !(worth && magic >= infernoNow() && magic - raidCost < infernoNow())
+                && lockRaidCells(board, this.playerSymbol).length > 0) {
+                chargeClicks.push({ skill: 'onClickLockRaid' });
+                magic -= raidCost;
             }
             // 飛び火(ランダムな敵2マスに🔥。直前の手番に相手が2コマ以上設置していれば無料)。火遁より🔥が多く付くので先に撃つ。対象は撃つ時に決まるので盤面は更新しない
             const sparkCost = this.calculateAICost(costs.onClickSpark, false, false, 'onClickSpark');

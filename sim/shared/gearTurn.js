@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
+exports.noteSkillUsed = exports.noteShuffleKind = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
@@ -133,6 +133,13 @@ exports.gearCostContext = gearCostContext;
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
+/** シャッフルは『スキル扱いでない』が、業火の無料権の種類カウントには数える（ユーザー指示 2026-11-06）。他の軽減・連鎖には影響しない */
+const noteShuffleKind = (g, seat) => {
+    g.kinds[seat].add('onClickShuffle');
+    if (g.kinds[seat].size >= thermal_1.INFERNO_FREE_SKILLS)
+        g.infernoReady[seat] = true;
+};
+exports.noteShuffleKind = noteShuffleKind;
 const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     var _a;
     g.skills[seat] += 1;

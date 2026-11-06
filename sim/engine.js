@@ -558,13 +558,14 @@ function spendMagic(s, amount, skillId) {
     s.magic[s.turn] -= amount;
     noteSkillUsed(s, skillId, amount);
 }
-// シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
+// シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないが業火の無料権の種類カウントには数える
 function shuffleHand(s) {
     // 市場: 手番ごとに、働いている市場の数だけシャッフルが無料（本番 Game.tsx の onClickShuffle と同じ）
     const free = s.marketUsed[s.turn] < objectsMod.marketCount(s.board, curPlayer(s));
     if (free) { s.marketUsed[s.turn]++; bumpStat(s, 'marketFree'); } else s.magic[s.turn] -= costsOf(s).onClickShuffle;
     s.skills = reshuffleSkillsFor(s, s.turn, POOL_SIZE);
     s.useMagicCount[s.turn]++;
+    gearTurnMod.noteShuffleKind({ kinds: s.skillKinds, infernoReady: s.infernoReady }, s.turn); // 業火の無料権の種類カウントに数える
 }
 function bumpMagicCount(s) {
     s.useMagicCount[s.turn]++;

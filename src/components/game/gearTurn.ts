@@ -207,6 +207,12 @@ export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, tu
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
+/** シャッフルは『スキル扱いでない』が、業火の無料権の種類カウントには数える（ユーザー指示 2026-11-06）。他の軽減・連鎖には影響しない */
+export const noteShuffleKind = (g: { kinds: Set<string>[]; infernoReady: boolean[] }, seat: number): void => {
+    g.kinds[seat].add('onClickShuffle');
+    if (g.kinds[seat].size >= INFERNO_FREE_SKILLS) g.infernoReady[seat] = true;
+};
+
 export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, seat: number, skillId?: string, paid: number = 0): void => {
     g.skills[seat] += 1;
     g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）

@@ -3403,6 +3403,14 @@ class AIPlayer {
                     magic -= tinderCost;
                 }
             }
+            // 錠前荒らし(130): 敵のロックを1つ外して🔥☠⚡のどれかを付ける。直前の相手ターンにロックが使われていれば無料。ロックの多い相手(魔法使い等)に撃つ
+            const raidCost = this.calculateAICost(costs.onClickLockRaid, false, false, 'onClickLockRaid');
+            if (!necroFoe && availableSkills.includes(130) && !this.skillKinds.has('onClickLockRaid') && !chargeClicks.some((c) => c.skill === 'onClickLockRaid') && magic >= raidCost
+                && !(worth && magic >= infernoNow() && magic - raidCost < infernoNow())
+                && (0, keysmith_1.lockRaidCells)(board, this.playerSymbol).length > 0) {
+                chargeClicks.push({ skill: 'onClickLockRaid' });
+                magic -= raidCost;
+            }
             // 飛び火(ランダムな敵2マスに🔥。直前の手番に相手が2コマ以上設置していれば無料)。火遁より🔥が多く付くので先に撃つ。対象は撃つ時に決まるので盤面は更新しない
             const sparkCost = this.calculateAICost(costs.onClickSpark, false, false, 'onClickSpark');
             if (!necroFoe && availableSkills.includes(97) && !this.skillKinds.has('onClickSpark') && !chargeClicks.some((c) => c.skill === 'onClickSpark') && magic >= sparkCost
