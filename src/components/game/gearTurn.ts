@@ -10,6 +10,7 @@ import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
 import { WORKSHOP_PARAMS, ownPieceCount } from './objects';
 import { skillCosts } from './skillCosts';
+import { LOCK_USED_KEYS } from './keysmith';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -48,6 +49,12 @@ export type GearTurnState = {
     /** 毒返しの構え: ward=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ wardFresh=使った手番（この手番の終わりでは減らさない） */
     ward: number[];
     wardFresh: boolean[];
+    /** 錠前荒らしの0コスト条件: lockSeen=相手がこの間にロックを使ったか（席ごと）/ lockPrev=今の手番の頭の時点での lockSeen（直前の相手ターンにロックが使われたか） */
+    lockSeen: boolean[];
+    lockPrev: boolean[];
+    /** 施錠の加護: blessing=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ blessingFresh=使った手番（この手番の終わりでは減らさない） */
+    blessing: number[];
+    blessingFresh: boolean[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -133,6 +140,8 @@ export const advanceGearState = (
     });
     if (g.wardFresh[endSeat]) g.wardFresh[endSeat] = false;
     else if (g.ward[endSeat] > 0) g.ward[endSeat] -= 1;
+    if (g.blessingFresh[endSeat]) g.blessingFresh[endSeat] = false;
+    else if (g.blessing[endSeat] > 0) g.blessing[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -148,6 +157,8 @@ export const advanceGearState = (
     g.discount[nextSeat] = emptyDiscount();
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
+    g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
+    g.lockSeen[nextSeat] = false;
     g.fireBase[nextSeat] = fireStacksTotal(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = plantedStacksTotal(board);
@@ -202,6 +213,7 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (LOCK_USED_KEYS.has(skillId)) g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
         if (((skillCosts as Record<string, number>)[skillId] ?? 0) >= BIG_CAST_BASE) g.bigCast[seat] = true;
         // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）

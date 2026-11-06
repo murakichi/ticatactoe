@@ -81,6 +81,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
         return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev)
         return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (skillKey === 'onClickLockRaid' && mine && env.lockPrev)
+        return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
     if (skillKey === 'onClickFireWheel' && mine && (0, thermal_1.fireStacksTotal)(env.board) > env.fireBase)
         return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）

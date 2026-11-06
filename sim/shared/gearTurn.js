@@ -10,6 +10,7 @@ const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
 const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
+const keysmith_1 = require("./keysmith");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -63,6 +64,10 @@ const advanceGearState = (g, r, input) => {
         g.wardFresh[endSeat] = false;
     else if (g.ward[endSeat] > 0)
         g.ward[endSeat] -= 1;
+    if (g.blessingFresh[endSeat])
+        g.blessingFresh[endSeat] = false;
+    else if (g.blessing[endSeat] > 0)
+        g.blessing[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -77,6 +82,8 @@ const advanceGearState = (g, r, input) => {
     g.discount[nextSeat] = (0, discount_1.emptyDiscount)();
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
+    g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
+    g.lockSeen[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = (0, exports.plantedStacksTotal)(board);
@@ -133,6 +140,8 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (keysmith_1.LOCK_USED_KEYS.has(skillId))
+            g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
         if (((_a = skillCosts_1.skillCosts[skillId]) !== null && _a !== void 0 ? _a : 0) >= bigSkills_1.BIG_CAST_BASE)
             g.bigCast[seat] = true;
