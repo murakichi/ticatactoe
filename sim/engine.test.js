@@ -1699,7 +1699,7 @@ test('絶対零度: 次の自分の手番開始時に、敵の❄マスへ❄ス
     assert.strictEqual(s.board[0].effects.length, 0);
 });
 
-test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・自コマ・空きマスは対象外。クリック不要・手番は続きコスト7', () => {
+test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑のコマはロックを解除してから🔥。自コマ・空きマスは対象外。クリック不要・手番は続きコスト7', () => {
     const s = game('pyromancer', 'you');
     s.heartTurn = true; s.heartMagic = 20;
     s.board[5] = { player: '⭕', bind: 3, effects: [] };
@@ -1718,7 +1718,8 @@ test('業火: 自分以外の全コマ（ライフ0含む）に🔥+2。🔑・�
     const fr = (i) => s.board[i].effects.filter((x) => x.effect === '❄').length;
     assert.strictEqual(fl(5), 2); assert.strictEqual(s.board[5].bind, 1); // ライフ3: 付与のたびに1ダメージで 3→1
     assert.strictEqual(s.board[6].player, undefined); assert.strictEqual(fl(6), 0); // ライフ0のコマは🔥で破壊され空きマスになる
-    assert.strictEqual(fl(4), 0); assert.strictEqual(fl(9), 0); assert.strictEqual(fl(0), 0);
+    assert.strictEqual(fl(4), 0); assert.strictEqual(fl(0), 0);
+    assert.strictEqual(fl(9), 2); assert.ok(!s.board[9].effects.some((x) => x.effect === '🔑')); // ロックは先に解除される
     assert.strictEqual(fr(8), 0); assert.strictEqual(fl(8), 1); // 1つ目で氷結が全解除、2つ目が🔥
     assert.strictEqual(fr(11), 0); assert.strictEqual(fl(11), 1);
     // 対象が無ければ不発（魔力を払わない）

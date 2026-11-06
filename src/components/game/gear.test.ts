@@ -27,6 +27,7 @@ import {
     flameCounts,
     frozenBudCount,
     rootGain,
+    emberGain,
     budCounts,
 } from './gear';
 import { skillCosts } from './skillCosts';
@@ -288,5 +289,13 @@ describe('春雷（springThunderThaw）', () => {
         d[2] = { player: '⭕', bind: 3, effects: [] };
         d[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 敵のコマが入った列
         expect(springThunderThaw(d, '💙')).toEqual([]);
+    });
+});
+
+describe('熾火の脈', () => {
+    it('盤面（敵味方問わず）の🔥の数だけ魔力が増える', () => {
+        const mk = (n: number, player: string) => ({ player, effects: Array.from({ length: n }, () => ({ effect: '🔥' })) });
+        expect(emberGain([mk(2, '💙'), mk(1, '⭕'), { effects: [{ effect: '🌱' }] }])).toBe(3);
+        expect(emberGain([])).toBe(0);
     });
 });

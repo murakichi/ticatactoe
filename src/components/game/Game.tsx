@@ -40,7 +40,7 @@ import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE 
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { boardLeaves, tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { boardLeaves, tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, infernoIgnite, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -60,6 +60,7 @@ import {
     flameCounts,
     frozenBudCount,
     rootGain,
+    emberGain,
     budCounts,
     countAilmentKinds,
     lostCells,
@@ -935,8 +936,12 @@ export const Game = (props: GameProps) => {
         if (garden > 0) gearTrigger('colorGarden', `魔力+${garden}`);
         const standBonus = lastStandActiveAgainst(nextSeat);
         // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
-        const root = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
-        if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
+        const frostRootGain = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
+        if (frostRootGain > 0) gearTrigger('frostRoot', `魔力+${frostRootGain}`);
+        // 熾火の脈: 盤面の🔥1つにつき+1
+        const ember = hasGear(gearsBySeat[nextSeat], 'emberVein') ? emberGain(currentBoard) : 0;
+        if (ember > 0) gearTrigger('emberVein', `魔力+${ember}`);
+        const root = frostRootGain + ember;
         let nextMagic: number = turnStartMagic({
             magic: magic[nextSeat],
             turn: currentTurn,
@@ -3339,7 +3344,7 @@ export const Game = (props: GameProps) => {
         if (targets.length === 0) return;
         const board = currentBoard.slice();
         addLog(`「業火」を使用（${targets.length}コマに🔥+${INFERNO_STACKS}）`);
-        const { thawed } = ignite(board, targets, geo.size, INFERNO_STACKS, keepBuds);
+        const { thawed } = infernoIgnite(board, targets, geo.size, INFERNO_STACKS, keepBuds);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(targets);
         playEffect('inferno', undefined, targets);

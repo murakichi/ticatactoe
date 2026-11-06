@@ -3433,7 +3433,7 @@ class AIPlayer {
             if (magic >= cost && worth) {
                 chargeClicks.push({ skill: 'onClickInferno' });
                 board = board.slice();
-                (0, thermal_1.ignite)(board, targets, this.sizeOf(board), thermal_1.INFERNO_STACKS);
+                (0, thermal_1.infernoIgnite)(board, targets, this.sizeOf(board), thermal_1.INFERNO_STACKS);
                 magic -= cost;
             }
             // バーンアウト: 🔥のマスを全て壊す。敵のコマが自陣より2つ以上多く壊れるなら撃つ（業火の直後は敵全員が🔥2つなので、合計4以上でタダになりやすい）

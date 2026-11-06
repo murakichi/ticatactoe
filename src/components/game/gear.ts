@@ -35,6 +35,7 @@ export type GearId =
     | 'scorchedEarth'
     | 'ashOffering'
     | 'frostRoot'
+    | 'emberVein'
     | 'conduction'
     | 'spellWard';
 
@@ -92,6 +93,7 @@ export const GEAR_PARAMS = {
     ashDiscount: 1,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
+    emberMagic: 1,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -122,6 +124,7 @@ export const GEARS: GearDef[] = [
     { id: 'scorchedEarth', name: '焦土', icon: '🌋', desc: `敵の🌱・🍂が🔥で消えるたびに魔力+${P.scorchMagic}（1手番に最大${P.scorchCap}）` },
     { id: 'ashOffering', name: '灰の供物', icon: '⚱️', desc: `敵のマスに🔥を付与すると、付与したマス1つにつき次の自分の手番の終わりまでスキルのコスト-${P.ashDiscount}（重複する）` },
     { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠している🌱（敵味方問わず）1つにつき魔力+${P.rootMagic}` },
+    { id: 'emberVein', name: '熾火の脈', icon: '♨️', desc: `手番開始時、盤面（敵味方問わず）の🔥の数だけ魔力+${P.emberMagic}` },
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
@@ -213,6 +216,7 @@ export const ignitedCount = (owners: readonly (string | undefined)[], flames: re
 export const flameCounts = (squares: readonly SquareLike[]): number[] => squares.map(flameCount);
 /** 凍てつく根: 氷結中のマスにある🌱の数（敵味方問わず）→魔力 */
 export const frozenBudCount = (squares: readonly SquareLike[]): number => squares.reduce((n, sq) => (hasEffect(sq, '❄') ? n + budCount(sq) : n), 0);
+export const emberGain = (squares: readonly SquareLike[]): number => squares.reduce((n, sq) => n + flameCount(sq), 0) * P.emberMagic;
 export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic;
 /** 手番開始時の🌱の数の記録 */
 export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(burnableCount);

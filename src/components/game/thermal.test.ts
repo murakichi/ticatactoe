@@ -421,7 +421,7 @@ describe('🔥火炎', () => {
         expect(thaw(s)).toBe(s);
     });
 
-    it('業火の対象は使用者以外のコマ全て（ライフ0も含む。🔑中と雷霆の巫の⚡無敵は除く）', () => {
+    it('業火の対象は使用者以外のコマ全て（ライフ0も含む。🔑中も対象で先に解除する。雷霆の巫の⚡無敵は除く）', () => {
         const b = emptyBoard();
         b[0] = sq('⭕', 3);
         b[1] = sq('⭕', 0);
@@ -430,7 +430,7 @@ describe('🔥火炎', () => {
         b[4] = sq('🟩', 3, '⚡'); // 雷霆の巫の無敵
         b[5] = sq('⭕', 3, '⚡'); // 雷霆の巫ではない⭕の⚡は対象
         const cs: CharacterId[] = ['pyromancer', 'you', 'electrician'];
-        expect(infernoTargets(b, '💙', cs)).toEqual([0, 1, 5]);
+        expect(infernoTargets(b, '💙', cs)).toEqual([0, 1, 2, 5]);
     });
 });
 

@@ -716,8 +716,11 @@ function advanceTurn(s) {
     if (objRes.magic > 0) bumpStat(s, 'objectMagic', objRes.magic);
     if (objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length > 0) bumpStat(s, 'objectEffect', objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length);
     // 手番開始時の魔力の規則は本番(turn.ts)の生成物。Game.tsx と同じく次の手番の席自身の魔力・バッズから計算する
-    const root = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
-    if (root > 0) bumpStat(s, 'frostRoot', root);
+    const frostRootGain = hasGear(s.gears[next], 'frostRoot') ? gear.rootGain(gear.frozenBudCount(s.board)) : 0;
+    if (frostRootGain > 0) bumpStat(s, 'frostRoot', frostRootGain);
+    const ember = hasGear(s.gears[next], 'emberVein') ? gear.emberGain(s.board) : 0; // 熾火の脈: 盤面の🔥1つにつき+1
+    if (ember > 0) bumpStat(s, 'emberVein', ember);
+    const root = frostRootGain + ember;
     let nextMagic = turnMod.turnStartMagic({
         magic: s.magic[next],
         turn: s.currentTurn,
@@ -2530,7 +2533,7 @@ function onClickBurnout(s) {
 function onClickInferno(s) {
     const targets = infernoTargets(s);
     if (!targets.length) return; // 対象なしは不発
-    thermal.ignite(s.board, targets, s.size, 2, keepBudsOf(s));
+    thermal.infernoIgnite(s.board, targets, s.size, 2, keepBudsOf(s)); // 対象のロックを先に解除する
     spendMagic(s, infernoCost(s), 'onClickInferno');
     s.infernoReady[s.turn] = false; // 撃ったら無料権とカウントをリセット
     s.skillKinds[s.turn] = new Set();

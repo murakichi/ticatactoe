@@ -21,7 +21,7 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isObject, isTree } from '../../types/ObjectKind';
 import { orthoNeighbors } from './boardGeometry';
-import { lockEffect } from './lock';
+import { lockEffect, clearLock } from './lock';
 
 /** 火炎1スタックあたりの継続ダメージ */
 export const FLAME_BURN_DAMAGE = 2;
@@ -275,16 +275,22 @@ export const INFERNO_COST = 7;
 /** 業火が敵コマ1つに足す🔥のスタック数 */
 export const INFERNO_STACKS = 2;
 
-/** 業火（煉獄の鍛冶師）の対象: 使用者以外のコマのうち、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
+/** 業火（煉獄の鍛冶師）の対象: 使用者以外のコマのうち、雷霆の巫の⚡無敵でないもの（ライフ0も含む。🔑ロック中でも対象で、業火が先にロックを解除する: `infernoIgnite`） */
 export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
     board
         .map((sq, i) => {
-            if (!sq.player || sq.player === me || hasLock(sq)) return -1;
+            if (!sq.player || sq.player === me) return -1;
             // 氷結中のコマは⚡が休眠して無敵も働かない（charge.ts の isShielded と同じ）
             if (chars[seatOf(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !isDormant(sq)) return -1;
             return i;
         })
         .filter((i) => i !== -1);
+
+/** 業火: 対象の敵コマの🔑ロックを先に解除してから、🔥を stacks スタックずつ付ける（ユーザー指示 2026-11-06）。ignite の戻り値を返す */
+export const infernoIgnite = (board: SquareInfo[], targets: number[], size: number, stacks: number, keepBuds?: Parameters<typeof ignite>[4]) => {
+    for (const k of targets) board[k] = clearLock(board[k]);
+    return ignite(board, targets, size, stacks, keepBuds);
+};
 
 /**
  * ターン進行1回ぶんのライフ減衰（自然減衰・🔥の継続ダメージ・毒）を1マスに適用した新しいマスを返す。
@@ -597,7 +603,7 @@ export const canSacrifice = (sq: SquareInfo, me: SquareInfo['player']): boolean 
 
 /** 殉火の🔥の対象: 使用者以外のコマのうち、ライフが threshold 以下で、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
 export const sacrificeTargets = (board: SquareInfo[], threshold: number, me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
-    infernoTargets(board, me, chars).filter((i) => board[i].bind <= threshold);
+    infernoTargets(board, me, chars).filter((i) => board[i].bind <= threshold && !hasLock(board[i])); // 殉火はロック中のコマを対象にしない（業火と違い解除しない）
 
 /**
  * 殉火: cell の自陣のコマのライフをゼロにして、そのライフ(threshold)以下の敵コマ全てに🔥を1スタック付ける

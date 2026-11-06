@@ -1,8 +1,8 @@
 // 自動生成: src/components/game/thermal.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sowCandidates = exports.graft = exports.GRAFT_MAX = exports.budReceivers = exports.harvestBuds = exports.canBud = exports.activeBuds = exports.budStacks = exports.burnout = exports.burnoutTargets = exports.burnoutCostOf = exports.totalFlames = exports.BURNOUT_FREE_FLAMES = exports.decayTick = exports.infernoTargets = exports.INFERNO_STACKS = exports.INFERNO_COST = exports.detonate = exports.freezeAll = exports.infernoCostOf = exports.INFERNO_FREE_SKILLS = exports.FLAME_SKILL_KEYS = exports.reducedGlacierCost = exports.GLACIER_DAMAGE_PER_STACK = exports.GLACIER_BASE_COST = exports.cleanse = exports.ailmentStacks = exports.AILMENTS = exports.freeze = exports.canFreeze = exports.ignite = exports.zeroOut = exports.absorbDestroy = exports.applyDamage = exports.isEffectWarded = exports.setEffectWard = exports.burnDamageOf = exports.lockable = exports.emptyBlocked = exports.overwriteBlocked = exports.thawOne = exports.thaw = exports.isDormant = exports.flameStacks = exports.isFrozen = exports.frozenStacks = exports.FLAME_INSTANT_DAMAGE = exports.FLAME_SKILL_MULT = exports.PYROMANCER_EXTRA_BURN = exports.FLAME_BURN_DAMAGE = void 0;
-exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE = exports.leafFrostTargets = exports.fireWheel = exports.FIRE_WHEEL_COUNT = exports.fireWheelTargets = exports.kimon = exports.kimonTargets = exports.fireStacksTotal = exports.KIMON_LOCK_TURNS = exports.thunderFireVictims = exports.THUNDER_FIRE_MIN = exports.thawAll = exports.thawTargets = exports.frostfallTargets = exports.placeFrostToken = exports.randomFreezeCandidates = exports.sacrificeFlame = exports.sacrificeTargets = exports.canSacrifice = exports.placeFlameToken = exports.swidden = exports.autumn = exports.autumnTargets = exports.mulch = exports.mulchCandidates = exports.bonfire = exports.bonfireTargets = exports.placeLeafToken = exports.mogaribue = exports.canMogaribue = exports.mogaribueTargets = exports.mogaribueDamage = exports.MOGARIBUE_LIFE = exports.kindling = exports.kindlingTargets = exports.tinderTargets = exports.leafCloakTargets = exports.leafAllTargets = exports.leafDrop = exports.leafDropTargets = exports.witchCostOf = exports.boardLeaves = exports.leafSurcharge = exports.activeLeaves = exports.leafStacks = exports.sow = exports.SOW_COUNT = void 0;
+exports.graft = exports.GRAFT_MAX = exports.budReceivers = exports.harvestBuds = exports.canBud = exports.activeBuds = exports.budStacks = exports.burnout = exports.burnoutTargets = exports.burnoutCostOf = exports.totalFlames = exports.BURNOUT_FREE_FLAMES = exports.decayTick = exports.infernoIgnite = exports.infernoTargets = exports.INFERNO_STACKS = exports.INFERNO_COST = exports.detonate = exports.freezeAll = exports.infernoCostOf = exports.INFERNO_FREE_SKILLS = exports.FLAME_SKILL_KEYS = exports.reducedGlacierCost = exports.GLACIER_DAMAGE_PER_STACK = exports.GLACIER_BASE_COST = exports.cleanse = exports.ailmentStacks = exports.AILMENTS = exports.freeze = exports.canFreeze = exports.ignite = exports.zeroOut = exports.absorbDestroy = exports.applyDamage = exports.isEffectWarded = exports.setEffectWard = exports.burnDamageOf = exports.lockable = exports.emptyBlocked = exports.overwriteBlocked = exports.thawOne = exports.thaw = exports.isDormant = exports.flameStacks = exports.isFrozen = exports.frozenStacks = exports.FLAME_INSTANT_DAMAGE = exports.FLAME_SKILL_MULT = exports.PYROMANCER_EXTRA_BURN = exports.FLAME_BURN_DAMAGE = void 0;
+exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE = exports.leafFrostTargets = exports.fireWheel = exports.FIRE_WHEEL_COUNT = exports.fireWheelTargets = exports.kimon = exports.kimonTargets = exports.fireStacksTotal = exports.KIMON_LOCK_TURNS = exports.thunderFireVictims = exports.THUNDER_FIRE_MIN = exports.thawAll = exports.thawTargets = exports.frostfallTargets = exports.placeFrostToken = exports.randomFreezeCandidates = exports.sacrificeFlame = exports.sacrificeTargets = exports.canSacrifice = exports.placeFlameToken = exports.swidden = exports.autumn = exports.autumnTargets = exports.mulch = exports.mulchCandidates = exports.bonfire = exports.bonfireTargets = exports.placeLeafToken = exports.mogaribue = exports.canMogaribue = exports.mogaribueTargets = exports.mogaribueDamage = exports.MOGARIBUE_LIFE = exports.kindling = exports.kindlingTargets = exports.tinderTargets = exports.leafCloakTargets = exports.leafAllTargets = exports.leafDrop = exports.leafDropTargets = exports.witchCostOf = exports.boardLeaves = exports.leafSurcharge = exports.activeLeaves = exports.leafStacks = exports.sow = exports.SOW_COUNT = exports.sowCandidates = void 0;
 const Player_1 = require("./Player");
 const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
@@ -239,10 +239,10 @@ exports.detonate = detonate;
 exports.INFERNO_COST = 7;
 /** 業火が敵コマ1つに足す🔥のスタック数 */
 exports.INFERNO_STACKS = 2;
-/** 業火（煉獄の鍛冶師）の対象: 使用者以外のコマのうち、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
+/** 業火（煉獄の鍛冶師）の対象: 使用者以外のコマのうち、雷霆の巫の⚡無敵でないもの（ライフ0も含む。🔑ロック中でも対象で、業火が先にロックを解除する: `infernoIgnite`） */
 const infernoTargets = (board, me, chars) => board
     .map((sq, i) => {
-    if (!sq.player || sq.player === me || hasLock(sq))
+    if (!sq.player || sq.player === me)
         return -1;
     // 氷結中のコマは⚡が休眠して無敵も働かない（charge.ts の isShielded と同じ）
     if (chars[(0, Player_1.seatOf)(sq.player)] === 'electrician' && sq.effects.some((e) => e.effect === '⚡') && !(0, exports.isDormant)(sq))
@@ -251,6 +251,13 @@ const infernoTargets = (board, me, chars) => board
 })
     .filter((i) => i !== -1);
 exports.infernoTargets = infernoTargets;
+/** 業火: 対象の敵コマの🔑ロックを先に解除してから、🔥を stacks スタックずつ付ける（ユーザー指示 2026-11-06）。ignite の戻り値を返す */
+const infernoIgnite = (board, targets, size, stacks, keepBuds) => {
+    for (const k of targets)
+        board[k] = (0, lock_1.clearLock)(board[k]);
+    return (0, exports.ignite)(board, targets, size, stacks, keepBuds);
+};
+exports.infernoIgnite = infernoIgnite;
 /**
  * ターン進行1回ぶんのライフ減衰（自然減衰・🔥の継続ダメージ・毒）を1マスに適用した新しいマスを返す。
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
@@ -539,7 +546,7 @@ exports.placeFlameToken = placeFlameToken;
 const canSacrifice = (sq, me) => !!sq.player && sq.player === me && sq.bind > 0 && !hasLock(sq);
 exports.canSacrifice = canSacrifice;
 /** 殉火の🔥の対象: 使用者以外のコマのうち、ライフが threshold 以下で、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
-const sacrificeTargets = (board, threshold, me, chars) => (0, exports.infernoTargets)(board, me, chars).filter((i) => board[i].bind <= threshold);
+const sacrificeTargets = (board, threshold, me, chars) => (0, exports.infernoTargets)(board, me, chars).filter((i) => board[i].bind <= threshold && !hasLock(board[i])); // 殉火はロック中のコマを対象にしない（業火と違い解除しない）
 exports.sacrificeTargets = sacrificeTargets;
 /**
  * 殉火: cell の自陣のコマのライフをゼロにして、そのライフ(threshold)以下の敵コマ全てに🔥を1スタック付ける
