@@ -20,27 +20,38 @@ import { AIResult, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SIL
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
 export type PlanMoveArgs = Parameters<typeof planMove>;
 
-export function planMove(
-    this: AIPlayer,
-    board: SquareInfo[],
-    magic: number,
-    costs: Record<keyof SkillCosts, number>,
-    opponentMagic: number,
-    life: number,
-    availableSkills: number[],
-    tokenUsed: boolean,
-    necroRemain: number = 0,
-    necroCost: number = 0,
-    judgeCost: number = 99,
-    assaultCost: number = 99,
-    proliferateActive: boolean = false,
-    seatMagic: number[] = [],
-    necroPay: number = necroCost,
-    necroCosts: number[] = []
-): AIResult {
-    this.necroActive = necroRemain > 0;
-    this.updateShield(board);
+/** planMove の各段階が共有する入力と途中経過。board/magic は段階の途中で更新され（あとの段階はその値を使う）、
+ *  facesWitch/holdFlood/chargeClicks は途中の段階が決めて後ろの段階が読む */
+interface PlanContext {
+    board: SquareInfo[];
+    magic: number;
+    costs: Record<keyof SkillCosts, number>;
+    opponentMagic: number;
+    life: number;
+    availableSkills: number[];
+    tokenUsed: boolean;
+    necroRemain: number;
+    necroCost: number;
+    judgeCost: number;
+    assaultCost: number;
+    proliferateActive: boolean;
+    seatMagic: number[];
+    necroPay: number;
+    necroCosts: number[];
+    /** 相手に凩の魔女がいる（planOpening が決める） */
+    facesWitch: boolean;
+    /** 陰陽師がコンボ待ちで魔力を貯めている（planThawAndYinYang が決める） */
+    holdFlood: boolean;
+    /** 帯電系の「スキル→クリック」の並び（planChargeAndObjects が積む） */
+    chargeClicks: { skill: string; target?: number; target2?: number }[];
+}
 
+/** planMove の段階。上から順に試し、最初に結果を返した段階で手番の計画が決まる */
+const PLAN_PHASES = [planOpening, planThawAndYinYang, planDefense, planCounterLocks, planChargeAndObjects, planOverflowCasts, planBudsAndFire];
+
+/** 巨人のストンプ・パーフェクトゲーム・追い剥ぎの即勝ちと、手札の引き直し。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planOpening(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay } = c;
     // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
     // （自陣のコマが範囲に入ってもライフ-5だけ）。最少回数で1列を自陣にできるなら、魔力が許す限り連打して勝つ
     if (this.character === 'giant') {
@@ -90,7 +101,7 @@ export function planMove(
     }
     // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
     // （旧sim AI の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
-    const facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
+    const facesWitch = c.facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
     // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
     const cheapWin = this.character === 'yinYangMaster' && magic >= RICH_REROLL_MAGIC && this.planShikigami(board, magic, costs, availableSkills)?.win === true;
     if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
@@ -124,7 +135,12 @@ export function planMove(
         const rr = this.planReroll(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
         if (rr) return { move: null, skills: [], reroll: rr };
     }
+    return null;
+}
 
+/** 氷結中の空きマスで塞がれた列の火遁での解除と、陰陽師の砕氷・式神。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planThawAndYinYang(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { board, magic, costs, life, availableSkills, facesWitch } = c;
     // 自分のリーチの4つ目が氷結中の空きマスで塞がれているとき、火遁（onClickIgnite）で隣のコマを燃やして解凍し、同じ手番で完成させる
     // （旧sim AI の unblock=2 と同一。A/B: 氷室の番人相手に全キャラ平均 +3.2pt、魔法使い +10.3±5.5(n=600)、氷室の番人でない相手では差 0.0）
     if (availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
@@ -168,7 +184,7 @@ export function planMove(
     }
 
     // 陰陽師: コンボ札（71/73）のどちらかを持っていて魔力が足りないうちは、他のスキルに魔力を使わず貯める（旧sim AI の floodHold=2）
-    const holdFlood = !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
+    const holdFlood = c.holdFlood = !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && (availableSkills.includes(71) || availableSkills.includes(73))
         && magic < this.comboPlan(board, costs, availableSkills).total;
     // 陰陽師: 一寸の虫に魂なし(92)で壊せる敵コマがあれば撃つ（盤面のコマの数だけ安い。旧sim AI の smallFry と同一。
     // 本番AI 対魔女 22→45%(13/59→29/65、デッキの12を92に差し替え)、全相手 52.7→54.2% #276）
@@ -193,7 +209,12 @@ export function planMove(
             return { move: followup, skills: [], chargeClicks: plan.clicks };
         }
     }
+    return null;
+}
 
+/** 相手のリーチへの防御（ロックの種類の選択・氷結で塞ぐ・巨人のストンプ）。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planDefense(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { board, magic, costs, life, availableSkills, seatMagic, necroCosts } = c;
     // マルチリーチ防御: 脅威数に応じてロック種別を選択
     const threatSquares = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o))));
     // 巨人: 相手にリーチがあるとき、ストンプ(コスト2・着手も兼ねる)で脅威が減るならロックより先に撃つ
@@ -352,7 +373,12 @@ export function planMove(
             };
         }
     }
+    return null;
+}
 
+/** 対策ロック・インジェクション・鬼門封じ・ミアズマ・毒花。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planCounterLocks(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { board, magic, costs, life, availableSkills } = c;
     // 対策ロック: 敵にネクロ/毒使い/陰陽師がいるときは、失いそうな低bindの自コマを事前にロックして守る (旧sim AI と同一)。
     // A/B: 対ネクロ 0.45→0.62、対陰陽師 +4.5〜+13pt、対毒使い 平均+4.8pt。軍師・毒使いはロックの追加コストで悪化、ネクロ同士は未検証のため対象外
     if (
@@ -439,11 +465,16 @@ export function planMove(
             return { move: this.getBestMove(board, life), skills: ['onClickInjection'], stompTarget: target };
         }
     }
+    return null;
+}
 
+/** 雷霆の巫の帯電とオブジェクト（大木・雷雲・毒沼）。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { costs, availableSkills, seatMagic, chargeClicks } = c;
+    let { board, magic } = c;
     // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
     // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
     // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
-    const chargeClicks: { skill: string; target?: number; target2?: number }[] = [];
     const chargeCost = (base: number) => reducedChargeCost(base, board, (c) => this.calculateAICost(c));
     if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const spreadCost = chargeCost(costs.onClickChargeSpread);
@@ -556,6 +587,15 @@ export function planMove(
             magic -= cost;
         }
     }
+    c.board = board;
+    c.magic = magic;
+    return null;
+}
+
+/** 氷室・魔女・毒使いの固有の撃ち方と、浄化。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planOverflowCasts(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { costs, availableSkills, chargeClicks } = c;
+    let { board, magic } = c;
     // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
     if (this.character === 'cryomancer') {
         const cost = reducedGlacierCost(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
@@ -637,6 +677,15 @@ export function planMove(
             this.updateShield(board);
         }
     }
+    c.board = board;
+    c.magic = magic;
+    return null;
+}
+
+/** バッズ系の汎用スキルと煉獄の鍛冶師の火炎。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
+function planBudsAndFire(this: AIPlayer, c: PlanContext): AIResult | null {
+    const { costs, opponentMagic, life, availableSkills, chargeClicks } = c;
+    let { board, magic } = c;
     // バッズ系の汎用スキル。氷結・火炎で🌱が消えるキャラ（氷室の番人・煉獄の鍛冶師）が他席にいるときに守りに使う
     {
         const size = this.sizeOf(board);
@@ -830,7 +879,42 @@ export function planMove(
             }
         }
     }
+    c.board = board;
+    c.magic = magic;
+    return null;
+}
 
+
+export function planMove(
+    this: AIPlayer,
+    board: SquareInfo[],
+    magic: number,
+    costs: Record<keyof SkillCosts, number>,
+    opponentMagic: number,
+    life: number,
+    availableSkills: number[],
+    tokenUsed: boolean,
+    necroRemain: number = 0,
+    necroCost: number = 0,
+    judgeCost: number = 99,
+    assaultCost: number = 99,
+    proliferateActive: boolean = false,
+    seatMagic: number[] = [],
+    necroPay: number = necroCost,
+    necroCosts: number[] = []
+): AIResult {
+    this.necroActive = necroRemain > 0;
+    this.updateShield(board);
+
+    const c: PlanContext = { board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, judgeCost, assaultCost, proliferateActive, seatMagic, necroPay, necroCosts, facesWitch: false, holdFlood: false, chargeClicks: [] };
+    for (const phase of PLAN_PHASES) {
+        const result = phase.call(this, c);
+        if (result) return result;
+    }
+    // 段階の途中で更新された board / magic を引き継ぐ
+    board = c.board;
+    magic = c.magic;
+    const { holdFlood, chargeClicks } = c;
     let chargeResult: { skill: string; target?: number }[] | undefined = chargeClicks.length > 0 ? chargeClicks : undefined;
 
     // 魔法使い: 相手にリーチがあっても、敵のリーチを全て崩せる審判の日は撃つ（sim/ai.js judgeUnderThreat: 対魔女・毒使い 40.5→45.3% seed8/300、全相手 49.6→55.3% seed9/150）
