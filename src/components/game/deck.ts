@@ -71,7 +71,6 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 47, name: '砕氷', icon: '🔨', category: 'ice', costKey: 'onClickShatter', desc: '氷結中のコマの❄を砕き、❄1つにつき3ダメージを与えます' },
     { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice', costKey: 'onClickFrostfall', desc: '自陣のライフ2以下のコマすべてに❄を付与します' },
     { idx: 49, name: '慈雨', icon: '⬆️', category: 'support', costKey: 'onClickBoost', desc: '自陣の全コマのライフを+1します' },
-    { idx: 50, name: '縮地', icon: '👣', category: 'support', costKey: 'onClickRelocate', desc: '自陣のコマを空きマスへ移動します（エフェクトごと）' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support', costKey: 'onClickClone', desc: '自陣のコマの隣の空きマスに、ライフ半分の写しを置きます' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack', costKey: 'onClickPlunder', desc: 'ライフ0の敵コマを1つ、自陣のコマ（ライフ1）にします' },
     { idx: 53, name: '特売', icon: '🏷️', category: 'support', costKey: 'onClickMarkdown', desc: '次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）' },
@@ -124,13 +123,48 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスを選んで生命の泉を設置します。手番開始時のライフ期待値+2' },
     { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスを選んで砦を設置します。手番開始時、周囲八マスの自陣のコマのライフ+1' },
     { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスを選んで雷雲を設置します。手番開始時、周囲八マスのコマのランダムな1つに⚡を付けます' },
-    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに1回、シャッフル（手札の引き直し）が無料になります' },
+    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になります' },
     { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
     { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
+    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を2つ選んで取り除き（同じコマから2個でも可）、相手全員が次の手番、スキルを使えなくなります（自陣の⚡が合計2個ないと使えません）' },
+    { idx: 114, name: '解体', icon: '🧨', category: 'object', costKey: 'onClickDemolish', desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
+    { idx: 115, name: '風化', icon: '🌫️', category: 'object', costKey: 'onClickWeather', desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ）。対象が無いと使えません' },
+    { idx: 116, name: '地ならし', icon: '🚜', category: 'object', costKey: 'onClickLevelAll', desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
+    { idx: 117, name: '補強工事', icon: '🏗️', category: 'object', costKey: 'onClickReinforce', desc: '自陣のオブジェクトを1つ選んで、ライフを+3します。対象が無いと使えません' },
+    { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
+    { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
+    { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
+    { idx: 121, name: '結界石', icon: '🪨', category: 'object', costKey: 'onClickBarrierStone', desc: '空きマスを選んで結界石を設置します。周囲八マスの自陣の式神は、時間経過のライフ減衰を受けません' },
+    { idx: 122, name: '護符の社', icon: '⛩️', category: 'object', costKey: 'onClickAmuletShrine', desc: '空きマスを選んで護符の社を設置します。手番開始時、周囲八マスの自陣の式神1体につきマジック+1を得ます（最大+3）' },
+    { idx: 123, name: '招き猫', icon: '🐈', category: 'object', costKey: 'onClickLuckyCat', desc: '空きマスを選んで招き猫を設置します。働いている間、自分のスキルのコストが1下がります（下限1・重ならない）' },
+    { idx: 124, name: '泥田坊', icon: '🌾', category: 'object', costKey: 'onClickMudField', desc: '空きマスを選んで泥田坊を設置します。働いている間、相手がトークンで置くコマのライフが0になります' },
+    { idx: 125, name: '閻魔の舌', icon: '👅', category: 'object', costKey: 'onClickTongueKing', desc: '空きマスを選んで閻魔の舌を設置します。働いている間、相手が自分のコマにエフェクトを付けると、そのコマのライフが手番の終わりに0になります' },
+    { idx: 126, name: '八卦の陣', icon: '🔯', category: 'object', costKey: 'onClickEightTrigrams', desc: '空きマスを選んで八卦の陣を設置します。周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利します。盤の端では成立しません' },
+    { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスを選んでお一人様限りの札を設置します。働いている間、相手は1ターンに新しいコマを1つしか置けません（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルも使えません）' },
+    { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスを選んで一言居士を設置します。働いている間、相手は1ターンにスキルを1つしか使えません（チャージ・シャッフル・ロックは数えません）' },
+    { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスを選んで見ざる地蔵を設置します。周囲八マスには新しくエフェクトを付けられません（手番の終わりに、その手番で付いたエフェクトが消えます）' },
+    { idx: 130, name: '錠前荒らし', icon: '🔓', category: 'control', costKey: 'onClickLockRaid', desc: '敵陣のロックを1つランダムに解除し、そのコマに🔥・☠・⚡のどれかをランダムに付与します。直前の相手ターンにロックが使われていたら0コスト' },
+    { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマに乗っているロックのスタックを全て+2します' },
+    { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
+    { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
 ];
 
-/** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
+/** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
+export const REMOVED_SKILL_IDX: readonly number[] = [50];
+
+/** 汎用スキルの idx の上限（手札の idx は 0..SKILL_IDX_END-1 のうち欠番を除く）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
+export const SKILL_IDX_END = SKILL_CATALOG.length + REMOVED_SKILL_IDX.length;
+
+/** 汎用スキルの総数（欠番を除く） */
 export const CATALOG_SIZE = SKILL_CATALOG.length;
+
+/** 手札・デッキに入りうる idx（昇順。欠番を除く） */
+export const AVAILABLE_SKILL_IDX: readonly number[] = SKILL_CATALOG.map((c) => c.idx);
+
+const SKILL_BY_IDX = new Map(SKILL_CATALOG.map((c) => [c.idx, c]));
+
+/** idx の札（欠番・範囲外なら undefined）。欠番があるので SKILL_CATALOG[idx] ではこれを使う */
+export const skillOf = (idx: number) => SKILL_BY_IDX.get(idx);
 
 /**
  * キャラ別の推奨デッキ（12枚）。AIが何も指定しないときに使う（人間も未指定なら同じ）。
@@ -139,17 +173,18 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
  * 初版は手組み。強制使用A/Bの結果（docs/diary/2026-10-20.md）に合わせて見直していく。
  */
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
-    you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 50],
-    tactician: [3, 9, 11, 45, 46, 50, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
+    you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 52],
+    tactician: [3, 9, 11, 45, 46, 52, 64, 92, 93, 94, 95, 96],
+    magician: [2, 9, 10, 11, 13, 35, 47, 52, 53, 56, 60, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
-    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 71, 72, 73, 92],
-    necromancer: [2, 3, 6, 8, 11, 22, 40, 50, 58, 89, 92, 95],
-    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 50],
+    yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92], // 百鬼夜行(73)→バーンアウト(61): コンボ待ちをやめる。対強豪平均 3シードで +4.6/+4.9/+2.3（氷室 37→57、ネクロ 36→59、軍師 24→33。巨人 84→31 は悪化）
+    necromancer: [2, 3, 6, 8, 11, 22, 40, 52, 58, 89, 92, 95],
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 52],
     electrician: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94],
-    cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 50, 73, 92],
-    pyromancer: [0, 3, 5, 8, 11, 28, 50, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
-    witch: [5, 8, 28, 44, 50, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
+    cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 52, 73, 92],
+    pyromancer: [0, 3, 5, 8, 11, 28, 52, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
+    witch: [5, 8, 28, 44, 52, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
+    keysmith: [0, 2, 3, 5, 8, 10, 11, 12, 13, 28, 32, 52], // 初版: 汎用の核（トークン・ライフ・スラッシュ・オピウム）に、ロック系（ロック・ダブル・トリプル）を足した手組み。未調整（#439）
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
@@ -162,10 +197,12 @@ export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMM
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {
+    // 陰陽師: 主案の8(オピウム)を大木(105)に替えた案。魔力+3/手番を立てる。対強豪平均 +1.6/+1.7（seed12/300・seed33/600）で主案以上だが統計的な採用基準は満たさないので別案にする
+    yinYangMaster: [[0, 2, 3, 5, 6, 105, 10, 53, 61, 71, 72, 92]],
     // ネクロマンサー: 特売・固有割引を残す山焼き入りの旧主案と、落葉の衣・火口・無礼講の別案。統計的な基準は満たさないが同等と見て併用する(ユーザー許可)
     necromancer: [
-        [0, 2, 3, 6, 8, 11, 50, 53, 57, 58, 92, 95],
-        [0, 2, 6, 8, 11, 50, 58, 86, 87, 92, 95, 96],
+        [0, 2, 3, 6, 8, 11, 52, 53, 57, 58, 92, 95],
+        [0, 2, 6, 8, 11, 52, 58, 86, 87, 92, 95, 96],
     ],
 };
 
@@ -179,7 +216,7 @@ export const pickRecommendedDeck = (character: CharacterId, rng: () => number = 
 
 /** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
 export const isValidDeck = (deck: readonly number[] | undefined): boolean =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && i >= 0 && i < CATALOG_SIZE);
+    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && AVAILABLE_SKILL_IDX.includes(i));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 export const resolveDeck = (deck: readonly number[] | undefined, character: CharacterId): number[] =>
@@ -187,7 +224,7 @@ export const resolveDeck = (deck: readonly number[] | undefined, character: Char
 
 /** ランダムなデッキ（rng は [0,1) を返す関数） */
 export const randomDeck = (rng: () => number = Math.random): number[] => {
-    const pool = Array.from({ length: CATALOG_SIZE }, (_, i) => i);
+    const pool = [...AVAILABLE_SKILL_IDX];
     const out: number[] = [];
     for (let k = 0; k < DECK_SIZE; k++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     return out.sort((a, b) => a - b);
@@ -201,7 +238,7 @@ export const AI_DECK_SWAPS = 3;
  * 陰陽師: 百鬼夜行(73)→式神一括(71)のコンボと、特売(53)でのコスト圧縮。核が抜けるとコンボが組めず勝率が大きく落ちる（tune-top 陰陽師）。
  */
 export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
-    yinYangMaster: [53, 71, 73],
+    yinYangMaster: [53, 71],
 };
 
 /**
@@ -212,7 +249,7 @@ export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {
     const deck = pickRecommendedDeck(character, rng);
-    const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
+    const outside = AVAILABLE_SKILL_IDX.filter((i) => !deck.includes(i));
     const core = CORE_CARDS[character] ?? [];
     const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
     for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
@@ -241,10 +278,13 @@ export const CATEGORY_ORDER: { id: SkillCategory; label: string }[] = [
 ];
 
 /** スキルの基礎コスト（キャラ補正・ギア補正の前の値） */
-export const baseCostOf = (idx: number): number => skillCosts[SKILL_CATALOG[idx].costKey];
+export const baseCostOf = (idx: number): number => skillCosts[(skillOf(idx) as NonNullable<ReturnType<typeof skillOf>>).costKey];
 
 /** ツールチップ用の1行説明: 「名前（基礎コストN）: 効果」 */
-export const describeSkill = (idx: number): string => `${SKILL_CATALOG[idx].name}（基礎コスト${baseCostOf(idx)}）: ${SKILL_CATALOG[idx].desc}`;
+export const describeSkill = (idx: number): string => {
+    const s = skillOf(idx) as NonNullable<ReturnType<typeof skillOf>>;
+    return `${s.name}（基礎コスト${baseCostOf(idx)}）: ${s.desc}`;
+};
 
 // ---- 保存したデッキ（ブラウザの localStorage） ----
 

@@ -8,7 +8,9 @@ const thermal_1 = require("./thermal");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
+const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
+const keysmith_1 = require("./keysmith");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -62,6 +64,10 @@ const advanceGearState = (g, r, input) => {
         g.wardFresh[endSeat] = false;
     else if (g.ward[endSeat] > 0)
         g.ward[endSeat] -= 1;
+    if (g.blessingFresh[endSeat])
+        g.blessingFresh[endSeat] = false;
+    else if (g.blessing[endSeat] > 0)
+        g.blessing[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -76,6 +82,8 @@ const advanceGearState = (g, r, input) => {
     g.discount[nextSeat] = (0, discount_1.emptyDiscount)();
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
+    g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
+    g.lockSeen[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = (0, exports.plantedStacksTotal)(board);
@@ -88,8 +96,17 @@ const advanceGearState = (g, r, input) => {
     g.shikiPlaced[nextSeat] = false;
     g.leafBase[nextSeat] = (0, comboCost_1.ownLeaves)(board, symbols[nextSeat]);
     g.darkPotUsed[nextSeat] = false;
-    g.marketUsed[endSeat] = false;
-    g.marketUsed[nextSeat] = false;
+    // 大工房の設置の無料条件: 終わる手番にベースコスト7以上のスキルを使った、またはスキルに合計7以上のマジックを払っていれば、他の席に伝える
+    if (g.bigCast[endSeat] || g.turnSpent[endSeat] >= objects_1.WORKSHOP_PARAMS.freeSpent)
+        g.oppBigSeen.forEach((_, i) => { if (i !== endSeat)
+            g.oppBigSeen[i] = true; });
+    g.oppBigPrev[nextSeat] = g.oppBigSeen[nextSeat];
+    g.oppBigSeen[nextSeat] = false;
+    g.pieceBase[nextSeat] = (0, objects_1.ownPieceCount)(board, symbols[nextSeat]);
+    g.turnSpent[endSeat] = 0;
+    g.turnSpent[nextSeat] = 0;
+    g.marketUsed[endSeat] = 0;
+    g.marketUsed[nextSeat] = 0;
     g.bigCast[endSeat] = false;
     g.bigCast[nextSeat] = false;
     g.tokenFree[endSeat] = false; // 無礼講は手番が終わると切れる
@@ -116,12 +133,15 @@ exports.gearCostContext = gearCostContext;
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
  * skillId はコストキー（onClickXxx）。シャッフルなど『スキル扱いでない』ものは呼ばない。g を直接書き換える
  */
-const noteSkillUsed = (g, seat, skillId) => {
+const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     var _a;
     g.skills[seat] += 1;
+    g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (keysmith_1.LOCK_USED_KEYS.has(skillId))
+            g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
         if (((_a = skillCosts_1.skillCosts[skillId]) !== null && _a !== void 0 ? _a : 0) >= bigSkills_1.BIG_CAST_BASE)
             g.bigCast[seat] = true;

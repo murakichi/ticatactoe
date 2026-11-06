@@ -6,6 +6,7 @@ import { GearId } from './gear';
 
 const cells = (container: HTMLElement) => Array.from(container.querySelectorAll('button.square'));
 const lifeAt = (container: HTMLElement, i: number) => cells(container)[i].querySelector('.life')?.textContent;
+const badgesAt = (container: HTMLElement, i: number) => cells(container)[i].querySelector('.effects')?.textContent; // 🔑は残りターン数（スタック）が出る
 const magicChips = (container: HTMLElement) =>
     Array.from(container.querySelectorAll('[class*="chipMagic"]')).map((el) => Number((el.textContent ?? '').replace(/\D/g, '')));
 const players = (g0: GearId[], g1: GearId[] = []): PlayerConfig[] => [
@@ -54,16 +55,17 @@ describe('ギア（ブラウザ版）', () => {
         expect(screen.getByRole('button', { name: 'ロック-1' })).toBeInTheDocument();
     });
 
-    it('堅牢の鍵: ロックのライフが9になる（通常は6）', () => {
+    it('堅牢の鍵: ロックが9ターンになる（通常は6）。ライフは変わらない', () => {
         const a = render(<Game players={players(['ironLock'])} />);
         fireEvent.click(screen.getByRole('button', { name: 'ロック-2' }));
         fireEvent.click(cells(a.container)[5]);
-        expect(lifeAt(a.container, 5)).toBe('9');
+        expect(badgesAt(a.container, 5)).toBe('🔑9');
+        expect(lifeAt(a.container, 5)).toBeUndefined();
         a.unmount();
         const b = render(<Game players={players([])} />);
         fireEvent.click(screen.getByRole('button', { name: 'ロック-2' }));
         fireEvent.click(cells(b.container)[5]);
-        expect(lifeAt(b.container, 5)).toBe('6');
+        expect(badgesAt(b.container, 5)).toBe('🔑6');
     });
 
     it('空蔵: 空きマスのロックが切れると自陣のコマ(ライフ1)になる', () => {

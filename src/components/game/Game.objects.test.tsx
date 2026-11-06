@@ -64,4 +64,24 @@ describe('オブジェクト（ブラウザ版）', () => {
         fireEvent.click(cells(container)[2]); // 💙の次の手番: 泉の+2
         expect(cells(container)[2].querySelector('.life')?.textContent).toBe('7');
     });
+    it('補強工事: 使ってから自陣のオブジェクトを選ぶとライフ+3。対象でないマスは選び直せる', () => {
+        const deck = [0, 1, 2, 3, 4, 5, 6, 7, 8, 105, 117, 119]; // 手札は末尾から 分譲・補強工事・大木
+        const { container } = render(<Game players={[{ character: 'you', isAI: false, deck }, { character: 'you', isAI: false, deck }]} />);
+        const btn = (re: RegExp) => screen.getByRole('button', { name: re }) as HTMLButtonElement;
+        let free = 15;
+        const charge = () => {
+            fireEvent.click(screen.getByRole('button', { name: /チャージ\+3/ }));
+            fireEvent.click(cells(container)[free--]); // ⭕の着手
+        };
+        for (let n = 0; n < 8 && btn(/^大木-/).disabled; n++) charge();
+        fireEvent.click(btn(/^大木-/));
+        fireEvent.click(cells(container)[0]);
+        expect(cells(container)[0].querySelector('.life')?.textContent).toBe('5');
+        for (let n = 0; n < 8 && btn(/^補強工事-/).disabled; n++) charge();
+        fireEvent.click(btn(/^補強工事-/));
+        fireEvent.click(cells(container)[7]); // 空きマスは対象でない: 選び直せる
+        expect(cells(container)[0].querySelector('.life')?.textContent).toBe('5');
+        fireEvent.click(cells(container)[0]);
+        expect(cells(container)[0].querySelector('.life')?.textContent).toBe('8');
+    });
 });

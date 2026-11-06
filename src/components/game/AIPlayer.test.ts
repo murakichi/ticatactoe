@@ -374,16 +374,16 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         expect(nb[6].effects).toHaveLength(0);
     });
 
-    it('findJudgeTarget: 氷結中の敵は数えず、氷結中の自コマは壊れない扱い', () => {
+    it('findJudgeTarget: 氷結中の敵も数える（氷結は身代わりにならない）。バッズのある敵は数えない', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
         frozen(b, 9, '⭕');
         const mage = new AIPlayer('💙', 'magician', ['⭕']);
-        expect(mage.findJudgeTarget(b)).toBeNull();
-        put(b, 4, '⭕');
-        put(b, 7, '⭕');
         expect(mage.findJudgeTarget(b)).not.toBeNull();
+        const c = emptyBoard();
+        [5, 6, 9].forEach((i) => { c[i] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] }; });
+        expect(mage.findJudgeTarget(c)).toBeNull();
     });
 
     it('findRescueCenter: 氷結中の敵コマは壊せたものとして数えない', () => {
@@ -965,9 +965,107 @@ describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先に
     });
     it('自分がかけた空きマスロックが上限(2)に達していればかけない', () => {
         const b = board();
-        b[2] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
-        b[3] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6, owner: 1 }] };
+        b[3] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6, owner: 1 }] };
         expect(run(true, 6, b).lockTargets).toBeUndefined();
+    });
+});
+
+describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 行0に💙が2つ(0,1)あり、2が空き(3つ並びの要)。相手のリーチは無い
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[1] = { player: '💙', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (character: 'keysmith' | 'you', magic: number, b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false); // 空蔵ギアなし
+        return ai.makeMove(b, magic, skillCosts, 2, 5, [], false);
+    };
+
+    it('ギアが無くても、自分の列の要になる空きマスをロックする。ロックしたマスに置く手を選ぶ', () => {
+        const r = run('keysmith', 6);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toHaveLength(1);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+        expect(r.move).not.toBeNull();
+    });
+    it('鍵師でなければ、空蔵が無いのでロックしない', () => {
+        expect(run('you', 6).lockTargets).toBeUndefined();
+    });
+    it('魔力がロックのコストに足りなければロックしない', () => {
+        expect(run('keysmith', 0).lockTargets).toBeUndefined();
+    });
+    it('ロック中の空きマスが上限(2)に達していれば、空きマスのロック判断ではかけない（誰が掛けたかを問わず数える）', () => {
+        // 二列並びのコンボが成立しない盤面（行0の残りに敵のコマを置く）で、空きマスのロック判断だけを見る
+        const b = board();
+        b[3] = { player: '⭕', bind: 4, effects: [] };
+        b[8] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+        b[9] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+        expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
+    });
+    it('ライフが尽きかけ（1以下）の、列づくりに効いている自陣のコマを先にロックして守る', () => {
+        const b = board();
+        b[0] = { player: '💙', bind: 1, effects: [] }; // 奪われる直前
+        const r = run('keysmith', 6, b);
+        expect(r.skills).toEqual(['onClickUseLock']);
+        expect(r.lockTargets).toEqual([0]);
+    });
+    it('ライフに余裕のある自陣のコマは、空きマスのロックを優先する（自陣のコマはロックしない）', () => {
+        const r = run('keysmith', 6);
+        expect(board()[r.lockTargets![0]].player).toBeUndefined();
+    });
+    it('すでにロック中の自陣のコマには重ねてロックしない', () => {
+        const b = board();
+        b[0] = { player: '💙', bind: 1, effects: [{ effect: '🔑', stack: 5 }] };
+        expect(run('keysmith', 6, b).lockTargets?.includes(0) ?? false).toBe(false);
+    });
+    describe('二列並びのコンボ（片方をロックして、もう片方に置く）', () => {
+        const combo = (b: SquareInfo[], magic = 6) => run('keysmith', magic, b);
+
+        it('敵のコマが無い列に自陣が2つ並び、残り2マスが空きなら、片方をロックしてもう片方に置く', () => {
+            const r = combo(board()); // 行0: 💙💙 _ _
+            expect(r.skills).toEqual(['onClickUseLock']);
+            expect(r.lockTargets).toHaveLength(1);
+            const lock = r.lockTargets![0];
+            expect([2, 3]).toContain(lock);
+            expect(r.move).toBe(lock === 2 ? 3 : 2); // もう片方に置く
+        });
+        it('敵にリーチがあるときは、止めるのが先でコンボは撃たない', () => {
+            const b = board();
+            b[4] = { player: '⭕', bind: 4, effects: [] };
+            b[5] = { player: '⭕', bind: 4, effects: [] };
+            b[6] = { player: '⭕', bind: 4, effects: [] }; // 行1: ⭕⭕⭕ _
+            expect(combo(b).lockTargets).not.toEqual(expect.arrayContaining([2]));
+            expect(combo(b).move).toBe(7); // 敵のリーチの最後のマスを塞ぐ
+        });
+        it('ライフが足りない（1以下）二列では、コンボではなく自陣のコマのロックを優先する', () => {
+            const b = board();
+            b[0] = { player: '💙', bind: 1, effects: [] };
+            expect(combo(b).lockTargets).toEqual([0]);
+        });
+        it('敵のコマが混ざっている列ではコンボを撃たない', () => {
+            const b = board();
+            b[3] = { player: '⭕', bind: 4, effects: [] }; // 行0: 💙💙 _ ⭕
+            expect(combo(b).lockTargets?.length ?? 0).toBeLessThanOrEqual(1);
+            expect(combo(b).move).not.toBe(3);
+        });
+        it('ロック中の空きマスがコンボの上限(3)に達していれば撃たない', () => {
+            const b = board();
+            for (const i of [8, 9, 10]) b[i] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+            expect(combo(b).lockTargets).toBeUndefined();
+        });
+        it('魔力がロックのコストに足りなければ撃たない', () => {
+            expect(combo(board(), 0).lockTargets).toBeUndefined();
+        });
+    });
+    it('価値の低いマスはロックしない（コマが1つだけの盤面）', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
     });
 });
 
@@ -1536,6 +1634,20 @@ describe('魔法使いは軍師が相手のとき、純増2の審判の日は撃
     });
 });
 
+describe('魔法使いは特売・返し特売・一寸の虫を手札に固定する', () => {
+    const locks = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'tactician']).chooseLocks(emptyBoard(), 5, 5, hand);
+    it('特売(53)と一寸の虫(92)が手札にあれば固定する', () => {
+        expect(locks([92, 53, 2])).toEqual(expect.arrayContaining([92, 53]));
+    });
+    it('返し特売(60)も固定対象（固定は最大2枚）', () => {
+        expect(locks([60, 92, 13])).toEqual(expect.arrayContaining([60, 92]));
+        expect(locks([53, 60, 92]).length).toBeLessThanOrEqual(2);
+    });
+    it('バッズ系(2)は固定しない（序盤の空きが多くても優先固定ではなく、固定対象の札が先頭に来る）', () => {
+        expect(locks([2, 53, 13])[0]).toBe(53);
+    });
+});
+
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
     // 💙(魔法使い)のコマ 0(🌱付き)・6・11。⭕のコマ 5・10・12・15。氷室は ロックされていないコマを凍らせる
     const board = () => {
@@ -1554,10 +1666,8 @@ describe('魔法使いは氷室が相手のとき審判の日より先に自陣�
         return [...(r.lockTargets ?? []), ...(r.chargeClicks ?? []).map((c) => c.target)];
     };
 
-    it('氷室が相手なら、🌱付きのコマを先頭に自陣のコマを全てロックする', () => {
-        const targets = lockTargetsOf('cryomancer');
-        expect(targets[0]).toBe(0);
-        expect([...targets].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 6, 11]);
+    it('氷室が相手のときは先にロックしない（手札固定を入れた後は、ロックに魔力を回すと裏目: 対氷室 35.0→66.0%）', () => {
+        expect(lockTargetsOf('cryomancer')).toEqual([]);
     });
     it('鍛冶師（🔥はロック中のコマに付かない）が相手のときも同じく全てロックする', () => {
         const targets = lockTargetsOf('pyromancer');
@@ -1850,22 +1960,6 @@ describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () =
     });
 });
 
-describe('縮地の連打', () => {
-    const { skillCosts } = require('./skillCosts');
-    it('列の足りないマスが空きだけなら、列の外の自陣コマを動かして最後の1マスを着手で揃える', () => {
-        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
-        const b = emptyBoard();
-        b[0] = { player: '💙', bind: 5, effects: [] };
-        b[1] = { player: '💙', bind: 5, effects: [] };
-        b[12] = { player: '💙', bind: 2, effects: [] };
-        b[13] = { player: '💙', bind: 3, effects: [] };
-        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [50], false);
-        expect(r.chargeClicks).toEqual([{ skill: 'onClickRelocate', target: 12, target2: 2 }]);
-        expect(r.move).toBe(3);
-        expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
-    });
-});
-
 describe('雷霆AI: パーフェクトゲーム（⚡の無敵コマだけが残る全破壊）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
@@ -1971,5 +2065,81 @@ describe('雷霆AI: 夜の帳で氷室の絶対零度（実コスト = 10 − �
     it('届かない（実コスト未満）か、+3でも遅らせられない（実コスト+3以上）なら撃たない', () => {
         expect(run(5, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
         expect(run(12, 0, [98, 21, 23]).skills ?? []).not.toContain('onClickNightVeil');
+    });
+});
+
+describe('雷霆AI: 沈黙は雷なりで相手の固有スキルの手番を封じる', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const run = (cryoMagic: number, bolts: boolean, hand: number[] = [113, 21, 23]) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }, { effect: '⚡' }] : [] };
+        b[1] = { player: '💙', bind: 5, effects: bolts ? [{ effect: '⚡' }] : [] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        return ai.makeMove(b, 6, skillCosts, cryoMagic, 5, hand, false, 0, 0, 99, 99, false, [6, cryoMagic]);
+    };
+    it('氷室が次の手番に絶対零度（実コスト10）を撃てる魔力に届くなら、⚡の多いコマを選んで撃つ', () => {
+        const r = run(9, true);
+        expect(r.chargeClicks).toEqual([{ skill: 'onClickBoltSilence', target: 0, target2: 0 }]); // 2スタックのコマから2個払う
+    });
+    it('⚡が合計1つしか無ければ撃てない', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
+    });
+    it('届かない魔力なら撃たない／自陣に⚡が無ければ撃てない', () => {
+        expect(run(4, true).chargeClicks ?? []).toEqual([]);
+        expect(run(9, false).chargeClicks ?? []).toEqual([]);
+    });
+    it('相手にリーチがあるときは撃たず、守りを優先する', () => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [{ effect: '⚡' }] };
+        [4, 5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] })); // 行1に敵のリーチ（7が空き）
+        const r = ai.makeMove(b, 6, skillCosts, 9, 5, [113, 21, 23], false, 0, 0, 99, 99, false, [6, 9]);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBoltSilence');
+    });
+});
+
+describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const run = (b: SquareInfo[], magic: number, hand: number[]) =>
+        new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'tactician']).makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    it('雷雲（idx 109）: 周囲八マスに敵のコマが2つ以上あるマスに立てる', () => {
+        const b = empty();
+        [5, 6].forEach((i) => (b[i] = { player: '⭕', bind: 5, effects: [] }));
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        const r = run(b, 6, [109, 21, 23]);
+        const click = (r.chargeClicks ?? []).find((c) => c.skill === 'onClickThundercloud');
+        expect(click).toBeDefined();
+        expect([0, 1, 2, 4, 7, 8, 9, 10].includes(click!.target as number)).toBe(true); // 敵(5,6)の隣のマス
+    });
+    it('雷雲: 周囲に敵のコマが1つしか立てられるマスが無ければ撃たない／魔力が足りなければ撃たない', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        expect((run(b, 6, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+        const b2 = empty();
+        [5, 6].forEach((i) => (b2[i] = { player: '⭕', bind: 5, effects: [] }));
+        expect((run(b2, 3, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+    });
+    it('大木（idx 105）は撃たない（対強豪で悪化: 魔力8を貯める間の損が回収できない。docs/tune/electrician.md 試行52）', () => {
+        const b = empty();
+        b[5] = { player: '⭕', bind: 5, effects: [] };
+        b[0] = { player: '💙', bind: 5, effects: [] };
+        expect((run(b, 12, [105, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickBigTree');
+    });
+    it('オブジェクトのマスは AI から『置けない空きマス』に見え、自陣のコマとして列に数えられない', () => {
+        const b = empty();
+        b[0] = { player: '💙', bind: 5, effects: [], object: 'bigTree' };
+        [1, 2, 3].forEach((i) => (b[i] = { player: '💙', bind: 5, effects: [] }));
+        // 行0は 大木(オブジェクト)+3コマ。オブジェクトは列に数えないので勝ち筋のリーチではない（誤認して0に置こうとしない）
+        const r = run(b, 2, [21, 23, 22]);
+        expect(r.move).not.toBe(0);
     });
 });

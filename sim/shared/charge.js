@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/charge.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeStacks = exports.orthoNeighbors = void 0;
+exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeStacks = exports.BOLT_SILENCE_BOLTS = exports.orthoNeighbors = void 0;
 const Player_1 = require("./Player");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -9,6 +9,8 @@ Object.defineProperty(exports, "orthoNeighbors", { enumerable: true, get: functi
 const thermal_1 = require("./thermal");
 const charOf = (chars, player) => chars[(0, Player_1.seatOf)(player)];
 /** ⚡の個数（スタック数） */
+/** 沈黙は雷なり: 払う⚡の数（自陣の⚡が合計でこれ以上ないと使えない） */
+exports.BOLT_SILENCE_BOLTS = 2;
 const chargeStacks = (sq) => sq.effects.filter((e) => e.effect === '⚡').length;
 exports.chargeStacks = chargeStacks;
 const hasLock = (sq) => sq.effects.some((e) => e.effect === '🔑');
@@ -164,7 +166,7 @@ const applyJammer = (board, i, size, current) => {
     const damaged = (0, exports.jammerTargets)(board, i, size, current);
     const zeroed = [];
     for (const j of damaged) {
-        // ジャマーの電気ダメージも氷結を貫通する
+        // 氷結中のコマは jammerTargets で除外済み（ジャマーのダメージは氷結中のマスに通らない）。ここに来るのは氷結していないコマだけ
         board[j] = (0, thermal_1.applyDamage)(board[j], stacks, 'electric').sq;
         if (board[j].bind === 0)
             zeroed.push(j);

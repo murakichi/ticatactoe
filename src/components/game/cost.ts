@@ -10,7 +10,10 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { comboCut, comboFloor } from './comboCost';
 import { Discount, applyDiscount, discountAmount } from './discount';
 import { CostContext, Gears, adjustCostByGear, gearTokenBindDelta } from './gear';
+import { OBJECT_PARAMS, WORKSHOP_PARAMS, luckyCatActive, workshopActive } from './objects';
+import { skillCosts } from './skillCosts';
 import { FIRST_FROST_FREE_LEAVES } from './tokenSkills';
+import { LOCK_SKILL_KEYS } from './keysmith';
 import { FLAME_SKILL_KEYS, boardLeaves, fireStacksTotal, leafSurcharge, witchCostOf } from './thermal';
 
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
@@ -43,10 +46,14 @@ export type CostEnv = {
     tokenFree: boolean;
     /** この手番に基礎コスト7以上のスキルを使ったか（柳の下に二匹目がいたの無料条件） */
     bigCast: boolean;
+    /** 自分の前の手番以降に、相手がベースコスト7以上のスキルを使った・スキルに合計7以上のマジックを払ったか（大工房の設置の無料条件） */
+    oppBigPrev: boolean;
     /** 夜の帳が効いているか（この席の手番の間、スキルコスト+3。手番の席にだけ掛かる） */
     veil: boolean;
     /** 自分の前の手番以降の相手のスキル使用（返し特売の0コスト条件）と、手番開始時点の盤面全体の🔥の総数（火の車の無料条件） */
     oppSkillPrev: boolean;
+    /** 直前の相手ターンにロックが使われたか（錠前荒らしの0コスト条件） */
+    lockPrev: boolean;
     /** 直前の手番に盤面の🌱🍂が増えたか（火口の無料条件。撃つと消える） */
     plantPrev: boolean;
     /** 直前の手番に相手がコマを2つ以上設置したか（飛び火の無料条件。撃つと消える） */
@@ -69,6 +76,8 @@ export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean
     if (characterId === 'pyromancer') return skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
     if (characterId === 'witch') return witchCostOf(cost, env.board);
+    // 鍵師: ロック系スキルは-1（下限1）
+    if (characterId === 'keysmith') return skillKey && LOCK_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (characterId === 'poisoner') return isPoison ? cost - 1 : cost + 1;
     if (characterId === 'tactician') return isToken ? cost - 1 : cost + 2;
@@ -82,6 +91,7 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     const mine = env.seat === env.turnSeat;
     if (skillKey === 'onClickShikigamiPurge' && mine && ownShikigami(env.board, env.player) >= SHIKIGAMI_PURGE_FREE) return 0; // 供犠: 自陣の式神が3体以上なら0
     if (skillKey === 'onClickSecondCatch' && mine && env.bigCast) return 0; // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使っていれば0
+    if (skillKey === 'onClickWorkshop' && mine && env.oppBigPrev) return 0; // 大工房の設置: 直前に相手がベースコスト7以上のスキル/合計7以上のマジックを使っていれば0
     if (isToken && mine && env.tokenFree) return 0; // 無礼講: この手番、トークン系スキルのコストは0
     if (skillKey === 'onClickFirstFrost' && mine && boardLeaves(env.board) >= FIRST_FROST_FREE_LEAVES) return 0; // 初霜: 盤面の🍂が3枚以上なら0
     const leafAdd = withLeaf ? leafSurcharge(env.board, env.player) + veilSurcharge(env) : 0; // 夜の帳も🍂と同じ増加分。characterCostOf が足し済みのときは withLeaf=false
@@ -90,9 +100,14 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     let adjusted = Math.max(comboFloor(skillKey), adjustCostByGear(cost + leafAdd, env.gears, env.ctx, isToken, skillKey) - cut); // カウント型の導線は下限1
     // 陰陽師のパッシブ: 式神を置く手番は、全スキル（陰陽転化・式神設置/爆破を含む）のコスト-1（下限1）。置くスキル自身も-1
     if (mine && env.characters[env.seat] === 'yinYangMaster' && (env.shikiPlaced || (!!skillKey && SHIKIGAMI_PLACING_KEYS.has(skillKey))) && adjusted > 1) adjusted -= 1;
+    // 大工房: 働いている間、ベースコスト7以上のスキルのコスト-3（重ならない。下限1）
+    if (skillKey && ((skillCosts as Record<string, number>)[skillKey] ?? 0) >= WORKSHOP_PARAMS.bigBase && workshopActive(env.board, env.player) && adjusted > 1) adjusted = Math.max(1, adjusted - WORKSHOP_PARAMS.cut);
+    // 招き猫: 働いている間、自分のスキルのコスト-1（下限1・重ならない）
+    if (luckyCatActive(env.board, env.player) && adjusted > 1) adjusted = Math.max(1, adjusted - OBJECT_PARAMS.luckyCatCut);
     if (skillKey === 'onClickSpark' && mine && env.placedPrev) return 0; // 飛び火: 直前の手番に相手がコマを2つ以上設置していれば0（1手番に1回まで）
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (skillKey === 'onClickLockRaid' && mine && env.lockPrev) return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
     if (skillKey === 'onClickFireWheel' && mine && fireStacksTotal(env.board) > env.fireBase) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
     return mine ? applyDiscount(adjusted, discountAmount(env.discount, skillKey, isToken)) : adjusted;

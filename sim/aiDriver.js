@@ -44,6 +44,8 @@ function aiFor(s, seat) {
     return ai;
 }
 
+const banned = (s, seat) => (s.aiFlags && s.aiFlags[seat] ? s.aiFlags[seat].ban : undefined);
+
 function inputOf(s, reroll) {
     const seat = s.turn;
     const others = E.otherSeats(s, seat);
@@ -53,7 +55,7 @@ function inputOf(s, reroll) {
         seat,
         magic: s.magic,
         costs: E.costsOf(s, seat),
-        hand: s.skills,
+        hand: banned(s, seat) === undefined ? s.skills : s.skills.filter((i) => i !== banned(s, seat)), // probe-top --scan audit: flags.ban の札はAIに見せない(使用禁止)
         life: s.life,
         tokenUsed: s.usedTokenThisTurn,
         necroRemain: s.remainNecro[seat],
@@ -84,11 +86,17 @@ function inputOf(s, reroll) {
     };
 }
 
+/** お一人様限りの札: 相手の札が働いていて、この手番にもう新しいコマを置いたか（空きマスに置けない） */
+function soloBlock(s) {
+    return require('./shared/objects').newPieceBlocked(s.board, E.symbolOfSeat(s.turn), E.placedThisTurn(s));
+}
+
 /** 計画のスキルを1つ実行する。縛り(ライフ3以下を置けない)に掛かるスキルは Game.executeSkillForAI と同じく何もしない */
 function runSkill(s, name) {
     if (name.startsWith('onClickHailMary:')) return E.onClickHailMary(s, name.slice('onClickHailMary:'.length));
     if (name === 'onClickShuffle') return E.shuffleHand(s);
     if (lifeBanMod.placeBlocked(s.lifeBan[s.turn], name, E.calculateTokenBind(s))) return; // 一寸の虫に魂なし: 置くスキルは撃てない(Game.executeSkillForAI と同じ)
+    if (E.skillRestrictedByObjects(s, name)) return; // 相手の一言居士・お一人様限りの札の縛り(Game.executeSkillForAI と同じ)
     const key = keyOf(name);
     const fn = E.SKILLS[key];
     if (!fn) throw new Error(`aiDriver: AIPlayer returned a skill that engine cannot run: ${name} (${key})`);
@@ -134,7 +142,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
             if (typeof step === 'string') { runSkill(s, step); continue; }
             if (i === plan.steps.length - 1) {
                 // 着手マスはスキル実行前の盤面で決めてある。埋まっていたら今の盤面で打ち直し、無ければチャージでパスする
-                const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, step, s.lifeBan[seat]);
+                const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, step, s.lifeBan[seat], soloBlock(s));
                 if (cell !== null) click(cell); else E.SKILLS.charge(s);
             } else click(step);
         }
@@ -151,7 +159,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
         if (over()) return;
         const last = i === plan.clicks.length - 1;
         if (i >= queued && last && plan.moveLast) {
-            const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i], s.lifeBan[seat]);
+            const cell = aiTurn.resolveMoveCell(aiFor(s, seat), s.board, s.chars, s.life, plan.clicks[i], s.lifeBan[seat], soloBlock(s));
             if (cell !== null) click(cell); else E.SKILLS.charge(s);
         } else click(plan.clicks[i]);
     }
