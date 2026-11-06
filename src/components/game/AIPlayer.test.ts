@@ -648,7 +648,12 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
     it('引き直しの回数が残っていなければ引き直さない', () => {
         const ai = mk();
         ai.rerollsLeft = 0;
-        expect(run(ai, 12, [53]).reroll).toBeUndefined();
+        expect(run(ai, 8, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使いは魔力10以上で余っていれば、引き直し回数を使い切っても追加で引き直す（24→10: 対ネクロ 24→40%）', () => {
+        const ai = mk();
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toEqual({});
     });
     it('魔法使い以外は、魔力が有り余っていなければ引き直さない', () => {
         expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();

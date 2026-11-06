@@ -57,6 +57,8 @@ const PANDEMIC_MIN_SCORE = 3;
 const INTENSIFY_MIN_FOE_POISON = 3;
 /** この魔力以上あるときは、手札で使う額が RICH_SPEND_GOAL に届かなければ、引き直し回数(rerollBudget)を使い切っても RICH_EXTRA_REROLLS 回まで引き直す */
 const RICH_REROLL_MAGIC = 24;
+/** 魔法使いは魔力が余りやすい（7手番目以降は毎手番20以上）ので、もっと低い魔力から引き直す。24→10: 全相手 62.7→約65（seed922/200）、対ネクロ 24→40%。5以下は引き直しすぎて悪化（0で崩壊） */
+const MAGICIAN_REROLL_MAGIC = 10;
 /** 手札で使う額の目標は魔力の1/4（RICH_SPEND_GOAL〜RICH_SPEND_GOAL_MAX）。魔力が多いほど、もっと使える手札が出るまで引き直す */
 const RICH_SPEND_GOAL = 5;
 const RICH_SPEND_GOAL_MAX = 12;
@@ -2345,9 +2347,9 @@ class AIPlayer {
         if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
             return this.extendPlan(result, args);
         }
-        if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
+        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック
-        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) return result;
+        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) return result;
         const goal = Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
         if (this.plannedSpend(result, args[2]) >= goal) return result;
         // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す
