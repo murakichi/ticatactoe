@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/charge.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.thunderFireTargets = exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeHealTargets = exports.bristleTargets = exports.boltSilenceTargets = exports.stashTargets = exports.ownChargedCells = exports.chargeStacks = exports.BOLT_SILENCE_BOLTS = exports.orthoNeighbors = void 0;
+exports.thunderFire = exports.payBolt = exports.stashBolts = exports.thunderFireTargets = exports.healCharged = exports.CHARGE_HEAL = exports.applyOverload = exports.isFullyCharged = exports.applyJammer = exports.jammerTargets = exports.canJam = exports.randomChargeCandidates = exports.reducedChargeCost = exports.boardChargeCount = exports.withCharge = exports.landCharge = exports.addCharge = exports.CHARGE_LANDING_DAMAGE = exports.connectedPieces = exports.releaseCharges = exports.fireCharges = exports.FIRE_DAMAGE = exports.shieldedCells = exports.isGuarded = exports.isShielded = exports.chargeHealTargets = exports.bristleTargets = exports.boltSilenceTargets = exports.stashTargets = exports.ownChargedCells = exports.chargeStacks = exports.BOLT_SILENCE_BOLTS = exports.orthoNeighbors = void 0;
 const Player_1 = require("./Player");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -228,3 +228,36 @@ exports.healCharged = healCharged;
 /** 雷のない所に火は立たぬの対象: ⚡のあるコマ（ロック中は除く。敵の無敵マスは除く） */
 const thunderFireTargets = (board, me, chars) => cellsWhere(board, (sq) => !!sq.player && (0, exports.chargeStacks)(sq) > 0 && !hasLock(sq) && (sq.player === me || !(0, exports.isShielded)(sq, chars)));
 exports.thunderFireTargets = thunderFireTargets;
+/** 雷神のへそくり: マスの⚡を全て外す。board を直接書き換え、外した数（次のスキルの軽減に回る）を返す */
+const stashBolts = (board, cell) => {
+    const n = (0, exports.chargeStacks)(board[cell]);
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((e) => e.effect !== '⚡') };
+    return n;
+};
+exports.stashBolts = stashBolts;
+/** 沈黙は雷なり: マスの⚡を1個払う。board を直接書き換え、払えたら true（⚡が無ければ false） */
+const payBolt = (board, cell) => {
+    const at = board[cell].effects.findIndex((e) => e.effect === '⚡');
+    if (at === -1)
+        return false;
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((_, k) => k !== at) };
+    return true;
+};
+exports.payBolt = payBolt;
+/**
+ * 雷のない所に火は立たぬ: 氷結中のコマなら❄を1つ砕くだけ（frozen=true。コマは壊れず火も移らない）。
+ * そうでなければコマを壊して空きマスにし、周囲8マスの敵コマ（ロック・無敵を除く）の無作為な一部に🔥を付ける。
+ * board を直接書き換える。壊したときの墓地（addCorpses）は呼び出し側が数える。rng は [0,1) を返す関数
+ */
+const thunderFire = (board, cell, me, chars, size, rng, keepBuds) => {
+    if ((0, thermal_1.isFrozen)(board[cell])) {
+        board[cell] = (0, thermal_1.thawOne)(board[cell]);
+        return { frozen: true, picks: [], thawed: [] };
+    }
+    board[cell] = { player: undefined, bind: 0, effects: [] };
+    const cands = (0, boardGeometry_1.geometryOf)(size).surroundRange(cell).filter((j) => board[j].player && board[j].player !== me && !(0, exports.isGuarded)(board[j], chars));
+    const picks = (0, thermal_1.thunderFireVictims)(cands, rng);
+    const { thawed } = (0, thermal_1.ignite)(board, picks, size, 1, keepBuds);
+    return { frozen: false, picks, thawed };
+};
+exports.thunderFire = thunderFire;

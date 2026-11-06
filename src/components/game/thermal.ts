@@ -375,6 +375,21 @@ export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['pla
     return receivers;
 };
 
+/**
+ * ひこばえ（受け手の選び方込み）: 受け手が GRAFT_MAX を超えるときは pick で無作為に GRAFT_MAX 個を選ぶ。
+ * 🌱が付いたマスを返す。board を直接書き換える。Game.tsx と sim/engine.js が同じ手順で使う（乱数だけ呼び出し側が渡す）
+ */
+export const suckerGraft = (
+    board: SquareInfo[],
+    cell: number,
+    player: SquareInfo['player'],
+    size: number,
+    pick: (receivers: number[], n: number) => number[]
+): number[] => {
+    const receivers = budReceivers(board, cell, player, size);
+    return graft(board, cell, player, size, receivers.length > GRAFT_MAX ? pick(receivers, GRAFT_MAX) : undefined);
+};
+
 /** 風の落とし子の候補: player のコマで🌱を持てるマス（昇順） */
 export const sowCandidates = (board: SquareInfo[], player: SquareInfo['player']): number[] =>
     board.map((sq, i) => (sq.player === player && canBud(sq) ? i : -1)).filter((i) => i !== -1);

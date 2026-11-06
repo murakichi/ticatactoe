@@ -5,6 +5,7 @@ import {
     harvestBuds,
     budReceivers,
     graft,
+    suckerGraft,
     GRAFT_MAX,
     sowCandidates,
     sow,
@@ -77,4 +78,26 @@ describe('バッズ系の汎用スキル（刈り入れ前夜・冬至の種子�
         expect(SOW_COUNT).toBe(2);
     });
 
+});
+
+describe('ひこばえの受け手の選び方（Game / sim 共有）', () => {
+    it('受け手が GRAFT_MAX 以下なら pick を呼ばず全員に、超えるなら pick が選んだ GRAFT_MAX 個だけに🌱', () => {
+        const b = emptyBoard();
+        b[5] = sq('💙', 4, '🌱');
+        b[1] = sq('💙', 4);
+        b[4] = sq('💙', 4);
+        let called = 0;
+        const done = suckerGraft(b, 5, '💙', 4, (r) => { called++; return r; });
+        expect(called).toBe(0);
+        expect(done).toEqual([1, 4]);
+
+        const c = emptyBoard();
+        c[5] = sq('💙', 4, '🌱');
+        c[1] = sq('💙', 4);
+        c[4] = sq('💙', 4);
+        c[6] = sq('💙', 4);
+        const got = suckerGraft(c, 5, '💙', 4, (r, n) => { expect(n).toBe(GRAFT_MAX); return r.slice(0, n); });
+        expect(got).toHaveLength(GRAFT_MAX);
+        expect(c.filter((x) => x.effects.some((e) => e.effect === '🌱')).length).toBe(1 + GRAFT_MAX);
+    });
 });

@@ -2018,9 +2018,7 @@ function bestSuckerTarget(s) {
 function exeSucker(s, i) {
     if (!suckerTargets(s).includes(i)) return false;
     // 受け手は最大2つ: 3つ以上あるときはその中からランダムに2つ（重複なし）
-    const recv = thermal.budReceivers(s.board, i, curPlayer(s), s.size);
-    const picked = recv.length > thermal.GRAFT_MAX ? randomAnyPick(recv, thermal.GRAFT_MAX, s.rng) : undefined;
-    const got = thermal.graft(s.board, i, curPlayer(s), s.size, picked);
+    const got = thermal.suckerGraft(s.board, i, curPlayer(s), s.size, (recv, n) => randomAnyPick(recv, n, s.rng));
     bumpStat(s, 'suckerCells', got.length);
     return true;
 }
@@ -2365,17 +2363,10 @@ function onClickThunderFire(s) {
 }
 function exeThunderFire(s, i) {
     if (!thunderFireTargets(s).includes(i)) return false;
-    if (thermal.isFrozen(s.board[i])) {
-        s.board[i] = thermal.thawOne(s.board[i]);
-        return true;
-    }
-    const me = curPlayer(s);
-    s.board[i] = { player: undefined, bind: 0, effects: [] };
+    const r = chargeMod.thunderFire(s.board, i, curPlayer(s), s.chars, s.size, s.rng, keepBudsOf(s));
+    if (r.frozen) return true;
     addCorpses(s, 1);
-    const cands = surroundRange(s, i).filter((j) => s.board[j].player && s.board[j].player !== me && !isGuarded(s, s.board[j]));
-    const picks = thermal.thunderFireVictims(cands, s.rng);
-    thermal.ignite(s.board, picks, s.size, 1, keepBudsOf(s));
-    bumpStat(s, 'thunderFireVictims', picks.length);
+    bumpStat(s, 'thunderFireVictims', r.picks.length);
     return true;
 }
 
@@ -2401,8 +2392,7 @@ function onClickBoltSilence(s) {
 }
 function exeBoltSilence(s, i) {
     if (!boltSilenceTargets(s).includes(i)) return false;
-    const at = s.board[i].effects.findIndex((e) => e.effect === '⚡');
-    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((_, k) => k !== at) };
+    chargeMod.payBolt(s.board, i);
     s.useBoltSilence -= 1;
     if (s.useBoltSilence === 0) otherSeats(s).forEach((seat) => { s.silenced[seat] = true; }); // 払い切ったとき
     return true;
@@ -2410,8 +2400,7 @@ function exeBoltSilence(s, i) {
 
 function exeStash(s, i) {
     if (!stashTargets(s).includes(i)) return false;
-    const n = chargeStacks(s.board[i]);
-    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((e) => e.effect !== '⚡') };
+    const n = chargeMod.stashBolts(s.board, i);
     s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { next: s.discount[s.turn].next + n }); // 軽減札なので「次に打つスキル」を消費せず、足す
     bumpStat(s, 'stashBolts', n);
     return true;

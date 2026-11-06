@@ -1,4 +1,4 @@
-import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged, ownChargedCells, stashTargets, boltSilenceTargets, bristleTargets, chargeHealTargets, thunderFireTargets } from './charge';
+import { PlayerCharacters, chargeStacks, orthoNeighbors, fireCharges, connectedPieces, isShielded, isGuarded, shieldedCells, withCharge, addCharge, landCharge, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, releaseCharges, healCharged, ownChargedCells, stashTargets, boltSilenceTargets, bristleTargets, chargeHealTargets, thunderFireTargets, stashBolts, payBolt, thunderFire } from './charge';
 import { skillCosts, CHARGE_MIN_COST } from './skillCosts';
 import { geometryOf } from './boardGeometry';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -533,5 +533,45 @@ describe('帯電スキルの対象マス（Game / sim 共有）', () => {
         // 自分が雷霆の巫なら自分のマスは対象、敵(you)のマスも⚡があれば対象
         const c: PlayerCharacters = ['you', 'tactician'];
         expect(thunderFireTargets(b, '💙', c)).toEqual([0, 1]);
+    });
+});
+
+describe('へそくり・沈黙・雷のない所に火は立たぬ（Game / sim 共有の盤面操作）', () => {
+    it('へそくりは⚡を全て外し、外した数を返す', () => {
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '⚡' }, { effect: '☠' }] };
+        expect(stashBolts(b, 0)).toBe(2);
+        expect(b[0].effects).toEqual([{ effect: '☠' }]);
+    });
+
+    it('沈黙は⚡を1個だけ払う。⚡が無ければ false で盤面は変わらない', () => {
+        const b = emptyBoard();
+        b[0] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '⚡' }] };
+        expect(payBolt(b, 0)).toBe(true);
+        expect(chargeStacks(b[0])).toBe(1);
+        put(b, 1, '💙', 4, false);
+        expect(payBolt(b, 1)).toBe(false);
+        expect(b[1].effects).toEqual([]);
+    });
+
+    it('雷のない所に火は立たぬ: コマを壊し、周囲の敵(無敵・ロックを除く)に🔥。氷結中は❄を1つ砕くだけ', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙', 4, true); // 対象
+        put(b, 6, '⭕', 4); // 周囲の敵
+        put(b, 4, '💙', 4); // 周囲の自陣（燃えない）
+        const r = thunderFire(b, 5, '💙', ['you', 'you'], 4, () => 0, undefined);
+        expect(r.frozen).toBe(false);
+        expect(b[5].player).toBeUndefined();
+        expect(r.picks).toEqual([6]);
+        expect(b[6].effects.some((e) => e.effect === '🔥')).toBe(true);
+        expect(b[4].effects).toEqual([]);
+
+        const f = emptyBoard();
+        f[5] = { player: '💙', bind: 4, effects: [{ effect: '⚡' }, { effect: '❄' }] };
+        put(f, 6, '⭕', 4);
+        const r2 = thunderFire(f, 5, '💙', ['you', 'you'], 4, () => 0, undefined);
+        expect(r2).toEqual({ frozen: true, picks: [], thawed: [] });
+        expect(f[5].player).toBe('💙');
+        expect(f[6].effects).toEqual([]);
     });
 });

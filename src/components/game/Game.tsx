@@ -31,7 +31,7 @@ import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder } from './ge
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, stashTargets as stashTargetsOf, bristleTargets as bristleTargetsOf, boltSilenceTargets as boltSilenceTargetsOf, chargeHealTargets, thunderFireTargets as thunderFireTargetsOf } from './charge';
+import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, stashTargets as stashTargetsOf, bristleTargets as bristleTargetsOf, boltSilenceTargets as boltSilenceTargetsOf, chargeHealTargets, thunderFireTargets as thunderFireTargetsOf, stashBolts, payBolt, thunderFire } from './charge';
 import { ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
@@ -39,7 +39,7 @@ import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE 
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, activeBuds, emptyBlocked, cleanse, sacrificeCandidates as sacrificeCandidatesOf, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, activeBuds, emptyBlocked, cleanse, sacrificeCandidates as sacrificeCandidatesOf, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, suckerGraft, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, sacrificeTargets, sacrificeFlame, placeFlameToken, budStacks, budReceivers, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -1681,19 +1681,15 @@ export const Game = (props: GameProps) => {
     const exeThunderFire = (i: number) => {
         const board = currentBoard.slice();
         setUseThunderFire(false);
-        if (isFrozen(board[i])) {
+        const { frozen, picks, thawed } = thunderFire(board, i, currentTurnPlayer, characters, geo.size, Math.random, keepBuds);
+        if (frozen) {
             // 氷結中のコマは破壊されず❄が1つ減るだけ。破壊できなかったので火は燃え移らない
-            board[i] = thawOne(board[i]);
             addLog(`${posName(i)}の氷結を1つ砕いた（コマは壊れず、火は燃え移らない）`);
             playBurst('iceBreak', [i]);
             setCurrentBoard(board);
             return;
         }
-        board[i] = { player: undefined, bind: 0, effects: [] };
         addCorpses(1);
-        const cands = geo.surroundRange(i).filter((j) => board[j].player && board[j].player !== currentTurnPlayer && !isGuarded(board[j], characters));
-        const picks = thunderFireVictims(cands, Math.random);
-        const thawed = ignite(board, picks, geo.size, 1, keepBuds).thawed;
         addLog(`${posName(i)}のコマを破壊し、周囲の敵${picks.length}コマに🔥`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells([i, ...picks]);
@@ -1711,10 +1707,9 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash'), true, true, 'onClickStash');
     };
     const exeStash = (i: number) => {
-        const n = chargeStacks(currentBoard[i]);
-        if (n === 0) return;
+        if (chargeStacks(currentBoard[i]) === 0) return;
         const board = currentBoard.slice();
-        board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '⚡') };
+        const n = stashBolts(board, i);
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n }; // 軽減札なので「次に打つスキル」を消費せず、足す
         addLog(`${posName(i)}の⚡${n}個を除去（次のスキル-${n}）`);
@@ -1736,9 +1731,7 @@ export const Game = (props: GameProps) => {
     };
     const exeBoltSilence = (i: number) => {
         const board = currentBoard.slice();
-        const at = board[i].effects.findIndex((e) => e.effect === '⚡');
-        if (at === -1) return;
-        board[i] = { ...board[i], effects: board[i].effects.filter((_, k) => k !== at) };
+        if (!payBolt(board, i)) return;
         flashCells([i]);
         const left = useBoltSilence - 1;
         setUseBoltSilence(left);
@@ -2661,10 +2654,8 @@ export const Game = (props: GameProps) => {
     const exeSucker = (i: number) => {
         if (!suckerSources().includes(i)) return; // 🌱を持たない・隣に受け手がいないマスは選び直せる
         const board = currentBoard.slice();
-        const receivers = budReceivers(board, i, currentTurnPlayer, geo.size);
         // 受け手が3つ以上なら、ランダムに2つだけに付く
-        const picked = receivers.length > GRAFT_MAX ? randomAnyPick([...receivers], GRAFT_MAX) : receivers;
-        const done = graft(board, i, currentTurnPlayer, geo.size, picked);
+        const done = suckerGraft(board, i, currentTurnPlayer, geo.size, (receivers, n) => randomAnyPick([...receivers], n));
         addLog(`${posName(i)}からひこばえ（${done.length}コマに🌱）`);
         flashCells(done);
         playEffect('sprout', undefined, done);
