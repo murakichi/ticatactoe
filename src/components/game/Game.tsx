@@ -10,12 +10,8 @@ import { PROLIFERATE, proliferateUpkeep } from './turn';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE } from './shikigami';
 import { EffectSnapshot, encircleWinner, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandable, objectLandableCells } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, SHIKIGAMI_PURGE_FREE } from './cost';
-import { Board } from './Board';
-import { BoardEffects, SkillEffectType } from './BoardEffects';
-import { VictoryEffect } from './VictoryEffect';
-import { GearToasts } from './GearToasts';
-import { SkillButton } from './SkillButton';
-import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, LineDir } from './boardGeometry';
+import { SkillEffectType } from './BoardEffects';
+import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf } from './boardGeometry';
 import { canHitBound, isTakeProtected } from './decay';
 import { resolveDeck, SKILL_CATALOG, skillOf } from './deck';
 import { parseSkillText } from './skillMeta';
@@ -33,7 +29,6 @@ import { skillCosts, SkillCosts } from './skillCosts';
 import {
     GearId,
     GEAR_PARAMS,
-    gearDefOf,
     hasGear,
     gearLifeBonus,
     gearLifeStd,
@@ -56,12 +51,18 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { PlayerPanel } from './PlayerPanel';
+import { ControlBar } from './ControlBar';
+import { OperationLog } from './OperationLog';
+import { CaptureDialog, IcicleChoices } from './BoardDialogs';
+import { BoardStage } from './BoardStage';
+import { SkillPanel, SkillCardDef } from './SkillPanel';
 import { useAIRunner } from './useAIRunner';
 import { useTurnEffects } from './useTurnEffects';
 import { useSkillDispatch } from './useSkillDispatch';
 import { useCellClick } from './useCellClick';
 import { useGameControls } from './useGameControls';
-import { GameProps, CHARACTER_NAMES } from './gameTypes';
+import { GameProps } from './gameTypes';
 import { useSeatArray } from './useSeatArray';
 import { useBoardEffects, useGearToasts, useSkillStrip, useSoundToggle } from './usePresentation';
 
@@ -70,17 +71,6 @@ export type { PlayerConfig } from './gameTypes';
 
 // 盤面を揺らすスキル演出
 const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami', 'slash', 'backslash', 'overload', 'glacierBurst', 'inferno', 'bulwark', 'glacier', 'shikigamiBlast', 'miasma'];
-
-const AVATAR_CLASSES = [
-    styles.avatarHeart,
-    styles.avatarCircle,
-    styles.avatarSeat2,
-    styles.avatarSeat3,
-    styles.avatarSeat4,
-    styles.avatarSeat5,
-    styles.avatarSeat6,
-    styles.avatarSeat7,
-];
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
@@ -658,70 +648,23 @@ export const Game = (props: GameProps) => {
     };
 
     // 盤面の両サイドに表示するプレイヤー情報パネル
-    const playerPanel = (seat: number) => {
-        const player = symbols[seat];
-        const character = characters[seat];
-        const isAI = props.players[seat].isAI;
-        const isCurrent = turnSeat === seat && !winner;
-        const effects = continuousEffects(seat);
-        const exclusiveCosts = exclusiveSkillCosts(seat);
-        return (
-            <div
-                key={seat}
-                className={`${styles.panel}${isCurrent ? ` ${styles.panelCurrent}` : ''}`}
-                style={{ ['--seat' as string]: `var(--color-seat-${seat})` }}
-            >
-                <div className={`${styles.avatar} ${AVATAR_CLASSES[seat]}`}>{player}</div>
-                <div className={styles.name}>{CHARACTER_NAMES[character]}</div>
-                <div className={styles.tags}>
-                    <span className={styles.tag}>{isAI ? 'AI' : '人間'}</span>
-                    {isCurrent && <span className={styles.turnBadge}>手番</span>}
-                </div>
-                {baseGearsBySeat[seat].length > 0 && (
-                    <div className={`${styles.gears} ${styles.more}`}>
-                        {baseGearsBySeat[seat].map((id) => {
-                            // 土壇場の防壁は1試合に1回きり。発動済みの席は非活性(灰色・取り消し線)で表示する
-                            const spent = gearOff[seat] || (id === 'lastStand' && lastStandUsed.current[seat]); // 裸の王様で無効な間は全部灰色
-                            return (
-                                <span
-                                    key={id}
-                                    className={`${styles.gear}${spent ? ` ${styles.gearSpent}` : ''}`}
-                                    aria-disabled={spent || undefined}
-                                    title={`${gearDefOf(id).name}: ${gearDefOf(id).desc}${spent ? '（発動済み）' : ''}`}
-                                >
-                                    {gearDefOf(id).icon} {gearDefOf(id).name}
-                                    {spent && <span className={styles.gearSpentLabel}>発動済み</span>}
-                                </span>
-                            );
-                        })}
-                    </div>
-                )}
-                <div className={styles.stats}>
-                    <span className={styles.chip}>🏆 {wins[seat]}</span>
-                    <span className={`${styles.chip} ${styles.chipMagic}`}>⚡ {magic[seat]}</span>
-                </div>
-                {exclusiveCosts.length > 0 && (
-                    <div className={`${styles.skillCosts} ${styles.more}`}>
-                        {exclusiveCosts.map((s) => (
-                            <div key={s.name} className={styles.skillCost}>
-                                <span>{s.name}</span>
-                                <b>⚡ {s.cost}</b>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {effects.length > 0 && (
-                    <div className={`${styles.effects} ${styles.more}`}>
-                        {effects.map((label) => (
-                            <span key={label} className={styles.effectBadge}>
-                                {label}
-                            </span>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
+    const playerPanel = (seat: number) => (
+        <PlayerPanel
+            key={seat}
+            seat={seat}
+            player={symbols[seat]}
+            character={characters[seat]}
+            isAI={props.players[seat].isAI}
+            isCurrent={turnSeat === seat && !winner}
+            gears={baseGearsBySeat[seat]}
+            gearsOff={gearOff[seat]}
+            lastStandUsed={lastStandUsed.current[seat]}
+            wins={wins[seat]}
+            magic={magic[seat]}
+            exclusiveCosts={exclusiveSkillCosts(seat)}
+            effects={continuousEffects(seat)}
+        />
+    );
     const { onClickRestart, onClickBackToSetup, onClickCopyLog, copied, onClickDownloadLog } = useGameControls({ geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables }, late);
 
     const notLocked = (idx: number) => !isGuarded(currentBoard[idx], characters);
@@ -962,6 +905,162 @@ export const Game = (props: GameProps) => {
         { idx: 86, onClick: onClickLeafCloak, buttonText: `落葉の衣-${calculateCost(seatCosts.onClickLeafCloak, false, false, currentTurnPlayer, 'onClickLeafCloak')}`, paragraph: `ランダムな自陣のコマ1つ（🔑ロック中も含む）に🍂を1つ付与します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafCloak) || leafCloakCandidates().length === 0 },
     ];
 
+    // スキルカードの定義。キャラ固有・基本のカード（固定の並び）に、手札のシャッフル対象（shuffleSkillDefs）が続く
+    const fixedSkillCards: Omit<SkillCardDef, 'key'>[] = [
+        {
+            onClick: onClickCharge,
+            buttonText: `チャージ+${charge}`,
+            paragraph: `ターンを終了し、マジックを+${charge}します`,
+        },
+        {
+            onClick: onClickShuffle,
+            buttonText: `シャッフル-${shuffleCost}`,
+            paragraph: '固定でないスキルをシャッフルします',
+            disabled: magic[turnSeat] < shuffleCost,
+        },
+        {
+            onClick: onClickUseLock,
+            hidden: currentCharacter === 'cryomancer',
+            buttonText: `ロック-${calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock')}`,
+            paragraph: `選択したマスを${gearLockStack(turnGears)}ターン以上ロックします`,
+            disabled: checkSkillDisable(seatCosts.onClickUseLock),
+        },
+        {
+            onClick: onClickCryoFreeze,
+            buttonText: `氷結-${calculateCost(seatCosts.onClickCryoFreeze, false, false, currentTurnPlayer, 'onClickCryoFreeze')}`,
+            paragraph: 'マスを1つ選び、❄氷結を付与します（空きマスも可）\n氷結中の空きマスには誰も着手できません。氷結したコマはターン進行でライフが減らず、スキルのダメージを❄1つで肩代わりしますが、自分も重ねて強化できません',
+            hidden: currentCharacter !== 'cryomancer',
+            disabled: checkSkillDisable(seatCosts.onClickCryoFreeze),
+        },
+        {
+            onClick: onClickTotalAssault,
+            buttonText: `全軍突撃-${totalAssaultCost}`,
+            paragraph: '3ターンの間、ターン終了時にランダムにトークンを設置します コストは使用したトークンの回数×2軽減されます(使用後はカウントがリセットされます)',
+            hidden: currentCharacter !== 'tactician',
+            exclusive: true,
+            disabled: magic[turnSeat] < totalAssaultCost,
+        },
+        {
+            onClick: onClickStomp,
+            buttonText: `ストンプ-${gearCost(seatCosts.onClickStomp, turnSeat, false, 'onClickStomp')}`,
+            paragraph: 'クリックしたセルと周囲1マスを破壊します',
+            hidden: currentCharacter !== 'giant',
+            exclusive: true,
+            disabled: checkSkillDisable(seatCosts.onClickStomp),
+        },
+        {
+            onClick: onClickJudgeDay,
+            buttonText: `審判の日-${judgeDayCost}`,
+            paragraph: 'セルをクリックし、審判を下します コストは使用したスキルの回数軽減されます(使用後はカウントがリセットされます)',
+            hidden: currentCharacter !== 'magician',
+            exclusive: true,
+            disabled: magic[turnSeat] < judgeDayCost,
+        },
+        {
+            onClick: onClickToggleYingYang,
+            buttonText: `陰陽転化-${gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang')}`,
+            paragraph: `陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`,
+            hidden: currentCharacter !== 'yinYangMaster',
+            exclusive: true,
+            disabled: checkSkillDisable(seatCosts.onClickToggleYingYang),
+        },
+        {
+            onClick: onClickNecromancy,
+            buttonText: `蘇生-${gearCost(currentNecroCost, turnSeat, false, 'onClickNecromancy')}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`,
+            paragraph: `発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`,
+            hidden: currentCharacter !== 'necromancer',
+            exclusive: true,
+            disabled: checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind()),
+        },
+        {
+            onClick: onClickMiasma,
+            buttonText: `ミアズマ-${miasmaCost()}`,
+            paragraph: '自陣の毒が乗っているマスの周囲1マスの敵コマに毒を付与します（毒マスが重なると積み上がります） 自陣の毒はすべて消えます コストは自陣の毒の数だけ軽減されます',
+            hidden: currentCharacter !== 'poisoner',
+            exclusive: true,
+            disabled: magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0,
+        },
+        {
+            onClick: onClickChargeSpread,
+            buttonText: `帯電拡散-${chargeSpreadCost()}`,
+            paragraph: 'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します（雷霆の巫以外のコマは乗った時点で2ダメージ） コストは盤面の⚡の数だけ軽減されます',
+            hidden: currentCharacter !== 'electrician',
+            exclusive: true,
+            disabled: magic[turnSeat] < chargeSpreadCost(),
+        },
+        {
+            onClick: onClickGlacier,
+            buttonText: `絶対零度-${glacierCost()}`,
+            paragraph: `全てのマス（空きマス含む。🔑ロック中を除く）に❄を1つ足します\n次の自分の手番開始時に、他のプレイヤーの氷結マスへ❄1つにつき3ダメージを与えて氷結を解除し、ライフが0になったマスを破壊します\nコストは盤面の氷結マスの数だけ軽減されます（下限1）${glacierPending[turnSeat] ? '\n発動待ちです' : ''}`,
+            hidden: currentCharacter !== 'cryomancer',
+            exclusive: true,
+            disabled: magic[turnSeat] < glacierCost() || glacierPending[turnSeat],
+        },
+        {
+            onClick: onClickInferno,
+            buttonText: `業火-${infernoCost()}`,
+            paragraph: '敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます\n1手番に異なるスキルを3種類以上使うと、次の業火がコスト0になります（手番を跨いで持ち越し。同じスキルの連打は1種類と数えます。撃つとリセット）',
+            hidden: currentCharacter !== 'pyromancer',
+            exclusive: true,
+            disabled: magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0,
+        },
+        {
+            onClick: onClickMogaribue,
+            buttonText: `虎落笛-${mogaribueCost()}`,
+            paragraph: `自陣の🍂の枚数(${mogaribueDamage(currentBoard, currentTurnPlayer)})ぶん、敵のコマ全てにダメージを与えます(🔑ロック中・⚡無敵を除く。氷結中は❄が1つ減るだけ、🔥中は1.5倍)\n同時に自陣のコマ全てのライフが+${MOGARIBUE_LIFE}されます`,
+            hidden: currentCharacter !== 'witch',
+            exclusive: true,
+            disabled: magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer),
+        },
+        {
+            onClick: onClickSeal,
+            buttonText: `封鎖の断-${sealCost()}`,
+            paragraph: `自陣のコマ全てを${SEAL_OWN_STACK}ターン、空きマス全てを${SEAL_EMPTY_STACK}ターンロックします（鍵師は空きマスのロックを無視して置けます）\n敵のコマのロックを全て解除し、解除した数（最低1）だけ敵のコマ全てにダメージを与えます（⚡無敵を除く。氷結中は❄が減るだけ）\n敵のロックの数だけコストが下がります（下限${SEAL_MIN_COST}）。使うとターン終了`,
+            hidden: currentCharacter !== 'keysmith',
+            exclusive: true,
+            disabled: magic[turnSeat] < sealCost(),
+        },
+        {
+            onClick: onClickIgnite,
+            buttonText: `火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`,
+            paragraph: 'マスを選択し、🔥火炎を1つ付与します（重複可）。空きマスにも置けます\n空きマスの🔥は、そこに置かれたコマ（誰のコマでも）に引き継がれます\n付与したマスと縦横隣の氷結は即座に解けます',
+            hidden: currentCharacter !== 'pyromancer',
+            exclusive: true,
+            disabled: checkSkillDisable(seatCosts.onClickIgnite),
+        },
+        {
+            onClick: onClickShikigamiPlace,
+            buttonText: `式神設置-${gearCost(seatCosts.onClickShikigamiPlace, turnSeat, false, 'onClickShikigamiPlace')}`,
+            paragraph: '任意の空きマスに式神（ライフ2の紙の分身）を置きます 式神は列の並びに数えません\n自分で補強すると🌱付きの自陣のコマになり、相手に乗っ取られると空きマスになります',
+            hidden: currentCharacter !== 'yinYangMaster' || currentYinYangMode === 'yang',
+            exclusive: true,
+            disabled: checkSkillDisable(seatCosts.onClickShikigamiPlace) || findEmptyIndexes(currentBoard).length === 0 || placeBlocked(lifeBan[turnSeat], 'onClickShikigamiPlace', calculateTokenBind()),
+        },
+        {
+            onClick: onClickShikigamiBlast,
+            buttonText: `式神爆破-${gearCost(seatCosts.onClickShikigamiBlast, turnSeat, false, 'onClickShikigamiBlast')}`,
+            paragraph: `自分の式神を1つ選んで爆破します 式神は消え、周囲8マスの敵のコマに${SHIKIGAMI_BLAST_DAMAGE}ダメージ（0になったコマは破壊）\n周囲の空きマスは自分の式神になります`,
+            hidden: currentCharacter !== 'yinYangMaster' || currentYinYangMode !== 'yang',
+            exclusive: true,
+            disabled: checkSkillDisable(seatCosts.onClickShikigamiBlast) || ownShikigami().length === 0,
+        },
+    ];
+    const skillCards: SkillCardDef[] = [
+        ...fixedSkillCards.map((c, i) => ({ key: `fixed-${i}`, ...c })),
+        ...shuffleSkillDefs.map((s): SkillCardDef => ({
+            key: s.idx,
+            onClick: s.onClick,
+            buttonText: s.buttonText,
+            paragraph: s.paragraph,
+            disabled: s.disabled || placeBlocked(lifeBan[turnSeat], skillOf(s.idx)?.costKey, calculateTokenBind()),
+            hidden: !skills.includes(s.idx) || (s.idx === 30 && currentCharacter === 'cryomancer'),
+            locked: currentLockedSkills.includes(s.idx),
+            onToggleLock: () => toggleLock(s.idx),
+            onHoverStart: s.onHoverStart,
+            onHoverEnd: s.onHoverEnd,
+        })),
+    ];
+
     return (
         <div className={`${styles.game}${showDetail ? ` ${styles.detail}` : ''}`}>
             <div className={styles.main}>
@@ -970,292 +1069,72 @@ export const Game = (props: GameProps) => {
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
                     {skillAnnounce && <div className={styles.announce}>{skillAnnounce}</div>}
                     {captureChoice !== null && currentBoard[captureChoice]?.object && (
-                        <div className={styles.dialogBackdrop} onClick={() => setCaptureChoice(null)}>
-                            <div className={styles.dialog} role="dialog" aria-label="オブジェクトの乗っ取り" onClick={(e) => e.stopPropagation()}>
-                                <p>
-                                    {posName(captureChoice)}の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}（{currentBoard[captureChoice].player}）を乗っ取ります
-                                </p>
-                                <button onClick={() => onCellClick(captureChoice, false)}>自陣のコマにする</button>
-                                <button onClick={() => onCellClick(captureChoice, true)}>
-                                    自分の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}にする
-                                </button>
-                                <button onClick={() => setCaptureChoice(null)}>キャンセル</button>
-                            </div>
-                        </div>
-                    )}
-                    {useIcicle && icicleCell !== null && (
-                        <div className={styles.announce}>
-                            {posName(icicleCell)}を通る線:{' '}
-                            {([['row', '横'], ['col', '縦'], ['diag', '↘'], ['anti', '↗']] as [LineDir, string][]).map(([dir, label]) => (
-                                <button key={dir} className={styles.btn} disabled={aiTurn} onClick={() => exeIcicle(dir)}>
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    <div
-                        className={`${styles.boardArea}${boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : giantShake > 0 ? ` ${giantShake % 2 ? styles.shakeLightA : styles.shakeLightB}` : ''}`}
-                        style={{ ['--sq' as string]: boardSqCss(geo.size) }}
-                    >
-                        <Board
-                            size={geo.size}
-                            squares={currentBoard}
-                            onPlay={(i) => {
-                                if (aiTurn) return;
-                                onCellClick(i);
-                            }}
-                            destroyCells={highlightedCells}
-                            previewCells={previewCells}
-                            shieldedCells={shieldedCells(currentBoard, characters)}
-                            winCells={winCells}
-                            turnColor={winner ? undefined : `var(--color-seat-${turnSeat})`}
-                            onCellHover={aiTurn ? undefined : onCellHover}
-                            onCellLeave={onCellLeave}
+                        <CaptureDialog
+                            cellName={posName(captureChoice)}
+                            objectName={OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}
+                            owner={currentBoard[captureChoice].player ?? ''}
+                            onToPiece={() => onCellClick(captureChoice, false)}
+                            onToObject={() => onCellClick(captureChoice, true)}
+                            onCancel={() => setCaptureChoice(null)}
                         />
-                        <BoardEffects effect={boardEffect} burst={boardBurst} size={geo.size} />
-                        {winner && <VictoryEffect key={winner} winner={winner} seat={seatOf(winner)} />}
-                        <GearToasts toasts={gearToasts} />
-                        {hailMarySpin && (
-                            <div className={styles.hmOverlay}>
-                                <div className={`${styles.hmBand} ${styles[`hm_${hailMarySpin.phase}`]}`}>{hailMarySpin.label}</div>
-                            </div>
-                        )}
-                    </div>
-                    <div className={styles.controls}>
-                        <button className={`${styles.btn}${winner ? ` ${styles.btnPrimary}` : ''}`} onClick={onClickRestart}>
-                            リスタート
-                        </button>
-                        <button
-                            className={styles.btn}
-                            onClick={onClickToggleSound}
-                            aria-pressed={soundOn}
-                            title={soundOn ? '効果音をオフにする' : '効果音をオンにする'}
-                        >
-                            {soundOn ? '🔊 音あり' : '🔇 音なし'}
-                        </button>
-                        <button className={`${styles.btn} ${styles.detailBtn}`} aria-pressed={showDetail} onClick={() => setShowDetail((v) => !v)}>
-                            {showDetail ? '詳細を閉じる ▴' : '詳細 ▾'}
-                        </button>
-                        {props.onBackToSetup && (
-                            <button className={styles.btn} onClick={onClickBackToSetup}>
-                                キャラ選択に戻る
-                            </button>
-                        )}
-                        {isAllAI && (
-                            <>
-                                <label className={styles.check}>
-                                    <input type='checkbox' checked={autoPlay} onChange={(e) => setAutoPlay(e.target.checked)} />
-                                    自動進行
-                                </label>
-                                <button
-                                    className={styles.btn}
-                                    onClick={() => setStepRequest((c) => c + 1)}
-                                    disabled={autoPlay || !!winner || pendingAIMove !== null}
-                                >
-                                    次の手番
-                                </button>
-                            </>
-                        )}
-                    </div>
+                    )}
+                    {useIcicle && icicleCell !== null && <IcicleChoices cellName={posName(icicleCell)} disabled={aiTurn} onPick={exeIcicle} />}
+                    <BoardStage
+                        size={geo.size}
+                        squares={currentBoard}
+                        shakeClass={boardEffect && SHAKE_EFFECTS.includes(boardEffect.type) ? ` ${styles.shake}` : giantShake > 0 ? ` ${giantShake % 2 ? styles.shakeLightA : styles.shakeLightB}` : ''}
+                        sqCss={boardSqCss(geo.size)}
+                        onPlay={(i) => {
+                            if (aiTurn) return;
+                            onCellClick(i);
+                        }}
+                        destroyCells={highlightedCells}
+                        previewCells={previewCells}
+                        shieldedCells={shieldedCells(currentBoard, characters)}
+                        winCells={winCells}
+                        turnColor={winner ? undefined : `var(--color-seat-${turnSeat})`}
+                        onCellHover={aiTurn ? undefined : onCellHover}
+                        onCellLeave={onCellLeave}
+                        effect={boardEffect}
+                        burst={boardBurst}
+                        winner={winner}
+                        winnerSeat={winner ? seatOf(winner) : 0}
+                        gearToasts={gearToasts}
+                        hailMarySpin={hailMarySpin}
+                    />
+                    <ControlBar
+                        finished={!!winner}
+                        onRestart={onClickRestart}
+                        soundOn={soundOn}
+                        onToggleSound={onClickToggleSound}
+                        showDetail={showDetail}
+                        onToggleDetail={() => setShowDetail((v) => !v)}
+                        onBackToSetup={props.onBackToSetup ? onClickBackToSetup : undefined}
+                        isAllAI={isAllAI}
+                        autoPlay={autoPlay}
+                        onChangeAutoPlay={setAutoPlay}
+                        onStep={() => setStepRequest((c) => c + 1)}
+                        stepDisabled={autoPlay || !!winner || pendingAIMove !== null}
+                    />
                 </div>
                 {seatCount === 2 && playerPanel(1)}
-                <div className={styles.logPreview} aria-hidden='true'>
-                    {gameLog.length === 0 ? 'まだ操作はありません' : gameLog[gameLog.length - 1]}
-                </div>
-                <div className={styles.log}>
-                    <div className={styles.logHead}>
-                        <span className={styles.logTitle}>操作ログ</span>
-                        <button className={styles.logBtn} onClick={onClickCopyLog} disabled={gameLog.length === 0}>
-                            {copied ? 'コピー済' : 'コピー'}
-                        </button>
-                        <button className={styles.logBtn} onClick={onClickDownloadLog} disabled={gameLog.length === 0}>
-                            DL
-                        </button>
-                    </div>
-                    <div className={styles.logBody}>
-                        {gameLog.length === 0 ? (
-                            <div className={styles.logEmpty}>まだ操作はありません</div>
-                        ) : (
-                            [...gameLog].reverse().map((entry, idx) => (
-                                <div key={gameLog.length - idx} className={styles.logEntry}>
-                                    {entry}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                <OperationLog log={gameLog} copied={copied} onCopy={onClickCopyLog} onDownload={onClickDownloadLog} />
             </div>
-            <div className={`${styles.skills}${hailMarySpin || silenced[turnSeat] ? ` ${styles.skillsBusy}` : ''}`}>
-                <div className={styles.skillsHead}>
-                    <div className={styles.skillsTitle}>スキル{silenced[turnSeat] && <span className={styles.silenceNote}> サイレンス中: この手番はスキルを使えません</span>}</div>
-                    <button type='button' className={styles.expandAll} aria-pressed={expandAllDesc} onClick={() => setExpandAllDesc((v) => !v)}>
-                        {expandAllDesc ? '説明をすべて閉じる' : '説明をすべて開く'}
-                    </button>
-                </div>
-                <div className={styles.skillStrip}>
-                    {stripEdge.left && (
-                        <button type='button' className={`${styles.stripArrow} ${styles.stripLeft}`} aria-label='左のスキルを見る' onClick={() => scrollStrip(-1)}>
-                            ‹
-                        </button>
-                    )}
-                    <div className={styles.skillGrid} ref={skillGridRef} onScroll={updateStripEdge}>
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickShuffle}
-                        buttonText={`シャッフル-${shuffleCost}`}
-                        paragraph='固定でないスキルをシャッフルします'
-                        disabled={magic[turnSeat] < shuffleCost}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickUseLock}
-                        hidden={currentCharacter === 'cryomancer'}
-                        buttonText={`ロック-${calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock')}`}
-                        paragraph={`選択したマスを${gearLockStack(turnGears)}ターン以上ロックします`}
-                        disabled={checkSkillDisable(seatCosts.onClickUseLock)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickCryoFreeze}
-                        buttonText={`氷結-${calculateCost(seatCosts.onClickCryoFreeze, false, false, currentTurnPlayer, 'onClickCryoFreeze')}`}
-                        paragraph={'マスを1つ選び、❄氷結を付与します（空きマスも可）\n氷結中の空きマスには誰も着手できません。氷結したコマはターン進行でライフが減らず、スキルのダメージを❄1つで肩代わりしますが、自分も重ねて強化できません'}
-                        hidden={currentCharacter !== 'cryomancer'}
-                        disabled={checkSkillDisable(seatCosts.onClickCryoFreeze)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickTotalAssault}
-                        buttonText={`全軍突撃-${totalAssaultCost}`}
-                        paragraph={
-                            '3ターンの間、ターン終了時にランダムにトークンを設置します コストは使用したトークンの回数×2軽減されます(使用後はカウントがリセットされます)'
-                        }
-                        hidden={currentCharacter !== 'tactician'}
-                        exclusive
-                        disabled={magic[turnSeat] < totalAssaultCost}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickStomp}
-                        buttonText={`ストンプ-${gearCost(seatCosts.onClickStomp, turnSeat, false, 'onClickStomp')}`}
-                        paragraph={'クリックしたセルと周囲1マスを破壊します'}
-                        hidden={currentCharacter !== 'giant'}
-                        exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickStomp)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickJudgeDay}
-                        buttonText={`審判の日-${judgeDayCost}`}
-                        paragraph='セルをクリックし、審判を下します コストは使用したスキルの回数軽減されます(使用後はカウントがリセットされます)'
-                        hidden={currentCharacter !== 'magician'}
-                        exclusive
-                        disabled={magic[turnSeat] < judgeDayCost}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickToggleYingYang}
-                        buttonText={`陰陽転化-${gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang')}`}
-                        paragraph={`陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`}
-                        hidden={currentCharacter !== 'yinYangMaster'}
-                        exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickToggleYingYang)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickNecromancy}
-                        buttonText={`蘇生-${gearCost(currentNecroCost, turnSeat, false, 'onClickNecromancy')}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`}
-                        paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
-                        hidden={currentCharacter !== 'necromancer'}
-                        exclusive
-                        disabled={checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickMiasma}
-                        buttonText={`ミアズマ-${miasmaCost()}`}
-                        paragraph={'自陣の毒が乗っているマスの周囲1マスの敵コマに毒を付与します（毒マスが重なると積み上がります） 自陣の毒はすべて消えます コストは自陣の毒の数だけ軽減されます'}
-                        hidden={currentCharacter !== 'poisoner'}
-                        exclusive
-                        disabled={magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickChargeSpread}
-                        buttonText={`帯電拡散-${chargeSpreadCost()}`}
-                        paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します（雷霆の巫以外のコマは乗った時点で2ダメージ） コストは盤面の⚡の数だけ軽減されます'}
-                        hidden={currentCharacter !== 'electrician'}
-                        exclusive
-                        disabled={magic[turnSeat] < chargeSpreadCost()}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickGlacier}
-                        buttonText={`絶対零度-${glacierCost()}`}
-                        paragraph={`全てのマス（空きマス含む。🔑ロック中を除く）に❄を1つ足します\n次の自分の手番開始時に、他のプレイヤーの氷結マスへ❄1つにつき3ダメージを与えて氷結を解除し、ライフが0になったマスを破壊します\nコストは盤面の氷結マスの数だけ軽減されます（下限1）${glacierPending[turnSeat] ? '\n発動待ちです' : ''}`}
-                        hidden={currentCharacter !== 'cryomancer'}
-                        exclusive
-                        disabled={magic[turnSeat] < glacierCost() || glacierPending[turnSeat]}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickInferno}
-                        buttonText={`業火-${infernoCost()}`}
-                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます\n1手番に異なるスキルを3種類以上使うと、次の業火がコスト0になります（手番を跨いで持ち越し。同じスキルの連打は1種類と数えます。撃つとリセット）'}
-                        hidden={currentCharacter !== 'pyromancer'}
-                        exclusive
-                        disabled={magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickMogaribue}
-                        buttonText={`虎落笛-${mogaribueCost()}`}
-                        paragraph={`自陣の🍂の枚数(${mogaribueDamage(currentBoard, currentTurnPlayer)})ぶん、敵のコマ全てにダメージを与えます(🔑ロック中・⚡無敵を除く。氷結中は❄が1つ減るだけ、🔥中は1.5倍)\n同時に自陣のコマ全てのライフが+${MOGARIBUE_LIFE}されます`}
-                        hidden={currentCharacter !== 'witch'}
-                        exclusive
-                        disabled={magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickSeal}
-                        buttonText={`封鎖の断-${sealCost()}`}
-                        paragraph={`自陣のコマ全てを${SEAL_OWN_STACK}ターン、空きマス全てを${SEAL_EMPTY_STACK}ターンロックします（鍵師は空きマスのロックを無視して置けます）\n敵のコマのロックを全て解除し、解除した数（最低1）だけ敵のコマ全てにダメージを与えます（⚡無敵を除く。氷結中は❄が減るだけ）\n敵のロックの数だけコストが下がります（下限${SEAL_MIN_COST}）。使うとターン終了`}
-                        hidden={currentCharacter !== 'keysmith'}
-                        exclusive
-                        disabled={magic[turnSeat] < sealCost()}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickIgnite}
-                        buttonText={`火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`}
-                        paragraph={'マスを選択し、🔥火炎を1つ付与します（重複可）。空きマスにも置けます\n空きマスの🔥は、そこに置かれたコマ（誰のコマでも）に引き継がれます\n付与したマスと縦横隣の氷結は即座に解けます'}
-                        hidden={currentCharacter !== 'pyromancer'}
-                        exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickIgnite)}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickShikigamiPlace}
-                        buttonText={`式神設置-${gearCost(seatCosts.onClickShikigamiPlace, turnSeat, false, 'onClickShikigamiPlace')}`}
-                        paragraph={'任意の空きマスに式神（ライフ2の紙の分身）を置きます 式神は列の並びに数えません\n自分で補強すると🌱付きの自陣のコマになり、相手に乗っ取られると空きマスになります'}
-                        hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode === 'yang'}
-                        exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickShikigamiPlace) || findEmptyIndexes(currentBoard).length === 0 || placeBlocked(lifeBan[turnSeat], 'onClickShikigamiPlace', calculateTokenBind())}
-                    />
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                        onClick={onClickShikigamiBlast}
-                        buttonText={`式神爆破-${gearCost(seatCosts.onClickShikigamiBlast, turnSeat, false, 'onClickShikigamiBlast')}`}
-                        paragraph={`自分の式神を1つ選んで爆破します 式神は消え、周囲8マスの敵のコマに${SHIKIGAMI_BLAST_DAMAGE}ダメージ（0になったコマは破壊）\n周囲の空きマスは自分の式神になります`}
-                        hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode !== 'yang'}
-                        exclusive
-                        disabled={checkSkillDisable(seatCosts.onClickShikigamiBlast) || ownShikigami().length === 0}
-                    />
-                    {shuffleSkillDefs.map((s) => (
-                        <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
-                            key={s.idx}
-                            onClick={s.onClick}
-                            buttonText={s.buttonText}
-                            paragraph={s.paragraph}
-                            disabled={s.disabled || placeBlocked(lifeBan[turnSeat], skillOf(s.idx)?.costKey, calculateTokenBind())}
-                            hidden={!skills.includes(s.idx) || (s.idx === 30 && currentCharacter === 'cryomancer')}
-                            locked={currentLockedSkills.includes(s.idx)}
-                            onToggleLock={() => toggleLock(s.idx)}
-                            onHoverStart={s.onHoverStart}
-                            onHoverEnd={s.onHoverEnd}
-                        />
-                    ))}
-                    </div>
-                    {stripEdge.right && (
-                        <button type='button' className={`${styles.stripArrow} ${styles.stripRight}`} aria-label='右のスキルを見る' onClick={() => scrollStrip(1)}>
-                            ›
-                        </button>
-                    )}
-                </div>
-            </div>
+            <SkillPanel
+                cards={skillCards}
+                restrict={restrictSkill}
+                inputBlocked={aiTurn}
+                magic={magic[turnSeat]}
+                tokenUsed={useToken}
+                expandAll={expandAllDesc}
+                onToggleExpandAll={() => setExpandAllDesc((v) => !v)}
+                silenced={silenced[turnSeat]}
+                busy={!!hailMarySpin}
+                stripEdge={stripEdge}
+                onScrollStrip={scrollStrip}
+                gridRef={skillGridRef}
+                onGridScroll={updateStripEdge}
+            />
         </div>
     );
 };
