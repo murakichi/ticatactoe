@@ -13,7 +13,7 @@ export const LIFE_MEANS = {
     tactician: 5,
     giant: 10,
     yinYangMaster_yang: 7,
-    yinYangMaster_ying: 4,
+    yinYangMaster_ying: Number(process.env.YL ?? 4),
     electrician: 6,
     cryomancer: 4, // 魔力+1(Game.tsx)とセット。鍛冶師と互角（対鍛冶師 53%）にするため、魔法使い並みに紙
     pyromancer: 6,

@@ -1,5 +1,6 @@
 // 自動生成: src/util.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findEmptyIndexes = exports.range = exports.normRand = exports.randomAnyPick = exports.randomPick = exports.calculateWinner = exports.lifeMeanOf = exports.calculateLife = exports.lineSymbols = exports.isObject = exports.isShikigami = exports.LIFE_STD = exports.LIFE_MEANS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
@@ -14,7 +15,7 @@ exports.LIFE_MEANS = {
     tactician: 5,
     giant: 10,
     yinYangMaster_yang: 7,
-    yinYangMaster_ying: 4,
+    yinYangMaster_ying: Number((_a = process.env.YL) !== null && _a !== void 0 ? _a : 4),
     electrician: 6,
     cryomancer: 4,
     pyromancer: 6,
