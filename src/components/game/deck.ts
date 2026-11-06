@@ -148,6 +148,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマに乗っているロックのスタックを全て+2します' },
     { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
+    { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します（自分のロックでも他人のロックでも選べます）' },
 ];
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */

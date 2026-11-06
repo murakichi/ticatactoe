@@ -9,7 +9,7 @@ import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
-import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -521,6 +521,7 @@ export const Game = (props: GameProps) => {
             case 'onClickAutumn': onClickAutumn(); break;
             case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickKimon': onClickKimon(); break;
+            case 'onClickLockConvert': onClickLockConvert(); break;
             case 'onClickFireWheel': onClickFireWheel(); break;
             case 'onClickSpark': onClickSpark(); break;
             case 'onClickShuffle': onClickShuffle(); break;
@@ -822,6 +823,7 @@ export const Game = (props: GameProps) => {
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseKimon(false);
+        setUseLockConvert(false);
         setUseStash(false);
         setUseBoltSilence(0);
         setUseThunderFire(false);
@@ -1134,6 +1136,10 @@ export const Game = (props: GameProps) => {
 
         if (useKimon) {
             exeKimon(i);
+            return;
+        }
+        if (useLockConvert) {
+            exeLockConvert(i);
             return;
         }
 
@@ -3215,6 +3221,8 @@ export const Game = (props: GameProps) => {
 
     // 鬼門封じ: 敵のコマを1つ選んで破壊する（氷結中は❄-1だけ）。破壊して空きマスになったら3ターンロックする。🔑ロック・⚡無敵のコマは選べない
     const [useKimon, setUseKimon] = useState<boolean>(false);
+    // 錠の転換（汎用 idx 134）: ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す。自分のロックでも敵のロックでもよい
+    const [useLockConvert, setUseLockConvert] = useState<boolean>(false);
     // 落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ付ける（🔑ロック・⚡無敵は除く）。クリック不要・手番は続く
     const leafDropCandidates = (): number[] => leafDropTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
     const onClickLeafDrop = () => {
@@ -3259,6 +3267,23 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
     };
     const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    const onClickLockConvert = () => {
+        if (lockConvertCells(currentBoard).length === 0) return;
+        addLog('「錠の転換」を使用（ロックのかかっているマスを選択）');
+        setUseLockConvert(true);
+        spendMagic(calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert'), true, true, 'onClickLockConvert');
+    };
+    const exeLockConvert = (i: number) => {
+        if (!lockConvertCells(currentBoard).includes(i)) return; // ロックの無いマスは選び直せる
+        const board = currentBoard.slice();
+        const gained = lockConvert(board, i);
+        addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
+        flashCells([i]);
+        playEffect('lock', i, [i], '錠の転換');
+        setUseLockConvert(false);
+        setCurrentBoard(board);
+        setLife(life + gained);
+    };
     const onClickKimon = () => {
         addLog('「鬼門封じ」を使用（敵のコマを選択）');
         setUseKimon(true);
@@ -3839,6 +3864,7 @@ export const Game = (props: GameProps) => {
         else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useShatter) setPreviewCells(currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []);
         else if (useKimon) setPreviewCells(kimonCandidates().includes(i) ? [i] : []);
+        else if (useLockConvert) setPreviewCells(lockConvertCells(currentBoard).includes(i) ? [i] : []);
         else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
         else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useShikigamiPlace) setPreviewCells(shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
@@ -3858,7 +3884,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useLockConvert || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -3898,6 +3924,8 @@ export const Game = (props: GameProps) => {
         ? '殉火'
         : useKimon
         ? '鬼門封じ'
+        : useLockConvert
+        ? '錠の転換'
         : useSwidden
         ? '焼畑'
         : objectPlacing
@@ -4049,6 +4077,7 @@ export const Game = (props: GameProps) => {
         { idx: 131, onClick: onClickLockExtend, buttonText: `ロックの増築-${calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend')}`, paragraph: `自陣のコマに乗っているロックのスタックを全て+${LOCK_EXTEND_STACK}します\n（ロックの乗っていないコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickLockExtend, false, false, 'onClickLockExtend') || lockExtendCells(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 132, onClick: onClickLockBlessing, buttonText: `施錠の加護-${calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing')}`, paragraph: `使った手番を含む自分の${BLESSING_TURNS}手番の間、設置したコマにロックが${BLESSING_STACK}スタック付きます\n（ロック中のコマは奪われません）`, disabled: checkSkillDisable(seatCosts.onClickLockBlessing, false, false, 'onClickLockBlessing') },
         { idx: 133, onClick: onClickVacantSeal, buttonText: `空き家封じ-${vacantSealCost()}`, paragraph: `空きマス全てを${VACANT_SEAL_STACK}スタックでロックします（ターンは続く）\n相手のリーチ1つにつきコスト-${VACANT_SEAL_REACH_CUT}（下限1）。鍵師は空きマスのロックを無視して置けます`, disabled: magic[turnSeat] < vacantSealCost() || vacantSealCells(currentBoard).length === 0 },
+        { idx: 134, onClick: onClickLockConvert, buttonText: `錠の転換-${calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert')}`, paragraph: `ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します\n（自分のロックでも他人のロックでも選べます。ロック中の空きマスも可）`, disabled: checkSkillDisable(seatCosts.onClickLockConvert, false, false, 'onClickLockConvert') || lockConvertCells(currentBoard).length === 0 },
         ...OBJECT_SKILL_KEYS.map((skill) => ({
             idx: OBJECT_SKILLS[skill].idx,
             onClick: () => onClickObjectSkill(skill),
