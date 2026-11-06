@@ -152,6 +152,10 @@ export const KEYSMITH_LOCK_MIN_VALUE = 40;
 /** 鍵師が自陣のコマをロックして守る条件: ライフがこの値以下（奪われる直前）で、列づくりの価値がこの値以上 */
 export const KEYSMITH_OWN_LOCK_MAX_BIND = 1; // 3や無制限に広げると対 you 58%→43〜48%（各60試合, seed2000）。ロックの撃ち過ぎで魔力を食う
 export const KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
+/** 鍵師のコンボ（二列並び→片方ロック→もう片方に置く）の条件: 自陣の2つのコマのライフがこの値以上 */
+export const KEYSMITH_COMBO_MIN_BIND = 2; // 各60試合, seed2000: 1→76.7/8.3/8.3, 2→75/8.3/6.7, 3→75/6.7/5, 4→66.7/6.7/3.3（対 you/magician/witch）。緩めても悪化せず差はノイズ。中間の2
+/** コンボを撃つときの、ロック中の空きマスの上限（空きマスのロック判断の上限2より1つ多い） */
+export const KEYSMITH_COMBO_EMPTY_LOCK_MAX = 3;
 /** 火遁で魔法使いの🌱を優先して燃やす重み（旧sim AI の igniteBud） */
 const IGNITE_BUD_WEIGHT = 6;
 const EMPTY_LOCK_DENY = 2;
@@ -295,6 +299,48 @@ class AIPlayer {
 
     private characterOf(player: Player): CharacterId | undefined {
         return player === this.playerSymbol ? this.character : this.characters[seatOf(player)];
+    }
+
+    /**
+     * 鍵師のコンボ『二列並び → 片方をロック、もう片方に置く』: 敵のコマが無い列に自陣が2つ並び、残り2マスが置ける空きマスのとき、
+     * 片方 lock をロックして、もう片方 place に置く。鍵師だけがロックしたマスに置けるので、置いた手番の次に lock へ置いて揃う。敵が止められるのは、
+     * 自陣のコマを奪う（ライフ0が必要）か、先に自分が揃えるときだけ。
+     * 2つの自陣のコマのライフが KEYSMITH_COMBO_MIN_BIND 以上（ロック中のコマはロックが残る間は奪われないので可）を求める。値は実測で決めた（厳しくするほど悪化した）。
+     * 候補が複数あれば、2つの自陣のコマのライフの合計が大きい列。lock は敵の列に入っているマスを優先（そのマスを敵にも使わせない）
+     */
+    private bestLockCombo(board: SquareInfo[], life: number): { lock: number; place: number } | null {
+        const geo = geometryForCells(board.length);
+        const moves = new Set(this.getValidMoves(board, life));
+        let best: { lock: number; place: number } | null = null;
+        let bestVal = -1;
+        for (const line of geo.winLines) {
+            if (line.some((idx) => isShikigami(board[idx]) || isObject(board[idx]))) continue;
+            const mine: number[] = [];
+            const open: number[] = [];
+            let bad = false;
+            for (const idx of line) {
+                const sq = board[idx];
+                if (sq.player === this.playerSymbol) mine.push(idx);
+                else if (sq.player) bad = true;
+                else if (!emptyBlocked(sq) && !this.shield.has(idx)) open.push(idx);
+                else bad = true;
+            }
+            if (bad || mine.length !== 2 || open.length !== 2) continue;
+            if (!open.every((idx) => moves.has(idx) && !board[idx].effects.some((e) => e.effect === '🔑'))) continue;
+            // 2つの自陣のコマが奪われない（ロック中か、ライフが減衰2回を越えて残る）
+            const safe = mine.every((idx) => board[idx].effects.some((e) => e.effect === '🔑') || board[idx].bind >= KEYSMITH_COMBO_MIN_BIND);
+            if (!safe) continue;
+            const val = mine.reduce((n, idx) => n + board[idx].bind, 0);
+            if (val <= bestVal) continue;
+            // 敵の列に入っている回数が多いほうをロックする
+            const enemyLines = (cell: number): number =>
+                geo.winLines.filter((l) => l.includes(cell) && l.some((idx) => this.isEnemy(board[idx].player))).length;
+            const [a, b] = open;
+            const lock = enemyLines(a) >= enemyLines(b) ? a : b;
+            best = { lock, place: lock === a ? b : a };
+            bestVal = val;
+        }
+        return best;
     }
 
     /**
@@ -3244,6 +3290,17 @@ class AIPlayer {
 
         // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
         // ロック中は敵も置けないので敵の列を止める効果もある（旧sim AI の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
+        // 鍵師のコンボ: 二列並びの片方をロックして、もう片方に置く（敵は塞げない）。自分にリーチがあれば着手が先、敵にリーチがあれば止めるのが先
+        if (
+            this.character === 'keysmith' &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            this.opponents.every((o) => this.countReaches(board, o) === 0) &&
+            this.myEmptyLocks(board) < KEYSMITH_COMBO_EMPTY_LOCK_MAX &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')
+        ) {
+            const combo = this.bestLockCombo(board, life);
+            if (combo !== null) return { move: combo.place, skills: ['onClickUseLock'], lockTargets: [combo.lock] };
+        }
         // 鍵師: ライフが尽きかけの、列づくりに効いている自陣のコマをロックして守る（1手番に1つ。ロック中のコマは奪われない）
         if (
             this.character === 'keysmith' &&
