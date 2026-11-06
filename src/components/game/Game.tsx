@@ -29,7 +29,7 @@ import { firstFrostTargets } from './tokenSkills';
 import { placeBlocked } from './lifeBan';
 import { SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
-import { emptyDiscount, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
+import { emptyDiscount, SHIKIGAMI_DISCOUNT_BASE } from './discount';
 import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, sacrificeTargets, budStacks, budReceivers, sowCandidates, infernoTargets, detonate, canFreeze, overwriteBlocked, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, setEffectWard, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
 import { skillCosts, SkillCosts } from './skillCosts';
 import {
@@ -62,6 +62,7 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { useSkillDispatch } from './useSkillDispatch';
 import { useCellClick } from './useCellClick';
 import { useGameControls } from './useGameControls';
 import { GameProps, CHARACTER_NAMES } from './gameTypes';
@@ -265,157 +266,6 @@ export const Game = (props: GameProps) => {
 
     // 魔法使いAIの引き直し（軽減札→シャッフル→再計画）の手番内の状態。手番開始時に初期化する
     const aiReroll = useRef({ left: MAX_REROLLS, started: false });
-    const executeSkillForAI = (skill: string) => {
-        if (placeBlocked(lifeBan[turnSeat], skill, calculateTokenBind())) return; // ライフ3以下のコマを置けない縛り
-        if (skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skill, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(skill), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn })) return; // 相手の一言居士・お一人様限りの札の縛り
-        // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
-        if (skill.startsWith('onClickHailMary:')) {
-            exeHailMary(skill.slice('onClickHailMary:'.length));
-            return;
-        }
-        // スキルキー → 実行関数。AI の計画（AIPlayer）が返すキーと 1:1 で対応する
-        const actions: Record<string, () => void> = {
-            onClickToken: () => onClickToken(),
-            onClickDoubleToken: () => onClickDoubleToken(),
-            onClickBudsToken: () => onClickBudsToken(),
-            onClickBothToken: () => onClickBothToken(),
-            onClickBuds: () => onClickBuds(),
-            onClickDoubleBuds: () => onClickDoubleBuds(),
-            onClickSlash: () => onClickSlash(),
-            onClickBackSlash: () => onClickBackSlash(),
-            onClickOpium: () => onClickOpium(),
-            onClickCharge: () => onClickCharge(),
-            onClickTsunami: () => onClickTsunami(),
-            onClickAddLife: () => onClickAddLife(),
-            onClickBibine: () => onClickBibine(),
-            onClickWalpurgisNight: () => onClickWalpurgisNight(),
-            onClickTotalAssault: () => onClickTotalAssault(),
-            onClickNecromancy: () => onClickNecromancy(),
-            onClickUseLock: () => (currentCharacter === 'cryomancer' ? onClickCryoFreeze : onClickUseLock)(),
-            onClickUseDoubleLock: () => onClickUseDoubleLock(),
-            onClickUseTripleLock: () => onClickUseTripleLock(),
-            onClickStomp: () => onClickStomp(),
-            onClickPlunder: () => onClickPlunder(),
-            onClickShatter: () => onClickShatter(),
-            onClickJudgeDay: () => onClickJudgeDay(),
-            onClickProliferate: () => onClickProliferate(),
-            onClickSerum: () => onClickSerum(),
-            onClickIntensify: () => onClickIntensify(),
-            onClickPandemic: () => onClickPandemic(),
-            onClickInjection: () => onClickInjection(),
-            onClickMiasma: () => onClickMiasma(),
-            onClickChargeToken: () => onClickChargeToken(),
-            onClickChargeOne: () => onClickChargeOne(),
-            onClickChargeSpread: () => onClickChargeSpread(),
-            onClickSilence: () => onClickSilence(),
-            onClickStrip: () => onClickStrip(),
-            onClickChargeSeason: () => onClickChargeSeason(),
-            onClickBristle: () => onClickBristle(),
-            onClickRelease: () => onClickRelease(),
-            onClickStash: () => onClickStash(),
-            onClickBoltSilence: () => onClickBoltSilence(),
-            onClickThunderFire: () => onClickThunderFire(),
-            onClickDarkPot: () => onClickDarkPot(),
-            onClickChargeHeal: () => onClickChargeHeal(),
-            onClickSmallFry: () => onClickSmallFry(),
-            onClickPerfectGame: () => onClickPerfectGame(),
-            onClickHelper: () => onClickHelper(),
-            onClickSecondCatch: () => onClickSecondCatch(),
-            onClickFirstFrost: () => onClickFirstFrost(),
-            onClickGather: () => onClickGather(),
-            onClickBurnOff: () => onClickBurnOff(),
-            onClickFreeToken: () => onClickFreeToken(),
-            onClickLeafDrop: () => onClickLeafDrop(),
-            onClickKindling: () => onClickKindling(),
-            onClickLeafCloak: () => onClickLeafCloak(),
-            onClickDoubleChargeToken: () => onClickDoubleChargeToken(),
-            onClickChargeArea: () => onClickChargeArea(),
-            onClickChargeRandom: () => onClickChargeRandom(),
-            onClickJammer: () => onClickJammer(),
-            onClickPoisonMist: () => onClickPoisonMist(),
-            onClickGlacier: () => onClickGlacier(),
-            onClickCleanse: () => onClickCleanse(),
-            onClickHarvestEve: () => onClickHarvestEve(),
-            onClickSolstice: () => onClickSolstice(),
-            onClickSucker: () => onClickSucker(),
-            onClickToggleYingYang: () => onClickToggleYingYang(),
-            onClickShikigamiPlace: () => onClickShikigamiPlace(),
-            onClickShikigamiBlast: () => onClickShikigamiBlast(),
-            onClickShikigamiBless: () => onClickShikigamiBless(),
-            onClickShikigamiCurse: () => onClickShikigamiCurse(),
-            onClickShikigamiPurge: () => onClickShikigamiPurge(),
-            onClickShikigamiDiscount: () => onClickShikigamiDiscount(),
-            onClickShikigamiAll: () => onClickShikigamiAll(),
-            onClickShikigamiRandom: () => onClickShikigamiRandom(),
-            onClickShikigamiFlood: () => onClickShikigamiFlood(),
-            onClickNightVeil: () => onClickNightVeil(),
-            onClickGraveDiscount: () => onClickGraveDiscount(),
-            onClickPoisonWard: () => onClickPoisonWard(),
-            onClickDemolish: () => onClickObjectSkill('demolish'),
-            onClickWeather: () => onClickObjectSkill('weather'),
-            onClickLevelAll: () => onClickObjectSkill('levelAll'),
-            onClickReinforce: () => onClickObjectSkill('reinforce'),
-            onClickExpandAll: () => onClickObjectSkill('expandAll'),
-            onClickDuplicate: () => onClickObjectSkill('duplicate'),
-            onClickWorkshop: () => onClickObject('workshop'),
-            onClickBarrierStone: () => onClickObject('barrierStone'),
-            onClickAmuletShrine: () => onClickObject('amuletShrine'),
-            onClickLuckyCat: () => onClickObject('luckyCat'),
-            onClickMudField: () => onClickObject('mudField'),
-            onClickTongueKing: () => onClickObject('tongueKing'),
-            onClickEightTrigrams: () => onClickObject('eightTrigrams'),
-            onClickSoloSign: () => onClickObject('soloSign'),
-            onClickOneWord: () => onClickObject('oneWord'),
-            onClickBlindMonkey: () => onClickObject('blindMonkey'),
-            onClickLockRaid: () => onClickLockRaid(),
-            onClickLockExtend: () => onClickLockExtend(),
-            onClickLockBlessing: () => onClickLockBlessing(),
-            onClickVacantSeal: () => onClickVacantSeal(),
-            onClickMarket: () => onClickObject('market'),
-            onClickSanctuary: () => onClickObject('sanctuary'),
-            onClickPoisonSwamp: () => onClickObject('poisonSwamp'),
-            onClickBigTree: () => onClickObject('bigTree'),
-            onClickDeadTree: () => onClickObject('deadTree'),
-            onClickSpring: () => onClickObject('spring'),
-            onClickFort: () => onClickObject('fort'),
-            onClickThundercloud: () => onClickObject('thundercloud'),
-            onClickGraveOffering: () => onClickGraveOffering(),
-            onClickWindborne: () => onClickWindborne(),
-            onClickFlameToken: () => onClickFlameToken(),
-            onClickDoubleFlameToken: () => onClickDoubleFlameToken(),
-            onClickSwidden: () => onClickSwidden(),
-            onClickSacrifice: () => onClickSacrifice(),
-            onClickBoost: () => onClickBoost(),
-            onClickRandomFreeze: () => onClickRandomFreeze(),
-            onClickPoisonToken: () => onClickPoisonToken(),
-            onClickFrostToken: () => onClickFrostToken(),
-            onClickDoubleFrostToken: () => onClickDoubleFrostToken(),
-            onClickFrostfall: () => onClickFrostfall(),
-            onClickIgnite: () => onClickIgnite(),
-            onClickTinder: () => onClickTinder(),
-            onClickInferno: () => onClickInferno(),
-            onClickMogaribue: () => onClickMogaribue(),
-            onClickSeal: () => onClickSeal(),
-            onClickRandomCast: () => onClickRandomCast(),
-            onClickBurnout: () => onClickBurnout(),
-            onClickLeafToken: () => onClickLeafToken(),
-            onClickTwinLeafToken: () => onClickTwinLeafToken(),
-            onClickDoubleLeafToken: () => onClickDoubleLeafToken(),
-            onClickLeafAll: () => onClickLeafAll(),
-            onClickBonfire: () => onClickBonfire(),
-            onClickMulch: () => onClickMulch(),
-            onClickAutumn: () => onClickAutumn(),
-            onClickLeafFrost: () => onClickLeafFrost(),
-            onClickKimon: () => onClickKimon(),
-            onClickFireWheel: () => onClickFireWheel(),
-            onClickSpark: () => onClickSpark(),
-            onClickShuffle: () => onClickShuffle(),
-            aiReplan: () => runAIMove(), // 引き直しのあと、新しい手札で計画し直す
-            // 割引系は同じ onClickDiscount にキーを渡す
-            ...Object.fromEntries((['onClickCounterMarkdown', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance'] as DiscountKey[]).map(k => [k, () => onClickDiscount(k)])),
-        };
-        actions[skill]?.();
-    };
 
     useEffect(() => {
         if (pendingAIMove !== null && pendingAIMove.length > 0 && !hailMarySpin) {
@@ -925,6 +775,7 @@ export const Game = (props: GameProps) => {
     const { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells } = useGenericSkills({ currentBoard, currentTurnPlayer, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, gearTurn, turnSeat, characters, addCorpses, otherSeats, setLifeBanAt, useToken, bumpGlacierCharge, putTokens, posName, setUseToken, calculateTokenBind, geo, keepBuds, afterTokenPlaced, harvestMagic, applyLock, playBurst, baseNecromancyCost, necroCost, toxicBloom, withOverload, deckBySeat, lifeBan, setNecroCostAt, setMagicAt, pendingFlag }, late);
     const { onClickPlunder, onClickGlacier, onClickHarvestEve, onClickSolstice, onClickSucker, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickBoost, onClickIgnite, onClickTinder, onClickRandomCast, onClickBurnout, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, onClickBonfire, onClickMulch, onClickAutumn, onClickDiscount, setUseFreeze, setUseSucker, setUseIgnite, setUseSwidden, useFreeze, useSucker, exeSucker, useSwidden, exeSwidden, useClone, exeClone, usePlunder, exePlunder, useTinder, tinderCandidates, useIgnite, setUseTinder, discountLabel, glacierCost, cloneSources, suckerSources, onClickFreeze, ownBudTotal, onClickClone, canUseDiscount, burnoutCost, leafAllCandidates } = useElementSkills({ pendingFlag, addLog, spendMagic, seatCosts, currentTurnPlayer, currentBoard, characters, gearTurn, turnSeat, costTableFor, glacierCharge, glacierPending, setGlacierChargeAt, flashCells, playEffect, setCurrentBoard, setGlacierPendingAt, budGuard, setMagicAt, setBudGuardAt, geo, posName, putTokens, playBurst, setUseToken, deckBySeat, harvestMagic, putTokensAt, reportAfter, addCorpses, life, magic, setLife }, late);
     const { onClickCryoFreeze, onClickShatter, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickCleanse, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickSacrifice, onClickRandomFreeze, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickInferno, onClickMogaribue, onClickSeal, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, setUseSacrifice, setUseKimon, setUseFrostArea, setUseIcicle, setUseFreezeSpread, setUseShatter, exeFreeze, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, exeTinder, exeIgnite, notShielded, infernoCost, mogaribueCost, sealCost, kimonCandidates, sacrificeCandidates, ownAilmentCells, onClickFrostArea, onClickIcicle, onClickFreezeSpread, onClickSpringWind, fireWheelGuard, vacantSealCost, leafDropCandidates, kindlingCandidates, leafCloakCandidates, icicleCell, exeIcicle } = useFrostLockSkills({ pendingFlag, currentBoard, characters, bumpGlacierCharge, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, currentTurnPlayer, geo, posName, putTokens, setUseToken, addCorpses, playBurst, gearTurn, turnSeat, keepBuds, setSkills, reshuffledSkills, deckBySeat, currentLockedSkills, setUseFreeze, costTableFor, setCurrentTurn, currentTurn, setUseTinder, setUseIgnite }, late);
+    const { executeSkillForAI } = useSkillDispatch({ lifeBan, turnSeat, calculateTokenBind, currentBoard, currentTurnPlayer, gearTurn, placedThisTurn, exeHailMary, onClickToken, onClickDoubleToken, onClickBudsToken, onClickBothToken, onClickBuds, onClickDoubleBuds, onClickSlash, onClickBackSlash, onClickOpium, onClickCharge, onClickTsunami, onClickAddLife, onClickBibine, onClickWalpurgisNight, onClickTotalAssault, onClickNecromancy, currentCharacter, onClickCryoFreeze, onClickUseLock, onClickUseDoubleLock, onClickUseTripleLock, onClickStomp, onClickPlunder, onClickShatter, onClickJudgeDay, onClickProliferate, onClickSerum, onClickIntensify, onClickPandemic, onClickInjection, onClickMiasma, onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickSilence, onClickStrip, onClickChargeSeason, onClickBristle, onClickRelease, onClickStash, onClickBoltSilence, onClickThunderFire, onClickDarkPot, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickPoisonMist, onClickGlacier, onClickCleanse, onClickHarvestEve, onClickSolstice, onClickSucker, onClickToggleYingYang, onClickShikigamiPlace, onClickShikigamiBlast, onClickShikigamiBless, onClickShikigamiCurse, onClickShikigamiPurge, onClickShikigamiDiscount, onClickShikigamiAll, onClickShikigamiRandom, onClickShikigamiFlood, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickObjectSkill, onClickObject, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickGraveOffering, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickSacrifice, onClickBoost, onClickRandomFreeze, onClickPoisonToken, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickIgnite, onClickTinder, onClickInferno, onClickMogaribue, onClickSeal, onClickRandomCast, onClickBurnout, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, onClickBonfire, onClickMulch, onClickAutumn, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, onClickShuffle, runAIMove, onClickDiscount }, late);
     const { onCellClick } = useCellClick({ hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn }, late);
 
     // 次の手番の席。巨人は2ターンに1回しか動かない（並びは giantTurn.ts。currentTurn だけで決まる）
