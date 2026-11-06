@@ -401,3 +401,5 @@ export const useElementSkills = (g: ElementSkillsScope, late: () => GameLate) =>
 
     return { onClickPlunder, onClickGlacier, onClickHarvestEve, onClickSolstice, onClickSucker, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickBoost, onClickIgnite, onClickTinder, onClickRandomCast, onClickBurnout, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, onClickBonfire, onClickMulch, onClickAutumn, onClickDiscount, setUseFreeze, setUseSucker, setUseIgnite, setUseSwidden, useFreeze, useSucker, exeSucker, useSwidden, exeSwidden, useClone, exeClone, usePlunder, exePlunder, useTinder, tinderCandidates, useIgnite, setUseTinder, discountLabel, glacierCost, cloneSources, suckerSources, onClickFreeze, ownBudTotal, onClickClone, canUseDiscount, burnoutCost, leafAllCandidates };
 };
+
+export type ElementSkillsResult = ReturnType<typeof useElementSkills>;

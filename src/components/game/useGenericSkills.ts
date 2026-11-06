@@ -336,3 +336,5 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
 
     return { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells };
 };
+
+export type GenericSkillsResult = ReturnType<typeof useGenericSkills>;

@@ -294,3 +294,5 @@ export const useBlastSkills = (g: BlastSkillsScope, late: () => GameLate) => {
 
     return { onClickTsunami, onClickWalpurgisNight, onClickTotalAssault, onClickStomp, onClickJudgeDay, onClickProliferate, onClickSilence, onClickStrip, onClickChargeSeason, onClickBristle, onClickRelease, onClickStash, onClickBoltSilence, onClickThunderFire, judgeDayCost, totalAssaultCost, setUseStash, setUseBoltSilence, setUseThunderFire, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useStomp, exeStomp, useJudgeDay, exeJudgeDay, useAssault, setUseAssaultAt, applyProliferate, setUseStomp, setUseJudgeDay, setUseAssaultAll, stripTargets, bristleTargets, ownChargeStacks, boltSilenceLegal };
 };
+
+export type BlastSkillsResult = ReturnType<typeof useBlastSkills>;

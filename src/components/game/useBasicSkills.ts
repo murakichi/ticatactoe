@@ -340,3 +340,5 @@ export const useBasicSkills = (g: BasicSkillsScope, late: () => GameLate) => {
 
     return { calculateTokenBind, onClickToken, onClickDoubleToken, onClickBudsToken, onClickBothToken, onClickBuds, onClickDoubleBuds, onClickSlash, onClickBackSlash, onClickOpium, onClickCharge, onClickAddLife, onClickBibine, onClickUseLock, onClickUseDoubleLock, onClickUseTripleLock, onClickShuffle, setUseLock, activeBudsCount, poisonCount, useLock, applyLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, poisonerInPlay, useBuds, setUseBuds, spreadPoisonAround, putTokens, miasmaCost, setUsePandemic, afterTokenPlaced, putTokensAt, reportAfter, charge, shuffleCost, miasmaPlan };
 };
+
+export type BasicSkillsResult = ReturnType<typeof useBasicSkills>;

@@ -295,3 +295,5 @@ export const useNecroSkills = (g: NecroSkillsScope, late: () => GameLate) => {
 
     return { exeHailMary, onClickNecromancy, onClickSerum, onClickIntensify, onClickPandemic, onClickInjection, onClickMiasma, onClickDarkPot, onClickPoisonMist, onClickPoisonToken, remainNecro, necroCost, hailMaryChoices, addCorpses, setRemainNecroAt, exePandemic, baseNecromancyCost, setNecroCostAt, setRemainNecroAll, setNecroCostAll, hailMaryPick, onClickHailMary, necromancySummonCap, necromancyReviveLife, necromancyDuration };
 };
+
+export type NecroSkillsResult = ReturnType<typeof useNecroSkills>;
