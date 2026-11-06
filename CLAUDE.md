@@ -12,6 +12,7 @@ A tactical 4-in-a-row game (title: 戦術四目並べ; repo name ticatactoe is h
 npm start    # Dev server (localhost:3000)
 npm run build
 npm test     # Jest in watch mode
+node sim/engine.test.js   # sim のルールテスト（本体は sim/engine-tests/*.js、共有の道具は sim/testkit.js。CI が実行する）
 ```
 
 ## Architecture
@@ -35,6 +36,8 @@ npm test     # Jest in watch mode
 - `Game.tsx` — Core game logic, state management, skill execution (~1000 lines)
 - `Board.tsx` / `Square.tsx` — Grid rendering, click delegation
 - `AIPlayer.ts` — Simple AI: checks win/block moves first, then uses skills, then random. Takes all other seats as `opponents`; search depth shrinks with board size (3/2/1)
+  - `AIPlayer.ts` は状態（フィールド）とコンストラクタだけ。メソッド群は `this: AIPlayer` の関数オブジェクトとして機能別ファイルに分けてあり、インターフェース統合 + `Object.assign(AIPlayer.prototype, …)` で戻す: `aiSearch.ts`（評価・minimax・着手候補）/ `aiTargets.ts`（スキルの狙いマス）/ `aiPlans.ts`（勝ち筋・コンボ計画）/ `aiSkillChoice.ts`（コスト見積もり・引き直し・スキル選択）/ `aiPlanMove.ts`（1手番の計画 `makeMove`/`planMove`）。定数・調整値・`AIResult` 型は `aiConstants.ts`（`AIPlayer.ts` が再エクスポート）。新しいメソッドは該当ファイルのオブジェクトに足す（戻り値の型は必ず明示する。省略すると型の循環で tsc が落ちる）。`planMove` の引数型は `PlanMoveArgs`
+  - `Game.tsx` の見せ方だけの状態（盤面演出・ギアのチップ・スキル帯・効果音）は `usePresentation.ts` のフック。`executeSkillForAI` はスキルキー→実行関数のテーブル、ホバープレビュー/発動待ちスキル名も優先順の表。新しいスキルは `AIPlayer` が返すキーと同じ名前でこのテーブルに足す（`aiTurn.test.ts` が対応漏れを検出する）
   - AI は自分のデッキを把握する: `AIPlayer` のコンストラクタ `deck`(`Game.tsx` が `deckBySeat[seat]` を渡す)、sim の `aiDriver.js` も `s.decks[seat]` を渡す。`inDeck(idx)`/`comboReachable()`で『引き直し・温存が報われるか』を判定し、陰陽師はコンボ札(71/73)がデッキに無ければ探索・温存しない。特売(53)が無ければコンボ計画は『特売が引ける前提』にしない。デッキ未指定は従来どおり全て引ける扱い
 
 **Magic system:** Players gain magic per turn, spend it on skills. Skill costs are defined in `src/types/skillCosts.ts`. Cost modifiers apply per character (e.g., Tactician gets -2 on token skills). Only 3 random skills available at a time (shuffleable for 1 cost).
