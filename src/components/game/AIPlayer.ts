@@ -130,6 +130,8 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
+/** 盤面評価: 雷霆の巫の『2つ+空き2つ』の減点（他は20）。ダブル帯電トークン+着手で同じ手番に完成させられるため */
+const TWO_TWO_PENALTY_ELECTRICIAN = Number(process.env.TT_PEN ?? 20);
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
 const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
@@ -792,7 +794,10 @@ class AIPlayer {
                     for (const idx of line) {
                         if (!board[idx].player) emptyInLine++;
                     }
-                    if (emptyInLine === 2) score -= 20;
+                    if (emptyInLine === 2) {
+                        const foe = Array.from(enemiesInLine)[0];
+                        score -= this.characterOf(foe) === 'electrician' ? TWO_TWO_PENALTY_ELECTRICIAN : 20; // 雷霆の巫は2個のトークン+着手で1手番に3個置ける
+                    }
                 }
             }
             // bind安定性ボーナス
