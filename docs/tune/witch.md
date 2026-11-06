@@ -11,6 +11,7 @@
 - 基準線(master 9908ab4・対強豪平均基準): `--rank --games 60 --seed 1 --write-strong` **2位 witch 57.0%**(field 66.2%) / 1位 yinYangMaster 64.7%(差7.7pt)。強豪=yinYangMaster,witch,cryomancer,tactician,pyromancer,electrician。不利対面: 対tactician 35%・対electrician 42%・対yinYangMaster 47%。以前の「1位」(field基準)は無効。ギア走査は#22で不採用。次は deck(撃たれない札の入れ替え)→ strategy(対陰陽師・軍師・電気使いのメタ)。
 - 完了判定(deck #23 採用後、master 9908ab4、`--rank --games 200 --seed 3 --target witch`): 条件1 **1位 witch 60.4%** / 2位 yinYangMaster 59.2%(差1.2pt)、条件2(`--envDeck pick --oppGears pick`) **1位 witch 60.8%** / 2位 yinYangMaster 59.7%(差1.1pt)。2条件とも1位でトップ到達(僅差)。
 - 基準線(master 61d9c50・オブジェクト導入/雷霆のコマがライフ0でも奪われない仕様の後、`--rank --games 60 --seed 1 --write-strong`): **4位 witch 49.3%** / 1位 cryomancer 60.7%(差11.4pt) / 2位 electrician 54.0% / 3位 tactician 49.7%。強豪=cryomancer,electrician,poisoner,witch,tactician,magician。対面: electrician 23%(前回50%)・tactician 35%・necromancer 28%・cryomancer 57%。**トップ陥落**（原因: 雷霆への対面が約27pt悪化。雷霆のコマがライフ0でも着手で奪われなくなったため）。
+- 基準線(master 55043be・鍵師追加/縮地削除/審判の日の新仕様の後、`--rank --games 60 --seed 1 --write-strong`): **5位 witch 44.4%** / 1位 magician 62.7%(差18.3pt) / 2位 electrician 59.7% / 3位 cryomancer 54.6%。強豪=electrician,magician,cryomancer,tactician,poisoner,giant。対面: electrician 22%・magician 27%・necromancer 28%・tactician 30%・yinYangMaster 45%。
 - 連続不採用回数: 1
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running(master 61d9c50 で陥落。旧: refining(トップ到達後の洗練中。2026-10-28 到達。洗練は未実施: 別案ギア/デッキ、F.cloak ノブの整理、焚きつけ(未使用)の見直し))
