@@ -951,7 +951,7 @@ function placeMove(s, i) {
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if ((board[i].bind > 0 || decayMod.isTakeProtected(board[i], s.chars)) && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
-    if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
+    if (board[i].effects.find((e) => e.effect === '🔑')) return false;
     // 氷結中の空きマスには誰も着手できない
     if (thermal.emptyBlocked(board[i])) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）

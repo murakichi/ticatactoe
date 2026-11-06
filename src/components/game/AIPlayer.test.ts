@@ -965,8 +965,8 @@ describe('鍛冶師AI: 空蔵で自分の列の要になる空きマスを先に
     });
     it('自分がかけた空きマスロックが上限(2)に達していればかけない', () => {
         const b = board();
-        b[2] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
-        b[3] = { player: undefined, bind: 6, effects: [{ effect: '🔑', value: 1 }] };
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6, owner: 1 }] };
+        b[3] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6, owner: 1 }] };
         expect(run(true, 6, b).lockTargets).toBeUndefined();
     });
 });

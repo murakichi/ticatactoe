@@ -200,7 +200,7 @@ export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, ch
     const sq = board[cell];
     if (isShielded(sq, characters)) return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
     if (sq.player && sq.player !== player && (sq.bind > 0 || isTakeProtected(sq, characters)) && character !== 'giant') return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
-    if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) return false; // ロック中
+    if (sq.effects.some((e) => e.effect === '🔑')) return false; // ロック中
     if (emptyBlocked(sq)) return false; // 氷結中の空きマス
     if (sq.player === player && overwriteBlocked(sq)) return false; // 氷結中の自コマには重ねられない
     return true;

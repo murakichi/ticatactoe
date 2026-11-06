@@ -309,7 +309,9 @@ test('巨人のオーラ: 周囲8マスの敵コマが壊れ、周囲8マス全�
     assert.strictEqual(s.board[mine].bind, 2);
     for (const j of around) {
         assert.ok(s.board[j].effects.some((x) => x.effect === '🔑'), `マス${j}がロックされる`);
-        if (j !== mine) assert.strictEqual(s.board[j].bind, 1);
+        // ロックはライフを変えずスタックで数える (#438)。空きマスと壊れたマスは1、自陣のコマはライフ分
+        if (j !== mine) assert.strictEqual(s.board[j].bind, 0);
+        assert.strictEqual(s.board[j].effects.find((x) => x.effect === '🔑').stack, j === mine ? 2 : 1);
     }
     // 相手の手番: ロック中のマスには置けない
     assert.strictEqual(e.placeMove(s, enemy), false);
@@ -2377,8 +2379,9 @@ test('鬼門封じ: 敵コマを破壊して3ターンロック（氷結中は�
     e.SKILLS.kimon(s);
     assert.strictEqual(e.placeMove(s, 0), true);
     assert.strictEqual(s.board[0].player, undefined);
-    assert.strictEqual(s.board[0].bind, 3);
+    assert.strictEqual(s.board[0].bind, 0);
     assert.strictEqual(s.board[0].effects.filter((x) => x.effect === '🔑').length, 1);
+    assert.strictEqual(s.board[0].effects.find((x) => x.effect === '🔑').stack, 3); // 3ターンのロック
 });
 
 test('火の車: ランダムな敵2マスに🔥、手札をシャッフル。このターン敵か自陣に🔥を付与していれば0コスト、撃つとリセット', () => {

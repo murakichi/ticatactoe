@@ -10,6 +10,7 @@ const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
+const lock_1 = require("./lock");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const blast_1 = require("./blast");
@@ -244,7 +245,7 @@ class AIPlayer {
     /** 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数 (旧sim AI myEmptyLocks) */
     myEmptyLocks(board) {
         const owner = (0, Player_1.seatOf)(this.playerSymbol) + 1;
-        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.value === owner)).length;
+        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.owner === owner)).length;
     }
     /** 空蔵: ロックしておく空きマス。自分の列の要になるマス、または敵の列を止められるマスのうち価値が最大のもの。なければ null
      * (旧sim AI bestEmptyLockTarget と同一。EL_MIN_VALUE=10, EL_DENY=2) */
@@ -875,7 +876,7 @@ class AIPlayer {
                 else if (sq.player)
                     op++;
                 // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
-                else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0))
+                else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑')))
                     blocked = true;
             }
             if (my === 3 && op === 0 && !blocked)
@@ -984,7 +985,7 @@ class AIPlayer {
                     pCount++;
                 else if (sq.player)
                     oCount++;
-                else if (!sq.player && !(sq.effects.some(e => e.effect === '🔑') && sq.bind > 0) && !(0, thermal_1.emptyBlocked)(sq))
+                else if (!sq.player && !(sq.effects.some((e) => e.effect === '🔑')) && !(0, thermal_1.emptyBlocked)(sq))
                     emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -1001,11 +1002,10 @@ class AIPlayer {
     decayBoard(board, skip) {
         return board.map((sq, k) => {
             const hadPoison = !(0, thermal_1.isDormant)(sq) && sq.effects.some((e) => e.effect === '☠');
-            const next = (0, thermal_1.decayTick)(sq, this.characters);
-            const effects = next.bind === 0 ? next.effects.filter((e) => e.effect !== '🔑') : next.effects;
-            if (hadPoison && next.bind === 0 && next.player && k !== skip)
+            const next = (0, lock_1.tickLock)((0, thermal_1.decayTick)(sq, this.characters)).sq; // ロックはスタックが尽きたら外れる (#438)
+            if (hadPoison && next.bind === 0 && next.player && k !== skip && !(0, lock_1.isLocked)(next))
                 return { player: undefined, bind: 0, effects: [] };
-            return { ...next, effects };
+            return next;
         });
     }
     /**
@@ -1025,7 +1025,7 @@ class AIPlayer {
             const sq = sim[j];
             if ((0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔑'))
                 continue;
-            sim[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+            sim[j] = (0, lock_1.addLock)(sq, Math.max(sq.bind, 1));
         }
         return sim;
     }
@@ -1077,7 +1077,7 @@ class AIPlayer {
             if (this.shield.has(i))
                 continue;
             // ロック済みかつbind>0はスキップ
-            if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)
+            if (sq.effects.some((e) => e.effect === '🔑'))
                 continue;
             if (!sq.player) {
                 // 空きマス (ロックされていない)
@@ -1108,7 +1108,7 @@ class AIPlayer {
             const sq = board[i];
             if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0)
                 continue;
-            if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)
+            if (sq.effects.some((e) => e.effect === '🔑'))
                 continue;
             if ((0, thermal_1.overwriteBlocked)(sq))
                 continue;
@@ -1125,7 +1125,7 @@ class AIPlayer {
             const sq = board[i];
             if (this.shield.has(i))
                 continue;
-            if (sq.effects.some(e => e.effect === '🔑') && sq.bind > 0)
+            if (sq.effects.some((e) => e.effect === '🔑'))
                 continue;
             if (!sq.player) {
                 if (!sq.effects.some(e => e.effect === '🔑') && !(0, thermal_1.emptyBlocked)(sq))
@@ -2343,7 +2343,7 @@ class AIPlayer {
                         }
                         else if (sq.player)
                             bad = true;
-                        else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) || this.shield.has(idx))
+                        else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑')) || this.shield.has(idx))
                             bad = true;
                         else
                             empties.push(idx);
@@ -2880,7 +2880,7 @@ class AIPlayer {
             this.countReaches(board, this.playerSymbol) === 0) {
             const target = this.findKimonTarget(board, 50);
             if (target !== null) {
-                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 3, effects: [{ effect: '🔑' }] } : sq));
+                const postBoard = board.map((sq, i) => (i === target ? { player: undefined, bind: 0, effects: [(0, lock_1.lockEffect)(3)] } : sq));
                 return { move: this.getBestMove(postBoard, life), skills: ['onClickKimon'], stompTarget: target };
             }
         }
@@ -3399,7 +3399,7 @@ class AIPlayer {
             const target = this.bestEmptyLockTarget(board);
             if (target !== null) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                post[target] = { ...post[target], bind: Math.max(post[target].bind, 1), effects: [...post[target].effects, { effect: '🔑', value: (0, Player_1.seatOf)(this.playerSymbol) + 1 }] };
+                post[target] = (0, lock_1.addLock)(post[target], 6, (0, Player_1.seatOf)(this.playerSymbol) + 1);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
                     return { move: followup, skills: ['onClickUseLock'], lockTargets: [target] };
