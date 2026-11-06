@@ -9,6 +9,7 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { addLock, isLocked, lockEffect, tickLock } from './lock';
+import { lockBlocksPlacement, sealBaseCost, sealReleaseCells, seal } from './keysmith';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { stomp as stompOf } from './blast';
@@ -89,7 +90,7 @@ const TOKEN_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
     'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
 ]);
-export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
+export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal'];
 
 export type AIResult = {
     move: number | null;
@@ -825,7 +826,7 @@ class AIPlayer {
                 if (sq.player === player) my++;
                 else if (sq.player) op++;
                 // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
-                else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑'))) blocked = true;
+                else if (emptyBlocked(sq) || lockBlocksPlacement(sq, this.characterOf(player))) blocked = true;
             }
             if (my === 3 && op === 0 && !blocked) reaches++;
         }
@@ -912,7 +913,7 @@ class AIPlayer {
                 const sq = board[idx];
                 if (sq.player === player) pCount++;
                 else if (sq.player) oCount++;
-                else if (!sq.player && !(sq.effects.some((e) => e.effect === '🔑')) && !emptyBlocked(sq)) emptyIdx = idx;
+                else if (!sq.player && !lockBlocksPlacement(sq, this.character) && !emptyBlocked(sq)) emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
                 if (!threats.includes(emptyIdx)) threats.push(emptyIdx);
@@ -997,11 +998,11 @@ class AIPlayer {
             const sq = board[i];
             if (this.shield.has(i)) continue;
             // ロック済みかつbind>0はスキップ
-            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (lockBlocksPlacement(sq, this.character)) continue;
 
             if (!sq.player) {
                 // 空きマス (ロックされていない)
-                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
+                if (!lockBlocksPlacement(sq, this.character) && !emptyBlocked(sq)) moves.push(i);
             } else if (this.isEnemy(sq.player)) {
                 // bind=0の敵マスは無条件で乗っ取り可能（雷霆の巫のコマは除く）
                 if (sq.bind <= 0 && !isTakeProtected(sq, this.characters)) {
@@ -1025,7 +1026,7 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0) continue;
-            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (lockBlocksPlacement(sq, this.character)) continue;
             if (overwriteBlocked(sq)) continue;
             const lost = this.opponents.some((o) =>
                 calculateWinner(lineSymbols(this.simulatePlace(decayed, i, o, life))) === o);
@@ -1040,9 +1041,9 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             if (this.shield.has(i)) continue;
-            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            if (lockBlocksPlacement(sq, this.character)) continue;
             if (!sq.player) {
-                if (!sq.effects.some(e => e.effect === '🔑') && !emptyBlocked(sq)) moves.push(i);
+                if (!lockBlocksPlacement(sq, this.character) && !emptyBlocked(sq)) moves.push(i);
             } else if (sq.player !== player) {
                 if (sq.bind <= 0 && !isTakeProtected(sq, this.characters)) moves.push(i);
             }
@@ -1528,6 +1529,13 @@ class AIPlayer {
             if (skills.length === 0 && isLosing && availableSkills.includes(7) && opponentMagic >= 6) {
                 spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
+        }
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
+        if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
+            const released = sealReleaseCells(board, this.playerSymbol).length;
+            const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
+            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost)))) spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
             const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
@@ -2160,7 +2168,7 @@ class AIPlayer {
                         const sq = b[idx];
                         if (sq.player === me) { if (isShikigami(sq)) shiki++; else real++; }
                         else if (sq.player) bad = true;
-                        else if (emptyBlocked(sq) || (sq.effects.some((e) => e.effect === '🔑')) || this.shield.has(idx)) bad = true;
+                        else if (emptyBlocked(sq) || lockBlocksPlacement(sq, this.character) || this.shield.has(idx)) bad = true;
                         else empties.push(idx);
                     }
                     if (bad || shiki + empties.length === 0) continue;

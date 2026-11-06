@@ -19,6 +19,7 @@ exports.LIFE_MEANS = {
     cryomancer: 4,
     pyromancer: 6,
     witch: 4,
+    keysmith: 4,
     default: 5,
 };
 exports.LIFE_STD = 3;

@@ -9,6 +9,7 @@ import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
+import { SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, lockBlocksPlacement, seal, sealBaseCost, sealReleaseCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -107,6 +108,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     cryomancer: '氷室の番人',
     pyromancer: '煉獄の鍛冶師',
     witch: '凩の魔女',
+    keysmith: '鍵師',
 };
 
 const AVATAR_CLASSES = [
@@ -496,6 +498,7 @@ export const Game = (props: GameProps) => {
             case 'onClickTinder': onClickTinder(); break;
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickMogaribue': onClickMogaribue(); break;
+            case 'onClickSeal': onClickSeal(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
             case 'onClickBurnout': onClickBurnout(); break;
             case 'onClickLeafToken': onClickLeafToken(); break;
@@ -1217,7 +1220,7 @@ export const Game = (props: GameProps) => {
             }
         }
 
-        if (nextBoard[i].effects.find((x) => x.effect === '🔑')) {
+        if (lockBlocksPlacement(nextBoard[i], currentCharacter)) {
             return;
         }
 
@@ -3348,6 +3351,20 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         spendMagic(mogaribueCost(), false, true, 'onClickMogaribue');
     };
+    // 固有スキル 封鎖の断（鍵師）: 自陣のコマ全てに7・空きマス全てに2のロック。敵のコマのロックを全て解除し、解除した数（最低1）だけ敵全てにダメージ。ターン終了
+    const sealCost = (player: Player = currentTurnPlayer): number =>
+        calculateCost(sealBaseCost(costTableFor(seatOf(player)).onClickSeal, sealReleaseCells(currentBoard, player).length), false, false, player, 'onClickSeal');
+    const onClickSeal = () => {
+        const cost = sealCost();
+        const board = currentBoard.slice();
+        const r = seal(board, currentTurnPlayer, characters);
+        addLog(`「封鎖の断」を使用（自陣${r.own.length}・空き${r.empty.length}マスをロック、敵のロック${r.released.length}個を解除して敵${r.hit.length}コマに${r.damage}ダメージ・ターン終了）`);
+        flashCells(r.hit);
+        playEffect('lock', undefined, [...r.own, ...r.empty], '封鎖の断');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickSeal');
+        setCurrentTurn(currentTurn + 1);
+    };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
@@ -3430,7 +3447,7 @@ export const Game = (props: GameProps) => {
         const sq = currentBoard[i];
         if (isShielded(sq, characters)) return false;
         if (sq.player && sq.player !== currentTurnPlayer && (sq.bind > 0 || isTakeProtected(sq, characters)) && !canHitBound(currentCharacter, currentBoard, seatCount)) return false;
-        if (sq.effects.some((e) => e.effect === '🔑')) return false;
+        if (lockBlocksPlacement(sq, currentCharacter)) return false;
         if (emptyBlocked(sq)) return false;
         if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
         return true;
@@ -3496,6 +3513,8 @@ export const Game = (props: GameProps) => {
                 return [{ name: '業火', cost: infernoCost(symbols[seat]) }];
             case 'witch':
                 return [{ name: '虎落笛', cost: mogaribueCost(symbols[seat]) }];
+            case 'keysmith':
+                return [{ name: '封鎖の断', cost: sealCost(symbols[seat]) }];
             default:
                 return [];
         }
@@ -4221,6 +4240,14 @@ export const Game = (props: GameProps) => {
                         hidden={currentCharacter !== 'witch'}
                         exclusive
                         disabled={magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer)}
+                    />
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                        onClick={onClickSeal}
+                        buttonText={`封鎖の断-${sealCost()}`}
+                        paragraph={`自陣のコマ全てを${SEAL_OWN_STACK}ターン、空きマス全てを${SEAL_EMPTY_STACK}ターンロックします（鍵師は空きマスのロックを無視して置けます）\n敵のコマのロックを全て解除し、解除した数（最低1）だけ敵のコマ全てにダメージを与えます（⚡無敵を除く。氷結中は❄が減るだけ）\n敵のロックの数だけコストが下がります（下限${SEAL_MIN_COST}）。使うとターン終了`}
+                        hidden={currentCharacter !== 'keysmith'}
+                        exclusive
+                        disabled={magic[turnSeat] < sealCost()}
                     />
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickIgnite}

@@ -11,6 +11,7 @@ const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
 const lock_1 = require("./lock");
+const keysmith_1 = require("./keysmith");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
 const blast_1 = require("./blast");
@@ -86,7 +87,7 @@ const TOKEN_SKILL_KEYS = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
     'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
 ]);
-exports.TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami'];
+exports.TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal'];
 // 魔法使いの引き直しに使う軽減札（撃つ優先順。旧sim AI の DISCOUNT_REDUCERS と同順）。cut は次に打つスキルの軽減量
 const REROLL_REDUCERS = [
     { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
@@ -878,7 +879,7 @@ class AIPlayer {
                 else if (sq.player)
                     op++;
                 // 残り1マスが着手不能（氷結中の空きマス・ロック中の空きマス）ならリーチではない（findThreatSquares と同じ判定）
-                else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑')))
+                else if ((0, thermal_1.emptyBlocked)(sq) || (0, keysmith_1.lockBlocksPlacement)(sq, this.characterOf(player)))
                     blocked = true;
             }
             if (my === 3 && op === 0 && !blocked)
@@ -987,7 +988,7 @@ class AIPlayer {
                     pCount++;
                 else if (sq.player)
                     oCount++;
-                else if (!sq.player && !(sq.effects.some((e) => e.effect === '🔑')) && !(0, thermal_1.emptyBlocked)(sq))
+                else if (!sq.player && !(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     emptyIdx = idx;
             }
             if (pCount === 3 && oCount === 0 && emptyIdx !== -1) {
@@ -1079,11 +1080,11 @@ class AIPlayer {
             if (this.shield.has(i))
                 continue;
             // ロック済みかつbind>0はスキップ
-            if (sq.effects.some((e) => e.effect === '🔑'))
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if (!sq.player) {
                 // 空きマス (ロックされていない)
-                if (!sq.effects.some(e => e.effect === '🔑') && !(0, thermal_1.emptyBlocked)(sq))
+                if (!(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     moves.push(i);
             }
             else if (this.isEnemy(sq.player)) {
@@ -1110,7 +1111,7 @@ class AIPlayer {
             const sq = board[i];
             if (sq.player !== this.playerSymbol || decayed[i].player !== sq.player || decayed[i].bind > 0)
                 continue;
-            if (sq.effects.some((e) => e.effect === '🔑'))
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if ((0, thermal_1.overwriteBlocked)(sq))
                 continue;
@@ -1127,10 +1128,10 @@ class AIPlayer {
             const sq = board[i];
             if (this.shield.has(i))
                 continue;
-            if (sq.effects.some((e) => e.effect === '🔑'))
+            if ((0, keysmith_1.lockBlocksPlacement)(sq, this.character))
                 continue;
             if (!sq.player) {
-                if (!sq.effects.some(e => e.effect === '🔑') && !(0, thermal_1.emptyBlocked)(sq))
+                if (!(0, keysmith_1.lockBlocksPlacement)(sq, this.character) && !(0, thermal_1.emptyBlocked)(sq))
                     moves.push(i);
             }
             else if (sq.player !== player) {
@@ -1628,6 +1629,14 @@ class AIPlayer {
             if (skills.length === 0 && isLosing && availableSkills.includes(7) && opponentMagic >= 6) {
                 spend(this.calculateAICost(costs.onClickTsunami, false, false, 'onClickTsunami'), 'onClickTsunami');
             }
+        }
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
+        if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
+            const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
+            const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
+            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost))))
+                spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
             const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
@@ -2347,7 +2356,7 @@ class AIPlayer {
                         }
                         else if (sq.player)
                             bad = true;
-                        else if ((0, thermal_1.emptyBlocked)(sq) || (sq.effects.some((e) => e.effect === '🔑')) || this.shield.has(idx))
+                        else if ((0, thermal_1.emptyBlocked)(sq) || (0, keysmith_1.lockBlocksPlacement)(sq, this.character) || this.shield.has(idx))
                             bad = true;
                         else
                             empties.push(idx);

@@ -7,6 +7,7 @@ const lifeBan_1 = require("./lifeBan");
 const decay_1 = require("./decay");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
+const keysmith_1 = require("./keysmith");
 const util_1 = require("./util");
 /** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
 const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
@@ -152,8 +153,8 @@ const canPlaceAt = (board, cell, player, character, characters) => {
         return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
     if (sq.player && sq.player !== player && (sq.bind > 0 || (0, decay_1.isTakeProtected)(sq, characters)) && character !== 'giant')
         return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
-    if (sq.effects.some((e) => e.effect === '🔑'))
-        return false; // ロック中
+    if ((0, keysmith_1.lockBlocksPlacement)(sq, character))
+        return false; // ロック中（鍵師は空きマスのロックを無視できる）
     if ((0, thermal_1.emptyBlocked)(sq))
         return false; // 氷結中の空きマス
     if (sq.player === player && (0, thermal_1.overwriteBlocked)(sq))
