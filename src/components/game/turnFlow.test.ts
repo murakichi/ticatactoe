@@ -77,7 +77,7 @@ describe('ギアの手番状態 advanceGearState', () => {
     const mk = (): [GearTurnState, RuinState] => {
         const n = 2;
         return [
-            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], marketUsed: [0, 0], pieceBase: [0, 0], turnSpent: [0, 0], oppBigSeen: [false, false], oppBigPrev: [false, false], bigCast: [false, false], chargeBase: [0, 0] , veil: [false, false], veilNext: [false, false], ward: [0, 0], wardFresh: [false, false], lockSeen: [false, false], lockPrev: [false, false], blessing: [0, 0], blessingFresh: [false, false] },
+            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], marketUsed: [0, 0], pieceBase: [0, 0], turnSpent: [0, 0], oppBigSeen: [false, false], oppBigPrev: [false, false], bigCast: [false, false], chargeBase: [0, 0] , veil: [false, false], veilNext: [false, false], ward: [0, 0], wardFresh: [false, false], lockSeen: [false, false], lockPrev: [false, false], lockFreeUsed: [false, false], blessing: [0, 0], blessingFresh: [false, false] },
             { active: [false, false], pending: [false, true], snap: null, snapBuds: null, snapFlames: null, ashActive: Array(n).fill(0), ashPending: Array(n).fill(0), lastMove: null },
         ];
     };
@@ -138,6 +138,12 @@ describe('ギアの手番状態 advanceGearState', () => {
         advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
         expect(g.lockPrev[0]).toBe(false);
         expect(g.lockPrev[1]).toBe(true);
+    });
+    it('鍵師の無料ロック: 手番が終わると、終わる席も次の席も lockFreeUsed がリセットされる', () => {
+        const [g, r] = mk();
+        g.lockFreeUsed[0] = true;
+        advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
+        expect(g.lockFreeUsed).toEqual([false, false]);
     });
     it('施錠の加護: 使った手番は減らさず、その後は自分の手番が終わるたびに1減る（使った手番を含めて3手番）', () => {
         const [g, r] = mk();

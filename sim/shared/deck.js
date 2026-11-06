@@ -133,6 +133,7 @@ exports.SKILL_CATALOG = [
     { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマに乗っているロックのスタックを全て+2します' },
     { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
+    { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します（自分のロックでも他人のロックでも選べます）' },
 ];
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
 exports.REMOVED_SKILL_IDX = [50];
@@ -164,7 +165,7 @@ exports.RECOMMENDED_DECKS = {
     cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 52, 73, 92],
     pyromancer: [0, 3, 5, 8, 11, 28, 52, 53, 56, 58, 87, 92],
     witch: [5, 8, 28, 44, 52, 53, 56, 62, 63, 64, 85, 92],
-    keysmith: [0, 2, 3, 5, 8, 10, 11, 12, 13, 28, 32, 52],
+    keysmith: [0, 2, 5, 8, 10, 11, 12, 13, 28, 32, 52, 95],
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };

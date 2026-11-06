@@ -8,7 +8,7 @@ const board = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: un
 const env = (character: CharacterId, over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: [character, 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 describe('柳の下に二匹目がいた', () => {
@@ -37,6 +37,21 @@ describe('characterCostOf（キャラ補正）', () => {
         b[0] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }, { effect: '🍂' }] };
         // 魔女自身は敵の🍂ぶん増える（⭕の🍂2枚 → +2）が、盤面の🍂2枚で-2: 4+2-2
         expect(characterCostOf(env('witch', { board: b }), 4, false, false)).toBe(4);
+    });
+});
+
+describe('鍵師のパッシブ: 手番ごとに1回、常設のロックが無料', () => {
+    const lock = (character: CharacterId, over: Partial<CostEnv> = {}) => calculateCostOf(env(character, over), skillCosts.onClickUseLock, false, false, 'onClickUseLock');
+    it('鍵師は無料の1回を使っていなければ0、使っていれば通常（鍵師の-1込みで下限1）', () => {
+        expect(lock('keysmith', { lockFreeUsed: false })).toBe(0);
+        expect(lock('keysmith', { lockFreeUsed: true })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));
+    });
+    it('鍵師以外は常に通常のコスト。鍵師でも他のスキル（ダブルロック・封鎖の断）は無料にならない', () => {
+        expect(lock('you', { lockFreeUsed: false })).toBe(skillCosts.onClickUseLock);
+        expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock')).toBeGreaterThan(0);
+    });
+    it('手番でない席（パネル表示用）には掛からない', () => {
+        expect(lock('keysmith', { lockFreeUsed: false, turnSeat: 1 })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));
     });
 });
 
