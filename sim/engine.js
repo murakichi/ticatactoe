@@ -436,6 +436,10 @@ function newGame(opts = {}) {
         veilNext: fill(false), // 夜の帳: この席の次の手番から効く
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
+        lockSeen: fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
+        blessing: fill(0), // 施錠の加護: 残りの手番数
+        blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -511,6 +515,7 @@ function costEnv(s, seat) {
         oppBigPrev: s.oppBigPrev[seat],
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
+        lockPrev: s.lockPrev[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],
@@ -532,6 +537,7 @@ function noteSkillUsed(s, skillId, paid = 0) {
     g.infernoReady = s.infernoReady;
     gearTurnMod.noteSkillUsed(g, s.turn, skillId, paid);
     s.oppSkilled = g.oppSkilled; // 作り直された配列を戻す
+    s.lockSeen = g.lockSeen; // 錠前荒らしの0コスト条件（同じく作り直される）
 }
 /** 収穫: エフェクトをn個付与したぶん魔力を得る（上限あり） */
 function harvestMagic(s, n) {
@@ -604,7 +610,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, blessing: s.blessing, blessingFresh: s.blessingFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -986,6 +992,8 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+    // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く [FAITHFUL] Game.tsx onCellClick
+    if (keysmithMod.blessingActive(s.blessing[s.turn]) && newPlayer === cur && !board[i].object) board[i] = keysmithMod.blessPlacedPiece(board[i]);
 
     // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
     const vengeanceGained = {};
@@ -2538,6 +2546,47 @@ function onClickSeal(s) {
     endTurn(s);
 }
 
+// ---- 鍵師向けの汎用スキル（#439, idx 130〜133）[FAITHFUL] Game.tsx onClickLockRaid / onClickLockExtend / onClickLockBlessing / onClickVacantSeal ----
+function lockRaidCost(s) {
+    return calculateCost(s, costsOf(s).onClickLockRaid, false, false, 'onClickLockRaid'); // lockPrev なら 0（cost.ts）
+}
+function onClickLockRaid(s) {
+    const pay = lockRaidCost(s);
+    const r = keysmithMod.lockRaid(s.board, curPlayer(s), s.chars, s.rng);
+    if (!r) return; // 対象が無ければ不発
+    s.lockPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
+    spendMagic(s, pay, 'onClickLockRaid');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockRaid');
+}
+function onClickLockExtend(s) {
+    const pay = calculateCost(s, costsOf(s).onClickLockExtend, false, false, 'onClickLockExtend');
+    const cells = keysmithMod.lockExtend(s.board, curPlayer(s));
+    if (cells.length === 0) return;
+    spendMagic(s, pay, 'onClickLockExtend');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockExtend');
+}
+function onClickLockBlessing(s) {
+    s.blessing[s.turn] = keysmithMod.BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
+    s.blessingFresh[s.turn] = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockBlessing, false, false, 'onClickLockBlessing'), 'onClickLockBlessing');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockBlessing');
+}
+function vacantSealCost(s) {
+    const n = keysmithMod.opponentReaches(s.board, curPlayer(s), s.chars);
+    return calculateCost(s, keysmithMod.vacantSealBaseCost(costsOf(s).onClickVacantSeal, n), false, false, 'onClickVacantSeal');
+}
+function onClickVacantSeal(s) {
+    const pay = vacantSealCost(s);
+    const cells = keysmithMod.vacantSeal(s.board);
+    if (cells.length === 0) return;
+    spendMagic(s, pay, 'onClickVacantSeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'vacantSeal');
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -2637,6 +2686,10 @@ const SKILLS = {
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
+    lockRaid: onClickLockRaid,
+    lockExtend: onClickLockExtend,
+    lockBlessing: onClickLockBlessing,
+    vacantSeal: onClickVacantSeal,
     burnout: onClickBurnout,
     markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
     effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
@@ -2719,5 +2772,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, sealCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, sealCost, lockRaidCost, vacantSealCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };

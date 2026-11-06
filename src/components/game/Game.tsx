@@ -9,7 +9,7 @@ import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
-import { SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, lockBlocksPlacement, seal, sealBaseCost, sealReleaseCells } from './keysmith';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -197,6 +197,10 @@ export const Game = (props: GameProps) => {
         veilNext: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の次の手番から効く
         ward: Array<number>(seatCount).fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: Array<boolean>(seatCount).fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
+        lockSeen: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での lockSeen
+        blessing: Array<number>(seatCount).fill(0), // 施錠の加護: 残りの手番数（その席の手番が終わるたびに1減る）
+        blessingFresh: Array<boolean>(seatCount).fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
         chargeBase: Array<number>(seatCount).fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数。増えたぶんがこの手番に付与した⚡
         processedTurn: 1,
     });
@@ -243,6 +247,7 @@ export const Game = (props: GameProps) => {
         oppBigPrev: gearTurn.current.oppBigPrev[seat],
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
+        lockPrev: gearTurn.current.lockPrev[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
@@ -473,6 +478,10 @@ export const Game = (props: GameProps) => {
             case 'onClickSoloSign': onClickObject('soloSign'); break;
             case 'onClickOneWord': onClickObject('oneWord'); break;
             case 'onClickBlindMonkey': onClickObject('blindMonkey'); break;
+            case 'onClickLockRaid': onClickLockRaid(); break;
+            case 'onClickLockExtend': onClickLockExtend(); break;
+            case 'onClickLockBlessing': onClickLockBlessing(); break;
+            case 'onClickVacantSeal': onClickVacantSeal(); break;
             case 'onClickMarket': onClickObject('market'); break;
             case 'onClickSanctuary': onClickObject('sanctuary'); break;
             case 'onClickPoisonSwamp': onClickObject('poisonSwamp'); break;
@@ -1287,6 +1296,8 @@ export const Game = (props: GameProps) => {
         }
 
         nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+        // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
+        if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 
         // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
         const vengeanceGained: Record<number, number> = {};
@@ -3330,6 +3341,53 @@ export const Game = (props: GameProps) => {
         spendMagic(cost, true, true, 'onClickSeal');
         setCurrentTurn(currentTurn + 1);
     };
+    // 錠前荒らし（汎用 idx 130）: 敵陣のロックを1つランダムに解除し、そのコマに🔥☠⚡のどれかをランダムに付与する。直前の相手ターンにロックが使われていたら0コスト
+    const onClickLockRaid = () => {
+        const board = currentBoard.slice();
+        const cost = calculateCost(seatCosts.onClickLockRaid, false, false, currentTurnPlayer, 'onClickLockRaid');
+        const r = lockRaid(board, currentTurnPlayer, characters, Math.random);
+        if (!r) return;
+        gearTurn.current.lockPrev[turnSeat] = false; // 無料で撃てるのは1手番に1回まで
+        addLog(`「錠前荒らし」を使用（${posName(r.cell)}のロックを解除して${r.effect}を付与）`);
+        flashCells([r.cell]);
+        playEffect('lock', r.cell, [r.cell], '錠前荒らし');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickLockRaid');
+    };
+    // ロックの増築（汎用 idx 131）: 自陣のコマのロックのスタックを全て +2
+    const onClickLockExtend = () => {
+        const board = currentBoard.slice();
+        const cost = calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend');
+        const cells = lockExtend(board, currentTurnPlayer);
+        if (cells.length === 0) return;
+        addLog(`「ロックの増築」を使用（自陣${cells.length}コマのロック+${LOCK_EXTEND_STACK}）`);
+        flashCells(cells);
+        playEffect('lock', undefined, cells, 'ロックの増築');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickLockExtend');
+    };
+    // 施錠の加護（汎用 idx 132）: 使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付く
+    const onClickLockBlessing = () => {
+        gearTurn.current.blessing[turnSeat] = BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
+        gearTurn.current.blessingFresh[turnSeat] = true;
+        addLog(`「施錠の加護」を使用（${BLESSING_TURNS}手番の間、設置したコマに🔑${BLESSING_STACK}）`);
+        playEffect('auraGreen');
+        spendMagic(calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing'), true, true, 'onClickLockBlessing');
+    };
+    // 空き家封じ（汎用 idx 133）: 空きマス全てを2スタックでロック（ターンは続く）。相手のリーチ1つにつきコスト-3
+    const vacantSealCost = (player: Player = currentTurnPlayer): number =>
+        calculateCost(vacantSealBaseCost(costTableFor(seatOf(player)).onClickVacantSeal, opponentReaches(currentBoard, player, characters)), false, false, player, 'onClickVacantSeal');
+    const onClickVacantSeal = () => {
+        const cost = vacantSealCost();
+        const board = currentBoard.slice();
+        const cells = vacantSeal(board);
+        if (cells.length === 0) return;
+        addLog(`「空き家封じ」を使用（空きマス${cells.length}マスを${VACANT_SEAL_STACK}ターンロック）`);
+        flashCells(cells);
+        playEffect('lock', undefined, cells, '空き家封じ');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickVacantSeal');
+    };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
@@ -3686,6 +3744,10 @@ export const Game = (props: GameProps) => {
             veilNext: Array<boolean>(seatCount).fill(false),
             ward: Array<number>(seatCount).fill(0),
             wardFresh: Array<boolean>(seatCount).fill(false),
+            lockSeen: Array<boolean>(seatCount).fill(false),
+            lockPrev: Array<boolean>(seatCount).fill(false),
+            blessing: Array<number>(seatCount).fill(0),
+            blessingFresh: Array<boolean>(seatCount).fill(false),
             darkPotUsed: Array<boolean>(seatCount).fill(false),
             chargeBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,
@@ -3935,6 +3997,11 @@ export const Game = (props: GameProps) => {
         { idx: 113, onClick: onClickBoltSilence, buttonText: `沈黙は雷なり-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, paragraph: `⚡のある自陣のコマを選んで⚡を${BOLT_SILENCE_BOLTS}個取り除き（同じコマから2個でも可）、相手全員が次の手番、スキルを使えなくなります（自陣の⚡が合計${BOLT_SILENCE_BOLTS}個ないと使えません）`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || !boltSilenceLegal() },
         { idx: 104, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, paragraph: `自分のデッキから、基礎コスト${SECOND_CATCH_MAX_BASE}以下で今撃てるスキルをランダムに1つ、コストを払わず発動します\nこのターンに基礎コスト7以上のスキルを使っていれば、0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
         // オブジェクトを壊す・強くするスキル(idx 114-119)
+        // 鍵師向けの汎用スキル（#439, idx 130〜133）
+        { idx: 130, onClick: onClickLockRaid, buttonText: `錠前荒らし-${calculateCost(seatCosts.onClickLockRaid, false, false, currentTurnPlayer, 'onClickLockRaid')}`, paragraph: `敵陣のロックを1つランダムに解除し、そのコマに🔥・☠・⚡のどれかをランダムに付与します（帯電中の雷霆の巫のコマには付きません）\n直前の相手ターンにロックが使われていたら0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickLockRaid, false, false, 'onClickLockRaid') || lockRaidCells(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 131, onClick: onClickLockExtend, buttonText: `ロックの増築-${calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend')}`, paragraph: `自陣のコマに乗っているロックのスタックを全て+${LOCK_EXTEND_STACK}します\n（ロックの乗っていないコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickLockExtend, false, false, 'onClickLockExtend') || lockExtendCells(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 132, onClick: onClickLockBlessing, buttonText: `施錠の加護-${calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing')}`, paragraph: `使った手番を含む自分の${BLESSING_TURNS}手番の間、設置したコマにロックが${BLESSING_STACK}スタック付きます\n（ロック中のコマは奪われません）`, disabled: checkSkillDisable(seatCosts.onClickLockBlessing, false, false, 'onClickLockBlessing') },
+        { idx: 133, onClick: onClickVacantSeal, buttonText: `空き家封じ-${vacantSealCost()}`, paragraph: `空きマス全てを${VACANT_SEAL_STACK}スタックでロックします（ターンは続く）\n相手のリーチ1つにつきコスト-${VACANT_SEAL_REACH_CUT}（下限1）。鍵師は空きマスのロックを無視して置けます`, disabled: magic[turnSeat] < vacantSealCost() || vacantSealCells(currentBoard).length === 0 },
         ...OBJECT_SKILL_KEYS.map((skill) => ({
             idx: OBJECT_SKILLS[skill].idx,
             onClick: () => onClickObjectSkill(skill),
