@@ -49,21 +49,21 @@ describe('審判の日', () => {
 });
 
 describe('審判の日で置いたマスはロック付き', () => {
-    it('中心は🌱＋🔑のロック付きで置かれ、期間は通常のロック(6)。ロック引数が無ければ従来どおり（🔑なし）', () => {
+    it('中心は🌱＋🔑のロック付きで置かれ、スタックは通常のロック(6)でライフは2のまま。ロック引数が無ければ従来どおり（🔑なし）', () => {
         const b = board();
         judgeDay(b, 5, '💙', { gears: [], seat: 0 });
         expect(b[5].player).toBe('💙');
-        expect(b[5].effects).toEqual([{ effect: '🌱' }, { effect: '🔑' }]);
-        expect(b[5].bind).toBe(6);
+        expect(b[5].effects).toEqual([{ effect: '🌱' }, { effect: '🔑', stack: 6 }]);
+        expect(b[5].bind).toBe(2); // ロックはライフを変えない(#438)
         const b2 = board();
         judgeDay(b2, 5, '💙');
         expect(b2[5].effects).toEqual([{ effect: '🌱' }]);
         expect(b2[5].bind).toBe(2);
     });
-    it('堅牢の鍵があればロックの期間が延びる(9)', () => {
+    it('堅牢の鍵があればロックのスタックが延びる(9)', () => {
         const b = board();
         judgeDay(b, 5, '💙', { gears: ['ironLock', 'luckyPurse'], seat: 0 });
-        expect(b[5].bind).toBe(9);
+        expect(b[5].effects).toEqual([{ effect: '🌱' }, { effect: '🔑', stack: 9 }]);
     });
     it('置いたコマ(🌱＋🔑)は、次の審判の日で自分が撃っても壊れない', () => {
         const b = board();

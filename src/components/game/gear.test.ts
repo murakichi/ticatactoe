@@ -7,7 +7,7 @@ import {
     applyPriceOffsets,
     gearLifeBonus,
     gearLifeStd,
-    gearLockBind,
+    gearLockStack,
     gearSlotsFor,
     gearTokenBindDelta,
     randomGears,
@@ -45,7 +45,7 @@ describe('ギアの定義', () => {
 
     it('説明文は GEAR_PARAMS の数値から描画される', () => {
         const desc = (id: string) => GEARS.find((g) => g.id === id)!.desc;
-        expect(desc('ironLock')).toContain(String(GEAR_PARAMS.ironLockBind));
+        expect(desc('ironLock')).toContain(String(GEAR_PARAMS.ironLockStack));
         expect(desc('luckyPurse')).toContain(`${GEAR_PARAMS.luckyPurseChance * 100}%`);
         expect(desc('bindingLock')).toContain(`${GEAR_PARAMS.bindingLockChance * 100}%`);
         expect(desc('harvest')).toContain(String(GEAR_PARAMS.harvestCap));
@@ -66,8 +66,8 @@ describe('ライフ・ロック・トークンの補正', () => {
         expect(gearLifeBonus(undefined)).toBe(0);
         expect(gearLifeStd(['gambler'], 3)).toBe(5);
         expect(gearLifeStd([], 3)).toBe(3);
-        expect(gearLockBind(['ironLock'])).toBe(9);
-        expect(gearLockBind([])).toBe(6);
+        expect(gearLockStack(['ironLock'])).toBe(9);
+        expect(gearLockStack([])).toBe(6);
     });
 
     it('トークンのライフ: 増援+2 / 軽量トークン-1 / 両方で+1', () => {

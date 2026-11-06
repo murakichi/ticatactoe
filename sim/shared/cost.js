@@ -14,6 +14,7 @@ const gear_1 = require("./gear");
 const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
 const tokenSkills_1 = require("./tokenSkills");
+const keysmith_1 = require("./keysmith");
 const thermal_1 = require("./thermal");
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
 exports.SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
@@ -33,6 +34,9 @@ const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
     if (characterId === 'witch')
         return (0, thermal_1.witchCostOf)(cost, env.board);
+    // 鍵師: ロック系スキルは-1（下限1）
+    if (characterId === 'keysmith')
+        return skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (characterId === 'poisoner')
         return isPoison ? cost - 1 : cost + 1;

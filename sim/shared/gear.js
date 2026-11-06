@@ -1,14 +1,14 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockBind = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 exports.GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
-    lockBind: 6,
+    lockStack: 6,
     /** 堅牢の鍵のロック期間 */
-    ironLockBind: 9,
+    ironLockStack: 9,
     /** 空蔵: 期限切れで生まれる自陣のコマのライフ */
     emptyLockLife: 1,
     /** 道連れの鍵: トークン系スキルで置いたコマにロックが付く確率 */
@@ -62,7 +62,7 @@ exports.GEAR_PARAMS = {
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
     { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスがライフ${P.emptyLockLife}の自陣のコマになる` },
-    { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockBind}ターンになる（通常${P.lockBind}）` },
+    { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockStack}ターンになる（通常${P.lockStack}）` },
     { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークン系スキルで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
     { id: 'quadMastery', name: '四連の極意', icon: '🎴', desc: `1ターンにスキルを${P.quadCount}回使うと、そのターンの次のスキルのコストが0になる` },
     { id: 'afterglow', name: '余韻', icon: '🔔', desc: `スキルを使った次のターン、1つ目のスキルのコスト${P.afterglowDelta}（下限1）` },
@@ -104,8 +104,8 @@ exports.gearLifeBonus = gearLifeBonus;
 const gearLifeStd = (gears, base) => ((0, exports.hasGear)(gears, 'gambler') ? P.gamblerStd : base);
 exports.gearLifeStd = gearLifeStd;
 /** ロックの期間（ライフ）。堅牢の鍵で延びる */
-const gearLockBind = (gears) => ((0, exports.hasGear)(gears, 'ironLock') ? P.ironLockBind : P.lockBind);
-exports.gearLockBind = gearLockBind;
+const gearLockStack = (gears) => ((0, exports.hasGear)(gears, 'ironLock') ? P.ironLockStack : P.lockStack);
+exports.gearLockStack = gearLockStack;
 /** トークンスキルで置くコマのライフ補正（増援 / 軽量トークン）。最終ライフは1以上に丸める側で行う */
 const gearTokenBindDelta = (gears) => ((0, exports.hasGear)(gears, 'reinforce') ? P.reinforceTokenLife : 0) + ((0, exports.hasGear)(gears, 'lightToken') ? P.lightTokenLife : 0);
 exports.gearTokenBindDelta = gearTokenBindDelta;

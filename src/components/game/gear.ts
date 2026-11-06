@@ -40,9 +40,9 @@ export type GearId =
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
-    lockBind: 6,
+    lockStack: 6,
     /** 堅牢の鍵のロック期間 */
-    ironLockBind: 9,
+    ironLockStack: 9,
     /** 空蔵: 期限切れで生まれる自陣のコマのライフ */
     emptyLockLife: 1,
     /** 道連れの鍵: トークン系スキルで置いたコマにロックが付く確率 */
@@ -100,7 +100,7 @@ const P = GEAR_PARAMS;
 
 export const GEARS: GearDef[] = [
     { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスがライフ${P.emptyLockLife}の自陣のコマになる` },
-    { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockBind}ターンになる（通常${P.lockBind}）` },
+    { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockStack}ターンになる（通常${P.lockStack}）` },
     { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークン系スキルで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
     { id: 'quadMastery', name: '四連の極意', icon: '🎴', desc: `1ターンにスキルを${P.quadCount}回使うと、そのターンの次のスキルのコストが0になる` },
     { id: 'afterglow', name: '余韻', icon: '🔔', desc: `スキルを使った次のターン、1つ目のスキルのコスト${P.afterglowDelta}（下限1）` },
@@ -145,7 +145,7 @@ export const gearLifeBonus = (gears: Gears): number =>
 export const gearLifeStd = (gears: Gears, base: number): number => (hasGear(gears, 'gambler') ? P.gamblerStd : base);
 
 /** ロックの期間（ライフ）。堅牢の鍵で延びる */
-export const gearLockBind = (gears: Gears): number => (hasGear(gears, 'ironLock') ? P.ironLockBind : P.lockBind);
+export const gearLockStack = (gears: Gears): number => (hasGear(gears, 'ironLock') ? P.ironLockStack : P.lockStack);
 
 /** トークンスキルで置くコマのライフ補正（増援 / 軽量トークン）。最終ライフは1以上に丸める側で行う */
 export const gearTokenBindDelta = (gears: Gears): number =>

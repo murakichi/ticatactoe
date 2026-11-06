@@ -5,7 +5,7 @@ import { Effect } from '../../types/Effect';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { POISON_LIFE_MULT } from './skillCosts';
-import { PlayerCharacters, isGuarded } from './charge';
+import { PlayerCharacters, isGuarded, isShielded } from './charge';
 import { geometryForCells } from './boardGeometry';
 import { isDormant } from './thermal';
 
@@ -32,7 +32,10 @@ export const poisonStrike = (sq: SquareInfo, chars: readonly (CharacterId | unde
 
 /** cells の各マスに☠を n 個付ける（毒使いのコマはライフが増える）。board を直接書き換える */
 export const addPoison = (board: SquareInfo[], cells: readonly number[], chars: readonly (CharacterId | undefined)[], n: number = 1): void => {
-    for (const k of cells) board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, ...Array<Effect>(n).fill(POISON)] }, chars);
+    for (const k of cells) {
+        if (isShielded(board[k], chars as PlayerCharacters)) continue; // 帯電中の雷霆の巫のコマには☠が付かない
+        board[k] = poisonStrike({ ...board[k], effects: [...board[k].effects, ...Array<Effect>(n).fill(POISON)] }, chars);
+    }
 };
 
 /** 自陣の☠を全て取り除く（血清・ミアズマ後）。取り除いたマスを返す。onlyActive なら氷結中のマスは残す */

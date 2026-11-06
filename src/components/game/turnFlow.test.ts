@@ -44,7 +44,7 @@ describe('減衰 decayBoard', () => {
         const b = board();
         b[0] = { player: '⭕', bind: 3, effects: [] };
         b[1] = { player: '⭕', bind: 3, effects: [{ effect: '❄' }] };
-        b[2] = { player: undefined, bind: 1, effects: [{ effect: '🔑', value: 1 }] };
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 1, owner: 1 }] };
         b[3] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
         b[4] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
         const r = decayBoard(b, 4, chars, symbols);
@@ -142,16 +142,18 @@ describe('ギアの手番状態 advanceGearState', () => {
 describe('トークン後のギア効果 tokenAfter', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { applyLockAt, propagate } = require('./tokenAfter');
-    it('ロック: 氷結中は掛からない。空きマスには空蔵の持ち主を記録し、堅牢の鍵でライフが延びる', () => {
+    it('ロック: 氷結中は掛からない。空きマスには空蔵の持ち主を記録し、堅牢の鍵でスタックが延びる', () => {
         const b = board();
         expect(applyLockAt(b, 0, ['emptyLock'], 1)).toBe(true);
-        expect(b[0].effects).toEqual([{ effect: '🔑', value: 2 }]);
-        expect(b[0].bind).toBe(6);
+        expect(b[0].effects).toEqual([{ effect: '🔑', stack: 6, owner: 2 }]);
+        expect(b[0].bind).toBe(0); // ロックはライフを変えず、スタックで数える (#438)
         b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
         expect(applyLockAt(b, 1, [], 0)).toBe(false);
         const c = board();
         applyLockAt(c, 0, ['ironLock'], 0);
-        expect(c[0].bind).toBe(9);
+        expect(c[0].effects).toEqual([{ effect: '🔑', stack: 9 }]);
+        applyLockAt(c, 0, ['ironLock'], 0);
+        expect(c[0].effects).toEqual([{ effect: '🔑', stack: 18 }]); // 重ねがけは加算
     });
     it('伝播: 周囲のコマのうち種類に合うものへ同じエフェクト（バッズは自陣、毒は敵）', () => {
         const b = board();
