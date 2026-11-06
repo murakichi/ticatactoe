@@ -3695,42 +3695,47 @@ export const Game = (props: GameProps) => {
     const showPreview = (cells: number[]) => setPreviewCells(cells);
     const clearPreview = () => setPreviewCells([]);
 
-    // マスのホバー時: マス選択型の破壊スキル(ストンプ/審判の日)が構えている間だけ範囲を表示
+    // マス選択待ちのスキルごとの、ホバー時のプレビュー範囲。先に並べた方が優先（同時に構えるのは1つだけ）
+    const hoverPreviews: [unknown, (i: number) => number[]][] = [
+        [useStomp, (i) => geo.stompRange(i)],
+        [useJudgeDay, (i) => geo.judgeRange(i)],
+        [usePandemic, (i) => geo.stompRange(i)],
+        [useInjection > 0, (i) => [i]],
+        [useChargeOne, (i) => [i]],
+        [useChargeSpread, (i) => connectedPieces(currentBoard, i, geo.size)],
+        [useChargeArea, (i) => geo.stompRange(i)],
+        [useClone, (i) => cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []],
+        [usePlunder, (i) => plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []],
+        [useFrostArea, (i) => geo.stompRange(i)],
+        [useIcicle, (i) => [i]],
+        [useFreezeSpread, (i) => connectedPieces(currentBoard, i, geo.size)],
+        [useShatter, (i) => currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []],
+        [useKimon, (i) => kimonCandidates().includes(i) ? [i] : []],
+        [useSacrifice, (i) => sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []],
+        [useSwidden, (i) => budStacks(currentBoard[i]) > 0 ? [i] : []],
+        [useShikigamiPlace, (i) => shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []],
+        [objectPlacing, (i) => objectLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []],
+        [objectTool, (i) => objectSkillTargetsNow(objectTool as ObjectSkill).includes(i) ? [i] : []],
+        [useShikigamiBlast, (i) => ownShikigami().includes(i) ? [i, ...geo.surroundRange(i)] : []],
+        [useShikigamiBless, (i) => ownShikigami().includes(i) ? [i, ...blessTargets()] : []],
+        [useShikigamiCurse, (i) => ownShikigami().includes(i) ? [i, ...curseTargets()] : []],
+        [useShikigamiPurge, (i) => purgeTargets().includes(i) ? [i] : []],
+        [useSucker, (i) => suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []],
+        [useFreeze, (i) => canFreeze(currentBoard[i]) ? [i] : []],
+        [useIgnite, (i) => [i]],
+        [useTinder, (i) => tinderCandidates().includes(i) ? [i] : []],
+        [useThunderFire, (i) => thunderFireTargets().includes(i) ? [i, ...geo.surroundRange(i)] : []],
+        [useStash, (i) => stashTargets().includes(i) ? [i] : []],
+        [useBoltSilence, (i) => boltSilenceTargets().includes(i) ? [i] : []],
+        [useJammer, (i) => canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []],
+    ];
+    // マスのホバー時: マス選択型のスキルが構えている間だけ範囲を表示
     const onCellHover = (i: number) => {
-        if (useStomp) setPreviewCells(geo.stompRange(i));
-        else if (useJudgeDay) setPreviewCells(geo.judgeRange(i));
-        else if (usePandemic) setPreviewCells(geo.stompRange(i));
-        else if (useInjection > 0) setPreviewCells([i]);
-        else if (useChargeOne) setPreviewCells([i]);
-        else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
-        else if (useChargeArea) setPreviewCells(geo.stompRange(i));
-        else if (useClone) setPreviewCells(cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []);
-        else if (usePlunder) setPreviewCells(plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []);
-        else if (useFrostArea) setPreviewCells(geo.stompRange(i));
-        else if (useIcicle) setPreviewCells([i]);
-        else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
-        else if (useShatter) setPreviewCells(currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []);
-        else if (useKimon) setPreviewCells(kimonCandidates().includes(i) ? [i] : []);
-        else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
-        else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
-        else if (useShikigamiPlace) setPreviewCells(shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
-        else if (objectPlacing) setPreviewCells(objectLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
-        else if (objectTool) setPreviewCells(objectSkillTargetsNow(objectTool).includes(i) ? [i] : []);
-        else if (useShikigamiBlast) setPreviewCells(ownShikigami().includes(i) ? [i, ...geo.surroundRange(i)] : []);
-        else if (useShikigamiBless) setPreviewCells(ownShikigami().includes(i) ? [i, ...blessTargets()] : []);
-        else if (useShikigamiCurse) setPreviewCells(ownShikigami().includes(i) ? [i, ...curseTargets()] : []);
-        else if (useShikigamiPurge) setPreviewCells(purgeTargets().includes(i) ? [i] : []);
-        else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
-        else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
-        else if (useIgnite) setPreviewCells([i]);
-        else if (useTinder) setPreviewCells(tinderCandidates().includes(i) ? [i] : []);
-        else if (useThunderFire) setPreviewCells(thunderFireTargets().includes(i) ? [i, ...geo.surroundRange(i)] : []);
-        else if (useStash) setPreviewCells(stashTargets().includes(i) ? [i] : []);
-        else if (useBoltSilence) setPreviewCells(boltSilenceTargets().includes(i) ? [i] : []);
-        else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
+        const active = hoverPreviews.find(([on]) => on);
+        if (active) setPreviewCells(active[1](i));
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (hoverPreviews.some(([on]) => on)) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
