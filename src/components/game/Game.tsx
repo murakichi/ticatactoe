@@ -4,7 +4,7 @@ import { Effect } from '../../types/Effect';
 import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEmptyIndexes, randomPick, calculateLife, LIFE_STD } from '../../util';
-import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
+import AIPlayer, { MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
@@ -17,10 +17,9 @@ import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIG
 import { boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
-import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
-import { isUniqueEffect } from './UniqueEffects';
+import { BoardEffects, SkillEffectType } from './BoardEffects';
 import { VictoryEffect } from './VictoryEffect';
-import { GearToast, GearToasts } from './GearToasts';
+import { GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
 import { decayBoard, shouldDecay, isCrowded, canHitBound, isTakeProtected } from './decay';
@@ -28,19 +27,19 @@ import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
 import { resolveDeck, baseCostOf, SKILL_CATALOG, skillOf } from './deck';
 import { parseSkillText } from './skillMeta';
-import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
+import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
 import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
-import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
-import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather, FIRST_FROST_FREE_LEAVES } from './tokenSkills';
+import { ownCharges } from './comboCost';
+import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
 import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
-import { emptyDiscount, applyDiscount, discountAmount, afterSkill as afterDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { boardLeaves, tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, FLAME_SKILL_KEYS, isFrozen, isDormant, activeBuds, burnDamageOf, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, decayTick, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, INFERNO_FREE_SKILLS, canFreeze, overwriteBlocked, leafSurcharge, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, isEffectWarded, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, witchCostOf, mogaribue, mogaribueDamage, mogaribueTargets, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { emptyDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
+import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, isDormant, activeBuds, emptyBlocked, cleanse, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, canSacrifice, sacrificeTargets, sacrificeFlame, placeFlameToken, GRAFT_MAX, budStacks, budReceivers, graft, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, thunderFireVictims, thawOne, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -52,17 +51,10 @@ import {
     gearLifeStd,
     gearLockStack,
     gearTokenBindDelta,
-    adjustCostByGear,
     countVarietySquares,
-    burnedBudCount,
-    scorchGain,
-    ignitedCount,
-    flameCounts,
     frozenBudCount,
     rootGain,
-    budCounts,
     countAilmentKinds,
-    lostCells,
     CostContext,
     rollPriceOffsets,
     applyPriceOffsets,
@@ -70,7 +62,8 @@ import {
 } from './gear';
 import { Status } from './Status';
 import styles from './Game.module.css';
-import { isMuted, playSfx, setMuted } from '../../sound';
+import { playSfx } from '../../sound';
+import { useBoardEffects, useGearToasts, useSkillStrip, useSoundToggle } from './usePresentation';
 
 
 // 盤面を揺らすスキル演出
@@ -269,82 +262,16 @@ export const Game = (props: GameProps) => {
     const [restartCount, setRestartCount] = useState<number>(0);
     // 連戦時の勝利数 (Restartしてもリセットしない)
     const [wins, setWinsAt] = useSeatArray<number>(() => Array(seatCount).fill(0));
-    // 実際に破壊されたマスを濃い目の黄色で点滅させるためのインデックス
-    const [highlightedCells, setHighlightedCells] = useState<number[]>([]);
-    // ホバー時に破壊範囲をレモン色でプレビューするためのインデックス
-    const [previewCells, setPreviewCells] = useState<number[]>([]);
-    // スキル発動時の盤面エフェクト
-    const [boardEffect, setBoardEffect] = useState<SkillEffect | null>(null);
+    const { highlightedCells, setHighlightedCells, previewCells, setPreviewCells, boardEffect, setBoardEffect, boardBurst, setBoardBurst, playEffect, playBurst, flashCells } = useBoardEffects();
     // 巨人の着手の揺れ(0=まだ揺れていない)。奇数/偶数で別名のアニメーションにして、連続でも再生し直す
     const [giantShake, setGiantShake] = useState<number>(0);
-    const playEffect = (type: SkillEffectType, index?: number, indexes?: number[], label?: string, extra?: { variant?: string; sources?: number[] }) => {
-        playSfx(type);
-        setBoardEffect((prev) => ({ type, index, indexes, label, ...extra, nonce: (prev?.nonce ?? 0) + 1 }));
-        // 固有スキルは予兆→本体→余波の多段演出なので長めに出す
-        setTimeout(() => setBoardEffect(null), isUniqueEffect(type) ? 2100 : 1400);
-    };
-    // マスに重ねる小演出（氷結が砕ける・解凍・燃焼）。メインの演出と同時に出せる
-    const [boardBurst, setBoardBurst] = useState<BurstEffect | null>(null);
-    const playBurst = (type: BurstType, cells: number[]) => {
-        if (cells.length === 0) return;
-        playSfx(type);
-        setBoardBurst((prev) => ({ type, cells, nonce: (prev?.nonce ?? 0) + 1 }));
-        setTimeout(() => setBoardBurst(null), 1200);
-    };
-    // ギアの発動を知らせる(盤面上端のチップ + 効果音)。スキルの盤面演出とは別枠なので、同時に起きても上書きしない。
-    // 同じギア・同じ文言が短時間に続いたら1つにまとめる(StrictMode の二重実行や、同じ手の中の連続発動で、チップが並びすぎないように)
-    const [gearToasts, setGearToasts] = useState<GearToast[]>([]);
-    const gearToastSeq = useRef(0);
-    const lastGearToast = useRef<{ key: string; at: number } | null>(null);
-    const gearTrigger = (gearId: GearId, text?: string) => {
-        const def = gearDefOf(gearId);
-        const key = `${gearId}:${text ?? ''}`;
-        const now = Date.now();
-        if (lastGearToast.current && lastGearToast.current.key === key && now - lastGearToast.current.at < 400) return;
-        lastGearToast.current = { key, at: now };
-        playSfx('gear');
-        const id = ++gearToastSeq.current;
-        // 積み上がりすぎないよう、同時に出すのは最新の3つまで
-        setGearToasts((prev) => [...prev, { id, icon: def.icon, name: def.name, text }].slice(-3));
-        setTimeout(() => setGearToasts((prev) => prev.filter((t) => t.id !== id)), 2300);
-    };
+    const { gearToasts, gearTrigger } = useGearToasts();
     // スキルカードの説明を、すべて開く/閉じる(カードごとの開閉は SkillButton 側)
     const [expandAllDesc, setExpandAllDesc] = useState<boolean>(false);
     // モバイルは、通常は1画面に収めてスクロールなしで遊べる表示。「詳細」でログ・ギア・コストまで全部出す
     const [showDetail, setShowDetail] = useState<boolean>(false);
-    // スキルカードは横一列で、はみ出す側にだけ「‹ ›」と端のフェードを出す(横に続くことを見落とさないため)
-    const skillGridRef = useRef<HTMLDivElement>(null);
-    const [stripEdge, setStripEdge] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
-    const updateStripEdge = () => {
-        const el = skillGridRef.current;
-        if (!el) return;
-        const left = el.scrollLeft > 4;
-        const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-        setStripEdge((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
-    };
-    const scrollStrip = (dir: -1 | 1) => skillGridRef.current?.scrollBy({ left: dir * 160, behavior: 'smooth' });
-    // 手札・表示モード・画面幅が変わったら判定し直す(依存を付けず毎描画で判定。値が同じなら再描画されない)
-    useEffect(updateStripEdge);
-    useEffect(() => {
-        window.addEventListener('resize', updateStripEdge);
-        return () => window.removeEventListener('resize', updateStripEdge);
-    }, []);
-    // 効果音のオン/オフ(設定は localStorage に保存される)
-    const [soundOn, setSoundOn] = useState<boolean>(!isMuted());
-    const onClickToggleSound = () => {
-        const next = !soundOn;
-        setMuted(!next);
-        setSoundOn(next);
-        // オンにした瞬間に確認音を鳴らす(ブラウザの音声再開も兼ねる)
-        if (next) playSfx('charge');
-    };
-    const flashCells = (indexes: number[]) => {
-        // スキル実行時はホバープレビューを消して破壊演出に切り替える
-        setPreviewCells([]);
-        if (indexes.length === 0) return;
-        setHighlightedCells(indexes);
-        setTimeout(() => setHighlightedCells([]), 1200);
-    };
+    const { skillGridRef, stripEdge, scrollStrip, updateStripEdge } = useSkillStrip();
+    const { soundOn, onClickToggleSound } = useSoundToggle();
     // ⚡を増やす操作の直後に、次の盤面を通す。全マス⚡なら過負荷（全⚡・全🔑除去、全マスのライフ0）。ターンは続く
     const withOverload = (board: SquareInfo[]): SquareInfo[] => {
         if (!isFullyCharged(board)) return board;
@@ -1505,15 +1432,7 @@ export const Game = (props: GameProps) => {
     // ミアズマが毒を付与するマス → 付与する毒の数。自陣の毒が乗っているマスごとに、周囲1マスの敵マス(ロック/無敵は除く)へ1つずつ（重複あり）
     const miasmaPlan = (board: SquareInfo[], player: Player): Map<number, number> => miasmaPlanOf(board, player, characters);
 
-    const budsReduce = 1;
     const [useBuds, setUseBuds] = useState<[boolean, number]>([false, 0]);
-    const budsCount = (player: Player): number => {
-        const ownerSquares = currentBoard.filter((x) => x.player === player);
-        return ownerSquares
-            .map((x) => x.effects)
-            .flat()
-            .filter((x) => x.effect === '🌱').length;
-    };
     // 氷結中のマスの🌱は消えないが休眠していて、魔力ボーナスに数えない（冬至の種子のガード中を除く）
     const activeBudsCount = (player: Player): number =>
         currentBoard.filter((x) => x.player === player).reduce((n, sq) => n + activeBuds(sq, budGuard[seatOf(player)]), 0);
@@ -1552,9 +1471,6 @@ export const Game = (props: GameProps) => {
         setUseLock(useLock + 3);
         spendMagic(calculateCost(seatCosts.onClickTripleLock, false, false, currentTurnPlayer, 'onClickTripleLock'), true, true, 'onClickTripleLock');
     };
-
-    const unlockCost = 4;
-    const onClickUnlock = () => {};
 
     // 「ライフを0にする」スキルを1マスに当てる。氷結中ならライフはそのまま氷結だけ解除（false）、そうでなければ0にして🔥も消す（true）
     const zeroBySkill = (board: SquareInfo[], idx: number, broken: number[]): boolean => {
