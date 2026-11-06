@@ -5,7 +5,6 @@ import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { range, isShikigami, findEmptyIndexes } from '../../util';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, lockExtendCells, lockRaidCells, vacantSealCells } from './keysmith';
-import { proliferateUpkeep } from './turn';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE } from './shikigami';
 import { ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandable, objectLandableCells } from './objects';
 import { SHIKIGAMI_PURGE_FREE } from './cost';
@@ -41,6 +40,7 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { usePanelInfo } from './usePanelInfo';
 import { useTurnDerived } from './useTurnDerived';
 import { useGearRuntime } from './useGearRuntime';
 import { useSeatResources } from './useSeatResources';
@@ -337,64 +337,7 @@ export const Game = (props: GameProps) => {
     const { executeSkillForAI } = useSkillDispatch({ lifeBan, turnSeat, calculateTokenBind, currentBoard, currentTurnPlayer, gearTurn, placedThisTurn, exeHailMary, onClickToken, onClickDoubleToken, onClickBudsToken, onClickBothToken, onClickBuds, onClickDoubleBuds, onClickSlash, onClickBackSlash, onClickOpium, onClickCharge, onClickTsunami, onClickAddLife, onClickBibine, onClickWalpurgisNight, onClickTotalAssault, onClickNecromancy, currentCharacter, onClickCryoFreeze, onClickUseLock, onClickUseDoubleLock, onClickUseTripleLock, onClickStomp, onClickPlunder, onClickShatter, onClickJudgeDay, onClickProliferate, onClickSerum, onClickIntensify, onClickPandemic, onClickInjection, onClickMiasma, onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickSilence, onClickStrip, onClickChargeSeason, onClickBristle, onClickRelease, onClickStash, onClickBoltSilence, onClickThunderFire, onClickDarkPot, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickPoisonMist, onClickGlacier, onClickCleanse, onClickHarvestEve, onClickSolstice, onClickSucker, onClickToggleYingYang, onClickShikigamiPlace, onClickShikigamiBlast, onClickShikigamiBless, onClickShikigamiCurse, onClickShikigamiPurge, onClickShikigamiDiscount, onClickShikigamiAll, onClickShikigamiRandom, onClickShikigamiFlood, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickObjectSkill, onClickObject, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickGraveOffering, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickSacrifice, onClickBoost, onClickRandomFreeze, onClickPoisonToken, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickIgnite, onClickTinder, onClickInferno, onClickMogaribue, onClickSeal, onClickRandomCast, onClickBurnout, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, onClickBonfire, onClickMulch, onClickAutumn, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, onClickShuffle, runAIMove, onClickDiscount }, late);
     const { onCellClick } = useCellClick({ hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn }, late);
     const { calculateCost, judgeNextSeat, winner, checkSkillDisable, currentNecroCost, currentNecroRemain, aiTurn, winCells } = useTurnDerived({ currentTurn, characters, turnSeat, currentTurnPlayer, magic, useToken, costEnvFor, currentBoard, lastStandHolderFor, currentAI, stallRef, pendingAIMove, hailMarySpin, onClickCharge, geo, necroCost, remainNecro, setWinsAt, currentCharacter, seatCount, silenced, addLog, setCurrentTurn }, late);
-
-    // 継続中スキルの残りターン数を返す
-    const continuousEffects = (seat: number): string[] => {
-        const labels: string[] = [];
-        const assault = useAssault[seat];
-        if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
-        if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
-        if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
-        if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
-        if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');
-        const dl = discountLabel(seat);
-        if (dl) labels.push(dl);
-        if (budGuard[seat]) labels.push('冬至の種子 🌱は火炎で消えず氷結中も働く');
-        const necro = remainNecro[seat];
-        if (necro > 0) labels.push(`蘇生 残り${necro}ターン`);
-        if (proliferate[seat]) {
-            const count = proliferateCount[seat];
-            labels.push(`増殖 ${count}回目 (次の維持${proliferateUpkeep(count)})`);
-        }
-        return labels;
-    };
-
-    // キャラ固有スキルの現在コスト(スキルボタンの表示と同じ値)。固有スキルのないキャラは空
-    const exclusiveSkillCosts = (seat: number): { name: string; cost: number }[] => {
-        const sc = costTableFor(seat);
-        const g = (cost: number) => gearCost(cost, seat);
-        switch (characters[seat]) {
-            case 'tactician':
-                return [{ name: '全軍突撃', cost: g(sc.onClickTotalAssault - useTokenCount[seat] * 2) }];
-            case 'giant':
-                return [{ name: 'ストンプ', cost: g(sc.onClickStomp) }];
-            case 'magician':
-                return [{ name: '審判の日', cost: g(Math.max(0, sc.onClickJudgeDay - useMagicCount[seat])) }];
-            case 'yinYangMaster': {
-                const yang = yinYangMode[seat] === 'yang';
-                return [
-                    { name: '陰陽転化', cost: g(sc.onClickToggleYingYang) },
-                    yang ? { name: '式神爆破', cost: g(sc.onClickShikigamiBlast) } : { name: '式神設置', cost: g(sc.onClickShikigamiPlace) },
-                ];
-            }
-            case 'necromancer':
-                return [{ name: '蘇生', cost: g(necroCost[seat]) }];
-            case 'poisoner':
-                return [{ name: 'ミアズマ', cost: miasmaCost(symbols[seat]) }];
-            case 'electrician':
-                return [{ name: '帯電拡散', cost: chargeSpreadCost(symbols[seat]) }];
-            case 'cryomancer':
-                return [{ name: '絶対零度', cost: glacierCost(symbols[seat]) }];
-            case 'pyromancer':
-                return [{ name: '業火', cost: infernoCost(symbols[seat]) }];
-            case 'witch':
-                return [{ name: '虎落笛', cost: mogaribueCost(symbols[seat]) }];
-            case 'keysmith':
-                return [{ name: '封鎖の断', cost: sealCost(symbols[seat]) }];
-            default:
-                return [];
-        }
-    };
+    const { exclusiveSkillCosts, continuousEffects } = usePanelInfo({ useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost }, late);
 
     // 盤面の両サイドに表示するプレイヤー情報パネル
     const playerPanel = (seat: number) => (
