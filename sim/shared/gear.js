@@ -262,6 +262,9 @@ exports.ALT_RECOMMENDED_GEARS = {
 exports.COUNTER_GEARS_FOR_YOU = {
     poisoner: ['lastStand', 'spellWard', 'sturdy'],
     magician: ['lastStand', 'sturdy', 'luckyPurse'],
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'],
+    necromancer: ['ironLock', 'titanCost', 'sturdy'],
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };

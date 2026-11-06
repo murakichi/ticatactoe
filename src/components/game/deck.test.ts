@@ -181,8 +181,8 @@ describe('「あなた」の相手別デッキ', () => {
         for (const d of Object.values(COUNTER_DECKS_FOR_YOU)) expect(isValidDeck(d)).toBe(true);
         expect(recommendedDeckAgainst('you', ['witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
         expect(recommendedDeckAgainst('you', ['witch', 'witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
-        expect(recommendedDeckAgainst('you', ['witch', 'giant'])).toEqual(recommendedDeck('you'));
-        expect(recommendedDeckAgainst('you', ['giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['witch', 'tactician', 'giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['tactician', 'giant'])).toEqual(recommendedDeck('you'));
         expect(recommendedDeckAgainst('you', ['tactician'])).toEqual(COUNTER_DECKS_FOR_YOU.tactician);
         expect(recommendedDeckAgainst('magician', ['witch'])).toEqual(recommendedDeck('magician'));
     });

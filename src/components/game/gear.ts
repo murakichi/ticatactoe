@@ -315,6 +315,9 @@ export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
 export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
     poisoner: ['lastStand', 'spellWard', 'sturdy'],
     magician: ['lastStand', 'sturdy', 'luckyPurse'],
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'], // 呪詛除けが🔥を止める。0.3→27.3%（seed2/300）
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 6.3→26.7%
+    necromancer: ['ironLock', 'titanCost', 'sturdy'], // 26.0→41.0%
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };

@@ -2,7 +2,7 @@
 - 目標(ユーザー指示 2026-11-06): 最下位でトップ不可は前提。**勝率を少しでも上げる**。全キャラ共通の1設定は不可能なので、**相手を1キャラずつ選んで専用デッキ・ギアを組む**。ある程度勝てるようになった対策は `docs/tune/LEARNINGS.md` に「対X」で書き、他キャラの対策の参考にする。
 - 最後に検証したmaster: 55043be
 - 現在の推奨設定(共通): gears=[luckyPurse,titanCost,sturdy] deck=[0,2,3,5,6,8,10,11,12,28,32,52]
-- 相手別の専用ギア(`gear.ts` `COUNTER_GEARS_FOR_YOU`。相手が1キャラのときだけ AI 席の「あなた」が使う): poisoner=[lastStand,spellWard,sturdy] / magician・keysmith・yinYangMaster=[lastStand,sturdy,luckyPurse]
+- 相手別の専用ギア(`gear.ts` `COUNTER_GEARS_FOR_YOU`。相手が1キャラのときだけ AI 席の「あなた」が使う): poisoner=[lastStand,spellWard,sturdy] / magician・keysmith・yinYangMaster=[lastStand,sturdy,luckyPurse] / pyromancer=[spellWard,emptyLock,luckyPurse] / giant=[lastStand,emptyLock,luckyPurse] / necromancer=[ironLock,titanCost,sturdy]
 - 相手別の専用デッキ(`deck.ts` `COUNTER_DECKS_FOR_YOU` + `AIPlayer.ts` `YOU_HOLD_VS` で一寸の虫(92)/火口(87)を引いたら手札に固定): magician・witch=[0,2,3,5,8,10,11,28,32,52,87,92] / cryomancer・electrician=[0,2,3,5,8,10,11,12,28,32,52,92] / tactician=[0,2,3,5,8,10,11,28,32,52,74,92]（74,92を固定）
 - 強豪リスト(固定): electrician,magician,cryomancer,tactician,poisoner,giant
 - 基準線: 対強豪平均 6.8%±2.0 (field 11.0%) / 12位(最下位) (--target you seed1/100)。対キャラ別: tactician18 magician3 giant7 yinYang9 necro32 poisoner7 electrician0 cryo6 pyro0 witch3 keysmith36
@@ -26,9 +26,9 @@
 | magician(デッキ追加) | 11.0%(専用ギアのみ) | +専用デッキ(87,92固定) | 14.7%±4.0(seed2/300) | 採用(小) |
 | pyromancer | 0.3% | 92固定 | 0.3% | 変更なし |
 | tactician | 17.0% | 現行ギア+専用デッキ(92,74固定) | 29.0%±5.1(seed2/300。seed1/150 でも 18.7→34.7) | 採用 |
-| necromancer | 30.0% | ギアは現推奨が最良(lastStand系 12.7〜16.7%)。92/74/53の固定デッキも 26.7〜31.3% | 差なし | 変更なし |
-| giant | 6.3% | 鬼門封じ(74)入りデッキ+固定 | 9.7%±3.4(seed2/300、+3.4でz<1) | 不採用(ノイズ内) |
-| pyromancer | 0% | ギア・デッキ(92/74/53固定、氷結30/41/45/46で自陣を凍らせる固定)いずれも差なし | 0〜2% | 変更なし(どの手も届かない。環境1位級の鍛冶師に対しては現行の手札では勝ち筋が無い) |
+| necromancer | 26.0% | ironLock,titanCost,sturdy | 41.0%±5.6(seed2/300。ギア1枠走査 seed5/60 でも ironLock 48.3%が首位) | 採用 |
+| giant | 6.3% | lastStand,emptyLock,luckyPurse | 26.7%±5.0(seed2/300。luckyPurse,emptyLock,sturdy 22.7) | 採用(鬼門封じ入りデッキ +3.4 はノイズで不採用) |
+| pyromancer | 0.3% | spellWard,emptyLock,luckyPurse | 27.3%±5.0(seed2/300。emptyLock,sturdy,spellWard 22.0) | 採用(ギア全探索で発見。以前の『差なし』はデッキ・固定案だけを見ていた) |
 
 ## 試行ログ(新しい順)
 | # | 軸 | 仮説 | 結果 | 採否 |
