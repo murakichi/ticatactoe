@@ -66,6 +66,7 @@ const graveMod = require('./shared/graveSkills');
 const placementMod = require('./shared/placement');
 const proliferateMod = require('./shared/proliferate');
 const tokenAfterMod = require('./shared/tokenAfter');
+const tokenPlaceMod = require('./shared/tokenPlace');
 const deadlockMod = require('./shared/deadlock');
 const keysmithMod = require('./shared/keysmith');
 const chargeMod = require('./shared/charge');
@@ -256,11 +257,32 @@ function toxicBloom(s, cells) {
 }
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
-function afterTokenPlaced(s, idx, effect) {
-    const r = tokenAfterMod.afterTokenPlaced(s.board, idx, effect, { player: curPlayer(s), turnSeat: s.turn, gears: s.gears[s.turn], chars: s.chars, chargeBuff: s.chargeBuff[s.turn], rng: s.rng });
+function afterOptions(s) {
+    return { player: curPlayer(s), turnSeat: s.turn, gears: s.gears[s.turn], chars: s.chars, chargeBuff: s.chargeBuff[s.turn], rng: s.rng };
+}
+// 置いたあとのギア処理の結果を統計に記録する
+function noteAfter(s, r) {
+    if (!r) return;
     if (r.locked) bumpStat(s, 'bindingLock');
     if (r.spreadTo !== null) bumpStat(s, 'propagate');
+}
+function afterTokenPlaced(s, idx, effect) {
+    const r = tokenAfterMod.afterTokenPlaced(s.board, idx, effect, afterOptions(s));
+    noteAfter(s, r);
     return r.granted;
+}
+// トークン系スキルの置き方（共有: tokenPlace.ts）。空きマスから n 個選び、kind のコマを置いて afterTokenPlaced を通し、収穫まで済ませる。
+// 1個のときは randomPick、2個以上は randomAnyPick で選ぶ。置いたコマ（idx / thawed / frost）を返す
+function putTokens(s, kind, n, extra, afterPut) {
+    const pick = n === 1 ? (cells) => [randomPick(cells, s.rng)] : (cells, k) => randomAnyPick(cells, k, s.rng);
+    return putTokensAt(s, kind, tokenPlaceMod.pickEmptyCells(s.board, n, pick), extra, afterPut);
+}
+function putTokensAt(s, kind, cells, extra, afterPut) {
+    const ctx = { player: curPlayer(s), bind: calculateTokenBind(s), chars: s.chars, size: s.size, ...extra };
+    const r = tokenPlaceMod.placeTokens(s.board, kind, cells, ctx, afterOptions(s), afterPut);
+    r.placed.forEach((p) => noteAfter(s, p.after));
+    harvestMagic(s, r.granted);
+    return r.placed;
 }
 // 復讐の刃: 魔力の増減を席ごとに記録するための上限つき加算
 function vengeanceGain(s, seat, gained) {
@@ -1123,40 +1145,21 @@ function onClickTripleLock(s) {
     bumpMagicCount(s);
 }
 function onClickToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickToken, true, false, 'onClickToken'), 'onClickToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickDoubleToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    const [a, b] = randomAnyPick(empties, 2, s.rng);
-    let granted = 0;
-    if (a != null) { s.board[a] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, a, undefined); }
-    if (b != null) { s.board[b] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, b, undefined); }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleToken, true, false, 'onClickDoubleToken'), 'onClickDoubleToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickBudsToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
-        granted = afterTokenPlaced(s, idx, '🌱');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'buds', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickBudsToken, true, false, 'onClickBudsToken'), 'onClickBudsToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1164,14 +1167,10 @@ function onClickBudsToken(s) {
 }
 function onClickBothToken(s) {
     // 参加者全員に1つずつ（席順に空きマスからランダムに）。空きが足りなければ先着の席だけ
-    const empties = findEmptyIndexes(s.board);
-    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
-    let granted = 0;
-    picks.forEach((idx, seat) => {
-        s.board[idx] = { player: SYMBOLS[seat], bind: seat === s.turn ? calculateTokenBind(s) : 4, effects: [] };
-        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
-    });
-    harvestMagic(s, granted);
+    const picks = tokenPlaceMod.pickEmptyCells(s.board, seatCount(s), (cells, n) => randomAnyPick(cells, n, s.rng));
+    const r = tokenPlaceMod.placeBothTokens(s.board, picks, SYMBOLS, s.turn, calculateTokenBind(s), 4, afterOptions(s));
+    r.placed.forEach((p) => noteAfter(s, p.after));
+    harvestMagic(s, r.granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickBothToken, true, false, 'onClickBothToken'), 'onClickBothToken');
     s.useMagicCount[s.turn]++;
     s.usedTokenThisTurn = true;
@@ -1325,18 +1324,11 @@ function onClickShikigamiFlood(s) {
 }
 // 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
 function onClickShikigamiRandom(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        // トークン系ギア(補強・軽量)のライフ補正を受ける
-        s.board[idx] = newShikigami(curPlayer(s), Math.max(1, SHIKIGAMI_LIFE + gear.gearTokenBindDelta(s.gears[s.turn])));
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    // トークン系ギア(補強・軽量)のライフ補正を受ける
+    const placed = putTokens(s, 'shikigami', 1, { shikigamiBind: Math.max(1, SHIKIGAMI_LIFE + gear.gearTokenBindDelta(s.gears[s.turn])) });
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
     bumpMagicCount(s);
-    if (empties.length) s.shikiPlaced[s.turn] = true;
+    if (placed.length) s.shikiPlaced[s.turn] = true;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
@@ -1408,9 +1400,8 @@ function necromancyPay(s) {
 }
 function summonCorpses(s, corpses) {
     const cur = curPlayer(s);
-    const empties = findEmptyIndexes(s.board);
-    const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
-    const targets = randomAnyPick(empties, summonCount, s.rng);
+    const summonCount = Math.min(corpses, necromancySummonCap, findEmptyIndexes(s.board).length);
+    const targets = randomAnyPick(findEmptyIndexes(s.board), summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
 }
 function onClickNecromancy(s) {
@@ -1449,15 +1440,8 @@ function onClickInjection(s) {
     bumpMagicCount(s);
 }
 function onClickPoisonToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = poisonMod.poisonStrike({ player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '☠' }] }, s.chars);
-        granted = afterTokenPlaced(s, idx, '☠');
-        toxicBloom(s, [idx]);
-    }
-    harvestMagic(s, granted);
+    const placed = putTokens(s, 'poison', 1);
+    if (placed.length) toxicBloom(s, [placed[0].idx]);
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1602,14 +1586,7 @@ function onClickFirstFrost(s) {
     const pay = calculateCost(s, costsOf(s).onClickFirstFrost, true, false, 'onClickFirstFrost'); // 凍結で🍂が休眠する前のコストで払う
     const frozen = thermal.freeze(s.board, firstFrostTargets(s));
     chargeGlacier(s, frozen.length);
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
-        granted = afterTokenPlaced(s, idx, '🌱');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'buds', 1);
     spendMagic(s, pay, 'onClickFirstFrost');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1687,15 +1664,7 @@ function onClickBurnOff(s) {
     const { cells, flames: lit, destroyed: destroyedCells } = tokenSkillsMod.burnOff(s.board, curPlayer(s), s.chars, s.size, keepBudsOf(s));
     const destroyed = destroyedCells.length;
     if (destroyed > 0) addCorpses(s, destroyed);
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-        applyLock(s, idx);
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 1, undefined, (board, idx) => applyLock(s, idx)); // ロック付きで置く
     spendMagic(s, pay, 'onClickBurnOff');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1777,16 +1746,9 @@ function onClickObjectSkill(s, skill) {
 }
 // 超助っ人 (idx 103): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを自陣のランダムな空きマスに置く（トークン扱い・ターン1回） [FAITHFUL] Game.tsx onClickHelper
 function onClickHelper(s) {
-    const empties = findEmptyIndexes(s.board);
     const effect = bigMod.pickHelperEffect(s.rng);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        bigMod.placeHelperToken(s.board, idx, curPlayer(s), calculateTokenBind(s), effect, s.chars, s.size);
-        granted = afterTokenPlaced(s, idx, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined);
-        if (effect === '☠') toxicBloom(s, [idx]);
-    }
-    harvestMagic(s, granted);
+    const placed = putTokens(s, 'helper', 1, { helperEffect: effect });
+    if (placed.length && effect === '☠') toxicBloom(s, [placed[0].idx]);
     spendMagic(s, calculateCost(s, costsOf(s).onClickHelper, true, false, 'onClickHelper'), 'onClickHelper');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1797,15 +1759,7 @@ function onClickHelper(s) {
 
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
-        landCharge(s, idx);
-        granted = afterTokenPlaced(s, idx, '⚡');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'charge', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1837,10 +1791,7 @@ function exeChargeSpread(s, i) {
 // ---- 雷霆の巫 スキル2 (#40) ----
 // 帯電ダブルトークン: ⚡付きのコマを2つ設置（ターン1回）
 function onClickDoubleChargeToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, 2, s.rng)) {
-        if (idx != null) { s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] }; landCharge(s, idx); }
-    }
+    putTokens(s, 'charge', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2081,13 +2032,7 @@ function exeFreezeSpread(s, i) {
 }
 // 氷結トークン (idx45) / 氷結ダブルトークン (idx46): 空きマスにランダムで❄付きの自陣のコマを置く。トークン扱い（ターン1回）
 function placeFrostTokens(s, n, costKey) {
-    const empties = findEmptyIndexes(s.board);
-    const picks = n === 1 ? (empties.length ? [randomPick(empties, s.rng)] : []) : randomAnyPick(empties, n, s.rng);
-    for (const idx of picks) {
-        if (idx == null) continue;
-        chargeGlacier(s, thermal.placeFrostToken(s.board, idx, curPlayer(s), calculateTokenBind(s)));
-        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない扱い
-    }
+    for (const p of putTokens(s, 'frost', n)) chargeGlacier(s, p.frost);
     spendMagic(s, calculateCost(s, costsOf(s)[costKey], true, false, costKey), costKey);
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2128,12 +2073,8 @@ function onClickFrostfall(s) {
 // ---- 🍂落ち葉系の汎用スキル (idx 62〜68) ----
 // 🍂付きのトークンはトークンのエフェクトを持たない扱い（収穫/伝播ギアとは連動しない。火炎トークンと同じ）
 function placeLeafTokens(s, count, leaves) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, Math.min(count, empties.length), s.rng)) {
-        if (idx == null) continue;
-        thermal.placeLeafToken(s.board, idx, curPlayer(s), calculateTokenBind(s), leaves);
-        harvestMagic(s, afterTokenPlaced(s, idx));
-    }
+    // 1個でも randomAnyPick で選ぶ（従来どおり）
+    putTokensAt(s, 'leaf', tokenPlaceMod.pickEmptyCells(s.board, count, (cells, n) => randomAnyPick(cells, n, s.rng)), { leaves });
 }
 // 払うコストは置く前の盤面で決める（紅葉狩りの導線が、自分で置いた🍂で成立してしまわないように）
 const leafTokenCost = (s, key) => calculateCost(s, costsOf(s)[key], true, false, key);
@@ -2216,12 +2157,7 @@ function onClickSpringWind(s) {
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
-        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない（収穫/伝播ギアとは連動しない）
-    }
+    putTokens(s, 'flame', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickFlameToken, true, false, 'onClickFlameToken'), 'onClickFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2230,12 +2166,7 @@ function onClickFlameToken(s) {
 }
 // 火炎ダブルトークン (idx38): 空きマス2つに同様
 function onClickDoubleFlameToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, 2, s.rng)) {
-        if (idx == null) continue;
-        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
-        harvestMagic(s, afterTokenPlaced(s, idx));
-    }
+    putTokens(s, 'flame', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleFlameToken, true, false, 'onClickDoubleFlameToken'), 'onClickDoubleFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;

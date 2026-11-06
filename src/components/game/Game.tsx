@@ -8,7 +8,8 @@ import AIPlayer, { MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
-import { applyLockAt, afterTokenPlaced as afterTokenPlacedOf } from './tokenAfter';
+import { applyLockAt, afterTokenPlaced as afterTokenPlacedOf, TokenAfterOptions, TokenAfterResult } from './tokenAfter';
+import { TokenKind, PutContext, pickEmptyCells, placeTokens, placeBothTokens } from './tokenPlace';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
@@ -31,15 +32,15 @@ import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder } from './ge
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, stashTargets as stashTargetsOf, bristleTargets as bristleTargetsOf, boltSilenceTargets as boltSilenceTargetsOf, chargeHealTargets, thunderFireTargets as thunderFireTargetsOf, stashBolts, payBolt, thunderFire } from './charge';
+import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload, stashTargets as stashTargetsOf, bristleTargets as bristleTargetsOf, boltSilenceTargets as boltSilenceTargetsOf, chargeHealTargets, thunderFireTargets as thunderFireTargetsOf, stashBolts, payBolt, thunderFire } from './charge';
 import { ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
-import { perfectGame, placeHelperToken, pickHelperEffect, SECOND_CATCH_MAX_BASE } from './bigSkills';
+import { perfectGame, pickHelperEffect, SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { darkPotRolls } from './darkPot';
 import { corpseCount, graveDiscountAmount, graveOfferingTarget, placeWardPiece, POISON_WARD_TURNS } from './graveSkills';
 import { emptyDiscount, canUseDiscountSkill, lifeDeltaOf, DISCOUNT_SKILLS, DiscountKey, SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, activeBuds, emptyBlocked, cleanse, sacrificeCandidates as sacrificeCandidatesOf, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, suckerGraft, harvestBuds, randomFreezeCandidates, placeFrostToken, frostfallTargets, shatter, swidden, sacrificeTargets, sacrificeFlame, placeFlameToken, budStacks, budReceivers, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, placeLeafToken, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
+import { tinderTargets, BURNOUT_FREE_FLAMES, burnout, burnoutCostOf, burnoutTargets, totalFlames, isFrozen, activeBuds, emptyBlocked, cleanse, sacrificeCandidates as sacrificeCandidatesOf, ailmentStacks, lockable, applyDamage, absorbDestroy, zeroOut, ignite, suckerGraft, harvestBuds, randomFreezeCandidates, frostfallTargets, shatter, swidden, sacrificeTargets, sacrificeFlame, budStacks, budReceivers, sowCandidates, sow, SOW_COUNT, infernoTargets, INFERNO_STACKS, freeze, detonate, reducedGlacierCost, infernoCostOf, canFreeze, overwriteBlocked, bonfireTargets, bonfire, mulchCandidates, mulch, autumnTargets, autumn, leafFrostTargets, thawTargets, thawAll, fireStacksTotal, setEffectWard, kimonTargets, kimon, fireWheelTargets, FIRE_WHEEL_COUNT, fireWheel, mogaribue, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, leafDropTargets, leafDrop, leafAllTargets, leafCloakTargets, kindlingTargets, kindling } from './thermal';
 import { skillCosts, MIASMA_MIN_COST, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -1397,8 +1398,10 @@ export const Game = (props: GameProps) => {
     };
     // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
-    const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
-        const r = afterTokenPlacedOf(board, idx, effect, { player: currentTurnPlayer, turnSeat, gears: turnGears, chars: characters, chargeBuff: chargeBuff[turnSeat], rng: Math.random });
+    const afterOptions = (): TokenAfterOptions => ({ player: currentTurnPlayer, turnSeat, gears: turnGears, chars: characters, chargeBuff: chargeBuff[turnSeat], rng: Math.random });
+    // 置いたあとのギア処理（道連れの鍵・伝播）の結果をログ・演出にする
+    const reportAfter = (idx: number, effect: TokenEffect | undefined, r: TokenAfterResult | null) => {
+        if (!r) return;
         if (r.locked) {
             addLog(`道連れの鍵: ${posName(idx)}にロックが付いた`);
             gearTrigger('bindingLock', 'ロック付与');
@@ -1409,7 +1412,22 @@ export const Game = (props: GameProps) => {
             gearTrigger('propagate', `${effect}が広がった`);
             playBurst('gearSpread', [r.spreadTo]);
         }
+    };
+    const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
+        const r = afterTokenPlacedOf(board, idx, effect, afterOptions());
+        reportAfter(idx, effect, r);
         return r.granted;
+    };
+    // トークン系スキルの置き方（共有: tokenPlace.ts）。空きマスから n 個選び、kind のコマを置いて afterTokenPlaced を通す。
+    // 収穫とギアのログは、スキルの使用ログのあとに report() で出す（1個のときは randomPick、2個以上は randomAnyPick で選ぶ）
+    const putTokens = (board: SquareInfo[], kind: TokenKind, n: number, extra?: Partial<PutContext>, afterPut?: (board: SquareInfo[], idx: number) => void) => {
+        const pick = n === 1 ? (cells: number[]) => [randomPick(cells)] : (cells: number[], k: number) => randomAnyPick(cells, k);
+        return putTokensAt(board, kind, pickEmptyCells(board, n, pick), extra, afterPut);
+    };
+    const putTokensAt = (board: SquareInfo[], kind: TokenKind, cells: number[], extra?: Partial<PutContext>, afterPut?: (board: SquareInfo[], idx: number) => void) => {
+        const ctx: PutContext = { player: currentTurnPlayer, bind: calculateTokenBind(), chars: characters, size: geo.size, ...extra };
+        const r = placeTokens(board, kind, cells, ctx, afterOptions(), afterPut);
+        return { ...r, report: () => { r.placed.forEach((t) => reportAfter(t.idx, t.effect, t.after)); harvestMagic(r.granted); } };
     };
     // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与する（毒拡散パッシブ）
     const spreadPoisonAround = (board: SquareInfo[], idx: number) => {
@@ -1538,16 +1556,12 @@ export const Game = (props: GameProps) => {
 
     const onClickBothToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
         // 参加者全員に1つずつ（席順に空きマスからランダムに）。空きが足りなければ先着の席だけ
-        const picks = randomAnyPick(emptyIndexes, Math.min(seatCount, emptyIndexes.length));
+        const picks = pickEmptyCells(board, seatCount, (cells, n) => randomAnyPick(cells, n));
         addLog(`「両トークン」を使用（${picks.map((idx, seat) => `${symbols[seat]}: ${posName(idx)}`).join(' / ')}に設置）`);
-        let granted = 0;
-        picks.forEach((idx, seat) => {
-            board[idx] = { player: symbols[seat], bind: seat === turnSeat ? calculateTokenBind() : 4, effects: [] };
-            if (seat === turnSeat) granted += afterTokenPlaced(board, idx);
-        });
-        harvestMagic(granted);
+        const both = placeBothTokens(board, picks, symbols, turnSeat, calculateTokenBind(), 4, afterOptions());
+        both.placed.forEach((t) => reportAfter(t.idx, t.effect, t.after));
+        harvestMagic(both.granted);
         playEffect('token', undefined, picks, '両トークン');
         spendMagic(calculateCost(seatCosts.onClickBothToken, true, false, currentTurnPlayer, 'onClickBothToken'), true, true, 'onClickBothToken');
         setCurrentBoard(board);
@@ -1556,12 +1570,12 @@ export const Game = (props: GameProps) => {
 
     const onClickToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        const index = randomPick(emptyIndexes);
-        board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
+        const t = putTokens(board, 'plain', 1);
+        if (t.placed.length === 0) return;
+        const index = t.placed[0].idx;
         addLog(`「トークン」を使用（${posName(index)}に設置）`);
         playEffect('token', index, [index], 'トークン');
-        harvestMagic(afterTokenPlaced(board, index));
+        t.report();
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickToken, true, false, currentTurnPlayer, 'onClickToken'), true, true, 'onClickToken');
         setUseToken(true);
@@ -1569,13 +1583,12 @@ export const Game = (props: GameProps) => {
 
     const onClickDoubleToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        const [emptyIndex1, emptyIndex2] = randomAnyPick(emptyIndexes, 2);
-        board[emptyIndex1] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
-        board[emptyIndex2] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
-        addLog(`「ダブルトークン」を使用（${posName(emptyIndex1)}・${posName(emptyIndex2)}に設置）`);
-        playEffect('token', undefined, [emptyIndex1, emptyIndex2], 'ダブルトークン');
-        harvestMagic(afterTokenPlaced(board, emptyIndex1) + afterTokenPlaced(board, emptyIndex2));
+        const t = putTokens(board, 'plain', 2);
+        const cells = t.placed.map((x) => x.idx);
+        if (cells.length === 0) return;
+        addLog(`「ダブルトークン」を使用（${cells.map(posName).join('・')}に設置）`);
+        playEffect('token', undefined, cells, 'ダブルトークン');
+        t.report();
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleToken, true, false, currentTurnPlayer, 'onClickDoubleToken'), true, true, 'onClickDoubleToken');
         setUseToken(true);
@@ -1586,12 +1599,12 @@ export const Game = (props: GameProps) => {
 
     const onClickBudsToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        const index = randomPick(emptyIndexes);
-        board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '🌱' }] };
+        const t = putTokens(board, 'buds', 1);
+        if (t.placed.length === 0) return;
+        const index = t.placed[0].idx;
         addLog(`「バッズトークン」を使用（${posName(index)}に設置）`);
         playEffect('token', index, [index], 'バッズトークン');
-        harvestMagic(afterTokenPlaced(board, index, '🌱'));
+        t.report();
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBudsToken, true, false, currentTurnPlayer, 'onClickBudsToken'), true, true, 'onClickBudsToken');
         setUseToken(true);
@@ -2032,18 +2045,17 @@ export const Game = (props: GameProps) => {
     // 汎用(idx 72・トークン扱い): ランダムな空きマスに式神。トークン系ギア(補強・軽量)のライフ補正を受ける
     const onClickShikigamiRandom = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        if (emptyIndexes.length > 0) {
-            const index = randomPick(emptyIndexes);
-            board[index] = newShikigami(currentTurnPlayer, Math.max(1, SHIKIGAMI_LIFE + gearTokenBindDelta(turnGears)));
+        const t = putTokens(board, 'shikigami', 1, { shikigamiBind: Math.max(1, SHIKIGAMI_LIFE + gearTokenBindDelta(turnGears)) });
+        if (t.placed.length > 0) {
+            const index = t.placed[0].idx;
             addLog(`「式神ランダム設置」を使用（${posName(index)}に設置）`);
             flashCells([index]);
             playEffect('shikigami', index);
-            harvestMagic(afterTokenPlaced(board, index));
+            t.report();
             setCurrentBoard(board);
         }
         spendMagic(calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom'), true, true, 'onClickShikigamiRandom');
-        if (emptyIndexes.length > 0) gearTurn.current.shikiPlaced[turnSeat] = true;
+        if (t.placed.length > 0) gearTurn.current.shikiPlaced[turnSeat] = true;
         setUseToken(true);
     };
 
@@ -2168,12 +2180,12 @@ export const Game = (props: GameProps) => {
 
     const onClickPoisonToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        const index = randomPick(emptyIndexes);
-        board[index] = poisonStrike({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '☠' }] });
+        const t = putTokens(board, 'poison', 1);
+        if (t.placed.length === 0) return;
+        const index = t.placed[0].idx;
         addLog(`「ポイズントークン」を使用（${posName(index)}に設置）`);
         playEffect('token', index, [index], 'ポイズントークン');
-        harvestMagic(afterTokenPlaced(board, index, '☠'));
+        t.report();
         toxicBloom(board, [index]);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickPoisonToken, true, true, currentTurnPlayer, 'onClickPoisonToken'), true, true, 'onClickPoisonToken');
@@ -2313,18 +2325,12 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const frozen = firstFrost(board, currentTurnPlayer, characters);
         bumpGlacierCharge(frozen.length);
-        const empties = findEmptyIndexes(board);
-        let granted = 0;
-        let index: number | undefined;
-        if (empties.length) {
-            index = randomPick(empties);
-            board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '🌱' }] };
-            granted = afterTokenPlaced(board, index, '🌱');
-        }
+        const t = putTokens(board, 'buds', 1);
+        const index: number | undefined = t.placed[0]?.idx;
         addLog(`「初霜」を使用（敵の🍂のあるコマ${frozen.length}個を凍結${index !== undefined ? `・${posName(index)}にバッズトークン` : ''}）`);
         flashCells(frozen);
         playEffect('firstFrost', index, index !== undefined ? [index, ...frozen] : frozen);
-        harvestMagic(granted);
+        t.report();
         setCurrentBoard(board);
         spendMagic(pay, true, true, 'onClickFirstFrost');
         setUseToken(true);
@@ -2353,20 +2359,13 @@ export const Game = (props: GameProps) => {
         const board = currentBoard.slice();
         const r = burnOff(board, currentTurnPlayer, characters, geo.size, keepBuds);
         if (r.destroyed.length > 0) addCorpses(r.destroyed.length);
-        const free = findEmptyIndexes(board);
-        let granted = 0;
-        let index: number | undefined;
-        if (free.length) {
-            index = randomPick(free);
-            board[index] = { player: currentTurnPlayer, bind: calculateTokenBind(), effects: [] };
-            applyLock(board, index);
-            granted = afterTokenPlaced(board, index);
-        }
+        const t = putTokens(board, 'plain', 1, undefined, (b, idx) => applyLock(b, idx)); // ロック付きで置く
+        const index: number | undefined = t.placed[0]?.idx;
         addLog(`「山焼き」を使用（敵のエフェクトのあるマス${r.cells.length}個に🔥${index !== undefined ? `・${posName(index)}にロック付きトークン` : ''}）`);
         flashCells(r.cells);
         playEffect('burnOff', index, index !== undefined ? [index, ...r.cells] : r.cells);
         playBurst('thaw', r.thawed);
-        harvestMagic(granted);
+        t.report();
         setCurrentBoard(board);
         spendMagic(pay, true, true, 'onClickBurnOff');
         setUseToken(true);
@@ -2425,17 +2424,17 @@ export const Game = (props: GameProps) => {
     // 超助っ人(idx 103): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを、自陣のランダムな空きマスに置く（トークン扱い・ターン1回）
     const onClickHelper = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
         const effect = pickHelperEffect(Math.random);
-        if (emptyIndexes.length > 0) {
-            const index = randomPick(emptyIndexes);
-            const r = placeHelperToken(board, index, currentTurnPlayer, calculateTokenBind(), effect, characters, geo.size);
+        const t = putTokens(board, 'helper', 1, { helperEffect: effect });
+        if (t.placed.length > 0) {
+            const index = t.placed[0].idx;
+            const r = t.placed[0];
             addLog(`「超助っ人」を使用（${posName(index)}に${effect}付きのコマを設置）`);
             if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
             playEffect('token', index, [index], '超助っ人');
             playBurst('thaw', r.thawed);
             // 🌱☠⚡はトークンのエフェクトとして収穫・伝播に数える。🔥❄🍂は持たない扱い（火炎・氷結・落ち葉トークンと同じ）
-            harvestMagic(afterTokenPlaced(board, index, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined));
+            t.report();
             if (effect === '☠') toxicBloom(board, [index]);
             setCurrentBoard(effect === '⚡' ? withOverload(board) : board);
         }
@@ -2493,12 +2492,11 @@ export const Game = (props: GameProps) => {
     // 帯電トークン: 空きマスにランダムに⚡付きのコマを置く（トークン扱い。発火はしない）
     const onClickChargeToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        if (emptyIndexes.length > 0) {
-            const index = randomPick(emptyIndexes);
-            board[index] = landCharge({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] }, characters);
+        const t = putTokens(board, 'charge', 1);
+        if (t.placed.length > 0) {
+            const index = t.placed[0].idx;
             addLog(`「帯電トークン」を使用（${posName(index)}に設置）`);
-            harvestMagic(afterTokenPlaced(board, index, '⚡'));
+            t.report();
             playEffect('zap', index, undefined, '帯電トークン');
             setCurrentBoard(withOverload(board));
         }
@@ -2520,12 +2518,11 @@ export const Game = (props: GameProps) => {
     // 帯電ダブルトークン: 空きマスにランダムに⚡付きのコマを2つ置く（トークン扱い。発火はしない）
     const onClickDoubleChargeToken = () => {
         const board = currentBoard.slice();
-        const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
-        for (const idx of picks) {
-            board[idx] = landCharge({ player: currentTurnPlayer, bind: calculateTokenBind(), effects: [{ effect: '⚡' }] }, characters);
-        }
+        const t = putTokens(board, 'charge', 2);
+        const picks = t.placed.map((x) => x.idx);
         addLog(`「帯電ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (picks.length > 0) playEffect('zap', picks[0], undefined, '帯電ダブルトークン');
+        t.report();
         setCurrentBoard(withOverload(board));
         spendMagic(calculateCost(seatCosts.onClickDoubleChargeToken, true, false, currentTurnPlayer, 'onClickDoubleChargeToken'), true, true, 'onClickDoubleChargeToken');
         setUseToken(true);
@@ -2670,18 +2667,17 @@ export const Game = (props: GameProps) => {
 
     // --- 火炎系の汎用スキル（idx 37-39）。氷結への対抗手段 ---
     // 火炎トークン: 🔥付きの自陣コマをランダムな空きマスに置く（置いたマスの縦横隣の氷結は全解除）
-    const placeFlame = (board: SquareInfo[], idx: number): number[] =>
-        placeFlameToken(board, idx, currentTurnPlayer, calculateTokenBind(), geo.size);
     const onClickFlameToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        if (emptyIndexes.length > 0) {
-            const index = randomPick(emptyIndexes);
-            const thawed = placeFlame(board, index);
+        const t = putTokens(board, 'flame', 1);
+        if (t.placed.length > 0) {
+            const index = t.placed[0].idx;
+            const thawed = t.placed[0].thawed;
             addLog(`「火炎トークン」を使用（${posName(index)}に設置）`);
             if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
             playEffect('flame', index, undefined, '火炎トークン');
             playBurst('thaw', thawed);
+            t.report();
             setCurrentBoard(board);
         }
         spendMagic(calculateCost(seatCosts.onClickFlameToken, true, false, currentTurnPlayer, 'onClickFlameToken'), true, true, 'onClickFlameToken');
@@ -2689,13 +2685,15 @@ export const Game = (props: GameProps) => {
     };
     const onClickDoubleFlameToken = () => {
         const board = currentBoard.slice();
-        const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
+        const t = putTokens(board, 'flame', 2);
+        const picks = t.placed.map((x) => x.idx);
         const thawed = new Set<number>();
-        for (const idx of picks) placeFlame(board, idx).forEach((k) => thawed.add(k));
+        t.placed.forEach((x) => x.thawed.forEach((k) => thawed.add(k)));
         addLog(`「火炎ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (thawed.size > 0) addLog(`氷結が溶けた（${Array.from(thawed).map(posName).join('・')}）`);
         if (picks.length > 0) playEffect('flame', picks[0], undefined, '火炎ダブルトークン');
         playBurst('thaw', Array.from(thawed));
+        t.report();
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleFlameToken, true, false, currentTurnPlayer, 'onClickDoubleFlameToken'), true, true, 'onClickDoubleFlameToken');
         setUseToken(true);
@@ -2753,12 +2751,11 @@ export const Game = (props: GameProps) => {
     };
     const placeLeafTokens = (key: LeafTokenKey, label: string, count: number, leaves: number) => {
         const board = currentBoard.slice();
-        const picks = randomAnyPick(findEmptyIndexes(board), count).filter((idx) => idx !== undefined);
-        let granted = 0;
-        for (const idx of picks) {
-            placeLeafToken(board, idx, currentTurnPlayer, calculateTokenBind(), leaves);
-            granted += afterTokenPlaced(board, idx);
-        }
+        // 1個でも randomAnyPick で選ぶ（従来どおり）
+        const t = putTokensAt(board, 'leaf', pickEmptyCells(board, count, (cells, n) => randomAnyPick(cells, n)), { leaves });
+        const picks = t.placed.map((x) => x.idx);
+        const granted = t.granted;
+        t.placed.forEach((x) => reportAfter(x.idx, x.effect, x.after));
         addLog(`「${label}」を使用（${picks.map(posName).join('・')}に🍂${leaves}枚付きで設置）`);
         setCurrentBoard(board);
         finishLeafToken(key, label, picks, granted);
@@ -2973,12 +2970,13 @@ export const Game = (props: GameProps) => {
     // 氷結トークン: ❄付きの自陣コマをランダムな空きマスに置く
     const onClickFrostToken = () => {
         const board = currentBoard.slice();
-        const emptyIndexes = findEmptyIndexes(board);
-        if (emptyIndexes.length > 0) {
-            const index = randomPick(emptyIndexes);
-            bumpGlacierCharge(placeFrostToken(board, index, currentTurnPlayer, calculateTokenBind()));
+        const t = putTokens(board, 'frost', 1);
+        if (t.placed.length > 0) {
+            const index = t.placed[0].idx;
+            bumpGlacierCharge(t.placed[0].frost);
             addLog(`「氷結トークン」を使用（${posName(index)}に設置）`);
             playEffect('freeze', index, [index], '氷結トークン');
+            t.report();
             setCurrentBoard(board);
         }
         spendMagic(calculateCost(seatCosts.onClickFrostToken, true, false, currentTurnPlayer, 'onClickFrostToken'), true, true, 'onClickFrostToken');
@@ -2986,12 +2984,12 @@ export const Game = (props: GameProps) => {
     };
     const onClickDoubleFrostToken = () => {
         const board = currentBoard.slice();
-        const picks = randomAnyPick(findEmptyIndexes(board), 2).filter((idx) => idx !== undefined);
-        let made = 0;
-        for (const idx of picks) made += placeFrostToken(board, idx, currentTurnPlayer, calculateTokenBind());
-        bumpGlacierCharge(made);
+        const t = putTokens(board, 'frost', 2);
+        const picks = t.placed.map((x) => x.idx);
+        bumpGlacierCharge(t.placed.reduce((n, x) => n + x.frost, 0));
         addLog(`「氷結ダブルトークン」を使用（${picks.map(posName).join('・')}に設置）`);
         if (picks.length > 0) playEffect('freeze', picks[0], picks, '氷結ダブルトークン');
+        t.report();
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickDoubleFrostToken, true, false, currentTurnPlayer, 'onClickDoubleFrostToken'), true, true, 'onClickDoubleFrostToken');
         setUseToken(true);
