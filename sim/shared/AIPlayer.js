@@ -185,6 +185,7 @@ class AIPlayer {
         this.hypoCut = 0;
         /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
         this.ownTrees = 0;
+        this.ownObjectKinds = new Set(); // 盤面の自陣のオブジェクトの種類
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
         /** 自陣の働いている毒沼の数 */
@@ -2462,6 +2463,7 @@ class AIPlayer {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownObjectKinds = new Set(argsIn[0].filter((sq) => sq.object && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).map((sq) => sq.object));
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
@@ -3007,6 +3009,24 @@ class AIPlayer {
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
                 magic -= cost;
+            }
+        }
+        // 陰陽師が立てるオブジェクト（検証用: 聖域・市場・砦・招き猫・泥田坊・見ざる地蔵）。大木と同じ条件・同じマスの選び方で、種類ごとに1つ
+        if (this.character === 'yinYangMaster' && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
+            for (const kind of ['luckyCat', 'sanctuary', 'market', 'fort', 'mudField', 'blindMonkey']) {
+                const def = objects_1.OBJECT_DEFS[kind];
+                if (!availableSkills.includes(def.idx) || this.ownObjectKinds.has(kind))
+                    continue;
+                const cost = this.calculateAICost(costs[def.costKey], false, false, def.costKey);
+                const cell = this.bestTreeCell(board);
+                if (cell !== null && magic >= cost) {
+                    chargeClicks.push({ skill: def.costKey, target: cell });
+                    board = board.slice();
+                    board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                    magic -= cost;
+                    break;
+                }
             }
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
