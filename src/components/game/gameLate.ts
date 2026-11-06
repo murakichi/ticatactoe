@@ -58,4 +58,5 @@ export interface GameLate {
     calculateTokenBind: () => number;
     hailMaryChoices: { name: string; run: () => void; }[];
     setLockedSkillsAt: (seat: number, value: number[] | ((prev: number[]) => number[])) => void;
+    yinYangMode: (YingYangMode | undefined)[];
 }
