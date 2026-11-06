@@ -9,7 +9,7 @@ import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
-import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -198,6 +198,7 @@ export const Game = (props: GameProps) => {
         ward: Array<number>(seatCount).fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: Array<boolean>(seatCount).fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         lockSeen: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: Array<boolean>(seatCount).fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
         lockPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での lockSeen
         blessing: Array<number>(seatCount).fill(0), // 施錠の加護: 残りの手番数（その席の手番が終わるたびに1減る）
         blessingFresh: Array<boolean>(seatCount).fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
@@ -248,6 +249,7 @@ export const Game = (props: GameProps) => {
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
+        lockFreeUsed: gearTurn.current.lockFreeUsed[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
@@ -518,6 +520,8 @@ export const Game = (props: GameProps) => {
             case 'onClickAutumn': onClickAutumn(); break;
             case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickKimon': onClickKimon(); break;
+            case 'onClickLockConvert': onClickLockConvert(); break;
+            case 'onClickLockDiscount': onClickLockDiscount(); break;
             case 'onClickFireWheel': onClickFireWheel(); break;
             case 'onClickSpark': onClickSpark(); break;
             case 'onClickShuffle': onClickShuffle(); break;
@@ -819,6 +823,7 @@ export const Game = (props: GameProps) => {
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseKimon(false);
+        setUseLockConvert(false);
         setUseStash(false);
         setUseBoltSilence(0);
         setUseThunderFire(false);
@@ -1131,6 +1136,10 @@ export const Game = (props: GameProps) => {
 
         if (useKimon) {
             exeKimon(i);
+            return;
+        }
+        if (useLockConvert) {
+            exeLockConvert(i);
             return;
         }
 
@@ -1536,9 +1545,12 @@ export const Game = (props: GameProps) => {
 
     const [useLock, setUseLock] = useState<number>(0);
     const onClickUseLock = () => {
+        // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料。支払いの前に判定して、無料を使ったことを記録する
+        const lockCost = calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock');
+        if (currentCharacter === 'keysmith' && lockCost === 0) gearTurn.current.lockFreeUsed[turnSeat] = true;
         addLog('「ロック」を使用（マスを選択）');
         setUseLock(useLock + 1);
-        spendMagic(calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock'), true, true, 'onClickUseLock');
+        spendMagic(lockCost, true, true, 'onClickUseLock');
     };
 
     const onClickUseDoubleLock = () => {
@@ -3175,6 +3187,8 @@ export const Game = (props: GameProps) => {
 
     // 鬼門封じ: 敵のコマを1つ選んで破壊する（氷結中は❄-1だけ）。破壊して空きマスになったら3ターンロックする。🔑ロック・⚡無敵のコマは選べない
     const [useKimon, setUseKimon] = useState<boolean>(false);
+    // 錠の転換（汎用 idx 134）: ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す。自分のロックでも敵のロックでもよい
+    const [useLockConvert, setUseLockConvert] = useState<boolean>(false);
     // 落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ付ける（🔑ロック・⚡無敵は除く）。クリック不要・手番は続く
     const leafDropCandidates = (): number[] => leafDropTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
     const onClickLeafDrop = () => {
@@ -3219,6 +3233,33 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
     };
     const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    // 錠前割引（汎用 idx 135）: 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）
+    const onClickLockDiscount = () => {
+        const n = lockedSquareCount(currentBoard);
+        if (n === 0) return;
+        addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
+        playEffect('discount', undefined, undefined, '錠前割引');
+        spendMagic(calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
+    };
+    const onClickLockConvert = () => {
+        if (lockConvertCells(currentBoard).length === 0) return;
+        addLog('「錠の転換」を使用（ロックのかかっているマスを選択）');
+        setUseLockConvert(true);
+        spendMagic(calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert'), true, true, 'onClickLockConvert');
+    };
+    const exeLockConvert = (i: number) => {
+        if (!lockConvertCells(currentBoard).includes(i)) return; // ロックの無いマスは選び直せる
+        const board = currentBoard.slice();
+        const gained = lockConvert(board, i);
+        addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
+        flashCells([i]);
+        playEffect('lock', i, [i], '錠の転換');
+        setUseLockConvert(false);
+        setCurrentBoard(board);
+        setLife(life + gained);
+    };
     const onClickKimon = () => {
         addLog('「鬼門封じ」を使用（敵のコマを選択）');
         setUseKimon(true);
@@ -3745,6 +3786,7 @@ export const Game = (props: GameProps) => {
             ward: Array<number>(seatCount).fill(0),
             wardFresh: Array<boolean>(seatCount).fill(false),
             lockSeen: Array<boolean>(seatCount).fill(false),
+            lockFreeUsed: Array<boolean>(seatCount).fill(false),
             lockPrev: Array<boolean>(seatCount).fill(false),
             blessing: Array<number>(seatCount).fill(0),
             blessingFresh: Array<boolean>(seatCount).fill(false),
@@ -3795,6 +3837,7 @@ export const Game = (props: GameProps) => {
         else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useShatter) setPreviewCells(currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []);
         else if (useKimon) setPreviewCells(kimonCandidates().includes(i) ? [i] : []);
+        else if (useLockConvert) setPreviewCells(lockConvertCells(currentBoard).includes(i) ? [i] : []);
         else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
         else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useShikigamiPlace) setPreviewCells(shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
@@ -3814,7 +3857,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useLockConvert || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -3852,6 +3895,8 @@ export const Game = (props: GameProps) => {
         ? '殉火'
         : useKimon
         ? '鬼門封じ'
+        : useLockConvert
+        ? '錠の転換'
         : useSwidden
         ? '焼畑'
         : objectPlacing
@@ -4002,6 +4047,8 @@ export const Game = (props: GameProps) => {
         { idx: 131, onClick: onClickLockExtend, buttonText: `ロックの増築-${calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend')}`, paragraph: `自陣のコマに乗っているロックのスタックを全て+${LOCK_EXTEND_STACK}します\n（ロックの乗っていないコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickLockExtend, false, false, 'onClickLockExtend') || lockExtendCells(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 132, onClick: onClickLockBlessing, buttonText: `施錠の加護-${calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing')}`, paragraph: `使った手番を含む自分の${BLESSING_TURNS}手番の間、設置したコマにロックが${BLESSING_STACK}スタック付きます\n（ロック中のコマは奪われません）`, disabled: checkSkillDisable(seatCosts.onClickLockBlessing, false, false, 'onClickLockBlessing') },
         { idx: 133, onClick: onClickVacantSeal, buttonText: `空き家封じ-${vacantSealCost()}`, paragraph: `空きマス全てを${VACANT_SEAL_STACK}スタックでロックします（ターンは続く）\n相手のリーチ1つにつきコスト-${VACANT_SEAL_REACH_CUT}（下限1）。鍵師は空きマスのロックを無視して置けます`, disabled: magic[turnSeat] < vacantSealCost() || vacantSealCells(currentBoard).length === 0 },
+        { idx: 134, onClick: onClickLockConvert, buttonText: `錠の転換-${calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert')}`, paragraph: `ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します\n（自分のロックでも他人のロックでも選べます。ロック中の空きマスも可）`, disabled: checkSkillDisable(seatCosts.onClickLockConvert, false, false, 'onClickLockConvert') || lockConvertCells(currentBoard).length === 0 },
+        { idx: 135, onClick: onClickLockDiscount, buttonText: `錠前割引-${calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount')}`, paragraph: `このターン、盤面にあるロックのマスの数(${lockedSquareCount(currentBoard)})だけ、打つスキルのコストを軽減します（使った時点の数で固定。下限1。軽減札どうしには効きません）`, disabled: checkSkillDisable(seatCosts.onClickLockDiscount, false, false, 'onClickLockDiscount') || lockedSquareCount(currentBoard) === 0 },
         ...OBJECT_SKILL_KEYS.map((skill) => ({
             idx: OBJECT_SKILLS[skill].idx,
             onClick: () => onClickObjectSkill(skill),

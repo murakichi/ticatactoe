@@ -52,6 +52,8 @@ export type GearTurnState = {
     /** 錠前荒らしの0コスト条件: lockSeen=相手がこの間にロックを使ったか（席ごと）/ lockPrev=今の手番の頭の時点での lockSeen（直前の相手ターンにロックが使われたか） */
     lockSeen: boolean[];
     lockPrev: boolean[];
+    /** 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか（手番が変わるとリセット） */
+    lockFreeUsed: boolean[];
     /** 施錠の加護: blessing=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ blessingFresh=使った手番（この手番の終わりでは減らさない） */
     blessing: number[];
     blessingFresh: boolean[];
@@ -159,6 +161,8 @@ export const advanceGearState = (
     g.oppSkilled[nextSeat] = false;
     g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
     g.lockSeen[nextSeat] = false;
+    g.lockFreeUsed[endSeat] = false; // 鍵師の無料ロックは手番ごと
+    g.lockFreeUsed[nextSeat] = false;
     g.fireBase[nextSeat] = fireStacksTotal(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = plantedStacksTotal(board);

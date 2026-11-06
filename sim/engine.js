@@ -419,6 +419,7 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        useLockConvert: false, // 錠の転換（汎用 idx 134）: ロックのかかったマスを選んで解除し、スタックを自分のライフに足す
         usePlunder: false,
         useStash: false,
         useBoltSilence: 0, // あと何個の⚡を選んで払うか
@@ -437,6 +438,7 @@ function newGame(opts = {}) {
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         lockSeen: fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
         lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
         blessing: fill(0), // 施錠の加護: 残りの手番数
         blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
@@ -516,6 +518,7 @@ function costEnv(s, seat) {
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
+        lockFreeUsed: s.lockFreeUsed[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],
@@ -610,7 +613,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, blessing: s.blessing, blessingFresh: s.blessingFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -649,7 +652,7 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useLockConvert', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.useLock = 0;
@@ -843,6 +846,11 @@ function placeMove(s, i) {
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
+        return true;
+    }
+    if (s.useLockConvert) {
+        if (!exeLockConvert(s, i)) return false; // ロックの無いマスは選び直せる
+        s.useLockConvert = false;
         return true;
     }
     if (s.useSacrifice) {
@@ -1121,7 +1129,9 @@ function onClickUseLock(s) {
         return;
     }
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock'), 'onClickUseLock');
+    const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+    if (curChar(s) === 'keysmith' && lockCost === 0) s.lockFreeUsed[s.turn] = true; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
+    spendMagic(s, lockCost, 'onClickUseLock');
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {
@@ -2308,6 +2318,29 @@ function onClickPlunder(s) {
 }
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+// 錠の転換 (idx 134): ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す [FAITHFUL] Game.tsx onClickLockConvert
+// 錠前割引 (idx 135): 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）[FAITHFUL] Game.tsx onClickLockDiscount
+function onClickLockDiscount(s) {
+    const n = keysmithMod.lockedSquareCount(s.board);
+    if (n === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockDiscount, false, false, 'onClickLockDiscount'), 'onClickLockDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + n });
+    bumpMagicCount(s);
+    bumpStat(s, 'lockDiscount');
+}
+function lockConvertCandidates(s) { return keysmithMod.lockConvertCells(s.board); }
+function onClickLockConvert(s) {
+    if (lockConvertCandidates(s).length === 0) return;
+    s.useLockConvert = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockConvert, false, false, 'onClickLockConvert'), 'onClickLockConvert');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockConvert');
+}
+function exeLockConvert(s, i) {
+    if (!lockConvertCandidates(s).includes(i)) return false;
+    s.life += keysmithMod.lockConvert(s.board, i);
+    return true;
+}
 function onClickKimon(s) {
     if (kimonCandidates(s).length === 0) return;
     s.useKimon = true;
@@ -2686,6 +2719,8 @@ const SKILLS = {
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
+    lockConvert: onClickLockConvert,
+    lockDiscount: onClickLockDiscount,
     lockRaid: onClickLockRaid,
     lockExtend: onClickLockExtend,
     lockBlessing: onClickLockBlessing,
