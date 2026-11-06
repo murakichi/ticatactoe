@@ -1,5 +1,6 @@
 // 自動生成: src/components/game/AIPlayer.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
@@ -112,6 +113,8 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
+/** 陰陽師が雷霆の巫と戦うとき、相手が2つ並べた列に着手するボーナス（検証用の環境変数 EB） */
+const ELECTRICIAN_BURST_COVER = Number((_a = process.env.EB) !== null && _a !== void 0 ? _a : 0);
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
 const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
@@ -1287,6 +1290,9 @@ class AIPlayer {
         // その線で一撃で負けるので、全ての線に自コマを置くよう着手を誘導する（旧sim AI F.floodCover と同じ。対陰陽師 11→28%）
         const floodCover = this.character === 'electrician' && this.opponents.some((o) => this.characterOf(o) === 'yinYangMaster') ? this.floodCoverWeight : 0;
         const floodLines = floodCover ? (0, boardGeometry_1.geometryForCells)(board.length).winLines : [];
+        // 陰陽師: 雷霆の巫は盤面に2つ並んだ列を、ダブル帯電トークン(2個)＋着手で1手番に完成させる。2つ並びの列の空きマスに先に自コマを置く
+        const burstFoes = this.character === 'yinYangMaster' ? this.opponents.filter((o) => this.characterOf(o) === 'electrician') : [];
+        const burstCover = burstFoes.length > 0 ? ELECTRICIAN_BURST_COVER : 0;
         for (const i of candidates) {
             const simBoard = this.simulatePlace(board, i, this.playerSymbol, life, 0);
             if (this.character === 'giant' && simBoard[i].player === this.playerSymbol)
@@ -1298,6 +1304,14 @@ class AIPlayer {
                 score += 200; // フォーク
             else if (reaches === 1)
                 score += 40; // シングルリーチ作成も評価
+            if (burstCover) {
+                for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+                    if (!line.includes(i) || line.some((j) => board[j].player === this.playerSymbol || (0, util_1.isShikigami)(board[j]) || (0, util_1.isObject)(board[j])))
+                        continue;
+                    if (line.filter((j) => burstFoes.includes(board[j].player)).length === 2)
+                        score += burstCover;
+                }
+            }
             // 陰陽師の百鬼夜行→式神一括(盤の空きを全て自コマにして列を完成させる)は、自コマが入った列には効かない。全ての列に自コマを1つは置く
             // (旧sim AI yyCover=150。ネクロマンサーが陰陽師と戦うとき 対陰陽師 7→30%。氷室の番人も同様: yyCoverCryo 対陰陽師 +4.6〜+17.4pt, seed1-3)
             if ((this.character === 'necromancer' || this.character === 'cryomancer') && this.facingYinYang()) {
