@@ -7,7 +7,7 @@ import { GearToast } from './GearToasts';
 import { GearId, gearDefOf } from './gear';
 import { isMuted, playSfx, setMuted } from '../../sound';
 
-type PlayEffectExtra = { variant?: string; sources?: number[] };
+export type PlayEffectExtra = { variant?: string; sources?: number[] };
 
 /** 盤面のハイライト・ホバープレビュー・スキル発動演出・マスに重ねる小演出 */
 export const useBoardEffects = () => {

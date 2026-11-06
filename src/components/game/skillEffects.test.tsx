@@ -1,7 +1,6 @@
 // tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
+import { readGameSource } from './gameSource';
 import React from 'react';
-import * as fs from 'fs';
-import * as path from 'path';
 import { render } from '@testing-library/react';
 import { BoardEffects, SkillEffectType } from './BoardEffects';
 import { SKILL_CATALOG } from './deck';
@@ -169,7 +168,7 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
     絶対零度: 'glacier',
 };
 
-const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
+const gameSource = readGameSource();
 
 // 他のスキルと演出(の種類)を共有するスキルは、バナーに自分の名前が出ること(別スキルの名前が出ないこと)を守る。
 // 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
