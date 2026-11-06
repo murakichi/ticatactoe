@@ -135,10 +135,12 @@ export const ignite = (
     cells: number[],
     size: number,
     n: number = 1,
-    keepBuds?: (sq: SquareInfo) => boolean
+    keepBuds?: (sq: SquareInfo) => boolean,
+    immune?: (sq: SquareInfo) => boolean
 ): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
+        if (immune?.(board[k])) continue; // 帯電中の雷霆の巫のコマには🔥が付かない
         for (let c = 0; c < n; c++) {
             if (isFrozen(board[k])) {
                 board[k] = thaw(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
@@ -178,10 +180,10 @@ export const ignite = (
 export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq) && flameStacks(sq) === 0;
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
+export const freeze = (board: SquareInfo[], cells: number[], immune?: (sq: SquareInfo) => boolean): number[] => {
     const done: number[] = [];
     for (const k of cells) {
-        if (!canFreeze(board[k])) continue;
+        if (!canFreeze(board[k]) || immune?.(board[k])) continue; // 帯電中の雷霆の巫のコマには❄が付かない
         board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] }; // 🌱は消えないが、氷結中は休眠する（activeBuds）
         done.push(k);
     }
@@ -225,10 +227,11 @@ export const INFERNO_FREE_SKILLS = 3;
 export const infernoCostOf = (baseCost: number, infernoReady: boolean, calc: (cost: number) => number): number =>
     infernoReady ? 0 : calc(baseCost);
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-export const freezeAll = (board: SquareInfo[]): number[] =>
+export const freezeAll = (board: SquareInfo[], immune?: (sq: SquareInfo) => boolean): number[] =>
     freeze(
         board,
-        board.map((_, i) => i)
+        board.map((_, i) => i),
+        immune
     );
 
 export type DetonateResult = {

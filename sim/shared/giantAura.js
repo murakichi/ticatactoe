@@ -25,8 +25,8 @@ const giantAura = (board, range, me, chars) => {
     }
     for (const j of range) {
         const sq = board[j];
-        if (!(0, thermal_1.lockable)(sq) || sq.effects.some((e) => e.effect === '🔑'))
-            continue;
+        if (!(0, thermal_1.lockable)(sq) || sq.effects.some((e) => e.effect === '🔑') || (0, charge_1.isShielded)(sq, chars))
+            continue; // 帯電中の雷霆の巫のコマにはロックも付かない
         board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
         locked.push(j);
     }
