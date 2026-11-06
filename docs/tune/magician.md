@@ -6,7 +6,7 @@
 - 基準線: 対強豪平均 **61.9% / 1位** / 2位 electrician 54.4%(基本, seed3/200)。条件2(`--envDeck pick --oppGears pick`) 62.5% / 1位 / 2位 electrician 52.9%(seed3/200)。field 67.3%、不利な対面 0、最悪対面は対陰陽師 44〜47%
 - 関連 issue: #339 魔法使いの調整案(本件) / #315 spellWard 追試(解決・コメント済み) / #124 lastStand 調整 / #333 巨人ストンプ
 - 連続不採用回数: 6以上(洗練が飽和: gear/deck/2枚/手札固定/対陰陽師/別ギア×デッキ/余剰魔力の使い道（高コスト汎用・パーフェクトゲーム・サイクル・オブジェクト）を測定済み)
-- 状態: refining(2026-11-06 master f1dc595 で条件1が2位に陥落、差0.6pt＝誤差内。対陰陽師PG案(試行62)は不採用。以前の記録: done 洗練が再び飽和。ユーザー指示のスキル変更（審判の日の仕様・縮地の削除）を反映済み。1位は維持だが電気技師との差は薄い。master が動いたら再検証)
+- 状態: done(2026-11-06 最新masterで完了判定を再実施: 基本 seed4/200 magician 63.7% 1位（2位 electrician 59.9%、差3.8pt）、条件2 seed3/200 62.4% 1位（2位 electrician 59.7%）。f1dc595 直後の seed3 での2位は誤差内（強豪集合の揺れ）。試行62・63の不採用で再び飽和。以前の記録: refining 2026-11-06 master f1dc595 で条件1が2位に陥落、差0.6pt＝誤差内。対陰陽師PG案(試行62)は不採用。以前の記録: done 洗練が再び飽和。ユーザー指示のスキル変更（審判の日の仕様・縮地の削除）を反映済み。1位は維持だが電気技師との差は薄い。master が動いたら再検証)
 
 ## 順位(master 25fe0f2 取り込み後, 新sim, seed3/100)
 1 cryomancer 67.8 / 2 electrician 54.2 / **3 magician 49.4**(field 57.5) / 4 witch 46.4 / 5 tactician 44.0。強豪=cryomancer,electrician,magician,poisoner,witch,tactician。1位との差 18.4pt。対氷室が最悪対面(21%)。
