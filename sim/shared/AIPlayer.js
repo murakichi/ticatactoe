@@ -23,8 +23,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..134)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 135;
+// 汎用スキルプールの大きさ (idx 0..135)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 136;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -3516,6 +3516,10 @@ class AIPlayer {
             const graveCut = (0, graveSkills_1.graveDiscountAmount)((0, graveSkills_1.corpseCount)(turn_1.NECROMANCY.baseCost, necroCost));
             if (graveCut >= 2)
                 reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
+            // 錠前割引（idx 135）: 盤面のロックのマスの数だけ、このターンの全スキルを軽減する。コスト1より多く軽減できる（ロック2つ以上）ときだけ候補にする
+            const lockCut = (0, keysmith_1.lockedSquareCount)(board);
+            if (lockCut >= 2)
+                reducers.push({ idx: 135, key: 'onClickLockDiscount', cut: lockCut });
             let best = null;
             for (const r of reducers) {
                 if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key))

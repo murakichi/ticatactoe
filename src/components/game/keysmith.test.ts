@@ -2,7 +2,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { CharacterId } from '../../types/Character';
 import { addLock, isLocked, lockStack } from './lock';
 import {
-    BLESSING_STACK, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_OWN_STACK, VACANT_SEAL_STACK, blessPlacedPiece, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockRaid, lockRaidCells,
+    BLESSING_STACK, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_OWN_STACK, VACANT_SEAL_STACK, blessPlacedPiece, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockRaid, lockRaidCells,
     opponentReaches, reachCount, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells,
 } from './keysmith';
 import { canPlaceAt } from './aiTurn';
@@ -112,6 +112,11 @@ describe('鍵師 (#439)', () => {
         it('錠の転換: 重ねがけして合計したスタックをまとめて返す', () => {
             const b = row([addLock(addLock(sq({ player: '⭕', bind: 3 }), 6), 6)]);
             expect(lockConvert(b, 0)).toBe(12);
+        });
+        it('錠前割引の軽減量: ロックのかかったマスの数（自分・敵・空きマスを問わず）。ロックの無いマスは数えない', () => {
+            const b = row([addLock(sq({ player: '💙', bind: 3 }), 4), addLock(sq({ player: '⭕', bind: 3 }), 2), addLock(sq(), 1), { player: '💙', bind: 3 }]);
+            expect(lockedSquareCount(b)).toBe(3);
+            expect(lockedSquareCount(row([]))).toBe(0);
         });
         it('錠前荒らし: ロックの乗った敵のコマを1つ解除し🔥・☠・⚡のどれか1つを付ける。対象が無ければ null', () => {
             const empty = row([{ player: '⭕', bind: 3 }]);
