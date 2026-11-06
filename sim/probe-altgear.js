@@ -58,7 +58,7 @@ function runDeck() {
         const outs = [];
         for (let j = 0; j < k; j++) outs.push(movable.splice(Math.floor(rng() * movable.length), 1)[0]);
         const rest = keep.filter((c) => !outs.includes(c));
-        const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i));
+        const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i));
         const ins = [];
         for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
         const d = rest.concat(ins).sort((a, b) => a - b);

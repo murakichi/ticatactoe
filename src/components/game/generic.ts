@@ -24,17 +24,6 @@ export const boostAll = (board: SquareInfo[], player: SquareInfo['player'], amou
 /** 着手（設置）できる空きマスか: コマが無く、🔑ロック中でなく、氷結中でない */
 export const isPlaceable = (sq: SquareInfo): boolean => !sq.player && !hasLock(sq) && !emptyBlocked(sq);
 
-/** 縮地で動かせる自陣のコマか: 🔑ロック中でも氷結中でもない */
-export const canRelocate = (sq: SquareInfo, me: SquareInfo['player']): boolean => !!sq.player && sq.player === me && !hasLock(sq) && !isFrozen(sq);
-
-/** 縮地: from の自陣のコマ（ライフ・エフェクトごと）を空きマス to へ動かす。動かせたら true。board を直接書き換える */
-export const relocate = (board: SquareInfo[], from: number, to: number, me: SquareInfo['player']): boolean => {
-    if (from === to || !canRelocate(board[from], me) || !isPlaceable(board[to])) return false;
-    board[to] = board[from];
-    board[from] = { player: undefined, bind: 0, effects: [] };
-    return true;
-};
-
 /** 写し身で増えたコマのライフ: 元のライフの半分（切り捨て、最低1） */
 export const cloneLife = (bind: number): number => Math.max(1, Math.floor(bind / 2));
 

@@ -68,6 +68,8 @@ exports.skillCosts = {
     onClickInferno: 7,
     // 凩の魔女の固有スキル 虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣のライフ+2。sim/engine.js の onClickMogaribue と一致させること
     onClickMogaribue: 7,
+    // 鍵師の固有スキル 封鎖の断（#439）: 自陣7・空きマス2のロック、敵陣のロックを解除して解除数ぶんダメージ。ターン終了。敵陣のロックの数だけ軽減（下限5, keysmith.ts の sealBaseCost）
+    onClickSeal: 10,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
@@ -90,7 +92,6 @@ exports.skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts
@@ -167,7 +168,12 @@ exports.skillCosts = {
     onClickEightTrigrams: 8,
     onClickSoloSign: 5,
     onClickOneWord: 6,
-    onClickBlindMonkey: 5, //   見ざる地蔵(idx 129): 周囲八マスには新しくエフェクトを付けられない。基準: 自陣を守る側にも自分が使う側にも効く範囲型。聖域(5)と同じ
+    onClickBlindMonkey: 5,
+    // 鍵師向けの汎用スキル（#439, idx 130〜133）。コストは docs/skill-cost-rules.md の基準から（日記 2026-11-06）
+    onClickLockRaid: 4,
+    onClickLockExtend: 5,
+    onClickLockBlessing: 4,
+    onClickVacantSeal: 10, //     空き家封じ(idx 133): 空きマス全てを2スタックでロック。相手のリーチ1つにつき-3（下限1）。盤面全体は重く基本10（R7）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

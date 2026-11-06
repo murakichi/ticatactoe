@@ -38,6 +38,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     conduction: 'trigger', // 毒・火炎が移る
     spellWard: 'passive', // スキルを使ったターンだけ効果ダメージが通らない
     lastStand: 'trigger', // 防壁の発動
+    springThunder: 'trigger', // 氷結した空きマスの❄を解く
 };
 
 const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');

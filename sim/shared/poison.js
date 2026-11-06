@@ -29,8 +29,11 @@ const poisonStrike = (sq, chars) => {
 exports.poisonStrike = poisonStrike;
 /** cells の各マスに☠を n 個付ける（毒使いのコマはライフが増える）。board を直接書き換える */
 const addPoison = (board, cells, chars, n = 1) => {
-    for (const k of cells)
+    for (const k of cells) {
+        if ((0, charge_1.isShielded)(board[k], chars))
+            continue; // 帯電中の雷霆の巫のコマには☠が付かない
         board[k] = (0, exports.poisonStrike)({ ...board[k], effects: [...board[k].effects, ...Array(n).fill(POISON)] }, chars);
+    }
 };
 exports.addPoison = addPoison;
 /** 自陣の☠を全て取り除く（血清・ミアズマ後）。取り除いたマスを返す。onlyActive なら氷結中のマスは残す */

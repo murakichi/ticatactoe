@@ -7,7 +7,7 @@ import {
     applyPriceOffsets,
     gearLifeBonus,
     gearLifeStd,
-    gearLockBind,
+    gearLockStack,
     gearSlotsFor,
     gearTokenBindDelta,
     randomGears,
@@ -45,7 +45,7 @@ describe('ギアの定義', () => {
 
     it('説明文は GEAR_PARAMS の数値から描画される', () => {
         const desc = (id: string) => GEARS.find((g) => g.id === id)!.desc;
-        expect(desc('ironLock')).toContain(String(GEAR_PARAMS.ironLockBind));
+        expect(desc('ironLock')).toContain(String(GEAR_PARAMS.ironLockStack));
         expect(desc('luckyPurse')).toContain(`${GEAR_PARAMS.luckyPurseChance * 100}%`);
         expect(desc('bindingLock')).toContain(`${GEAR_PARAMS.bindingLockChance * 100}%`);
         expect(desc('harvest')).toContain(String(GEAR_PARAMS.harvestCap));
@@ -66,8 +66,8 @@ describe('ライフ・ロック・トークンの補正', () => {
         expect(gearLifeBonus(undefined)).toBe(0);
         expect(gearLifeStd(['gambler'], 3)).toBe(5);
         expect(gearLifeStd([], 3)).toBe(3);
-        expect(gearLockBind(['ironLock'])).toBe(9);
-        expect(gearLockBind([])).toBe(6);
+        expect(gearLockStack(['ironLock'])).toBe(9);
+        expect(gearLockStack([])).toBe(6);
     });
 
     it('トークンのライフ: 増援+2 / 軽量トークン-1 / 両方で+1', () => {
@@ -257,5 +257,36 @@ describe('AIが選ぶギア', () => {
 
     it('別案が無いキャラは主案を返す', () => {
         expect(pickRecommendedGears('tactician', () => 0.99)).toEqual(recommendedGears('tactician'));
+    });
+});
+
+describe('春雷（springThunderThaw）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { springThunderThaw } = require('./gear');
+    const empty = () => Array.from({ length: 16 }, () => ({ player: undefined as any, bind: 0, effects: [] as any[] }));
+    const mine = (b: any[], cells: number[]) => cells.forEach((i) => (b[i] = { player: '💙', bind: 3, effects: [] }));
+    it('自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く', () => {
+        const b = empty();
+        mine(b, [0, 1, 2]);
+        b[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }, { effect: '❄' }] }; // ❄が2つ
+        expect(springThunderThaw(b, '💙')).toEqual([3]);
+        expect(b[3].effects.filter((e: any) => e.effect === '❄').length).toBe(1); // 1つだけ解く
+        expect(springThunderThaw(b, '💙')).toEqual([3]);
+        expect(b[3].effects.length).toBe(0); // 2回目で解けきる
+    });
+    it('敵のコマが入った列・リーチでない列・凍っていない空きマスは対象外', () => {
+        const b = empty();
+        mine(b, [0, 1]);
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 2つしか無い列
+        expect(springThunderThaw(b, '💙')).toEqual([]);
+        const c = empty();
+        mine(c, [0, 1, 2]);
+        c[3] = { player: undefined, bind: 0, effects: [] }; // 凍っていない空き
+        expect(springThunderThaw(c, '💙')).toEqual([]);
+        const d = empty();
+        mine(d, [0, 1]);
+        d[2] = { player: '⭕', bind: 3, effects: [] };
+        d[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 敵のコマが入った列
+        expect(springThunderThaw(d, '💙')).toEqual([]);
     });
 });

@@ -44,7 +44,7 @@ describe('減衰 decayBoard', () => {
         const b = board();
         b[0] = { player: '⭕', bind: 3, effects: [] };
         b[1] = { player: '⭕', bind: 3, effects: [{ effect: '❄' }] };
-        b[2] = { player: undefined, bind: 1, effects: [{ effect: '🔑', value: 1 }] };
+        b[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 1, owner: 1 }] };
         b[3] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
         b[4] = { player: '⭕', bind: 0, effects: [{ effect: '☠' }] };
         const r = decayBoard(b, 4, chars, symbols);
@@ -77,7 +77,7 @@ describe('ギアの手番状態 advanceGearState', () => {
     const mk = (): [GearTurnState, RuinState] => {
         const n = 2;
         return [
-            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], marketUsed: [0, 0], pieceBase: [0, 0], turnSpent: [0, 0], oppBigSeen: [false, false], oppBigPrev: [false, false], bigCast: [false, false], chargeBase: [0, 0] , veil: [false, false], veilNext: [false, false], ward: [0, 0], wardFresh: [false, false] },
+            { skills: [3, 2], echoReady: [false, false], echoNext: [false, true], kinds: [new Set(['a']), new Set(['b'])], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: [false, true], plantPrev: [false, false], plantBase: [0, 0], placedPrev: [false, false], placeBase: [0, 0], oppSkillPrev: [false, false], shikiPlaced: [true, true], fireBase: [0, 0], leafBase: [0, 0], darkPotUsed: [true, true], tokenFree: [true, true], marketUsed: [0, 0], pieceBase: [0, 0], turnSpent: [0, 0], oppBigSeen: [false, false], oppBigPrev: [false, false], bigCast: [false, false], chargeBase: [0, 0] , veil: [false, false], veilNext: [false, false], ward: [0, 0], wardFresh: [false, false], lockSeen: [false, false], lockPrev: [false, false], blessing: [0, 0], blessingFresh: [false, false] },
             { active: [false, false], pending: [false, true], snap: null, snapBuds: null, snapFlames: null, ashActive: Array(n).fill(0), ashPending: Array(n).fill(0), lastMove: null },
         ];
     };
@@ -121,6 +121,38 @@ describe('ギアの手番状態 advanceGearState', () => {
         expect(c.ruinNext).toBe(true);
         expect(r.snap).not.toBeNull();
     });
+    it('錠前荒らしの0コスト条件: 相手がロックを使った手番のあとだけ lockPrev が立つ。使われていなければ立たない。1手番で消える', () => {
+        const [g, r] = mk();
+        const { noteSkillUsed } = require('./gearTurn'); // eslint-disable-line @typescript-eslint/no-var-requires
+        (g as unknown as { infernoReady: boolean[] }).infernoReady = [false, false];
+        // 席0がロックを使って手番を終える → 席1の頭で lockPrev
+        noteSkillUsed(g, 0, 'onClickUseLock', 1);
+        advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
+        expect(g.lockPrev[1]).toBe(true);
+        // 席1はロック以外のスキルだけ使って手番を終える → 席0の頭では立たない
+        noteSkillUsed(g, 1, 'onClickAddLife', 1);
+        advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 1, nextSeat: 0 });
+        expect(g.lockPrev[0]).toBe(false);
+        // 自分がロックを使っても自分の lockPrev は立たない
+        noteSkillUsed(g, 0, 'onClickDoubleLock', 1);
+        advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
+        expect(g.lockPrev[0]).toBe(false);
+        expect(g.lockPrev[1]).toBe(true);
+    });
+    it('施錠の加護: 使った手番は減らさず、その後は自分の手番が終わるたびに1減る（使った手番を含めて3手番）', () => {
+        const [g, r] = mk();
+        g.blessing[0] = 2;
+        g.blessingFresh[0] = true;
+        const step = (end: number, next: number) => advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: end, nextSeat: next });
+        step(0, 1); // 使った手番の終わり: 減らない
+        expect(g.blessing[0]).toBe(2);
+        step(1, 0);
+        step(0, 1); // 2手番目の終わり
+        expect(g.blessing[0]).toBe(1);
+        step(1, 0);
+        step(0, 1); // 3手番目の終わり
+        expect(g.blessing[0]).toBe(0);
+    });
     it('焦土: 敵の🌱が🔥で消えたぶん魔力。廃墟の底力: 自陣が破壊されたら次の手番から割引', () => {
         const [g, r] = mk();
         const b = board();
@@ -142,16 +174,18 @@ describe('ギアの手番状態 advanceGearState', () => {
 describe('トークン後のギア効果 tokenAfter', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { applyLockAt, propagate } = require('./tokenAfter');
-    it('ロック: 氷結中は掛からない。空きマスには空蔵の持ち主を記録し、堅牢の鍵でライフが延びる', () => {
+    it('ロック: 氷結中は掛からない。空きマスには空蔵の持ち主を記録し、堅牢の鍵でスタックが延びる', () => {
         const b = board();
         expect(applyLockAt(b, 0, ['emptyLock'], 1)).toBe(true);
-        expect(b[0].effects).toEqual([{ effect: '🔑', value: 2 }]);
-        expect(b[0].bind).toBe(6);
+        expect(b[0].effects).toEqual([{ effect: '🔑', stack: 6, owner: 2 }]);
+        expect(b[0].bind).toBe(0); // ロックはライフを変えず、スタックで数える (#438)
         b[1] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] };
         expect(applyLockAt(b, 1, [], 0)).toBe(false);
         const c = board();
         applyLockAt(c, 0, ['ironLock'], 0);
-        expect(c[0].bind).toBe(9);
+        expect(c[0].effects).toEqual([{ effect: '🔑', stack: 9 }]);
+        applyLockAt(c, 0, ['ironLock'], 0);
+        expect(c[0].effects).toEqual([{ effect: '🔑', stack: 18 }]); // 重ねがけは加算
     });
     it('伝播: 周囲のコマのうち種類に合うものへ同じエフェクト（バッズは自陣、毒は敵）', () => {
         const b = board();
