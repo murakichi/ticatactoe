@@ -92,7 +92,6 @@ exports.skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts

@@ -133,7 +133,6 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickDarkPot: 'darkPot',
     onClickChargeHeal: 'thunderHeal',
     onClickBoost: 'rain',
-    onClickRelocate: 'dash',
     onClickClone: 'clone',
     onClickPlunder: 'plunder',
     onClickShikigamiAll: 'shikigami',

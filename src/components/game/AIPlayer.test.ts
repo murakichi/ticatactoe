@@ -374,16 +374,16 @@ describe('氷結・火炎への対応 (AI追随 Phase1)', () => {
         expect(nb[6].effects).toHaveLength(0);
     });
 
-    it('findJudgeTarget: 氷結中の敵は数えず、氷結中の自コマは壊れない扱い', () => {
+    it('findJudgeTarget: 氷結中の敵も数える（氷結は身代わりにならない）。バッズのある敵は数えない', () => {
         const b = emptyBoard();
         frozen(b, 5, '⭕');
         frozen(b, 6, '⭕');
         frozen(b, 9, '⭕');
         const mage = new AIPlayer('💙', 'magician', ['⭕']);
-        expect(mage.findJudgeTarget(b)).toBeNull();
-        put(b, 4, '⭕');
-        put(b, 7, '⭕');
         expect(mage.findJudgeTarget(b)).not.toBeNull();
+        const c = emptyBoard();
+        [5, 6, 9].forEach((i) => { c[i] = { player: '⭕', bind: 4, effects: [{ effect: '🌱' }] }; });
+        expect(mage.findJudgeTarget(c)).toBeNull();
     });
 
     it('findRescueCenter: 氷結中の敵コマは壊せたものとして数えない', () => {
@@ -1634,17 +1634,17 @@ describe('魔法使いは軍師が相手のとき、純増2の審判の日は撃
     });
 });
 
-describe('魔法使いは縮地・特売・返し特売・一寸の虫を手札に固定する', () => {
+describe('魔法使いは特売・返し特売・一寸の虫を手札に固定する', () => {
     const locks = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'tactician']).chooseLocks(emptyBoard(), 5, 5, hand);
-    it('縮地(50)と特売(53)が手札にあれば固定する', () => {
-        expect(locks([50, 53, 2])).toEqual(expect.arrayContaining([50, 53]));
+    it('特売(53)と一寸の虫(92)が手札にあれば固定する', () => {
+        expect(locks([92, 53, 2])).toEqual(expect.arrayContaining([92, 53]));
     });
-    it('返し特売(60)・一寸の虫に魂なし(92)も固定対象（固定は最大2枚）', () => {
+    it('返し特売(60)も固定対象（固定は最大2枚）', () => {
         expect(locks([60, 92, 13])).toEqual(expect.arrayContaining([60, 92]));
-        expect(locks([50, 53, 60]).length).toBeLessThanOrEqual(2);
+        expect(locks([53, 60, 92]).length).toBeLessThanOrEqual(2);
     });
     it('バッズ系(2)は固定しない（序盤の空きが多くても優先固定ではなく、固定対象の札が先頭に来る）', () => {
-        expect(locks([2, 50, 13])[0]).toBe(50);
+        expect(locks([2, 53, 13])[0]).toBe(53);
     });
 });
 
@@ -1957,22 +1957,6 @@ describe('追い剥ぎ・砕氷の連打（魔力が有り余るとき）', () =
         const names = (r.chargeClicks ?? []).map((c) => c.skill);
         expect(names).toContain('onClickShatter');
         expect(names.indexOf('onClickUseLock')).toBeLessThan(names.indexOf('onClickShatter'));
-    });
-});
-
-describe('縮地の連打', () => {
-    const { skillCosts } = require('./skillCosts');
-    it('列の足りないマスが空きだけなら、列の外の自陣コマを動かして最後の1マスを着手で揃える', () => {
-        const ai = new AIPlayer('💙', 'you', ['⭕'], ['you', 'you']);
-        const b = emptyBoard();
-        b[0] = { player: '💙', bind: 5, effects: [] };
-        b[1] = { player: '💙', bind: 5, effects: [] };
-        b[12] = { player: '💙', bind: 2, effects: [] };
-        b[13] = { player: '💙', bind: 3, effects: [] };
-        const r = ai.makeMove(b, 12, skillCosts, 2, 5, [50], false);
-        expect(r.chargeClicks).toEqual([{ skill: 'onClickRelocate', target: 12, target2: 2 }]);
-        expect(r.move).toBe(3);
-        expect(ai.makeMove(b, 1, skillCosts, 2, 5, [50], false).chargeClicks ?? []).toEqual([]);
     });
 });
 
