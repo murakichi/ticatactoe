@@ -9,7 +9,7 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { addLock, isLocked, lockEffect, tickLock } from './lock';
-import { lockBlocksPlacement, opponentReaches, sealBaseCost, sealReleaseCells, seal, vacantSealBaseCost } from './keysmith';
+import { lockBlocksPlacement, lockedSquareCount, opponentReaches, sealBaseCost, sealReleaseCells, seal, vacantSealBaseCost } from './keysmith';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf, judgeDayVictims } from './blast';
@@ -22,8 +22,8 @@ import { firstFrostTargets, burnOffTargets } from './tokenSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, orthoNeighbors, connectedPieces, withCharge, reducedChargeCost, applyJammer, isGuarded } from './charge';
 
-// 汎用スキルプールの大きさ (idx 0..134)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 135;
+// 汎用スキルプールの大きさ (idx 0..135)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 136;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
@@ -1622,12 +1622,14 @@ class AIPlayer {
             // 鍵師以外は自分も置けなくなる（空きマスが全部ロック）ので、敵のリーチが2つ以上（1手で塞げない）のときだけ撃つ
             if (remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2)) spend(vsCost, 'onClickVacantSeal');
         }
-        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 払えれば撃つ（自分の手番は着手が先になるので、自分にリーチがあるときは撃たない）。
         // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
         if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
             const released = sealReleaseCells(board, this.playerSymbol).length;
             const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
-            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost)))) spend(sealCost, 'onClickSeal');
+            // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
+            // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
+            if (remaining >= sealCost) spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
             const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
@@ -3306,6 +3308,9 @@ class AIPlayer {
             // 弔い割引: 墓地の死体の数（上限3）だけ次のスキルを軽減する。コスト1より多く軽減できる（死体2体以上）ときだけ候補にする
             const graveCut = graveDiscountAmount(corpseCount(NECROMANCY.baseCost, necroCost));
             if (graveCut >= 2) reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
+            // 錠前割引（idx 135）: 盤面のロックのマスの数だけ、このターンの全スキルを軽減する。コスト1より多く軽減できる（ロック2つ以上）ときだけ候補にする
+            const lockCut = lockedSquareCount(board);
+            if (lockCut >= 2) reducers.push({ idx: 135, key: 'onClickLockDiscount', cut: lockCut });
             let best: { r: (typeof reducers)[number]; rc: number; plan: string[]; left: number } | null = null;
             for (const r of reducers) {
                 if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key)) continue;

@@ -2319,6 +2319,15 @@ function onClickPlunder(s) {
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
 // 錠の転換 (idx 134): ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す [FAITHFUL] Game.tsx onClickLockConvert
+// 錠前割引 (idx 135): 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）[FAITHFUL] Game.tsx onClickLockDiscount
+function onClickLockDiscount(s) {
+    const n = keysmithMod.lockedSquareCount(s.board);
+    if (n === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockDiscount, false, false, 'onClickLockDiscount'), 'onClickLockDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + n });
+    bumpMagicCount(s);
+    bumpStat(s, 'lockDiscount');
+}
 function lockConvertCandidates(s) { return keysmithMod.lockConvertCells(s.board); }
 function onClickLockConvert(s) {
     if (lockConvertCandidates(s).length === 0) return;
@@ -2711,6 +2720,7 @@ const SKILLS = {
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
     lockConvert: onClickLockConvert,
+    lockDiscount: onClickLockDiscount,
     lockRaid: onClickLockRaid,
     lockExtend: onClickLockExtend,
     lockBlessing: onClickLockBlessing,

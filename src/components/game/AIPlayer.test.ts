@@ -1023,6 +1023,29 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
         b[0] = { player: '💙', bind: 1, effects: [{ effect: '🔑', stack: 5 }] };
         expect(run('keysmith', 6, b).lockTargets?.includes(0) ?? false).toBe(false);
     });
+    describe('封鎖の断（払えれば撃つ）', () => {
+        const seal = (b: SquareInfo[], magic: number) => run('keysmith', magic, b);
+        // コンボ（二列並び）も空きマスのロックも成立しない盤面: 自陣のコマが1つだけ
+        const plain = (): SquareInfo[] => {
+            const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+            b[0] = { player: '💙', bind: 4, effects: [] };
+            return b;
+        };
+        it('払える魔力があれば、敵のリーチやロックが無くても撃つ（ターン終了）', () => {
+            const r = seal(plain(), 30);
+            expect(r.skills).toContain('onClickSeal');
+            expect(r.move).toBeNull(); // ターン終了スキルなので着手しない
+        });
+        it('魔力が足りなければ撃たない', () => {
+            expect(seal(plain(), 3).skills).not.toContain('onClickSeal');
+        });
+        it('自分にリーチがあるときは撃たない（ターン終了スキルを撃つと勝ち手を逃す）', () => {
+            const b = plain();
+            b[1] = { player: '💙', bind: 4, effects: [] };
+            b[2] = { player: '💙', bind: 4, effects: [] }; // 行0: 💙💙💙 _ （リーチ）
+            expect(seal(b, 30).skills).not.toContain('onClickSeal');
+        });
+    });
     describe('二列並びのコンボ（片方をロックして、もう片方に置く）', () => {
         const combo = (b: SquareInfo[], magic = 6) => run('keysmith', magic, b);
 

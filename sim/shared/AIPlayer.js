@@ -23,8 +23,8 @@ const shikigami_1 = require("./shikigami");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-// 汎用スキルプールの大きさ (idx 0..134)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-exports.SKILL_POOL_SIZE = 135;
+// 汎用スキルプールの大きさ (idx 0..135)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+exports.SKILL_POOL_SIZE = 136;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 const CHARGE_ONE_MIN_SCORE = 2;
 // 範囲帯電の採用しきい値 (旧sim AI の CHARGE_AREA_MIN_SCORE)
@@ -1736,12 +1736,14 @@ class AIPlayer {
             if (remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2))
                 spend(vsCost, 'onClickVacantSeal');
         }
-        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+        // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 払えれば撃つ（自分の手番は着手が先になるので、自分にリーチがあるときは撃たない）。
         // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
         if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
             const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
             const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
-            if (remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost))))
+            // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
+            // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
+            if (remaining >= sealCost)
                 spend(sealCost, 'onClickSeal');
         }
         if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
@@ -3516,6 +3518,10 @@ class AIPlayer {
             const graveCut = (0, graveSkills_1.graveDiscountAmount)((0, graveSkills_1.corpseCount)(turn_1.NECROMANCY.baseCost, necroCost));
             if (graveCut >= 2)
                 reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
+            // 錠前割引（idx 135）: 盤面のロックのマスの数だけ、このターンの全スキルを軽減する。コスト1より多く軽減できる（ロック2つ以上）ときだけ候補にする
+            const lockCut = (0, keysmith_1.lockedSquareCount)(board);
+            if (lockCut >= 2)
+                reducers.push({ idx: 135, key: 'onClickLockDiscount', cut: lockCut });
             let best = null;
             for (const r of reducers) {
                 if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key))

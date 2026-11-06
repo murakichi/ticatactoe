@@ -9,7 +9,7 @@ import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
-import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
@@ -521,6 +521,7 @@ export const Game = (props: GameProps) => {
             case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickKimon': onClickKimon(); break;
             case 'onClickLockConvert': onClickLockConvert(); break;
+            case 'onClickLockDiscount': onClickLockDiscount(); break;
             case 'onClickFireWheel': onClickFireWheel(); break;
             case 'onClickSpark': onClickSpark(); break;
             case 'onClickShuffle': onClickShuffle(); break;
@@ -3232,6 +3233,16 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
     };
     const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    // 錠前割引（汎用 idx 135）: 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）
+    const onClickLockDiscount = () => {
+        const n = lockedSquareCount(currentBoard);
+        if (n === 0) return;
+        addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
+        playEffect('discount', undefined, undefined, '錠前割引');
+        spendMagic(calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
+    };
     const onClickLockConvert = () => {
         if (lockConvertCells(currentBoard).length === 0) return;
         addLog('「錠の転換」を使用（ロックのかかっているマスを選択）');
@@ -4037,6 +4048,7 @@ export const Game = (props: GameProps) => {
         { idx: 132, onClick: onClickLockBlessing, buttonText: `施錠の加護-${calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing')}`, paragraph: `使った手番を含む自分の${BLESSING_TURNS}手番の間、設置したコマにロックが${BLESSING_STACK}スタック付きます\n（ロック中のコマは奪われません）`, disabled: checkSkillDisable(seatCosts.onClickLockBlessing, false, false, 'onClickLockBlessing') },
         { idx: 133, onClick: onClickVacantSeal, buttonText: `空き家封じ-${vacantSealCost()}`, paragraph: `空きマス全てを${VACANT_SEAL_STACK}スタックでロックします（ターンは続く）\n相手のリーチ1つにつきコスト-${VACANT_SEAL_REACH_CUT}（下限1）。鍵師は空きマスのロックを無視して置けます`, disabled: magic[turnSeat] < vacantSealCost() || vacantSealCells(currentBoard).length === 0 },
         { idx: 134, onClick: onClickLockConvert, buttonText: `錠の転換-${calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert')}`, paragraph: `ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します\n（自分のロックでも他人のロックでも選べます。ロック中の空きマスも可）`, disabled: checkSkillDisable(seatCosts.onClickLockConvert, false, false, 'onClickLockConvert') || lockConvertCells(currentBoard).length === 0 },
+        { idx: 135, onClick: onClickLockDiscount, buttonText: `錠前割引-${calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount')}`, paragraph: `このターン、盤面にあるロックのマスの数(${lockedSquareCount(currentBoard)})だけ、打つスキルのコストを軽減します（使った時点の数で固定。下限1。軽減札どうしには効きません）`, disabled: checkSkillDisable(seatCosts.onClickLockDiscount, false, false, 'onClickLockDiscount') || lockedSquareCount(currentBoard) === 0 },
         ...OBJECT_SKILL_KEYS.map((skill) => ({
             idx: OBJECT_SKILLS[skill].idx,
             onClick: () => onClickObjectSkill(skill),

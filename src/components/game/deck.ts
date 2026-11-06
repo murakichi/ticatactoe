@@ -148,6 +148,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
     { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します（自分のロックでも他人のロックでも選べます）' },
+    { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面にあるロックのマスの数だけ、打つスキルのコストを軽減します（使った時点の数で固定。軽減後の下限は1。軽減札どうしには効きません）' },
 ];
 
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
