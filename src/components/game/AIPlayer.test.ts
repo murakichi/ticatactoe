@@ -1090,6 +1090,21 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
         b[0] = { player: '💙', bind: 4, effects: [] };
         expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
     });
+
+    describe('ロックの計画に手札の他の札を足す（extendPlan）', () => {
+        const withHand = (character: 'keysmith' | 'you') => {
+            const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
+            return ai.makeMove(board(), 12, skillCosts, 2, 5, [11, 2, 0], false);
+        };
+        it('鍵師は、ロックを撃つ手番でも余った魔力で手札の札（バッズ）を足す', () => {
+            const r = withHand('keysmith');
+            expect(r.skills).toContain('onClickUseLock');
+            expect(r.skills).toContain('onClickBuds');
+        });
+        it('鍵師でなければ、この盤面ではロックを撃たない', () => {
+            expect(withHand('you').skills).not.toContain('onClickUseLock');
+        });
+    });
 });
 
 describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {

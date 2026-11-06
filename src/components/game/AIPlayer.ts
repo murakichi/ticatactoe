@@ -2338,6 +2338,13 @@ class AIPlayer {
             : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
+        // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
+        // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
+        // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
+        // 対強豪平均: seed9/200 21.4→26.3, seed7/100 21.3→28.8（+4.9/+7.5pt）。魔力のしきい値を1〜7で振ってもどれも26〜29%で、8以上では効果が消える
+        if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
+            return this.extendPlan(result, args);
+        }
         if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック
         if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) return result;
