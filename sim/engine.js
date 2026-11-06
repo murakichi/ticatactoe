@@ -439,6 +439,7 @@ function newGame(opts = {}) {
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         lockSeen: fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
         lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
         blessing: fill(0), // 施錠の加護: 残りの手番数
         blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
@@ -518,6 +519,7 @@ function costEnv(s, seat) {
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
+        lockFreeUsed: s.lockFreeUsed[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],
@@ -612,7 +614,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, blessing: s.blessing, blessingFresh: s.blessingFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -1133,7 +1135,9 @@ function onClickUseLock(s) {
         return;
     }
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock'), 'onClickUseLock');
+    const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+    if (curChar(s) === 'keysmith' && lockCost === 0) s.lockFreeUsed[s.turn] = true; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
+    spendMagic(s, lockCost, 'onClickUseLock');
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {

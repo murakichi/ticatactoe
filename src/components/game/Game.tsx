@@ -198,6 +198,7 @@ export const Game = (props: GameProps) => {
         ward: Array<number>(seatCount).fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: Array<boolean>(seatCount).fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         lockSeen: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: Array<boolean>(seatCount).fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
         lockPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での lockSeen
         blessing: Array<number>(seatCount).fill(0), // 施錠の加護: 残りの手番数（その席の手番が終わるたびに1減る）
         blessingFresh: Array<boolean>(seatCount).fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
@@ -248,6 +249,7 @@ export const Game = (props: GameProps) => {
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
+        lockFreeUsed: gearTurn.current.lockFreeUsed[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
@@ -1542,9 +1544,12 @@ export const Game = (props: GameProps) => {
 
     const [useLock, setUseLock] = useState<number>(0);
     const onClickUseLock = () => {
+        // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料。支払いの前に判定して、無料を使ったことを記録する
+        const lockCost = calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock');
+        if (currentCharacter === 'keysmith' && lockCost === 0) gearTurn.current.lockFreeUsed[turnSeat] = true;
         addLog('「ロック」を使用（マスを選択）');
         setUseLock(useLock + 1);
-        spendMagic(calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock'), true, true, 'onClickUseLock');
+        spendMagic(lockCost, true, true, 'onClickUseLock');
     };
 
     const onClickUseDoubleLock = () => {
@@ -3782,6 +3787,7 @@ export const Game = (props: GameProps) => {
             ward: Array<number>(seatCount).fill(0),
             wardFresh: Array<boolean>(seatCount).fill(false),
             lockSeen: Array<boolean>(seatCount).fill(false),
+            lockFreeUsed: Array<boolean>(seatCount).fill(false),
             lockPrev: Array<boolean>(seatCount).fill(false),
             blessing: Array<number>(seatCount).fill(0),
             blessingFresh: Array<boolean>(seatCount).fill(false),

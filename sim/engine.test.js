@@ -3805,11 +3805,13 @@ test('鍵師: 空きマスのロックを無視して置ける。他キャラは
     assert.strictEqual(e.placeMove(t, 5), false);
 });
 
-test('鍵師: ロック系スキルはコスト-1（ロック2→1）。他のキャラは変わらない', () => {
+test('鍵師: ロック系スキルはコスト-1（ダブルロック）。他のキャラは変わらない。常設のロックは無料の1回があるので0', () => {
     const s = game('keysmith', 'you');
-    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), 0); // 手番ごとの無料の1回
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickAddLife, false, false, 'onClickAddLife'), e.skillCosts.onClickAddLife);
     const t = game('you', 'keysmith');
+    assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock);
     assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock);
 });
 
@@ -3915,6 +3917,30 @@ test('錠前荒らし: 敵陣のロックを1つ解除して🔥☠⚡を付与�
     assert.ok(!s.board[5].effects.some((x) => x.effect === '🔑'), '敵のロックが解除される');
     assert.ok(s.board[5].effects.some((x) => ['🔥', '☠', '⚡'].includes(x.effect)), 'エフェクトが付く');
     assert.strictEqual(e.lockRaidCost(s), e.skillCosts.onClickLockRaid, '無料は1手番に1回まで');
+});
+
+
+test('鍵師のパッシブ: 手番ごとに1回、常設のロックが無料。2回目は払い、次の手番でまた無料になる', () => {
+    const s = game('keysmith', 'you');
+    s.magic[0] = 10; s.magic[1] = 10;
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], 10, '1回目は無料');
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], 10 - Math.max(1, e.skillCosts.onClickUseLock - 1), '2回目は鍵師の-1込みで払う');
+    // 手番を終えて（チャージ）→ 相手の手番 → 戻ってきたらまた無料
+    s.useLock = 0;
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.turn, 1);
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.turn, 0);
+    const before = s.magic[0];
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], before, '次の手番でまた無料');
+    // 他キャラは払う
+    const t = game('you', 'you');
+    t.magic[0] = 10;
+    e.SKILLS.lock(t);
+    assert.strictEqual(t.magic[0], 10 - e.skillCosts.onClickUseLock);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
