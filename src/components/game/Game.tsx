@@ -5,22 +5,22 @@ import { Player, PLAYER_SYMBOLS, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { range, isShikigami, findEmptyIndexes } from '../../util';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, lockExtendCells, lockRaidCells, vacantSealCells } from './keysmith';
-import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE } from './shikigami';
-import { ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandable, objectLandableCells } from './objects';
+import { SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE } from './shikigami';
+import { ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillUsable, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandableCells } from './objects';
 import { SHIKIGAMI_PURGE_FREE } from './cost';
 import { SkillEffectType } from './BoardEffects';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf } from './boardGeometry';
 import { resolveDeck, SKILL_CATALOG, skillOf } from './deck';
 import { parseSkillText } from './skillMeta';
-import { cloneTargets, plunderTargets } from './generic';
+import { plunderTargets } from './generic';
 import { lateMagicBonus } from './lateMagic';
-import { BOLT_SILENCE_BOLTS, isGuarded, shieldedCells, connectedPieces, boardChargeCount, canJam, jammerTargets, isFullyCharged, applyOverload } from './charge';
+import { BOLT_SILENCE_BOLTS, isGuarded, shieldedCells, boardChargeCount, isFullyCharged, applyOverload } from './charge';
 import { firstFrostTargets } from './tokenSkills';
 import { placeBlocked } from './lifeBan';
 import { SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { graveOfferingTarget, POISON_WARD_TURNS } from './graveSkills';
 import { SHIKIGAMI_DISCOUNT_BASE } from './discount';
-import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, sacrificeTargets, budStacks, budReceivers, sowCandidates, infernoTargets, canFreeze, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, setEffectWard, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, budStacks, sowCandidates, infernoTargets, canFreeze, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, setEffectWard, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
 import { skillCosts, SkillCosts } from './skillCosts';
 import {
     GearId,
@@ -40,6 +40,7 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { useHoverPreview } from './useHoverPreview';
 import { usePanelInfo } from './usePanelInfo';
 import { useTurnDerived } from './useTurnDerived';
 import { useGearRuntime } from './useGearRuntime';
@@ -358,100 +359,7 @@ export const Game = (props: GameProps) => {
         />
     );
     const { onClickRestart, onClickBackToSetup, onClickCopyLog, copied, onClickDownloadLog } = useGameControls({ geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables }, late);
-
-    const notLocked = (idx: number) => !isGuarded(currentBoard[idx], characters);
-    const isOpponentCell = (idx: number) => !!currentBoard[idx].player && currentBoard[idx].player !== currentTurnPlayer;
-
-    // ボタンホバー時に破壊範囲をプレビューするマス
-    const slashPreview = (): number[] => geo.antiDiagonal.filter((idx) => notLocked(idx));
-    const backSlashPreview = (): number[] => geo.mainDiagonal.filter((idx) => notLocked(idx));
-    const opiumPreview = (): number[] =>
-        currentBoard.map((_, idx) => idx).filter((idx) => isOpponentCell(idx) && currentBoard[idx].bind > 0 && notLocked(idx));
-
-    const showPreview = (cells: number[]) => setPreviewCells(cells);
-    const clearPreview = () => setPreviewCells([]);
-
-    // マス選択待ちのスキルごとの、ホバー時のプレビュー範囲。先に並べた方が優先（同時に構えるのは1つだけ）
-    const hoverPreviews: [unknown, (i: number) => number[]][] = [
-        [useStomp, (i) => geo.stompRange(i)],
-        [useJudgeDay, (i) => geo.judgeRange(i)],
-        [usePandemic, (i) => geo.stompRange(i)],
-        [useInjection > 0, (i) => [i]],
-        [useChargeOne, (i) => [i]],
-        [useChargeSpread, (i) => connectedPieces(currentBoard, i, geo.size)],
-        [useChargeArea, (i) => geo.stompRange(i)],
-        [useClone, (i) => cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []],
-        [usePlunder, (i) => plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []],
-        [useFrostArea, (i) => geo.stompRange(i)],
-        [useIcicle, (i) => [i]],
-        [useFreezeSpread, (i) => connectedPieces(currentBoard, i, geo.size)],
-        [useShatter, (i) => currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []],
-        [useKimon, (i) => kimonCandidates().includes(i) ? [i] : []],
-        [useSacrifice, (i) => sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []],
-        [useSwidden, (i) => budStacks(currentBoard[i]) > 0 ? [i] : []],
-        [useShikigamiPlace, (i) => shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []],
-        [objectPlacing, (i) => objectLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []],
-        [objectTool, (i) => objectSkillTargetsNow(objectTool as ObjectSkill).includes(i) ? [i] : []],
-        [useShikigamiBlast, (i) => ownShikigami().includes(i) ? [i, ...geo.surroundRange(i)] : []],
-        [useShikigamiBless, (i) => ownShikigami().includes(i) ? [i, ...blessTargets()] : []],
-        [useShikigamiCurse, (i) => ownShikigami().includes(i) ? [i, ...curseTargets()] : []],
-        [useShikigamiPurge, (i) => purgeTargets().includes(i) ? [i] : []],
-        [useSucker, (i) => suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []],
-        [useFreeze, (i) => canFreeze(currentBoard[i]) ? [i] : []],
-        [useIgnite, (i) => [i]],
-        [useTinder, (i) => tinderCandidates().includes(i) ? [i] : []],
-        [useThunderFire, (i) => thunderFireTargets().includes(i) ? [i, ...geo.surroundRange(i)] : []],
-        [useStash, (i) => stashTargets().includes(i) ? [i] : []],
-        [useBoltSilence, (i) => boltSilenceTargets().includes(i) ? [i] : []],
-        [useJammer, (i) => canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []],
-    ];
-    // マスのホバー時: マス選択型のスキルが構えている間だけ範囲を表示
-    const onCellHover = (i: number) => {
-        const active = hoverPreviews.find(([on]) => on);
-        if (active) setPreviewCells(active[1](i));
-    };
-    const onCellLeave = () => {
-        if (hoverPreviews.some(([on]) => on)) setPreviewCells([]);
-    };
-
-    // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
-    // 先に並べた方が優先。条件が偽なら false/null になり、find で飛ばされる
-    const pendingSkillName: string | null = [
-        useStomp && 'ストンプ',
-        useThunderFire && '雷のない所に火は立たぬ',
-        useBoltSilence && '沈黙は雷なり',
-        useStash && '雷神のへそくり',
-        useJudgeDay && '審判の日',
-        useChargeSpread && '帯電拡散',
-        usePandemic && 'パンデミック',
-        useInjection > 0 && 'インジェクション',
-        useChargeOne && '帯電付与',
-        useClone && '写し身',
-        usePlunder && '追い剥ぎ',
-        useFrostArea && '範囲氷結',
-        useIcicle && '氷柱',
-        useFreezeSpread && '氷結拡散',
-        useShatter && '砕氷',
-        useSacrifice && '殉火',
-        useKimon && '鬼門封じ',
-        useSwidden && '焼畑',
-        objectPlacing && OBJECT_DEFS[objectPlacing].name,
-        objectTool && OBJECT_SKILLS[objectTool].name,
-        useShikigamiPlace && '式神設置',
-        useShikigamiBlast && '式神爆破',
-        useShikigamiBless && '式神の加護',
-        useShikigamiCurse && '式神の呪詛',
-        useShikigamiPurge && '式神の供犠',
-        useSucker && 'ひこばえ',
-        useFreeze && '氷結',
-        useIgnite && '火遁',
-        useTinder && '火口',
-    ].find((name) => name) || null;
-    const skillAnnounce = pendingSkillName
-        ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
-        : hailMaryPick
-        ? `ヘイルメアリー → ${hailMaryPick}`
-        : null;
+    const { showPreview, slashPreview, clearPreview, backSlashPreview, opiumPreview, skillAnnounce, onCellHover, onCellLeave } = useHoverPreview({ currentBoard, characters, currentTurnPlayer, geo, setPreviewCells, useStomp, useJudgeDay, usePandemic, useInjection, useChargeOne, useChargeSpread, useChargeArea, useClone, cloneSources, usePlunder, useFrostArea, useIcicle, useFreezeSpread, useShatter, useKimon, kimonCandidates, useSacrifice, sacrificeCandidates, useSwidden, useShikigamiPlace, objectPlacing, objectTool, objectSkillTargetsNow, useShikigamiBlast, ownShikigami, useShikigamiBless, blessTargets, useShikigamiCurse, curseTargets, useShikigamiPurge, purgeTargets, useSucker, suckerSources, useFreeze, useIgnite, useTinder, tinderCandidates, useThunderFire, thunderFireTargets, useStash, stashTargets, useBoltSilence, boltSilenceTargets, useJammer, hailMaryPick }, late);
 
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
     const shuffleSkillDefs: {

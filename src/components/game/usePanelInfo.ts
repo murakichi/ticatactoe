@@ -1,5 +1,6 @@
 // Game.tsx から切り出したハンドラ群: プレイヤーパネルに出す継続中の効果と、固有スキルの現在コスト
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { YingYangMode } from '../../types/Character';
 import { CharacterId } from '../../types/Character';
 import { proliferateUpkeep } from './turn';
 import { SkillCosts } from './skillCosts';
