@@ -3739,65 +3739,38 @@ export const Game = (props: GameProps) => {
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
-    const pendingSkillName = useStomp
-        ? 'ストンプ'
-        : useThunderFire
-        ? '雷のない所に火は立たぬ'
-        : useBoltSilence
-        ? '沈黙は雷なり'
-        : useStash
-        ? '雷神のへそくり'
-        : useJudgeDay
-        ? '審判の日'
-        : useChargeSpread
-        ? '帯電拡散'
-        : usePandemic
-        ? 'パンデミック'
-        : useInjection > 0
-        ? 'インジェクション'
-        : useChargeOne
-        ? '帯電付与'
-        : useClone
-        ? '写し身'
-        : usePlunder
-        ? '追い剥ぎ'
-        : useFrostArea
-        ? '範囲氷結'
-        : useIcicle
-        ? '氷柱'
-        : useFreezeSpread
-        ? '氷結拡散'
-        : useShatter
-        ? '砕氷'
-        : useSacrifice
-        ? '殉火'
-        : useKimon
-        ? '鬼門封じ'
-        : useSwidden
-        ? '焼畑'
-        : objectPlacing
-        ? OBJECT_DEFS[objectPlacing].name
-        : objectTool
-        ? OBJECT_SKILLS[objectTool].name
-        : useShikigamiPlace
-        ? '式神設置'
-        : useShikigamiBlast
-        ? '式神爆破'
-        : useShikigamiBless
-        ? '式神の加護'
-        : useShikigamiCurse
-        ? '式神の呪詛'
-        : useShikigamiPurge
-        ? '式神の供犠'
-        : useSucker
-        ? 'ひこばえ'
-        : useFreeze
-        ? '氷結'
-        : useIgnite
-        ? '火遁'
-        : useTinder
-        ? '火口'
-        : null;
+    // 先に並べた方が優先。条件が偽なら false/null になり、find で飛ばされる
+    const pendingSkillName: string | null = [
+        useStomp && 'ストンプ',
+        useThunderFire && '雷のない所に火は立たぬ',
+        useBoltSilence && '沈黙は雷なり',
+        useStash && '雷神のへそくり',
+        useJudgeDay && '審判の日',
+        useChargeSpread && '帯電拡散',
+        usePandemic && 'パンデミック',
+        useInjection > 0 && 'インジェクション',
+        useChargeOne && '帯電付与',
+        useClone && '写し身',
+        usePlunder && '追い剥ぎ',
+        useFrostArea && '範囲氷結',
+        useIcicle && '氷柱',
+        useFreezeSpread && '氷結拡散',
+        useShatter && '砕氷',
+        useSacrifice && '殉火',
+        useKimon && '鬼門封じ',
+        useSwidden && '焼畑',
+        objectPlacing && OBJECT_DEFS[objectPlacing].name,
+        objectTool && OBJECT_SKILLS[objectTool].name,
+        useShikigamiPlace && '式神設置',
+        useShikigamiBlast && '式神爆破',
+        useShikigamiBless && '式神の加護',
+        useShikigamiCurse && '式神の呪詛',
+        useShikigamiPurge && '式神の供犠',
+        useSucker && 'ひこばえ',
+        useFreeze && '氷結',
+        useIgnite && '火遁',
+        useTinder && '火口',
+    ].find((name) => name) || null;
     const skillAnnounce = pendingSkillName
         ? `${hailMaryPick ? `ヘイルメアリー → ` : ''}${pendingSkillName}：マスを選択`
         : hailMaryPick
