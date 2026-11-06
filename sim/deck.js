@@ -60,7 +60,6 @@ const SKILL_CATALOG = [
     { idx: 47, name: '砕氷', icon: '🔨', category: 'ice' },
     { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice' },
     { idx: 49, name: '慈雨', icon: '⬆️', category: 'support' },
-    { idx: 50, name: '縮地', icon: '👣', category: 'support' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack' },
     { idx: 53, name: '特売', icon: '🏷️', category: 'support' },
@@ -117,6 +116,10 @@ const SKILL_CATALOG = [
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1） */
 const CATALOG_SIZE = SKILL_CATALOG.length;
+/** 削除したスキルの idx（欠番）。縮地(50)を削除（deck.ts の REMOVED_SKILL_IDX と同じ） */
+const REMOVED_SKILL_IDX = [50];
+const SKILL_IDX_END = CATALOG_SIZE + REMOVED_SKILL_IDX.length;
+const AVAILABLE_SKILL_IDX = SKILL_CATALOG.map((c) => c.idx);
 
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
@@ -150,14 +153,14 @@ const pickRecommendedDeck = (character, rng = Math.random) => {
 
 /** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
 const isValidDeck = (deck) =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && i >= 0 && i < CATALOG_SIZE);
+    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && AVAILABLE_SKILL_IDX.includes(i));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 const resolveDeck = (deck, character) => (isValidDeck(deck) ? [...deck].sort((a, b) => a - b) : recommendedDeck(character));
 
 /** ランダムなデッキ（rng は [0,1) を返す関数） */
 function randomDeck(rng = Math.random) {
-    const pool = Array.from({ length: CATALOG_SIZE }, (_, i) => i);
+    const pool = [...AVAILABLE_SKILL_IDX];
     const out = [];
     for (let k = 0; k < DECK_SIZE; k++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     return out.sort((a, b) => a - b);
@@ -172,7 +175,7 @@ const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
 
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     const deck = pickRecommendedDeck(character, rng);
-    const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
+    const outside = AVAILABLE_SKILL_IDX.filter((i) => !deck.includes(i));
     const core = CORE_CARDS[character] || [];
     const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
     for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
@@ -184,4 +187,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, REMOVED_SKILL_IDX, SKILL_IDX_END, AVAILABLE_SKILL_IDX, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
