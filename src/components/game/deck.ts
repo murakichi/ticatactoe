@@ -6,6 +6,12 @@ import { skillCosts, SkillCosts } from './skillCosts';
 /** デッキの枚数（同じスキルは1枚まで） */
 export const DECK_SIZE = 12;
 
+/**
+ * オリジナルスキル（customSkill.ts）がデッキに入るときの idx。汎用スキルの idx とは重ならない。
+ * デッキの1枠を使うので、入るのは最大1枚（重複不可）。使えるのは人間席だけで、AI席・仕様が無い席では Game が外す。
+ */
+export const CUSTOM_SKILL_IDX = 200;
+
 export type SkillCategory = 'basic' | 'token' | 'attack' | 'support' | 'control' | 'poison' | 'buds' | 'charge' | 'ice' | 'fire' | 'shikigami' | 'object';
 
 export type CatalogEntry = {
@@ -215,9 +221,12 @@ export const pickRecommendedDeck = (character: CharacterId, rng: () => number = 
     return patterns[Math.floor(rng() * patterns.length)];
 };
 
-/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
+/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx（オリジナルスキルの idx は1枚まで） */
 export const isValidDeck = (deck: readonly number[] | undefined): boolean =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && AVAILABLE_SKILL_IDX.includes(i));
+    !!deck &&
+    deck.length === DECK_SIZE &&
+    new Set(deck).size === DECK_SIZE &&
+    deck.every((i) => Number.isInteger(i) && (AVAILABLE_SKILL_IDX.includes(i) || i === CUSTOM_SKILL_IDX));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 export const resolveDeck = (deck: readonly number[] | undefined, character: CharacterId): number[] =>

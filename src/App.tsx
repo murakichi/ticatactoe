@@ -8,6 +8,7 @@ import { LIFE_MEANS, range } from './util';
 import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears } from './components/game/gear';
 import {
     DECK_SIZE,
+    CUSTOM_SKILL_IDX,
     SKILL_CATALOG,
     CATEGORY_ORDER,
     MAX_SAVED_DECKS,
@@ -22,6 +23,8 @@ import {
     pickRecommendedDeck,
 } from './components/game/deck';
 import { SimPanel } from './components/SimPanel';
+import { CustomSkillCreator } from './components/CustomSkillCreator';
+import { CustomSkillSpec, clearCustomSkill, customIcon, customSkillCost, describeCustom, loadCustomSkill, saveCustomSkill } from './components/game/customSkill';
 import styles from './App.module.css';
 
 type CharacterDef = {
@@ -92,6 +95,8 @@ export const App = () => {
     const [isSimOpen, setIsSimOpen] = useState<boolean>(false);
     // 対戦開始時に確定した席の設定（AIのデッキのランダム入れ替えは開始時に1回だけ決める）
     const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
+    // 作成したオリジナルスキル（ブラウザに1枚だけ保存。人間席のデッキに1枚まで入れられる）
+    const [customSkill, setCustomSkill] = useState<CustomSkillSpec | undefined>(() => loadCustomSkill());
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) =>
@@ -120,6 +125,10 @@ export const App = () => {
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p) => {
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: pickRecommendedGears(p.character) } : p;
+            // オリジナルスキルは人間席だけ。AI席のデッキに入っていたら推奨デッキに戻す
+            const hasCustom = !!p.deck?.includes(CUSTOM_SKILL_IDX);
+            if (hasCustom && (p.isAI || !customSkill)) return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
+            if (hasCustom) return { ...withGears, customSkill };
             if (isValidDeck(p.deck)) return withGears;
             return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
@@ -197,6 +206,21 @@ export const App = () => {
                             </button>
                         </div>
                     </section>
+                    <section className={styles.rules} aria-label='オリジナルスキル'>
+                        <CustomSkillCreator
+                            key={customSkill ? 'saved' : 'new'}
+                            initial={customSkill}
+                            onSave={(spec) => {
+                                const saved = saveCustomSkill(spec);
+                                if (saved) setCustomSkill(saved);
+                                return !!saved;
+                            }}
+                            onDelete={() => {
+                                clearCustomSkill();
+                                setCustomSkill(undefined);
+                            }}
+                        />
+                    </section>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting
@@ -211,6 +235,7 @@ export const App = () => {
                                 onChangeGears={(gears) => updatePlayer(seat, { gears })}
                                 onRandomGears={() => randomizeGears(seat)}
                                 deck={players[seat].deck}
+                                customSkill={customSkill}
                                 onChangeDeck={(deck) => updatePlayer(seat, { deck })}
                             />
                         ))}
@@ -276,6 +301,7 @@ type PlayerSettingProps = {
     onRandomGears: () => void;
     /** 組んだデッキ（未指定なら推奨デッキ） */
     deck: number[] | undefined;
+    customSkill: CustomSkillSpec | undefined;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -359,6 +385,7 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                     character={props.checkedCharacter}
                     isAI={props.isAI}
                     deck={props.deck}
+                    customSkill={props.customSkill}
                     onChangeDeck={props.onChangeDeck}
                 />
                 {props.gears.length > 0 && (
@@ -380,6 +407,7 @@ type DeckBoxProps = {
     character: CharacterId;
     isAI: boolean;
     deck: number[] | undefined;
+    customSkill: CustomSkillSpec | undefined;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -445,7 +473,11 @@ const DeckBox = (props: DeckBoxProps) => {
                 </span>
             </div>
             <div className={styles.deckInfo} aria-live='polite'>
-                {pointed === null ? 'スキルにカーソルを合わせる（タップ）と、効果と基礎コストが出ます' : describeSkill(pointed)}
+                {pointed === null
+                    ? 'スキルにカーソルを合わせる（タップ）と、効果と基礎コストが出ます'
+                    : pointed === CUSTOM_SKILL_IDX && props.customSkill
+                    ? `${props.customSkill.name}（基礎コスト${customSkillCost(props.customSkill)}）: ${describeCustom(props.customSkill)}`
+                    : describeSkill(pointed)}
             </div>
             {CATEGORY_ORDER.map((cat) => {
                 const entries = SKILL_CATALOG.filter((c) => c.category === cat.id);
@@ -475,6 +507,22 @@ const DeckBox = (props: DeckBoxProps) => {
                     </div>
                 );
             })}
+            <div className={styles.deckGroup}>
+                <div className={styles.deckGroupLabel}>オリジナル（デッキに1枚まで・人間席のみ）</div>
+                <div className={styles.gearGrid}>
+                    <button
+                        className={`${styles.gearChip} ${shown.includes(CUSTOM_SKILL_IDX) ? styles.gearChipActive : ''}`}
+                        onClick={() => toggle(CUSTOM_SKILL_IDX)}
+                        onMouseEnter={() => setPointed(CUSTOM_SKILL_IDX)}
+                        onFocus={() => setPointed(CUSTOM_SKILL_IDX)}
+                        disabled={(!shown.includes(CUSTOM_SKILL_IDX) && shown.length >= DECK_SIZE) || (!props.customSkill && !shown.includes(CUSTOM_SKILL_IDX)) || props.isAI}
+                        aria-pressed={shown.includes(CUSTOM_SKILL_IDX)}
+                        title={props.isAI ? 'AI席は使えません' : props.customSkill ? describeCustom(props.customSkill) : '先に「オリジナルスキル」を作成して保存してください'}
+                    >
+                        {props.customSkill ? `${customIcon(props.customSkill)} ${props.customSkill.name}` : '🛠 （未作成）'}
+                    </button>
+                </div>
+            </div>
             <div className={styles.deckSave}>
                 <input
                     className={styles.deckInput}
