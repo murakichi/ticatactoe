@@ -420,8 +420,6 @@ function newGame(opts = {}) {
         useSacrifice: false,
         useKimon: false,
         usePlunder: false,
-        useRelocate: false,
-        relocateFrom: null,
         useStash: false,
         useBoltSilence: 0, // あと何個の⚡を選んで払うか
         useThunderFire: false,
@@ -469,7 +467,7 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     const keep = s.lockedSkills[seat].slice(0, 3);
     const pool = [];
     if (s.decks) { for (const i of s.decks[seat]) if (!keep.includes(i)) pool.push(i); }
-    else for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
+    else for (let i = 0; i < poolEnd; i++) if (!keep.includes(i) && !deckMod.REMOVED_SKILL_IDX.includes(i)) pool.push(i); // 欠番(削除したスキル)は引かない
     const fill = randomAnyPick(pool, Math.max(0, 3 - keep.length), s.rng);
     return [...keep, ...fill];
 }
@@ -651,10 +649,9 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
-    s.relocateFrom = null;
     s.useLock = 0;
     s.objectPlacing = null;
     s.objectTool = null;
@@ -834,15 +831,6 @@ function placeMove(s, i) {
     if (s.useSwidden) {
         if (!exeSwidden(s, i)) return false; // 🌱の無いマスは選び直せる
         s.useSwidden = false;
-        return true;
-    }
-    if (s.useRelocate) {
-        // 縮地: 動かす自陣のコマを選び、空きマスを選ぶ。選べないマスは選び直せる
-        if (genericMod.canRelocate(s.board[i], curPlayer(s))) { s.relocateFrom = i; return false; }
-        if (s.relocateFrom === null) return false;
-        if (!genericMod.relocate(s.board, s.relocateFrom, i, curPlayer(s))) return false;
-        s.useRelocate = false;
-        s.relocateFrom = null;
         return true;
     }
     if (s.usePlunder) {
@@ -1386,7 +1374,7 @@ function onClickJudgeDay(s) {
     s.useJudgeDay = true;
 }
 function exeJudgeDay(s, i) {
-    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s));
+    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s), { gears: s.gears[s.turn], seat: s.turn });
     addCorpses(s, destroyed);
     s.useMagicCount[s.turn] = 0;
     s.useJudgeDay = false;
@@ -2310,14 +2298,6 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
-// 縮地 (idx50): 自陣のコマを1つ選び、空きマスへ動かす（ライフ・エフェクトごと）。手番は続く
-function onClickRelocate(s) {
-    s.useRelocate = true;
-    s.relocateFrom = null;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickRelocate, false, false, 'onClickRelocate'), 'onClickRelocate');
-    bumpMagicCount(s);
-    bumpStat(s, 'relocate');
-}
 // 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
 function onClickPlunder(s) {
     if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
@@ -2674,7 +2654,6 @@ const SKILLS = {
     springWind: onClickSpringWind,
     kimon: onClickKimon,
     plunder: onClickPlunder,
-    relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
     spark: onClickSpark,
     strip: onClickStrip,

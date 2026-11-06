@@ -213,7 +213,7 @@ async function main() {
     const cand = {};
     if (args.deck) {
         const d = ints(args.deck);
-        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.CATALOG_SIZE - 1) + ' の重複なし12個');
+        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.SKILL_IDX_END - 1) + '（欠番を除く）の重複なし12個');
         cand.deck = d;
     }
     if (args.gears) cand.gears = args.gears === 'none' ? [] : args.gears.split(',');
@@ -310,7 +310,7 @@ async function main() {
             const keep = base.slice();
             const outs = [], ins = [];
             for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
@@ -318,7 +318,7 @@ async function main() {
             seen.add(key);
             const d = keep.concat(ins).sort((a, b) => a - b);
             variants.push({ ...cand, deck: d });
-            const nm = (i) => `${i}(${deckMod.SKILL_CATALOG[i].name})`;
+            const nm = (i) => `${i}(${deckMod.skillOf(i).name})`;
             labels.push(`-${outs.map(nm).join(',')} +${ins.map(nm).join(',')}  [${d.join(',')}]`);
         }
     }
@@ -330,7 +330,7 @@ async function main() {
         variants = [{ ...cand, deck, gears }]; labels = ['base'];
         for (const idx of deck) {
             variants.push({ ...cand, deck, gears, flags: { ...(cand.flags || {}), ban: idx } });
-            labels.push(`card ${idx}(${deckMod.SKILL_CATALOG[idx].name}) を禁止`);
+            labels.push(`card ${idx}(${deckMod.skillOf(idx).name}) を禁止`);
         }
         for (const g of gears) {
             variants.push({ ...cand, deck, gears: gears.filter((x) => x !== g) });

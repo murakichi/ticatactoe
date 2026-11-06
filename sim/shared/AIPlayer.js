@@ -37,8 +37,6 @@ const CHARGE_RANDOM_MARGIN = 1;
 const SURPLUS_MAGIC = 12;
 /** 払ったあとにこの魔力が残るなら『有り余っている』とみなし、効果の薄い札でも魔力を使い切る方に回る（多人数戦・防壁で長引いた試合） */
 const RICH_MAGIC = 14;
-/** 縮地を1手番に連打する回数の上限 */
-const RELOCATE_CHAIN_MAX = 3;
 /** 氷室の番人の砕氷: 1手番に壊す敵コマの数・氷結を重ねる回数の上限・撃ったあとに残す魔力 */
 const SHATTER_MAX_PER_TURN = 2;
 const SHATTER_MAX_FREEZES = 3;
@@ -100,8 +98,8 @@ const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
-/** 魔法使いが手札に固定する札: 縮地・特売・返し特売・一寸の虫に魂なし */
-const MAGICIAN_HOLD = [50, 53, 60, 92];
+/** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
+const MAGICIAN_HOLD = [53, 60, 92];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
@@ -1480,7 +1478,7 @@ class AIPlayer {
             // 対魔女の新スキル(初霜93・吹き寄せ94・山焼き95)は、引いたら先に手札に固定する (旧sim AI の lockNew=1)
             (this.facesWitchNow() && (idx === 93 || idx === 94 || idx === 95)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
-            // 魔法使い: 縮地(50)・特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
+            // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
             (this.character === 'magician' && MAGICIAN_HOLD.includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
@@ -2127,26 +2125,6 @@ class AIPlayer {
         }
         return best;
     }
-    /** 縮地の連打で1列を揃える計画。列の自陣でないマスは全て置ける空きマスで、そのうち1つを最後の着手に残し、残りを列の外の自陣コマで埋める */
-    planRelocateWin(board, maxCasts) {
-        const cap = Math.min(maxCasts, RELOCATE_CHAIN_MAX);
-        let best = null;
-        for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-            const need = line.filter((c) => board[c].player !== this.playerSymbol);
-            if (need.length < 2 || need.length - 1 > cap || !need.every((c) => (0, generic_1.isPlaceable)(board[c])) || (best && need.length - 1 >= best.moves.length))
-                continue;
-            const spare = board.map((_, i) => i).filter((i) => !line.includes(i) && (0, generic_1.canRelocate)(board[i], this.playerSymbol));
-            if (spare.length < need.length - 1)
-                continue;
-            const last = need[need.length - 1];
-            if (board[last].effects.some((e) => e.effect === '❄' || e.effect === '🔑'))
-                continue;
-            // ライフの低いコマから動かす（動かしても元のマスに自陣のコマは要らない）
-            spare.sort((a, b) => board[a].bind - board[b].bind);
-            best = { moves: need.slice(0, -1).map((to, k) => ({ from: spare[k], to })), move: last };
-        }
-        return best;
-    }
     /** 追い剥ぎの連打で1列を揃える計画。列の自陣でないマスは、追い剥ぎできる(ライフ0の敵)か、最後の着手に使う空きマス1つだけ */
     planPlunderWin(board, maxCasts) {
         const cap = Math.min(maxCasts, PLUNDER_CHAIN_MAX);
@@ -2173,25 +2151,13 @@ class AIPlayer {
     }
     /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
     findJudgeTarget(board) {
-        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
         let bestIdx = null, bestNet = 0;
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i))
                 continue;
-            let enemy = 0, mine = 0;
-            for (const idx of geo.judgeRange(i)) {
-                const sq = board[idx];
-                const locked = sq.effects.some(e => e.effect === '🔑');
-                const protectedBud = sq.player === this.playerSymbol && sq.effects.some(e => e.effect === '🌱');
-                if (locked && protectedBud)
-                    continue;
-                if ((0, thermal_1.isFrozen)(sq))
-                    continue; // 氷結中は❄1つが身代わりになり、敵も自陣も壊れない
-                if (this.isEnemy(sq.player))
-                    enemy++;
-                else if (sq.player === this.playerSymbol)
-                    mine++;
-            }
+            const victims = (0, blast_1.judgeDayVictims)(board, i, this.playerSymbol); // blast.ts の judgeDay と同じ処理で壊れるコマを数える
+            const enemy = victims.filter((v) => this.isEnemy(v.owner)).length;
+            const mine = victims.length - enemy;
             const net = enemy - mine;
             if (net > bestNet) {
                 bestNet = net;
@@ -2237,23 +2203,10 @@ class AIPlayer {
         for (let i = 0; i < board.length; i++) {
             if (this.shield.has(i))
                 continue;
-            let enemy = 0, mine = 0;
-            const gone = new Set();
-            for (const idx of geo.judgeRange(i)) {
-                const sq = board[idx];
-                const locked = sq.effects.some(e => e.effect === '🔑');
-                const protectedBud = sq.player === me && sq.effects.some(e => e.effect === '🌱');
-                if (locked && protectedBud)
-                    continue;
-                if ((0, thermal_1.isFrozen)(sq))
-                    continue;
-                if (this.isEnemy(sq.player)) {
-                    enemy++;
-                    gone.add(idx);
-                }
-                else if (sq.player === me)
-                    mine++;
-            }
+            const victims = (0, blast_1.judgeDayVictims)(board, i, me);
+            const gone = new Set(victims.filter((v) => this.isEnemy(v.owner)).map((v) => v.cell));
+            const enemy = gone.size;
+            const mine = victims.length - enemy;
             if (!reachLines.every((line) => line.some((idx) => gone.has(idx))))
                 continue;
             if (enemy - mine > bestNet) {
@@ -2273,22 +2226,26 @@ class AIPlayer {
                 continue;
             const nb = board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
             let killed = 0;
-            for (const idx of kind === 'stomp' ? geo.stompRange(i) : geo.judgeRange(i)) {
-                const sq = nb[idx];
-                if (kind === 'stomp' && sq.player === me) {
-                    nb[idx] = (0, thermal_1.applyDamage)(sq, 5, 'skill').sq;
-                    continue;
+            if (kind === 'judge') {
+                killed = (0, blast_1.judgeDayVictims)(board, i, me).filter((v) => this.isEnemy(v.owner)).length;
+                (0, blast_1.judgeDay)(nb, i, me); // blast.ts の judgeDay と同じ処理
+            }
+            else {
+                for (const idx of geo.stompRange(i)) {
+                    const sq = nb[idx];
+                    if (sq.player === me) {
+                        nb[idx] = (0, thermal_1.applyDamage)(sq, 5, 'skill').sq;
+                        continue;
+                    }
+                    const guard = (0, thermal_1.absorbDestroy)(sq);
+                    if (guard.blocked) {
+                        nb[idx] = guard.sq;
+                        continue;
+                    } // 氷結は❄1つが身代わりになる
+                    if (this.isEnemy(sq.player))
+                        killed++;
+                    nb[idx] = { player: undefined, bind: 0, effects: [] };
                 }
-                if (kind === 'judge' && sq.player === me && sq.effects.some(e => e.effect === '🔑') && sq.effects.some(e => e.effect === '🌱'))
-                    continue;
-                const guard = (0, thermal_1.absorbDestroy)(sq);
-                if (guard.blocked) {
-                    nb[idx] = guard.sq;
-                    continue;
-                } // 氷結は❄1つが身代わりになる
-                if (this.isEnemy(sq.player))
-                    killed++;
-                nb[idx] = { player: undefined, bind: 0, effects: [] };
             }
             if (!nb[i].player)
                 nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
@@ -2661,14 +2618,6 @@ class AIPlayer {
             const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : PLUNDER_CHAIN_MAX);
             if (win !== null) {
                 return { move: win.move, skills: [], chargeClicks: win.cells.map((c) => ({ skill: 'onClickPlunder', target: c })), win: true };
-            }
-        }
-        // 縮地(50): 自陣のコマを空きマスへ動かす（手番は続く）。列の足りないマスが空きだけで、よそに動かせる自陣のコマが足りるなら、動かして最後の1マスは着手で揃える
-        if (availableSkills.includes(50)) {
-            const relocateCost = this.calculateAICost(costs.onClickRelocate, false, false, 'onClickRelocate');
-            const win = this.planRelocateWin(board, relocateCost > 0 ? Math.floor(magic / relocateCost) : RELOCATE_CHAIN_MAX);
-            if (win !== null) {
-                return { move: win.move, skills: [], chargeClicks: win.moves.map((m) => ({ skill: 'onClickRelocate', target: m.from, target2: m.to })), win: true };
             }
         }
         // 魔法使い: 撃てるスキルが無いとき、軽減札を撃ってから1コストで手札を引き直して探す（旧sim AI の discountPlan>=2 と同方針。

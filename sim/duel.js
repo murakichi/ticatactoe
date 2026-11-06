@@ -260,7 +260,7 @@ function show(cfg, res) {
     if (engine.findEmptyIndexes(s.board).length === 0) console.log('\n（着手できるマスなし: charge で手番を終えられる）');
     const pend = pendingOf(s);
     if (pend.length) console.log(`待ち状態: ${pend.join(',')} → p N で対象マスを指定`);
-    const cat = deckMod.SKILL_CATALOG;
+    const cat = new Proxy({}, { get: (_, k) => deckMod.skillOf(Number(k)) });
     console.log('\n手札（h IDX で使用 / lock IDX で次手番に固定）:');
     for (const idx of s.skills) {
         const name = IDX_SKILL[idx];

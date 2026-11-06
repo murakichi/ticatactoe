@@ -26,9 +26,9 @@ import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDi
 import { decayBoard, shouldDecay, isCrowded, canHitBound, isTakeProtected } from './decay';
 import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
-import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
+import { resolveDeck, baseCostOf, SKILL_CATALOG, skillOf } from './deck';
 import { parseSkillText } from './skillMeta';
-import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
+import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
@@ -407,7 +407,6 @@ export const Game = (props: GameProps) => {
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickPlunder': onClickPlunder(); break;
-            case 'onClickRelocate': onClickRelocate(); break;
             case 'onClickShatter': onClickShatter(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
@@ -1137,11 +1136,6 @@ export const Game = (props: GameProps) => {
 
         if (useFrostArea) {
             exeFrostArea(i);
-            return;
-        }
-
-        if (useRelocate) {
-            exeRelocate(i);
             return;
         }
 
@@ -1918,7 +1912,7 @@ export const Game = (props: GameProps) => {
 
     const exeJudgeDay = (i: number) => {
         const board = currentBoard.slice();
-        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer);
+        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer, { gears: turnGears, seat: turnSeat });
         addCorpses(destroyed);
 
         setUseMagicCountAt(turnSeat, 0);
@@ -2557,7 +2551,7 @@ export const Game = (props: GameProps) => {
         deckBySeat[turnSeat]
             .filter((i) => i !== 59 && i !== 104 && baseCostOf(i) <= SECOND_CATCH_MAX_BASE)
             .map((i) => shuffleSkillDefs.find((d) => d.idx === i))
-            .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled && !placeBlocked(lifeBan[turnSeat], SKILL_CATALOG[d.idx].costKey, calculateTokenBind()));
+            .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled && !placeBlocked(lifeBan[turnSeat], skillOf(d.idx)?.costKey, calculateTokenBind()));
     const onClickSecondCatch = () => {
         const pool = secondCatchPool();
         if (pool.length === 0) {
@@ -2565,7 +2559,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         const second = randomPick(pool);
-        addLog(`「柳の下に二匹目がいた」を使用 → ${SKILL_CATALOG[second.idx].name}が発動`);
+        addLog(`「柳の下に二匹目がいた」を使用 → ${skillOf(second.idx)?.name}が発動`);
         spendMagic(calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch'), true, true, 'onClickSecondCatch');
         gearTurn.current.freeCast = true;
         second.onClick();
@@ -2831,8 +2825,6 @@ export const Game = (props: GameProps) => {
     };
 
     // --- 汎用スキル（idx 49-52）: 慈雨・縮地・写し身・追い剥ぎ ---
-    const [useRelocate, setUseRelocate] = useState<boolean>(false);
-    const [relocateFrom, setRelocateFrom] = useState<number | null>(null);
     const [useClone, setUseClone] = useState<boolean>(false);
     const [usePlunder, setUsePlunder] = useState<boolean>(false);
     // 慈雨: 自陣の全コマのライフ+1（クリック不要・手番は続く）
@@ -2849,7 +2841,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         const picked = randomPick(pool);
-        addLog(`「福引き」を使用 → ${SKILL_CATALOG[picked.idx].name}が発動`);
+        addLog(`「福引き」を使用 → ${skillOf(picked.idx)?.name}が発動`);
         spendMagic(calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast'), true, true, 'onClickRandomCast');
         gearTurn.current.freeCast = true;
         picked.onClick();
@@ -2979,33 +2971,6 @@ export const Game = (props: GameProps) => {
         playEffect('rain', undefined, done);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost'), true, true, 'onClickBoost');
-    };
-    // 縮地: 自陣のコマ（🔑・氷結中は不可）を選び、空きマスを選ぶと、ライフ・エフェクトごと移動する
-    const relocateSources = (): number[] =>
-        currentBoard.map((sq, i) => (canRelocate(sq, currentTurnPlayer) ? i : -1)).filter((i) => i !== -1);
-    const onClickRelocate = () => {
-        addLog('「縮地」を使用（動かす自陣のコマを選択）');
-        setUseRelocate(true);
-        setRelocateFrom(null);
-        spendMagic(calculateCost(seatCosts.onClickRelocate, false, false, currentTurnPlayer, 'onClickRelocate'), true, true, 'onClickRelocate');
-    };
-    const exeRelocate = (i: number) => {
-        if (relocateFrom === null) {
-            if (canRelocate(currentBoard[i], currentTurnPlayer)) setRelocateFrom(i); // 動かせるコマだけ選べる
-            return;
-        }
-        if (canRelocate(currentBoard[i], currentTurnPlayer)) {
-            setRelocateFrom(i); // 別のコマに選び直せる
-            return;
-        }
-        const board = currentBoard.slice();
-        if (!relocate(board, relocateFrom, i, currentTurnPlayer)) return; // 置けないマスは選び直せる
-        addLog(`${posName(relocateFrom)}のコマを${posName(i)}へ移動`);
-        flashCells([i]);
-        playEffect('dash', i, [relocateFrom, i]);
-        setUseRelocate(false);
-        setRelocateFrom(null);
-        setCurrentBoard(board);
     };
     // 写し身: 自陣のコマを選ぶと、縦横隣のランダムな空きマスにライフ半分の写しが現れる
     const cloneSources = (): number[] =>
@@ -3732,8 +3697,6 @@ export const Game = (props: GameProps) => {
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseFrostArea(false);
-        setUseRelocate(false);
-        setRelocateFrom(null);
         setUseClone(false);
         setUsePlunder(false);
         setUseIcicle(false);
@@ -3825,7 +3788,6 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
-        else if (useRelocate) setPreviewCells(relocateFrom === null ? (canRelocate(currentBoard[i], currentTurnPlayer) ? [i] : []) : isPlaceable(currentBoard[i]) ? [i] : []);
         else if (useClone) setPreviewCells(cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []);
         else if (usePlunder) setPreviewCells(plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []);
         else if (useFrostArea) setPreviewCells(geo.stompRange(i));
@@ -3852,7 +3814,7 @@ export const Game = (props: GameProps) => {
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -3874,8 +3836,6 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
-        : useRelocate
-        ? '縮地'
         : useClone
         ? '写し身'
         : usePlunder
@@ -3989,7 +3949,6 @@ export const Game = (props: GameProps) => {
         { idx: 47, onClick: onClickShatter, buttonText: `砕氷-${calculateCost(seatCosts.onClickShatter, false, false, currentTurnPlayer, 'onClickShatter')}`, paragraph: `氷結中のコマを選択し、❄を全て砕いて❄1つにつき3ダメージを与えます（ライフが0になったら破壊）\n自陣のコマにも使えます`, disabled: checkSkillDisable(seatCosts.onClickShatter) || !currentBoard.some((sq) => sq.player && isFrozen(sq)) },
         { idx: 48, onClick: onClickFrostfall, buttonText: `霜降り-${calculateCost(seatCosts.onClickFrostfall, false, false, currentTurnPlayer, 'onClickFrostfall')}`, paragraph: `自陣のライフ2以下のコマすべてに❄を1つ付与します`, disabled: checkSkillDisable(seatCosts.onClickFrostfall) || frostfallTargets(currentBoard, currentTurnPlayer).length === 0 },
         { idx: 49, onClick: onClickBoost, buttonText: `慈雨-${calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost')}`, paragraph: `自陣の全コマのライフを+1します（ライフ0のコマも）`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
-        { idx: 50, onClick: onClickRelocate, buttonText: `縮地-${calculateCost(seatCosts.onClickRelocate, false, false, currentTurnPlayer, 'onClickRelocate')}`, paragraph: `自陣のコマを選び、空きマスを選ぶと、ライフ・エフェクトごと移動します\n🔑ロック中・氷結中のコマは動かせません`, disabled: checkSkillDisable(seatCosts.onClickRelocate) || relocateSources().length === 0 || !currentBoard.some(isPlaceable) },
         { idx: 51, onClick: onClickClone, buttonText: `写し身-${calculateCost(seatCosts.onClickClone, false, false, currentTurnPlayer, 'onClickClone')}`, paragraph: `自陣のコマを選ぶと、縦横隣のランダムな空きマスに、ライフが半分（切り捨て・最低1）の写しが現れます`, disabled: checkSkillDisable(seatCosts.onClickClone) || cloneSources().length === 0 },
         { idx: 52, onClick: onClickPlunder, buttonText: `追い剥ぎ-${calculateCost(seatCosts.onClickPlunder, false, false, currentTurnPlayer, 'onClickPlunder')}`, paragraph: `ライフ0の敵のコマを1つ選んで、自陣のコマ（ライフ1）にします\n🔑ロック中のコマ・無敵のコマは奪えません。手番は続きます`, disabled: checkSkillDisable(seatCosts.onClickPlunder) || plunderTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
         { idx: 53, onClick: () => onClickDiscount('onClickMarkdown'), buttonText: `特売-${calculateCost(seatCosts.onClickMarkdown, false, false, currentTurnPlayer, 'onClickMarkdown')}`, paragraph: `次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: !canUseDiscount('onClickMarkdown') },
@@ -4346,7 +4305,7 @@ export const Game = (props: GameProps) => {
                             onClick={s.onClick}
                             buttonText={s.buttonText}
                             paragraph={s.paragraph}
-                            disabled={s.disabled || placeBlocked(lifeBan[turnSeat], SKILL_CATALOG[s.idx]?.costKey, calculateTokenBind())}
+                            disabled={s.disabled || placeBlocked(lifeBan[turnSeat], skillOf(s.idx)?.costKey, calculateTokenBind())}
                             hidden={!skills.includes(s.idx) || (s.idx === 30 && currentCharacter === 'cryomancer')}
                             locked={currentLockedSkills.includes(s.idx)}
                             onToggleLock={() => toggleLock(s.idx)}
