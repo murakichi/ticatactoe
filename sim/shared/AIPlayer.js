@@ -104,6 +104,8 @@ const NIGHT_VEIL_RAISE = 3;
 const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
 const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
+/** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
+const MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
@@ -1484,7 +1486,7 @@ class AIPlayer {
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
-            (this.character === 'magician' && (this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : MAGICIAN_HOLD).includes(idx)) ||
+            (this.character === 'magician' && (this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'yinYangMaster') ? MAGICIAN_HOLD_VS_YINYANG : MAGICIAN_HOLD).includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||

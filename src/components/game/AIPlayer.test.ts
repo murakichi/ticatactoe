@@ -1695,6 +1695,11 @@ describe('魔法使いは特売・返し特売・一寸の虫を手札に固定�
         expect(vsNecro([53, 52, 13])).toContain(52);
         expect(vsNecro([53, 13, 2])).not.toContain(53);
     });
+    it('陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える（対陰陽師 +4.7pt, seed1161〜1165 各400）', () => {
+        const vsYin = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'yinYangMaster']).chooseLocks(emptyBoard(), 5, 5, hand);
+        expect(vsYin([52, 13, 2])).toContain(52);
+        expect(vsYin([53, 13, 2])).toContain(53);
+    });
 });
 
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
