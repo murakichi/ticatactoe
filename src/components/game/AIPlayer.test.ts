@@ -1689,6 +1689,12 @@ describe('魔法使いは特売・返し特売・一寸の虫を手札に固定�
     it('バッズ系(2)は固定しない（序盤の空きが多くても優先固定ではなく、固定対象の札が先頭に来る）', () => {
         expect(locks([2, 53, 13])[0]).toBe(53);
     });
+    it('ネクロマンサーが相手のときは特売(53)でなく追い剥ぎ(52)を固定する（対ネクロ 36→47%, seed1142〜1144 各400）', () => {
+        const vsNecro = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'necromancer']).chooseLocks(emptyBoard(), 5, 5, hand);
+        expect(vsNecro([52, 92, 60])).toEqual(expect.arrayContaining([92]));
+        expect(vsNecro([53, 52, 13])).toContain(52);
+        expect(vsNecro([53, 13, 2])).not.toContain(53);
+    });
 });
 
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
