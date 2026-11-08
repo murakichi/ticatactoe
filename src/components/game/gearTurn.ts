@@ -10,7 +10,7 @@ import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
 import { WORKSHOP_PARAMS, ownPieceCount } from './objects';
 import { skillCosts } from './skillCosts';
-import { LOCK_USED_KEYS } from './keysmith';
+import { LOCK_SKILL_KEYS, LOCK_USED_KEYS } from './keysmith';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -217,6 +217,7 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (LOCK_SKILL_KEYS.has(skillId)) g.lockFreeUsed[seat] = true; // 鍵師のパッシブ: 手番の最初のロック系スキルが無料。使ったので以降は通常
         if (LOCK_USED_KEYS.has(skillId)) g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
         if (((skillCosts as Record<string, number>)[skillId] ?? 0) >= BIG_CAST_BASE) g.bigCast[seat] = true;

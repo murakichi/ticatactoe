@@ -142,6 +142,8 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (keysmith_1.LOCK_SKILL_KEYS.has(skillId))
+            g.lockFreeUsed[seat] = true; // 鍵師のパッシブ: 手番の最初のロック系スキルが無料。使ったので以降は通常
         if (keysmith_1.LOCK_USED_KEYS.has(skillId))
             g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える

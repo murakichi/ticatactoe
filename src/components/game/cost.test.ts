@@ -40,15 +40,23 @@ describe('characterCostOf（キャラ補正）', () => {
     });
 });
 
-describe('鍵師のパッシブ: 手番ごとに1回、常設のロックが無料', () => {
+describe('鍵師のパッシブ: 手番の最初のロック系スキルは何でも無料', () => {
     const lock = (character: CharacterId, over: Partial<CostEnv> = {}) => calculateCostOf(env(character, over), skillCosts.onClickUseLock, false, false, 'onClickUseLock');
     it('鍵師は無料の1回を使っていなければ0、使っていれば通常（鍵師の-1込みで下限1）', () => {
         expect(lock('keysmith', { lockFreeUsed: false })).toBe(0);
         expect(lock('keysmith', { lockFreeUsed: true })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));
     });
-    it('鍵師以外は常に通常のコスト。鍵師でも他のスキル（ダブルロック・封鎖の断）は無料にならない', () => {
+    it('鍵師以外は常に通常のコスト', () => {
         expect(lock('you', { lockFreeUsed: false })).toBe(skillCosts.onClickUseLock);
-        expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock')).toBeGreaterThan(0);
+        expect(calculateCostOf(env('you', { lockFreeUsed: false }), skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock')).toBe(skillCosts.onClickDoubleLock);
+    });
+    it('ダブルロック・延長など、ロック系なら何でも最初の1回は無料。使ったあとは通常（ロック系でないスキルは無料にならない）', () => {
+        for (const key of ['onClickDoubleLock', 'onClickTripleLock', 'onClickLockExtend', 'onClickLockBlessing']) {
+            const base = (skillCosts as Record<string, number>)[key];
+            expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), base, false, false, key)).toBe(0);
+            expect(calculateCostOf(env('keysmith', { lockFreeUsed: true }), base, false, false, key)).toBe(Math.max(1, base - 1));
+        }
+        expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), skillCosts.onClickBuds, false, false, 'onClickBuds')).toBeGreaterThan(0);
     });
     it('手番でない席（パネル表示用）には掛からない', () => {
         expect(lock('keysmith', { lockFreeUsed: false, turnSeat: 1 })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));

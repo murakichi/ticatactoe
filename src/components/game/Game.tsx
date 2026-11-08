@@ -1545,9 +1545,7 @@ export const Game = (props: GameProps) => {
 
     const [useLock, setUseLock] = useState<number>(0);
     const onClickUseLock = () => {
-        // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料。支払いの前に判定して、無料を使ったことを記録する
         const lockCost = calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock');
-        if (currentCharacter === 'keysmith' && lockCost === 0) gearTurn.current.lockFreeUsed[turnSeat] = true;
         addLog('「ロック」を使用（マスを選択）');
         setUseLock(useLock + 1);
         spendMagic(lockCost, true, true, 'onClickUseLock');
