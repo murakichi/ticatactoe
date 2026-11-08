@@ -84,6 +84,8 @@ const advanceGearState = (g, r, input) => {
     g.oppSkilled[nextSeat] = false;
     g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
     g.lockSeen[nextSeat] = false;
+    g.lockFreeUsed[endSeat] = false; // 鍵師の無料ロックは手番ごと
+    g.lockFreeUsed[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = (0, exports.plantedStacksTotal)(board);
