@@ -648,7 +648,12 @@ describe('魔法使いAI: 撃てるスキルが無いとき軽減札→引き直
     it('引き直しの回数が残っていなければ引き直さない', () => {
         const ai = mk();
         ai.rerollsLeft = 0;
-        expect(run(ai, 12, [53]).reroll).toBeUndefined();
+        expect(run(ai, 8, [53]).reroll).toBeUndefined();
+    });
+    it('魔法使いは魔力10以上で余っていれば、引き直し回数を使い切っても追加で引き直す（24→10: 対ネクロ 24→40%）', () => {
+        const ai = mk();
+        ai.rerollsLeft = 0;
+        expect(run(ai, 12, [53]).reroll).toEqual({});
     });
     it('魔法使い以外は、魔力が有り余っていなければ引き直さない', () => {
         expect(run(mk('giant'), 11, [53]).reroll).toBeUndefined();
@@ -1684,6 +1689,17 @@ describe('魔法使いは特売・返し特売・一寸の虫を手札に固定�
     it('バッズ系(2)は固定しない（序盤の空きが多くても優先固定ではなく、固定対象の札が先頭に来る）', () => {
         expect(locks([2, 53, 13])[0]).toBe(53);
     });
+    it('ネクロマンサーが相手のときは特売(53)でなく追い剥ぎ(52)を固定する（対ネクロ 36→47%, seed1142〜1144 各400）', () => {
+        const vsNecro = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'necromancer']).chooseLocks(emptyBoard(), 5, 5, hand);
+        expect(vsNecro([52, 92, 60])).toEqual(expect.arrayContaining([92]));
+        expect(vsNecro([53, 52, 13])).toContain(52);
+        expect(vsNecro([53, 13, 2])).not.toContain(53);
+    });
+    it('陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える（対陰陽師 +4.7pt, seed1161〜1165 各400）', () => {
+        const vsYin = (hand: number[]) => new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'yinYangMaster']).chooseLocks(emptyBoard(), 5, 5, hand);
+        expect(vsYin([52, 13, 2])).toContain(52);
+        expect(vsYin([53, 13, 2])).toContain(53);
+    });
 });
 
 describe('魔法使いは氷室が相手のとき審判の日より先に自陣のコマをロックする (旧sim AI lockFirstCryo と同じ)', () => {
@@ -2179,5 +2195,19 @@ describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
         // 行0は 大木(オブジェクト)+3コマ。オブジェクトは列に数えないので勝ち筋のリーチではない（誤認して0に置こうとしない）
         const r = run(b, 2, [21, 23, 22]);
         expect(r.move).not.toBe(0);
+    });
+});
+
+describe('「あなた」の相手別の手札固定', () => {
+    const locksVs = (foe: 'witch' | 'giant' | 'electrician', avail: number[]) =>
+        new AIPlayer('💙', 'you', ['⭕'], ['you', foe]).chooseLocks(emptyBoard(), 0, 5, avail);
+    it('相手が魔女・雷霆の巫なら一寸の虫(92)を固定する（固定しない相手には出ない）', () => {
+        expect(locksVs('witch', [92, 2, 8])).toContain(92);
+        expect(locksVs('electrician', [92, 2, 8])).toContain(92);
+        expect(locksVs('giant', [92, 2, 8])).not.toContain(92);
+    });
+    it('相手が複数キャラのときは固定しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'witch', 'giant']);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [92, 2, 8])).not.toContain(92);
     });
 });

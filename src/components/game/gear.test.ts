@@ -12,6 +12,8 @@ import {
     gearTokenBindDelta,
     randomGears,
     recommendedGears,
+    recommendedGearsAgainst,
+    COUNTER_GEARS_FOR_YOU,
     RECOMMENDED_GEARS,
     ALT_RECOMMENDED_GEARS,
     pickRecommendedGears,
@@ -288,5 +290,23 @@ describe('春雷（springThunderThaw）', () => {
         d[2] = { player: '⭕', bind: 3, effects: [] };
         d[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 敵のコマが入った列
         expect(springThunderThaw(d, '💙')).toEqual([]);
+    });
+});
+
+describe('「あなた」の相手別ギア', () => {
+    it('相手が1キャラで専用ギアがあればそれ、複数キャラ・専用なしなら通常の推奨', () => {
+        expect(recommendedGearsAgainst('you', ['poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
+        expect(recommendedGearsAgainst('you', ['poisoner', 'poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
+        expect(recommendedGearsAgainst('you', ['poisoner', 'giant'])).toEqual(recommendedGears('you'));
+        expect(recommendedGearsAgainst('you', ['magician'])).toEqual(['lastStand', 'sturdy', 'luckyPurse']);
+        expect(recommendedGearsAgainst('you', ['giant'])).toEqual(['lastStand', 'emptyLock', 'luckyPurse']);
+        expect(recommendedGearsAgainst('you', ['tactician'])).toEqual(recommendedGears('you'));
+        expect(recommendedGearsAgainst('magician', ['poisoner'])).toEqual(recommendedGears('magician'));
+    });
+    it('専用ギアはすべて実在し、枠数に収まる', () => {
+        for (const g of Object.values(COUNTER_GEARS_FOR_YOU)) {
+            expect(g!.length).toBeLessThanOrEqual(gearSlotsFor('you'));
+            for (const id of g!) expect(GEAR_IDS).toContain(id);
+        }
     });
 });

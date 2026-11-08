@@ -57,6 +57,8 @@ const PANDEMIC_MIN_SCORE = 3;
 const INTENSIFY_MIN_FOE_POISON = 3;
 /** この魔力以上あるときは、手札で使う額が RICH_SPEND_GOAL に届かなければ、引き直し回数(rerollBudget)を使い切っても RICH_EXTRA_REROLLS 回まで引き直す */
 const RICH_REROLL_MAGIC = 24;
+/** 魔法使いは魔力が余りやすい（7手番目以降は毎手番20以上）ので、もっと低い魔力から引き直す。24→10: 全相手 62.7→約65（seed922/200）、対ネクロ 24→40%。5以下は引き直しすぎて悪化（0で崩壊） */
+const MAGICIAN_REROLL_MAGIC = 10;
 /** 手札で使う額の目標は魔力の1/4（RICH_SPEND_GOAL〜RICH_SPEND_GOAL_MAX）。魔力が多いほど、もっと使える手札が出るまで引き直す */
 const RICH_SPEND_GOAL = 5;
 const RICH_SPEND_GOAL_MAX = 12;
@@ -117,8 +119,24 @@ const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
+/**
+ * 「あなた」が相手キャラ別に手札へ固定する札。他キャラの対策札(一寸の虫=魔女・氷室対策、火口=魔法使い・魔女対策)を、
+ * 引いたら固定して毎手番使えるようにする（対応する専用デッキは deck.ts COUNTER_DECKS_FOR_YOU。seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%、対魔法使い 11.0→14.7%、対軍師 17.0→29.0%）。相手が1キャラだけのときに限る（固定が裏目の相手がいるため。docs/tune/you.md）
+ */
+export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
+    magician: [87, 92],
+    witch: [92, 87],
+    cryomancer: [92],
+    electrician: [92],
+    tactician: [92, 74],
+};
+
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 const MAGICIAN_HOLD = [53, 60, 92];
+/** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
+const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
+/** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
+const MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */
@@ -1319,6 +1337,13 @@ class AIPlayer {
         return this.character !== 'witch' && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch');
     }
 
+    /** 「あなた」: 相手が1キャラだけで、その相手向けに固定する札（YOU_HOLD_VS）か */
+    holdsVsOpponent(idx: number): boolean {
+        const foes = this.characters.filter((_, seat) => seat !== seatOf(this.playerSymbol));
+        const kinds = Array.from(new Set(foes));
+        return kinds.length === 1 && (YOU_HOLD_VS[kinds[0]] ?? []).includes(idx);
+    }
+
     chooseLocks(
         board: SquareInfo[],
         opponentMagic: number,
@@ -1367,11 +1392,12 @@ class AIPlayer {
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
-            (this.character === 'magician' && MAGICIAN_HOLD.includes(idx)) ||
+            (this.character === 'magician' && (this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[seatOf(o)] === 'yinYangMaster') ? MAGICIAN_HOLD_VS_YINYANG : MAGICIAN_HOLD).includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
+            (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
 
         // 盤面的に価値が高いスキル
@@ -2345,9 +2371,9 @@ class AIPlayer {
         if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
             return this.extendPlan(result, args);
         }
-        if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
+        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック
-        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) return result;
+        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) return result;
         const goal = Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
         if (this.plannedSpend(result, args[2]) >= goal) return result;
         // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す
