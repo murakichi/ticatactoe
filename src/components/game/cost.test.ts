@@ -1,3 +1,4 @@
+import { SEAL_FIRST_CUT } from './keysmith';
 import { CostEnv, calculateCostOf, characterCostOf, gearCostOf, tokenBindOf } from './cost';
 import { skillCosts } from './skillCosts';
 import { emptyDiscount, afterSkill } from './discount';
@@ -57,6 +58,13 @@ describe('鍵師のパッシブ: 手番の最初のロック系スキルは何�
             expect(calculateCostOf(env('keysmith', { lockFreeUsed: true }), base, false, false, key)).toBe(Math.max(1, base - 1));
         }
         expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), skillCosts.onClickBuds, false, false, 'onClickBuds')).toBeGreaterThan(0);
+    });
+    it('封鎖の断だけは無料でなく、最初の1回が -SEAL_FIRST_CUT（完全無料だと環境が崩れる）', () => {
+        const base = skillCosts.onClickSeal;
+        const first = calculateCostOf(env('keysmith', { lockFreeUsed: false }), base, false, false, 'onClickSeal');
+        const later = calculateCostOf(env('keysmith', { lockFreeUsed: true }), base, false, false, 'onClickSeal');
+        expect(first).toBe(Math.max(1, later - SEAL_FIRST_CUT));
+        expect(first).toBeGreaterThan(0);
     });
     it('手番でない席（パネル表示用）には掛からない', () => {
         expect(lock('keysmith', { lockFreeUsed: false, turnSeat: 1 })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));
