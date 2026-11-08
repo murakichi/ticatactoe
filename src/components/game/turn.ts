@@ -35,8 +35,6 @@ export type TurnStartMagicInput = {
 export const turnStartMagic = (i: TurnStartMagicInput): number => {
     let next = i.magic + 1 + lateMagicBonus(i.turn, i.seatCount) + i.buds;
     if (MAGIC_BONUS_CHARACTERS.includes(i.character)) next++;
-    // 凩の魔女はさらに+1（計+3）: 環境5位44%→魔力+1の上限実験で対強豪62%（tune-top 魔女 #461。ユーザー許可）
-    if (i.character === 'witch') next++;
     if (i.character === 'yinYangMaster' && i.yinYangMode === 'ying') next++;
     // 魔法使い: 自陣のバッズ1つにつき魔力回復+3 (標準の+1に追加で+2)。バッズ蓄積→スキル連打のコンセプト
     if (i.character === 'magician') next += i.buds * 2;
