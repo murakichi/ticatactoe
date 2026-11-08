@@ -119,6 +119,18 @@ const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 const GLACIER_COST = 10;
 const NIGHT_VEIL_RAISE = 3;
+/**
+ * 「あなた」が相手キャラ別に手札へ固定する札。他キャラの対策札(一寸の虫=魔女・氷室対策、火口=魔法使い・魔女対策)を、
+ * 引いたら固定して毎手番使えるようにする（対応する専用デッキは deck.ts COUNTER_DECKS_FOR_YOU。seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%、対魔法使い 11.0→14.7%、対軍師 17.0→29.0%）。相手が1キャラだけのときに限る（固定が裏目の相手がいるため。docs/tune/you.md）
+ */
+export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
+    magician: [87, 92],
+    witch: [92, 87],
+    cryomancer: [92],
+    electrician: [92],
+    tactician: [92, 74],
+};
+
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
@@ -1325,6 +1337,13 @@ class AIPlayer {
         return this.character !== 'witch' && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch');
     }
 
+    /** 「あなた」: 相手が1キャラだけで、その相手向けに固定する札（YOU_HOLD_VS）か */
+    holdsVsOpponent(idx: number): boolean {
+        const foes = this.characters.filter((_, seat) => seat !== seatOf(this.playerSymbol));
+        const kinds = Array.from(new Set(foes));
+        return kinds.length === 1 && (YOU_HOLD_VS[kinds[0]] ?? []).includes(idx);
+    }
+
     chooseLocks(
         board: SquareInfo[],
         opponentMagic: number,
@@ -1378,6 +1397,7 @@ class AIPlayer {
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
+            (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
 
         // 盤面的に価値が高いスキル

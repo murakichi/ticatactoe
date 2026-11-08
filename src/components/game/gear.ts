@@ -307,6 +307,31 @@ export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 
+/**
+ * 「あなた」の相手キャラ別の専用ギア。「あなた」は固有スキルが無く全キャラ共通の1設定では最下位なので、相手を見て組み替える
+ * （docs/tune/you.md。lastStand は対 poisoner/yinYang/keysmith、spellWard は毒に効く）。相手が1キャラに決まるときだけ使う。
+ * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
+ */
+export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
+    poisoner: ['lastStand', 'spellWard', 'sturdy'],
+    magician: ['lastStand', 'sturdy', 'luckyPurse'],
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'], // 呪詛除けが🔥を止める。0.3→27.3%（seed2/300）
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 6.3→26.7%
+    necromancer: ['ironLock', 'titanCost', 'sturdy'], // 26.0→41.0%
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+};
+
+/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+export const recommendedGearsAgainst = (character: CharacterId, opponents: CharacterId[]): GearId[] => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
+        if (counter) return counter.slice(0, gearSlotsFor(character));
+    }
+    return recommendedGears(character);
+};
+
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
 export const pickRecommendedGears = (character: CharacterId, rng: () => number = Math.random): GearId[] => {
     const patterns = [recommendedGears(character), ...(ALT_RECOMMENDED_GEARS[character] ?? []).map((g) => g.slice(0, gearSlotsFor(character)))];

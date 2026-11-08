@@ -195,6 +195,29 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
 export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMMENDED_DECKS[character] ?? RECOMMENDED_DECKS.you)];
 
 /**
+ * 「あなた」の相手キャラ別の専用デッキ（相手が1キャラのときだけ使う。AIPlayer.ts YOU_HOLD_VS と対）。
+ * 一寸の虫に魂なし(92)・火口(87)を入れて、引いたら手札に固定して毎手番使う。docs/tune/you.md
+ * （seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%）。
+ */
+export const COUNTER_DECKS_FOR_YOU: Partial<Record<CharacterId, number[]>> = {
+    magician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    witch: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    cryomancer: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    electrician: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    tactician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 74, 92], // 一寸の虫(92)+鬼門封じ(74)を固定。対軍師 17.0→29.0%（seed2/300）
+};
+
+/** character の推奨デッキ。「あなた」は相手が1キャラで専用デッキがあればそれ */
+export const recommendedDeckAgainst = (character: CharacterId, opponents: CharacterId[]): number[] => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? COUNTER_DECKS_FOR_YOU[kinds[0]] : undefined;
+        if (counter) return [...counter];
+    }
+    return recommendedDeck(character);
+};
+
+/**
  * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */

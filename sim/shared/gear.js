@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 exports.GEAR_PARAMS = {
@@ -254,6 +254,31 @@ exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'luckyPurse']],
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
+/**
+ * 「あなた」の相手キャラ別の専用ギア。「あなた」は固有スキルが無く全キャラ共通の1設定では最下位なので、相手を見て組み替える
+ * （docs/tune/you.md。lastStand は対 poisoner/yinYang/keysmith、spellWard は毒に効く）。相手が1キャラに決まるときだけ使う。
+ * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
+ */
+exports.COUNTER_GEARS_FOR_YOU = {
+    poisoner: ['lastStand', 'spellWard', 'sturdy'],
+    magician: ['lastStand', 'sturdy', 'luckyPurse'],
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'],
+    necromancer: ['ironLock', 'titanCost', 'sturdy'],
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+};
+/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+const recommendedGearsAgainst = (character, opponents) => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
+        if (counter)
+            return counter.slice(0, (0, exports.gearSlotsFor)(character));
+    }
+    return (0, exports.recommendedGears)(character);
+};
+exports.recommendedGearsAgainst = recommendedGearsAgainst;
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
 const pickRecommendedGears = (character, rng = Math.random) => {
     var _a;

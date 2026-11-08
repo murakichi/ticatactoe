@@ -2197,3 +2197,17 @@ describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
         expect(r.move).not.toBe(0);
     });
 });
+
+describe('「あなた」の相手別の手札固定', () => {
+    const locksVs = (foe: 'witch' | 'giant' | 'electrician', avail: number[]) =>
+        new AIPlayer('💙', 'you', ['⭕'], ['you', foe]).chooseLocks(emptyBoard(), 0, 5, avail);
+    it('相手が魔女・雷霆の巫なら一寸の虫(92)を固定する（固定しない相手には出ない）', () => {
+        expect(locksVs('witch', [92, 2, 8])).toContain(92);
+        expect(locksVs('electrician', [92, 2, 8])).toContain(92);
+        expect(locksVs('giant', [92, 2, 8])).not.toContain(92);
+    });
+    it('相手が複数キャラのときは固定しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'witch', 'giant']);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [92, 2, 8])).not.toContain(92);
+    });
+});
