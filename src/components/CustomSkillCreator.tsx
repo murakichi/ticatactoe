@@ -1,7 +1,11 @@
 // オリジナルスキルの作成画面。選択肢（対象・選び方・効果・代償）から選ぶだけで、コストは自動で出る。
 // 保存した1枚は、人間席のデッキ編集で「オリジナル」として1枚だけ入れられる。AIは使わない。
 import React, { useState } from 'react';
+import { OBJECT_KINDS } from '../types/ObjectKind';
+import { OBJECT_DEFS } from './game/objects';
 import {
+    BAN_MAX_CHOICES,
+    BAN_MIN_CHOICES,
     COUNTS,
     CustomKind,
     CustomOp,
@@ -27,6 +31,7 @@ import {
     defaultOp,
     describeCustom,
     drawbackCut,
+    hasCellOps,
     normalizeSpec,
     opAllowedFor,
     sanitizeName,
@@ -96,16 +101,25 @@ export const CustomSkillCreator = (props: Props) => {
                     </button>
                 ))}
             </div>
-
+            {!hasCellOps(shown) && <div className={styles.gearNote}>いまの効果はマスを使わないので、対象と決め方は関係ありません（使うと相手全員に掛かります）。</div>}
+            {hasCellOps(shown) && (
+                <>
             <div className={styles.deckGroupLabel}>どう決める（選択系 / 即発動系）</div>
             <div className={styles.gearGrid}>
                 {PICK_DEFS.map((p) => (
-                    <button key={p.id} className={chip(spec.pick === p.id)} aria-pressed={spec.pick === p.id} onClick={() => setPick(p.id)}>
+                    <button
+                        key={p.id}
+                        className={chip(shown.pick === p.id)}
+                        aria-pressed={shown.pick === p.id}
+                        disabled={p.id === 'all' && shown.ops.some((o) => o.op === 'object')}
+                        title={p.id === 'all' && shown.ops.some((o) => o.op === 'object') ? 'オブジェクトを全ての空きマスには置けません' : undefined}
+                        onClick={() => setPick(p.id)}
+                    >
                         {p.mode === 'select' ? '選択系: ' : '即発動: '}
                         {p.label}
                     </button>
                 ))}
-                {spec.pick !== 'all' && (
+                {shown.pick !== 'all' && (
                     <select
                         className={styles.deckInput}
                         aria-label='マスの数'
@@ -120,6 +134,8 @@ export const CustomSkillCreator = (props: Props) => {
                     </select>
                 )}
             </div>
+                </>
+            )}
 
             <div className={styles.deckGroupLabel}>効果（{shown.ops.length}/{MAX_OPS}）</div>
             {shown.ops.map((op, i) => (
@@ -133,14 +149,26 @@ export const CustomSkillCreator = (props: Props) => {
                             if (v === 'damage') setOp(i, { op: 'damage', amount: 2, destroyOnZero: false });
                             else if (v === 'destroy') setOp(i, { op: 'destroy' });
                             else if (v === 'heal') setOp(i, { op: 'heal', amount: 3 });
+                            else if (v === 'object') setOp(i, { op: 'object', object: 'bigTree' });
+                            else if (v === 'silence') setOp(i, { op: 'silence', mode: 'all', n: 0 });
+                            else if (v === 'gearOff') setOp(i, { op: 'gearOff' });
                             else setOp(i, { op: 'effect', effect: v.slice(7) as StatusEffect, count: 1 });
                         }}
                     >
-                        {(['damage', 'destroy', 'heal'] as const)
-                            .filter((o) => opAllowedFor(o === 'destroy' ? { op: 'destroy' } : o === 'heal' ? { op: 'heal', amount: 1 } : { op: 'damage', amount: 1, destroyOnZero: false }, spec.kind))
-                            .map((o) => (
-                                <option key={o} value={o}>
-                                    {o === 'damage' ? 'ダメージを与える' : o === 'destroy' ? '駒を破壊する' : 'ライフを加算する'}
+                        {(
+                            [
+                                ['damage', 'ダメージを与える', { op: 'damage', amount: 1, destroyOnZero: false }],
+                                ['destroy', '駒を破壊する', { op: 'destroy' }],
+                                ['heal', 'ライフを加算する', { op: 'heal', amount: 1 }],
+                                ['object', 'オブジェクトを設置する（対象: 空きマス/どのマスでも）', { op: 'object', object: 'bigTree' }],
+                                ['silence', '相手のスキルを封じる（次の手番・全員）', { op: 'silence', mode: 'all', n: 0 }],
+                                ['gearOff', '相手のギアを封じる（次の手番・全員）', { op: 'gearOff' }],
+                            ] as [string, string, CustomOp][]
+                        )
+                            .filter(([, , probe]) => opAllowedFor(probe, spec.kind))
+                            .map(([v, label]) => (
+                                <option key={v} value={v}>
+                                    {label}
                                 </option>
                             ))}
                         {STATUS_DEFS.filter((d) => opAllowedFor({ op: 'effect', effect: d.id, count: 1 }, spec.kind)).map((d) => (
@@ -149,6 +177,41 @@ export const CustomSkillCreator = (props: Props) => {
                             </option>
                         ))}
                     </select>
+                    {op.op === 'object' && (
+                        <select className={styles.deckInput} aria-label={`効果${i + 1}のオブジェクト`} value={op.object} onChange={(e) => setOp(i, { op: 'object', object: e.target.value as typeof op.object })}>
+                            {OBJECT_KINDS.map((k) => (
+                                <option key={k} value={k}>
+                                    {OBJECT_DEFS[k].icon}{OBJECT_DEFS[k].name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    {op.op === 'silence' && (
+                        <>
+                            <select
+                                className={styles.deckInput}
+                                aria-label={`効果${i + 1}の封じる範囲`}
+                                value={op.mode}
+                                onChange={(e) => {
+                                    const mode = e.target.value as 'all' | 'max' | 'min';
+                                    setOp(i, { op: 'silence', mode, n: mode === 'all' ? 0 : mode === 'max' ? BAN_MAX_CHOICES[1] : BAN_MIN_CHOICES[2] });
+                                }}
+                            >
+                                <option value='all'>全てのスキル</option>
+                                <option value='max'>コストn以下</option>
+                                <option value='min'>コストn以上</option>
+                            </select>
+                            {op.mode !== 'all' && (
+                                <select className={styles.deckInput} aria-label={`効果${i + 1}の封じるコスト`} value={op.n} onChange={(e) => setOp(i, { ...op, n: Number(e.target.value) })}>
+                                    {(op.mode === 'max' ? BAN_MAX_CHOICES : BAN_MIN_CHOICES).map((n) => (
+                                        <option key={n} value={n}>
+                                            {n}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </>
+                    )}
                     {op.op === 'damage' && (
                         <>
                             <select className={styles.deckInput} aria-label={`効果${i + 1}のダメージ量`} value={op.amount} onChange={(e) => setOp(i, { ...op, amount: Number(e.target.value) })}>

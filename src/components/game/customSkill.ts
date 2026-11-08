@@ -7,6 +7,9 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { addCharge, isShielded } from './charge';
 import { addPoison } from './poison';
 import type { SkillCategory } from './deck';
+import { OBJECT_KINDS, ObjectKind } from '../../types/ObjectKind';
+import { OBJECT_DEFS, newObject, objectLandable, sweepBurntTrees } from './objects';
+import { skillCosts } from './skillCosts';
 import { absorbDestroy, applyDamage, canBud, canFreeze, freeze, ignite, sow } from './thermal';
 
 export { CUSTOM_SKILL_IDX } from './deck';
@@ -25,7 +28,16 @@ export type CustomOp =
     /** エフェクトを count 個乗せる */
     | { op: 'effect'; effect: StatusEffect; count: number }
     /** ライフを +amount する */
-    | { op: 'heal'; amount: number };
+    | { op: 'heal'; amount: number }
+    /** 空きマスにオブジェクトを設置する（持ち主は使用者） */
+    | { op: 'object'; object: ObjectKind }
+    /**
+     * 相手全員を、次の手番だけスキルを使えなくする（盤面のマスを使わない即発動の効果）。
+     * mode=all は全スキル（サイレンス）、max は表示コストが n 以下、min は n 以上のスキルだけ。チャージ・シャッフル・ロックは対象外
+     */
+    | { op: 'silence'; mode: 'all' | 'max' | 'min'; n: number }
+    /** 相手全員のギアを、その相手の次の手番の終わりまで無効にする（盤面のマスを使わない即発動の効果。裸の王様と同じ） */
+    | { op: 'gearOff' };
 
 export type CustomSkillSpec = {
     name: string;
@@ -72,6 +84,9 @@ export const RANDOM_DISCOUNT = 1;
 /** 2つ目以降の効果ごとの上乗せ（1手で複数の仕事をする割増） */
 export const EXTRA_OP_SURCHARGE = 1;
 
+/** 「n以下」「n以上」で封じる n の選択肢 */
+export const BAN_MAX_CHOICES = [2, 3, 4, 5, 6];
+export const BAN_MIN_CHOICES = [3, 4, 5, 6, 7];
 export const DAMAGE_AMOUNTS = [1, 2, 3, 4, 5];
 export const HEAL_AMOUNTS = [1, 2, 3, 4, 5];
 
@@ -101,11 +116,19 @@ const EMPTY: SquareInfo = { player: undefined, bind: 0, effects: [] };
 
 // ---- 効果の組み立て・検証 ----
 
-/** その効果が、空きマスにも乗るか（コマ専用か） */
-const needsPiece = (op: CustomOp): boolean => op.op !== 'effect' || op.effect === 'poison' || op.effect === 'bud';
+/** その効果が、コマにしか乗らないか */
+const needsPiece = (op: CustomOp): boolean =>
+    op.op === 'damage' || op.op === 'destroy' || op.op === 'heal' || (op.op === 'effect' && (op.effect === 'poison' || op.effect === 'bud'));
 
-/** この対象の種類で意味のある効果か（空きマスにはコマ専用の効果を付けられない） */
-export const opAllowedFor = (op: CustomOp, kind: CustomKind): boolean => kind !== 'empty' || !needsPiece(op);
+/** 盤面のマスを使わない効果か（サイレンス・ギア封じ）。対象の種類・選び方に関係なく、使った瞬間に相手全員へ掛かる */
+export const isGlobalOp = (op: CustomOp): boolean => op.op === 'silence' || op.op === 'gearOff';
+export const cellOps = (spec: Pick<CustomSkillSpec, 'ops'>): CustomOp[] => spec.ops.filter((o) => !isGlobalOp(o));
+export const globalOps = (spec: Pick<CustomSkillSpec, 'ops'>): CustomOp[] => spec.ops.filter(isGlobalOp);
+export const hasCellOps = (spec: Pick<CustomSkillSpec, 'ops'>): boolean => spec.ops.some((o) => !isGlobalOp(o));
+
+/** この対象の種類で意味のある効果か（空きマスにはコマ専用の効果を付けられない。オブジェクトは空きマスにだけ置ける） */
+export const opAllowedFor = (op: CustomOp, kind: CustomKind): boolean =>
+    isGlobalOp(op) ? true : op.op === 'object' ? kind === 'empty' || kind === 'any' : kind !== 'empty' || !needsPiece(op);
 
 export const opLabel = (op: CustomOp): string => {
     switch (op.op) {
@@ -119,6 +142,12 @@ export const opLabel = (op: CustomOp): string => {
             const d = statusDef(op.effect);
             return `${d.icon}×${op.count}`;
         }
+        case 'object':
+            return `${OBJECT_DEFS[op.object].name}設置`;
+        case 'silence':
+            return op.mode === 'all' ? 'スキル封じ' : op.mode === 'max' ? `コスト${op.n}以下封じ` : `コスト${op.n}以上封じ`;
+        case 'gearOff':
+            return 'ギア封じ';
     }
 };
 
@@ -138,6 +167,15 @@ const normalizeOp = (op: CustomOp): CustomOp | null => {
             const d = STATUS_DEFS.find((x) => x.id === op.effect);
             return d && d.counts.includes(op.count) ? { op: 'effect', effect: d.id, count: op.count } : null;
         }
+        case 'object':
+            return OBJECT_KINDS.includes(op.object) ? { op: 'object', object: op.object } : null;
+        case 'silence':
+            if (op.mode === 'all') return { op: 'silence', mode: 'all', n: 0 };
+            if (op.mode === 'max') return BAN_MAX_CHOICES.includes(op.n) ? { op: 'silence', mode: 'max', n: op.n } : null;
+            if (op.mode === 'min') return BAN_MIN_CHOICES.includes(op.n) ? { op: 'silence', mode: 'min', n: op.n } : null;
+            return null;
+        case 'gearOff':
+            return { op: 'gearOff' };
         default:
             return null;
     }
@@ -161,18 +199,22 @@ export const autoName = (spec: Omit<CustomSkillSpec, 'name'>): string => {
     const kind = KIND_DEFS.find((k) => k.id === spec.kind)?.label ?? '';
     const how = spec.pick === 'all' ? '全' : spec.pick === 'random' ? '乱' : '';
     const first = spec.ops[0] ? opLabel(spec.ops[0]).replace(/[（）]/g, '') : '';
-    return sanitizeName(`${how}${kind.replace('のコマ', '').replace('マス', '')}${first}${spec.ops.length > 1 ? 'ほか' : ''}`);
+    const target = hasCellOps(spec) ? `${how}${kind.replace('のコマ', '').replace('マス', '')}` : '';
+    return sanitizeName(`${target}${first}${spec.ops.length > 1 ? 'ほか' : ''}`);
 };
 
 /** 選択肢が矛盾しないよう整える（不正な効果は捨て、空きマス対象にコマ専用の効果は付けない）。名前が空なら既定名 */
 export const normalizeSpec = (spec: CustomSkillSpec): CustomSkillSpec => {
     const kind = KIND_DEFS.some((k) => k.id === spec.kind) ? spec.kind : 'enemy';
-    const pick = PICK_DEFS.some((p) => p.id === spec.pick) ? spec.pick : 'select';
-    const count = pick === 'all' ? 1 : COUNTS.includes(spec.count) ? spec.count : 1;
     const raw = (Array.isArray(spec.ops) ? spec.ops : []).map(normalizeOp).filter((o): o is CustomOp => !!o && opAllowedFor(o, kind));
     const ops = (raw.length > 0 ? raw : [defaultOp(kind)]).slice(0, MAX_OPS);
+    // マスを使う効果が無ければ、対象の種類・選び方は意味を持たないので固定する。オブジェクトの設置は「全て」にできない（全ての空きマスに建つため）
+    const onlyGlobal = !hasCellOps({ ops });
+    const wantedPick = PICK_DEFS.some((p) => p.id === spec.pick) ? spec.pick : 'select';
+    const pick = onlyGlobal ? 'all' : wantedPick === 'all' && ops.some((o) => o.op === 'object') ? 'select' : wantedPick;
+    const count = pick === 'all' ? 1 : COUNTS.includes(spec.count) ? spec.count : 1;
     const drawbacks = (Array.isArray(spec.drawbacks) ? spec.drawbacks : []).map(normalizeDrawback).filter((d): d is Drawback => !!d).slice(0, MAX_DRAWBACKS);
-    const base = { kind, pick, count, ops, drawbacks, endTurn: !!spec.endTurn };
+    const base = { kind: onlyGlobal ? ('enemy' as CustomKind) : kind, pick: pick as CustomPick, count, ops, drawbacks, endTurn: !!spec.endTurn };
     return { ...base, name: sanitizeName(typeof spec.name === 'string' ? spec.name : '') || autoName(base) };
 };
 
@@ -201,6 +243,13 @@ export const opUnit = (op: CustomOp): number => {
             const d = statusDef(op.effect);
             return d.unit * op.count * Math.pow(0.85, op.count - 1); // R3
         }
+        case 'object':
+            return skillCosts[OBJECT_DEFS[op.object].costKey]; // 設置スキルの基礎コスト（docs の『オブジェクト』の表）
+        case 'silence':
+            // 全スキル封じ = サイレンス 5。n以下: 小さい n ほど封じる範囲が狭い。n以上: 大きい n ほど狭い（どちらも全封じの 5 未満）
+            return op.mode === 'all' ? 5 : op.mode === 'max' ? Math.min(4, Math.round(1 + 0.6 * op.n)) : Math.max(1, Math.min(4, Math.round(6.5 - 0.7 * op.n)));
+        case 'gearOff':
+            return 4; // 裸の王様 4
     }
 };
 
@@ -217,16 +266,18 @@ export const drawbackCut = (spec: Pick<CustomSkillSpec, 'drawbacks'>, before: nu
 
 /** 代償を引く前のコスト */
 export const costBeforeDrawbacks = (spec: CustomSkillSpec): number => {
-    const sum = spec.ops.reduce((n, op) => n + opUnit(op), 0);
-    let cost = Math.round(sum * targetFactor(spec)) + EXTRA_OP_SURCHARGE * Math.max(0, spec.ops.length - 1);
-    if (spec.pick === 'random') cost -= RANDOM_DISCOUNT;
+    // マスを使う効果は対象マス数の係数を掛ける。サイレンス・ギア封じは相手全員に掛かる固定額（係数なし）
+    const cellSum = cellOps(spec).reduce((n, op) => n + opUnit(op), 0);
+    const globalSum = globalOps(spec).reduce((n, op) => n + opUnit(op), 0);
+    let cost = Math.round(cellSum * targetFactor(spec)) + globalSum + EXTRA_OP_SURCHARGE * Math.max(0, spec.ops.length - 1);
+    if (spec.pick === 'random' && hasCellOps(spec)) cost -= RANDOM_DISCOUNT;
     if (spec.endTurn) cost -= END_TURN_DISCOUNT;
     return Math.max(1, cost);
 };
 
 /**
  * 基礎コスト（キャラ・ギアの補正前）。docs/skill-cost-rules.md の基準で自動算出する:
- *   Σ効果の単価 × 対象マス数の係数 を四捨五入 → 2つ目以降の効果ごとに +1 → ランダムは -1 → 手番終了は -2
+ *   (マスを使う効果の単価の合計 × 対象マス数の係数 を四捨五入) + サイレンス・ギア封じの固定額 → 2つ目以降の効果ごとに +1 → ランダムは -1 → 手番終了は -2
  *   → 代償の割引（代償の単価 × 0.7 の合計。割引前の6割まで）→ 下限1
  */
 export const customSkillCost = (spec: CustomSkillSpec): number => {
@@ -245,7 +296,7 @@ export const describeCustom = (spec: CustomSkillSpec): string => {
             : spec.kind === 'any'
             ? '盤面の全マスに'
             : `全ての${kind}に`;
-    const verbs = spec.ops.map((op) => {
+    const verb = (op: CustomOp): string => {
         switch (op.op) {
             case 'damage':
                 return `${op.amount}ダメージを与える${op.destroyOnZero ? '（ライフが0になったコマは破壊）' : ''}`;
@@ -257,17 +308,28 @@ export const describeCustom = (spec: CustomSkillSpec): string => {
                 const d = statusDef(op.effect);
                 return op.effect === 'frost' ? '❄氷結を付与する' : `${d.icon}を${op.count}つ付与する`;
             }
+            case 'object':
+                return `${OBJECT_DEFS[op.object].icon}${OBJECT_DEFS[op.object].name}を設置する`;
+            case 'silence':
+                return op.mode === 'all' ? '相手全員は次の手番、スキルを使えない' : `相手全員は次の手番、コスト${op.n}${op.mode === 'max' ? '以下' : '以上'}のスキルを使えない（チャージ・シャッフル・ロックを除く）`;
+            case 'gearOff':
+                return '相手全員は次の手番、ギアを使えない';
         }
-    });
+    };
     const sep = spec.pick === 'select' ? '、' : '';
+    const lines: string[] = [];
+    if (hasCellOps(spec)) lines.push(`${target}${sep}${cellOps(spec).map(verb).join('→')}`);
+    globalOps(spec).forEach((op) => lines.push(verb(op)));
     const costs = spec.drawbacks.map((d) => {
         const who = d.side === 'own' ? '自陣のランダムなコマ' : '敵のランダムなコマ';
         const op = d.op;
-        const what = op.op === 'damage' ? `${op.amount}ダメージ` : op.op === 'destroy' ? '破壊' : op.op === 'heal' ? `ライフ+${op.amount}` : `${statusDef(op.effect).icon}×${op.count}`;
+        const what = op.op === 'damage' ? `${op.amount}ダメージ` : op.op === 'destroy' ? '破壊' : op.op === 'heal' ? `ライフ+${op.amount}` : op.op === 'effect' ? `${statusDef(op.effect).icon}×${op.count}` : '';
         return `${who}1つに${what}`;
     });
-    const penalty = costs.length > 0 ? `\n代償: ${costs.join('、')}` : '';
-    return `${target}${sep}${verbs.join('→')}${penalty}${spec.endTurn ? '\n使うと手番を終えます' : ''}\n（オリジナルスキル・AIは使いません）`;
+    if (costs.length > 0) lines.push(`代償: ${costs.join('、')}`);
+    if (spec.endTurn) lines.push('使うと手番を終えます');
+    lines.push('（オリジナルスキル・AIは使いません）');
+    return lines.join('\n');
 };
 
 // ---- 対象 ----
@@ -290,6 +352,11 @@ export const opApplies = (sq: SquareInfo, op: CustomOp): boolean => {
             if (op.effect === 'bud') return canBud(sq);
             if (op.effect === 'frost') return canFreeze(sq);
             return true; // 火炎・帯電は空きマスにも乗る
+        case 'object':
+            return objectLandable(sq); // 氷結・ロック中でない空きマス
+        case 'silence':
+        case 'gearOff':
+            return false; // マスに掛からない
     }
 };
 
@@ -315,9 +382,12 @@ export const isCustomTarget = (sq: SquareInfo, spec: CustomSkillSpec, me: Player
 export const customTargets = (board: SquareInfo[], spec: CustomSkillSpec, me: Player, chars: readonly CharacterId[]): number[] =>
     board.map((sq, i) => (isCustomTarget(sq, spec, me, chars) ? i : -1)).filter((i) => i !== -1);
 
-/** 今使えるか: 対象が1つでもあるか */
-export const canCastCustom = (board: SquareInfo[], spec: CustomSkillSpec, me: Player, chars: readonly CharacterId[]): boolean =>
-    customTargets(board, spec, me, chars).length > 0;
+/**
+ * 今使えるか: マスを使う効果があれば対象が1つでもあるか。サイレンス・ギア封じだけなら、サイレンスはいつでも、
+ * ギア封じはギアを持つ相手がいるときだけ
+ */
+export const canCastCustom = (board: SquareInfo[], spec: CustomSkillSpec, me: Player, chars: readonly CharacterId[], oppHasGear: boolean = true): boolean =>
+    hasCellOps(spec) ? customTargets(board, spec, me, chars).length > 0 : globalOps(spec).some((op) => op.op === 'silence' || oppHasGear);
 
 /** 選択系で実際に選ぶ数: 設定の数と、選べるマスの数の小さい方 */
 export const selectCount = (board: SquareInfo[], spec: CustomSkillSpec, me: Player, chars: readonly CharacterId[]): number =>
@@ -331,6 +401,7 @@ export const customCellsAuto = (
     chars: readonly CharacterId[],
     pick: (cells: number[], n: number) => number[]
 ): number[] => {
+    if (!hasCellOps(spec)) return [];
     const all = customTargets(board, spec, me, chars);
     if (spec.pick === 'all') return all;
     if (spec.pick === 'random') return pick(all, Math.min(spec.count, all.length));
@@ -340,6 +411,8 @@ export const customCellsAuto = (
 // ---- 適用 ----
 
 export type CustomApplyEnv = {
+    /** 使用者（オブジェクトの持ち主） */
+    me: Player;
     chars: readonly CharacterId[];
     size: number;
     /** 冬至の種子のガード中か（火炎で🌱が消えない） */
@@ -364,6 +437,7 @@ export const applyCustom = (board: SquareInfo[], cells: number[], spec: CustomSk
     const thawed = new Set<number>();
     const destroyed = new Set<number>();
     for (const op of spec.ops) {
+        if (isGlobalOp(op)) continue; // サイレンス・ギア封じは盤面を変えない（Game が席の状態に掛ける）
         const targets = cells.filter((k) => opApplies(board[k], op) && !isShielded(board[k], env.chars));
         switch (op.op) {
             case 'heal':
@@ -400,6 +474,14 @@ export const applyCustom = (board: SquareInfo[], cells: number[], spec: CustomSk
                         affected.add(k);
                     }
                 }
+                break;
+            case 'object':
+                for (const k of targets) {
+                    // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
+                    board[k] = { ...newObject(env.me, op.object), effects: board[k].effects.filter((e) => e.effect === '🔥') };
+                    affected.add(k);
+                }
+                sweepBurntTrees(board).forEach((k) => destroyed.add(k));
                 break;
             case 'effect':
                 if (op.effect === 'poison') addPoison(board, targets, env.chars, op.count);
@@ -442,7 +524,7 @@ export const applyDrawbacks = (
 };
 
 /** 盤面の演出の種類（BoardEffects の SkillEffectType のうち、効果に近いもの）。複数の効果は先頭のもの */
-export const customEffectType = (spec: CustomSkillSpec): 'rain' | 'opium' | 'poison' | 'flame' | 'zap' | 'freeze' | 'windborne' => {
+export const customEffectType = (spec: CustomSkillSpec): 'rain' | 'opium' | 'poison' | 'flame' | 'zap' | 'freeze' | 'windborne' | 'token' | 'silence' | 'strip' => {
     const op = spec.ops[0];
     switch (op.op) {
         case 'heal':
@@ -450,6 +532,12 @@ export const customEffectType = (spec: CustomSkillSpec): 'rain' | 'opium' | 'poi
         case 'damage':
         case 'destroy':
             return 'opium';
+        case 'object':
+            return 'token';
+        case 'silence':
+            return 'silence';
+        case 'gearOff':
+            return 'strip';
         case 'effect':
             return { poison: 'poison', fire: 'flame', charge: 'zap', frost: 'freeze', bud: 'windborne' }[op.effect] as 'poison' | 'flame' | 'zap' | 'freeze' | 'windborne';
     }
@@ -460,13 +548,30 @@ export const customCategory = (spec: CustomSkillSpec): SkillCategory => {
     const op = spec.ops[0];
     if (op.op === 'heal') return 'support';
     if (op.op === 'damage' || op.op === 'destroy') return 'attack';
+    if (op.op === 'object') return 'object';
+    if (op.op === 'silence' || op.op === 'gearOff') return 'control';
     return { poison: 'poison', fire: 'fire', charge: 'charge', frost: 'ice', bud: 'buds' }[op.effect] as SkillCategory;
 };
 
 /** カードの見た目（アイコン）: 先頭の効果 */
 export const customIcon = (spec: CustomSkillSpec): string => {
     const op = spec.ops[0];
-    return op.op === 'heal' ? '💚' : op.op === 'damage' ? '⚔️' : op.op === 'destroy' ? '💥' : statusDef(op.effect).icon;
+    switch (op.op) {
+        case 'heal':
+            return '💚';
+        case 'damage':
+            return '⚔️';
+        case 'destroy':
+            return '💥';
+        case 'object':
+            return OBJECT_DEFS[op.object].icon;
+        case 'silence':
+            return '🤫';
+        case 'gearOff':
+            return '🚫';
+        case 'effect':
+            return statusDef(op.effect).icon;
+    }
 };
 
 // ---- 保存（ブラウザの localStorage。デッキと同じく読み書きに失敗しても動く） ----

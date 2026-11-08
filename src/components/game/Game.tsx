@@ -27,7 +27,7 @@ import { decayBoard, shouldDecay, isCrowded, canHitBound, isTakeProtected } from
 import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
 import { resolveDeck, baseCostOf, SKILL_CATALOG, skillOf, CUSTOM_SKILL_IDX } from './deck';
-import { CustomSkillSpec, normalizeSpec, isValidSpec, customSkillCost, describeCustom, customTargets, customCellsAuto, applyCustom, applyDrawbacks, canCastCustom, selectCount, customEffectType, customIcon, customCategory } from './customSkill';
+import { CustomSkillSpec, normalizeSpec, isValidSpec, customSkillCost, describeCustom, customTargets, customCellsAuto, applyCustom, applyDrawbacks, canCastCustom, selectCount, customEffectType, customIcon, customCategory, hasCellOps, globalOps } from './customSkill';
 import { parseSkillText, registerCustomMeta } from './skillMeta';
 import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
@@ -387,6 +387,8 @@ export const Game = (props: GameProps) => {
     // 魔法使いAIの引き直し（軽減札→シャッフル→再計画）の手番内の状態。手番開始時に初期化する
     const aiReroll = useRef({ left: MAX_REROLLS, started: false });
     const executeSkillForAI = (skill: string) => {
+        const aiBase = (seatCosts as Record<string, unknown>)[skill];
+        if (skillBan[turnSeat] && typeof aiBase === 'number' && !['onClickShuffle', 'onClickUseLock', 'onClickCharge'].includes(skill) && bannedByCost(turnSeat, calculateCost(aiBase, false, false, currentTurnPlayer, skill))) return; // スキル封じ
         if (placeBlocked(lifeBan[turnSeat], skill, calculateTokenBind())) return; // ライフ3以下のコマを置けない縛り
         if (skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skill, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(skill), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn })) return; // 相手の一言居士・お一人様限りの札の縛り
         // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
@@ -753,6 +755,13 @@ export const Game = (props: GameProps) => {
     const proliferateMaxStacks = PROLIFERATE.maxStacks;
     // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
     const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // オリジナルスキルの「コストn以下/n以上のスキル封じ」: 立っている席は、その席の次の手番の終わりまで、表示コストが範囲内のスキルを使えない
+    // （チャージ・シャッフル・ロックを除く）。サイレンスと同じく、封じられた側の手番が終わるたびに解除
+    const [skillBan, setSkillBanAt, setSkillBanAll] = useSeatArray<{ mode: 'max' | 'min'; n: number } | null>(() => Array(seatCount).fill(null));
+    const bannedByCost = (seat: number, cost: number): boolean => {
+        const ban = skillBan[seat];
+        return !!ban && (ban.mode === 'max' ? cost <= ban.n : cost >= ban.n);
+    };
     // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
     const [lifeBan, setLifeBanAt, setLifeBanAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     // 静電気の季節: 立っている間（残りターン数）、その席が設置する駒（着手・トークン・全軍突撃のトークン）に⚡が付く
@@ -988,6 +997,7 @@ export const Game = (props: GameProps) => {
         );
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
+        setSkillBanAt(turnSeat, null);
         setLifeBanAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
         setGearOffAt(turnSeat, false);
@@ -1019,6 +1029,7 @@ export const Game = (props: GameProps) => {
     const restrictSkill = (text: string): boolean => {
         const parsed = parseSkillText(text);
         if (!parsed || parsed.sign === '+') return false;
+        if (!['シャッフル', 'ロック'].includes(parsed.name) && bannedByCost(turnSeat, parsed.amount)) return true; // スキル封じ（表示コストで判定）
         return skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skillKeyByName(parsed.name), basic: ['シャッフル', 'ロック'].includes(parsed.name), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn });
     };
     // asObject: 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣のコマで置き換え）。人間の手番で未指定なら選択ダイアログを出す
@@ -3538,6 +3549,8 @@ export const Game = (props: GameProps) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        const ban = skillBan[seat];
+        if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
         if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');
@@ -3712,6 +3725,7 @@ export const Game = (props: GameProps) => {
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
+        setSkillBanAll(Array(seatCount).fill(null));
         setLifeBanAll(Array(seatCount).fill(false));
         setGearOffAll(Array(seatCount).fill(false));
         setChargeBuffAll(Array(seatCount).fill(0));
@@ -3944,7 +3958,7 @@ export const Game = (props: GameProps) => {
     const customBase = customSpec ? customSkillCost(customSpec) : 0;
     const customHasPoison = !!customSpec?.ops.some((o) => o.op === 'effect' && o.effect === 'poison');
     const customCost = (): number => calculateCost(customBase, false, customHasPoison, currentTurnPlayer, 'onClickCustom');
-    const customEnv = () => ({ chars: characters, size: geo.size, keepBuds });
+    const customEnv = () => ({ me: currentTurnPlayer, chars: characters, size: geo.size, keepBuds });
     const pickRandom = (cells: number[], n: number): number[] => randomAnyPick([...cells], n);
     // 効果と代償を盤面に反映して、演出・ログ・手番終了までを行う
     const runCustom = (spec: CustomSkillSpec, cells: number[], label: string) => {
@@ -3963,6 +3977,20 @@ export const Game = (props: GameProps) => {
         playEffect(customEffectType(spec), undefined, res.affected, spec.name);
         playBurst('thaw', thawed);
         playBurst('iceBreak', blocked);
+        // サイレンス・ギア封じ: 相手全員の席に掛ける（ギアのない相手には掛けない）
+        globalOps(spec).forEach((op) => {
+            if (op.op === 'silence' && op.mode === 'all') {
+                otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+                addLog('相手は次の手番スキルを使えない');
+            } else if (op.op === 'silence') {
+                otherSeats(turnSeat).forEach((seat) => setSkillBanAt(seat, { mode: op.mode as 'max' | 'min', n: op.n }));
+                addLog(`相手は次の手番、コスト${op.n}${op.mode === 'max' ? '以下' : '以上'}のスキルを使えない`);
+            } else if (op.op === 'gearOff') {
+                const seats = stripTargets();
+                seats.forEach((seat) => setGearOffAt(seat, true));
+                if (seats.length > 0) addLog(`${seats.map((seat) => symbols[seat]).join('・')}のギアが次の手番の終わりまで無効`);
+            }
+        });
         if (spec.ops.some((o) => o.op === 'effect')) harvestMagic(res.affected.length);
         setCurrentBoard(spec.ops.some((o) => o.op === 'effect' && o.effect === 'charge') ? withOverload(board) : board);
         setUseCustom(false);
@@ -3970,7 +3998,13 @@ export const Game = (props: GameProps) => {
         if (spec.endTurn) setCurrentTurn(currentTurn + 1);
     };
     const onClickCustom = () => {
-        if (!customSpec || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters)) return;
+        if (!customSpec || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters, stripTargets().length > 0)) return;
+        if (!hasCellOps(customSpec)) {
+            // サイレンス・ギア封じだけ: マスを選ばずに発動
+            spendMagic(customCost(), true, true, 'onClickCustom');
+            runCustom(customSpec, [], '相手全員');
+            return;
+        }
         if (customSpec.pick === 'select') {
             addLog(`「${customSpec.name}」を使用（マスを${selectCount(currentBoard, customSpec, currentTurnPlayer, characters)}つ選択）`);
             setCustomPicks([]);
@@ -4431,7 +4465,7 @@ export const Game = (props: GameProps) => {
                             onClick={onClickCustom}
                             buttonText={`${customSpec.name}-${customCost()}`}
                             paragraph={describeCustom(customSpec)}
-                            disabled={checkSkillDisable(customBase, false, customHasPoison, 'onClickCustom') || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters)}
+                            disabled={checkSkillDisable(customBase, false, customHasPoison, 'onClickCustom') || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters, stripTargets().length > 0)}
                             hidden={!skills.includes(CUSTOM_SKILL_IDX)}
                             locked={currentLockedSkills.includes(CUSTOM_SKILL_IDX)}
                             onToggleLock={() => toggleLock(CUSTOM_SKILL_IDX)}

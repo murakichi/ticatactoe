@@ -14,6 +14,8 @@ import {
     normalizeSpec,
     saveCustomSkill,
     selectCount,
+    hasCellOps,
+    opUnit,
     CUSTOM_SKILL_KEY,
 } from './customSkill';
 import { CUSTOM_SKILL_IDX, DECK_SIZE, isValidDeck, recommendedDeck } from './deck';
@@ -23,7 +25,7 @@ const FOE = '⭕';
 const sq = (player: SquareInfo['player'], bind = 3, effects: SquareInfo['effects'] = []): SquareInfo => ({ player, bind, effects });
 const boardOf = (cells: SquareInfo[]): SquareInfo[] => [...cells, ...Array.from({ length: 16 - cells.length }, () => sq(undefined, 0))];
 const chars = ['you', 'you'] as const;
-const env = { chars, size: 4 };
+const env = { me: ME as typeof ME, chars, size: 4 };
 const spec = (patch: Partial<CustomSkillSpec>): CustomSkillSpec =>
     normalizeSpec({ name: 'テスト', kind: 'enemy', pick: 'select', count: 1, ops: [{ op: 'damage', amount: 2, destroyOnZero: false }], drawbacks: [], endTurn: false, ...patch });
 
@@ -183,3 +185,66 @@ describe('オリジナルスキル: 対象と適用', () => {
         expect(text).toContain('手番を終えます');
     });
 });
+
+describe('オリジナルスキル: オブジェクト設置・スキル封じ・ギア封じ', () => {
+    const emptyKind = (patch: Partial<CustomSkillSpec>) => spec({ kind: 'empty', ...patch });
+
+    it('オブジェクト設置のコストは設置スキルの基礎コスト（大木8）。空きマスだけに置け、選ぶ数でR3', () => {
+        const one = emptyKind({ ops: [{ op: 'object', object: 'bigTree' }] });
+        expect(customSkillCost(one)).toBe(8);
+        expect(customSkillCost(emptyKind({ count: 2, ops: [{ op: 'object', object: 'bigTree' }] }))).toBe(14);
+        const b = boardOf([sq(ME, 3), sq(FOE, 3)]);
+        expect(customTargets(b, one, ME, chars)).toEqual(Array.from({ length: 14 }, (_, i) => i + 2));
+    });
+    it('オブジェクトは敵・自陣対象には付けられず、「全て」にもできない', () => {
+        expect(spec({ kind: 'enemy', ops: [{ op: 'object', object: 'bigTree' }] }).ops[0].op).not.toBe('object');
+        expect(emptyKind({ pick: 'all', ops: [{ op: 'object', object: 'fort' }] }).pick).toBe('select');
+    });
+    it('設置: 持ち主は使用者でライフは設置スキルのとおり。空きマスに乗っていた🔥は引き継ぐ', () => {
+        const b = boardOf([sq(ME, 3)]);
+        b[5] = { player: undefined, bind: 0, effects: [{ effect: '🔥' }] };
+        const r = applyCustom(b, [4, 5], emptyKind({ count: 2, ops: [{ op: 'object', object: 'fort' }] }), env);
+        expect(b[4]).toMatchObject({ player: ME, object: 'fort', bind: 5 });
+        expect(b[5].object).toBe('fort');
+        expect(b[5].effects.some((e) => e.effect === '🔥')).toBe(true);
+        expect(r.affected).toEqual([4, 5]);
+        const c = boardOf([sq(ME, 3)]);
+        c[5] = { player: undefined, bind: 0, effects: [{ effect: '🔥' }] };
+        const r2 = applyCustom(c, [5], emptyKind({ ops: [{ op: 'object', object: 'bigTree' }] }), env);
+        expect(c[5].object).toBeUndefined(); // 大木は火炎で即座に燃え尽きる
+        expect(r2.destroyed).toEqual([5]);
+    });
+    it('サイレンスとギア封じはマスを使わず、対象が無くても使える（ギア封じはギアを持つ相手がいるときだけ）', () => {
+        const silence = spec({ ops: [{ op: 'silence', mode: 'all', n: 0 }] });
+        expect(hasCellOps(silence)).toBe(false);
+        const b = boardOf([]);
+        expect(canCastCustom(b, silence, ME, chars)).toBe(true);
+        const gear = spec({ ops: [{ op: 'gearOff' }] });
+        expect(canCastCustom(b, gear, ME, chars, true)).toBe(true);
+        expect(canCastCustom(b, gear, ME, chars, false)).toBe(false);
+        expect(customCellsAuto(b, silence, ME, chars, (cs) => cs)).toEqual([]);
+        expect(silence.pick).toBe('all'); // 対象の設定は意味を持たないので固定される
+    });
+    it('封じのコスト: 全封じ5 > n以下/n以上（どちらも4以下）。nが範囲を狭めるほど安い。対象マスの係数は掛からない', () => {
+        const cost = (op: Parameters<typeof opUnit>[0]) => customSkillCost(spec({ pick: 'random', count: 3, ops: [op] }));
+        expect(cost({ op: 'silence', mode: 'all', n: 0 })).toBe(5);
+        expect(cost({ op: 'silence', mode: 'max', n: 2 })).toBeLessThan(cost({ op: 'silence', mode: 'max', n: 6 }));
+        expect(cost({ op: 'silence', mode: 'min', n: 7 })).toBeLessThan(cost({ op: 'silence', mode: 'min', n: 3 }));
+        expect(cost({ op: 'silence', mode: 'max', n: 6 })).toBeLessThan(5);
+        expect(cost({ op: 'silence', mode: 'min', n: 3 })).toBeLessThan(5);
+        expect(cost({ op: 'gearOff' })).toBe(4);
+    });
+    it('不正なnは捨てられる。封じとダメージを重ねると対象の設定は残る', () => {
+        expect(normalizeSpec({ ...spec({}), ops: [{ op: 'silence', mode: 'max', n: 99 }] } as CustomSkillSpec).ops[0].op).toBe('damage');
+        const mixed = spec({ kind: 'enemy', pick: 'all', ops: [{ op: 'damage', amount: 1, destroyOnZero: false }, { op: 'silence', mode: 'all', n: 0 }] });
+        expect(mixed.pick).toBe('all');
+        expect(customSkillCost(mixed)).toBe(Math.round(1.3 * 3.5) + 5 + 1);
+    });
+    it('説明文に封じが出る', () => {
+        const text = describeCustom(spec({ ops: [{ op: 'silence', mode: 'max', n: 3 }, { op: 'gearOff' }] }));
+        expect(text).toContain('コスト3以下のスキルを使えない');
+        expect(text).toContain('ギアを使えない');
+        expect(text).not.toContain('選び');
+    });
+});
+

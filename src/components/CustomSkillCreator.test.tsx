@@ -31,6 +31,24 @@ describe('オリジナルスキル作成画面', () => {
         expect(screen.getByText(/代償: 自陣のランダムなコマ1つに破壊/)).toBeInTheDocument();
     });
 
+    it('オブジェクト設置・スキル封じ・ギア封じを選べる。マスを使わない効果だけなら対象の設定が隠れる', () => {
+        render(<CustomSkillCreator initial={undefined} onSave={() => true} onDelete={() => undefined} />);
+        // 敵のコマ対象では、オブジェクトの設置は選べない
+        const select = screen.getByLabelText('効果1の種類') as HTMLSelectElement;
+        expect(Array.from(select.options).some((o) => o.value === 'object')).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: '空きマス' }));
+        fireEvent.change(select, { target: { value: 'object' } });
+        expect(screen.getByLabelText('効果1のオブジェクト')).toBeInTheDocument();
+        expect(screen.getByText(/を設置する/, { selector: 'div' })).toBeInTheDocument();
+        fireEvent.change(select, { target: { value: 'silence' } });
+        fireEvent.change(screen.getByLabelText('効果1の封じる範囲'), { target: { value: 'max' } });
+        expect(screen.getByText(/コスト3以下のスキルを使えない/)).toBeInTheDocument();
+        expect(screen.getByText(/マスを使わないので/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /選択系/ })).toBeNull();
+        fireEvent.change(select, { target: { value: 'gearOff' } });
+        expect(screen.getByText(/ギアを使えない/)).toBeInTheDocument();
+    });
+
     it('空きマス対象に切り替えるとコマ専用の効果が外れる', () => {
         render(<CustomSkillCreator initial={undefined} onSave={() => true} onDelete={() => undefined} />);
         fireEvent.click(screen.getByRole('button', { name: '空きマス' }));

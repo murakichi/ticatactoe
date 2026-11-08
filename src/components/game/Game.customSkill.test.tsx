@@ -74,4 +74,59 @@ describe('オリジナルスキル（ブラウザ版）', () => {
         fireEvent.click(screen.getByRole('button', { name: /^恵み-\d+$/ }));
         expect(Number(lifeAt(r.container, 0))).toBe(before - 2);
     });
+
+    // 代償（自陣のコマに3ダメージ）で、封じ・設置が今の魔力で撃てるコストまで下がる
+    const COST_CUT = [{ side: 'own' as const, op: { op: 'damage' as const, amount: 3, destroyOnZero: false as const } }];
+
+    it('スキル封じ（コストn以下）: 相手の次の手番に封じが掛かり、その手番の終わりで解ける', () => {
+        const r = setup(spec({ name: '封印', ops: [{ op: 'silence', mode: 'max', n: 3 }], drawbacks: COST_CUT }));
+        fireEvent.click(screen.getByRole('button', { name: /^封印-\d+$/ }));
+        expect(screen.getAllByText(/スキル封じ 次の手番、コスト3以下のスキル不可/).length).toBeGreaterThan(0);
+        fireEvent.click(cells(r.container)[2]); // 手番を終える → ⭕の手番
+        fireEvent.click(cells(r.container)[3]); // ⭕が着手 → 封じは解ける
+        expect(screen.queryAllByText(/スキル封じ 次の手番/)).toHaveLength(0);
+    });
+
+    it('サイレンス（全スキル）: 相手はスキル欄が使えなくなる', () => {
+        const r = setup(spec({ name: '沈黙', ops: [{ op: 'silence', mode: 'all', n: 0 }], drawbacks: COST_CUT }));
+        fireEvent.click(screen.getByRole('button', { name: /^沈黙-\d+$/ }));
+        fireEvent.click(cells(r.container)[2]); // 手番を終える → ⭕の手番（サイレンス中）
+        expect(screen.getByText(/サイレンス中: この手番はスキルを使えません/)).toBeInTheDocument();
+    });
+
+    it('ギア封じ: ギアを持つ相手にだけ使え、相手のギアが無効になる', () => {
+        const withGear: PlayerConfig[] = [
+            { character: 'you', isAI: false, deck: DECK, customSkill: spec({ name: '剥奪', ops: [{ op: 'gearOff' }], drawbacks: COST_CUT }) },
+            { character: 'you', isAI: false, gears: ['sturdy'] },
+        ];
+        const r = render(<Game players={withGear} />);
+        fireEvent.click(cells(r.container)[0]);
+        fireEvent.click(cells(r.container)[1]);
+        fireEvent.click(screen.getByRole('button', { name: /^剥奪-\d+$/ }));
+        expect(screen.getAllByText(/ギア無効/).length).toBeGreaterThan(0);
+    });
+
+    it('ギア封じ: 相手にギアが無ければ使えない', () => {
+        setup(spec({ name: '剥奪', ops: [{ op: 'gearOff' }], drawbacks: COST_CUT }));
+        expect(screen.getByRole('button', { name: /^剥奪-\d+$/ })).toBeDisabled();
+    });
+
+    it('オブジェクト設置（選択系）: 空きマスを選ぶと自分のオブジェクトが建つ', () => {
+        const r = setup(spec({ name: '建築', kind: 'empty', ops: [{ op: 'object', object: 'market' }], drawbacks: COST_CUT }));
+        fireEvent.click(screen.getByRole('button', { name: /^建築-\d+$/ }));
+        fireEvent.click(cells(r.container)[5]);
+        expect(cells(r.container)[5].textContent).toContain('🏪');
+        expect(cells(r.container)[0].textContent).not.toContain('🏪');
+    });
+
+    it('スキル封じ（コスト6以下）: 相手の手札のスキルが押せなくなり、ロック・シャッフルは使える', () => {
+        const r = setup(spec({ name: '封印', ops: [{ op: 'silence', mode: 'max', n: 6 }], drawbacks: COST_CUT }));
+        fireEvent.click(screen.getByRole('button', { name: /^封印-\d+$/ }));
+        fireEvent.click(cells(r.container)[2]); // 手番を終える → ⭕の手番
+        const skillButtons = screen.getAllByRole('button', { name: /^.+-\d+$/ }).filter((b) => !/^(ロック|シャッフル|チャージ)/.test(b.getAttribute('aria-label') ?? b.textContent ?? ''));
+        expect(skillButtons.length).toBeGreaterThan(0);
+        skillButtons.forEach((b) => expect(b).toBeDisabled());
+        expect(screen.getByRole('button', { name: /^ロック-\d+$/ })).toBeEnabled();
+    });
 });
+
