@@ -1,15 +1,16 @@
 # tune-top: poisoner
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: e1281c6（条件1: 2位 73.8% / 1位 witch 82.0%、差8.2pt。witch が他セッションの調整でさらに上がった）
-- 現在の推奨設定: gears=[lastStand,spellWard] deck=[0,12,15,16,17,18,19,29,31,45,46,48] AIフラグ=cryoPoison=1(既定)
-- 基準線: 対強豪平均 45.3% / 5位 / 1位 cryomancer 69.7%（`--rank --games 60 --seed 1 --write-strong`, master 0dae21a）。参考 field 58.8%・最悪対面 18%(cryomancer)・不利/有利 1/5・均衡 0.9%。seed7/100 では 対強豪 48.0%（対氷室 28%）
-- 強豪リスト(固定): cryomancer,poisoner,tactician,witch,magician,yinYangMaster
-- 連続不採用回数: 2（gear・deck。試行37のバグ修正は数えない）
+- 最後に検証したmaster: 6543158
+- 現在の推奨設定: gears=[snowball,spellWard] deck=[0,12,15,16,17,18,19,29,45,46,48,52] AIフラグ=cryoPoison=1(既定)
+- 基準線: 対強豪平均 48.5% / 5位 / 1位 yinYangMaster 60.2%（`--rank --target poisoner --games 200 --seed 3`, master 6543158, 差11.7pt）。参考 field 50.1%・最悪対面 14%(cryomancer)・不利/有利 4/3。採用前は rank60 で 8位 35.3%
+- 強豪リスト(固定): yinYangMaster,electrician,necromancer,magician,keysmith,cryomancer（rank60 seed1, master 6543158）／完了判定(rank200)は yinYangMaster,electrician,necromancer,magician,keysmith,giant
+- 連続不採用回数: 0
 - 関連 issue: #124 lastStand が突出して強い懸念(open) / #27 本番AIでの毒使い勝率が未測定(open) / 2026-10-22 検索; #250 spellWard で突出(open)
-- 状態: blocked(issue #250。2026-10-30: 新基準(対強豪平均)で5位45.3%、1位 cryomancer 69.7%。ギア・デッキは閾値未満、氷室戦(16〜28%)は❄が毒を止める構造でルール変更が要る。ルールは変えない方針(2026-10-29)のため)
+- 状態: running(2026-11-09: 新ギア雪だるまを採用して 8位35.3%→5位48.5%。旧 blocked(#250)は旧環境の判断。1位まで11.7pt。次: 大岩(ユーザー案)・閻魔の舌 #491)
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 40 | gear(新ギア) | 新ギア 雪だるま/死神の鎌 を毒使いで（ユーザー情報: 陰陽師で死神の鎌+雪だるまが強い）。ペア5通り seed22/100（基準 lastStand,spellWard 35.2%）: reaper,snowball 36.7 / reaper,spellWard 39.8 / lastStand,reaper 29.5 / **snowball,spellWard 43.7**。上位を seed2/200 で再測定（基準 33.5） | snowball,spellWard **43.0%（+9.5, z≈5.3）**、reaper,spellWard 37.5%（+4.0）。対氷室は9→12%（死神の鎌は氷室に 0〜4% で壊滅）。悪化-15pt超なし | **採用**（雪だるまで毎手番ライフ期待値が積み上がり、低ライフのコマが減衰で0になって奪われる負け筋を遅らせる） |
 | 39 | deck | 新基準でデッキ1枚30近傍（seed12/60、対強豪 基準 37.0%）。最良 ライフ3→式神ランダム設置(72) 50.0%、次点 ダブルロック→範囲氷結(41) 47.1%。上位2案を seed2/200 で再測定（基準 44.1%） | 72案 42.1%（-2.0）、41案 40.3%（-3.8）。勝者の呪い（探索時 +13pt が再測定で負け） | 不採用 |
 | 38 | gear | 新基準でギア1枠走査（seed11/60、対強豪 基準 39.5%）。最良 lastStand→toxicBloom 44.3%（+4.8, z≈0.6）、propagate 42.7%、harvest 41.1% | 閾値(n≤40+: 3.3)に届かず。slot1(spellWard)側の置換はすべて基準以下 | 不採用 |
 | 37 | strategy(バグ) | ギア走査が worker のメモリ不足で落ちる原因を調査。poisoner vs tactician seed1100049 で毒使いが魔力1000超をためたまま猛毒化を撃ち続け、🔑ロック中の敵コマ（毒で死なない）の毒が倍々に増え（turn310で毒1500万スタック）、`flatMap` が `Invalid array length` で落ちた（#204 と同じ現象） | 猛毒化は敵の1マスの毒が32以上なら撃たない（`INTENSIFY_MAX_CELL_POISON`）。同じ試合で毒の総数が頭打ち(1778)。対強豪平均は変わらず 48.0%（seed7/100）。試合が引き分けのまま長引くケースだけ止まる | 採用（クラッシュ回避） |
@@ -67,6 +68,7 @@
 - **ルール変更案**（witch の🔑を毒が貫通／毒スキルを🍂コスト増から除外）: 2026-10-29 オーナー判断で行わない（#250）。
 - 過去の不採用（試行1〜28）は上の試行ログを参照。同じ案を再試行しない。
 
+- **大岩(136)＋オブジェクトを引き金にするギア（地代・普請道楽）**（2026-11-09 ユーザー案: 妨害できる・オブジェクトがトリガーのギアやスキルを発動できる）: 毒使いのAIは置けないので `sim/probe-object.js`（理想的なマスに置く上限実験。対強豪 yinYangMaster,electrician,necromancer,magician,keysmith,giant、現ギア snowball,spellWard）。大岩1個: 基準 47.2% → 46.3%（各100試合×6体=600試合、差なし）。小さい試験（各30試合）でも 大岩1個 +3.1 / 2個 +2.1（SE±7）で誤差内。**ギアの枠が無い**: 毒使いは snowball と spellWard の両方が効いており（spellWard を外すと約-10pt、snowball を外すと約-9pt）、地代・普請道楽（groundRent/buildMania）に替えると 26〜31% に落ちる（大岩2個＋地代,spellWard 27.3 / 普請道楽,spellWard 26.2 / 地代,snowball 30.5）。→ 採用しない。大岩のロックで相手の4つ目のマスを塞ぐ用途（妨害）は、AIの設置判断（相手のリーチのマスを選ぶ）が要るため未測定で、理想的な置き方でも差が出なかったので優先度は低い。
 ## 次に試す候補（要AI対応）: 毒使いが扱えないが使えれば強いスキル（2026-11-09 調査）
 全135札を機構（毒・低ライフ・奪取されやすい・❄が毒を止める）から舐めた。毒使いのAIはオブジェクトを置けない（置くのは陰陽師の大木・雷霆の巫の雷雲/毒沼だけ）。`sim/probe-object.js`（理想的なマスに1個置く上限実験。現環境の強豪6体×30試合、基準 38.0%）:
 | 札 | 対強豪 | 対氷室 | 機構 |
