@@ -132,12 +132,12 @@ describe('AIPlayer が返すスキル名の実行側の対応', () => {
     const COST_KEY_ONLY = new Set(['onClickCryoFreeze', 'onClickHailMary', 'onClickRandomCast', 'onClickBoost', 'onClickDoubleLock', 'onClickTripleLock']);
     const names = Array.from(new Set(aiSource.match(/'onClick[A-Za-z]+'/g) ?? [])).map((n) => n.slice(1, -1)).filter((n) => !NOT_RETURNED.has(n));
 
-    it('Game.tsx の executeSkillForAI に case がある', () => {
+    it('Game.tsx の executeSkillForAI のテーブルにキーがある', () => {
         const game = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
         const start = game.indexOf('const executeSkillForAI');
         const body = game.slice(start, game.indexOf('useEffect(', start));
         // コスト表のキーでしか使わない名前（AIPlayer 内でスキルとして返さないもの）は除く
-        const missing = names.filter((n) => !body.includes(`'${n}'`) && !COST_KEY_ONLY.has(n));
+        const missing = names.filter((n) => !new RegExp(`\\b${n}\\b`).test(body) && !COST_KEY_ONLY.has(n));
         expect(missing).toEqual([]);
     });
 

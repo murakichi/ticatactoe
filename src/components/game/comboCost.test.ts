@@ -27,8 +27,8 @@ describe('導線(コンボ)の軽減', () => {
         expect(comboCut('onClickChargeSeason', [sq('⭕', [BOLT])], '💙', 0, new Set())).toBe(COMBO_CUT);
         expect(ownCharges([sq('💙', [BOLT, BOLT])], '💙')).toBe(2);
     });
-    test('一寸先は闇鍋: 盤面のエフェクトの数だけ（空きマス・敵のコマも数え、式神の印は数えない）', () => {
-        const board = [sq('💙', [LEAF, BOLT]), sq('⭕', [BOLT]), sq(undefined, [{ effect: '🔑' as const }]), sq('💙', [{ effect: '📜' as const }])];
+    test('一寸先は闇鍋: 盤面のエフェクトの数だけ（空きマス・敵のコマも数え、式神そのものはエフェクトではないので数えない）', () => {
+        const board = [sq('💙', [LEAF, BOLT]), sq('⭕', [BOLT]), sq(undefined, [{ effect: '🔑' as const }]), { ...sq('💙', []), object: 'shikigami' as const }];
         expect(boardEffectCount(board)).toBe(4);
         expect(comboCut('onClickDarkPot', board, '💙', 0, new Set())).toBe(4);
         expect(comboCut('onClickDarkPot', [sq('💙')], '💙', 0, new Set())).toBe(0);
@@ -63,7 +63,7 @@ describe('導線(コンボ)の軽減', () => {
 
     test('吹き寄せ・山焼き: 氷結のマスは❄の数だけ・🔑自体と📜は数えず、ロックのマスの他のエフェクトは数える。1つにつき2/3軽減で下限1', () => {
         // 1:🌱🍂(2) 2:❄🌱☠ → ❄だけ(1) 3:🔑🌱 → 🌱(1) 4:📜だけ(0) 5:❄❄(2) = 6
-        const board = [sq('💙', [{ effect: '🌱' }, LEAF]), sq('⭕', [FREEZE, { effect: '🌱' }, { effect: '☠' }]), sq('💙', [LOCK, { effect: '🌱' }]), sq('⭕', [{ effect: '📜' }]), sq('⭕', [FREEZE, FREEZE])];
+        const board = [sq('💙', [{ effect: '🌱' }, LEAF]), sq('⭕', [FREEZE, { effect: '🌱' }, { effect: '☠' }]), sq('💙', [LOCK, { effect: '🌱' }]), { ...sq('⭕', []), object: 'shikigami' as const }, sq('⭕', [FREEZE, FREEZE])];
         expect(reduceCount(board)).toBe(6);
         expect(comboCut('onClickGather', board, '💙', 0, new Set())).toBe(GATHER_CUT * 6);
         expect(comboCut('onClickBurnOff', board, '💙', 0, new Set())).toBe(BURN_OFF_CUT * 6);

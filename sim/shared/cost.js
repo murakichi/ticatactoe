@@ -23,11 +23,17 @@ exports.SHIKIGAMI_PURGE_FREE = 3;
 /** 夜の帳: 手番の席のスキルコストに足す量（コストが0のスキルは変えない） */
 const veilSurcharge = (env) => (env.veil && env.seat === env.turnSeat ? graveSkills_1.NIGHT_VEIL_SURCHARGE : 0);
 /** 自陣の式神の数 */
-const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
+    var _a;
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env);
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    if (characterId === 'necromancer') {
+        const cut = Math.min((_a = env.corpses) !== null && _a !== void 0 ? _a : 0, graveSkills_1.NECRO_CORPSE_CUT_CAP);
+        return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
+    }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer')
         return skillKey && thermal_1.FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;

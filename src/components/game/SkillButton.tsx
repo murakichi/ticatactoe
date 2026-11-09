@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from 'react';
 import styles from './SkillButton.module.css';
+import { CATEGORY_HELP } from './deck';
 import { CATEGORY_LABEL, metaOf, parseSkillText } from './skillMeta';
 
 type SkillButtonProps = {
@@ -71,7 +72,7 @@ export const SkillButton = (props: SkillButtonProps) => {
                     </span>
                     <span className={styles.tags}>
                         {props.exclusive && <span className={styles.tagExclusive}>固有</span>}
-                        <span className={styles.tagCategory}>{CATEGORY_LABEL[meta.category]}</span>
+                        <span className={styles.tagCategory} title={CATEGORY_HELP[meta.category]}>{CATEGORY_LABEL[meta.category]}</span>
                         {parsed?.suffix && <span className={styles.tagCategory}>{parsed.suffix.replace(/[()]/g, '')}</span>}
                     </span>
                     <span id={descId} className={`${styles.desc}${open ? ` ${styles.descOpen}` : ''}`}>

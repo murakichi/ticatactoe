@@ -1,37 +1,68 @@
-import { applyLockAt } from './tokenAfter';
+import { afterTokenPlaced, TokenAfterOptions } from './tokenAfter';
 import { SquareInfo } from '../../types/SquareInfo';
+import { Gears } from './gear';
 
-describe('芽吹きの錠: ロックを掛けた低ライフの自陣のコマにバッズ', () => {
-    const board = (sq: Partial<SquareInfo>): SquareInfo[] => {
-        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
-        b[5] = { player: '💙', bind: 2, effects: [], ...sq };
-        return b;
-    };
-    const buds = (b: SquareInfo[]) => b[5].effects.filter((e) => e.effect === '🌱').length;
+const emptyBoard = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+const opts = (gears: Gears, rng: () => number, chargeBuff = 0): TokenAfterOptions => ({ player: '💙', turnSeat: 0, gears, chars: ['you', 'you'], chargeBuff, rng });
+const has = (sq: SquareInfo, e: string): boolean => sq.effects.some((x) => x.effect === e);
 
-    it('ライフ2以下でバッズの無い自陣のコマに掛けるとバッズ+1', () => {
-        const b = board({});
-        expect(applyLockAt(b, 5, ['lockBloom'], 0)).toBe(true);
-        expect(buds(b)).toBe(1);
-        expect(b[5].effects.some((e) => e.effect === '🔑')).toBe(true);
+describe('afterTokenPlaced（トークン後の盤面処理の順序。Game / sim 共有）', () => {
+    it('ギアが無ければ、エフェクト付きトークンの1だけ数え、乱数は使わない', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] };
+        const rng = jest.fn(() => 0);
+        expect(afterTokenPlaced(b, 5, '🌱', opts(undefined, rng))).toEqual({ granted: 1, locked: false, spreadTo: null, seeded: false });
+        expect(afterTokenPlaced(b, 5, undefined, opts(undefined, rng)).granted).toBe(0);
+        expect(rng).not.toHaveBeenCalled();
     });
-    it('ギアが無ければバッズは付かない', () => {
-        const b = board({});
-        applyLockAt(b, 5, [], 0);
-        expect(buds(b)).toBe(0);
+
+    it('静電気の季節は⚡を付けるが、収穫には数えない', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 4, effects: [] };
+        const r = afterTokenPlaced(b, 5, undefined, opts(undefined, () => 0, 2));
+        expect(has(b[5], '⚡')).toBe(true);
+        expect(r.granted).toBe(0);
     });
-    it('ライフ3以上・すでにバッズあり・敵のコマ・空きマスには付かない', () => {
-        const high = board({ bind: 3 });
-        applyLockAt(high, 5, ['lockBloom'], 0);
-        expect(buds(high)).toBe(0);
-        const has = board({ effects: [{ effect: '🌱' }] });
-        applyLockAt(has, 5, ['lockBloom'], 0);
-        expect(buds(has)).toBe(1);
-        const foe = board({ player: '⭕' });
-        applyLockAt(foe, 5, ['lockBloom'], 0);
-        expect(buds(foe)).toBe(0);
-        const empty = board({ player: undefined, bind: 0 });
-        applyLockAt(empty, 5, ['lockBloom'], 0);
-        expect(buds(empty)).toBe(0);
+
+    it('道連れの鍵: 乱数がしきい値未満ならロックが付いて収穫に+1。以上なら付かない', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 4, effects: [] };
+        const hit = afterTokenPlaced(b, 5, undefined, opts(['bindingLock'], () => 0));
+        expect(hit).toEqual({ granted: 1, locked: true, spreadTo: null, seeded: false });
+        expect(has(b[5], '🔑')).toBe(true);
+        const c = emptyBoard();
+        c[5] = { player: '💙', bind: 4, effects: [] };
+        const miss = afterTokenPlaced(c, 5, undefined, opts(['bindingLock'], () => 0.99));
+        expect(miss.locked).toBe(false);
+        expect(has(c[5], '🔑')).toBe(false);
+    });
+
+    it('伝播: effect があるときだけ、周囲の候補に同じエフェクトが広がり収穫に+1', () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] };
+        b[6] = { player: '💙', bind: 4, effects: [] };
+        const r = afterTokenPlaced(b, 5, '🌱', opts(['propagate'], () => 0));
+        expect(r).toEqual({ granted: 2, locked: false, spreadTo: 6, seeded: false });
+        expect(has(b[6], '🌱')).toBe(true);
+        const c = emptyBoard();
+        c[5] = { player: '💙', bind: 4, effects: [] };
+        c[6] = { player: '💙', bind: 4, effects: [] };
+        expect(afterTokenPlaced(c, 5, undefined, opts(['propagate'], () => 0)).spreadTo).toBeNull();
+    });
+
+    it('芽吹き: ライフが基準以上の自陣のコマに🌱が付く（収穫・伝播には数えない）。ギアが無ければ付かない', () => {
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[5] = { player: '💙', bind: 9, effects: [] };
+            return b;
+        };
+        const b = mk();
+        const r = afterTokenPlaced(b, 5, undefined, opts(['budSeed'], () => 0.99));
+        expect(r.seeded).toBe(true);
+        expect(r.granted).toBe(0);
+        expect(has(b[5], '🌱')).toBe(true);
+        const c = mk();
+        expect(afterTokenPlaced(c, 5, undefined, opts(undefined, () => 0.99)).seeded).toBe(false);
+        expect(has(c[5], '🌱')).toBe(false);
     });
 });

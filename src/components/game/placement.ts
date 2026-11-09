@@ -26,16 +26,18 @@ export type PlacementResult = {
  * @param asObject 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪う（false は自陣の通常のコマとして置き換える）。ライフは life
  */
 export const resolvePlacement = (cell: SquareInfo, player: Player, life: number, asObject: boolean = false): PlacementResult => {
+    if (cell.player === player && isShikigami(cell)) {
+        // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
+        return { square: { player, bind: cell.bind + life + 1, effects: [...cell.effects, { effect: '🌱' as const }] }, poisonSpread: false, corpse: false, reinforced: true };
+    }
     if (cell.player === player && isObject(cell)) {
         // 自陣のオブジェクトは、いつでも通常のコマで乗っ取れる（オブジェクトは消えて、ライフ life のコマになる。設置数の制限は無い）
         return { square: { player, bind: life, effects: [...cell.effects] }, poisonSpread: false, corpse: false, reinforced: false };
     }
     if (cell.player === player) {
-        // 式神を自分で補強すると、式神ではなく🌱付きの自陣コマになる
-        const effects = isShikigami(cell) ? [...cell.effects.filter((e) => e.effect !== '📜'), { effect: '🌱' as const }] : [...cell.effects];
-        return { square: { player, bind: cell.bind + life + 1, effects }, poisonSpread: false, corpse: false, reinforced: true };
+        return { square: { player, bind: cell.bind + life + 1, effects: [...cell.effects] }, poisonSpread: false, corpse: false, reinforced: true };
     }
-    if (cell.player && cell.object && cell.bind > 0 && cell.bind - life + 1 <= 0) {
+    if (cell.player && cell.object && !isShikigami(cell) && cell.bind > 0 && cell.bind - life + 1 <= 0) {
         // 敵のオブジェクトはライフが0でないと乗っ取れない。ライフを削り切る攻撃（巨人・満杯の盤面）でも、ライフが0になるだけでオブジェクトは残る
         return { square: { player: cell.player, bind: 0, effects: [], object: cell.object }, poisonSpread: false, corpse: false, reinforced: false };
     }

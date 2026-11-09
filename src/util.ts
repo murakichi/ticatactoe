@@ -2,7 +2,7 @@ import { CharacterId, YingYangMode } from './types/Character';
 import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 import { geometryForCells } from './components/game/boardGeometry';
-import { isObject } from './types/ObjectKind';
+import { isObject, isShikigami } from './types/ObjectKind';
 
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
@@ -37,14 +37,8 @@ const calculateLife = (nextCharacterId: CharacterId, yingYangMode: YingYangMode 
     return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std, rng));
 };
 
-/** 式神(📜)は列の並びに数えない */
-const isShikigami = (sq: { effects: readonly { effect: string }[] }): boolean => {
-    const ef = sq.effects;
-    for (let i = 0; i < ef.length; i++) if (ef[i].effect === '📜') return true;
-    return false;
-};
-/** 列判定用のシンボル配列（式神・オブジェクトはコマ無し扱い） */
-const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isShikigami(x) || isObject(x) ? undefined : x.player));
+/** 列判定用のシンボル配列（オブジェクトはコマ無し扱い。式神もオブジェクトの一種） */
+const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isObject(x) ? undefined : x.player));
 
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
     const lines = geometryForCells(squares.length).winLines;

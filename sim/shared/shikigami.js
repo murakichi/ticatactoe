@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/shikigami.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.purge = exports.curse = exports.bless = exports.blast = exports.purgeTargets = exports.curseTargets = exports.blessTargets = exports.ownShikigamiCells = exports.newShikigami = exports.shikigamiLandable = exports.SHIKIGAMI_CURSE_STACKS = exports.SHIKIGAMI_BLESS_LIFE = exports.SHIKIGAMI_BLAST_DAMAGE = exports.SHIKIGAMI_LIFE = void 0;
+exports.purge = exports.curse = exports.bless = exports.blast = exports.purgeTargets = exports.curseTargets = exports.blessTargets = exports.ownShikigamiCells = exports.toPiece = exports.newShikigami = exports.shikigamiLandable = exports.SHIKIGAMI_CURSE_STACKS = exports.SHIKIGAMI_BLESS_LIFE = exports.SHIKIGAMI_BLAST_DAMAGE = exports.SHIKIGAMI_LIFE = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const poison_1 = require("./poison");
@@ -18,8 +18,15 @@ exports.SHIKIGAMI_CURSE_STACKS = 2;
 /** 式神（百鬼夜行・式神設置・爆破で空きマスに生まれる式神）を置けるマスか: 空きで、氷結中でも🔑ロック中でもない（ロック中の空きマスには通常の着手もできない） */
 const shikigamiLandable = (sq) => !sq.player && !(0, thermal_1.emptyBlocked)(sq) && !(sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0);
 exports.shikigamiLandable = shikigamiLandable;
-const newShikigami = (player, bind = exports.SHIKIGAMI_LIFE) => ({ player, bind, effects: [{ effect: '📜' }] });
+/** 式神。オブジェクトの一種（SquareInfo.object = 'shikigami'）で、列に数えない */
+const newShikigami = (player, bind = exports.SHIKIGAMI_LIFE) => ({ player, bind, effects: [], object: 'shikigami' });
 exports.newShikigami = newShikigami;
+/** 式神の印を外して通常のコマにする（ライフとエフェクトはそのまま） */
+const toPiece = (sq) => {
+    const { object, ...rest } = sq;
+    return object === 'shikigami' ? rest : sq;
+};
+exports.toPiece = toPiece;
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
 /** player の式神のあるマス */
 const ownShikigamiCells = (board, player) => board.map((sq, i) => (sq.player === player && (0, util_1.isShikigami)(sq) ? i : -1)).filter((i) => i !== -1);

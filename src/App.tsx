@@ -1,10 +1,10 @@
 import './App.css';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Game, PlayerConfig } from './components/game/Game';
 import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
-import { LIFE_MEANS, range } from './util';
+import { range } from './util';
 import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst } from './components/game/gear';
 import {
     DECK_SIZE,
@@ -15,6 +15,7 @@ import {
     SavedDeck,
     deleteSavedDeck,
     describeSkill,
+    CATEGORY_HELP,
     isValidDeck,
     loadSavedDecks,
     randomDeck,
@@ -35,51 +36,49 @@ type CharacterDef = {
     passive: string;
 };
 
-// 説明文は実装と一致させること。ライフ平均は util.ts の LIFE_MEANS を参照して埋め込む
-// （数値のズレを構造的に防ぐ / issue #13）。詳細は docs/characters.md
-const L = LIFE_MEANS;
+// 説明文の書き方は docs/description-guidelines.md。数値などの細かい仕様は docs/characters.md に書く
 const CHARACTERS: CharacterDef[] = [
-    { id: 'you', name: 'あなた', icon: '🧑', passive: `補正も固有スキルも無い基準点。ライフ平均${L.default}` },
-    { id: 'tactician', name: '軍師', icon: '🎖️', passive: `トークン系コスト-1/他+2。自分のトークンはライフ6。固有:全軍突撃` },
-    { id: 'magician', name: '魔法使い', icon: '🧙', passive: `毎ターン魔力+1、自陣バッズ1個ごとに更に+2。ライフ平均${L.magician}。固有:審判の日` },
-    { id: 'giant', name: '巨人', icon: '👹', passive: `ライフ平均${L.giant}。5ターンに1回休み。ライフの残る敵も殴れる。固有:ストンプ` },
+    { id: 'you', name: 'あなた', icon: '🧑', passive: '補正も固有スキルもない基準のキャラ' },
+    { id: 'tactician', name: '軍師', icon: '🎖️', passive: 'トークン系スキルが安く、置くコマのライフが高い。固有: 全軍突撃' },
+    { id: 'magician', name: '魔法使い', icon: '🧙', passive: '毎ターンのマジックが増え、自陣のバッズが多いほどさらに増加。固有: 審判の日' },
+    { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフの高いコマを置けるが、数ターンに1回休み。固有: ストンプ' },
     {
         id: 'yinYangMaster',
         name: '陰陽師',
         icon: '☯️',
-        passive: `陰陽を切替。陽=ライフ平均${L.yinYangMaster_yang}/全スキル+1、陰=ライフ平均${L.yinYangMaster_ying}/魔力+1。固有:式神(陰で設置・陽で爆破)`,
+        passive: '陰と陽を切り替えて戦う。固有: 式神設置・式神爆破',
     },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: `コマが消えるたび墓地+1→蘇生が安く強くなる。ライフ平均${L.default}。固有:蘇生` },
-    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: `毒スキル-1/他+1。自陣の毒の数だけライフ+1。毒が付いた自分のコマはライフ1.5倍。毒でライフが尽きたマスは消えて魔力+1。そこから周囲へ毒が拡散` },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強化。死体の数だけ他のスキルも安い。固有: 蘇生' },
+    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒スキルが安く、毒の付いた自陣のコマが強化。固有: ミアズマ' },
     {
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: `⚡が付いた自分のコマは誰にも触れない無敵（ただし自分も触れない）。自陣の⚡の発火ダメージと、⚡が乗った時点の2ダメージ（雷霆以外のコマが受ける）は受けない。自分のコマはライフが0になっても着手で奪われない（巨人と満杯の盤面を除く）。ライフ平均${L.electrician}。固有:帯電拡散`,
+        passive: '⚡の付いた自陣のコマは敵から触れられず、⚡のダメージも受けない。固有: 帯電拡散',
     },
     {
         id: 'cryomancer',
         name: '氷室の番人',
         icon: '🧊',
-        passive: `ライフ平均${L.cryomancer}。毎ターンの魔力+1(計+2)。常在のロックの代わりに「氷結」(コスト2・空きマスも可。氷結した空きマスは誰も置けない。🔑・🔥のあるマスには置けない)を持つ。❄は重なり、ターン進行・隣接⚡のダメージを受けず、スキルのダメージを1スタック分肩代わりする。固有:絶対零度`,
+        passive: 'ロックの代わりに氷結を使い、毎ターンのマジックが増加。固有: 絶対零度',
     },
     {
         id: 'pyromancer',
         name: '煉獄の鍛冶師',
         icon: '🔥',
-        passive: `🔥を付与するスキルのコスト-1（火遁・火炎トークン・殉火・焼畑）。敵が🔥の継続ダメージを受けるとき追加で1ダメージ（🔥は毎ターン1つにつき2ダメージ・スキル被ダメ1.5倍）。ライフ平均${L.pyromancer}。固有:業火（仮）・火遁（空きマスにも置ける。空きマスの🔥は置かれたコマに引き継がれる）`,
+        passive: '🔥スキルが安く、🔥を受けた敵に追加ダメージ。固有: 業火・火遁',
     },
     {
         id: 'witch',
         name: '凩の魔女',
         icon: '🍂',
-        passive: `毎ターンの魔力+1(計+2)。盤面にある🍂（敵味方問わず）1枚につきスキルのコスト-1（下限1）。自陣の🍂は相手全員のコストを増やし、敵の🍂は魔女のコストを増やす（パッシブで相殺される）。ライフ平均${L.witch}。固有:虎落笛（自陣の🍂の枚数ぶん敵全てにダメージ・自陣のライフ+2）`,
+        passive: '毎ターンのマジックが増え、盤面の🍂が多いほどスキルが安い。固有: 虎落笛',
     },
     {
         id: 'keysmith',
         name: '鍵師',
         icon: '🗝️',
-        passive: `空きマスのロックを無視して置ける。手番の最初のロック系スキルは、手持ちの魔力以下なら無料。ロック系スキル（ロック・ダブル/トリプル・封鎖の断）のコスト-1（下限1）。ライフ平均${L.keysmith}。固有:封鎖の断（自陣のコマ全てを7ターン・空きマス全てを2ターンロックし、敵のコマのロックを全て解除して解除した数（最低1）だけ敵全てにダメージ。ターン終了。敵のロックの数だけコスト軽減・下限5）`,
+        passive: 'ロックスキルが安く、空きマスのロックを無視して設置可能。固有: 封鎖の断',
     },
 ];
 
@@ -98,6 +97,14 @@ export const App = () => {
     const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
     // 作成したオリジナルスキル（ブラウザに1枚だけ保存。人間席のデッキに1枚まで入れられる）
     const [customSkill, setCustomSkill] = useState<CustomSkillSpec | undefined>(() => loadCustomSkill());
+    // オリジナルスキルの編集サブウィンドウ（デッキ編集の最下部のボタンから開く）
+    const [isCustomOpen, setIsCustomOpen] = useState<boolean>(false);
+    useEffect(() => {
+        if (!isCustomOpen) return;
+        const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsCustomOpen(false);
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isCustomOpen]);
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) =>
@@ -210,21 +217,6 @@ export const App = () => {
                             </button>
                         </div>
                     </section>
-                    <section className={styles.rules} aria-label='オリジナルスキル'>
-                        <CustomSkillCreator
-                            key={customSkill ? 'saved' : 'new'}
-                            initial={customSkill}
-                            onSave={(spec) => {
-                                const saved = saveCustomSkill(spec);
-                                if (saved) setCustomSkill(saved);
-                                return !!saved;
-                            }}
-                            onDelete={() => {
-                                clearCustomSkill();
-                                setCustomSkill(undefined);
-                            }}
-                        />
-                    </section>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting
@@ -240,6 +232,7 @@ export const App = () => {
                                 onRandomGears={() => randomizeGears(seat)}
                                 deck={players[seat].deck}
                                 customSkill={customSkill}
+                                onEditCustom={() => setIsCustomOpen(true)}
                                 onChangeDeck={(deck) => updatePlayer(seat, { deck })}
                             />
                         ))}
@@ -247,6 +240,31 @@ export const App = () => {
                     {invalidDeckSeat >= 0 && (
                         <div className={styles.deckWarn}>
                             プレイヤー{invalidDeckSeat + 1}のデッキが{DECK_SIZE}枚ではありません（「推奨」に戻すか、{DECK_SIZE}枚に調整してください）
+                        </div>
+                    )}
+                    {isCustomOpen && (
+                        <div className={styles.modalBackdrop} onClick={() => setIsCustomOpen(false)}>
+                            <div className={styles.modal} role='dialog' aria-modal='true' aria-label='オリジナルスキルの編集' onClick={(e) => e.stopPropagation()}>
+                                <div className={styles.modalHead}>
+                                    <span>🛠 オリジナルスキル{customSkill ? `（保存済み: ${customSkill.name}）` : '（未作成）'}</span>
+                                    <button className={styles.gearMiniBtn} onClick={() => setIsCustomOpen(false)} aria-label='閉じる'>
+                                        ✕ 閉じる
+                                    </button>
+                                </div>
+                                <CustomSkillCreator
+                                    key={customSkill ? 'saved' : 'new'}
+                                    initial={customSkill}
+                                    onSave={(spec) => {
+                                        const saved = saveCustomSkill(spec);
+                                        if (saved) setCustomSkill(saved);
+                                        return !!saved;
+                                    }}
+                                    onDelete={() => {
+                                        clearCustomSkill();
+                                        setCustomSkill(undefined);
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                     <div className={styles.startBar}>
@@ -306,6 +324,7 @@ type PlayerSettingProps = {
     /** 組んだデッキ（未指定なら推奨デッキ） */
     deck: number[] | undefined;
     customSkill: CustomSkillSpec | undefined;
+    onEditCustom: () => void;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -390,6 +409,7 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                     isAI={props.isAI}
                     deck={props.deck}
                     customSkill={props.customSkill}
+                    onEditCustom={props.onEditCustom}
                     onChangeDeck={props.onChangeDeck}
                 />
                 {props.gears.length > 0 && (
@@ -412,6 +432,7 @@ type DeckBoxProps = {
     isAI: boolean;
     deck: number[] | undefined;
     customSkill: CustomSkillSpec | undefined;
+    onEditCustom: () => void;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -488,7 +509,7 @@ const DeckBox = (props: DeckBoxProps) => {
                 if (entries.length === 0) return null;
                 return (
                     <div key={cat.id} className={styles.deckGroup}>
-                        <div className={styles.deckGroupLabel}>{cat.label}</div>
+                        <div className={styles.deckGroupLabel} title={CATEGORY_HELP[cat.id]}>{cat.label}</div>
                         <div className={styles.gearGrid}>
                             {entries.map((c) => {
                                 const active = shown.includes(c.idx);
@@ -521,9 +542,12 @@ const DeckBox = (props: DeckBoxProps) => {
                         onFocus={() => setPointed(CUSTOM_SKILL_IDX)}
                         disabled={(!shown.includes(CUSTOM_SKILL_IDX) && shown.length >= DECK_SIZE) || (!props.customSkill && !shown.includes(CUSTOM_SKILL_IDX)) || props.isAI}
                         aria-pressed={shown.includes(CUSTOM_SKILL_IDX)}
-                        title={props.isAI ? 'AI席は使えません' : props.customSkill ? describeCustom(props.customSkill) : '先に「オリジナルスキル」を作成して保存してください'}
+                        title={props.isAI ? 'AI席は使えません' : props.customSkill ? describeCustom(props.customSkill) : '先に右の「作成」でオリジナルスキルを作って保存してください'}
                     >
-                        {props.customSkill ? `${customIcon(props.customSkill)} ${props.customSkill.name}` : '🛠 （未作成）'}
+                        {props.customSkill ? `${customIcon(props.customSkill)} ${props.customSkill.name}` : '（未作成）'}
+                    </button>
+                    <button className={styles.gearMiniBtn} onClick={props.onEditCustom} aria-label={`プレイヤー${props.seat + 1}のオリジナルスキルを${props.customSkill ? '編集' : '作成'}`}>
+                        🛠 {props.customSkill ? '編集' : '作成'}
                     </button>
                 </div>
             </div>

@@ -1,16 +1,18 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
+exports.lifeZeroVictims = exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
+const charge_1 = require("./charge");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
 const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
 const keysmith_1 = require("./keysmith");
+const ObjectKind_1 = require("./ObjectKind");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -161,3 +163,15 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     g.echoReady[seat] = false;
 };
 exports.noteSkillUsed = noteSkillUsed;
+/**
+ * 死神の鎌: 誰かが装備していれば、ライフ0になった駒（プレイヤーを問わず）を手番の終わりに壊す。
+ * 氷結中・🔑ロック中・雷霆の巫の⚡無敵の駒、オブジェクトは壊れない。壊すマスの添字を返す（盤は書き換えない）。
+ */
+const lifeZeroVictims = (board, chars, gears) => {
+    if (!gears.some((g) => (0, gear_1.hasGear)(g, 'reaper')))
+        return [];
+    return board
+        .map((sq, i) => (sq.player && !(0, ObjectKind_1.isBuilding)(sq) && sq.bind <= 0 && !(0, thermal_1.isFrozen)(sq) && !sq.effects.some((e) => e.effect === '🔑') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
+        .filter((i) => i >= 0);
+};
+exports.lifeZeroVictims = lifeZeroVictims;

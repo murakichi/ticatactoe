@@ -22,7 +22,7 @@ const PROD = !!args.prod; // --prod: 全席が推奨デッキ・推奨ギア（�
 const gearMod = require('./shared/gear');
 const size = args.size ? parseInt(args.size, 10) : undefined;
 const games = parseInt(args.games || '20', 10), seed0 = parseInt(args.seed || '1', 10), D = parseInt(args.depth || '4', 10);
-const symbolsOf = (b) => b.map((x) => (engine.isShikigami(x) ? undefined : x.player));
+const symbolsOf = (b) => b.map((x) => (x.object ? undefined : x.player));
 
 /** 状態の複製(関数は共有、Set/Map/配列/オブジェクトは再帰コピー)。複製側は c.rng を差し替えて使う */
 function deepClone(x) {
