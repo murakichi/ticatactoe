@@ -44,7 +44,7 @@ const IDX_SKILL = {
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
     77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 113: 'boltSilence', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
     84: 'leafDrop', 85: 'kindling', 86: 'leafCloak', 87: 'tinder', 92: 'smallFry', 93: 'firstFrost', 94: 'gather',
-    95: 'burnOff', 96: 'freeToken', 97: 'spark', 98: 'nightVeil', 99: 'graveDiscount', 100: 'poisonWard', 101: 'graveOffering', 102: 'perfectGame', 103: 'helper', 105: 'bigTree', 106: 'deadTree', 107: 'spring', 108: 'fort', 109: 'thundercloud', 110: 'market', 111: 'sanctuary', 112: 'poisonSwamp', 114: 'demolish', 115: 'weather', 116: 'levelAll', 117: 'reinforce', 118: 'expandAll', 119: 'duplicate', 120: 'workshop', 121: 'barrierStone', 122: 'amuletShrine', 123: 'luckyCat', 124: 'mudField', 125: 'tongueKing', 126: 'eightTrigrams', 127: 'soloSign', 128: 'oneWord', 129: 'blindMonkey',
+    95: 'burnOff', 96: 'freeToken', 97: 'spark', 98: 'nightVeil', 99: 'graveDiscount', 100: 'poisonWard', 101: 'graveOffering', 102: 'perfectGame', 103: 'helper', 105: 'bigTree', 106: 'deadTree', 107: 'spring', 108: 'fort', 109: 'thundercloud', 110: 'market', 111: 'sanctuary', 112: 'poisonSwamp', 114: 'demolish', 115: 'weather', 116: 'levelAll', 117: 'reinforce', 118: 'expandAll', 119: 'duplicate', 120: 'workshop', 121: 'barrierStone', 122: 'amuletShrine', 123: 'luckyCat', 124: 'mudField', 125: 'tongueKing', 126: 'eightTrigrams', 127: 'soloSign', 128: 'oneWord', 129: 'blindMonkey', 136: 'boulder',
 };
 
 /** キャラ固有の SKILLS キー */

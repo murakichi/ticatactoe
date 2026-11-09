@@ -6,7 +6,7 @@ exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
  * オブジェクト: 空きマスに設置して使う、ライフを持つ建造物。コマと違い列(勝利判定)には数えず、時間経過でライフが減らない。
  * 持ち主(SquareInfo.player)のものとして手番開始時に効果を発揮する。種類の定義は src/components/game/objects.ts。
  */
-exports.OBJECT_KINDS = ['bigTree', 'deadTree', 'spring', 'fort', 'thundercloud', 'market', 'sanctuary', 'poisonSwamp', 'workshop', 'barrierStone', 'amuletShrine', 'luckyCat', 'mudField', 'tongueKing', 'eightTrigrams', 'soloSign', 'oneWord', 'blindMonkey'];
+exports.OBJECT_KINDS = ['bigTree', 'deadTree', 'spring', 'fort', 'thundercloud', 'market', 'sanctuary', 'poisonSwamp', 'workshop', 'barrierStone', 'amuletShrine', 'luckyCat', 'mudField', 'tongueKing', 'eightTrigrams', 'soloSign', 'oneWord', 'blindMonkey', 'boulder'];
 /** マスがオブジェクトか（thermal.ts などの低レイヤーから循環 import なしで使えるよう、ここに置く） */
 const isObject = (sq) => sq.object !== undefined;
 exports.isObject = isObject;

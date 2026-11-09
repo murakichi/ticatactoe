@@ -102,7 +102,7 @@ export interface SkillDispatchScope {
     onClickGraveDiscount: () => void;
     onClickPoisonWard: () => void;
     onClickObjectSkill: (skill: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate") => void;
-    onClickObject: (kind: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey") => void;
+    onClickObject: (kind: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder") => void;
     onClickLockRaid: () => void;
     onClickLockExtend: () => void;
     onClickLockBlessing: () => void;
@@ -248,6 +248,7 @@ export const useSkillDispatch = (g: SkillDispatchScope, late: () => GameLate) =>
             onClickSoloSign: () => onClickObject('soloSign'),
             onClickOneWord: () => onClickObject('oneWord'),
             onClickBlindMonkey: () => onClickObject('blindMonkey'),
+            onClickBoulder: () => onClickObject('boulder'),
             onClickLockRaid: () => onClickLockRaid(),
             onClickLockExtend: () => onClickLockExtend(),
             onClickLockBlessing: () => onClickLockBlessing(),
