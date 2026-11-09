@@ -859,7 +859,7 @@ function planBudsAndFire(c) {
         ];
         for (const plan of objectPlans) {
             const pc = this.calculateAICost(costs[plan.key], false, false, plan.key);
-            if (necroFoe || !availableSkills.includes(plan.idx) || this.skillKinds.has(plan.key) || chargeClicks.some((c) => c.skill === plan.key))
+            if (!availableSkills.includes(plan.idx) || this.skillKinds.has(plan.key) || chargeClicks.some((c) => c.skill === plan.key))
                 continue;
             if (pc > plan.cap || magic < pc || (plan.kind !== 'boulder' && board.some((sq) => sq.object === plan.kind && sq.player === this.playerSymbol)))
                 continue;
@@ -899,7 +899,7 @@ function planBudsAndFire(c) {
         }
         // 解錠の碑(137。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないとき、または普請道楽で1コストのときに置く
         const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
-        if (!necroFoe && availableSkills.includes(137) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
+        if (availableSkills.includes(137) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
             && !(worth && magic >= infernoNow() && magic - stoneCost < infernoNow())) {
             let cell = this.bestUnlockStoneCell(board);
             if (cell === null && stoneCost <= 1 && !(0, objects_1.hasOwnObject)(board, this.playerSymbol)) {
