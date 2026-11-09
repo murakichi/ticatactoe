@@ -1,5 +1,6 @@
 // 自動生成: src/components/game/AIPlayer.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.MAX_REROLLS = exports.KEYSMITH_COMBO_EMPTY_LOCK_MAX = exports.KEYSMITH_COMBO_MIN_BIND = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.YOU_HOLD_VS = exports.TURN_ENDING_SKILLS = exports.SKILL_POOL_SIZE = void 0;
 const Player_1 = require("./Player");
@@ -128,6 +129,8 @@ const CLOUD_MAX = 1;
 const CLOUD_MIN_EMPTY = 4;
 const CLOUD_MIN_FOES = 2;
 const BIG_TREE_MIN_EMPTY = 6;
+/** 施錠の加護（陰陽師）を撃つとき、コスト以外に残す魔力 */
+const LOCK_BLESS_RESERVE = Number((_a = process.env.LB) !== null && _a !== void 0 ? _a : 4);
 /** 大木のコストにあと何魔力以内なら、他のスキルの支払いを控えてためるか */
 const BIG_TREE_HOLD_GAP = 5;
 /** ためている間でも支払ってよいスキル（パーフェクトゲーム本体と、そのコストを下げる軽減札） */
@@ -3129,6 +3132,16 @@ class AIPlayer {
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
                 magic -= cost;
                 break;
+            }
+        }
+        // 施錠の加護（陰陽師）: 数手番の間、置いたコマにロックが付く。ロック中のコマは一寸の虫(92)・乗っ取りの対象外。
+        // 自陣にロック付きのコマがまだ無い（加護が切れている）とき、魔力に余裕があれば撃つ
+        if (this.character === 'yinYangMaster' && availableSkills.includes(132)
+            && !board.some((sq) => sq.player === this.playerSymbol && sq.effects.some((e) => e.effect === '🔑'))) {
+            const cost = this.calculateAICost(costs.onClickLockBlessing, false, false, 'onClickLockBlessing');
+            if (magic >= cost + LOCK_BLESS_RESERVE) {
+                chargeClicks.push({ skill: 'onClickLockBlessing' });
+                magic -= cost;
             }
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
