@@ -211,6 +211,8 @@ class AIPlayer {
         this.hypoCut = 0;
         /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
         this.ownTrees = 0;
+        /** 自陣のオブジェクトの数（鍵師の砦の設置判断に使う） */
+        this.ownObjectCount = 0;
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
         /** 自陣の働いている毒沼の数 */
@@ -2562,6 +2564,7 @@ class AIPlayer {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
@@ -3107,6 +3110,25 @@ class AIPlayer {
                 board = board.slice();
                 board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // 以後の計画では『置けない空きマス』として扱う
                 magic -= cost;
+            }
+        }
+        // 砦・市場（鍵師）: 自陣にオブジェクトが無い間だけ1つ立てる。普請道楽ギア（自陣にオブジェクトがある間は全スキル-3）の起点にする。
+        // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
+        if (this.character === 'keysmith' && this.ownObjectCount === 0
+            && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+            && (0, util_1.findEmptyIndexes)(board).length >= BIG_TREE_MIN_EMPTY) {
+            for (const [def, key] of [[objects_1.OBJECT_DEFS.fort, 'onClickFort'], [objects_1.OBJECT_DEFS.market, 'onClickMarket']]) {
+                if (!availableSkills.includes(def.idx))
+                    continue;
+                const cost = this.calculateAICost(costs[key], false, false, key);
+                const cell = this.bestTreeCell(board);
+                if (cell === null || magic < cost)
+                    continue;
+                chargeClicks.push({ skill: key, target: cell });
+                board = board.slice();
+                board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+                magic -= cost;
+                break;
             }
         }
         // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
