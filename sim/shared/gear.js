@@ -278,16 +278,16 @@ exports.randomGears = randomGears;
 exports.RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['snowball', 'luckyPurse'], // spellWard から差し替え（雪だるま。環境再編後 対強豪平均 53.0→59.2、対ネクロ 7→17、対陰陽師 25→41、seed22/100。docs/tune/magician.md 試行87）
+    magician: ['snowball', 'luckyPurse'],
     giant: ['lastStand', 'sturdy'],
-    yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
-    necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
+    yinYangMaster: ['reaper', 'snowball'],
+    necromancer: ['reaper', 'lastStand'],
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
-    keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
+    pyromancer: ['afterglow', 'vengeance'],
+    keysmith: ['lastStand', 'lockBloom'],
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => { var _a; return ((_a = exports.RECOMMENDED_GEARS[character]) !== null && _a !== void 0 ? _a : ['sturdy']).slice(0, (0, exports.gearSlotsFor)(character)); };
@@ -297,8 +297,8 @@ exports.recommendedGears = recommendedGears;
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 exports.ALT_RECOMMENDED_GEARS = {
-    yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']], // 別案: 死神の鎌+土壇場の防壁 60.5%（seed8、主案 71.0%）／旧主案 44.0%
-    necromancer: [['reaper', 'snowball']], // 主案 reaper,lastStand 61.2 に対し 60.3（seed200/200, 対強豪）で同程度。対giant 30→41%、対poisoner 59→69%
+    yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']],
+    necromancer: [['reaper', 'snowball']],
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 /**
@@ -309,9 +309,9 @@ exports.ALT_RECOMMENDED_GEARS = {
 exports.COUNTER_GEARS_FOR_YOU = {
     poisoner: ['lastStand', 'spellWard', 'sturdy'],
     magician: ['lastStand', 'sturdy', 'luckyPurse'],
-    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'], // 呪詛除けが🔥を止める。0.3→27.3%（seed2/300）
-    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 6.3→26.7%
-    necromancer: ['ironLock', 'titanCost', 'sturdy'], // 26.0→41.0%
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'],
+    necromancer: ['ironLock', 'titanCost', 'sturdy'],
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };
