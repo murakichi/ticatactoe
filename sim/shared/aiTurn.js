@@ -134,6 +134,16 @@ const planAITurn = (ai, input, pickHailMary) => {
     if (!result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
         return { kind: 'queue', steps: [...result.skills, 'aiReplan'], locks };
     }
+    // ロックとランダム帯電トークンを同じ手番で撃つ計画は、ロックの対象クリックを先に済ませる。
+    // 『スキルを全部撃ってから対象クリック』の順だと、トークンの着地で対象の自コマが⚡無敵になり、ロックが拒否されて『ロック待ち』が残り、
+    // 次の着手がロックの対象として消費されて手番が進まなくなる。sim/engine.js の skillCosts にキーを足すと価格破壊の乱数表が変わって露呈した (#439)
+    if (result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        const isLockSkill = (sk) => sk.startsWith('onClickUse') && sk.endsWith('Lock');
+        const steps = [...result.skills.filter(isLockSkill), ...result.lockTargets, ...result.skills.filter((sk) => !isLockSkill(sk))];
+        if (result.move !== null)
+            steps.push(result.move);
+        return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
+    }
     const clicks = [];
     if (result.lockTargets)
         clicks.push(...result.lockTargets);

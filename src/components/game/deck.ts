@@ -6,6 +6,12 @@ import { skillCosts, SkillCosts } from './skillCosts';
 /** デッキの枚数（同じスキルは1枚まで） */
 export const DECK_SIZE = 12;
 
+/**
+ * オリジナルスキル（customSkill.ts）がデッキに入るときの idx。汎用スキルの idx とは重ならない。
+ * デッキの1枠を使うので、入るのは最大1枚（重複不可）。使えるのは人間席だけで、AI席・仕様が無い席では Game が外す。
+ */
+export const CUSTOM_SKILL_IDX = 200;
+
 export type SkillCategory = 'basic' | 'token' | 'attack' | 'support' | 'control' | 'poison' | 'buds' | 'charge' | 'ice' | 'fire' | 'shikigami' | 'object';
 
 export type CatalogEntry = {
@@ -147,6 +153,8 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマに乗っているロックのスタックを全て+2します' },
     { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
+    { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します（自分のロックでも他人のロックでも選べます）' },
+    { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面にあるロックのマスの数だけ、打つスキルのコストを軽減します（使った時点の数で固定。軽減後の下限は1。軽減札どうしには効きません）' },
 ];
 
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
@@ -175,7 +183,7 @@ export const skillOf = (idx: number) => SKILL_BY_IDX.get(idx);
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 52],
     tactician: [3, 9, 11, 45, 46, 52, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 13, 35, 47, 52, 53, 56, 60, 92],
+    magician: [2, 9, 10, 13, 26, 47, 52, 53, 56, 60, 64, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92], // 百鬼夜行(73)→バーンアウト(61): コンボ待ちをやめる。対強豪平均 3シードで +4.6/+4.9/+2.3（氷室 37→57、ネクロ 36→59、軍師 24→33。巨人 84→31 は悪化）
     necromancer: [2, 3, 6, 8, 11, 22, 40, 52, 58, 89, 92, 95],
@@ -184,13 +192,36 @@ export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
     cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 52, 73, 92],
     pyromancer: [0, 3, 5, 8, 11, 28, 52, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
     witch: [5, 8, 28, 44, 52, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
-    keysmith: [0, 2, 3, 5, 8, 10, 11, 12, 13, 28, 32, 52], // 初版: 汎用の核（トークン・ライフ・スラッシュ・オピウム）に、ロック系（ロック・ダブル・トリプル）を足した手組み。未調整（#439）
+    keysmith: [0, 2, 5, 8, 10, 11, 12, 13, 28, 32, 52, 95], // トークン(3)→山焼き(95)。対強豪平均 seed2/200: 12.4→16.0, seed3/200: 11.3→15.8（死に札に替えただけの対照は+0.1）。縮地(50)→追い剥ぎ(52)は master の全キャラ置換に従う。docs/tune/keysmith.md
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
 
 /** キャラの推奨デッキ（コピー） */
 export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMMENDED_DECKS[character] ?? RECOMMENDED_DECKS.you)];
+
+/**
+ * 「あなた」の相手キャラ別の専用デッキ（相手が1キャラのときだけ使う。AIPlayer.ts YOU_HOLD_VS と対）。
+ * 一寸の虫に魂なし(92)・火口(87)を入れて、引いたら手札に固定して毎手番使う。docs/tune/you.md
+ * （seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%）。
+ */
+export const COUNTER_DECKS_FOR_YOU: Partial<Record<CharacterId, number[]>> = {
+    magician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    witch: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    cryomancer: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    electrician: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    tactician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 74, 92], // 一寸の虫(92)+鬼門封じ(74)を固定。対軍師 17.0→29.0%（seed2/300）
+};
+
+/** character の推奨デッキ。「あなた」は相手が1キャラで専用デッキがあればそれ */
+export const recommendedDeckAgainst = (character: CharacterId, opponents: CharacterId[]): number[] => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? COUNTER_DECKS_FOR_YOU[kinds[0]] : undefined;
+        if (counter) return [...counter];
+    }
+    return recommendedDeck(character);
+};
 
 /**
  * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
@@ -217,9 +248,12 @@ export const pickRecommendedDeck = (character: CharacterId, rng: () => number = 
     return patterns[Math.floor(rng() * patterns.length)];
 };
 
-/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
+/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx（オリジナルスキルの idx は1枚まで） */
 export const isValidDeck = (deck: readonly number[] | undefined): boolean =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && AVAILABLE_SKILL_IDX.includes(i));
+    !!deck &&
+    deck.length === DECK_SIZE &&
+    new Set(deck).size === DECK_SIZE &&
+    deck.every((i) => Number.isInteger(i) && (AVAILABLE_SKILL_IDX.includes(i) || i === CUSTOM_SKILL_IDX));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 export const resolveDeck = (deck: readonly number[] | undefined, character: CharacterId): number[] =>
