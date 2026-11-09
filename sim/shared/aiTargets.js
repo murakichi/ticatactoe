@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.targetMethods = void 0;
 const Player_1 = require("./Player");
 const util_1 = require("./util");
+const gear_1 = require("./gear");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
 const poison_1 = require("./poison");
@@ -65,6 +66,29 @@ exports.targetMethods = {
      * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
      * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
      */
+    bestBloomLockTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = -Infinity;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > gear_1.GEAR_PARAMS.lockBloomMaxLife || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑' || e.effect === '🌱'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player)))
+                    continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    },
     bestOwnLockTarget(board) {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);

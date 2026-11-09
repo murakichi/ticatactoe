@@ -6,6 +6,8 @@ const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
 exports.GEAR_PARAMS = {
+    /** 芽吹きの錠: ロックを掛けた自陣のコマのうち、ライフがこの値以下でバッズの無いものにバッズが付く */
+    lockBloomMaxLife: 2,
     /** 通常のロック期間(ライフ) */
     lockStack: 6,
     /** 堅牢の鍵のロック期間 */
@@ -77,6 +79,7 @@ exports.GEAR_PARAMS = {
 };
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
+    { id: 'lockBloom', name: '芽吹きの錠', icon: '🌸', desc: `ロックをかけた低ライフの自陣のコマにバッズが付く` },
     { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスが自陣のコマになる` },
     { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockStack}ターンに延長` },
     { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークンで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
@@ -284,7 +287,7 @@ exports.RECOMMENDED_GEARS = {
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'vengeance'],
-    keysmith: ['lastStand', 'buildMania'],
+    keysmith: ['lastStand', 'lockBloom'],
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => { var _a; return ((_a = exports.RECOMMENDED_GEARS[character]) !== null && _a !== void 0 ? _a : ['sturdy']).slice(0, (0, exports.gearSlotsFor)(character)); };

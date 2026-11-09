@@ -1,6 +1,6 @@
 // AIPlayer のメソッド群: 1手番の計画のエントリ（makeMove → planMove）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
-import { lockedSquareCount } from './keysmith';
+import { lockedSquareCount, sealBaseCost, sealReleaseCells } from './keysmith';
 import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -1027,6 +1027,21 @@ export function planMove(
             if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
         }
     }
+    // 鍵師+芽吹きの錠: ライフ2以下でバッズの無い自陣のコマをロックすると、そのコマにバッズが付く（バッズは毎手番の魔力になり、ロックで奪われない）。
+    // 無料の1回で撃てるので、守りの判断のあとに1手番1つだけ。列づくりに効いているコマを優先する
+    if (
+        this.character === 'keysmith' && this.hasLockBloom &&
+        this.countReaches(board, this.playerSymbol) === 0 &&
+        magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')
+    ) {
+        const sprout = this.bestBloomLockTarget(board);
+        if (sprout !== null) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            post[sprout] = addLock(post[sprout], 6);
+            const followup = this.getBestMove(post, life);
+            if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [sprout] };
+        }
+    }
     // 鍵師は空きマスのロックを無視して置けるので、ギアが無くても常にこの判断を行う（敵だけが置けない空きマスを作る）
     if (
         (this.hasEmptyLock || this.character === 'keysmith') &&
@@ -1139,6 +1154,9 @@ export const planMoveMethods = {
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
         // 対強豪平均: seed9/200 21.4→26.3, seed7/100 21.3→28.8（+4.9/+7.5pt）。魔力のしきい値を1〜7で振ってもどれも26〜29%で、8以上では効果が消える
         if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
+            // 無料の1回（手番の最初のロック系）は、安いロックではなく封鎖の断（通常9〜10）に使いたい。魔力が足りて封鎖の断を撃つ判断なら、そちらを返す。
+            // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
+            if (this.sealWanted(args)) return { move: null, skills: ['onClickSeal'] };
             return this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
@@ -1150,6 +1168,16 @@ export const planMoveMethods = {
         const extended = this.extendPlan(result, args);
         if (this.plannedSpend(extended, args[2]) >= goal) return extended;
         return { move: null, skills: [], reroll: {} };
+    },
+
+    /** 鍵師: 封鎖の断を撃つ判断か（スキル選択の結果に封鎖の断が含まれる）。魔力が足りないときは false */
+    sealWanted(this: AIPlayer, args: PlanMoveArgs): boolean {
+        const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
+        if (this.countReaches(board, this.playerSymbol) !== 0) return false;
+        const released = sealReleaseCells(board, this.playerSymbol).length;
+        const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
+        if (magic < sealCost) return false;
+        return this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay).includes('onClickSeal');
     },
 
     /** 計画 result に、残りの魔力で撃てる手札のスキル（対象の要らないもの。トークンは未使用のときだけ）を足す */
