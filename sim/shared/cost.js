@@ -83,8 +83,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
         return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickLockRaid' && mine && env.lockPrev)
         return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
-    if (skillKey === 'onClickUseLock' && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed)
-        return 0; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
+    if (skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed)
+        return skillKey === 'onClickSeal' ? Math.max(1, adjusted - keysmith_1.SEAL_FIRST_CUT) : 0; // 鍵師のパッシブ: 手番の最初のロック系スキルは無料（封鎖の断だけは -SEAL_FIRST_CUT）
     if (skillKey === 'onClickFireWheel' && mine && (0, thermal_1.fireStacksTotal)(env.board) > env.fireBase)
         return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）

@@ -297,17 +297,35 @@ export const infernoIgnite = (board: SquareInfo[], targets: number[], size: numb
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => {
+export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => decayParts(sq, chars, natural).sq;
+
+/** decayTick で減ったライフの内訳(実際に減った量)。natural=自然減衰、burn=🔥の継続ダメージ、poison=☠の継続ダメージ */
+export type DecayParts = { sq: SquareInfo; natural: number; burn: number; poison: number };
+
+/** decayTick と同じ計算で、ライフが何でいくつ減ったかも返す(ダメージの表示用。減った量は実際に減った分で、0未満にはならない) */
+export const decayParts = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): DecayParts => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
-    if (next.player && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
+    const parts = { natural: 0, burn: 0, poison: 0 };
+    if (next.player && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) {
+        next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
+        parts.natural = 1;
+    }
     const burn = burnDamageOf(next, chars);
-    if (burn > 0) next = { ...next, bind: Math.max(0, next.bind - burn) };
+    if (burn > 0) {
+        const bind = Math.max(0, next.bind - burn);
+        parts.burn = next.bind - bind;
+        next = { ...next, bind };
+    }
     // 🔥でライフが0になった(0のまま🔥が乗っている)コマは破壊され、空きマスになる（🔑ロック中・氷結中は除く）
-    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { player: undefined, bind: 0, effects: [] };
+    if (next.player && next.bind === 0 && flameStacks(next) > 0 && !isFrozen(next) && !hasLock(next) && !isEffectWarded(next)) return { sq: { player: undefined, bind: 0, effects: [] }, ...parts };
     // 休眠マス（氷結中・火炎中）の☠は継続ダメージを与えない
     const poison = isDormant(next) ? 0 : next.effects.filter((e) => e.effect === '☠').length;
-    if (poison > 0 && next.bind > 0) next = applyDamage(next, poison, 'poison').sq;
-    return next;
+    if (poison > 0 && next.bind > 0) {
+        const r = applyDamage(next, poison, 'poison');
+        parts.poison = next.bind - r.sq.bind;
+        next = r.sq;
+    }
+    return { sq: next, ...parts };
 };
 
 // ---- バーンアウト（汎用スキル）----
@@ -379,6 +397,21 @@ export const graft = (board: SquareInfo[], cell: number, player: SquareInfo['pla
     const receivers = budReceivers(board, cell, player, size).filter((k) => !picked || picked.includes(k));
     for (const k of receivers) board[k] = { ...board[k], effects: [...board[k].effects, { effect: '🌱' }] };
     return receivers;
+};
+
+/**
+ * ひこばえ（受け手の選び方込み）: 受け手が GRAFT_MAX を超えるときは pick で無作為に GRAFT_MAX 個を選ぶ。
+ * 🌱が付いたマスを返す。board を直接書き換える。Game.tsx と sim/engine.js が同じ手順で使う（乱数だけ呼び出し側が渡す）
+ */
+export const suckerGraft = (
+    board: SquareInfo[],
+    cell: number,
+    player: SquareInfo['player'],
+    size: number,
+    pick: (receivers: number[], n: number) => number[]
+): number[] => {
+    const receivers = budReceivers(board, cell, player, size);
+    return graft(board, cell, player, size, receivers.length > GRAFT_MAX ? pick(receivers, GRAFT_MAX) : undefined);
 };
 
 /** 風の落とし子の候補: player のコマで🌱を持てるマス（昇順） */
@@ -604,6 +637,10 @@ export const canSacrifice = (sq: SquareInfo, me: SquareInfo['player']): boolean 
 /** 殉火の🔥の対象: 使用者以外のコマのうち、ライフが threshold 以下で、🔑ロック中でなく、雷霆の巫の⚡無敵でないもの（ライフ0も含む） */
 export const sacrificeTargets = (board: SquareInfo[], threshold: number, me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
     infernoTargets(board, me, chars).filter((i) => board[i].bind <= threshold && !hasLock(board[i])); // 殉火はロック中のコマを対象にしない（業火と違い解除しない）
+
+/** 殉火で犠牲にできる自陣のコマ: ライフが残り、🔑ロックがなく、焼ける敵が1つ以上いるもの */
+export const sacrificeCandidates = (board: SquareInfo[], me: SquareInfo['player'], chars: readonly CharacterId[]): number[] =>
+    board.map((sq, i) => (canSacrifice(sq, me) && sacrificeTargets(board, sq.bind, me, chars).length > 0 ? i : -1)).filter((i) => i !== -1);
 
 /**
  * 殉火: cell の自陣のコマのライフをゼロにして、そのライフ(threshold)以下の敵コマ全てに🔥を1スタック付ける

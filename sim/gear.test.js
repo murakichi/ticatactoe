@@ -183,6 +183,23 @@ test('道連れの鍵: 外れたらロックは付かない', () => {
     assert.ok(!sq.effects.some((x) => x.effect === '🔑'));
 });
 
+// 火炎・氷結・ダブル帯電のトークンも『トークン系スキル』なので、道連れの鍵・収穫が効く（本番(Game.tsx)も同じ。以前は本番だけ通していなかった）
+test('道連れの鍵・収穫: 火炎・氷結・ダブル帯電のトークンにも効く（rng=0 で必ず当たる）', () => {
+    for (const [skill, label] of [['flameToken', '火炎'], ['frostToken', '氷結'], ['doubleChargeToken', 'ダブル帯電']]) {
+        const s = game([['bindingLock', 'harvest'], []], ['electrician', 'you']);
+        s.magic[0] = 99;
+        s.rng = () => 0;
+        e.SKILLS[skill](s);
+        const mine = s.board.filter((x) => x.player === H);
+        assert.ok(mine.length >= 1, label + ': コマが置かれる');
+        const locked = mine.some((x) => x.effects.some((f) => f.effect === '🔑'));
+        const frozenOnly = skill === 'frostToken'; // 氷結中のマスにはロックが掛からない（道連れの鍵は働いた扱いで収穫には数える）
+        assert.ok(frozenOnly ? !locked : locked, label + ': ロック ' + (frozenOnly ? '(氷結中は付かない)' : ''));
+        assert.ok(s.stats.bindingLock >= 1, label + ': 道連れの鍵が働いた統計');
+        assert.ok(s.stats.harvestMagic >= 1, label + ': 収穫が働いた統計');
+    }
+});
+
 test('増援 / 軽量トークン: トークンのライフが+2 / -1（コストは軽量トークンだけ-1）', () => {
     const a = game([['reinforce'], []]);
     a.magic[0] = 99;
@@ -552,6 +569,89 @@ test('術中の加護: 帯電の発火も、🔥を付けた瞬間のダメー�
         thermal.ignite(s.board, [6], s.size);
         return s.board[6].bind;
     }
+});
+
+test('雪だるま: 最初は+0から、引くたびに+1ずつ積み上がり、10以上が3回出たらリセット(最初に引いた分も数える)', () => {
+    const s = game([['snowball'], []]);
+    assert.strictEqual(s.ramp[0].stack, 1, '最初に引いたあと1段');
+    assert.strictEqual(s.ramp[0].hits, s.life >= 10 ? 1 : 0, '最初に10以上を引いたら数える');
+    assert.deepStrictEqual(s.ramp[1], { stack: 0, hits: 0 }, '装備していない席は積み上がらない');
+    const t = gear.rampAfterRoll(gear.rampAfterRoll(gear.rampAfterRoll(gear.rampStart(), 10), 12), 15);
+    assert.deepStrictEqual(t, { stack: 0, hits: 0 });
+    assert.strictEqual(gear.rampBonus(gear.rampStart()), 0);
+});
+
+test('雪だるま: 長い試合では平均ライフが装備なしより高い(乱数固定)', () => {
+    const avg = (gears) => {
+        let sum = 0, n = 0;
+        for (let seed = 1; seed <= 20; seed++) {
+            const s = game(gears, ['you', 'you'], seed);
+            for (let k = 0; k < 8; k++) { // 💙の手番を4回ぶん
+                if (k % 2 === 0) { sum += s.life; n++; }
+                e.placeMove(s, s.board.findIndex((sq) => !sq.player));
+            }
+        }
+        return sum / n;
+    };
+    assert.ok(avg([['snowball'], []]) > avg([[], []]) + 0.5);
+});
+
+test('死神の鎌: ライフ平均+2 / 誰かが装備していれば、ライフ0の駒(誰のものでも)が手番の終わりに壊れる', () => {
+    assert.strictEqual(gear.gearLifeBonus(['reaper']), 2);
+    const run = (gears) => {
+        const s = game(gears);
+        s.board[5] = { player: H, bind: 0, effects: [] }; // 自分のライフ0の駒
+        s.board[6] = { player: C, bind: 0, effects: [] }; // 相手のライフ0の駒
+        s.board[9] = { player: C, bind: 0, effects: [{ effect: '🔑', stack: 3 }] }; // ロック中は壊れない
+        s.board[10] = { player: C, bind: 0, effects: [{ effect: '❄' }] }; // 氷結中は壊れない
+        s.board[11] = { player: C, bind: 5, effects: [] }; // ライフが残っている駒は壊れない
+        e.placeMove(s, 0);
+        return s;
+    };
+    const s = run([[], ['reaper']]); // ⭕だけが装備していても、💙の駒も壊れる
+    assert.strictEqual(s.board[5].player, undefined);
+    assert.strictEqual(s.board[6].player, undefined);
+    assert.strictEqual(s.board[9].player, C, 'ロック中は壊れない');
+    assert.strictEqual(s.board[10].player, C, '氷結中は壊れない');
+    assert.strictEqual(s.board[11].player, C);
+    const t = run([[], []]);
+    assert.strictEqual(t.board[6].player, C, 'ギアなしなら残る');
+});
+
+test('死神の鎌: ⚡で無敵の雷霆の巫の駒は壊れない / 勝負が付いた手番は壊さない', () => {
+    const s = e.newGame({ chars: ['you', 'electrician'], gears: [[], ['reaper']], rng: e.makeRng(42) });
+    s.board[5] = { player: C, bind: 0, effects: [{ effect: '⚡' }] };
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[5].player, C);
+    const w = game([[], ['reaper']]);
+    [0, 1, 2].forEach((i) => { w.board[i] = { player: H, bind: 0, effects: [] }; });
+    e.placeMove(w, 3); // 💙が4つ揃える
+    assert.strictEqual(w.winner, H);
+    assert.strictEqual(w.board[0].player, H, '勝負が付いたら壊さない');
+});
+
+test('芽吹き: ライフ7以上のコマを設置するとき🌱が付く(6以下・補強・装備なしでは付かない)', () => {
+    const place = (gears, life, pre) => {
+        const s = game(gears);
+        s.life = life;
+        if (pre) s.board[5] = pre;
+        e.placeMove(s, 5);
+        return s.board[5];
+    };
+    const buds = (sq) => sq.effects.filter((x) => x.effect === '🌱').length;
+    assert.strictEqual(buds(place([['budSeed'], []], 7)), 1, 'ライフ7で付く');
+    assert.strictEqual(buds(place([['budSeed'], []], 12)), 1);
+    assert.strictEqual(buds(place([['budSeed'], []], 6)), 0, 'ライフ6は付かない');
+    assert.strictEqual(buds(place([[], []], 9)), 0, '装備なしは付かない');
+    assert.strictEqual(buds(place([['budSeed'], []], 9, { player: H, bind: 3, effects: [] })), 0, '補強は設置ではない');
+});
+
+test('芽吹き: 🔥のマスにはバッズが付かない(seedBud)', () => {
+    const t = require('./shared/tokenAfter');
+    const burning = { player: H, bind: 9, effects: [{ effect: '🔥' }] };
+    assert.strictEqual(t.seedBud(burning, H, ['budSeed']), null);
+    assert.strictEqual(t.seedBud({ player: H, bind: 7, effects: [] }, H, ['budSeed']).effects.length, 1);
+    assert.strictEqual(t.seedBud({ player: C, bind: 9, effects: [] }, H, ['budSeed']), null, '相手のコマには付かない');
 });
 
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
