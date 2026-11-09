@@ -278,7 +278,7 @@ exports.randomGears = randomGears;
 exports.RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['spellWard', 'luckyPurse'], // 旧主案に戻す: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）
+    magician: ['snowball', 'luckyPurse'], // spellWard から差し替え（雪だるま。環境再編後 対強豪平均 53.0→59.2、対ネクロ 7→17、対陰陽師 25→41、seed22/100。docs/tune/magician.md 試行87）
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
     necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
