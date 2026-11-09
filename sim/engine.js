@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch', 'keysmith'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch', 'keysmith', 'dragonMiko'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -69,6 +69,7 @@ const tokenAfterMod = require('./shared/tokenAfter');
 const tokenPlaceMod = require('./shared/tokenPlace');
 const deadlockMod = require('./shared/deadlock');
 const keysmithMod = require('./shared/keysmith');
+const dragonMod = require('./shared/dragon');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
 const genericMod = require('./shared/generic');
@@ -410,6 +411,8 @@ function newGame(opts = {}) {
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
+        // 龍神の巫女（#527）: 席ごとの形態（miko/dragon）と、覚醒時に消したマスの数 N
+        dragon: chars.map(() => dragonMod.newDragonState()),
         // 雪だるま: 席ごとのライフ期待値の積み上げとリセットまでの回数
         ramp: gears.map(() => gear.rampStart()),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
@@ -653,6 +656,17 @@ function settleWinner(s) {
     let w = calculateWinner(symbolsOf(s.board));
     const byLines = !!w;
     if (w) {
+        // 龍の防壁（龍神の巫女・#527）: 龍のあいだに相手が列を揃えたら、かわりにその列と自陣のコマが消滅して巫女に戻る
+        const dragonHolder = s.chars.findIndex((c, seat) => c === 'dragonMiko' && s.dragon[seat].form === 'dragon' && SYMBOLS[seat] !== w);
+        if (dragonHolder >= 0) {
+            dragonMod.applyBulwark(s.board, w, SYMBOLS[dragonHolder]);
+            s.dragon[dragonHolder] = dragonMod.newDragonState();
+            bumpStat(s, 'dragonBulwark');
+            w = calculateWinner(symbolsOf(s.board));
+            if (!w) { s.winner = undefined; return; }
+        }
+    }
+    if (w) {
         const holder = s.gears.findIndex((g, seat) => hasGear(g, 'lastStand') && !s.lastStandUsed[seat] && SYMBOLS[seat] !== w);
         if (holder >= 0) {
             for (const line of geometryForCells(s.board.length).winLines) {
@@ -758,6 +772,7 @@ function advanceTurn(s) {
         scorch: scorchForNext, // 焦土(上で計算)
         root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
         objects: objRes.magic, // 大木
+        dragon: dragonMod.dragonMagicBonus(s.dragon[next]), // 龍神の巫女（龍）: 覚醒時に消したマスの数ぶん
         rent: hasGear(s.gears[next], 'groundRent') ? gear.rentGain(objectsMod.activeObjectCount(s.board, sym)) : 0, // 地代: 働いている自陣のオブジェクト1つにつき+1
     });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
@@ -778,7 +793,7 @@ function advanceTurn(s) {
     }
     // 雪だるま: 引いたライフを数えて、手番ごとに期待値が1段積み上がる。10以上が3回出たらリセット
     const rampOn = hasGear(s.gears[next], 'snowball');
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + dragonMod.dragonLifeBonus(s.dragon[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
     if (rampOn) {
         s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
         if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
@@ -942,6 +957,7 @@ function placeMove(s, i) {
         if (!r) return false;
         bumpStat(s, 'objectSkill_' + s.objectTool);
         s.objectTool = null;
+        dragonCheck(s);
         return true;
     }
     if (s.objectPlacing) {
@@ -951,6 +967,7 @@ function placeMove(s, i) {
         objectsMod.sweepBurntTrees(board);
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
+        dragonCheck(s);
         return true;
     }
     if (s.useShikigamiPlace) {
@@ -2491,6 +2508,44 @@ function onClickMogaribue(s) {
     bumpStat(s, 'mogaribueDamage', r.damage * r.hit.length);
 }
 
+// ---- 龍神の巫女（#527）[FAITHFUL] Game.tsx dragonCheck / onClickPrayer / onClickRoar ----
+// 覚醒: 巫女のとき自陣の建造物が4つになったら、囲んだ範囲と自陣の建造物を消滅させて龍になる。消したマスの数 N を覚えておく
+function dragonCheck(s) {
+    const seat = s.turn;
+    if (s.chars[seat] !== 'dragonMiko' || s.dragon[seat].form !== 'miko') return;
+    const plan = dragonMod.awakenPlan(s.board, curPlayer(s));
+    if (!plan) return;
+    const n = dragonMod.applyAwaken(s.board, plan);
+    s.dragon[seat] = { form: 'dragon', n };
+    bumpStat(s, 'dragonAwaken');
+    bumpStat(s, 'dragonAwakenN', n);
+}
+function prayerDeck(s) { return s.decks ? s.decks[s.turn] : undefined; }
+function prayerLegal(s) { return dragonMod.prayerUsable(s.board, prayerDeck(s)); }
+// 八百万の祈り: デッキ内の建造物設置スキルをランダムに1つ発動する（中身のコストは払わない）。設置マスは自分で選ぶ
+function onClickPrayer(s) {
+    const kind = dragonMod.pickPrayerKind(prayerDeck(s), s.rng);
+    s.objectPlacing = kind;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickPrayer, false, false, 'onClickPrayer'), 'onClickPrayer');
+    bumpMagicCount(s);
+    bumpStat(s, 'prayer');
+    bumpStat(s, 'object_' + kind);
+}
+function roarCost(s) { return calculateCost(s, costsOf(s).onClickRoar, false, false, 'onClickRoar'); }
+function roarLegal(s) { return s.chars[s.turn] === 'dragonMiko' && s.dragon[s.turn].form === 'dragon' && dragonMod.roarUsable(s.board, curPlayer(s)); }
+// 龍の咆哮: 自陣のオブジェクト全ての周囲8マスの敵コマを破壊し、そのあと自陣のオブジェクト全てに⚡。ターン終了
+function onClickRoar(s) {
+    const cost = roarCost(s);
+    const r = dragonMod.roar(s.board, curPlayer(s), s.chars);
+    spendMagic(s, cost, 'onClickRoar');
+    bumpMagicCount(s);
+    addCorpses(s, r.destroyed);
+    bumpStat(s, 'roar');
+    bumpStat(s, 'roarDestroyed', r.destroyed);
+    bumpStat(s, 'roarCharged', r.charged.length);
+    endTurn(s);
+}
+
 // 封鎖の断（鍵師・#439）: 自陣7・空きマス2のロック、敵のロックを解除して解除数ぶんダメージ。ターン終了 [FAITHFUL] Game.tsx onClickSeal
 function sealCost(s) {
     const n = keysmithMod.sealReleaseCells(s.board, curPlayer(s)).length;
@@ -2647,6 +2702,8 @@ const SKILLS = {
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
+    prayer: onClickPrayer,
+    roar: onClickRoar,
     lockConvert: onClickLockConvert,
     lockDiscount: onClickLockDiscount,
     lockRaid: onClickLockRaid,

@@ -10,6 +10,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { addCharge, chargeStacks } from './charge';
 import { absorbDestroy } from './thermal';
+import { OBJECT_DEFS, OBJECT_KINDS, ObjectKind, objectLandableCells } from './objects';
 
 /** 覚醒に必要な自陣の建造物の数 */
 export const AWAKEN_BUILDINGS = 4;
@@ -163,3 +164,28 @@ export const roar = (board: SquareInfo[], player: Player, chars: readonly (Chara
 /** 咆哮を撃てるか（自陣のオブジェクトがある） */
 export const roarUsable = (board: SquareInfo[], player: Player): boolean =>
     board.some((sq) => sq.object !== undefined && sq.player === player);
+
+/** 八百万の祈りが引ける建造物の種類: デッキの中のオブジェクト設置スキル（deck が無ければ全種類） */
+export const prayerKinds = (deck?: readonly number[]): ObjectKind[] =>
+    OBJECT_KINDS.filter((k) => !deck || deck.includes(OBJECT_DEFS[k].idx));
+
+/** 祈りを使えるか（引ける種類があり、置ける空きマスがある） */
+export const prayerUsable = (board: SquareInfo[], deck?: readonly number[]): boolean =>
+    prayerKinds(deck).length > 0 && objectLandableCells(board).length > 0;
+
+/** 祈りで引く種類を抽選する。rng は [0,1) */
+export const pickPrayerKind = (deck: readonly number[] | undefined, rng: () => number): ObjectKind | undefined => {
+    const kinds = prayerKinds(deck);
+    return kinds.length ? kinds[Math.floor(rng() * kinds.length)] : undefined;
+};
+
+/**
+ * 龍の防壁。相手 winner が列を揃えたとき、揃った列のマスと龍の持ち主 holder の自陣のコマをすべて消滅させる
+ * （土壇場の防壁と同じ処理。ロック・氷結を貫通）。board を直接書き換える。ほかの席への永続ボーナスは付けない。
+ */
+export const applyBulwark = (board: SquareInfo[], winner: Player, holder: Player): void => {
+    for (const line of geometryForCells(board.length).winLines) {
+        if (line.every((idx) => !board[idx].object && board[idx].player === winner)) for (const idx of line) board[idx] = empty();
+    }
+    for (let idx = 0; idx < board.length; idx++) if (board[idx].player === holder) board[idx] = empty();
+};

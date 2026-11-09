@@ -1,11 +1,12 @@
 // 自動生成: src/components/game/dragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.roarUsable = exports.roar = exports.roarVictims = exports.dragonMagicBonus = exports.dragonLifeBonus = exports.applyAwaken = exports.awakenPlan = exports.enclosedCells = exports.ownBuildingCells = exports.isDragonMiko = exports.newDragonState = exports.DRAGON_N_CAP = exports.DRAGON_LIFE_PLUS = exports.DRAGON_LIFE_BASE = exports.MIKO_LIFE_MEAN = exports.AWAKEN_BUILDINGS = void 0;
+exports.applyBulwark = exports.pickPrayerKind = exports.prayerUsable = exports.prayerKinds = exports.roarUsable = exports.roar = exports.roarVictims = exports.dragonMagicBonus = exports.dragonLifeBonus = exports.applyAwaken = exports.awakenPlan = exports.enclosedCells = exports.ownBuildingCells = exports.isDragonMiko = exports.newDragonState = exports.DRAGON_N_CAP = exports.DRAGON_LIFE_PLUS = exports.DRAGON_LIFE_BASE = exports.MIKO_LIFE_MEAN = exports.AWAKEN_BUILDINGS = void 0;
 const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const thermal_1 = require("./thermal");
+const objects_1 = require("./objects");
 /** 覚醒に必要な自陣の建造物の数 */
 exports.AWAKEN_BUILDINGS = 4;
 /** 巫女のライフ平均（通常5から-2）。util.ts の LIFE_MEANS.dragonMiko と同値 */
@@ -141,3 +142,30 @@ exports.roar = roar;
 /** 咆哮を撃てるか（自陣のオブジェクトがある） */
 const roarUsable = (board, player) => board.some((sq) => sq.object !== undefined && sq.player === player);
 exports.roarUsable = roarUsable;
+/** 八百万の祈りが引ける建造物の種類: デッキの中のオブジェクト設置スキル（deck が無ければ全種類） */
+const prayerKinds = (deck) => objects_1.OBJECT_KINDS.filter((k) => !deck || deck.includes(objects_1.OBJECT_DEFS[k].idx));
+exports.prayerKinds = prayerKinds;
+/** 祈りを使えるか（引ける種類があり、置ける空きマスがある） */
+const prayerUsable = (board, deck) => (0, exports.prayerKinds)(deck).length > 0 && (0, objects_1.objectLandableCells)(board).length > 0;
+exports.prayerUsable = prayerUsable;
+/** 祈りで引く種類を抽選する。rng は [0,1) */
+const pickPrayerKind = (deck, rng) => {
+    const kinds = (0, exports.prayerKinds)(deck);
+    return kinds.length ? kinds[Math.floor(rng() * kinds.length)] : undefined;
+};
+exports.pickPrayerKind = pickPrayerKind;
+/**
+ * 龍の防壁。相手 winner が列を揃えたとき、揃った列のマスと龍の持ち主 holder の自陣のコマをすべて消滅させる
+ * （土壇場の防壁と同じ処理。ロック・氷結を貫通）。board を直接書き換える。ほかの席への永続ボーナスは付けない。
+ */
+const applyBulwark = (board, winner, holder) => {
+    for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
+        if (line.every((idx) => !board[idx].object && board[idx].player === winner))
+            for (const idx of line)
+                board[idx] = empty();
+    }
+    for (let idx = 0; idx < board.length; idx++)
+        if (board[idx].player === holder)
+            board[idx] = empty();
+};
+exports.applyBulwark = applyBulwark;
