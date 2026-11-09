@@ -384,6 +384,11 @@ export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
 export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<CharacterId, GearId[]>>>> = {
     tactician: { cryomancer: ['springThunder', 'priceWreck'] },
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    necromancer: { cryomancer: ['springThunder', 'lastStand'] }, // 31→84%（seed2/3, 各150試合）
+    cryomancer: {
+        magician: ['reaper', 'lastStand'], // 9→79%（同）。死神の鎌が魔法使いのバッズ・ロックのコマを削る
+        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+    },
 };
 
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */

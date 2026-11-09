@@ -323,6 +323,11 @@ exports.COUNTER_GEARS_FOR_YOU = {
 exports.COUNTER_GEARS = {
     tactician: { cryomancer: ['springThunder', 'priceWreck'] },
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    necromancer: { cryomancer: ['springThunder', 'lastStand'] },
+    cryomancer: {
+        magician: ['reaper', 'lastStand'],
+        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+    },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
 const counterGearsFor = (character, opponents) => {
