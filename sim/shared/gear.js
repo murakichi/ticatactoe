@@ -323,17 +323,14 @@ exports.COUNTER_GEARS_FOR_YOU = {
 exports.COUNTER_GEARS = {
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
-        magician: ['lastStand', 'budSeed'], // 42→56%（seed2/3, 各150試合）
     },
     giant: {
-        magician: ['lastStand', 'budSeed'],
         cryomancer: ['lastStand', 'budSeed'], // 35→60%（同）
     },
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] },
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
     necromancer: { cryomancer: ['springThunder', 'lastStand'] },
     cryomancer: {
-        magician: ['reaper', 'lastStand'],
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
     },
 };
