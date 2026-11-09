@@ -872,12 +872,17 @@ function planBudsAndFire(this: AIPlayer, c: PlanContext): AIResult | null {
         for (const plan of objectPlans) {
             const pc = this.calculateAICost(costs[plan.key], false, false, plan.key);
             if (necroFoe || !availableSkills.includes(plan.idx) || this.skillKinds.has(plan.key) || chargeClicks.some((c) => c.skill === plan.key)) continue;
-            if (pc > plan.cap || magic < pc || board.some((sq) => sq.object === plan.kind && sq.player === this.playerSymbol)) continue;
+            if (pc > plan.cap || magic < pc || (plan.kind !== 'boulder' && board.some((sq) => sq.object === plan.kind && sq.player === this.playerSymbol))) continue;
             if (worth && magic >= infernoNow() && magic - pc < infernoNow()) continue;
             const geo = geometryForCells(board.length);
             let cell: number | null = null;
+            // 大岩は敵の勝ち筋(リーチの空き・敵が並ぶ列の空き)を塞ぐマスに置く。それが無いときは自陣のオブジェクトを作るためだけに中央寄りへ
+            if (plan.kind === 'boulder') {
+                cell = this.bestBoulderCell(board);
+                if (cell === null && board.some((sq) => sq.object === 'boulder' && sq.player === this.playerSymbol)) continue; // 塞ぐ先が無く、既に持っているなら置かない
+            }
             let bestN = -1;
-            board.forEach((sq, k) => { if (objectLandable(sq) && geo.surroundRange(k).length > bestN) { bestN = geo.surroundRange(k).length; cell = k; } });
+            if (cell === null) board.forEach((sq, k) => { if (objectLandable(sq) && geo.surroundRange(k).length > bestN) { bestN = geo.surroundRange(k).length; cell = k; } });
             if (cell === null) continue;
             chargeClicks.push({ skill: plan.key, target: cell });
             board = board.slice();

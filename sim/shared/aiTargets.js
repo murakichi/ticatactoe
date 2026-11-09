@@ -13,6 +13,35 @@ const charge_1 = require("./charge");
 const aiConstants_1 = require("./aiConstants");
 const objects_1 = require("./objects");
 exports.targetMethods = {
+    /**
+     * 大岩（2ターンのロック付きで置く邪魔者。オブジェクトは列に数えない）を置くマス: 敵の勝ち筋を塞ぐ空きマス。
+     * 敵のリーチ(敵3つ＋設置できる空き1つ)の空きマスを最優先。無ければ、敵が2つ以上並び自陣のコマが無い列に含まれる空きマスの数が最大のもの。無ければ null
+     */
+    bestBoulderCell(board) {
+        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
+        let reach = null;
+        const score = board.map(() => 0);
+        for (const line of lines) {
+            const foes = line.filter((k) => this.isEnemy(board[k].player) && !board[k].object).length;
+            const mine = line.filter((k) => board[k].player === this.playerSymbol).length;
+            if (mine > 0)
+                continue;
+            const empties = line.filter((k) => (0, objects_1.objectLandable)(board[k]));
+            if (foes === 3 && empties.length === 1 && line.every((k) => k === empties[0] || (this.isEnemy(board[k].player) && !board[k].object)))
+                reach = empties[0];
+            if (foes >= 2)
+                empties.forEach((k) => { score[k] += foes === 3 ? 10 : foes; });
+        }
+        if (reach !== null)
+            return reach;
+        let best = null;
+        let bestScore = 0;
+        score.forEach((v, k) => { if (v > bestScore && (0, objects_1.objectLandable)(board[k])) {
+            bestScore = v;
+            best = k;
+        } });
+        return best;
+    },
     /** 解錠の碑(136)を置くマス: 周囲八マスの🔑ロック中の敵コマが最も多い、設置できる空きマス（2コ以上。同数なら中央寄り）。無ければ null */
     bestUnlockStoneCell(board) {
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
