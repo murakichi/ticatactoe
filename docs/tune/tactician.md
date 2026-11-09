@@ -4,7 +4,7 @@
 - 現在の推奨設定: gears=[lastStand, priceWreck] deck=[3,9,11,16,45,46,64,92,93,94,95,96](新スキル4種+一寸の虫に魂なし, 試行#26〜#27) AIフラグ=lsAggro=1・lockNew=1・witchDig=2・digMargin=3・freeTok=1・smallFryMin=2(既定)
 - 強豪リスト(2026-11-09 固定): necromancer,electrician,magician,keysmith,giant,cryomancer
 - 基準線(対強豪平均基準, master 2f1b091, seed1/60): **対強豪平均 39.7% / 7位** / 1位 electrician 55.7% / (参考)field 49.2%・最悪対面 electrician 27%・不利4/有利2。対強豪の内訳: giant 62 / necromancer 50 / magician 37 / keysmith 33 / cryomancer 30 / electrician 27。以下の古い数値(66.7%・2位など)は field 基準で、今の基準線と比べない。
-- 連続不採用回数: 4(#33 gear, #34 deck, #35 meta, #36 strategy。基準変更で数え直し。2026-11-09)
+- 連続不採用回数: 5(#33 gear, #34 deck, #35 meta, #36 strategy, #37 joint。基準変更で数え直し。2026-11-09)
 - 関連 issue: #85(魔力律速・数値案), #256(新推奨デッキの環境順位未測定)。調べた日 2026-11-09
 - 状態: running(7位。1位まで16pt)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
@@ -25,6 +25,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 37 | joint(ギア組の再測定, 対強豪6体) | seed4/150: 基準 lastStand+priceWreck 33.4±3.0 / lightToken+priceWreck 37.0±3.1(+3.6) / chainDiscount+priceWreck 27.3 / lastStand+harvest 20.7。最良 lightToken+priceWreck を追試: seed2/200 42.0(基準40.0, +2.0)、seed3/400 39.0(基準40.3, -1.3) | 追試で+2.0→-1.3 と符号が変わり誤差。lightToken(軽量トークン化)は軍師に効かない。harvest/chainDiscount は大幅悪化 | 不採用 |
 | 36 | strategy(一寸の虫の撃つ条件) | #35 の `smallFryMin` はフラグでなく `aiSkillChoice.ts` の直書き `>= 2`（フラグは存在しない）。軍師だけ `>= 1` に緩めて対強豪6体 seed2/200: 基準 40.0±2.7 → 40.0±2.7(±0.0, 対キャラ別も同じ) | 敵の低ライフ(≤3)コマがちょうど1個の場面は撃つ価値が低く起きないため変化なし。電気使いの帯電コマは壊せる対象にならない。コードは元に戻した | 不採用 |
 | 35 | meta(対電気使い 26%, 強豪の最悪対面) | 推奨設定の probe-usage(--deck/--gears を明示。`probe-usage` を引数なしで回すと別構成で勝率7%になり、診断にならない)で、一寸の虫(smallFry)は使った試合の勝率67%だが15%の試合でしか撃たれない。撃つ条件 `smallFryMin` 2→1 で対電気・魔法使い・鍵師・氷室(seed2/200) | 2も1も 35.2% で全相手とも完全一致=フラグが sim の本番AIに効いていない(または条件に入らない)。効果は測れていない | 不採用(測定不能。smallFryMin を sim で効かせる経路が要調査) |
 | 34 | deck(1枚差し替え24近傍, 対強豪6体) | `--scan deck --neighbors 24 --games 60 --seed 1 --opp <強豪6体>`。基準 39.7±4.9。最良 -11(ダブルトークン)+16(ポイズントークン) 46.9(+7.2, z≈1.0)。2位以下は 42.2 以下で、基準を下回る札が大半(最下位は氷結ダブルトークン抜き 24.4、初霜抜き+両トークン 30.3)。最良を seed2/200 で追試: 基準 40.0±2.7 → 42.4±2.7(+2.4。対necro +4/対magician +6/対cryo +5、対keysmith -3)。採用条件(+1.96×SE≈3.7)に届かない | 探索の+7.2は勝者の呪いで+2.4まで縮んだ。方向は一貫して正だが誤差内 | 追試 seed3/400: 基準 40.3±1.9 → 40.4±1.9(+0.1)。誤差と判明 → **不採用** |
