@@ -14,8 +14,10 @@ const { CHARACTERS } = engine;
 // 何も渡さないと全キャラが「デッキ未指定・ギアなし」で戦い、実ゲームや環境順位(probe-top)とかけ離れる（陰陽師が極端に弱くなる）
 function aiLoadout(chars, rng, opts) {
     const out = {};
-    if (opts.deck) out.decks = chars.map((c) => deckMod.pickRecommendedDeck(c, rng));
-    if (opts.gears) out.gears = chars.map((c) => gearMod.pickRecommendedGears(c, rng));
+    // 「あなた」は相手が1キャラに決まるとき相手別の専用デッキ・ギア（本番 App.tsx と同じ。rng は消費しない）
+    const foesOf = (seat) => chars.filter((_, i) => i !== seat);
+    if (opts.deck) out.decks = chars.map((c, seat) => (c === 'you' ? deckMod.recommendedDeckAgainst(c, foesOf(seat)) : deckMod.pickRecommendedDeck(c, rng)));
+    if (opts.gears) out.gears = chars.map((c, seat) => (c === 'you' ? gearMod.recommendedGearsAgainst(c, foesOf(seat)) : gearMod.pickRecommendedGears(c, rng)));
     return out;
 }
 
@@ -58,4 +60,4 @@ function pickChars(n, fixed, rng) {
 }
 
 
-module.exports = { runGame, pickChars };
+module.exports = { runGame, pickChars, aiLoadout };
