@@ -1133,10 +1133,6 @@ describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', ()
         b[15] = { player: '💙', bind: 3, effects: [], object: 'fort' };
         expect(run('keysmith', 8, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
     });
-    it('魔力が封鎖の断(9〜10)に届くなら、安いロックではなく封鎖の断を優先する（無料の1回を封鎖の断に使う）', () => {
-        const r = run('keysmith', 14, [11, 2, 0]);
-        expect(r.skills).toEqual(['onClickSeal']);
-    });
     it('鍵師以外は立てない', () => {
         expect(run('you', 8, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
     });
@@ -1158,6 +1154,11 @@ describe('鍵師AI: 芽吹きの錠でバッズを付ける', () => {
         const r = run(true);
         expect(r.skills).toContain('onClickUseLock');
         expect(r.lockTargets).toEqual([5]);
+    });
+    it('魔力が封鎖の断(9〜10)に届くなら、安いロックではなく封鎖の断を優先する（無料の1回を封鎖の断に使う）', () => {
+        const ai = new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', 'you'], undefined, false, false, undefined, true);
+        const r = ai.makeMove(board(), 14, skillCosts, 2, 5, [11, 2, 0], false);
+        expect(r.skills).toEqual(['onClickSeal']);
     });
     it('ギアが無ければこの盤面ではロックしない（ライフ2は守りの対象ではない）', () => {
         expect(run(false).lockTargets).toBeUndefined();
