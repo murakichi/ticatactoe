@@ -343,7 +343,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
+    pyromancer: ['buildMania', 'groundRent'], // 普請道楽+地代(tune-top #70。大岩/一言居士を安く置いて全スキル-3と地代のマジックを得る。対強豪 38.5→59.2%: seed13/200。旧: 余韻+復讐の刃 #50)
     keysmith: ['lastStand', 'buildMania'], // 普請道楽: 砦/市場を1つ立てると全スキル-3（魔力が律速の鍵師の資源になる）。対強豪平均 seed9/11/13・各200: 26.3/25.6/27.1→29.7/30.8/29.8（docs/tune/keysmith.md 試行14）
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
