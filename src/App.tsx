@@ -5,7 +5,7 @@ import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
-import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears } from './components/game/gear';
+import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst } from './components/game/gear';
 import {
     DECK_SIZE,
     CUSTOM_SKILL_IDX,
@@ -21,6 +21,7 @@ import {
     recommendedDeck,
     saveDeck,
     pickRecommendedDeck,
+    recommendedDeckAgainst,
 } from './components/game/deck';
 import { SimPanel } from './components/SimPanel';
 import { CustomSkillCreator } from './components/CustomSkillCreator';
@@ -123,13 +124,16 @@ export const App = () => {
     // 開始時に席の設定を確定する。ギアを選んでいないAI席は、キャラに合うギアを自分で選ぶ（人間が選んだギアはそのまま）。
     // デッキを指定していない席は推奨デッキ。AI席は推奨デッキの主案と別案(複数パターン)からひとつ選ぶだけで、カードをランダムに入れ替えない
     const buildGamePlayers = (): PlayerConfig[] =>
-        players.slice(0, playerCount).map((p) => {
-            const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: pickRecommendedGears(p.character) } : p;
+        players.slice(0, playerCount).map((p, seat, all) => {
+            const others = all.filter((_, i) => i !== seat).map((q) => q.character);
+            const aiGears = () => (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
+            const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: aiGears() } : p;
             // オリジナルスキルは人間席だけ。AI席のデッキに入っていたら推奨デッキに戻す
             const hasCustom = !!p.deck?.includes(CUSTOM_SKILL_IDX);
             if (hasCustom && (p.isAI || !customSkill)) return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
             if (hasCustom) return { ...withGears, customSkill };
             if (isValidDeck(p.deck)) return withGears;
+            if (p.character === 'you') return { ...withGears, deck: recommendedDeckAgainst(p.character, others) };
             return { ...withGears, deck: p.isAI ? pickRecommendedDeck(p.character) : recommendedDeck(p.character) };
         });
     // デッキを自分で組んだ席が不正（12枚でない）なら開始できない

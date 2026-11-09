@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/deck.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSavedDeck = exports.saveDeck = exports.loadSavedDecks = exports.MAX_SAVED_DECKS = exports.SAVED_DECKS_KEY = exports.describeSkill = exports.baseCostOf = exports.CATEGORY_ORDER = exports.variedAIDeck = exports.CORE_CARDS = exports.AI_DECK_SWAPS = exports.randomDeck = exports.resolveDeck = exports.isValidDeck = exports.pickRecommendedDeck = exports.ALT_RECOMMENDED_DECKS = exports.recommendedDeck = exports.RECOMMENDED_DECKS = exports.skillOf = exports.AVAILABLE_SKILL_IDX = exports.CATALOG_SIZE = exports.SKILL_IDX_END = exports.REMOVED_SKILL_IDX = exports.SKILL_CATALOG = exports.CUSTOM_SKILL_IDX = exports.DECK_SIZE = void 0;
+exports.deleteSavedDeck = exports.saveDeck = exports.loadSavedDecks = exports.MAX_SAVED_DECKS = exports.SAVED_DECKS_KEY = exports.describeSkill = exports.baseCostOf = exports.CATEGORY_ORDER = exports.variedAIDeck = exports.CORE_CARDS = exports.AI_DECK_SWAPS = exports.randomDeck = exports.resolveDeck = exports.isValidDeck = exports.pickRecommendedDeck = exports.ALT_RECOMMENDED_DECKS = exports.recommendedDeckAgainst = exports.COUNTER_DECKS_FOR_YOU = exports.recommendedDeck = exports.RECOMMENDED_DECKS = exports.skillOf = exports.AVAILABLE_SKILL_IDX = exports.CATALOG_SIZE = exports.SKILL_IDX_END = exports.REMOVED_SKILL_IDX = exports.SKILL_CATALOG = exports.CUSTOM_SKILL_IDX = exports.DECK_SIZE = void 0;
 const skillCosts_1 = require("./skillCosts");
 /** デッキの枚数（同じスキルは1枚まで） */
 exports.DECK_SIZE = 12;
@@ -139,6 +139,7 @@ exports.SKILL_CATALOG = [
     { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付きます' },
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てを2スタックでロックします（ターンは続く）。相手のリーチ1つにつきコスト-3。鍵師は空きマスのロックを無視して置けます' },
     { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除したロックのスタックを自分のライフに加算します（自分のロックでも他人のロックでも選べます）' },
+    { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面にあるロックのマスの数だけ、打つスキルのコストを軽減します（使った時点の数で固定。軽減後の下限は1。軽減札どうしには効きません）' },
 ];
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
 exports.REMOVED_SKILL_IDX = [50];
@@ -161,7 +162,7 @@ exports.skillOf = skillOf;
 exports.RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 52],
     tactician: [3, 9, 11, 45, 46, 52, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 13, 35, 47, 52, 53, 56, 60, 92],
+    magician: [2, 9, 10, 13, 26, 47, 52, 53, 56, 60, 64, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92],
     necromancer: [2, 3, 6, 8, 11, 22, 40, 52, 58, 89, 92, 95],
@@ -177,6 +178,29 @@ exports.RECOMMENDED_DECKS = {
 /** キャラの推奨デッキ（コピー） */
 const recommendedDeck = (character) => { var _a; return [...((_a = exports.RECOMMENDED_DECKS[character]) !== null && _a !== void 0 ? _a : exports.RECOMMENDED_DECKS.you)]; };
 exports.recommendedDeck = recommendedDeck;
+/**
+ * 「あなた」の相手キャラ別の専用デッキ（相手が1キャラのときだけ使う。AIPlayer.ts YOU_HOLD_VS と対）。
+ * 一寸の虫に魂なし(92)・火口(87)を入れて、引いたら手札に固定して毎手番使う。docs/tune/you.md
+ * （seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%）。
+ */
+exports.COUNTER_DECKS_FOR_YOU = {
+    magician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    witch: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    cryomancer: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    electrician: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    tactician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 74, 92], // 一寸の虫(92)+鬼門封じ(74)を固定。対軍師 17.0→29.0%（seed2/300）
+};
+/** character の推奨デッキ。「あなた」は相手が1キャラで専用デッキがあればそれ */
+const recommendedDeckAgainst = (character, opponents) => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? exports.COUNTER_DECKS_FOR_YOU[kinds[0]] : undefined;
+        if (counter)
+            return [...counter];
+    }
+    return (0, exports.recommendedDeck)(character);
+};
+exports.recommendedDeckAgainst = recommendedDeckAgainst;
 /**
  * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。

@@ -111,6 +111,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickLockExtend: 'lock',
     onClickLockBlessing: 'auraGreen',
     onClickLockConvert: 'lock',
+    onClickLockDiscount: 'discount',
     onClickVacantSeal: 'lock',
     onClickDemolish: 'tsunami',
     onClickWeather: 'tsunami',

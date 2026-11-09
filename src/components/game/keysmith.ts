@@ -23,7 +23,7 @@ export const SEAL_MIN_COST = 5;
 /** ロック系スキル（鍵師はコスト-1）。Game.tsx の skillKey / sim/engine.js の costsOf のキー */
 export const LOCK_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickUseLock', 'onClickDoubleLock', 'onClickTripleLock', 'onClickSeal',
-    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickLockConvert',
+    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickLockConvert', 'onClickLockDiscount',
 ]);
 
 /** 『ロックが使われた』とみなすスキル（錠前荒らしの0コスト条件: 直前の相手ターンにこれらが使われた）。ロックを掛ける・延ばす・ロックを残して壊すスキル */
@@ -181,3 +181,7 @@ export const lockConvert = (board: SquareInfo[], cell: number): number => {
     board[cell] = clearLock(board[cell]);
     return gained;
 };
+
+/** 錠前割引（汎用 idx 135）の軽減量: 盤面にロックのかかっているマスの数（自分・敵・空きマスを問わず。オブジェクトは除く）。使った時点の数で固定する */
+export const lockedSquareCount = (board: SquareInfo[]): number => board.filter((sq) => !isObject(sq) && isLocked(sq)).length;
+
