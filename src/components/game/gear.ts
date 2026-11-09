@@ -390,7 +390,6 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
     },
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
-    necromancer: { cryomancer: ['springThunder', 'lastStand'] }, // 31→84%（seed2/3, 各150試合）
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
     },

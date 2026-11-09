@@ -329,7 +329,6 @@ exports.COUNTER_GEARS = {
     },
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] },
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
-    necromancer: { cryomancer: ['springThunder', 'lastStand'] },
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
     },
