@@ -1,12 +1,12 @@
 # tune-top: magician
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: e41f913（2026-11-09。PR #530 マージ後の基準線 seed1/60: 魔法使い2位 50.0%、1位 necromancer 67.0%）
-- 現在の推奨設定(2026-11-09): gears=[snowball, luckyPurse](別案なし) deck=[2,9,10,13,26,47,52,53,56,60,64,92] AI: 手札固定 [53,60,92]（対ネクロ=[60,92,52]・対陰陽師=[53,60,92,52]）・氷室には先にロックしない。引き直しは魔力10以上
+- 現在の推奨設定(2026-11-09): gears=[snowball, ironLock](別案なし) deck=[2,9,10,13,26,47,52,53,56,60,64,92] AI: 手札固定 [53,60,92]（対ネクロ=[60,92,52]・対陰陽師=[53,60,92,52]）・氷室には先にロックしない。引き直しは魔力10以上
 - 強豪リスト(2026-11-09 基準線 seed1/60で固定): necromancer,yinYangMaster,electrician,cryomancer,giant(魔法使い自身は除く。`--strong` で復元)
 - 基準線(master e41f913, seed1/60 --write-strong): 魔法使い **2位** 対強豪50.0%(field 60.2) / 1位 necromancer 67.0%。最悪対面 necromancer 7%・yinYangMaster 28%。差17pt。強豪=necromancer,yinYangMaster,magician,electrician,witch,giant
 - 関連 issue: #339 魔法使いの調整案(本件) / #315 spellWard 追試(解決・コメント済み) / #124 lastStand 調整 / #333 巨人ストンプ
 - 連続不採用回数: 3（試行88〜90。gear/deck/strategy を対ネクロで測定）
-- 状態: blocked(issue #473, #513) — ネクロの降霊が支配的（降霊を無効にすると対ネクロ 12→63%）。ギア・デッキ・AIでは1位に届かず、ルール側の調整案を #473 に追記。master が動いたら再検証
+- 状態: blocked(issue #473, #513) — ネクロの降霊が支配的（降霊を無効にすると対ネクロ 12→63%）。gear/deck1枚/deck2枚/strategy(夜の帳)/joint(ギア走査)を対強豪で測り、試行91で [snowball,ironLock] を採用して改善(強豪5体 48.5→56.7)したが、完了判定は 3位（対強豪 51.1%、1位 necromancer 65.1%, seed3/100）。ルール側の調整案を #473 に追記済み。master が動いたら再検証
 
 ## 順位(master 25fe0f2 取り込み後, 新sim, seed3/100)
 1 cryomancer 67.8 / 2 electrician 54.2 / **3 magician 49.4**(field 57.5) / 4 witch 46.4 / 5 tactician 44.0。強豪=cryomancer,electrician,magician,poisoner,witch,tactician。1位との差 18.4pt。対氷室が最悪対面(21%)。
@@ -14,6 +14,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 91 | gear(強豪5体のギア1枠走査 + 追試) | 縮小走査（強豪5体 necromancer,yinYangMaster,electrician,witch,giant, seed62/40, 基準 [snowball,luckyPurse] 54.5）: **[snowball,ironLock] 65.1** / lastStand 61.2 / bindingLock 61.0 / 他は基準±3。追試 seed71/100: luckyPurse 48.5 → **ironLock 56.7（+8.2, SE約1.9）**・lastStand 52.5。対ネクロ 7→19・対陰陽師 30→42・対魔女 60→85・対巨人 81→76 | **採用** [snowball,ironLock]（+1.5pt かつ +1.96SE を満たす）。完了判定 seed3/100（強豪=yinYangMaster,necromancer,magician,electrician,giant,pyromancer）: magician 3位 51.1%（1位 necromancer 65.1、2位 yinYangMaster 57.6）。1位に届かず blocked は維持 |
+| 92 | synergy(デッキ2枚, 強豪5体) | 2枚入替の15近傍（seed61/40, 基準 [snowball,luckyPurse] 54.9）。最良 58.9（-52,-26 +1,+122）、次点 58.3 | 差 +4.0（SE約3）、閾値(15近傍 z≥2.7)に届かず **不採用** |
 | 90 | deck(1枚, 対ネクロのみ) | 対ネクロ単独のデッキ1枚近傍30（seed51/60, 基準 8.8）。最良 -52追い剥ぎ+11ダブルトークン 22.8。追試 seed52/200: 8.6→20.9（+12.3）。全相手 seed53/100 対強豪平均: 54.6→54.0 | 対ネクロ単独は上がるが対強豪平均は横ばい（-0.6）→ **不採用**。デッキは対戦前に固定なので対ネクロ専用にできない |
 | 89 | strategy(夜の帳を対ネクロで固定) | 降霊のコストを払わせない狙い。夜の帳(98)を8枠それぞれに入れ、対ネクロのときだけ手札固定[60,92,52,98]（seed41/100, 基準 10.3）| 4.2〜6.3 → 全て悪化 → **不採用**（コード復元） |
 | 88 | 診断(アブレーション) | 対ネクロ seed31/100 推奨デッキ・[snowball,luckyPurse]。無効化: 降霊 12.2→**62.8**、大岩 15.0、墓地割引 12.2、生贄 12.2 | 原因は降霊1つ（#513 の雷霆の巫と同じ）。ルール側の調整案を #473 に追記 |
