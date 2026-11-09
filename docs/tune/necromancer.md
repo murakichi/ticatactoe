@@ -16,6 +16,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 57 | 新ギア地代/頑丈な建材 + 大岩(136) | master追加の地代(手番開始に自陣オブジェクト数だけマジック)・大岩(コスト1・2ターンロック付き・効果なし)を検討。AIは地代装備時に大岩を最大4個まで重ねて設置(`hasGroundRent`)。seed210/150(強豪=electrician,magician,giant,cryomancer,keysmith,yinYangMaster, 自身を含めない): 現行[reaper,lastStand] 58.6 / [reaper,groundRent] 49.6 / +大岩デッキ[reaper,groundRent] 51.8 / +大岩+市場 49.9 / 大岩デッキ[reaper,lastStand] 61.0 | 地代は土壇場の防壁(lastStand)を外す損(−7〜−9)を埋められず却下。大岩入りデッキ自体は+2.4(ノイズ圏)。頑丈な建材は未測定(オブジェクトの数が少なく効く場面が無い) |
 | 56 | 順位追試(master分割取込後, PR#501マージ時点) | seed7/100。強豪=electrician,necromancer,magician,keysmith,giant,cryomancer | **2位** 対強豪53.2%(field 68.1%)。1位 electrician 57.0%(field 68.9%)。seed5/6 は1位、seed7 は2位 = electrician との僅差(fieldでは0.8pt差)。最悪対面 giant 29% |
 | 55 | 順位追試 | seed6/100(別シード) | **1位を再確認** 対強豪56.2%(field 68.7%)。2位 electrician 52.0%、giant 52.0%。差4.2pt(fieldでも3.6pt)。最悪対面 giant 33% |
 | 54 | 順位再測定(reaper,lastStand 採用後) | seed5/100。強豪=necromancer,electrician,magician,giant,cryomancer,keysmith | **1位** 対強豪55.0%(field 68.2%)。2位 giant 53.4%、3位 magician 52.2%、4位 electrician 50.5%。1位との差(対強豪)は1.6pt、fieldでは3.5pt。最悪対面 cryomancer 22% |
