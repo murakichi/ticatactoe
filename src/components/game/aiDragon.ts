@@ -175,6 +175,18 @@ export const dragonMethods: DragonMethods = {
         if (isDragon && roarUsable(real, me) && magic >= roarCost && roarVictims(real, me).length >= ROAR_MIN_VICTIMS) {
             return { move: null, skills: ['onClickRoar'] };
         }
+        // 龍: 覚醒の直後は自陣の建造物が無い（消滅した）。祈りで敵の固まりの隣に建造物を置き、同じ手番にそのまま咆哮を撃つ
+        // （祈りは手番を終えず、咆哮は終える）。ふつうに2手番かけると、そのあいだに相手に列を揃えられて防壁が発動し、巫女に戻ってしまう
+        if (isDragon && magic >= prayCost + roarCost && prayerUsable(real, deck) && ownBuildingCells(real, me).length < BUILDING_CAP) {
+            let best: { cell: number; victims: number } | null = null;
+            for (let i = 0; i < real.length; i++) {
+                if (!objectLandable(real[i])) continue;
+                const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' as const } : sq));
+                const v = roarVictims(hyp, me).length;
+                if (v >= ROAR_MIN_VICTIMS && (!best || v > best.victims)) best = { cell: i, victims: v };
+            }
+            if (best) return { move: null, skills: ['onClickRoar'], chargeClicks: [{ skill: 'onClickPrayer', target: best.cell }] };
+        }
 
         // 祈りで建造物を置く（巫女は覚醒の型へ、龍は敵の固まりの隣へ）。魔力が続く限り重ねる（1手番に最大4つ）
         const clicks: { skill: string; target: number }[] = [];
