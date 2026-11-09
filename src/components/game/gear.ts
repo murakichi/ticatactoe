@@ -335,7 +335,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
     necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
-    poisoner: ['lastStand', 'spellWard'],
+    poisoner: ['snowball', 'spellWard'], // 対強豪平均 33.5→43.0%（seed2/200, z≈5.3。旧 lastStand,spellWard）。死神の鎌,spellWard は 37.5%
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
