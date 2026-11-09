@@ -6,6 +6,10 @@ import { BoardEffects } from './BoardEffects';
 const pops = (c: HTMLElement) => Array.from(c.querySelectorAll('[class*="damagePop"]')).map((e) => e.textContent ?? '');
 
 describe('コマが受けたダメージの表示(赤字の -n)', () => {
+    // Math.random を 0.25 に固定すると、正規乱数のライフが毎回 9 になる（ライフが0以下に出て減衰が表示されない不安定さを避ける。#506）
+    beforeEach(() => jest.spyOn(Math, 'random').mockReturnValue(0.25));
+    afterEach(() => jest.restoreAllMocks());
+
     it('BoardEffects: 受けたダメージを「-n」で出し、効果によるものは絵文字付きで出す', () => {
         const { container } = render(
             <BoardEffects

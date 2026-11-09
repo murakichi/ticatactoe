@@ -5,6 +5,7 @@ exports.findEmptyIndexes = exports.range = exports.normRand = exports.randomAnyP
 const boardGeometry_1 = require("./boardGeometry");
 const ObjectKind_1 = require("./ObjectKind");
 Object.defineProperty(exports, "isObject", { enumerable: true, get: function () { return ObjectKind_1.isObject; } });
+Object.defineProperty(exports, "isShikigami", { enumerable: true, get: function () { return ObjectKind_1.isShikigami; } });
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
  * ここが唯一の出典で、キャラ選択画面の説明文もこの値を参照する（説明文と実装のズレ防止 / issue #13）。
@@ -37,17 +38,8 @@ const calculateLife = (nextCharacterId, yingYangMode, lifeBonus = 0, std = expor
     return Math.floor(normRand(lifeMeanOf(nextCharacterId, yingYangMode) + lifeBonus, std, rng));
 };
 exports.calculateLife = calculateLife;
-/** 式神(📜)は列の並びに数えない */
-const isShikigami = (sq) => {
-    const ef = sq.effects;
-    for (let i = 0; i < ef.length; i++)
-        if (ef[i].effect === '📜')
-            return true;
-    return false;
-};
-exports.isShikigami = isShikigami;
-/** 列判定用のシンボル配列（式神・オブジェクトはコマ無し扱い） */
-const lineSymbols = (board) => board.map((x) => (isShikigami(x) || (0, ObjectKind_1.isObject)(x) ? undefined : x.player));
+/** 列判定用のシンボル配列（オブジェクトはコマ無し扱い。式神もオブジェクトの一種） */
+const lineSymbols = (board) => board.map((x) => ((0, ObjectKind_1.isObject)(x) ? undefined : x.player));
 exports.lineSymbols = lineSymbols;
 const calculateWinner = (squares) => {
     const lines = (0, boardGeometry_1.geometryForCells)(squares.length).winLines;

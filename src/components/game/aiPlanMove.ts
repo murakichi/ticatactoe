@@ -6,7 +6,7 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { OBJECT_DEFS, objectLandable } from './objects';
-import { findEmptyIndexes, isObject } from '../../util';
+import { findEmptyIndexes } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { ailmentStacks, cleanse, canFreeze, budStacks, budReceivers, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, freeze, shatter, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, fireWheelTargets, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
@@ -17,6 +17,7 @@ import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveS
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
 export type PlanMoveArgs = Parameters<typeof planMove>;
@@ -1145,11 +1146,11 @@ export const planMoveMethods = {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
-        this.ownObjectCount = argsIn[0].filter((sq) => isObject(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => isBuilding(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(NECRO_CORPSE_CUT_CAP, Math.max(0, NECROMANCY.baseCost - (argsIn[8] ?? NECROMANCY.baseCost))) : 0;
-        const args: PlanMoveArgs = argsIn[0].some((sq) => isObject(sq))
-            ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
+        const args: PlanMoveArgs = argsIn[0].some((sq) => isBuilding(sq))
+            ? [argsIn[0].map((sq) => (isBuilding(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
@@ -1206,7 +1207,7 @@ const BOULDER_MAX = 4;
 function planObject(this: AIPlayer, board: SquareInfo[], left: number, costs: SkillCosts, availableSkills: number[], heavyReady: boolean): { kind: keyof typeof OBJECT_DEFS; cell: number } | null {
     const geo = geometryForCells(board.length);
     const size = Math.round(Math.sqrt(board.length));
-    const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
+    const mine = board.filter((sq) => sq.player === this.playerSymbol && !isBuilding(sq)).length;
     if (mine < 2) return null;
     const order = this.hasGroundRent
         ? (['boulder', 'market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'] as const)
@@ -1228,7 +1229,7 @@ function planObject(this: AIPlayer, board: SquareInfo[], left: number, costs: Sk
         let bestScore = -1;
         for (let i = 0; i < board.length; i++) {
             if (!objectLandable(board[i])) continue;
-            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !isBuilding(board[j])).length;
             const r = Math.floor(i / size);
             const c = i % size;
             const edge = Math.abs(r - (size - 1) / 2) + Math.abs(c - (size - 1) / 2);

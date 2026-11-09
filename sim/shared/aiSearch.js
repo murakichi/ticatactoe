@@ -11,6 +11,7 @@ const keysmith_1 = require("./keysmith");
 const decay_1 = require("./decay");
 const charge_1 = require("./charge");
 const aiConstants_1 = require("./aiConstants");
+const shikigami_1 = require("./shikigami");
 exports.searchMethods = {
     /** 相手に陰陽師がいるか */
     facingYinYang() {
@@ -321,7 +322,7 @@ exports.searchMethods = {
             newBoard[index] = { ...sq, bind: sq.bind + life + 1 };
             // 式神を補強すると🌱付きの通常コマになる
             if ((0, util_1.isShikigami)(sq))
-                newBoard[index].effects = newBoard[index].effects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]);
+                newBoard[index] = { ...(0, shikigami_1.toPiece)(newBoard[index]), effects: [...newBoard[index].effects, { effect: '🌱' }] };
         }
         return newBoard;
     },

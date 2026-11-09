@@ -126,7 +126,7 @@ test('式神(陰): 任意の空きマスに置ける。ライフ2・📜付き�
     assert.strictEqual(e.placeMove(s, 1), false); // 埋まっている
     assert.strictEqual(s.useShikigamiPlace, true);
     assert.strictEqual(e.placeMove(s, 6), true);
-    assert.deepStrictEqual(s.board[6], { player: '💙', bind: 2, effects: [{ effect: '📜' }] });
+    assert.deepStrictEqual(s.board[6], { player: '💙', bind: 2, effects: [], object: 'shikigami' });
     assert.strictEqual(s.turn, 0); // 手番は続く
     assert.strictEqual(s.useShikigamiPlace, false);
 });
@@ -148,13 +148,13 @@ test('式神: 自分で補強すると式神ではなく🌱付きの自陣コ�
     s.life = 3;
     e.placeMove(s, 5);
     assert.strictEqual(s.board[5].player, '💙');
-    assert.strictEqual(s.board[5].bind, 1 + 3 + 1); // 着手前の減衰で式神のライフは2→1
+    assert.strictEqual(s.board[5].bind, 2 + 3 + 1); // 式神は自然減衰を受けない（ライフ2のまま）
     assert.deepStrictEqual(s.board[5].effects.map((x) => x.effect), ['🌱']);
 });
 
 test('式神: 相手が乗っ取る（ライフ0）と空きマスになり、コマは置かれない', () => {
     const s = game('yinYangMaster', 'you');
-    s.board[5] = { player: '💙', bind: 0, effects: [{ effect: '📜' }] };
+    s.board[5] = { player: '💙', bind: 0, effects: [], object: 'shikigami' };
     s.turn = 1; s.life = 3;
     assert.strictEqual(e.placeMove(s, 5), true);
     assert.deepStrictEqual(s.board[5], { player: undefined, bind: 0, effects: [] });

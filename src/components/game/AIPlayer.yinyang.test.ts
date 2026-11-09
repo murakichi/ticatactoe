@@ -13,7 +13,7 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
         pattern.forEach((p, k) => put(b, 4 + k, p, 3));
         return b;
     };
-    const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [{ effect: '📜' }] }; };
+    const shiki = (b: SquareInfo[], i: number, player: Player = '💙') => { b[i] = { player, bind: 2, effects: [], object: 'shikigami' }; };
     const mk = () => new AIPlayer('💙', 'yinYangMaster', ['⭕']);
 
     it('氷結中の空きマスが行0の列を塞いでいるとき、隣の敵コマを火遁で燃やして氷結を溶かせば組めるなら、その敵コマを返す（組める盤面や溶かしても組めない盤面は null）', () => {
@@ -60,7 +60,7 @@ describe('陰陽師の式神運用 (旧sim AI shikigamiTurn と同一)', () => {
         // 爆破後: 式神は消え、敵の0・1は壊れ、周囲の空きマスは式神になる
         expect(plan!.board[5].player).toBeUndefined();
         expect(plan!.board[0].player).toBeUndefined();
-        expect(plan!.board[4].effects.some((e) => e.effect === '📜')).toBe(true);
+        expect(plan!.board[4].object).toBe('shikigami');
     });
 
     it('式神一括: 自コマ1+式神置き3で列を完成できる魔力があればコンボを組む', () => {

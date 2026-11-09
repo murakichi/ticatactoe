@@ -8,6 +8,7 @@ const gear_1 = require("./gear");
 const lock_1 = require("./lock");
 const poison_1 = require("./poison");
 const thermal_1 = require("./thermal");
+const ObjectKind_1 = require("./ObjectKind");
 /**
  * マス idx に🔑ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら、空蔵の持ち主(turnSeat)を記録しておく。
  * 氷結中のマスには掛からない。掛けたら true。board を直接書き換える
@@ -50,7 +51,7 @@ exports.propagate = propagate;
  * 芽吹き: ライフが budSeedLife 以上の自陣のコマを設置するとき🌱を付ける（通常の着手・トークン系スキルの両方）。
  * 付けたら新しいマスを返し、付けない（ギアなし・ライフが足りない・オブジェクト・氷結中や🔥のマスにはバッズが付かない）なら null
  */
-const seedBud = (sq, player, gears) => (0, gear_1.hasGear)(gears, 'budSeed') && sq.player === player && !sq.object && sq.bind >= gear_1.GEAR_PARAMS.budSeedLife && (0, thermal_1.canBud)(sq)
+const seedBud = (sq, player, gears) => (0, gear_1.hasGear)(gears, 'budSeed') && sq.player === player && !(0, ObjectKind_1.isBuilding)(sq) && sq.bind >= gear_1.GEAR_PARAMS.budSeedLife && (0, thermal_1.canBud)(sq)
     ? { ...sq, effects: [...sq.effects, { effect: '🌱' }] }
     : null;
 exports.seedBud = seedBud;

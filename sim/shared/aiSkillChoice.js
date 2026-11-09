@@ -426,6 +426,8 @@ exports.skillChoiceMethods = {
             // 対魔女の新スキル(初霜93・吹き寄せ94・山焼き95)は、引いたら先に手札に固定する (旧sim AI の lockNew=1)
             (this.facesWitchNow() && (idx === 93 || idx === 94 || idx === 95)) ||
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
+            // 軍師: 雷霆の巫が相手のときは、一寸の虫に魂なし(92)を手札に固定して、撃てる機会を逃さない（対雷霆の巫 21.3→26.7%、6シード各150〜250試合・計1300で全て正、+5.4pt、z=3.2）
+            (this.character === 'tactician' && idx === 92 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'electrician')) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
             (this.character === 'magician' && (this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer') ? aiConstants_1.MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'yinYangMaster') ? aiConstants_1.MAGICIAN_HOLD_VS_YINYANG : aiConstants_2.MAGICIAN_HOLD).includes(idx)) ||
@@ -465,7 +467,9 @@ exports.skillChoiceMethods = {
                 locks.push(idx);
         }
         // キャラ専用シナジーを優先して残す。守備の余地のため最大2つ
-        locks.sort((a, b) => (preferred(b) ? 1 : 0) - (preferred(a) ? 1 : 0));
+        // 軍師が雷霆の巫と当たるときは、上限2枚でも92を落とさない(トークン系に押し出されない)
+        const topIdx = this.character === 'tactician' && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'electrician') ? 92 : -1;
+        locks.sort((a, b) => ((b === topIdx ? 2 : 0) + (preferred(b) ? 1 : 0)) - ((a === topIdx ? 2 : 0) + (preferred(a) ? 1 : 0)));
         return locks.slice(0, 2);
     },
     /** AI用コスト計算 (軍師のトークン割引など) */

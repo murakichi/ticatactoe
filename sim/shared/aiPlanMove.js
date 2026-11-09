@@ -19,6 +19,7 @@ const graveSkills_1 = require("./graveSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
 const aiConstants_1 = require("./aiConstants");
+const ObjectKind_1 = require("./ObjectKind");
 /** planMove の段階。上から順に試し、最初に結果を返した段階で手番の計画が決まる */
 const PLAN_PHASES = [planOpening, planThawAndYinYang, planDefense, planCounterLocks, planChargeAndObjects, planOverflowCasts, planBudsAndFire];
 /** 巨人のストンプ・パーフェクトゲーム・追い剥ぎの即勝ちと、手札の引き直し。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
@@ -1116,11 +1117,11 @@ exports.planMoveMethods = {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
-        const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
-            ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
+        const args = argsIn[0].some((sq) => (0, ObjectKind_1.isBuilding)(sq))
+            ? [argsIn[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
@@ -1180,7 +1181,7 @@ const BOULDER_MAX = 4;
 function planObject(board, left, costs, availableSkills, heavyReady) {
     const geo = (0, boardGeometry_1.geometryForCells)(board.length);
     const size = Math.round(Math.sqrt(board.length));
-    const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
+    const mine = board.filter((sq) => sq.player === this.playerSymbol && !(0, ObjectKind_1.isBuilding)(sq)).length;
     if (mine < 2)
         return null;
     const order = this.hasGroundRent
@@ -1210,7 +1211,7 @@ function planObject(board, left, costs, availableSkills, heavyReady) {
         for (let i = 0; i < board.length; i++) {
             if (!(0, objects_1.objectLandable)(board[i]))
                 continue;
-            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !(0, ObjectKind_1.isBuilding)(board[j])).length;
             const r = Math.floor(i / size);
             const c = i % size;
             const edge = Math.abs(r - (size - 1) / 2) + Math.abs(c - (size - 1) / 2);

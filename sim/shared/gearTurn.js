@@ -12,6 +12,7 @@ const bigSkills_1 = require("./bigSkills");
 const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
 const keysmith_1 = require("./keysmith");
+const ObjectKind_1 = require("./ObjectKind");
 /** 飛び火が無料になる、直前の手番での設置数（自陣のコマの増加数） */
 exports.SPARK_FREE_PLACED = 2;
 /** 盤面全体の🌱と🍂の総数（火口の『直前に植えられた』判定の元） */
@@ -170,7 +171,7 @@ const lifeZeroVictims = (board, chars, gears) => {
     if (!gears.some((g) => (0, gear_1.hasGear)(g, 'reaper')))
         return [];
     return board
-        .map((sq, i) => (sq.player && !sq.object && sq.bind <= 0 && !(0, thermal_1.isFrozen)(sq) && !sq.effects.some((e) => e.effect === '🔑') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
+        .map((sq, i) => (sq.player && !(0, ObjectKind_1.isBuilding)(sq) && sq.bind <= 0 && !(0, thermal_1.isFrozen)(sq) && !sq.effects.some((e) => e.effect === '🔑') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
         .filter((i) => i >= 0);
 };
 exports.lifeZeroVictims = lifeZeroVictims;
