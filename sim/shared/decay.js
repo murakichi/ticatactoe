@@ -30,7 +30,7 @@ const isCrowded = (board, seatCount) => seatCount >= exports.CROWDED_DECAY_MIN_P
 exports.isCrowded = isCrowded;
 /** 満杯の追加減衰: コマのライフを1減らし、🔑ロックのスタックも1減らす（切れるのは通常の減衰のとき）。氷結中・ライフ0・オブジェクトはライフが対象外 */
 const crowdedDecay = (sq) => {
-    const aged = sq.player && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && !(0, ObjectKind_1.isObject)(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+    const aged = sq.player && sq.bind > 0 && !(0, thermal_1.isFrozen)(sq) && (!(0, ObjectKind_1.isObject)(sq) || (0, ObjectKind_1.isShikigami)(sq)) ? { ...sq, bind: sq.bind - 1 } : sq;
     return (0, lock_1.lockStack)(aged) > 1 ? (0, lock_1.tickLock)(aged).sq : aged;
 };
 exports.crowdedDecay = crowdedDecay;

@@ -67,7 +67,7 @@ exports.OBJECT_DEFS = {
 /** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
 exports.OBJECT_PLACE_KEYS = new Set(Object.values(exports.OBJECT_DEFS).map((d) => d.costKey));
 /** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
-const hasOwnObject = (board, player) => board.some((sq) => sq.object !== undefined && sq.player === player);
+const hasOwnObject = (board, player) => board.some((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === player);
 exports.hasOwnObject = hasOwnObject;
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 const objectLandable = (sq) => (0, shikigami_1.shikigamiLandable)(sq) && !(0, ObjectKind_1.isObject)(sq);
@@ -136,7 +136,7 @@ const enforceEffectRules = (board, snap, endPlayer) => {
             board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
             res.removed.push(k);
         }
-        else if (tongue && sq.player === endPlayer && !sq.object) {
+        else if (tongue && sq.player === endPlayer && !(0, ObjectKind_1.isBuilding)(sq)) {
             board[k] = { ...sq, bind: 0 };
             res.zeroed.push(k);
         }
@@ -167,7 +167,7 @@ exports.ONE_PIECE_MULTI_KEYS = new Set([
     'onClickShikigamiFlood', 'onClickTotalAssault', 'onClickNecromancy',
 ]);
 /** player が非オブジェクトのコマを持つ数 */
-const ownPieceCount = (board, player) => board.filter((sq) => sq.player === player && !sq.object).length;
+const ownPieceCount = (board, player) => board.filter((sq) => sq.player === player && !(0, ObjectKind_1.isBuilding)(sq)).length;
 exports.ownPieceCount = ownPieceCount;
 /** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
 const newPieceBlocked = (board, actor, placedThisTurn) => placedThisTurn >= 1 && (0, exports.enemyObjectActive)(board, actor, 'soloSign');
@@ -312,7 +312,7 @@ const objectSkillTargets = (skill, board, player, chars) => {
         case 'demolish': return enemyObjects(board, player, chars);
         case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
         case 'reinforce': return ownObjects(board, player);
-        case 'duplicate': return (0, exports.objectLandableCells)(board).length > 0 ? ownObjects(board, player) : [];
+        case 'duplicate': return (0, exports.objectLandableCells)(board).length > 0 ? ownObjects(board, player).filter((i) => board[i].object !== 'shikigami') : []; // 式神は複製できない（式神を置くスキルが別にある）
         default: return [];
     }
 };

@@ -7,6 +7,7 @@ import { GEAR_PARAMS, Gears, TokenEffect, gearLockStack, hasGear } from './gear'
 import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { canBud, lockable } from './thermal';
+import { isBuilding } from '../../types/ObjectKind';
 
 /**
  * マス idx に🔑ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら、空蔵の持ち主(turnSeat)を記録しておく。
@@ -47,7 +48,7 @@ export const propagate = (board: SquareInfo[], idx: number, effect: TokenEffect,
  * 付けたら新しいマスを返し、付けない（ギアなし・ライフが足りない・オブジェクト・氷結中や🔥のマスにはバッズが付かない）なら null
  */
 export const seedBud = (sq: SquareInfo, player: Player, gears: Gears): SquareInfo | null =>
-    hasGear(gears, 'budSeed') && sq.player === player && !sq.object && sq.bind >= GEAR_PARAMS.budSeedLife && canBud(sq)
+    hasGear(gears, 'budSeed') && sq.player === player && !isBuilding(sq) && sq.bind >= GEAR_PARAMS.budSeedLife && canBud(sq)
         ? { ...sq, effects: [...sq.effects, { effect: '🌱' as const }] }
         : null;
 

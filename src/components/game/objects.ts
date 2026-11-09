@@ -8,7 +8,7 @@
 //  - エフェクトやスキルの効果は通常のコマと同じように受ける。氷結中のオブジェクトは休眠して効果を発揮しない
 //  - 大木・枯れた大木は🔥を付けられると即座に壊れる（thermal.ts の ignite。念のため手番開始時に sweepBurntTrees でも掃除する）
 //  - 手番開始時、持ち主の席のオブジェクトが objectTurnStart で効果を発揮する
-import { ObjectKind, OBJECT_KINDS, isObject, isTree } from '../../types/ObjectKind';
+import { ObjectKind, OBJECT_KINDS, isBuilding, isObject, isTree } from '../../types/ObjectKind';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
@@ -84,7 +84,7 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
 export const OBJECT_PLACE_KEYS: ReadonlySet<string> = new Set(Object.values(OBJECT_DEFS).map((d) => d.costKey));
 
 /** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
-export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => sq.object !== undefined && sq.player === player);
+export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => isBuilding(sq) && sq.player === player);
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 export const objectLandable = (sq: SquareInfo): boolean => shikigamiLandable(sq) && !isObject(sq);
@@ -154,7 +154,7 @@ export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | n
         if (quiet[k]) {
             board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
             res.removed.push(k);
-        } else if (tongue && sq.player === endPlayer && !sq.object) {
+        } else if (tongue && sq.player === endPlayer && !isBuilding(sq)) {
             board[k] = { ...sq, bind: 0 };
             res.zeroed.push(k);
         }
@@ -184,7 +184,7 @@ export const ONE_PIECE_MULTI_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** player が非オブジェクトのコマを持つ数 */
-export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !sq.object).length;
+export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !isBuilding(sq)).length;
 
 /** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
 export const newPieceBlocked = (board: SquareInfo[], actor: Player, placedThisTurn: number): boolean =>
@@ -365,7 +365,7 @@ export const objectSkillTargets = (skill: ObjectSkill, board: SquareInfo[], play
         case 'demolish': return enemyObjects(board, player, chars);
         case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
         case 'reinforce': return ownObjects(board, player);
-        case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player) : [];
+        case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player).filter((i) => board[i].object !== 'shikigami') : []; // 式神は複製できない（式神を置くスキルが別にある）
         default: return [];
     }
 };

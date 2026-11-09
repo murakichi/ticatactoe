@@ -1,9 +1,10 @@
 import { CharacterId } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
-import { newShikigami } from './shikigami';
+import { isBuilding, isObject, isShikigami } from '../../types/ObjectKind';
+import { newShikigami, toPiece } from './shikigami';
 import { decayBoard } from './decay';
-import { boardWinner, effectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { boardWinner, effectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, OBJECT_PARAMS, activeObjectCells, hasOwnObject, ownPieceCount, marketCount, sanctuaryProtected, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { resolvePlacement } from './placement';
 import { ignite } from './thermal';
 
@@ -437,5 +438,52 @@ describe('相手を縛るオブジェクト・八卦の陣', () => {
         expect(skillRestricted({ ...base, skillKey: 'onClickToken' })).toBe(false);
         expect(skillRestricted({ ...base, skillKey: 'onClickToken', placedThisTurn: 1 })).toBe(true);
         expect(skillRestricted({ ...base, actor: '⭕', skillKey: 'onClickDoubleToken', skillsThisTurn: 2 })).toBe(false);
+    });
+});
+
+describe('式神はオブジェクトの一種', () => {
+    it('式神は isObject / isShikigami が真で、isBuilding は偽。設置した建造物は isBuilding が真で isShikigami は偽', () => {
+        const sh = newShikigami('💙');
+        expect(sh).toEqual({ player: '💙', bind: 2, effects: [], object: 'shikigami' });
+        expect([isObject(sh), isShikigami(sh), isBuilding(sh)]).toEqual([true, true, false]);
+        const fort = newObject('💙', 'fort');
+        expect([isObject(fort), isShikigami(fort), isBuilding(fort)]).toEqual([true, false, true]);
+    });
+
+    it('従来どおり: 列に数えず、自然減衰を受け、結界石で守れる。toPiece で通常のコマになる', () => {
+        const b = board();
+        b[0] = newShikigami('💙');
+        b[1] = newShikigami('💙');
+        for (const k of [2, 3]) b[k] = { player: '💙', bind: 1, effects: [] };
+        expect(calculateWinner(lineSymbols(b))).toBeUndefined();
+        decayBoard(b, -1, chars, ['💙', '⭕'], false);
+        expect(b[0].bind).toBe(1); // 式神は減衰を受ける
+        expect(toPiece(b[0]).object).toBeUndefined();
+        const guarded = board();
+        guarded[5] = newObject('💙', 'barrierStone');
+        guarded[4] = newShikigami('💙');
+        decayBoard(guarded, -1, chars, ['💙', '⭕'], false);
+        expect(guarded[4].bind).toBe(2);
+    });
+
+    it('敵に乗っ取られると空きマス、自分で補強すると🌱付きの通常のコマ。ライフが残る攻撃ではオブジェクトとして乗っ取られない', () => {
+        expect(resolvePlacement({ ...newShikigami('⭕'), bind: 0 }, '💙', 3).square).toEqual({ player: undefined, bind: 0, effects: [] });
+        const self = resolvePlacement(newShikigami('💙'), '💙', 3);
+        expect(self.square).toEqual({ player: '💙', bind: 6, effects: [{ effect: '🌱' }] });
+        expect(self.square.object).toBeUndefined();
+    });
+
+    it('解体・風化・地ならし・補強工事の対象になるが、分譲では複製できない。普請道楽・コマ数の数え方は建造物だけを見る', () => {
+        const b = board();
+        b[0] = newShikigami('⭕');
+        b[1] = newShikigami('💙');
+        expect(objectSkillTargets('demolish', b, '💙', chars)).toEqual([0]);
+        expect(objectSkillTargets('reinforce', b, '💙', chars)).toEqual([1]);
+        expect(objectSkillTargets('duplicate', b, '💙', chars)).toEqual([]);
+        expect(hasOwnObject(b, '💙')).toBe(false);
+        expect(ownPieceCount(b, '💙')).toBe(1); // お一人様限りの札: 式神を置くのも新しいコマ
+        b[2] = newObject('💙', 'fort');
+        expect(hasOwnObject(b, '💙')).toBe(true);
+        expect(ownPieceCount(b, '💙')).toBe(1);
     });
 });

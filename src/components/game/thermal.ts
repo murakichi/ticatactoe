@@ -19,7 +19,7 @@ import { CharacterId } from '../../types/Character';
 import { Effect } from '../../types/Effect';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { isObject, isTree } from '../../types/ObjectKind';
+import { isObject, isShikigami, isTree } from '../../types/ObjectKind';
 import { orthoNeighbors } from './boardGeometry';
 import { lockEffect } from './lock';
 
@@ -300,7 +300,7 @@ export type DecayParts = { sq: SquareInfo; natural: number; burn: number; poison
 export const decayParts = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): DecayParts => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
     const parts = { natural: 0, burn: 0, poison: 0 };
-    if (next.player && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) {
+    if (next.player && next.bind > 0 && !isFrozen(next) && (!isObject(next) || isShikigami(next)) && natural) {
         next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
         parts.natural = 1;
     }

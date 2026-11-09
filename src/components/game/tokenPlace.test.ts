@@ -46,7 +46,7 @@ describe('putToken（種類ごとのコマの組み立て）', () => {
         expect(b[9].effects.filter((e) => e.effect === '🍂')).toHaveLength(2);
         putToken('shikigami', b, 10, { ...ctx, shikigamiBind: 7 });
         expect(b[10].bind).toBe(7);
-        expect(has(b[10], '📜')).toBe(true);
+        expect(b[10].object).toBe('shikigami');
     });
 
     it('超助っ人は付けたエフェクトのうち 🌱☠⚡ だけをトークンのエフェクトとして返す', () => {
