@@ -563,7 +563,7 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
     }
     // 砦・市場（鍵師）: 自陣にオブジェクトが無い間だけ1つ立てる。普請道楽ギア（自陣にオブジェクトがある間は全スキル-3）の起点にする。
     // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
-    if (this.character === 'keysmith' && this.ownObjectCount === 0
+    if ((this.character === 'keysmith' || this.character === 'witch') && this.ownObjectCount === 0
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
         && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
         for (const [def, key] of [[OBJECT_DEFS.fort, 'onClickFort'], [OBJECT_DEFS.market, 'onClickMarket']] as const) {
@@ -601,6 +601,22 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
         const cell = this.bestCloudCell(board);
         if (cell !== null && magic >= cost) {
             chargeClicks.push({ skill: 'onClickPoisonSwamp', target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+        }
+    }
+    // 閻魔の舌（毒使い×氷室の番人）: 相手が自分のコマにエフェクトを付けると、そのコマのライフが手番終わりに0になる。氷室の番人は自陣のコマに❄を付け続けるので、
+    // ❄で毒を止めていたコマがライフ0になって奪える（毒使いの最悪対面。上限実験 対氷室 9→24%: docs/tune/poisoner.md）。1つあれば働くので1つだけ立てる。
+    // 置き場所の条件と選び方は大木と同じ（相手にリーチも自分に勝ち筋も無いとき、自分の列を潰さず敵の列を潰せるマス）
+    if (this.character === 'poisoner' && availableSkills.includes(OBJECT_DEFS.tongueKing.idx) && this.ownTongues === 0
+        && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+        const cost = this.calculateAICost(costs.onClickTongueKing, false, false, 'onClickTongueKing');
+        const cell = this.bestTreeCell(board);
+        if (cell !== null && magic >= cost) {
+            chargeClicks.push({ skill: 'onClickTongueKing', target: cell });
             board = board.slice();
             board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
             magic -= cost;
@@ -1162,6 +1178,7 @@ export const planMoveMethods = {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => isBuilding(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(NECRO_CORPSE_CUT_CAP, Math.max(0, NECROMANCY.baseCost - (argsIn[8] ?? NECROMANCY.baseCost))) : 0;
         const args: PlanMoveArgs = argsIn[0].some((sq) => isBuilding(sq))
