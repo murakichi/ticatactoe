@@ -283,7 +283,7 @@ exports.RECOMMENDED_GEARS = {
     yinYangMaster: ['reaper', 'snowball'],
     necromancer: ['reaper', 'lastStand'],
     poisoner: ['snowball', 'spellWard'],
-    electrician: ['lightToken', 'harvest'],
+    electrician: ['budSeed', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'vengeance'],
@@ -299,7 +299,7 @@ exports.recommendedGears = recommendedGears;
 exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']],
     necromancer: [['reaper', 'snowball']],
-    electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
+    electrician: [['lightToken', 'budSeed']], // 主案との差 -1.5pt（61.3 vs 62.8, seed2/200）。旧別案(afterglow/springThunder 系)は主案が変わったので外した（docs/tune/electrician.md）
 };
 /**
  * 「あなた」の相手キャラ別の専用ギア。「あなた」は固有スキルが無く全キャラ共通の1設定では最下位なので、相手を見て組み替える
