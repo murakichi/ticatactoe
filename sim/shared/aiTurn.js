@@ -29,7 +29,7 @@ exports.maxOppMagic = maxOppMagic;
  * @param pickHailMary 詰みのヘイルメアリーで当選させるスキル名を選ぶ（本番は Game の抽選、sim は rng）
  */
 const planAITurn = (ai, input, pickHailMary) => {
-    var _a;
+    var _a, _b;
     const { board, seat, life } = input;
     const oppMagic = (0, exports.maxOppMagic)(input.magic, seat);
     ai.placements = input.placements;
@@ -88,6 +88,18 @@ const planAITurn = (ai, input, pickHailMary) => {
                 kept.push(c);
             }
             result.chargeClicks = kept;
+        }
+    }
+    // 一寸の虫に魂なし対策: ライフが3以下で着手できないときは、ライフ+3（idx 0）で4以上に上げてから置く。手札にあり、すでに選んだスキルと合わせて魔力が足りるときだけ
+    if (input.lifeBan && (0, lifeBan_1.moveBlocked)(true, life) && result.move === null && !((_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.length) && !result.lockTargets && result.stompTarget === undefined
+        && !result.skills.some((sk) => AIPlayer_1.TURN_ENDING_SKILLS.includes(sk)) && input.hand.includes(ADD_LIFE_IDX)) {
+        const costOfKey = (key) => { var _a; return ai.calculateAICost((_a = input.costs[key]) !== null && _a !== void 0 ? _a : 0, false, false, key); };
+        const total = result.skills.reduce((sum, sk) => sum + costOfKey(sk), costOfKey('onClickAddLife'));
+        const raised = life + ADD_LIFE_AMOUNT;
+        if (input.magic[seat] >= total && !(0, lifeBan_1.moveBlocked)(true, raised)) {
+            const m = ai.getBestMove(board, raised);
+            if (m !== null)
+                result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')], result.move = m;
         }
     }
     // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）
@@ -160,6 +172,8 @@ const planAITurn = (ai, input, pickHailMary) => {
     return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends, moveLast: result.move !== null };
 };
 exports.planAITurn = planAITurn;
+const ADD_LIFE_IDX = 0; // ライフ+3 のスキル idx
+const ADD_LIFE_AMOUNT = 3; // 増えるライフ（onClickAddLife と同じ）
 /** player が今の盤面で cell に通常の着手をできるか（Game.onCellClick / sim の placeMove が弾く条件。人数・ライフ縛りは含めない） */
 const canPlaceAt = (board, cell, player, character, characters) => {
     const sq = board[cell];

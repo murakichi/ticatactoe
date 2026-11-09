@@ -154,6 +154,18 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         }
     }
 
+    // 一寸の虫に魂なし対策: ライフが3以下で着手できないときは、ライフ+3（idx 0）で4以上に上げてから置く。手札にあり、すでに選んだスキルと合わせて魔力が足りるときだけ
+    if (input.lifeBan && moveBlocked(true, life) && result.move === null && !result.chargeClicks?.length && !result.lockTargets && result.stompTarget === undefined
+        && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk)) && input.hand.includes(ADD_LIFE_IDX)) {
+        const costOfKey = (key: string) => ai.calculateAICost((input.costs as unknown as Record<string, number>)[key] ?? 0, false, false, key);
+        const total = result.skills.reduce((sum, sk) => sum + costOfKey(sk), costOfKey('onClickAddLife'));
+        const raised = life + ADD_LIFE_AMOUNT;
+        if (input.magic[seat] >= total && !moveBlocked(true, raised)) {
+            const m = ai.getBestMove(board, raised);
+            if (m !== null) result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')], result.move = m;
+        }
+    }
+
     // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）
     const locks = ai.chooseLocks(board, oppMagic, life, input.hand);
 
@@ -217,6 +229,9 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     const ends = result.move !== null || result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk));
     return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends, moveLast: result.move !== null };
 };
+
+const ADD_LIFE_IDX = 0; // ライフ+3 のスキル idx
+const ADD_LIFE_AMOUNT = 3; // 増えるライフ（onClickAddLife と同じ）
 
 /** player が今の盤面で cell に通常の着手をできるか（Game.onCellClick / sim の placeMove が弾く条件。人数・ライフ縛りは含めない） */
 export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, character: CharacterId, characters: readonly CharacterId[]): boolean => {
