@@ -260,6 +260,9 @@ function afterTokenPlaced(s, idx, effect) {
     // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
     if (s.chargeBuff[s.turn] > 0 && s.board[idx].player === curPlayer(s)) addCharge(s, idx);
     const g = s.gears[s.turn];
+    // 芽吹き: ライフの高いトークンにも🌱（収穫・伝播には数えない）
+    const seeded = tokenAfterMod.seedBud(s.board[idx], curPlayer(s), g);
+    if (seeded) { s.board[idx] = seeded; bumpStat(s, 'budSeed'); }
     let granted = effect ? 1 : 0;
     if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
         applyLock(s, idx);
@@ -1020,6 +1023,11 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+    // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+    if (!placed.reinforced) {
+        const seeded = tokenAfterMod.seedBud(board[i], cur, s.gears[s.turn]);
+        if (seeded) { board[i] = seeded; bumpStat(s, 'budSeed'); }
+    }
     // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く [FAITHFUL] Game.tsx onCellClick
     if (keysmithMod.blessingActive(s.blessing[s.turn]) && newPlayer === cur && !board[i].object) board[i] = keysmithMod.blessPlacedPiece(board[i]);
 

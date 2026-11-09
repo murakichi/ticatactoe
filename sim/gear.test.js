@@ -613,6 +613,30 @@ test('死神の鎌: ⚡で無敵の雷霆の巫の駒は壊れない / 勝負が
     assert.strictEqual(w.board[0].player, H, '勝負が付いたら壊さない');
 });
 
+test('芽吹き: ライフ7以上のコマを設置するとき🌱が付く(6以下・補強・装備なしでは付かない)', () => {
+    const place = (gears, life, pre) => {
+        const s = game(gears);
+        s.life = life;
+        if (pre) s.board[5] = pre;
+        e.placeMove(s, 5);
+        return s.board[5];
+    };
+    const buds = (sq) => sq.effects.filter((x) => x.effect === '🌱').length;
+    assert.strictEqual(buds(place([['budSeed'], []], 7)), 1, 'ライフ7で付く');
+    assert.strictEqual(buds(place([['budSeed'], []], 12)), 1);
+    assert.strictEqual(buds(place([['budSeed'], []], 6)), 0, 'ライフ6は付かない');
+    assert.strictEqual(buds(place([[], []], 9)), 0, '装備なしは付かない');
+    assert.strictEqual(buds(place([['budSeed'], []], 9, { player: H, bind: 3, effects: [] })), 0, '補強は設置ではない');
+});
+
+test('芽吹き: 🔥のマスにはバッズが付かない(seedBud)', () => {
+    const t = require('./shared/tokenAfter');
+    const burning = { player: H, bind: 9, effects: [{ effect: '🔥' }] };
+    assert.strictEqual(t.seedBud(burning, H, ['budSeed']), null);
+    assert.strictEqual(t.seedBud({ player: H, bind: 7, effects: [] }, H, ['budSeed']).effects.length, 1);
+    assert.strictEqual(t.seedBud({ player: C, bind: 9, effects: [] }, H, ['budSeed']), null, '相手のコマには付かない');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

@@ -8,7 +8,7 @@ import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPla
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState, gearCostContext, lifeZeroVictims, noteSkillUsed } from './gearTurn';
-import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
+import { applyLockAt, propagate as propagateEffect, seedBud } from './tokenAfter';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
@@ -1382,6 +1382,14 @@ export const Game = (props: GameProps) => {
         }
 
         nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+        // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+        if (!placed.reinforced) {
+            const seeded = seedBud(nextBoard[i], currentTurnPlayer, turnGears);
+            if (seeded) {
+                nextBoard[i] = seeded;
+                gearTrigger('budSeed', 'バッズ付きで設置');
+            }
+        }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
         if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 
@@ -1555,6 +1563,12 @@ export const Game = (props: GameProps) => {
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
     const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
         let granted = effect ? 1 : 0;
+        // 芽吹き: ライフの高いトークンにも🌱（収穫・伝播には数えない）
+        const seeded = seedBud(board[idx], currentTurnPlayer, turnGears);
+        if (seeded) {
+            board[idx] = seeded;
+            gearTrigger('budSeed', 'バッズ付きで設置');
+        }
         // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
         if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
         if (hasGear(turnGears, 'bindingLock') && Math.random() < GEAR_PARAMS.bindingLockChance) {

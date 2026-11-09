@@ -40,7 +40,8 @@ export type GearId =
     | 'spellWard'
     | 'buildMania'
     | 'snowball'
-    | 'reaper';
+    | 'reaper'
+    | 'budSeed';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -105,6 +106,8 @@ export const GEAR_PARAMS = {
     rampResetHits: 3,
     /** 死神の鎌: 自陣のライフ期待値への加算 */
     reaperLife: 2,
+    /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
+    budSeedLife: 7,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -140,6 +143,7 @@ export const GEARS: GearDef[] = [
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: `手番開始時、自陣のリーチを塞ぐ氷結を1つ解除` },
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
+    { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];

@@ -37,6 +37,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     frostRoot: 'trigger', // 休眠した🌱で魔力
     conduction: 'trigger', // 毒・火炎が移る
     buildMania: 'passive', // コスト表示に反映される
+    budSeed: 'trigger', // 設置したコマにバッズが付く
     reaper: 'trigger', // ライフ0の駒が壊れる
     snowball: 'trigger', // 積み上げがリセットされる
     spellWard: 'passive', // スキルを使ったターンだけ効果ダメージが通らない
