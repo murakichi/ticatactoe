@@ -150,6 +150,8 @@ export const KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
 /** 鍵師が1手番に自陣のコマを続けてロックする上限（1=従来どおり1つだけ）と、その対象にするライフの上限。人間の勝ちログ（game-log_4）は毎手番2〜3回ロックして自陣を固めていた */
 export const KEYSMITH_MULTI_LOCK_MAX = 1;
 export const KEYSMITH_MULTI_LOCK_BIND = 99;
+/** 鍵師の『一列確保』: 敵のコマが無い列の空きマスと自陣のコマを先にロックして固め、毎手番その列に置いていく（人間の勝ちログ game-log_4/5）。1=有効 */
+export const KEYSMITH_LINE_CLAIM = 0;
 /** 鍵師のコンボ（二列並び→片方ロック→もう片方に置く）の条件: 自陣の2つのコマのライフがこの値以上 */
 export const KEYSMITH_COMBO_MIN_BIND = 2; // 各60試合, seed2000: 1→76.7/8.3/8.3, 2→75/8.3/6.7, 3→75/6.7/5, 4→66.7/6.7/3.3（対 you/magician/witch）。緩めても悪化せず差はノイズ。中間の2
 /** コンボを撃つときの、ロック中の空きマスの上限（空きマスのロック判断の上限2より1つ多い） */

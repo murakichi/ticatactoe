@@ -99,6 +99,37 @@ export const targetMethods = {
         return cand.slice(0, Math.max(0, max - 1)).map((x) => x.i);
     },
 
+    /**
+     * 鍵師の『一列確保』: 敵のコマが無く、置けない障害（オブジェクト・氷結）も無い列のうち、自陣のコマが最も多い列を選ぶ。
+     * その列の空きマス（置くマス place 以外）と自陣のコマのうち、ロックの無いものを locks に返す（空きマス優先: 敵に置かれる前に塞ぐ）。
+     * 敵はロックされた空きマスに置けず、ロック中の自陣のコマは奪われない。鍵師だけがロックされた空きマスに置ける。置くマスはロックの無い空きマスを優先する。
+     */
+    lineClaimPlan(this: AIPlayer, board: SquareInfo[]): { place: number; locks: number[] } | null {
+        const geo = geometryForCells(board.length);
+        const isLocked = (sq: SquareInfo) => sq.effects.some((e) => e.effect === '🔑');
+        let best: { place: number; locks: number[]; score: number } | null = null;
+        for (const line of geo.winLines) {
+            let own = 0;
+            let ok = true;
+            const empties: number[] = [];
+            for (const i of line) {
+                const sq = board[i];
+                if (sq.player === this.playerSymbol && !isObject(sq)) { own++; continue; }
+                if (sq.player || isObject(sq) || isFrozen(sq) || emptyBlocked(sq) || this.shield.has(i)) { ok = false; break; }
+                empties.push(i);
+            }
+            if (!ok || empties.length === 0) continue;
+            const place = empties.find((i) => !isLocked(board[i])) ?? empties[0];
+            const locks = [
+                ...empties.filter((i) => i !== place && !isLocked(board[i])),
+                ...line.filter((i) => board[i].player === this.playerSymbol && !isObject(board[i]) && !isLocked(board[i])),
+            ];
+            const score = own * 10 - locks.length;
+            if (best === null || score > best.score) best = { place, locks, score };
+        }
+        return best === null ? null : { place: best.place, locks: best.locks };
+    },
+
     bestOwnLockTarget(this: AIPlayer, board: SquareInfo[]): number | null {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = geometryForCells(board.length);

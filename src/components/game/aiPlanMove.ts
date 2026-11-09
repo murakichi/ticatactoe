@@ -16,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, KEYSMITH_MULTI_LOCK_MAX, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, KEYSMITH_LINE_CLAIM, KEYSMITH_MULTI_LOCK_MAX, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -1003,6 +1003,25 @@ export function planMove(
 
     // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
     // ロック中は敵も置けないので敵の列を止める効果もある（旧sim AI の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
+    // 鍵師の『一列確保』（KEYSMITH_LINE_CLAIM）: 敵のコマが無い列を選び、空きマスと自陣のコマをロックして固め、毎手番その列に置く。
+    // 敵はロックされた空きマスに置けないので、列を止められない。相手にリーチが無く、自分にもリーチが無いときだけ（リーチがあれば守り／勝ちが先）
+    if (
+        KEYSMITH_LINE_CLAIM > 0 &&
+        this.character === 'keysmith' &&
+        this.countReaches(board, this.playerSymbol) === 0 &&
+        this.opponents.every((o) => this.countReaches(board, o) === 0)
+    ) {
+        const plan = this.lineClaimPlan(board);
+        const firstCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+        if (plan !== null && magic >= firstCost) {
+            const laterCost = Math.max(1, costs.onClickUseLock - 1);
+            const n = Math.min(plan.locks.length, 1 + Math.floor((magic - firstCost) / laterCost));
+            const locks = plan.locks.slice(0, n);
+            if (locks.length === 0) return { move: plan.place, skills: [] };
+            if (locks.length === 1) return { move: plan.place, skills: ['onClickUseLock'], lockTargets: locks };
+            return { move: plan.place, skills: [], chargeClicks: locks.map((c) => ({ skill: 'onClickUseLock', target: c })) };
+        }
+    }
     // 鍵師のコンボ: 二列並びの片方をロックして、もう片方に置く（敵は塞げない）。自分にリーチがあれば着手が先、敵にリーチがあれば止めるのが先
     if (
         this.character === 'keysmith' &&
