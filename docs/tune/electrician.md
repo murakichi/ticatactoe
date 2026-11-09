@@ -7,6 +7,7 @@
 - 連続不採用回数: 0(2026-10-28 に返し特売の採用で戻した)
 - 2026-10-27(play-learn A1): 対策ロックを撃たない(elecNoAnti)で環境 50.3→57.8%、rank seed12/100 で3位 59.8%(1位 poisoner 68.0)。状態は blocked を維持（1位との差 約8pt）
 - 基準線(2026-11-09 master be4fe88, 主指標=対強豪平均): seed1/60 --write-strong は 1位 55.7%(2位 necromancer 54.7%・3位 giant 53.3%)、seed3/200 --target(条件1)は **2位 58.8%** / 1位 necromancer 64.1%(差5.3pt)・3位 giant 58.1%。最悪対面は対necromancer 36.5%。強豪(seed1/60)=necromancer,electrician,magician,keysmith,giant,cryomancer。状態は running 継続(条件2は未測定)。
+- 基準線(2026-11-09 master a48fffc, 新ギア budSeed,harvest, seed1/100 --write-strong): 雷霆 3位 対強豪 52.2%(field 63.1%) / 1位 necromancer 70.4%(2位 yinYangMaster 57.2%)。差18.2pt。最悪対面は対necromancer 33%。強豪=necromancer,electrician,yinYangMaster,magician,giant,pyromancer。1位は雷霆だけでなく全キャラから13pt以上離れた一強で、ギア・デッキの調整では覆せない見込み(降霊が雷霆に対して約50pt効く=診断参照)。ルール側の案は #513。残る未測定の軸: synergy / strategy / joint。
 - 状態: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
 - 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
