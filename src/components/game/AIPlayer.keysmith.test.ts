@@ -120,47 +120,6 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
         b[0] = { player: '💙', bind: 4, effects: [] };
         expect(run('keysmith', 6, b).lockTargets).toBeUndefined();
     });
-
-    describe('ロックの計画に手札の他の札を足す（extendPlan）', () => {
-        const withHand = (character: 'keysmith' | 'you') => {
-            const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
-            return ai.makeMove(board(), 8, skillCosts, 2, 5, [11, 2, 0], false); // 封鎖の断(9〜10)は払えない魔力
-        };
-        it('鍵師は、ロックを撃つ手番でも余った魔力で手札の札（バッズ）を足す', () => {
-            const r = withHand('keysmith');
-            expect(r.skills).toContain('onClickUseLock');
-            expect(r.skills).toContain('onClickBuds');
-        });
-        it('鍵師でなければ、この盤面ではロックを撃たない', () => {
-            expect(withHand('you').skills).not.toContain('onClickUseLock');
-        });
-    });
-});
-
-describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { skillCosts } = require('./skillCosts');
-    const board = () => Array.from({ length: 16 }, (): SquareInfo => ({ player: undefined, bind: 0, effects: [] }));
-    const run = (character: 'keysmith' | 'you', magic: number, hand: number[], b: SquareInfo[] = board()) => {
-        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
-        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
-    };
-    it('鍵師は、砦(108)が手札にあり魔力が足りれば立てる', () => {
-        const r = run('keysmith', 8, [108, 2, 0]);
-        expect(r.chargeClicks?.some((c) => c.skill === 'onClickFort')).toBe(true);
-    });
-    it('市場(110)でも立てる。魔力が足りなければ立てない', () => {
-        expect(run('keysmith', 8, [110, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickMarket')).toBe(true);
-        expect(run('keysmith', 1, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
-    });
-    it('自陣にオブジェクトが既にあれば、2つ目は立てない', () => {
-        const b = board();
-        b[15] = { player: '💙', bind: 3, effects: [], object: 'fort' };
-        expect(run('keysmith', 8, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
-    });
-    it('鍵師以外は立てない', () => {
-        expect(run('you', 8, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
-    });
 });
 
 describe('鍵師AI: 芽吹きの錠でバッズを付ける', () => {
@@ -187,5 +146,28 @@ describe('鍵師AI: 芽吹きの錠でバッズを付ける', () => {
     });
     it('ギアが無ければこの盤面ではロックしない（ライフ2は守りの対象ではない）', () => {
         expect(run(false).lockTargets).toBeUndefined();
+    });
+});
+
+describe('鍵師AI: 封鎖の断のために魔力を貯める', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 4, effects: [] };
+        b[5] = { player: '⭕', bind: 4, effects: [] };
+        return b;
+    };
+    const run = (character: 'keysmith' | 'you', magic: number) => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
+        return ai.makeMove(board(), magic, skillCosts, 2, 5, [2, 11, 10], false);
+    };
+    it('封鎖の断のコストに届かず、守りも要らないときは、手札のスキルを撃たず魔力を貯める', () => {
+        const r = run('keysmith', 5);
+        expect(r.skills.filter((sk) => sk !== 'onClickUseLock')).toEqual([]);
+        expect(r.chargeClicks ?? []).toEqual([]);
+    });
+    it('鍵師以外は、同じ場面で手札のスキルを撃つ', () => {
+        expect(run('you', 8).skills.length).toBeGreaterThan(0);
     });
 });
