@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/objects.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.hasOwnObject = exports.OBJECT_PLACE_KEYS = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
+exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.activeObjectCount = exports.newObject = exports.objectLandable = exports.hasOwnObject = exports.OBJECT_PLACE_KEYS = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.BOULDER_LOCK_STACK = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
 // オブジェクト（空きマスに設置して使う建造物）の純粋ロジック。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
 //
 // ルール
@@ -19,6 +19,7 @@ Object.defineProperty(exports, "isTree", { enumerable: true, get: function () { 
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const lifeBan_1 = require("./lifeBan");
+const lock_1 = require("./lock");
 const poison_1 = require("./poison");
 const util_1 = require("./util");
 const shikigami_1 = require("./shikigami");
@@ -42,6 +43,8 @@ exports.OBJECT_PARAMS = {
 };
 /** 設置したときのライフ（全種類共通） */
 exports.OBJECT_LIFE = 5;
+/** 大岩を置くときに付く🔑ロックの残りターン数 */
+exports.BOULDER_LOCK_STACK = 2;
 /** 大工房: 軽減の対象になるスキルのベースコスト・軽減量・設置スキルが無料になる相手の手番の支出 */
 exports.WORKSHOP_PARAMS = { bigBase: 7, cut: 3, freeSpent: 7 };
 exports.OBJECT_DEFS = {
@@ -63,18 +66,26 @@ exports.OBJECT_DEFS = {
     soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: exports.OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '相手は1ターンにコマを1つしか置けない' },
     oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: exports.OBJECT_LIFE, costKey: 'onClickOneWord', desc: '相手は1ターンにスキルを1つしか使えない' },
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: exports.OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲にはエフェクトを付与できない' },
+    boulder: { idx: 136, name: '大岩', icon: '⛰️', life: exports.OBJECT_LIFE, costKey: 'onClickBoulder', desc: '効果は無く、2ターンのロック付きで設置される' },
 };
 /** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
 exports.OBJECT_PLACE_KEYS = new Set(Object.values(exports.OBJECT_DEFS).map((d) => d.costKey));
 /** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
-const hasOwnObject = (board, player) => board.some((sq) => sq.object !== undefined && sq.player === player);
+const hasOwnObject = (board, player) => board.some((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === player);
 exports.hasOwnObject = hasOwnObject;
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 const objectLandable = (sq) => (0, shikigami_1.shikigamiLandable)(sq) && !(0, ObjectKind_1.isObject)(sq);
 exports.objectLandable = objectLandable;
-/** 種類 kind のオブジェクト。player のものとして、種類ごとのライフで置く */
-const newObject = (player, kind) => ({ player, bind: exports.OBJECT_DEFS[kind].life, effects: [], object: kind });
+/** 種類 kind のオブジェクト。player のものとして、種類ごとのライフで置く。carried は空きマスから引き継ぐエフェクト（🔥） */
+const newObject = (player, kind, lifeBonus = 0, carried = []) => {
+    const sq = { player, bind: exports.OBJECT_DEFS[kind].life + lifeBonus, effects: [...carried], object: kind };
+    // 大岩は効果を持たず、2ターンのロック付きで置かれる（相手の邪魔と、オブジェクトに関わるギア・スキルの発動用）
+    return kind === 'boulder' ? (0, lock_1.addLock)(sq, exports.BOULDER_LOCK_STACK) : sq;
+};
 exports.newObject = newObject;
+/** 働いている（氷結で休眠していない）player のオブジェクトの数。地代の魔力の元 */
+const activeObjectCount = (board, player) => board.filter((sq) => sq.object !== undefined && sq.player === player && !(0, thermal_1.isDormant)(sq)).length;
+exports.activeObjectCount = activeObjectCount;
 /** 設置先に選べるマス全て（昇順） */
 const objectLandableCells = (board) => board.map((sq, i) => ((0, exports.objectLandable)(sq) ? i : -1)).filter((i) => i !== -1);
 exports.objectLandableCells = objectLandableCells;
@@ -136,7 +147,7 @@ const enforceEffectRules = (board, snap, endPlayer) => {
             board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
             res.removed.push(k);
         }
-        else if (tongue && sq.player === endPlayer && !sq.object) {
+        else if (tongue && sq.player === endPlayer && !(0, ObjectKind_1.isBuilding)(sq)) {
             board[k] = { ...sq, bind: 0 };
             res.zeroed.push(k);
         }
@@ -167,7 +178,7 @@ exports.ONE_PIECE_MULTI_KEYS = new Set([
     'onClickShikigamiFlood', 'onClickTotalAssault', 'onClickNecromancy',
 ]);
 /** player が非オブジェクトのコマを持つ数 */
-const ownPieceCount = (board, player) => board.filter((sq) => sq.player === player && !sq.object).length;
+const ownPieceCount = (board, player) => board.filter((sq) => sq.player === player && !(0, ObjectKind_1.isBuilding)(sq)).length;
 exports.ownPieceCount = ownPieceCount;
 /** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
 const newPieceBlocked = (board, actor, placedThisTurn) => placedThisTurn >= 1 && (0, exports.enemyObjectActive)(board, actor, 'soloSign');
@@ -312,7 +323,7 @@ const objectSkillTargets = (skill, board, player, chars) => {
         case 'demolish': return enemyObjects(board, player, chars);
         case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
         case 'reinforce': return ownObjects(board, player);
-        case 'duplicate': return (0, exports.objectLandableCells)(board).length > 0 ? ownObjects(board, player) : [];
+        case 'duplicate': return (0, exports.objectLandableCells)(board).length > 0 ? ownObjects(board, player).filter((i) => board[i].object !== 'shikigami') : []; // 式神は複製できない（式神を置くスキルが別にある）
         default: return [];
     }
 };
@@ -338,8 +349,9 @@ const destroyOne = (board, i, res) => {
 /**
  * オブジェクトのスキルを実行する。マスを選ぶスキルは i に選んだマス（対象でなければ何もせず null を返す）。board を直接書き換える。
  * @param rng 分譲の置き先の抽選用 [0,1)
+ * @param lifeBonus 分譲で置くオブジェクトの初期ライフへの加算（頑丈な建材）
  */
-const runObjectSkill = (skill, board, player, chars, i, rng = Math.random) => {
+const runObjectSkill = (skill, board, player, chars, i, rng = Math.random, lifeBonus = 0) => {
     const res = { destroyed: [], blocked: [], affected: [] };
     if (exports.OBJECT_SKILLS[skill].target && !(0, exports.objectSkillTargets)(skill, board, player, chars).includes(i))
         return null;
@@ -376,7 +388,7 @@ const runObjectSkill = (skill, board, player, chars, i, rng = Math.random) => {
         case 'duplicate': {
             const empties = (0, exports.objectLandableCells)(board);
             const j = empties[Math.floor(rng() * empties.length)];
-            board[j] = { ...(0, exports.newObject)(player, board[i].object), effects: board[j].effects.filter((e) => e.effect === '🔥') };
+            board[j] = (0, exports.newObject)(player, board[i].object, lifeBonus, board[j].effects.filter((e) => e.effect === '🔥'));
             (0, exports.sweepBurntTrees)(board);
             res.affected.push(j);
             break;

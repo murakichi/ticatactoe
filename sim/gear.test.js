@@ -183,6 +183,23 @@ test('道連れの鍵: 外れたらロックは付かない', () => {
     assert.ok(!sq.effects.some((x) => x.effect === '🔑'));
 });
 
+// 火炎・氷結・ダブル帯電のトークンも『トークン系スキル』なので、道連れの鍵・収穫が効く（本番(Game.tsx)も同じ。以前は本番だけ通していなかった）
+test('道連れの鍵・収穫: 火炎・氷結・ダブル帯電のトークンにも効く（rng=0 で必ず当たる）', () => {
+    for (const [skill, label] of [['flameToken', '火炎'], ['frostToken', '氷結'], ['doubleChargeToken', 'ダブル帯電']]) {
+        const s = game([['bindingLock', 'harvest'], []], ['electrician', 'you']);
+        s.magic[0] = 99;
+        s.rng = () => 0;
+        e.SKILLS[skill](s);
+        const mine = s.board.filter((x) => x.player === H);
+        assert.ok(mine.length >= 1, label + ': コマが置かれる');
+        const locked = mine.some((x) => x.effects.some((f) => f.effect === '🔑'));
+        const frozenOnly = skill === 'frostToken'; // 氷結中のマスにはロックが掛からない（道連れの鍵は働いた扱いで収穫には数える）
+        assert.ok(frozenOnly ? !locked : locked, label + ': ロック ' + (frozenOnly ? '(氷結中は付かない)' : ''));
+        assert.ok(s.stats.bindingLock >= 1, label + ': 道連れの鍵が働いた統計');
+        assert.ok(s.stats.harvestMagic >= 1, label + ': 収穫が働いた統計');
+    }
+});
+
 test('増援 / 軽量トークン: トークンのライフが+2 / -1（コストは軽量トークンだけ-1）', () => {
     const a = game([['reinforce'], []]);
     a.magic[0] = 99;
@@ -635,6 +652,55 @@ test('芽吹き: 🔥のマスにはバッズが付かない(seedBud)', () => {
     assert.strictEqual(t.seedBud(burning, H, ['budSeed']), null);
     assert.strictEqual(t.seedBud({ player: H, bind: 7, effects: [] }, H, ['budSeed']).effects.length, 1);
     assert.strictEqual(t.seedBud({ player: C, bind: 9, effects: [] }, H, ['budSeed']), null, '相手のコマには付かない');
+});
+
+test('地代: 手番開始時、働いている自陣のオブジェクト1つにつきマジック+1(上限なし。氷結中・敵のオブジェクトは数えない)', () => {
+    const objects = require('./shared/objects');
+    const turnGain = (gears) => {
+        const s = game(gears);
+        s.board[5] = objects.newObject(H, 'fort');
+        s.board[6] = objects.newObject(H, 'fort');
+        s.board[7] = objects.newObject(H, 'fort');
+        s.board[8] = objects.newObject(H, 'fort');
+        s.board[9] = { ...objects.newObject(H, 'fort'), effects: [{ effect: '❄' }] }; // 氷結中は休眠
+        s.board[10] = objects.newObject(C, 'fort'); // 敵のオブジェクト
+        e.placeMove(s, 0);
+        const before = s.magic[0];
+        e.placeMove(s, 1);
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(turnGain([['groundRent'], []]) - turnGain([[], []]), 4);
+});
+
+test('頑丈な建材: 設置するオブジェクトの初期ライフが+3(5→8)。装備なしは5', () => {
+    const place = (gears) => {
+        const s = game(gears);
+        s.objectPlacing = 'fort';
+        e.placeMove(s, 5);
+        return s.board[5].bind;
+    };
+    assert.strictEqual(place([['sturdyBuild'], []]), 8);
+    assert.strictEqual(place([[], []]), 5);
+});
+
+test('大岩: コスト1で、2ターンのロック付きの効果なしオブジェクトを設置する(頑丈な建材は+3)', () => {
+    const objects = require('./shared/objects');
+    const place = (gears) => {
+        const s = game(gears);
+        s.magic[0] = 5;
+        e.SKILLS.boulder(s); // スキルを使う(空きマスを選ぶ構え)
+        assert.strictEqual(s.magic[0], 4, 'コスト1');
+        assert.strictEqual(s.objectPlacing, 'boulder');
+        e.placeMove(s, 5);
+        return s.board[5];
+    };
+    const sq = place([[], []]);
+    assert.strictEqual(sq.object, 'boulder');
+    assert.strictEqual(sq.player, H);
+    assert.strictEqual(sq.bind, objects.OBJECT_DEFS.boulder.life);
+    const lock = sq.effects.find((x) => x.effect === '🔑');
+    assert.ok(lock && lock.stack === 2, '2ターンのロック');
+    assert.strictEqual(place([['sturdyBuild'], []]).bind, 8);
 });
 
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {

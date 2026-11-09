@@ -11,6 +11,7 @@ import { OBJECT_KINDS, ObjectKind } from '../../types/ObjectKind';
 import { OBJECT_DEFS, newObject, objectLandable, sweepBurntTrees } from './objects';
 import { skillCosts } from './skillCosts';
 import { absorbDestroy, applyDamage, canBud, canFreeze, freeze, ignite, sow } from './thermal';
+import { isBuilding } from '../../types/ObjectKind';
 
 export { CUSTOM_SKILL_IDX } from './deck';
 
@@ -338,7 +339,7 @@ const hasLockEffect = (sq: SquareInfo): boolean => sq.effects.some((f) => f.effe
 
 /** 効果がそのマスに乗るか（乗らないマスは飛ばす）。⚡無敵のコマは呼び出し側で除く */
 export const opApplies = (sq: SquareInfo, op: CustomOp): boolean => {
-    if (sq.object) return false;
+    if (isBuilding(sq)) return false;
     const piece = !!sq.player;
     switch (op.op) {
         case 'damage':
@@ -361,7 +362,7 @@ export const opApplies = (sq: SquareInfo, op: CustomOp): boolean => {
 };
 
 const kindMatches = (sq: SquareInfo, kind: CustomKind, me: Player): boolean => {
-    if (sq.object) return false;
+    if (isBuilding(sq)) return false;
     switch (kind) {
         case 'own':
             return sq.player === me;
@@ -478,7 +479,7 @@ export const applyCustom = (board: SquareInfo[], cells: number[], spec: CustomSk
             case 'object':
                 for (const k of targets) {
                     // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
-                    board[k] = { ...newObject(env.me, op.object), effects: board[k].effects.filter((e) => e.effect === '🔥') };
+                    board[k] = newObject(env.me, op.object, 0, board[k].effects.filter((e) => e.effect === '🔥'));
                     affected.add(k);
                 }
                 sweepBurntTrees(board).forEach((k) => destroyed.add(k));

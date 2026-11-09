@@ -20,8 +20,6 @@ export const SEAL_EMPTY_STACK = 2;
 /** 封鎖の断の基礎コストの下限（敵陣のロックの数だけ軽減したあと） */
 export const SEAL_MIN_COST = 5;
 
-/** 鍵師のパッシブ（手番の最初のロック系が無料）で、封鎖の断だけは無料にせず、この分だけ安くする（完全無料だと毎手番撃てて環境が崩れる: 対強豪95%・全体75%。-6で約43%、-7で約76%） */
-export const SEAL_FIRST_CUT = 6;
 
 /** ロック系スキル（鍵師はコスト-1）。Game.tsx の skillKey / sim/engine.js の costsOf のキー */
 export const LOCK_SKILL_KEYS: ReadonlySet<string> = new Set([

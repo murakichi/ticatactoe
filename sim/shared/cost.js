@@ -23,11 +23,17 @@ exports.SHIKIGAMI_PURGE_FREE = 3;
 /** 夜の帳: 手番の席のスキルコストに足す量（コストが0のスキルは変えない） */
 const veilSurcharge = (env) => (env.veil && env.seat === env.turnSeat ? graveSkills_1.NIGHT_VEIL_SURCHARGE : 0);
 /** 自陣の式神の数 */
-const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
+    var _a;
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env);
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    if (characterId === 'necromancer') {
+        const cut = Math.min((_a = env.corpses) !== null && _a !== void 0 ? _a : 0, graveSkills_1.NECRO_CORPSE_CUT_CAP);
+        return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
+    }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer')
         return skillKey && thermal_1.FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
@@ -83,8 +89,8 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
         return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickLockRaid' && mine && env.lockPrev)
         return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
-    if (skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed)
-        return skillKey === 'onClickSeal' ? Math.max(1, adjusted - keysmith_1.SEAL_FIRST_CUT) : 0; // 鍵師のパッシブ: 手番の最初のロック系スキルは無料（封鎖の断だけは -SEAL_FIRST_CUT）
+    if (skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed && adjusted <= env.magic)
+        return 0; // 鍵師のパッシブ: 自身の魔力以下のロック系スキルの最初の1回は無料（払える額でないと無料にならない）
     if (skillKey === 'onClickFireWheel' && mine && (0, thermal_1.fireStacksTotal)(env.board) > env.fireBase)
         return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）

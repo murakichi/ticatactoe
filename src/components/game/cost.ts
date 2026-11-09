@@ -3,7 +3,7 @@
 //   characterCostOf … 増加分 → キャラの減少分
 //   gearCostOf      … ギアの補正・導線・陰陽師のパッシブ・無料条件・軽減スキル
 //   calculateCostOf … 上の2つを続けて掛けたもの（スキルの表示・支払いに使う）
-import { NIGHT_VEIL_SURCHARGE } from './graveSkills';
+import { NECRO_CORPSE_CUT_CAP, NIGHT_VEIL_SURCHARGE } from './graveSkills';
 import { CharacterId, YingYangMode } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -13,7 +13,7 @@ import { CostContext, Gears, adjustCostByGear, gearTokenBindDelta } from './gear
 import { OBJECT_PARAMS, WORKSHOP_PARAMS, luckyCatActive, workshopActive } from './objects';
 import { skillCosts } from './skillCosts';
 import { FIRST_FROST_FREE_LEAVES } from './tokenSkills';
-import { LOCK_SKILL_KEYS, SEAL_FIRST_CUT } from './keysmith';
+import { LOCK_SKILL_KEYS } from './keysmith';
 import { FLAME_SKILL_KEYS, boardLeaves, fireStacksTotal, leafSurcharge, witchCostOf } from './thermal';
 
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
@@ -50,12 +50,16 @@ export type CostEnv = {
     oppBigPrev: boolean;
     /** 夜の帳が効いているか（この席の手番の間、スキルコスト+3。手番の席にだけ掛かる） */
     veil: boolean;
+    /** この席の墓地の死体の数（ネクロマンサーの全スキル軽減の入力） */
+    corpses?: number;
     /** 自分の前の手番以降の相手のスキル使用（返し特売の0コスト条件）と、手番開始時点の盤面全体の🔥の総数（火の車の無料条件） */
     oppSkillPrev: boolean;
     /** 直前の相手ターンにロックが使われたか（錠前荒らしの0コスト条件） */
     lockPrev: boolean;
-    /** 鍵師のパッシブ: この手番に、常設のロックの無料の1回を使ったか */
+    /** 鍵師のパッシブ: この手番に、無料のロック系スキルの1回を使ったか */
     lockFreeUsed: boolean;
+    /** この席の手持ちの魔力（鍵師の無料ロックは、通常のコストが手持ちの魔力以下のスキルだけに効く） */
+    magic: number;
     /** 直前の手番に盤面の🌱🍂が増えたか（火口の無料条件。撃つと消える） */
     plantPrev: boolean;
     /** 直前の手番に相手がコマを2つ以上設置したか（飛び火の無料条件。撃つと消える） */
@@ -68,12 +72,17 @@ export type CostEnv = {
 const veilSurcharge = (env: CostEnv): number => (env.veil && env.seat === env.turnSeat ? NIGHT_VEIL_SURCHARGE : 0);
 
 /** 自陣の式神の数 */
-const ownShikigami = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 
 export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean, isPoison: boolean, skillKey?: string): number => {
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + leafSurcharge(env.board, env.player) + veilSurcharge(env);
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    if (characterId === 'necromancer') {
+        const cut = Math.min(env.corpses ?? 0, NECRO_CORPSE_CUT_CAP);
+        return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
+    }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer') return skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
@@ -110,7 +119,7 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickLockRaid' && mine && env.lockPrev) return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
-    if (skillKey && LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed) return skillKey === 'onClickSeal' ? Math.max(1, adjusted - SEAL_FIRST_CUT) : 0; // 鍵師のパッシブ: 手番の最初のロック系スキルは無料（封鎖の断だけは -SEAL_FIRST_CUT）
+    if (skillKey && LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed && adjusted <= env.magic) return 0; // 鍵師のパッシブ: 自身の魔力以下のロック系スキルの最初の1回は無料（払える額でないと無料にならない）
     if (skillKey === 'onClickFireWheel' && mine && fireStacksTotal(env.board) > env.fireBase) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
     return mine ? applyDiscount(adjusted, discountAmount(env.discount, skillKey, isToken)) : adjusted;
