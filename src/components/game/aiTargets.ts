@@ -47,7 +47,7 @@ export const targetMethods = {
         board.forEach((sq, k) => {
             if (!objectLandable(sq)) return;
             const ring = geo.surroundRange(k);
-            const locked = ring.filter((j) => this.isEnemy(board[j].player) && !board[j].object && board[j].effects.some((e) => e.effect === '🔑')).length;
+            const locked = ring.filter((j) => (this.isEnemy(board[j].player) || !board[j].player) && !board[j].object && board[j].effects.some((e) => e.effect === '🔑')).length; // 敵のコマと空きマス（鍵師の封鎖で置けなくなったマス）のロック
             const score = locked * 10 + ring.length; // 同数なら周囲が多い(中央寄り)ほうを選ぶ
             if (locked >= 2 && score > bestScore) { bestScore = score; best = k; }
         });

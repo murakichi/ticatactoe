@@ -468,7 +468,7 @@ export const skillChoiceMethods = {
             (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch'))) ||
             // 鍛冶師: 相手に魔法使いがいるとき、解錠の碑(137)を手札に固定する（魔法使いのロックで火遁が通らない）
-            (this.character === 'pyromancer' && idx === 137 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'magician'));
+            (this.character === 'pyromancer' && idx === 137 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'keysmith')));
 
         // 盤面的に価値が高いスキル
         const valued = (idx: number): boolean => {
