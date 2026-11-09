@@ -16,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, KEYSMITH_SEAL_ALT, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -1167,8 +1167,22 @@ export const planMoveMethods = {
         const args: PlanMoveArgs = argsIn[0].some((sq) => isBuilding(sq))
             ? [argsIn[0].map((sq) => (isBuilding(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
-        const result = this.planMove(...args);
+        let result = this.planMove(...args);
         const magic = args[1];
+        // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
+        if (KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
+            && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
+            const released = sealReleaseCells(args[0], this.playerSymbol).length;
+            const sealCost = this.calculateAICost(sealBaseCost(args[2].onClickSeal, released), false, false, 'onClickSeal');
+            if (magic < sealCost && this.plannedSpend(result, args[2]) > 0) {
+                const isLock = (sk: string) => sk === 'onClickUseLock';
+                const kept = { ...result, skills: result.skills.filter(isLock), chargeClicks: result.chargeClicks?.filter((c) => isLock(c.skill)) };
+                if (kept.skills.length === 0 && (kept.chargeClicks?.length ?? 0) === 0 && !kept.lockTargets) {
+                    const move = result.move ?? this.getBestMove(args[0], args[4]);
+                    result = { move, skills: [] };
+                } else result = kept;
+            }
+        }
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
         // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
@@ -1191,12 +1205,18 @@ export const planMoveMethods = {
     },
 
     /** 鍵師: 封鎖の断を撃つ判断か（スキル選択の結果に封鎖の断が含まれる）。魔力が足りないときは false */
+    sealWaitsForFill(this: AIPlayer, board: SquareInfo[]): boolean {
+        if (KEYSMITH_SEAL_ALT === 0) return false;
+        const empties = board.filter((sq) => !sq.player).length;
+        return empties > 0 && this.myEmptyLocks(board) * 2 >= empties;
+    },
+
     sealWanted(this: AIPlayer, args: PlanMoveArgs): boolean {
         const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
         if (this.countReaches(board, this.playerSymbol) !== 0) return false;
         const released = sealReleaseCells(board, this.playerSymbol).length;
         const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
-        if (magic < sealCost) return false;
+        if (magic < sealCost || this.sealWaitsForFill(board)) return false;
         return this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay).includes('onClickSeal');
     },
 
