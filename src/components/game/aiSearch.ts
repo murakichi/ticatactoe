@@ -12,6 +12,7 @@ import { lockBlocksPlacement } from './keysmith';
 import { shouldDecay, canHitBound, isTakeProtected } from './decay';
 import { chargeStacks, orthoNeighbors } from './charge';
 import { EXCLUSIVE_MIN_MAGIC, FORCED_WIN_PLIES, GLACIER_COST, NO_CAP_NECRO_WEIGHT, YY_COVER_WEIGHT } from './aiConstants';
+import { toPiece } from './shikigami';
 
 export const searchMethods = {
 
@@ -294,7 +295,7 @@ export const searchMethods = {
             // 自分のマスに重ね置き
             newBoard[index] = { ...sq, bind: sq.bind + life + 1 };
             // 式神を補強すると🌱付きの通常コマになる
-            if (isShikigami(sq)) newBoard[index].effects = newBoard[index].effects.filter((e) => e.effect !== '📜').concat([{ effect: '🌱' }]);
+            if (isShikigami(sq)) newBoard[index] = { ...toPiece(newBoard[index]), effects: [...newBoard[index].effects, { effect: '🌱' }] };
         }
 
         return newBoard;

@@ -490,9 +490,9 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     return [...keep, ...fill];
 }
 
-// 式神(📜)は列の並びに数えない
-const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
-const symbolsOf = (board) => board.map((x) => (isShikigami(x) || x.object ? undefined : x.player)); // 式神・オブジェクトは列に数えない
+// 式神はオブジェクトの一種（SquareInfo.object = 'shikigami'）。オブジェクトは列の並びに数えない
+const isShikigami = (sq) => sq.object === 'shikigami';
+const symbolsOf = (board) => board.map((x) => (x.object ? undefined : x.player));
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
@@ -532,6 +532,7 @@ function costEnv(s, seat) {
         bigCast: s.bigCast[seat],
         oppBigPrev: s.oppBigPrev[seat],
         veil: s.veil[seat],
+        corpses: turnMod.NECROMANCY.baseCost - s.necroCost[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
         lockFreeUsed: s.lockFreeUsed[seat],
@@ -754,6 +755,7 @@ function advanceTurn(s) {
         scorch: scorchForNext, // 焦土(上で計算)
         root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
         objects: objRes.magic, // 大木
+        rent: hasGear(s.gears[next], 'groundRent') ? gear.rentGain(objectsMod.activeObjectCount(s.board, sym)) : 0, // 地代: 働いている自陣のオブジェクト1つにつき+1
     });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
@@ -933,7 +935,7 @@ function placeMove(s, i) {
     }
     if (s.objectTool) {
         // オブジェクトのスキル（解体・風化・補強工事・分譲）: 対象のマスを選ぶ。対象でないマスは選び直せる [FAITHFUL] Game.tsx exeObjectTool
-        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng);
+        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng, gear.objectBuildLife(s.gears[s.turn]));
         if (!r) return false;
         bumpStat(s, 'objectSkill_' + s.objectTool);
         s.objectTool = null;
@@ -942,7 +944,7 @@ function placeMove(s, i) {
     if (s.objectPlacing) {
         // オブジェクト: 空きマスに設置する。埋まっている/氷結中/ロック中のマスは選び直せる [FAITHFUL] Game.tsx exeObjectPlace
         if (!objectsMod.objectLandable(board[i])) return false;
-        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing), effects: board[i].effects.filter((e) => e.effect === '🔥') };
+        board[i] = objectsMod.newObject(curPlayer(s), s.objectPlacing, gear.objectBuildLife(s.gears[s.turn]), board[i].effects.filter((e) => e.effect === '🔥'));
         objectsMod.sweepBurntTrees(board);
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
@@ -1341,7 +1343,7 @@ function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
     const base = shikigamiAllBase(s);
     if (base === 0) return;
-    for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
+    s.board.forEach((sq, k) => { if (sq.player === cur && isShikigami(sq)) s.board[k] = shikiMod.toPiece(sq); });
     spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
@@ -1709,7 +1711,7 @@ function onClickBurnOff(s) {
     bumpStat(s, 'burnOffFlames', lit);
 }
 
-// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
+// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
 // 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {
@@ -2674,6 +2676,7 @@ const SKILLS = {
     soloSign: (s) => onClickObject(s, 'soloSign'),
     oneWord: (s) => onClickObject(s, 'oneWord'),
     blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
+    boulder: (s) => onClickObject(s, 'boulder'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),

@@ -8,12 +8,13 @@
 //  - エフェクトやスキルの効果は通常のコマと同じように受ける。氷結中のオブジェクトは休眠して効果を発揮しない
 //  - 大木・枯れた大木は🔥を付けられると即座に壊れる（thermal.ts の ignite。念のため手番開始時に sweepBurntTrees でも掃除する）
 //  - 手番開始時、持ち主の席のオブジェクトが objectTurnStart で効果を発揮する
-import { ObjectKind, OBJECT_KINDS, isObject, isTree } from '../../types/ObjectKind';
+import { ObjectKind, OBJECT_KINDS, isBuilding, isObject, isTree } from '../../types/ObjectKind';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isGuarded } from './charge';
 import { LIFE_BAN_PLACING_KEYS } from './lifeBan';
+import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { calculateWinner, isShikigami, lineSymbols } from '../../util';
 import { shikigamiLandable } from './shikigami';
@@ -30,7 +31,7 @@ export type ObjectDef = {
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine' | 'onClickLuckyCat' | 'onClickMudField' | 'onClickTongueKing' | 'onClickEightTrigrams' | 'onClickSoloSign' | 'onClickOneWord' | 'onClickBlindMonkey';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine' | 'onClickLuckyCat' | 'onClickMudField' | 'onClickTongueKing' | 'onClickEightTrigrams' | 'onClickSoloSign' | 'onClickOneWord' | 'onClickBlindMonkey' | 'onClickBoulder';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -55,6 +56,8 @@ export const OBJECT_PARAMS = {
 
 /** 設置したときのライフ（全種類共通） */
 export const OBJECT_LIFE = 5;
+/** 大岩を置くときに付く🔑ロックの残りターン数 */
+export const BOULDER_LOCK_STACK = 2;
 
 /** 大工房: 軽減の対象になるスキルのベースコスト・軽減量・設置スキルが無料になる相手の手番の支出 */
 export const WORKSHOP_PARAMS = { bigBase: 7, cut: 3, freeSpent: 7 } as const;
@@ -78,19 +81,27 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '相手は1ターンにコマを1つしか置けない' },
     oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: OBJECT_LIFE, costKey: 'onClickOneWord', desc: '相手は1ターンにスキルを1つしか使えない' },
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲にはエフェクトを付与できない' },
+    boulder: { idx: 136, name: '大岩', icon: '⛰️', life: OBJECT_LIFE, costKey: 'onClickBoulder', desc: '効果は無く、2ターンのロック付きで設置される' },
 };
 
 /** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
 export const OBJECT_PLACE_KEYS: ReadonlySet<string> = new Set(Object.values(OBJECT_DEFS).map((d) => d.costKey));
 
 /** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
-export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => sq.object !== undefined && sq.player === player);
+export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => isBuilding(sq) && sq.player === player);
 
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 export const objectLandable = (sq: SquareInfo): boolean => shikigamiLandable(sq) && !isObject(sq);
 
-/** 種類 kind のオブジェクト。player のものとして、種類ごとのライフで置く */
-export const newObject = (player: Player, kind: ObjectKind): SquareInfo => ({ player, bind: OBJECT_DEFS[kind].life, effects: [], object: kind });
+/** 種類 kind のオブジェクト。player のものとして、種類ごとのライフで置く。carried は空きマスから引き継ぐエフェクト（🔥） */
+export const newObject = (player: Player, kind: ObjectKind, lifeBonus: number = 0, carried: SquareInfo['effects'] = []): SquareInfo => {
+    const sq: SquareInfo = { player, bind: OBJECT_DEFS[kind].life + lifeBonus, effects: [...carried], object: kind };
+    // 大岩は効果を持たず、2ターンのロック付きで置かれる（相手の邪魔と、オブジェクトに関わるギア・スキルの発動用）
+    return kind === 'boulder' ? addLock(sq, BOULDER_LOCK_STACK) : sq;
+};
+
+/** 働いている（氷結で休眠していない）player のオブジェクトの数。地代の魔力の元 */
+export const activeObjectCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.object !== undefined && sq.player === player && !isDormant(sq)).length;
 
 /** 設置先に選べるマス全て（昇順） */
 export const objectLandableCells = (board: SquareInfo[]): number[] => board.map((sq, i) => (objectLandable(sq) ? i : -1)).filter((i) => i !== -1);
@@ -154,7 +165,7 @@ export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | n
         if (quiet[k]) {
             board[k] = { ...sq, effects: sq.effects.filter((_, idx) => !added.includes(idx)) };
             res.removed.push(k);
-        } else if (tongue && sq.player === endPlayer && !sq.object) {
+        } else if (tongue && sq.player === endPlayer && !isBuilding(sq)) {
             board[k] = { ...sq, bind: 0 };
             res.zeroed.push(k);
         }
@@ -184,7 +195,7 @@ export const ONE_PIECE_MULTI_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** player が非オブジェクトのコマを持つ数 */
-export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !sq.object).length;
+export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !isBuilding(sq)).length;
 
 /** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
 export const newPieceBlocked = (board: SquareInfo[], actor: Player, placedThisTurn: number): boolean =>
@@ -365,7 +376,7 @@ export const objectSkillTargets = (skill: ObjectSkill, board: SquareInfo[], play
         case 'demolish': return enemyObjects(board, player, chars);
         case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
         case 'reinforce': return ownObjects(board, player);
-        case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player) : [];
+        case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player).filter((i) => board[i].object !== 'shikigami') : []; // 式神は複製できない（式神を置くスキルが別にある）
         default: return [];
     }
 };
@@ -400,8 +411,9 @@ const destroyOne = (board: SquareInfo[], i: number, res: ObjectSkillResult): voi
 /**
  * オブジェクトのスキルを実行する。マスを選ぶスキルは i に選んだマス（対象でなければ何もせず null を返す）。board を直接書き換える。
  * @param rng 分譲の置き先の抽選用 [0,1)
+ * @param lifeBonus 分譲で置くオブジェクトの初期ライフへの加算（頑丈な建材）
  */
-export const runObjectSkill = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters, i: number, rng: () => number = Math.random): ObjectSkillResult | null => {
+export const runObjectSkill = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters, i: number, rng: () => number = Math.random, lifeBonus: number = 0): ObjectSkillResult | null => {
     const res: ObjectSkillResult = { destroyed: [], blocked: [], affected: [] };
     if (OBJECT_SKILLS[skill].target && !objectSkillTargets(skill, board, player, chars).includes(i)) return null;
     switch (skill) {
@@ -435,7 +447,7 @@ export const runObjectSkill = (skill: ObjectSkill, board: SquareInfo[], player: 
         case 'duplicate': {
             const empties = objectLandableCells(board);
             const j = empties[Math.floor(rng() * empties.length)];
-            board[j] = { ...newObject(player, board[i].object as ObjectKind), effects: board[j].effects.filter((e) => e.effect === '🔥') };
+            board[j] = newObject(player, board[i].object as ObjectKind, lifeBonus, board[j].effects.filter((e) => e.effect === '🔥'));
             sweepBurntTrees(board);
             res.affected.push(j);
             break;

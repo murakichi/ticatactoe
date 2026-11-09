@@ -12,19 +12,19 @@ const countOwn = (board, player, effect) => board.reduce((n, sq) => (sq.player =
 /** player のコマに乗っている🍂の総数（休眠中も数える） */
 const ownLeaves = (board, player) => countOwn(board, player, '🍂');
 exports.ownLeaves = ownLeaves;
-/** 盤面（空きマスも含む）に乗っているエフェクトの総数。式神の印(📜)は数えない */
-const boardEffectCount = (board) => board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect !== '📜').length, 0);
+/** 盤面（空きマスも含む）に乗っているエフェクトの総数 */
+const boardEffectCount = (board) => board.reduce((n, sq) => n + sq.effects.length, 0);
 exports.boardEffectCount = boardEffectCount;
 /** 吹き寄せの軽減: 1エフェクトにつき */
 exports.GATHER_CUT = 2;
 /** 山焼きの軽減: 1エフェクトにつき */
 exports.BURN_OFF_CUT = 3;
 /** 吹き寄せ・山焼きの軽減に数えるエフェクトの数。氷結(❄)のあるマスは❄の数だけ（同じマスの他のエフェクトは数えない）。
- *  それ以外のマスはエフェクトを全部数えるが、🔑ロック自体と式神の印📜は数えない（ロックのマスの他のエフェクトは数える） */
+ *  それ以外のマスはエフェクトを全部数えるが、🔑ロック自体は数えない（ロックのマスの他のエフェクトは数える） */
 const reduceCount = (board) => board.reduce((n, sq) => {
     if (sq.effects.some((e) => e.effect === '❄'))
         return n + sq.effects.filter((e) => e.effect === '❄').length;
-    return n + sq.effects.filter((e) => e.effect !== '📜' && e.effect !== '🔑').length;
+    return n + sq.effects.filter((e) => e.effect !== '🔑').length;
 }, 0);
 exports.reduceCount = reduceCount;
 /** 焚きつけ: 盤面（敵味方とも）の🍂1枚につき3、🌱1つにつき2だけ軽減する */

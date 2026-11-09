@@ -84,7 +84,7 @@ describe('gearCostOf（導線・無料条件・軽減スキル）', () => {
         [0, 1, 2].forEach((i) => { b[i] = { player: '⭕', bind: 3, effects: [{ effect: '🍂' }] }; });
         expect(gearCostOf(env('you', { board: b }), 6, true, 'onClickFirstFrost')).toBe(0);
         const sh = board();
-        [0, 1, 2].forEach((i) => { sh[i] = { player: '💙', bind: 2, effects: [{ effect: '📜' }] }; });
+        [0, 1, 2].forEach((i) => { sh[i] = { player: '💙', bind: 2, effects: [], object: 'shikigami' }; });
         expect(gearCostOf(env('yinYangMaster', { board: sh }), 5, false, 'onClickShikigamiPurge')).toBe(0);
     });
     it('陰陽師は式神を置いた手番、全スキル-1（下限1）。置くスキル自身も安い', () => {

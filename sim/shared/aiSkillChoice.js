@@ -482,6 +482,8 @@ exports.skillChoiceMethods = {
             cost = Math.max(1, cost - this.leafCount); // 盤面の🍂1枚につき-1（下限1）
         else if (this.character === 'yinYangMaster' && this.yinYangMode === 'yang')
             cost += 1; // 陽は全スキル+1
+        else if (this.character === 'necromancer' && this.corpseCut > 0 && skillKey !== 'onClickNecromancy' && cost > 1)
+            cost = Math.max(1, cost - this.corpseCut); // 墓地の死体の数だけ軽減
         const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
         // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
         return this.hypoCut > 0 && paid > 0 && !(skillKey && (0, discount_1.isDiscountSkill)(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;

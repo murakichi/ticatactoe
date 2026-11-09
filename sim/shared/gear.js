@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
@@ -70,6 +70,10 @@ exports.GEAR_PARAMS = {
     reaperLife: 2,
     /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
     budSeedLife: 7,
+    /** 地代: 働いている自陣のオブジェクト1つにつきの手番開始時の魔力（上限なし） */
+    rentMagic: 1,
+    /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+    buildLife: 3,
 };
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
@@ -102,6 +106,8 @@ exports.GEARS = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
+    { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクトの数だけマジックを獲得` },
+    { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフが上昇` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];
@@ -174,6 +180,12 @@ exports.rootGain = rootGain;
 /** 手番開始時の🌱の数の記録 */
 const budCounts = (squares) => squares.map(burnableCount);
 exports.budCounts = budCounts;
+/** 地代: 働いている自陣のオブジェクトの数 → 手番開始時の魔力 */
+const rentGain = (activeObjects) => activeObjects * P.rentMagic;
+exports.rentGain = rentGain;
+/** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+const objectBuildLife = (gears) => ((0, exports.hasGear)(gears, 'sturdyBuild') ? P.buildLife : 0);
+exports.objectBuildLife = objectBuildLife;
 const rampStart = () => ({ stack: 0, hits: 0 });
 exports.rampStart = rampStart;
 /** 次に引くライフの期待値に足す加算 */
@@ -266,7 +278,7 @@ exports.RECOMMENDED_GEARS = {
     magician: ['spellWard', 'luckyPurse'],
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'],
-    necromancer: ['vengeance', 'lastStand'],
+    necromancer: ['reaper', 'lastStand'],
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
@@ -283,6 +295,7 @@ exports.recommendedGears = recommendedGears;
  */
 exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']],
+    necromancer: [['reaper', 'snowball']],
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 /**

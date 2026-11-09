@@ -24,6 +24,7 @@ import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
+import { isBuilding } from '../../types/ObjectKind';
 
 export interface CellClickScope {
     addDamageHint: (cell: number, icon: string | undefined, amount: number) => void;
@@ -70,7 +71,7 @@ export interface CellClickScope {
     exeSucker: (i: number) => void;
     useShikigamiPlace: boolean;
     exeShikigamiPlace: (i: number) => void;
-    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | null;
+    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null;
     exeObjectPlace: (i: number) => void;
     objectTool: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null;
     exeObjectTool: (i: number) => void;
@@ -400,7 +401,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             return;
         }
 
-        if (asObject === undefined && !currentAI && currentBoard[i].object && currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer && currentBoard[i].bind <= 0) {
+        if (asObject === undefined && !currentAI && isBuilding(currentBoard[i]) && currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer && currentBoard[i].bind <= 0) {
             setCaptureChoice(i);
             return;
         }
@@ -475,7 +476,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             }
         }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
-        if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
+        if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !isBuilding(nextBoard[i])) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 
         // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
         const vengeanceGained: Record<number, number> = {};

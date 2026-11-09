@@ -161,7 +161,7 @@ exports.planMethods = {
     floodComboWins(board) {
         const me = this.playerSymbol;
         const nb = board.map((sq) => ((0, shikigami_1.shikigamiLandable)(sq) ? { player: me, bind: 0, effects: [] }
-            : (sq.player === me && (0, util_1.isShikigami)(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+            : (sq.player === me && (0, util_1.isShikigami)(sq) ? (0, shikigami_1.toPiece)(sq) : sq)));
         return (0, util_1.calculateWinner)((0, util_1.lineSymbols)(nb)) === me;
     },
     /**
@@ -187,7 +187,7 @@ exports.planMethods = {
                 const combo = this.comboPlan(b, costs, availableSkills);
                 if (m >= combo.total) {
                     const nb = b.map((sq) => ((0, shikigami_1.shikigamiLandable)(sq) ? { player: me, bind: 0, effects: [] }
-                        : (sq.player === me && (0, util_1.isShikigami)(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+                        : (sq.player === me && (0, util_1.isShikigami)(sq) ? (0, shikigami_1.toPiece)(sq) : sq)));
                     if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(nb)) === me) {
                         // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ
                         for (let k = 0; k < combo.floodCasts; k++)
@@ -307,7 +307,7 @@ exports.planMethods = {
                         break;
                     clicks.push({ skill: 'onClickShikigamiPlace', target: cell });
                     m -= placeCost;
-                    b[cell] = { player: me, bind: shikigami_1.SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
+                    b[cell] = (0, shikigami_1.newShikigami)(me);
                     continue;
                 }
                 break;

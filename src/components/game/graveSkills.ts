@@ -10,6 +10,8 @@ import { emptyBlocked } from './thermal';
 export const NIGHT_VEIL_SURCHARGE = 3;
 /** 弔い割引: 軽減する死体の数の上限 */
 export const GRAVE_DISCOUNT_CAP = 3;
+/** ネクロマンサーのパッシブ: 墓地の死体の数（上限）だけ、蘇生以外の全スキルのコストを軽減する（下限1）。cost.ts の characterCostOf */
+export const NECRO_CORPSE_CUT_CAP = 3;
 /** 毒返しの構え: 続く手番数（使った手番の次の自分の手番から数えて、この回数目の手番の終わりまで）と、置くコマのライフ */
 export const POISON_WARD_TURNS = 3;
 export const POISON_WARD_LIFE = 4;

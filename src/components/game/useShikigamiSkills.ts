@@ -8,11 +8,11 @@ import { CharacterId, YingYangMode } from '../../types/Character';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isShikigami } from '../../util';
 import { TokenKind, PutContext, PlacedToken } from './tokenPlace';
-import { shikigamiLandable, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
+import { toPiece, shikigamiLandable, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
 import { OBJECT_SKILLS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, ObjectKind, newObject, objectLandable, sweepBurntTrees } from './objects';
 import { SkillEffectType, BurstType } from './BoardEffects';
 import { SHIKIGAMI_DISCOUNT_BASE, Discount } from './discount';
-import { GearId, gearTokenBindDelta } from './gear';
+import { GearId, gearTokenBindDelta, objectBuildLife } from './gear';
 import { PendingMode } from './pendingMode';
 import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
@@ -53,7 +53,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         spendMagic(gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang'), false, true, 'onClickToggleYingYang');
     };
 
-    // 式神(📜): 紙の分身。ライフ2で列には数えない。自分で補強すると🌱付きの自陣コマ、相手に乗っ取られると空きマスになる。
+    // 式神(📜): 紙の分身。オブジェクトの一種（object: 'shikigami'）でライフ2、列には数えない。自分で補強すると🌱付きの自陣コマ、相手に乗っ取られると空きマスになる。
     // 陰: 任意の空きマスに置く(コスト2) / 陽: 自分の式神を1つ選んで爆破(コスト4)。sim/engine.js の SHIKIGAMI_* と同値
     const [useShikigamiPlace, setUseShikigamiPlace] = pendingFlag('shikigamiPlace');
     const [useShikigamiBlast, setUseShikigamiBlast] = pendingFlag('shikigamiBlast');
@@ -90,7 +90,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         if (!objectTool) return;
         const def = OBJECT_SKILLS[objectTool];
         const board = currentBoard.slice();
-        const r = runObjectSkill(objectTool, board, currentTurnPlayer, characters, i);
+        const r = runObjectSkill(objectTool, board, currentTurnPlayer, characters, i, Math.random, objectBuildLife(turnGears));
         if (!r) return; // 対象でないマスは選び直せる
         addLog(`${posName(i)}に「${def.name}」${r.destroyed.length > 0 ? '（破壊）' : r.blocked.length > 0 ? '（氷結が身代わり）' : ''}`);
         flashCells([i, ...r.destroyed, ...r.blocked, ...r.affected]);
@@ -113,7 +113,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
     const exeObjectPlace = (i: number) => {
         if (!objectPlacing || !objectLandable(currentBoard[i])) return; // 埋まっている・氷結中・ロック中のマスは選び直せる
         const board = currentBoard.slice();
-        board[i] = { ...newObject(currentTurnPlayer, objectPlacing), effects: currentBoard[i].effects.filter((e) => e.effect === '🔥') }; // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
+        board[i] = newObject(currentTurnPlayer, objectPlacing, objectBuildLife(turnGears), currentBoard[i].effects.filter((e) => e.effect === '🔥')); // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
         sweepBurntTrees(board);
         addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
         flashCells([i]);
@@ -232,7 +232,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
     const onClickShikigamiAll = () => {
         const mine = ownShikigami();
         const board = currentBoard.slice();
-        for (const i of mine) board[i] = { ...board[i], effects: board[i].effects.filter((e) => e.effect !== '📜') };
+        for (const i of mine) board[i] = toPiece(board[i]);
         if (mine.length === 0) return;
         addLog(`「式神一括」を使用（${mine.length}体が自陣のコマに）`);
         flashCells(mine);
