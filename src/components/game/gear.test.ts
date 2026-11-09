@@ -310,3 +310,22 @@ describe('「あなた」の相手別ギア', () => {
         }
     });
 });
+
+describe('普請道楽（オブジェクトのギア）', () => {
+    const own = { skillsThisTurn: 0, echoReady: false, ownObjects: true };
+    const none = { skillsThisTurn: 0, echoReady: false, ownObjects: false };
+    it('自陣にオブジェクトが無いときはオブジェクトを設置するスキルがコスト-2、あれば全スキル-3（設置スキルの-2は無いときだけ。重ならない）。下限1', () => {
+        expect(adjustCostByGear(8, ['buildMania'], none, false, 'onClickBigTree')).toBe(6);
+        expect(adjustCostByGear(5, ['buildMania'], none, false, 'onClickFort')).toBe(3);
+        expect(adjustCostByGear(4, ['buildMania'], none, false, 'onClickBibine')).toBe(4); // 設置でもオブジェクトも無いスキルは変わらない
+        expect(adjustCostByGear(4, ['buildMania'], own, false, 'onClickBibine')).toBe(1);
+        expect(adjustCostByGear(8, ['buildMania'], own, false, 'onClickBigTree')).toBe(5); // 設置スキルも-3だけ（-2は上乗せされない）
+        expect(adjustCostByGear(5, ['buildMania'], own, false, 'onClickFort')).toBe(2);
+        expect(adjustCostByGear(3, ['buildMania'], own, false, 'onClickBibine')).toBe(1); // 下限1
+        expect(adjustCostByGear(1, ['buildMania'], own, false, 'onClickShuffle')).toBe(1);
+    });
+    it('ギアを持たない席には何も起きない。壊す・強くするスキルは設置ではないので-2の対象外', () => {
+        expect(adjustCostByGear(8, [], own, false, 'onClickBigTree')).toBe(8);
+        expect(adjustCostByGear(6, ['buildMania'], none, false, 'onClickDuplicate')).toBe(6);
+    });
+});

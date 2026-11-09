@@ -126,10 +126,11 @@ exports.advanceGearState = advanceGearState;
 /**
  * ギア補正（adjustCostByGear）の入力。手番の席は今の手番内の状態、手番でない席（パネルで非手番側のコストを出すとき）は『その席の次の手番の頭』の状態で出す。
  * @param ailments 病炎の契りの入力（自陣にある毒・火炎の種類数。ギア未装備なら 0）
+ * @param ownObjects 普請道楽の入力（自陣にオブジェクトがあるか。ギア未装備なら false）
  */
-const gearCostContext = (g, r, seat, turnSeat, ailments) => seat === turnSeat
-    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat] }
-    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat] };
+const gearCostContext = (g, r, seat, turnSeat, ailments, ownObjects = false) => seat === turnSeat
+    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects }
+    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects };
 exports.gearCostContext = gearCostContext;
 /**
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。

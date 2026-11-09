@@ -14,7 +14,7 @@ import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './tu
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
-import { boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { hasOwnObject, boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType } from './BoardEffects';
@@ -227,7 +227,7 @@ export const Game = (props: GameProps) => {
         gearsBySeat.findIndex((g, seat) => hasGear(g, 'lastStand') && !lastStandUsed.current[seat] && symbols[seat] !== w);
     const gearCtxFor = (seat: number): CostContext => {
         const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
-        return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments);
+        return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments, hasGear(gearsBySeat[seat], 'buildMania') && hasOwnObject(currentBoard, symbols[seat]));
     };
     /** コストを払う席の状況（実コストの計算は cost.ts で sim と共有） */
     const costEnvFor = (seat: number): CostEnv => ({

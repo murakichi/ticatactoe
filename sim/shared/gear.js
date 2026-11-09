@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
+const objects_1 = require("./objects");
 exports.GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
     lockStack: 6,
@@ -56,6 +57,9 @@ exports.GEAR_PARAMS = {
     scorchCap: 6,
     /** 灰の供物: 敵のマスに🔥を付与したマス1つにつき、次の自分の手番の終わりまで全スキルのコスト-N（重複する） */
     ashDiscount: 1,
+    /** 普請道楽: 自陣にオブジェクトが無いときのオブジェクト設置スキルの割引と、ある間の全スキルの割引（重ならない） */
+    buildPlaceCut: 2,
+    buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
 };
@@ -87,6 +91,7 @@ exports.GEARS = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
+    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 exports.GEAR_IDS = exports.GEARS.map((g) => g.id);
@@ -184,6 +189,9 @@ const adjustCostByGear = (cost, gears, ctx, isToken = false, skillKey) => {
         delta -= P.ruinDiscount;
     if ((0, exports.hasGear)(gears, 'ashOffering'))
         delta -= P.ashDiscount * ((_b = ctx.ash) !== null && _b !== void 0 ? _b : 0);
+    // 普請道楽: 自陣にオブジェクトが無いときはオブジェクトを設置するスキルが-2、ある間は全スキル-3（設置スキルの-2は無いときだけ。重ならない）
+    if ((0, exports.hasGear)(gears, 'buildMania'))
+        delta -= ctx.ownObjects ? P.buildAllCut : skillKey && objects_1.OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 };
