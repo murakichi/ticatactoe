@@ -147,6 +147,9 @@ export const KEYSMITH_LOCK_MIN_VALUE = 40;
 /** 鍵師が自陣のコマをロックして守る条件: ライフがこの値以下（奪われる直前）で、列づくりの価値がこの値以上 */
 export const KEYSMITH_OWN_LOCK_MAX_BIND = 1; // 3や無制限に広げると対 you 58%→43〜48%（各60試合, seed2000）。ロックの撃ち過ぎで魔力を食う
 export const KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
+/** 鍵師が1手番に自陣のコマを続けてロックする上限（1=従来どおり1つだけ）と、その対象にするライフの上限。人間の勝ちログ（game-log_4）は毎手番2〜3回ロックして自陣を固めていた */
+export const KEYSMITH_MULTI_LOCK_MAX = 1;
+export const KEYSMITH_MULTI_LOCK_BIND = 99;
 /** 鍵師のコンボ（二列並び→片方ロック→もう片方に置く）の条件: 自陣の2つのコマのライフがこの値以上 */
 export const KEYSMITH_COMBO_MIN_BIND = 2; // 各60試合, seed2000: 1→76.7/8.3/8.3, 2→75/8.3/6.7, 3→75/6.7/5, 4→66.7/6.7/3.3（対 you/magician/witch）。緩めても悪化せず差はノイズ。中間の2
 /** コンボを撃つときの、ロック中の空きマスの上限（空きマスのロック判断の上限2より1つ多い） */

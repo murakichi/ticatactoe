@@ -12,7 +12,7 @@ import { miasmaPlan as miasmaPlanOf, pandemicTargets } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf, judgeDayVictims } from './blast';
 import { SHIKIGAMI_BLAST_DAMAGE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { chargeStacks, orthoNeighbors, connectedPieces, isGuarded } from './charge';
-import { BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
+import { BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, KEYSMITH_MULTI_LOCK_BIND, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
 
 export const targetMethods = {
 
@@ -78,6 +78,25 @@ export const targetMethods = {
             if (val > bestVal) { bestVal = val; bestIdx = i; }
         }
         return bestIdx;
+    },
+
+    /** 鍵師: 最初の1つ(first)に続けてロックする自陣のコマ。ロックの無い自陣のコマ(オブジェクト・式神・氷結を除く)を、列づくりの価値が高い順に最大 max-1 個 */
+    moreOwnLockTargets(this: AIPlayer, board: SquareInfo[], first: number, max: number): number[] {
+        const geo = geometryForCells(board.length);
+        const cand: { i: number; val: number }[] = [];
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (i === first || sq.player !== this.playerSymbol || isObject(sq) || isShikigami(sq) || isFrozen(sq) || sq.bind > KEYSMITH_MULTI_LOCK_BIND || this.shield.has(i)) continue;
+            if (sq.effects.some((e) => e.effect === '🔑')) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player))) continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            cand.push({ i, val });
+        }
+        cand.sort((a, b) => b.val - a.val);
+        return cand.slice(0, Math.max(0, max - 1)).map((x) => x.i);
     },
 
     bestOwnLockTarget(this: AIPlayer, board: SquareInfo[]): number | null {
