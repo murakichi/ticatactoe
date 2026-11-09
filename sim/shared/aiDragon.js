@@ -59,6 +59,16 @@ exports.dragonMethods = {
         }
         return best ? best.cell : null;
     },
+    planDragon(args) {
+        const plan = this.planDragonPlan(args);
+        if (!plan || plan.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk)))
+            return plan;
+        // 祈り・大岩・沈黙のあとに魔力が余るなら、手札のほかのスキル（トークン・ロックなど）も撃つ（余った魔力が溜まって決着しない試合があった）
+        const masked = args[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? lockedEmpty() : sq));
+        const maskedArgs = [...args];
+        maskedArgs[0] = masked;
+        return this.extendPlan(plan, maskedArgs);
+    },
     boltSilencePlan(args, real) {
         var _a;
         const magic = args[1];
@@ -86,7 +96,7 @@ exports.dragonMethods = {
         }
         return { clicks: [{ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }], cost };
     },
-    planDragon(args) {
+    planDragonPlan(args) {
         var _a;
         const silence = this.boltSilencePlan(args, args[0]);
         if (!silence)

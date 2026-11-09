@@ -10,7 +10,7 @@ import { OBJECT_DEFS, objectLandable } from './objects';
 import { isBuilding } from '../../types/ObjectKind';
 import { AIResult } from './aiConstants';
 import { PlanMoveArgs } from './aiPlanMove';
-import { BOLT_SILENCE_IDX } from './aiConstants';
+import { BOLT_SILENCE_IDX, TURN_ENDING_SKILLS } from './aiConstants';
 import { BOLT_SILENCE_BOLTS, chargeStacks } from './charge';
 import { isDormant } from './thermal';
 
@@ -38,6 +38,7 @@ const lockedEmpty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [{
 export interface DragonMethods {
     planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
     planDragonCore(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
+    planDragonPlan(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
     /** 沈黙は雷なり: 自陣の⚡2つを払って相手の次の手番のスキルを封じる計画（撃つべきでなければ null） */
     boltSilencePlan(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[]): { clicks: { skill: string; target: number; target2?: number }[]; cost: number } | null;
     /** 巫女/龍: 相手の即勝ちマスに大岩を置いて塞ぐ（手札に大岩があり、魔力が足りるとき）。置けなければ null */
@@ -77,6 +78,15 @@ export const dragonMethods: DragonMethods = {
         return best ? best.cell : null;
     },
 
+    planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
+        const plan = this.planDragonPlan(args);
+        if (!plan || plan.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) return plan;
+        // 祈り・大岩・沈黙のあとに魔力が余るなら、手札のほかのスキル（トークン・ロックなど）も撃つ（余った魔力が溜まって決着しない試合があった）
+        const masked = args[0].map((sq) => (isBuilding(sq) ? lockedEmpty() : sq));
+        const maskedArgs = [...args] as unknown as PlanMoveArgs;
+        (maskedArgs as unknown as unknown[])[0] = masked;
+        return this.extendPlan(plan, maskedArgs);
+    },
     boltSilencePlan(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[]): { clicks: { skill: string; target: number; target2?: number }[]; cost: number } | null {
         const magic = args[1];
         const costs = args[2];
@@ -100,7 +110,7 @@ export const dragonMethods: DragonMethods = {
         return { clicks: [{ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }], cost };
     },
 
-    planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
+    planDragonPlan(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
         const silence = this.boltSilencePlan(args, args[0]);
         if (!silence) return this.planDragonCore(args);
         const rest = [...args] as unknown as PlanMoveArgs;
