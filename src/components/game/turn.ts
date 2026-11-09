@@ -6,8 +6,9 @@ import { lateMagicBonus } from './lateMagic';
 /** 手番開始時の魔力が標準の+1に加えて+1されるキャラ。
  *  巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し(life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)。
  *  氷室の番人は、魔力が律速（tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）だったので魔法使いと同じ+1（issue #94）。
- *  凩の魔女も+1（魔力が律速。ユーザー指示。ライフ平均-1とセット） */
-export const MAGIC_BONUS_CHARACTERS: readonly CharacterId[] = ['magician', 'cryomancer', 'witch'];
+ *  凩の魔女も+1（魔力が律速。ユーザー指示。ライフ平均-1とセット）。
+ *  龍神の巫女も+1（ユーザー指示。巫女は祈りで魔力を使うため。龍の +N はこれに加わる） */
+export const MAGIC_BONUS_CHARACTERS: readonly CharacterId[] = ['magician', 'cryomancer', 'witch', 'dragonMiko'];
 
 export type TurnStartMagicInput = {
     /** 次に動く席の今の魔力 */
