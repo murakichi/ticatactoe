@@ -31,7 +31,6 @@ import {
     rootGain,
     budCounts,
     rampStart,
-    rampBump,
     rampBonus,
     rampAfterRoll,
 } from './gear';
@@ -186,26 +185,25 @@ describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根�
 });
 
 describe('雪だるま（ライフ期待値の積み上げ）', () => {
-    it('手番ごとに+1ずつ積み上がる', () => {
+    it('最初は+0で、引くたびに+1ずつ積み上がる', () => {
         let r = rampStart();
         expect(rampBonus(r)).toBe(0);
-        r = rampBump(r);
-        r = rampBump(r);
-        r = rampBump(r);
+        r = rampAfterRoll(r, 5);
+        r = rampAfterRoll(r, 5);
+        r = rampAfterRoll(r, 5);
         expect(rampBonus(r)).toBe(3);
     });
 
-    it('10以上のライフが3回出たら、積み上げと回数がリセットされる(9以下は数えない)', () => {
-        let r = rampBump(rampBump(rampStart()));
+    it('10以上のライフが3回出たら、積み上げと回数がリセットされる(9以下は数えない。最初に引いた分も数える)', () => {
+        let r = rampAfterRoll(rampStart(), 10); // 最初の10以上も数える
+        expect(r).toEqual({ stack: 1, hits: 1 });
         r = rampAfterRoll(r, 9);
-        expect(r).toEqual({ stack: 2, hits: 0 });
-        r = rampAfterRoll(r, 10);
+        expect(r).toEqual({ stack: 2, hits: 1 });
         r = rampAfterRoll(r, 14);
-        expect(r).toEqual({ stack: 2, hits: 2 });
+        expect(r).toEqual({ stack: 3, hits: 2 });
         r = rampAfterRoll(r, 10);
         expect(r).toEqual({ stack: 0, hits: 0 });
-        // リセット後はまた最初から積み上がる
-        expect(rampBonus(rampBump(r))).toBe(1);
+        expect(rampBonus(r)).toBe(0); // リセット後は次の抽選が+0
     });
 });
 

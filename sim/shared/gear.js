@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampBump = exports.rampStart = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
@@ -95,7 +95,7 @@ exports.GEARS = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
-    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が+${P.rampStep}ずつ積み上がる。${P.rampHighLife}以上のライフが${P.rampResetHits}回出たら、積み上げがリセットされる` },
+    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `最初は+0から、自分の手番ごとにライフの期待値が+${P.rampStep}ずつ積み上がる。${P.rampHighLife}以上のライフが${P.rampResetHits}回出たら、積み上げがリセットされる` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
@@ -170,16 +170,13 @@ const budCounts = (squares) => squares.map(burnableCount);
 exports.budCounts = budCounts;
 const rampStart = () => ({ stack: 0, hits: 0 });
 exports.rampStart = rampStart;
-/** 手番開始: 期待値の積み上げを1段上げる */
-const rampBump = (s) => ({ ...s, stack: s.stack + 1 });
-exports.rampBump = rampBump;
-/** いまの積み上げぶんのライフ期待値の加算 */
+/** 次に引くライフの期待値に足す加算 */
 const rampBonus = (s) => s.stack * P.rampStep;
 exports.rampBonus = rampBonus;
-/** 引いたライフを数える。10以上が規定回数に達したら積み上げと回数をリセット */
+/** 引いたライフを数える。10以上が規定回数に達したら積み上げと回数をリセット(次は+0)。そうでなければ積み上げを1段上げる */
 const rampAfterRoll = (s, life) => {
     const hits = s.hits + (life >= P.rampHighLife ? 1 : 0);
-    return hits >= P.rampResetHits ? (0, exports.rampStart)() : { stack: s.stack, hits };
+    return hits >= P.rampResetHits ? (0, exports.rampStart)() : { stack: s.stack + 1, hits };
 };
 exports.rampAfterRoll = rampAfterRoll;
 /**

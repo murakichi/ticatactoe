@@ -56,7 +56,6 @@ import {
     adjustCostByGear,
     RampState,
     rampStart,
-    rampBump,
     rampBonus,
     rampAfterRoll,
     countVarietySquares,
@@ -779,18 +778,26 @@ export const Game = (props: GameProps) => {
     const currentYinYangMode = yinYangMode[turnSeat];
     const yinYangModeName = (seat: number) => (yinYangMode[seat] === 'yang' ? '陽' : '陰');
 
-    // 雪だるま: 席ごとのライフ期待値の積み上げ。先手の最初の手番は1段積み上がった状態から始まる。
-    // turn/counted は同じ手番の効果が二重に走っても積み上げ・回数を二重に数えないための印
-    const initialRamp = (): RampState[] => gearsBySeat.map((g, seat) => (seat === 0 && hasGear(g, 'snowball') ? rampBump(rampStart()) : rampStart()));
-    const rampRef = useRef({ states: initialRamp(), turn: 0, counted: false });
-    const [life, setLife] = useState<number>(
-        calculateLife(
+    // 雪だるま: 席ごとのライフ期待値の積み上げ(最初は+0から)。先手の最初に引いたライフも数える。
+    // turn/counted/bonus は同じ手番の効果が二重に走っても、積み上げ・回数を二重に数えず同じ加算で引くための印
+    const rampRef = useRef<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>({
+        states: gearsBySeat.map(() => rampStart()),
+        turn: 0,
+        counted: false,
+        bonus: 0,
+        first: null,
+    });
+    if (rampRef.current.first === null) {
+        const first = calculateLife(
             characters[0],
             yinYangMode[0],
             gearLifeBonus(gearsBySeat[0]) + (hasGear(gearsBySeat[0], 'snowball') ? rampBonus(rampRef.current.states[0]) : 0),
             gearLifeStd(gearsBySeat[0], LIFE_STD)
-        )
-    );
+        );
+        rampRef.current.first = first;
+        if (hasGear(gearsBySeat[0], 'snowball')) rampRef.current.states[0] = rampAfterRoll(rampRef.current.states[0], first);
+    }
+    const [life, setLife] = useState<number>(rampRef.current.first);
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
     const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
@@ -1005,7 +1012,7 @@ export const Game = (props: GameProps) => {
         const rampOn = hasGear(nextGears, 'snowball');
         const ramp = rampRef.current;
         if (rampOn && ramp.turn !== currentTurn) {
-            ramp.states[nextSeat] = rampBump(ramp.states[nextSeat]);
+            ramp.bonus = rampBonus(ramp.states[nextSeat]);
             ramp.turn = currentTurn;
             ramp.counted = false;
         }
@@ -1014,7 +1021,7 @@ export const Game = (props: GameProps) => {
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
-                (rampOn ? rampBonus(ramp.states[nextSeat]) : 0) +
+                (rampOn ? ramp.bonus : 0) +
                 objectLifeForNext + // 生命の泉
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
@@ -3866,7 +3873,7 @@ export const Game = (props: GameProps) => {
             lastMove: null,
         };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
-        rampRef.current = { states: initialRamp(), turn: 0, counted: false };
+        rampRef.current = { states: gearsBySeat.map(() => rampStart()), turn: 0, counted: false, bonus: 0, first: rampRef.current.first };
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };
