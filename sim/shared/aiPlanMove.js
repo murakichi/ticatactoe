@@ -975,6 +975,25 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     // 空蔵: 空きマスにかけたロックが切れると自陣のコマ(ライフ1)になる。自分の列の要になる空きマスを先にロックしておく。
     // ロック中は敵も置けないので敵の列を止める効果もある（旧sim AI の EL_AI と同一。tune-top 鍛冶師: 空蔵+収穫で環境勝率 +11.7pt）
+    // 鍵師の『一列確保』（KEYSMITH_LINE_CLAIM）: 敵のコマが無い列を選び、空きマスと自陣のコマをロックして固め、毎手番その列に置く。
+    // 敵はロックされた空きマスに置けないので、列を止められない。相手にリーチが無く、自分にもリーチが無いときだけ（リーチがあれば守り／勝ちが先）
+    if (aiConstants_1.KEYSMITH_LINE_CLAIM > 0 &&
+        this.character === 'keysmith' &&
+        this.countReaches(board, this.playerSymbol) === 0 &&
+        this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        const plan = this.lineClaimPlan(board);
+        const firstCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+        if (plan !== null && magic >= firstCost) {
+            const laterCost = Math.max(1, costs.onClickUseLock - 1);
+            const n = Math.min(plan.locks.length, 1 + Math.floor((magic - firstCost) / laterCost));
+            const locks = plan.locks.slice(0, n);
+            if (locks.length === 0)
+                return { move: plan.place, skills: [] };
+            if (locks.length === 1)
+                return { move: plan.place, skills: ['onClickUseLock'], lockTargets: locks };
+            return { move: plan.place, skills: [], chargeClicks: locks.map((c) => ({ skill: 'onClickUseLock', target: c })) };
+        }
+    }
     // 鍵師のコンボ: 二列並びの片方をロックして、もう片方に置く（敵は塞げない）。自分にリーチがあれば着手が先、敵にリーチがあれば止めるのが先
     if (this.character === 'keysmith' &&
         this.countReaches(board, this.playerSymbol) === 0 &&
@@ -992,7 +1011,17 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         if (own !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             post[own] = (0, lock_1.addLock)(post[own], 6);
+            // 続けて他の自陣のコマもロックする（最初の1回は無料、2回目以降は通常のコスト(-1・下限1)。払える範囲で）
+            const laterCost = Math.max(1, costs.onClickUseLock - 1);
+            const firstCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+            const room = laterCost > 0 ? Math.floor((magic - firstCost) / laterCost) : 0;
+            const more = aiConstants_1.KEYSMITH_MULTI_LOCK_MAX > 1 ? this.moreOwnLockTargets(post, own, Math.min(aiConstants_1.KEYSMITH_MULTI_LOCK_MAX, 1 + room)) : [];
+            for (const c of more)
+                post[c] = (0, lock_1.addLock)(post[c], 6);
             const followup = this.getBestMove(post, life);
+            if (followup !== null && more.length > 0) {
+                return { move: followup, skills: [], chargeClicks: [own, ...more].map((c) => ({ skill: 'onClickUseLock', target: c })) };
+            }
             if (followup !== null)
                 return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
         }

@@ -89,6 +89,66 @@ exports.targetMethods = {
         }
         return bestIdx;
     },
+    /** 鍵師: 最初の1つ(first)に続けてロックする自陣のコマ。ロックの無い自陣のコマ(オブジェクト・式神・氷結を除く)を、列づくりの価値が高い順に最大 max-1 個 */
+    moreOwnLockTargets(board, first, max) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const cand = [];
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (i === first || sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > aiConstants_1.KEYSMITH_MULTI_LOCK_BIND || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player)))
+                    continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            cand.push({ i, val });
+        }
+        cand.sort((a, b) => b.val - a.val);
+        return cand.slice(0, Math.max(0, max - 1)).map((x) => x.i);
+    },
+    /**
+     * 鍵師の『一列確保』: 敵のコマが無く、置けない障害（オブジェクト・氷結）も無い列のうち、自陣のコマが最も多い列を選ぶ。
+     * その列の空きマス（置くマス place 以外）と自陣のコマのうち、ロックの無いものを locks に返す（空きマス優先: 敵に置かれる前に塞ぐ）。
+     * 敵はロックされた空きマスに置けず、ロック中の自陣のコマは奪われない。鍵師だけがロックされた空きマスに置ける。置くマスはロックの無い空きマスを優先する。
+     */
+    lineClaimPlan(board) {
+        var _a;
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const isLocked = (sq) => sq.effects.some((e) => e.effect === '🔑');
+        let best = null;
+        for (const line of geo.winLines) {
+            let own = 0;
+            let ok = true;
+            const empties = [];
+            for (const i of line) {
+                const sq = board[i];
+                if (sq.player === this.playerSymbol && !(0, util_1.isObject)(sq)) {
+                    own++;
+                    continue;
+                }
+                if (sq.player || (0, util_1.isObject)(sq) || (0, thermal_1.isFrozen)(sq) || (0, thermal_1.emptyBlocked)(sq) || this.shield.has(i)) {
+                    ok = false;
+                    break;
+                }
+                empties.push(i);
+            }
+            if (!ok || empties.length === 0)
+                continue;
+            const place = (_a = empties.find((i) => !isLocked(board[i]))) !== null && _a !== void 0 ? _a : empties[0];
+            const locks = [
+                ...empties.filter((i) => i !== place && !isLocked(board[i])),
+                ...line.filter((i) => board[i].player === this.playerSymbol && !(0, util_1.isObject)(board[i]) && !isLocked(board[i])),
+            ];
+            const score = own * 10 - locks.length;
+            if (best === null || score > best.score)
+                best = { place, locks, score };
+        }
+        return best === null ? null : { place: best.place, locks: best.locks };
+    },
     bestOwnLockTarget(board) {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
