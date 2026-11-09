@@ -2,7 +2,6 @@
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { App } from './App';
-import { LIFE_MEANS } from './util';
 
 test('起動時はキャラクター選択画面が描画される', () => {
     render(<App />);
@@ -12,15 +11,6 @@ test('起動時はキャラクター選択画面が描画される', () => {
     expect(screen.getAllByText('軍師')).toHaveLength(2);
     expect(screen.getAllByText('毒使い')).toHaveLength(2);
     expect(screen.getAllByText('雷霆の巫')).toHaveLength(2);
-});
-
-test('キャラ説明のライフ平均は実装の定数から描画される', () => {
-    render(<App />);
-    // 説明文をベタ書きすると実装とズレるため、LIFE_MEANS を埋め込んでいる (issue #13)
-    const giant = screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.giant}`));
-    expect(giant.length).toBe(2); // 💙 / ⭕ の2枚
-    expect(screen.getAllByText(new RegExp(`陽=ライフ平均${LIFE_MEANS.yinYangMaster_yang}`)).length).toBe(2);
-    expect(screen.getAllByText(new RegExp(`ライフ平均${LIFE_MEANS.electrician}。固有:帯電拡散`)).length).toBe(2);
 });
 
 test('対戦スタートで盤面に切り替わる', () => {

@@ -1112,6 +1112,32 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
     });
 });
 
+describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => Array.from({ length: 16 }, (): SquareInfo => ({ player: undefined, bind: 0, effects: [] }));
+    const run = (character: 'keysmith' | 'you', magic: number, hand: number[], b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('鍵師は、砦(108)が手札にあり魔力が足りれば立てる', () => {
+        const r = run('keysmith', 12, [108, 2, 0]);
+        expect(r.chargeClicks?.some((c) => c.skill === 'onClickFort')).toBe(true);
+    });
+    it('市場(110)でも立てる。魔力が足りなければ立てない', () => {
+        expect(run('keysmith', 12, [110, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickMarket')).toBe(true);
+        expect(run('keysmith', 1, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+    it('自陣にオブジェクトが既にあれば、2つ目は立てない', () => {
+        const b = board();
+        b[15] = { player: '💙', bind: 3, effects: [], object: 'fort' };
+        expect(run('keysmith', 12, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+    it('鍵師以外は立てない', () => {
+        expect(run('you', 12, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+});
+
 describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');

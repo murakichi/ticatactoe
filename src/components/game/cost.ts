@@ -13,7 +13,7 @@ import { CostContext, Gears, adjustCostByGear, gearTokenBindDelta } from './gear
 import { OBJECT_PARAMS, WORKSHOP_PARAMS, luckyCatActive, workshopActive } from './objects';
 import { skillCosts } from './skillCosts';
 import { FIRST_FROST_FREE_LEAVES } from './tokenSkills';
-import { LOCK_SKILL_KEYS } from './keysmith';
+import { LOCK_SKILL_KEYS, SEAL_FIRST_CUT } from './keysmith';
 import { FLAME_SKILL_KEYS, boardLeaves, fireStacksTotal, leafSurcharge, witchCostOf } from './thermal';
 
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
@@ -117,7 +117,7 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickLockRaid' && mine && env.lockPrev) return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
-    if (skillKey === 'onClickUseLock' && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed) return 0; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
+    if (skillKey && LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed) return skillKey === 'onClickSeal' ? Math.max(1, adjusted - SEAL_FIRST_CUT) : 0; // 鍵師のパッシブ: 手番の最初のロック系スキルは無料（封鎖の断だけは -SEAL_FIRST_CUT）
     if (skillKey === 'onClickFireWheel' && mine && fireStacksTotal(env.board) > env.fireBase) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
     return mine ? applyDiscount(adjusted, discountAmount(env.discount, skillKey, isToken)) : adjusted;
