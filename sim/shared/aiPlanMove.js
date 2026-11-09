@@ -1139,12 +1139,13 @@ exports.planMoveMethods = {
             : argsIn;
         let result = this.planMove(...args);
         const magic = args[1];
+        let saving = false;
         // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
         if (aiConstants_1.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
             && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
             const released = (0, keysmith_1.sealReleaseCells)(args[0], this.playerSymbol).length;
             const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(args[2].onClickSeal, released), false, false, 'onClickSeal');
-            if (magic < sealCost && this.plannedSpend(result, args[2]) > 0) {
+            if (magic < sealCost) {
                 const isLock = (sk) => sk === 'onClickUseLock';
                 const kept = { ...result, skills: result.skills.filter(isLock), chargeClicks: (_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.filter((c) => isLock(c.skill)) };
                 if (kept.skills.length === 0 && ((_d = (_c = kept.chargeClicks) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0) === 0 && !kept.lockTargets) {
@@ -1153,6 +1154,7 @@ exports.planMoveMethods = {
                 }
                 else
                     result = kept;
+                saving = true; // 貯める間は、残りの魔力で手札のスキルを足す処理（extendPlan）も止める
             }
         }
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
@@ -1164,7 +1166,7 @@ exports.planMoveMethods = {
             // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
             if (this.sealWanted(args))
                 return { move: null, skills: ['onClickSeal'] };
-            return this.extendPlan(result, args);
+            return saving ? result : this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_1.MAGICIAN_REROLL_MAGIC : aiConstants_1.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
             return result;
@@ -1182,19 +1184,13 @@ exports.planMoveMethods = {
         return { move: null, skills: [], reroll: {} };
     },
     /** 鍵師: 封鎖の断を撃つ判断か（スキル選択の結果に封鎖の断が含まれる）。魔力が足りないときは false */
-    sealWaitsForFill(board) {
-        if (aiConstants_1.KEYSMITH_SEAL_ALT === 0)
-            return false;
-        const empties = board.filter((sq) => !sq.player).length;
-        return empties > 0 && this.myEmptyLocks(board) * 2 >= empties;
-    },
     sealWanted(args) {
         const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
         if (this.countReaches(board, this.playerSymbol) !== 0)
             return false;
         const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
         const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
-        if (magic < sealCost || this.sealWaitsForFill(board))
+        if (magic < sealCost)
             return false;
         return this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay).includes('onClickSeal');
     },

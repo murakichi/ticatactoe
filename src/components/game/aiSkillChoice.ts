@@ -164,7 +164,7 @@ function chooseTurnEndingSkills(this: AIPlayer, c: SkillChoiceContext): string[]
         const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
         // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
         // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
-        if (mana.remaining >= sealCost && !this.sealWaitsForFill(board)) spend(sealCost, 'onClickSeal');
+        if (mana.remaining >= sealCost) spend(sealCost, 'onClickSeal');
     }
     if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
         const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
