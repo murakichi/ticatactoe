@@ -34,6 +34,7 @@ import { useGenericSkills } from './useGenericSkills';
 import { useElementSkills } from './useElementSkills';
 import { useFrostLockSkills } from './useFrostLockSkills';
 import { GameLate } from './gameLate';
+import { NECROMANCY } from './turn';
 import { useCustomSkill } from './useCustomSkill';
 import { useSkillCards } from './useSkillCards';
 import { useHoverPreview } from './useHoverPreview';
@@ -100,7 +101,8 @@ export const Game = (props: GameProps) => {
     const [priceTables, setPriceTables] = useState<(SkillCosts | null)[]>(rollPriceTables);
     const costTableFor = (seat: number): SkillCosts => (gearOff[seat] ? skillCosts : priceTables[seat] ?? skillCosts);
     const seatCosts = costTableFor(turnSeat);
-    const { wardRef, gearTurn, gearCost, lastStandUsed, lastStandSaves, lastStandHolderFor, setLastStandSaves, effectSnap, ruinState, lastStandActiveAgainst, costEnvFor, reaperSweeps, setReaperSweeps } = useGearRuntime({ seatCount, gearsBySeat, symbols, currentBoard, turnSeat, characters }, late);
+    const necroCostRef = useRef<number[]>(Array(seatCount).fill(NECROMANCY.baseCost));
+    const { wardRef, gearTurn, gearCost, lastStandUsed, lastStandSaves, lastStandHolderFor, setLastStandSaves, effectSnap, ruinState, lastStandActiveAgainst, costEnvFor, reaperSweeps, setReaperSweeps } = useGearRuntime({ seatCount, gearsBySeat, symbols, currentBoard, turnSeat, characters, necroCostRef }, late);
     wardRef.current = { gears: gearsBySeat, turnSeat };
     useEffect(() => {
         setEffectWard((sq) => !!sq.player && hasGear(wardRef.current.gears[seatOf(sq.player)], 'spellWard') && gearTurn.current.skills[wardRef.current.turnSeat] > 0);
@@ -363,6 +365,7 @@ export const Game = (props: GameProps) => {
     const { onClickToggleYingYang, onClickShikigamiPlace, onClickShikigamiBlast, onClickShikigamiBless, onClickShikigamiCurse, onClickShikigamiPurge, onClickShikigamiDiscount, onClickShikigamiAll, onClickShikigamiRandom, onClickShikigamiFlood, onClickObjectSkill, onClickObject, setUseShikigamiPlace, setUseShikigamiBlast, setUseShikigamiBless, setUseShikigamiCurse, setUseShikigamiPurge, setObjectPlacing, setObjectTool, setCaptureChoice, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, objectSkillTargetsNow, ownShikigami, blessTargets, curseTargets, purgeTargets, captureChoice } = shikigamiSkills;
     const necroSkills = useNecroSkills({ seatCount, characters, lifeBan, turnSeat, calculateTokenBind, spendMagic, gearCost, currentBoard, currentTurnPlayer, setCurrentBoard, playEffect, addLog, setUseAssaultAt, setUseTokenCountAt, setUseStomp, setUseJudgeDay, setUseShikigamiPlace, currentCharacter, seatCosts, setHailMarySpin, harvestMagic, toxicBloom, flashCells, miasmaCost, setUseInjection, useInjection, putTokens, posName, setUseToken, setUsePandemic, gearTurn, geo, keepBuds, poisonStrike, withOverload }, late);
     const { exeHailMary, onClickNecromancy, onClickSerum, onClickIntensify, onClickPandemic, onClickInjection, onClickMiasma, onClickDarkPot, onClickPoisonMist, onClickPoisonToken, remainNecro, necroCost, hailMaryChoices, addCorpses, setRemainNecroAt, exePandemic, baseNecromancyCost, setNecroCostAt, setRemainNecroAll, setNecroCostAll, hailMaryPick } = necroSkills;
+    necroCostRef.current = necroCost; // コスト計算（useGearRuntime）が死体の数として読む
     const genericSkills = useGenericSkills({ currentBoard, currentTurnPlayer, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, gearTurn, turnSeat, characters, addCorpses, otherSeats, setLifeBanAt, useToken, bumpGlacierCharge, putTokens, posName, setUseToken, calculateTokenBind, geo, keepBuds, afterTokenPlaced, harvestMagic, applyLock, playBurst, baseNecromancyCost, necroCost, toxicBloom, withOverload, deckBySeat, lifeBan, setNecroCostAt, setMagicAt, pendingFlag }, late);
     const { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost } = genericSkills;
     const elementSkills = useElementSkills({ pendingFlag, addLog, spendMagic, seatCosts, currentTurnPlayer, currentBoard, characters, gearTurn, turnSeat, costTableFor, glacierCharge, glacierPending, setGlacierChargeAt, flashCells, playEffect, setCurrentBoard, setGlacierPendingAt, budGuard, setMagicAt, setBudGuardAt, geo, posName, putTokens, playBurst, setUseToken, deckBySeat, harvestMagic, putTokensAt, reportAfter, addCorpses, life, magic, setLife }, late);

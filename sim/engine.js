@@ -532,6 +532,7 @@ function costEnv(s, seat) {
         bigCast: s.bigCast[seat],
         oppBigPrev: s.oppBigPrev[seat],
         veil: s.veil[seat],
+        corpses: turnMod.NECROMANCY.baseCost - s.necroCost[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
         lockFreeUsed: s.lockFreeUsed[seat],

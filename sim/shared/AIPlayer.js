@@ -78,6 +78,8 @@ class AIPlayer {
         this.leafCount = 0;
         /** 他の席のコマに乗っている効力のある🍂の総数（スキルコストの増加分。updateShield で更新する） */
         this.foeLeaves = 0;
+        /** ネクロマンサーのパッシブ: 墓地の死体の数（上限）だけ蘇生以外の全スキルが安い（cost.ts の characterCostOf と同じ。makeMove で更新） */
+        this.corpseCut = 0;
         /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
         this.placements = 0;
         this.seatCount = 2;

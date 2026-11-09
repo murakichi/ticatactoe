@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS } from './objects';
+import { OBJECT_DEFS, objectLandable } from './objects';
 import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -13,7 +13,7 @@ import { ailmentStacks, cleanse, canFreeze, budStacks, budReceivers, harvestBuds
 import { addLock, lockEffect } from './lock';
 import { pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { NECROMANCY } from './turn';
-import { corpseCount, graveDiscountAmount } from './graveSkills';
+import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
@@ -1084,6 +1084,18 @@ export function planMove(
     this.hypoCut = 0;
     const skills = planned;
 
+    // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木・市場などを自陣の近くに1つずつ設置する。
+    // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
+    if (this.character === 'necromancer' && !skills.some(s => TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        const pick = planObject.call(this, board, magic - this.lastSpent, costs, availableSkills, availableSkills.includes(92) || (necroRemain === 0 && NECROMANCY.baseCost - necroCost >= 2));
+        if (pick) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            post[pick.cell] = { player: this.playerSymbol, bind: OBJECT_DEFS[pick.kind].life, effects: post[pick.cell].effects.filter((e) => e.effect === '🔥'), object: pick.kind };
+            const followup = this.getBestMove(post, life);
+            if (followup !== null) return { move: followup, skills, chargeClicks: [...(chargeResult ?? []), { skill: OBJECT_DEFS[pick.kind].costKey, target: pick.cell }] };
+        }
+    }
+
     // ターン終了スキルの場合は手を打たない
     if (skills.some(s => TURN_ENDING_SKILLS.includes(s))) {
         return { move: null, skills, chargeClicks: chargeResult };
@@ -1115,6 +1127,7 @@ export const planMoveMethods = {
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => isObject(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.corpseCut = this.character === 'necromancer' ? Math.min(NECRO_CORPSE_CUT_CAP, Math.max(0, NECROMANCY.baseCost - (argsIn[8] ?? NECROMANCY.baseCost))) : 0;
         const args: PlanMoveArgs = argsIn[0].some((sq) => isObject(sq))
             ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
@@ -1165,3 +1178,38 @@ export const planMoveMethods = {
     planMove,
 };
 export type PlanMoveMethods = typeof planMoveMethods;
+
+
+/** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、それ以外は盤の隅に近いマス。置けなければ null */
+function planObject(this: AIPlayer, board: SquareInfo[], left: number, costs: SkillCosts, availableSkills: number[], heavyReady: boolean): { kind: keyof typeof OBJECT_DEFS; cell: number } | null {
+    const geo = geometryForCells(board.length);
+    const size = Math.round(Math.sqrt(board.length));
+    const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
+    if (mine < 2) return null;
+    const order = ['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'] as const;
+    for (const kind of order) {
+        const idx = OBJECT_DEFS[kind].idx;
+        if (!availableSkills.includes(idx)) continue;
+        if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind)) continue;
+        // 大工房はベースコスト7以上の札(降霊・一寸の虫)を撃てる見込みがあるときだけ。一言居士はスキルを連打する相手がいるときだけ
+        if (kind === 'workshop' && !heavyReady) continue;
+        if (kind === 'oneWord' && !this.opponents.some((o) => ['cryomancer', 'poisoner', 'witch', 'tactician', 'magician', 'pyromancer'].includes(this.characterOf(o) ?? ''))) continue;
+        const cost = this.calculateAICost(costs[OBJECT_DEFS[kind].costKey], false, false, OBJECT_DEFS[kind].costKey);
+        if (left - cost < 1) continue;
+        // 市場は普請道楽(オブジェクトが無いとき設置が-2)で1コストになるときだけ。全スキルが安くなる『最初のオブジェクト』として置く
+        if (kind === 'market' && cost > 1) continue;
+        let best = -1;
+        let bestScore = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (!objectLandable(board[i])) continue;
+            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+            const r = Math.floor(i / size);
+            const c = i % size;
+            const edge = Math.abs(r - (size - 1) / 2) + Math.abs(c - (size - 1) / 2);
+            const score = kind === 'sanctuary' || kind === 'fort' ? (near >= 2 ? near : -1) : edge;
+            if (score > bestScore) { bestScore = score; best = i; }
+        }
+        if (best >= 0) return { kind, cell: best };
+    }
+    return null;
+}

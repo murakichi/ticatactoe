@@ -1056,6 +1056,18 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     this.hypoCut = 0;
     const skills = planned;
+    // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木・市場などを自陣の近くに1つずつ設置する。
+    // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
+    if (this.character === 'necromancer' && !skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        const pick = planObject.call(this, board, magic - this.lastSpent, costs, availableSkills, availableSkills.includes(92) || (necroRemain === 0 && turn_1.NECROMANCY.baseCost - necroCost >= 2));
+        if (pick) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            post[pick.cell] = { player: this.playerSymbol, bind: objects_1.OBJECT_DEFS[pick.kind].life, effects: post[pick.cell].effects.filter((e) => e.effect === '🔥'), object: pick.kind };
+            const followup = this.getBestMove(post, life);
+            if (followup !== null)
+                return { move: followup, skills, chargeClicks: [...(chargeResult !== null && chargeResult !== void 0 ? chargeResult : []), { skill: objects_1.OBJECT_DEFS[pick.kind].costKey, target: pick.cell }] };
+        }
+    }
     // ターン終了スキルの場合は手を打たない
     if (skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s))) {
         return { move: null, skills, chargeClicks: chargeResult };
@@ -1079,11 +1091,13 @@ exports.planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
+        var _a;
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
@@ -1140,3 +1154,48 @@ exports.planMoveMethods = {
     },
     planMove,
 };
+/** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、それ以外は盤の隅に近いマス。置けなければ null */
+function planObject(board, left, costs, availableSkills, heavyReady) {
+    const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+    const size = Math.round(Math.sqrt(board.length));
+    const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
+    if (mine < 2)
+        return null;
+    const order = ['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'];
+    for (const kind of order) {
+        const idx = objects_1.OBJECT_DEFS[kind].idx;
+        if (!availableSkills.includes(idx))
+            continue;
+        if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind))
+            continue;
+        // 大工房はベースコスト7以上の札(降霊・一寸の虫)を撃てる見込みがあるときだけ。一言居士はスキルを連打する相手がいるときだけ
+        if (kind === 'workshop' && !heavyReady)
+            continue;
+        if (kind === 'oneWord' && !this.opponents.some((o) => { var _a; return ['cryomancer', 'poisoner', 'witch', 'tactician', 'magician', 'pyromancer'].includes((_a = this.characterOf(o)) !== null && _a !== void 0 ? _a : ''); }))
+            continue;
+        const cost = this.calculateAICost(costs[objects_1.OBJECT_DEFS[kind].costKey], false, false, objects_1.OBJECT_DEFS[kind].costKey);
+        if (left - cost < 1)
+            continue;
+        // 市場は普請道楽(オブジェクトが無いとき設置が-2)で1コストになるときだけ。全スキルが安くなる『最初のオブジェクト』として置く
+        if (kind === 'market' && cost > 1)
+            continue;
+        let best = -1;
+        let bestScore = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (!(0, objects_1.objectLandable)(board[i]))
+                continue;
+            const near = geo.surroundRange(i).filter((j) => board[j].player === this.playerSymbol && !board[j].object).length;
+            const r = Math.floor(i / size);
+            const c = i % size;
+            const edge = Math.abs(r - (size - 1) / 2) + Math.abs(c - (size - 1) / 2);
+            const score = kind === 'sanctuary' || kind === 'fort' ? (near >= 2 ? near : -1) : edge;
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        if (best >= 0)
+            return { kind, cell: best };
+    }
+    return null;
+}
