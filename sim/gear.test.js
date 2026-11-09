@@ -654,6 +654,55 @@ test('芽吹き: 🔥のマスにはバッズが付かない(seedBud)', () => {
     assert.strictEqual(t.seedBud({ player: C, bind: 9, effects: [] }, H, ['budSeed']), null, '相手のコマには付かない');
 });
 
+test('地代: 手番開始時、働いている自陣のオブジェクト1つにつきマジック+1(上限なし。氷結中・敵のオブジェクトは数えない)', () => {
+    const objects = require('./shared/objects');
+    const turnGain = (gears) => {
+        const s = game(gears);
+        s.board[5] = objects.newObject(H, 'fort');
+        s.board[6] = objects.newObject(H, 'fort');
+        s.board[7] = objects.newObject(H, 'fort');
+        s.board[8] = objects.newObject(H, 'fort');
+        s.board[9] = { ...objects.newObject(H, 'fort'), effects: [{ effect: '❄' }] }; // 氷結中は休眠
+        s.board[10] = objects.newObject(C, 'fort'); // 敵のオブジェクト
+        e.placeMove(s, 0);
+        const before = s.magic[0];
+        e.placeMove(s, 1);
+        return s.magic[0] - before;
+    };
+    assert.strictEqual(turnGain([['groundRent'], []]) - turnGain([[], []]), 4);
+});
+
+test('頑丈な建材: 設置するオブジェクトの初期ライフが+3(5→8)。装備なしは5', () => {
+    const place = (gears) => {
+        const s = game(gears);
+        s.objectPlacing = 'fort';
+        e.placeMove(s, 5);
+        return s.board[5].bind;
+    };
+    assert.strictEqual(place([['sturdyBuild'], []]), 8);
+    assert.strictEqual(place([[], []]), 5);
+});
+
+test('大岩: コスト1で、2ターンのロック付きの効果なしオブジェクトを設置する(頑丈な建材は+3)', () => {
+    const objects = require('./shared/objects');
+    const place = (gears) => {
+        const s = game(gears);
+        s.magic[0] = 5;
+        e.SKILLS.boulder(s); // スキルを使う(空きマスを選ぶ構え)
+        assert.strictEqual(s.magic[0], 4, 'コスト1');
+        assert.strictEqual(s.objectPlacing, 'boulder');
+        e.placeMove(s, 5);
+        return s.board[5];
+    };
+    const sq = place([[], []]);
+    assert.strictEqual(sq.object, 'boulder');
+    assert.strictEqual(sq.player, H);
+    assert.strictEqual(sq.bind, objects.OBJECT_DEFS.boulder.life);
+    const lock = sq.effects.find((x) => x.effect === '🔑');
+    assert.ok(lock && lock.stack === 2, '2ターンのロック');
+    assert.strictEqual(place([['sturdyBuild'], []]).bind, 8);
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

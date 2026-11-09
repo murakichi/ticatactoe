@@ -41,7 +41,9 @@ export type GearId =
     | 'buildMania'
     | 'snowball'
     | 'reaper'
-    | 'budSeed';
+    | 'budSeed'
+    | 'groundRent'
+    | 'sturdyBuild';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -108,6 +110,10 @@ export const GEAR_PARAMS = {
     reaperLife: 2,
     /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
     budSeedLife: 7,
+    /** 地代: 働いている自陣のオブジェクト1つにつきの手番開始時の魔力（上限なし） */
+    rentMagic: 1,
+    /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+    buildLife: 3,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -144,6 +150,8 @@ export const GEARS: GearDef[] = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
+    { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクトの数だけマジックを獲得` },
+    { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフが上昇` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];
@@ -238,6 +246,11 @@ export const frozenBudCount = (squares: readonly SquareLike[]): number => square
 export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic;
 /** 手番開始時の🌱の数の記録 */
 export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(burnableCount);
+
+/** 地代: 働いている自陣のオブジェクトの数 → 手番開始時の魔力 */
+export const rentGain = (activeObjects: number): number => activeObjects * P.rentMagic;
+/** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+export const objectBuildLife = (gears: Gears): number => (hasGear(gears, 'sturdyBuild') ? P.buildLife : 0);
 
 /** 雪だるま: 席ごとの積み上げ(stack)と、10以上のライフが出た回数(hits)。最初は+0から */
 export type RampState = { stack: number; hits: number };

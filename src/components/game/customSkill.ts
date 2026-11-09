@@ -478,7 +478,7 @@ export const applyCustom = (board: SquareInfo[], cells: number[], spec: CustomSk
             case 'object':
                 for (const k of targets) {
                     // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
-                    board[k] = { ...newObject(env.me, op.object), effects: board[k].effects.filter((e) => e.effect === '🔥') };
+                    board[k] = newObject(env.me, op.object, 0, board[k].effects.filter((e) => e.effect === '🔥'));
                     affected.add(k);
                 }
                 sweepBurntTrees(board).forEach((k) => destroyed.add(k));
