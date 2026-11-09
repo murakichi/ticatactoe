@@ -28,6 +28,8 @@ npm test     # Jest in watch mode
 
 **説明文:** スキル・キャラ・ギア・オブジェクトの説明を書く・直すときは `docs/description-guidelines.md` に従う（エフェクトの意味は `deck.ts` の `CATEGORY_HELP` だけに書き、個別の説明には書かない。細かい仕様は書かない。書式は1文・体言止め。「ターン1回」の制限だけは必ず残す）。汎用スキルの説明は `SKILL_CATALOG[].desc` が唯一の出典で、`Game.tsx` に二重に書かない。
 
+**ダメージ・破壊・消滅:** 効果を実装する・説明を書くときは `docs/damage-terms.md` の定義に従う（ダメージ=ライフを減らすだけで空きマスにはならない／破壊=空きマスにする・効果の影響を受ける／消滅=効果を無視して空きマスにする）。
+
 **スキルのコスト:** スキルを新規に作る・コストを変えるときは、必ず `docs/skill-cost-rules.md` の基準（単価・複数付与の割引式・派手さと導線）で値を出す。基準から外すなら理由を日記に書く。
 
 **ギア:** キャラ選択時に席ごとに装備する追加パッシブ(通常2枠、「あなた」だけ3枠)。定義と純粋関数は `src/components/game/gear.ts`(`GEAR_PARAMS` が数値の唯一の出典。説明文もここから描画)、ヘッドレス版は `sim/shared/gear.js`(生成物)。`PlayerConfig.gears` で `Game` に渡し、`Game.tsx` では `gearCost`(コスト補正) / `spendMagic`(幸運の財布・スキル使用数) / `applyLock` / `afterTokenPlaced` などが、`sim/engine.js` では `gearCost` / `spendMagic` / `applyLock` / `afterTokenPlaced` / `costsOf` が対応する。コスト表は席ごとに `costTableFor(seat)`(価格破壊で引き直す)から引き、`skillCosts` を直接参照しない。手番内のスキル使用数は `Game.tsx` では ref(`gearTurn`)、sim では `s.gearSkills` で持つ。ギアなしの試合は乱数を消費しないので従来と同じ結果になる。
