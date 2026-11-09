@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/tokenAfter.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.propagate = exports.propagateCandidates = exports.applyLockAt = void 0;
+exports.seedBud = exports.propagate = exports.propagateCandidates = exports.applyLockAt = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const gear_1 = require("./gear");
@@ -46,3 +46,11 @@ const propagate = (board, idx, effect, player, chars, rng = Math.random) => {
     return j;
 };
 exports.propagate = propagate;
+/**
+ * 芽吹き: ライフが budSeedLife 以上の自陣のコマを設置するとき🌱を付ける（通常の着手・トークン系スキルの両方）。
+ * 付けたら新しいマスを返し、付けない（ギアなし・ライフが足りない・オブジェクト・氷結中や🔥のマスにはバッズが付かない）なら null
+ */
+const seedBud = (sq, player, gears) => (0, gear_1.hasGear)(gears, 'budSeed') && sq.player === player && !sq.object && sq.bind >= gear_1.GEAR_PARAMS.budSeedLife && (0, thermal_1.canBud)(sq)
+    ? { ...sq, effects: [...sq.effects, { effect: '🌱' }] }
+    : null;
+exports.seedBud = seedBud;

@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
@@ -62,6 +62,14 @@ exports.GEAR_PARAMS = {
     buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
+    /** 雪だるま: 自分の手番ごとに足されるライフ期待値 / リセットの目安にするライフの値 / その回数 */
+    rampStep: 1,
+    rampHighLife: 10,
+    rampResetHits: 3,
+    /** 死神の鎌: 自陣のライフ期待値への加算 */
+    reaperLife: 2,
+    /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
+    budSeedLife: 7,
 };
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
@@ -91,6 +99,9 @@ exports.GEARS = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: `帯電したコマの毒・火炎を、ダメージを受けた敵のマスに伝播` },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: `誰かがスキルを使ったターンの間、自陣のコマはエフェクトのダメージを受けない` },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: `手番開始時、自陣のリーチを塞ぐ氷結を1つ解除` },
+    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
+    { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
+    { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];
@@ -103,7 +114,7 @@ exports.gearSlotsFor = gearSlotsFor;
 const hasGear = (gears, id) => !!gears && gears.includes(id);
 exports.hasGear = hasGear;
 /** ライフ平均への加算（頑健 / 剛腕の代償） */
-const gearLifeBonus = (gears) => ((0, exports.hasGear)(gears, 'sturdy') ? P.sturdyLife : 0) + ((0, exports.hasGear)(gears, 'titanCost') ? P.titanLife : 0);
+const gearLifeBonus = (gears) => ((0, exports.hasGear)(gears, 'sturdy') ? P.sturdyLife : 0) + ((0, exports.hasGear)(gears, 'titanCost') ? P.titanLife : 0) + ((0, exports.hasGear)(gears, 'reaper') ? P.reaperLife : 0);
 exports.gearLifeBonus = gearLifeBonus;
 /** ライフ値の標準偏差。賭博師の骰子があれば広がる */
 const gearLifeStd = (gears, base) => ((0, exports.hasGear)(gears, 'gambler') ? P.gamblerStd : base);
@@ -163,6 +174,17 @@ exports.rootGain = rootGain;
 /** 手番開始時の🌱の数の記録 */
 const budCounts = (squares) => squares.map(burnableCount);
 exports.budCounts = budCounts;
+const rampStart = () => ({ stack: 0, hits: 0 });
+exports.rampStart = rampStart;
+/** 次に引くライフの期待値に足す加算 */
+const rampBonus = (s) => s.stack * P.rampStep;
+exports.rampBonus = rampBonus;
+/** 引いたライフを数える。10以上が規定回数に達したら積み上げと回数をリセット(次は+0)。そうでなければ積み上げを1段上げる */
+const rampAfterRoll = (s, life) => {
+    const hits = s.hits + (life >= P.rampHighLife ? 1 : 0);
+    return hits >= P.rampResetHits ? (0, exports.rampStart)() : { stack: s.stack + 1, hits };
+};
+exports.rampAfterRoll = rampAfterRoll;
 /**
  * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。
  * 下げる方向の補正は下限1（もともと0のコストは0のまま）。四連の極意の無料だけは0にする。

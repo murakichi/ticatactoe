@@ -3,10 +3,10 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, isGuarded } from './charge';
-import { Gears, TokenEffect, gearLockStack, hasGear } from './gear';
+import { GEAR_PARAMS, Gears, TokenEffect, gearLockStack, hasGear } from './gear';
 import { addLock } from './lock';
 import { poisonStrike } from './poison';
-import { lockable } from './thermal';
+import { canBud, lockable } from './thermal';
 
 /**
  * マス idx に🔑ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら、空蔵の持ち主(turnSeat)を記録しておく。
@@ -41,3 +41,12 @@ export const propagate = (board: SquareInfo[], idx: number, effect: TokenEffect,
     board[j] = effect === '☠' ? poisonStrike(spread, chars) : spread;
     return j;
 };
+
+/**
+ * 芽吹き: ライフが budSeedLife 以上の自陣のコマを設置するとき🌱を付ける（通常の着手・トークン系スキルの両方）。
+ * 付けたら新しいマスを返し、付けない（ギアなし・ライフが足りない・オブジェクト・氷結中や🔥のマスにはバッズが付かない）なら null
+ */
+export const seedBud = (sq: SquareInfo, player: Player, gears: Gears): SquareInfo | null =>
+    hasGear(gears, 'budSeed') && sq.player === player && !sq.object && sq.bind >= GEAR_PARAMS.budSeedLife && canBud(sq)
+        ? { ...sq, effects: [...sq.effects, { effect: '🌱' as const }] }
+        : null;

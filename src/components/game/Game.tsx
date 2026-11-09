@@ -7,8 +7,8 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
-import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
-import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
+import { advanceGearState, gearCostContext, lifeZeroVictims, noteSkillUsed } from './gearTurn';
+import { applyLockAt, propagate as propagateEffect, seedBud } from './tokenAfter';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
@@ -54,6 +54,10 @@ import {
     gearLockStack,
     gearTokenBindDelta,
     adjustCostByGear,
+    RampState,
+    rampStart,
+    rampBonus,
+    rampAfterRoll,
     countVarietySquares,
     burnedBudCount,
     scorchGain,
@@ -228,6 +232,7 @@ export const Game = (props: GameProps) => {
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
     const lastStandUsed = useRef<boolean[]>(Array<boolean>(seatCount).fill(false));
     const [lastStandSaves, setLastStandSaves] = useState<number>(0);
+    const [reaperSweeps, setReaperSweeps] = useState<number>(0); // 死神の鎌でコマが壊れた回数（AIの手番の効果を、盤面が変わったあとにやり直すため）
     const lastStandActiveAgainst = (seat: number): boolean => lastStandUsed.current.some((used, holder) => used && holder !== seat);
     // 勝者 w に対して発動できる土壇場の防壁の持ち主（未使用・w 以外）。いなければ -1
     const lastStandHolderFor = (w: Player): number =>
@@ -680,7 +685,7 @@ export const Game = (props: GameProps) => {
 
         return () => clearTimeout(timer);
         // currentTurn も依存に含める: 巨人のスキップで turnSeat が変わらず同じ席が連続手番になる場合でも再発火させる
-    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves]);
+    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves, reaperSweeps]);
 
     // 「次の手番」ボタン押下でAI同士の対戦を1ターン進める
     useEffect(() => {
@@ -774,9 +779,26 @@ export const Game = (props: GameProps) => {
     const currentYinYangMode = yinYangMode[turnSeat];
     const yinYangModeName = (seat: number) => (yinYangMode[seat] === 'yang' ? '陽' : '陰');
 
-    const [life, setLife] = useState<number>(
-        calculateLife(characters[0], yinYangMode[0], gearLifeBonus(gearsBySeat[0]), gearLifeStd(gearsBySeat[0], LIFE_STD))
-    );
+    // 雪だるま: 席ごとのライフ期待値の積み上げ(最初は+0から)。先手の最初に引いたライフも数える。
+    // turn/counted/bonus は同じ手番の効果が二重に走っても、積み上げ・回数を二重に数えず同じ加算で引くための印
+    const rampRef = useRef<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>({
+        states: gearsBySeat.map(() => rampStart()),
+        turn: 0,
+        counted: false,
+        bonus: 0,
+        first: null,
+    });
+    if (rampRef.current.first === null) {
+        const first = calculateLife(
+            characters[0],
+            yinYangMode[0],
+            gearLifeBonus(gearsBySeat[0]) + (hasGear(gearsBySeat[0], 'snowball') ? rampBonus(rampRef.current.states[0]) : 0),
+            gearLifeStd(gearsBySeat[0], LIFE_STD)
+        );
+        rampRef.current.first = first;
+        if (hasGear(gearsBySeat[0], 'snowball')) rampRef.current.states[0] = rampAfterRoll(rampRef.current.states[0], first);
+    }
+    const [life, setLife] = useState<number>(rampRef.current.first);
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
     const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
@@ -987,15 +1009,29 @@ export const Game = (props: GameProps) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextGears = gearsBySeat[nextSeat];
+        // 雪だるま: 手番ごとに期待値が1段積み上がり、10以上のライフが3回出たらリセット
+        const rampOn = hasGear(nextGears, 'snowball');
+        const ramp = rampRef.current;
+        if (rampOn && ramp.turn !== currentTurn) {
+            ramp.bonus = rampBonus(ramp.states[nextSeat]);
+            ramp.turn = currentTurn;
+            ramp.counted = false;
+        }
         const nextLife = calculateLife(
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
+                (rampOn ? ramp.bonus : 0) +
                 objectLifeForNext + // 生命の泉
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );
+        if (rampOn && !ramp.counted) {
+            ramp.states[nextSeat] = rampAfterRoll(ramp.states[nextSeat], nextLife);
+            ramp.counted = true;
+            if (ramp.states[nextSeat].stack === 0) gearTrigger('snowball', '積み上げがリセット');
+        }
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
         setSkillBanAt(turnSeat, null);
@@ -1011,6 +1047,22 @@ export const Game = (props: GameProps) => {
         setLife(nextLife > 0 ? nextLife : 1);
         setUseToken(false);
         setTurnSeat(nextSeat);
+    }, [currentTurn]);
+
+    // 死神の鎌: ライフ0の駒を手番の終わりに壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
+    useEffect(() => {
+        if (currentTurn === 1) return;
+        if (calculateWinner(currentBoard.map((x) => x.player))) return;
+        const victims = lifeZeroVictims(currentBoard, characters, gearsBySeat);
+        if (victims.length === 0) return;
+        const board = currentBoard.slice();
+        for (const k of victims) board[k] = { player: undefined, bind: 0, effects: [] };
+        setCurrentBoard(board);
+        addCorpses(victims.length);
+        addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
+        gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        flashCells(victims);
+        setReaperSweeps((c) => c + 1);
     }, [currentTurn]);
 
     useEffect(() => {
@@ -1330,6 +1382,14 @@ export const Game = (props: GameProps) => {
         }
 
         nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+        // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+        if (!placed.reinforced) {
+            const seeded = seedBud(nextBoard[i], currentTurnPlayer, turnGears);
+            if (seeded) {
+                nextBoard[i] = seeded;
+                gearTrigger('budSeed', 'バッズ付きで設置');
+            }
+        }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
         if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 
@@ -1503,6 +1563,12 @@ export const Game = (props: GameProps) => {
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
     const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
         let granted = effect ? 1 : 0;
+        // 芽吹き: ライフの高いトークンにも🌱（収穫・伝播には数えない）
+        const seeded = seedBud(board[idx], currentTurnPlayer, turnGears);
+        if (seeded) {
+            board[idx] = seeded;
+            gearTrigger('budSeed', 'バッズ付きで設置');
+        }
         // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
         if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
         if (hasGear(turnGears, 'bindingLock') && Math.random() < GEAR_PARAMS.bindingLockChance) {
@@ -3836,6 +3902,7 @@ export const Game = (props: GameProps) => {
             lastMove: null,
         };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
+        rampRef.current = { states: gearsBySeat.map(() => rampStart()), turn: 0, counted: false, bonus: 0, first: rampRef.current.first };
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };

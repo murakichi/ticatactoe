@@ -4,7 +4,9 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Discount, afterSkill, emptyDiscount } from './discount';
 import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
-import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './thermal';
+import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, isFrozen, leafStacks } from './thermal';
+import { isShielded } from './charge';
+import { CharacterId } from '../../types/Character';
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
@@ -230,4 +232,15 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     }
     g.echoNext[seat] = true;
     g.echoReady[seat] = false;
+};
+
+/**
+ * 死神の鎌: 誰かが装備していれば、ライフ0になった駒（プレイヤーを問わず）を手番の終わりに壊す。
+ * 氷結中・🔑ロック中・雷霆の巫の⚡無敵の駒、オブジェクトは壊れない。壊すマスの添字を返す（盤は書き換えない）。
+ */
+export const lifeZeroVictims = (board: readonly SquareInfo[], chars: readonly CharacterId[], gears: readonly Gears[]): number[] => {
+    if (!gears.some((g) => hasGear(g, 'reaper'))) return [];
+    return board
+        .map((sq, i) => (sq.player && !sq.object && sq.bind <= 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isShielded(sq, chars) ? i : -1))
+        .filter((i) => i >= 0);
 };

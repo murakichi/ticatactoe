@@ -260,6 +260,9 @@ function afterTokenPlaced(s, idx, effect) {
     // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
     if (s.chargeBuff[s.turn] > 0 && s.board[idx].player === curPlayer(s)) addCharge(s, idx);
     const g = s.gears[s.turn];
+    // 芽吹き: ライフの高いトークンにも🌱（収穫・伝播には数えない）
+    const seeded = tokenAfterMod.seedBud(s.board[idx], curPlayer(s), g);
+    if (seeded) { s.board[idx] = seeded; bumpStat(s, 'budSeed'); }
     let granted = effect ? 1 : 0;
     if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
         applyLock(s, idx);
@@ -397,6 +400,8 @@ function newGame(opts = {}) {
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
+        // 雪だるま: 席ごとのライフ期待値の積み上げとリセットまでの回数
+        ramp: gears.map(() => gear.rampStart()),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(rng)) : null)),
         useChargeArea: false,
@@ -456,7 +461,10 @@ function newGame(opts = {}) {
         log: [],
     };
     defineLegacyAliases(state);
-    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], LIFE_STD)));
+    // 雪だるま: 最初は+0から。先手の最初に引いたライフも数える
+    const firstRoll = calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]) + (hasGear(gears[0], 'snowball') ? gear.rampBonus(state.ramp[0]) : 0), gear.gearLifeStd(gears[0], LIFE_STD));
+    if (hasGear(gears[0], 'snowball')) state.ramp[0] = gear.rampAfterRoll(state.ramp[0], firstRoll);
+    state.life = Math.max(1, firstRoll);
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     armWard(state);
     return state;
@@ -661,6 +669,15 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
+    if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
+        const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
+        if (victims.length > 0) {
+            for (const k of victims) s.board[k] = newSquare();
+            addCorpses(s, victims.length);
+            bumpStat(s, 'reaperKill', victims.length);
+        }
+    }
     // 膠着の打開(本番 deadlock.ts): 着手が何周も無いと氷結とロックが一段解ける
     if (!s.deadlock || s.deadlock.placements !== s.placements) s.deadlock = { placements: s.placements, turn: s.currentTurn };
     else if (deadlockMod.isDeadlocked(s.currentTurn, s.deadlock.turn, seatCount(s))) {
@@ -746,7 +763,13 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    // 雪だるま: 引いたライフを数えて、手番ごとに期待値が1段積み上がる。10以上が3回出たらリセット
+    const rampOn = hasGear(s.gears[next], 'snowball');
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    if (rampOn) {
+        s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
+        if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
+    }
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;
@@ -1000,6 +1023,11 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+    // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+    if (!placed.reinforced) {
+        const seeded = tokenAfterMod.seedBud(board[i], cur, s.gears[s.turn]);
+        if (seeded) { board[i] = seeded; bumpStat(s, 'budSeed'); }
+    }
     // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く [FAITHFUL] Game.tsx onCellClick
     if (keysmithMod.blessingActive(s.blessing[s.turn]) && newPlayer === cur && !board[i].object) board[i] = keysmithMod.blessPlacedPiece(board[i]);
 

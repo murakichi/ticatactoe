@@ -38,7 +38,10 @@ export type GearId =
     | 'frostRoot'
     | 'conduction'
     | 'spellWard'
-    | 'buildMania';
+    | 'buildMania'
+    | 'snowball'
+    | 'reaper'
+    | 'budSeed';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -97,6 +100,14 @@ export const GEAR_PARAMS = {
     buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
+    /** 雪だるま: 自分の手番ごとに足されるライフ期待値 / リセットの目安にするライフの値 / その回数 */
+    rampStep: 1,
+    rampHighLife: 10,
+    rampResetHits: 3,
+    /** 死神の鎌: 自陣のライフ期待値への加算 */
+    reaperLife: 2,
+    /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
+    budSeedLife: 7,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -130,6 +141,9 @@ export const GEARS: GearDef[] = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: `帯電したコマの毒・火炎を、ダメージを受けた敵のマスに伝播` },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: `誰かがスキルを使ったターンの間、自陣のコマはエフェクトのダメージを受けない` },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: `手番開始時、自陣のリーチを塞ぐ氷結を1つ解除` },
+    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
+    { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
+    { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];
@@ -145,7 +159,7 @@ export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.i
 
 /** ライフ平均への加算（頑健 / 剛腕の代償） */
 export const gearLifeBonus = (gears: Gears): number =>
-    (hasGear(gears, 'sturdy') ? P.sturdyLife : 0) + (hasGear(gears, 'titanCost') ? P.titanLife : 0);
+    (hasGear(gears, 'sturdy') ? P.sturdyLife : 0) + (hasGear(gears, 'titanCost') ? P.titanLife : 0) + (hasGear(gears, 'reaper') ? P.reaperLife : 0);
 
 /** ライフ値の標準偏差。賭博師の骰子があれば広がる */
 export const gearLifeStd = (gears: Gears, base: number): number => (hasGear(gears, 'gambler') ? P.gamblerStd : base);
@@ -224,6 +238,17 @@ export const frozenBudCount = (squares: readonly SquareLike[]): number => square
 export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic;
 /** 手番開始時の🌱の数の記録 */
 export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(burnableCount);
+
+/** 雪だるま: 席ごとの積み上げ(stack)と、10以上のライフが出た回数(hits)。最初は+0から */
+export type RampState = { stack: number; hits: number };
+export const rampStart = (): RampState => ({ stack: 0, hits: 0 });
+/** 次に引くライフの期待値に足す加算 */
+export const rampBonus = (s: RampState): number => s.stack * P.rampStep;
+/** 引いたライフを数える。10以上が規定回数に達したら積み上げと回数をリセット(次は+0)。そうでなければ積み上げを1段上げる */
+export const rampAfterRoll = (s: RampState, life: number): RampState => {
+    const hits = s.hits + (life >= P.rampHighLife ? 1 : 0);
+    return hits >= P.rampResetHits ? rampStart() : { stack: s.stack + 1, hits };
+};
 
 /**
  * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。
