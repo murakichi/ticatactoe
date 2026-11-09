@@ -202,6 +202,12 @@ function planDefense(c) {
             return { move: followup, skills: ['onClickStomp'], stompTarget: rescue };
         }
     }
+    // 陰陽師×巨人: 巨人は自分より低いライフのコマを奪える。リーチを塞ぐコマも奪い返されるので、施錠の加護(132)で塞ぐコマにロックを付けてから塞ぐ
+    if (this.character === 'yinYangMaster' && threatSquares.length >= 1 && availableSkills.includes(132)
+        && this.opponents.some((o) => this.characterOf(o) === 'giant')
+        && magic >= this.calculateAICost(costs.onClickLockBlessing, false, false, 'onClickLockBlessing')) {
+        return { move: this.getBestMove(board, life), skills: ['onClickLockBlessing'] };
+    }
     // 氷室の番人: ロックが氷結に置き換わっている。単独の脅威は氷結で塞げば着手を使わずに済み、その手番を攻めに使える
     // （旧sim AI と同一。A/B: 氷室の番人の勝率 +11.7pt vs あなた(n=400)、全キャラ相手でほぼ向上）
     // 氷室の番人: 脅威が無いとき、魔法使いの🌱付きでロックされていないコマを凍らせる。氷結中の🌱は休眠して魔力を生まず、魔法使いの魔力エンジンが止まる
