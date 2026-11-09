@@ -2,9 +2,11 @@
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: e1281c6(魔女 witch 追加・陰陽師ナーフ後。別セッションが軍師の推奨デッキを更新済み)
 - 現在の推奨設定: gears=[lastStand, priceWreck] deck=[3,9,11,16,45,46,64,92,93,94,95,96](新スキル4種+一寸の虫に魂なし, 試行#26〜#27) AIフラグ=lsAggro=1・lockNew=1・witchDig=2・digMargin=3・freeTok=1・smallFryMin=2(既定)
-- 基準線: 環境勝率 66.7% / **2位** / 1位 witch 70.1%（差 3.4pt） / 3位 poisoner 65.4%   (seed 3, games 100, 基本条件, 軍師の氷結トークン使用+固定を採用後)
-- 連続不採用回数: 9(#13, #14, #17〜#23)
-- 状態: running(氷結トークンの使用で2位に浮上。1位まで3.4pt)
+- 強豪リスト(2026-11-09 固定): necromancer,electrician,magician,keysmith,giant,cryomancer
+- 基準線(対強豪平均基準, master 2f1b091, seed1/60): **対強豪平均 39.7% / 7位** / 1位 electrician 55.7% / (参考)field 49.2%・最悪対面 electrician 27%・不利4/有利2。対強豪の内訳: giant 62 / necromancer 50 / magician 37 / keysmith 33 / cryomancer 30 / electrician 27。以下の古い数値(66.7%・2位など)は field 基準で、今の基準線と比べない。
+- 連続不採用回数: 0(基準変更で数え直し。2026-11-09)
+- 関連 issue: #85(魔力律速・数値案), #256(新推奨デッキの環境順位未測定)。調べた日 2026-11-09
+- 状態: running(7位。1位まで16pt)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
 - 軍師の対キャラ別: magician 40% / giant 49% / 他は58〜75%。
