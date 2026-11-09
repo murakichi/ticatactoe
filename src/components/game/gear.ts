@@ -335,7 +335,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['spellWard', 'luckyPurse'], // 旧主案に戻す: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）
+    magician: ['snowball', 'luckyPurse'], // 2026-11-09: spellWard→snowball。対ネクロ 約3→16%（seed1〜3、80〜150試合）、対その他6キャラ 63.0→65.9%、対鍛冶師 85→66%・対毒使い/鍵師は上がり3体平均はほぼ同じ。旧: ['spellWard', 'luckyPurse']（旧主案に戻した: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）)
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
     necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
