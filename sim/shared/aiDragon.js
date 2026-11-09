@@ -54,6 +54,40 @@ exports.dragonMethods = {
         }
         return best ? best.cell : null;
     },
+    blockWithBoulders(args, real, masked) {
+        const magic = args[1];
+        const costs = args[2];
+        const life = args[4];
+        const available = args[5];
+        const prayCost = this.calculateAICost(costs.onClickPrayer, false, false, 'onClickPrayer');
+        const bcost = this.calculateAICost(costs.onClickBoulder, false, false, 'onClickBoulder');
+        const hasBoulder = available.includes(objects_1.OBJECT_DEFS.boulder.idx);
+        const threats = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(masked, o)))).filter((c) => (0, objects_1.objectLandable)(real[c]));
+        const clicks = [];
+        const post = masked.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        let left = magic;
+        // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
+        // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
+        let prayers = 0;
+        for (const c of threats) {
+            if (prayers < exports.PRAYER_MAX_PER_TURN && left >= prayCost && (0, dragon_1.prayerUsable)(real, this.deck)) {
+                clicks.push({ skill: 'onClickPrayer', target: c });
+                left -= prayCost;
+                prayers++;
+            }
+            else if (hasBoulder && left >= bcost) {
+                clicks.push({ skill: 'onClickBoulder', target: c });
+                left -= bcost;
+            }
+            else
+                continue;
+            post[c] = lockedEmpty();
+        }
+        if (clicks.length === 0)
+            return null;
+        const followup = this.getBestMove(post, life);
+        return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
+    },
     planDragon(args) {
         const real = args[0];
         const magic = args[1];
@@ -61,9 +95,10 @@ exports.dragonMethods = {
         const life = args[4];
         const me = this.playerSymbol;
         const masked = real.map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? lockedEmpty() : sq));
-        // 相手にリーチがあるときは、通常の防御・攻めの計画に任せる
+        // 相手にリーチがあるとき: 手札に大岩があれば、相手の即勝ちマス（リーチの要の空きマス）に大岩を置いて塞ぐ。
+        // 大岩は建造物なので覚醒の4つに数えられる（妨害しながら覚醒に近づく）。無ければ通常の防御・攻めの計画に任せる
         if (this.opponents.some((o) => this.countReaches(masked, o) > 0))
-            return null;
+            return this.blockWithBoulders(args, real, masked);
         const deck = this.deck;
         const prayCost = this.calculateAICost(costs.onClickPrayer, false, false, 'onClickPrayer');
         const roarCost = this.calculateAICost(costs.onClickRoar, false, false, 'onClickRoar');

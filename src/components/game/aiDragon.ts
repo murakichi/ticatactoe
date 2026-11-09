@@ -6,7 +6,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { Player } from '../../types/Player';
 import { geometryForCells } from './boardGeometry';
 import { AWAKEN_BUILDINGS, ownBuildingCells, prayerUsable, roarUsable, roarVictims } from './dragon';
-import { objectLandable } from './objects';
+import { OBJECT_DEFS, objectLandable } from './objects';
 import { isBuilding } from '../../types/ObjectKind';
 import { AIResult } from './aiConstants';
 import { PlanMoveArgs } from './aiPlanMove';
@@ -32,6 +32,8 @@ const lockedEmpty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [{
 
 export interface DragonMethods {
     planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
+    /** 巫女/龍: 相手の即勝ちマスに大岩を置いて塞ぐ（手札に大岩があり、魔力が足りるとき）。置けなければ null */
+    blockWithBoulders(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[], masked: SquareInfo[]): AIResult | null;
     /** 巫女: 次に建造物を置く（祈りで引く）マス。角を斜めに切る型のうち、すでに建造物が多く置けるものへ寄せる。無ければ null */
     mikoBuildCell(this: AIPlayer, real: SquareInfo[], me: Player): number | null;
     /** 龍: 建造物を置くマス。周囲8マスの敵コマが多い空きマス。1つも巻き込めなければ null */
@@ -67,6 +69,37 @@ export const dragonMethods: DragonMethods = {
         return best ? best.cell : null;
     },
 
+    blockWithBoulders(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[], masked: SquareInfo[]): AIResult | null {
+        const magic = args[1];
+        const costs = args[2];
+        const life = args[4];
+        const available = args[5];
+        const prayCost = this.calculateAICost(costs.onClickPrayer, false, false, 'onClickPrayer');
+        const bcost = this.calculateAICost(costs.onClickBoulder, false, false, 'onClickBoulder');
+        const hasBoulder = available.includes(OBJECT_DEFS.boulder.idx);
+        const threats = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(masked, o)))).filter((c) => objectLandable(real[c]));
+        const clicks: { skill: string; target: number }[] = [];
+        const post = masked.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        let left = magic;
+        // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
+        // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
+        let prayers = 0;
+        for (const c of threats) {
+            if (prayers < PRAYER_MAX_PER_TURN && left >= prayCost && prayerUsable(real, this.deck)) {
+                clicks.push({ skill: 'onClickPrayer', target: c });
+                left -= prayCost;
+                prayers++;
+            } else if (hasBoulder && left >= bcost) {
+                clicks.push({ skill: 'onClickBoulder', target: c });
+                left -= bcost;
+            } else continue;
+            post[c] = lockedEmpty();
+        }
+        if (clicks.length === 0) return null;
+        const followup = this.getBestMove(post, life);
+        return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
+    },
+
     planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
         const real = args[0];
         const magic = args[1];
@@ -74,8 +107,9 @@ export const dragonMethods: DragonMethods = {
         const life = args[4];
         const me = this.playerSymbol;
         const masked = real.map((sq) => (isBuilding(sq) ? lockedEmpty() : sq));
-        // 相手にリーチがあるときは、通常の防御・攻めの計画に任せる
-        if (this.opponents.some((o) => this.countReaches(masked, o) > 0)) return null;
+        // 相手にリーチがあるとき: 手札に大岩があれば、相手の即勝ちマス（リーチの要の空きマス）に大岩を置いて塞ぐ。
+        // 大岩は建造物なので覚醒の4つに数えられる（妨害しながら覚醒に近づく）。無ければ通常の防御・攻めの計画に任せる
+        if (this.opponents.some((o) => this.countReaches(masked, o) > 0)) return this.blockWithBoulders(args, real, masked);
         const deck = this.deck;
         const prayCost = this.calculateAICost(costs.onClickPrayer, false, false, 'onClickPrayer');
         const roarCost = this.calculateAICost(costs.onClickRoar, false, false, 'onClickRoar');
