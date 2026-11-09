@@ -460,6 +460,8 @@ export const skillChoiceMethods = {
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             // 軍師: 雷霆の巫が相手のときは、一寸の虫に魂なし(92)を手札に固定して、撃てる機会を逃さない（対雷霆の巫 21.3→26.7%、6シード各150〜250試合・計1300で全て正、+5.4pt、z=3.2）
             (this.character === 'tactician' && idx === 92 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'electrician')) ||
+            // 実験用(軍師): TAC_LOCK_VS='相手:idx,idx;相手:idx' で、その相手のときに固定する札を足す
+            (process.env.TAC_LOCK_VS !== undefined && this.character === 'tactician' && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (process.env.TAC_LOCK_VS as string).split(';').some((e) => e.split(':')[0] === c && e.split(':')[1].split(',').map(Number).includes(idx)))) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
             (this.character === 'magician' && (this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[seatOf(o)] === 'yinYangMaster') ? MAGICIAN_HOLD_VS_YINYANG : MAGICIAN_HOLD).includes(idx)) ||
