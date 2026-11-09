@@ -2,6 +2,7 @@ import './App.css';
 import React, { useState } from 'react';
 import { Game, PlayerConfig } from './components/game/Game';
 import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
+import { NECRO_CORPSE_CUT_CAP } from './components/game/graveSkills';
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { LIFE_MEANS, range } from './util';
@@ -49,7 +50,7 @@ const CHARACTERS: CharacterDef[] = [
         icon: '☯️',
         passive: `陰陽を切替。陽=ライフ平均${L.yinYangMaster_yang}/全スキル+1、陰=ライフ平均${L.yinYangMaster_ying}/魔力+1。固有:式神(陰で設置・陽で爆破)`,
     },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: `コマが消えるたび墓地+1→蘇生が安く強くなる。ライフ平均${L.default}。固有:蘇生` },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: `コマが消えるたび墓地+1→蘇生が安く強くなり、死体の数(最大${NECRO_CORPSE_CUT_CAP})だけ蘇生以外の全スキルも安くなる。ライフ平均${L.default}。固有:蘇生` },
     { id: 'poisoner', name: '毒使い', icon: '🧪', passive: `毒スキル-1/他+1。自陣の毒の数だけライフ+1。毒が付いた自分のコマはライフ1.5倍。毒でライフが尽きたマスは消えて魔力+1。そこから周囲へ毒が拡散` },
     {
         id: 'electrician',

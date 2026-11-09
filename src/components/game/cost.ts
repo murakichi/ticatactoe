@@ -3,7 +3,7 @@
 //   characterCostOf … 増加分 → キャラの減少分
 //   gearCostOf      … ギアの補正・導線・陰陽師のパッシブ・無料条件・軽減スキル
 //   calculateCostOf … 上の2つを続けて掛けたもの（スキルの表示・支払いに使う）
-import { NIGHT_VEIL_SURCHARGE } from './graveSkills';
+import { NECRO_CORPSE_CUT_CAP, NIGHT_VEIL_SURCHARGE } from './graveSkills';
 import { CharacterId, YingYangMode } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -76,10 +76,9 @@ export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + leafSurcharge(env.board, env.player) + veilSurcharge(env);
-    // ネクロマンサー(実験): 墓地の死体の数（上限NC_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
     if (characterId === 'necromancer') {
-        const cap = process.env.NC_CAP ? +process.env.NC_CAP : 0;
-        const cut = Math.min(env.corpses ?? 0, cap);
+        const cut = Math.min(env.corpses ?? 0, NECRO_CORPSE_CUT_CAP);
         return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
     }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）

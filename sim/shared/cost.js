@@ -29,10 +29,9 @@ const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env);
-    // ネクロマンサー(実験): 墓地の死体の数（上限NC_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
     if (characterId === 'necromancer') {
-        const cap = process.env.NC_CAP ? +process.env.NC_CAP : 0;
-        const cut = Math.min((_a = env.corpses) !== null && _a !== void 0 ? _a : 0, cap);
+        const cut = Math.min((_a = env.corpses) !== null && _a !== void 0 ? _a : 0, graveSkills_1.NECRO_CORPSE_CUT_CAP);
         return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
     }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
