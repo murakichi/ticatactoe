@@ -1058,7 +1058,7 @@ test('氷結: オピウムは氷結が身代わりになる（ライフはその
     assert.strictEqual(s.board[6].bind, 2);
 });
 
-test('氷結: スラッシュ・ストンプ・審判の日・式神の爆破も氷結が身代わりになる', () => {
+test('氷結: スラッシュ・ストンプ・式神の爆破は氷結が身代わりになる（審判の日は氷結ごと破壊する）', () => {
     const anti = e.newGame({ heartChar: 'you', circleChar: 'you', rng: e.makeRng(1) });
     const idx = require('./shared/boardGeometry').geometryOf(anti.size).antiDiagonal[1];
     anti.heartTurn = true; anti.heartMagic = 20;
@@ -1081,9 +1081,8 @@ test('氷結: スラッシュ・ストンプ・審判の日・式神の爆破も
     m.heartTurn = true; m.heartMagic = 30;
     m.board[5] = { player: '⭕', bind: 4, effects: [FRZ] };
     e.SKILLS.judgeDay(m);
-    e.placeMove(m, 5); // 中心が氷結の敵コマ → 身代わりで残り、中心は奪えない
-    assert.strictEqual(m.board[5].player, '⭕');
-    assert.strictEqual(m.board[5].effects.length, 0);
+    e.placeMove(m, 5); // 中心が氷結の敵コマ → 審判の日は氷結ごと破壊し(全エフェクト-99→99ダメージ)、中心は自分のコマ
+    assert.strictEqual(m.board[5].player, '💙');
 
     const y = game('yinYangMaster', 'you');
     y.heartTurn = true; y.heartMagic = 30; y.yy[0] = 'yang';
@@ -2107,7 +2106,7 @@ test('霜降り: 自陣のライフ2以下（0含む）かつ canFreeze なコ�
 test('氷結スキル群のコスト表と絶対零度のカウンタへの寄与（作れなかったマスは数えない）', () => {
     assert.deepStrictEqual([e.skillCosts.onClickFrostArea, e.skillCosts.onClickIcicle, e.skillCosts.onClickRandomFreeze, e.skillCosts.onClickFreezeSpread, e.skillCosts.onClickFrostToken, e.skillCosts.onClickDoubleFrostToken, e.skillCosts.onClickShatter, e.skillCosts.onClickFrostfall], [5, 6, 3, 7, 3, 5, 4, 3]);
     const keys = Object.keys(e.skillCosts);
-    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickRelocate', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop', 'onClickBarrierStone', 'onClickAmuletShrine', 'onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey', 'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickUnlockStone']);
+    assert.deepStrictEqual(keys.slice(keys.indexOf('onClickSacrifice')), ['onClickSacrifice', 'onClickFrostArea', 'onClickIcicle', 'onClickRandomFreeze', 'onClickFreezeSpread', 'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickShatter', 'onClickFrostfall', 'onClickBoost', 'onClickClone', 'onClickPlunder', 'onClickMarkdown', 'onClickEffectDiscount', 'onClickTokenDiscount', 'onClickVitalMarkdown', 'onClickUniqueDiscount', 'onClickClearance', 'onClickRandomCast', 'onClickCounterMarkdown', 'onClickBurnout', 'onClickLeafToken', 'onClickTwinLeafToken', 'onClickDoubleLeafToken', 'onClickLeafAll', 'onClickBonfire', 'onClickMulch', 'onClickAutumn', 'onClickLeafFrost', 'onClickSpringWind', 'onClickKimon', 'onClickFireWheel', 'onClickStrip', 'onClickChargeSeason', 'onClickBristle', 'onClickRelease', 'onClickStash', 'onClickThunderFire', 'onClickDarkPot', 'onClickChargeHeal', 'onClickLeafDrop', 'onClickKindling', 'onClickLeafCloak', 'onClickTinder', 'onClickSmallFry', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff', 'onClickFreeToken', 'onClickSpark', 'onClickNightVeil', 'onClickGraveDiscount', 'onClickPoisonWard', 'onClickGraveOffering', 'onClickPerfectGame', 'onClickHelper', 'onClickSecondCatch', 'onClickBigTree', 'onClickDeadTree', 'onClickSpring', 'onClickFort', 'onClickThundercloud', 'onClickMarket', 'onClickSanctuary', 'onClickPoisonSwamp', 'onClickBoltSilence', 'onClickDemolish', 'onClickWeather', 'onClickLevelAll', 'onClickReinforce', 'onClickExpandAll', 'onClickDuplicate', 'onClickWorkshop', 'onClickBarrierStone', 'onClickAmuletShrine', 'onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey', 'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickLockConvert', 'onClickLockDiscount', 'onClickUnlockStone']);
 });
 
 
@@ -3811,6 +3810,25 @@ test('招き猫（sim）: 自分のスキルコスト-1', () => {
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'), before - 1);
 });
 
+test('審判の日で置いたマスは🔑ロック付き（ライフは2のまま、スタックは通常6・堅牢の鍵で9）', () => {
+    const m = game('magician', 'you');
+    m.heartTurn = true; m.heartMagic = 30;
+    m.board[6] = { player: '⭕', bind: 3, effects: [] };
+    e.SKILLS.judgeDay(m);
+    e.placeMove(m, 5);
+    assert.strictEqual(m.board[5].player, '💙');
+    assert.deepStrictEqual(m.board[5].effects.map((x) => x.effect), ['🌱', '🔑']);
+    assert.strictEqual(m.board[5].bind, 2); // ロックはライフを変えない(#438)
+    assert.strictEqual(m.board[5].effects.find((x) => x.effect === '🔑').stack, 6);
+    assert.strictEqual(m.board[6].player, undefined);
+
+    const g = game('magician', 'you');
+    g.heartTurn = true; g.heartMagic = 30;
+    g.gears[0] = ['ironLock', 'luckyPurse'];
+    e.SKILLS.judgeDay(g);
+    e.placeMove(g, 5);
+    assert.strictEqual(g.board[5].effects.find((x) => x.effect === '🔑').stack, 9);
+});
 
 // ---- 鍵師 (#439) ----
 test('鍵師: 空きマスのロックを無視して置ける。他キャラは置けない', () => {
@@ -3824,11 +3842,13 @@ test('鍵師: 空きマスのロックを無視して置ける。他キャラは
     assert.strictEqual(e.placeMove(t, 5), false);
 });
 
-test('鍵師: ロック系スキルはコスト-1（ロック2→1）。他のキャラは変わらない', () => {
+test('鍵師: ロック系スキルはコスト-1（ダブルロック）。他のキャラは変わらない。常設のロックは無料の1回があるので0', () => {
     const s = game('keysmith', 'you');
-    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock - 1);
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), 0); // 手番ごとの無料の1回
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickAddLife, false, false, 'onClickAddLife'), e.skillCosts.onClickAddLife);
     const t = game('you', 'keysmith');
+    assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock);
     assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), e.skillCosts.onClickUseLock);
 });
 
@@ -3849,6 +3869,17 @@ test('鍵師: 封鎖の断は自陣7・空きマス2をロックしてターン�
     assert.strictEqual(e.placeMove(s, 2), false); // 敵(⭕)は空きマスに置けない
 });
 
+test('審判の日の処理順: 空きマスのロックが外れ、敵のロック付きコマはロックごと破壊される', () => {
+    const m = game('magician', 'you');
+    m.heartTurn = true; m.heartMagic = 30;
+    m.board[4] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 6 }] };
+    m.board[6] = { player: '⭕', bind: 4, effects: [{ effect: '🔑', stack: 6 }] };
+    e.SKILLS.judgeDay(m);
+    e.placeMove(m, 5);
+    assert.deepStrictEqual(m.board[4].effects, []);
+    assert.strictEqual(m.board[6].player, undefined);
+    assert.strictEqual(m.board[5].player, '💙');
+});
 
 // ---- 鍵師向けの汎用スキル（#439, idx 130〜133）----
 test('空き家封じ: 空きマス全てを2スタックでロック。ターンは続く。相手のリーチ1つにつきコスト-3', () => {
@@ -3934,6 +3965,93 @@ test('錠前荒らし: 敵陣のロックを1つ解除して🔥☠⚡を付与�
     assert.ok(!s.board[5].effects.some((x) => x.effect === '🔑'), '敵のロックが解除される');
     assert.ok(s.board[5].effects.some((x) => ['🔥', '☠', '⚡'].includes(x.effect)), 'エフェクトが付く');
     assert.strictEqual(e.lockRaidCost(s), e.skillCosts.onClickLockRaid, '無料は1手番に1回まで');
+});
+
+
+test('鍵師のパッシブ: 手番ごとに1回、常設のロックが無料。2回目は払い、次の手番でまた無料になる', () => {
+    const s = game('keysmith', 'you');
+    s.magic[0] = 10; s.magic[1] = 10;
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], 10, '1回目は無料');
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], 10 - Math.max(1, e.skillCosts.onClickUseLock - 1), '2回目は鍵師の-1込みで払う');
+    // 手番を終えて（チャージ）→ 相手の手番 → 戻ってきたらまた無料
+    s.useLock = 0;
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.turn, 1);
+    e.SKILLS.charge(s);
+    assert.strictEqual(s.turn, 0);
+    const before = s.magic[0];
+    e.SKILLS.lock(s);
+    assert.strictEqual(s.magic[0], before, '次の手番でまた無料');
+    // 他キャラは払う
+    const t = game('you', 'you');
+    t.magic[0] = 10;
+    e.SKILLS.lock(t);
+    assert.strictEqual(t.magic[0], 10 - e.skillCosts.onClickUseLock);
+});
+
+
+test('錠の転換: ロックのかかったマスを選んで解除し、そのスタックを自分のライフに足す。自分のロックでも敵のロックでも、空きマスでもよい', () => {
+    const s = game('you', 'you');
+    s.magic[0] = 30;
+    s.life = 5;
+    s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '🔑', stack: 4 }] }; // 自分のロック
+    s.board[1] = { player: '⭕', bind: 3, effects: [{ effect: '🔑', stack: 6 }] }; // 敵のロック
+    s.board[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 2 }] }; // ロック中の空きマス
+    s.board[3] = { player: '💙', bind: 3, effects: [] }; // ロックの無いマス
+    e.SKILLS.lockConvert(s);
+    assert.strictEqual(s.magic[0], 30 - e.skillCosts.onClickLockConvert);
+    assert.strictEqual(s.useLockConvert, true);
+    assert.strictEqual(e.placeMove(s, 3), false, 'ロックの無いマスは選べない（選び直せる）');
+    assert.strictEqual(s.life, 5);
+    assert.strictEqual(e.placeMove(s, 1), true, '敵のロックも選べる');
+    assert.strictEqual(s.life, 5 + 6, '解除したスタックが自分のライフに足される');
+    assert.ok(!s.board[1].effects.some((x) => x.effect === '🔑'), 'ロックが解除される');
+    assert.strictEqual(s.board[1].bind, 3, 'マスのライフは変わらない');
+    assert.strictEqual(s.useLockConvert, false);
+});
+
+test('錠の転換: ロックのかかったマスが無ければ不発（魔力を払わない）', () => {
+    const s = game('you', 'you');
+    s.magic[0] = 30;
+    e.SKILLS.lockConvert(s);
+    assert.strictEqual(s.magic[0], 30);
+    assert.ok(!s.useLockConvert);
+});
+
+
+test('錠前割引: 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する。使った時点の数で固定。ロックが無ければ不発', () => {
+    const s = game('you', 'you');
+    s.magic[0] = 30;
+    e.SKILLS.lockDiscount(s);
+    assert.strictEqual(s.magic[0], 30, 'ロックが場に無ければ不発（魔力を払わない）');
+    s.board[0] = { player: '💙', bind: 3, effects: [{ effect: '🔑', stack: 4 }] };
+    s.board[1] = { player: '⭕', bind: 3, effects: [{ effect: '🔑', stack: 2 }] };
+    s.board[2] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 1 }] };
+    const before = e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine'); // バイバイン（軽減の対象になる普通のスキル）
+    e.SKILLS.lockDiscount(s);
+    assert.strictEqual(s.magic[0], 30 - e.skillCosts.onClickLockDiscount);
+    assert.strictEqual(s.discount[0].turn, 3, 'ロックのマス3つ');
+    const after = e.calculateCost(s, e.skillCosts.onClickBibine, false, false, 'onClickBibine');
+    assert.strictEqual(after, Math.max(1, before - 3), '全スキルが3軽減される（下限1）');
+    // 使った後にロックが増えても、軽減量は使った時点で固定
+    s.board[3] = { player: undefined, bind: 0, effects: [{ effect: '🔑', stack: 1 }] };
+    assert.strictEqual(s.discount[0].turn, 3);
+    // 軽減札どうしには効かない（錠前割引自身は軽減されない）
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickLockDiscount, false, false, 'onClickLockDiscount'), e.skillCosts.onClickLockDiscount);
+});
+
+test('普請道楽（sim）: 自陣にオブジェクトが無いときオブジェクトを設置するスキルは-2、あるとき全スキル-3。ギアを持たない席は変わらない', () => {
+    const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(95), gears: [['buildMania'], []] });
+    const price = (key) => e.calculateCost(s, e.skillCosts[key], false, false, key);
+    assert.strictEqual(price('onClickBibine'), e.skillCosts.onClickBibine);
+    assert.strictEqual(price('onClickBigTree'), e.skillCosts.onClickBigTree - 2);
+    s.board[0] = { player: '💙', bind: 5, effects: [], object: 'fort' };
+    assert.strictEqual(price('onClickBibine'), Math.max(1, e.skillCosts.onClickBibine - 3));
+    assert.strictEqual(price('onClickBigTree'), e.skillCosts.onClickBigTree - 3, '設置スキルもオブジェクトがあれば-3だけ（-2は上乗せされない）');
+    s.board[0] = { ...s.board[0], player: '⭕' };
+    assert.strictEqual(price('onClickBibine'), e.skillCosts.onClickBibine, '相手のオブジェクトは数えない');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

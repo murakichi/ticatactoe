@@ -88,7 +88,6 @@ export const skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts
@@ -171,7 +170,9 @@ export const skillCosts = {
     onClickLockExtend: 5, //      ロックの増築(idx 131): 自陣のロックのスタックを全て+2（R4: 自陣全体。ロックの乗ったコマだけが対象）
     onClickLockBlessing: 4, //    施錠の加護(idx 132): 3手番の間、設置したコマにロック2（🔑単価2×設置1〜2回）
     onClickVacantSeal: 10, //     空き家封じ(idx 133): 空きマス全てを2スタックでロック。相手のリーチ1つにつき-3（下限1）。盤面全体は重く基本10（R7）
-    onClickUnlockStone: 2, //     解錠の碑(idx 134。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2。解除=錠前荒らし級の価値、設置のライフ5は他のオブジェクトと同じ）
+    onClickLockConvert: 4, //     錠の転換(idx 134): ロックを1つ解除し、そのスタックを自分のライフに足す。ライフ3(3)＋ロック解除。スタックは普通6なので『ライフ+6』が4で買える代わりに、自陣のロックを崩す／敵のロックを崩す対象が要る
+    onClickLockDiscount: 1, //    錠前割引(idx 135・ユーザー提案): 盤面のロックのマスの数だけ、このターンの全スキルを軽減。使った時点の数で固定。春一番(turn軽減)と同型。軽減札は基準で1〜3（特売3・大特価7は次の1スキルのみ）、このターン全体に効くが条件（ロックが場に要る）があるので1
+    onClickUnlockStone: 2, //     解錠の碑(idx 136。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2。解除=錠前荒らし級の価値、設置のライフ5は他のオブジェクトと同じ）
 };
 
 export type SkillCosts = typeof skillCosts;

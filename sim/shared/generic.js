@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/generic.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.plunder = exports.plunderTargets = exports.cloneInto = exports.cloneTargets = exports.cloneLife = exports.relocate = exports.canRelocate = exports.isPlaceable = exports.boostAll = exports.PLUNDER_LIFE = void 0;
+exports.plunder = exports.plunderTargets = exports.cloneInto = exports.cloneTargets = exports.cloneLife = exports.isPlaceable = exports.boostAll = exports.PLUNDER_LIFE = void 0;
 const Player_1 = require("./Player");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
@@ -23,18 +23,6 @@ exports.boostAll = boostAll;
 /** 着手（設置）できる空きマスか: コマが無く、🔑ロック中でなく、氷結中でない */
 const isPlaceable = (sq) => !sq.player && !hasLock(sq) && !(0, thermal_1.emptyBlocked)(sq);
 exports.isPlaceable = isPlaceable;
-/** 縮地で動かせる自陣のコマか: 🔑ロック中でも氷結中でもない */
-const canRelocate = (sq, me) => !!sq.player && sq.player === me && !hasLock(sq) && !(0, thermal_1.isFrozen)(sq);
-exports.canRelocate = canRelocate;
-/** 縮地: from の自陣のコマ（ライフ・エフェクトごと）を空きマス to へ動かす。動かせたら true。board を直接書き換える */
-const relocate = (board, from, to, me) => {
-    if (from === to || !(0, exports.canRelocate)(board[from], me) || !(0, exports.isPlaceable)(board[to]))
-        return false;
-    board[to] = board[from];
-    board[from] = { player: undefined, bind: 0, effects: [] };
-    return true;
-};
-exports.relocate = relocate;
 /** 写し身で増えたコマのライフ: 元のライフの半分（切り捨て、最低1） */
 const cloneLife = (bind) => Math.max(1, Math.floor(bind / 2));
 exports.cloneLife = cloneLife;

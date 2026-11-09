@@ -1,5 +1,7 @@
 import {
     DECK_SIZE,
+    SKILL_IDX_END,
+    REMOVED_SKILL_IDX,
     CATALOG_SIZE,
     SKILL_CATALOG,
     CATEGORY_ORDER,
@@ -9,6 +11,8 @@ import {
     MAX_SAVED_DECKS,
     SAVED_DECKS_KEY,
     recommendedDeck,
+    recommendedDeckAgainst,
+    COUNTER_DECKS_FOR_YOU,
     isValidDeck,
     resolveDeck,
     randomDeck,
@@ -32,9 +36,13 @@ const lcg = (seed: number) => () => {
 };
 
 describe('デッキ', () => {
-    it('カタログは idx 0..N-1 が連番で、プールの大きさ（AIPlayer の SKILL_POOL_SIZE）と一致する', () => {
-        expect(SKILL_CATALOG.map((c) => c.idx)).toEqual(Array.from({ length: CATALOG_SIZE }, (_, i) => i));
-        expect(CATALOG_SIZE).toBe(SKILL_POOL_SIZE);
+    it('カタログは idx 0..N-1 が連番（削除したスキルの欠番を除く）で、idx の上限が AIPlayer の SKILL_POOL_SIZE と一致する', () => {
+        expect(SKILL_CATALOG.map((c) => c.idx)).toEqual(Array.from({ length: SKILL_IDX_END }, (_, i) => i).filter((i) => !REMOVED_SKILL_IDX.includes(i)));
+        expect(SKILL_IDX_END).toBe(SKILL_POOL_SIZE);
+        expect(CATALOG_SIZE).toBe(SKILL_POOL_SIZE - REMOVED_SKILL_IDX.length);
+        expect(REMOVED_SKILL_IDX).toContain(50); // 縮地は削除済み（欠番）
+        const allDecks = [...Object.values(RECOMMENDED_DECKS), ...Object.values(ALT_RECOMMENDED_DECKS).flat()] as number[][];
+        expect(allDecks.some((d) => d.includes(50))).toBe(false); // 欠番はどのデッキにも入らない
         expect(new Set(SKILL_CATALOG.map((c) => c.name)).size).toBe(CATALOG_SIZE); // 名前に重複なし
     });
 
@@ -52,7 +60,8 @@ describe('デッキ', () => {
         expect(isValidDeck(undefined)).toBe(false);
         expect(isValidDeck([1, 2, 3])).toBe(false);
         expect(isValidDeck([...recommendedDeck('you').slice(0, 11), recommendedDeck('you')[0]])).toBe(false);
-        expect(isValidDeck([...recommendedDeck('you').slice(0, 11), CATALOG_SIZE])).toBe(false);
+        expect(isValidDeck([...recommendedDeck('you').slice(0, 11), SKILL_IDX_END])).toBe(false);
+        expect(isValidDeck([...recommendedDeck('you').slice(0, 11), 50])).toBe(false); // 欠番（縮地は削除済み）
     });
 
     it('resolveDeck: 有効な指定は昇順に整えて採用、無効・未指定は推奨デッキ', () => {
@@ -164,5 +173,17 @@ describe('保存したデッキ', () => {
         const failing: DeckStorage = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
         expect(saveDeck('x', recommendedDeck('you'), failing)).toBeNull();
         expect(loadSavedDecks(undefined)).toEqual([]);
+    });
+});
+
+describe('「あなた」の相手別デッキ', () => {
+    it('専用デッキはすべて有効で、相手が1キャラのときだけ使う', () => {
+        for (const d of Object.values(COUNTER_DECKS_FOR_YOU)) expect(isValidDeck(d)).toBe(true);
+        expect(recommendedDeckAgainst('you', ['witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
+        expect(recommendedDeckAgainst('you', ['witch', 'witch'])).toEqual(COUNTER_DECKS_FOR_YOU.witch);
+        expect(recommendedDeckAgainst('you', ['witch', 'tactician', 'giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['tactician', 'giant'])).toEqual(recommendedDeck('you'));
+        expect(recommendedDeckAgainst('you', ['tactician'])).toEqual(COUNTER_DECKS_FOR_YOU.tactician);
+        expect(recommendedDeckAgainst('magician', ['witch'])).toEqual(recommendedDeck('magician'));
     });
 });

@@ -12,7 +12,7 @@ const symbols: Player[] = ['💙', '⭕'];
 const costEnv = (over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: ['you', 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 const mkState = (): [GearTurnState, RuinState] => {
@@ -23,7 +23,7 @@ const mkState = (): [GearTurnState, RuinState] => {
         {
             skills: z(0), echoReady: f(), echoNext: f(), kinds: [new Set(), new Set()], discount: [emptyDiscount(), emptyDiscount()], oppSkilled: f(), oppSkillPrev: f(),
             shikiPlaced: f(), fireBase: z(0), plantPrev: f(), plantBase: z(0), placedPrev: f(), placeBase: z(0), leafBase: z(0), darkPotUsed: f(), tokenFree: f(), bigCast: f(), marketUsed: z(0), pieceBase: z(0), turnSpent: z(0), oppBigSeen: f(), oppBigPrev: f(), chargeBase: z(0),
-            veil: f(), veilNext: f(), ward: z(0), wardFresh: f(), lockSeen: f(), lockPrev: f(), blessing: z(0), blessingFresh: f(),
+            veil: f(), veilNext: f(), ward: z(0), wardFresh: f(), lockSeen: f(), lockPrev: f(), lockFreeUsed: f(), blessing: z(0), blessingFresh: f(),
         },
         { active: f(), pending: f(), snap: null, snapBuds: null, snapFlames: null, ashActive: z(0), ashPending: z(0), lastMove: null },
     ];

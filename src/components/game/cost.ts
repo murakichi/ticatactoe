@@ -54,6 +54,8 @@ export type CostEnv = {
     oppSkillPrev: boolean;
     /** 直前の相手ターンにロックが使われたか（錠前荒らしの0コスト条件） */
     lockPrev: boolean;
+    /** 鍵師のパッシブ: この手番に、常設のロックの無料の1回を使ったか */
+    lockFreeUsed: boolean;
     /** 直前の手番に盤面の🌱🍂が増えたか（火口の無料条件。撃つと消える） */
     plantPrev: boolean;
     /** 直前の手番に相手がコマを2つ以上設置したか（飛び火の無料条件。撃つと消える） */
@@ -108,6 +110,7 @@ export const gearCostOf = (env: CostEnv, cost: number, isToken: boolean, skillKe
     if (skillKey === 'onClickTinder' && mine && env.plantPrev) return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev) return 0; // 返し特売: 直前に相手がスキルを使っていれば0
     if (skillKey === 'onClickLockRaid' && mine && env.lockPrev) return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
+    if (skillKey === 'onClickUseLock' && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed) return 0; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
     if (skillKey === 'onClickFireWheel' && mine && fireStacksTotal(env.board) > env.fireBase) return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）
     return mine ? applyDiscount(adjusted, discountAmount(env.discount, skillKey, isToken)) : adjusted;

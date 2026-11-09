@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/keysmith.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.blessPlacedPiece = exports.blessingActive = exports.lockRaid = exports.lockRaidCells = exports.lockExtend = exports.lockExtendCells = exports.vacantSeal = exports.vacantSealCells = exports.vacantSealBaseCost = exports.opponentReaches = exports.reachCount = exports.BLESSING_TURNS = exports.BLESSING_STACK = exports.LOCK_EXTEND_STACK = exports.VACANT_SEAL_REACH_CUT = exports.VACANT_SEAL_STACK = exports.seal = exports.sealBaseCost = exports.sealReleaseCells = exports.lockBlocksPlacement = exports.ignoresEmptyLock = exports.LOCK_USED_KEYS = exports.LOCK_SKILL_KEYS = exports.SEAL_MIN_COST = exports.SEAL_EMPTY_STACK = exports.SEAL_OWN_STACK = void 0;
+exports.lockedSquareCount = exports.lockConvert = exports.lockConvertCells = exports.blessPlacedPiece = exports.blessingActive = exports.lockRaid = exports.lockRaidCells = exports.lockExtend = exports.lockExtendCells = exports.vacantSeal = exports.vacantSealCells = exports.vacantSealBaseCost = exports.opponentReaches = exports.reachCount = exports.BLESSING_TURNS = exports.BLESSING_STACK = exports.LOCK_EXTEND_STACK = exports.VACANT_SEAL_REACH_CUT = exports.VACANT_SEAL_STACK = exports.seal = exports.sealBaseCost = exports.sealReleaseCells = exports.lockBlocksPlacement = exports.ignoresEmptyLock = exports.LOCK_USED_KEYS = exports.LOCK_SKILL_KEYS = exports.SEAL_MIN_COST = exports.SEAL_EMPTY_STACK = exports.SEAL_OWN_STACK = void 0;
 const Player_1 = require("./Player");
 const util_1 = require("./util");
 const boardGeometry_1 = require("./boardGeometry");
@@ -16,7 +16,7 @@ exports.SEAL_MIN_COST = 5;
 /** ロック系スキル（鍵師はコスト-1）。Game.tsx の skillKey / sim/engine.js の costsOf のキー */
 exports.LOCK_SKILL_KEYS = new Set([
     'onClickUseLock', 'onClickDoubleLock', 'onClickTripleLock', 'onClickSeal',
-    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal',
+    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickLockConvert', 'onClickLockDiscount',
 ]);
 /** 『ロックが使われた』とみなすスキル（錠前荒らしの0コスト条件: 直前の相手ターンにこれらが使われた）。ロックを掛ける・延ばす・ロックを残して壊すスキル */
 exports.LOCK_USED_KEYS = new Set([
@@ -152,3 +152,21 @@ exports.blessingActive = blessingActive;
 /** 施錠の加護: 設置したコマ（着手後のマス）に BLESSING_STACK のロックを足す */
 const blessPlacedPiece = (sq) => (0, lock_1.addLock)(sq, exports.BLESSING_STACK);
 exports.blessPlacedPiece = blessPlacedPiece;
+/** 錠の転換（汎用 idx 134）の対象: ロックの乗っているマス全て（自分のコマ・敵のコマ・空きマス）。オブジェクトは除く */
+const lockConvertCells = (board) => board.map((sq, i) => (!(0, util_1.isObject)(sq) && (0, lock_1.isLocked)(sq) ? i : -1)).filter((i) => i !== -1);
+exports.lockConvertCells = lockConvertCells;
+/**
+ * 錠の転換: cell のロックを解除し、解除したスタックの合計を返す（呼び出し側が自分の『ライフ値』に足す。「ライフ3」スキルと同じライフ）。
+ * 対象でなければ 0 を返して何もしない。board を直接書き換える。ロックの持ち主は問わない（敵のロックを崩して自分のライフにもできる）
+ */
+const lockConvert = (board, cell) => {
+    if (!(0, exports.lockConvertCells)(board).includes(cell))
+        return 0;
+    const gained = (0, lock_1.lockStack)(board[cell]);
+    board[cell] = (0, lock_1.clearLock)(board[cell]);
+    return gained;
+};
+exports.lockConvert = lockConvert;
+/** 錠前割引（汎用 idx 135）の軽減量: 盤面にロックのかかっているマスの数（自分・敵・空きマスを問わず。オブジェクトは除く）。使った時点の数で固定する */
+const lockedSquareCount = (board) => board.filter((sq) => !(0, util_1.isObject)(sq) && (0, lock_1.isLocked)(sq)).length;
+exports.lockedSquareCount = lockedSquareCount;

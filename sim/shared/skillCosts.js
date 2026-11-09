@@ -92,7 +92,6 @@ exports.skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts
@@ -175,7 +174,9 @@ exports.skillCosts = {
     onClickLockExtend: 5,
     onClickLockBlessing: 4,
     onClickVacantSeal: 10,
-    onClickUnlockStone: 2, //     解錠の碑(idx 134。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2。解除=錠前荒らし級の価値、設置のライフ5は他のオブジェクトと同じ）
+    onClickLockConvert: 4,
+    onClickLockDiscount: 1,
+    onClickUnlockStone: 2, //     解錠の碑(idx 136。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2。解除=錠前荒らし級の価値、設置のライフ5は他のオブジェクトと同じ）
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

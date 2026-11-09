@@ -11,7 +11,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { isObject, isShikigami } from '../../util';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, addCharge, isShielded } from './charge';
-import { addLock, clearLock, isLocked } from './lock';
+import { addLock, clearLock, isLocked, lockStack } from './lock';
 import { addPoison } from './poison';
 import { applyDamage, emptyBlocked, ignite, lockable } from './thermal';
 
@@ -23,7 +23,7 @@ export const SEAL_MIN_COST = 5;
 /** ロック系スキル（鍵師はコスト-1）。Game.tsx の skillKey / sim/engine.js の costsOf のキー */
 export const LOCK_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickUseLock', 'onClickDoubleLock', 'onClickTripleLock', 'onClickSeal',
-    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal',
+    'onClickLockRaid', 'onClickLockExtend', 'onClickLockBlessing', 'onClickVacantSeal', 'onClickLockConvert', 'onClickLockDiscount',
 ]);
 
 /** 『ロックが使われた』とみなすスキル（錠前荒らしの0コスト条件: 直前の相手ターンにこれらが使われた）。ロックを掛ける・延ばす・ロックを残して壊すスキル */
@@ -166,3 +166,22 @@ export const blessingActive = (remaining: number): boolean => remaining > 0;
 
 /** 施錠の加護: 設置したコマ（着手後のマス）に BLESSING_STACK のロックを足す */
 export const blessPlacedPiece = (sq: SquareInfo): SquareInfo => addLock(sq, BLESSING_STACK);
+
+/** 錠の転換（汎用 idx 134）の対象: ロックの乗っているマス全て（自分のコマ・敵のコマ・空きマス）。オブジェクトは除く */
+export const lockConvertCells = (board: SquareInfo[]): number[] =>
+    board.map((sq, i) => (!isObject(sq) && isLocked(sq) ? i : -1)).filter((i) => i !== -1);
+
+/**
+ * 錠の転換: cell のロックを解除し、解除したスタックの合計を返す（呼び出し側が自分の『ライフ値』に足す。「ライフ3」スキルと同じライフ）。
+ * 対象でなければ 0 を返して何もしない。board を直接書き換える。ロックの持ち主は問わない（敵のロックを崩して自分のライフにもできる）
+ */
+export const lockConvert = (board: SquareInfo[], cell: number): number => {
+    if (!lockConvertCells(board).includes(cell)) return 0;
+    const gained = lockStack(board[cell]);
+    board[cell] = clearLock(board[cell]);
+    return gained;
+};
+
+/** 錠前割引（汎用 idx 135）の軽減量: 盤面にロックのかかっているマスの数（自分・敵・空きマスを問わず。オブジェクトは除く）。使った時点の数で固定する */
+export const lockedSquareCount = (board: SquareInfo[]): number => board.filter((sq) => !isObject(sq) && isLocked(sq)).length;
+
