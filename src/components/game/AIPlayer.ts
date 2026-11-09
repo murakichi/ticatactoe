@@ -76,6 +76,8 @@ class AIPlayer {
     hasEmptyLock: boolean = false;
     /** 芽吹きの錠を装備しているか（ロックを掛けたライフ2以下の自陣のコマにバッズが付く） */
     hasLockBloom: boolean = false;
+    /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
+    hasGroundRent: boolean = false;
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
     deck?: number[];
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
@@ -98,7 +100,8 @@ class AIPlayer {
         hasToxicBloom: boolean = false,
         hasEmptyLock: boolean = false,
         deck?: number[],
-        hasLockBloom: boolean = false
+        hasLockBloom: boolean = false,
+        hasGroundRent: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -109,6 +112,7 @@ class AIPlayer {
         this.hasEmptyLock = hasEmptyLock;
         this.hasLockBloom = hasLockBloom;
         this.deck = deck;
+        this.hasGroundRent = hasGroundRent;
     }
 
     /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
