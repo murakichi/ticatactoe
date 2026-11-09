@@ -944,7 +944,7 @@ function placeMove(s, i) {
     if (s.objectPlacing) {
         // オブジェクト: 空きマスに設置する。埋まっている/氷結中/ロック中のマスは選び直せる [FAITHFUL] Game.tsx exeObjectPlace
         if (!objectsMod.objectLandable(board[i])) return false;
-        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing, gear.objectBuildLife(s.gears[s.turn])), effects: board[i].effects.filter((e) => e.effect === '🔥') };
+        board[i] = objectsMod.newObject(curPlayer(s), s.objectPlacing, gear.objectBuildLife(s.gears[s.turn]), board[i].effects.filter((e) => e.effect === '🔥'));
         objectsMod.sweepBurntTrees(board);
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
@@ -2676,6 +2676,7 @@ const SKILLS = {
     soloSign: (s) => onClickObject(s, 'soloSign'),
     oneWord: (s) => onClickObject(s, 'oneWord'),
     blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
+    boulder: (s) => onClickObject(s, 'boulder'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),

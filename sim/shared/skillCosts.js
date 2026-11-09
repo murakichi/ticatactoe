@@ -175,7 +175,9 @@ exports.skillCosts = {
     onClickLockBlessing: 4,
     onClickVacantSeal: 10,
     onClickLockConvert: 4,
-    onClickLockDiscount: 1, //    錠前割引(idx 135・ユーザー提案): 盤面のロックのマスの数だけ、このターンの全スキルを軽減。使った時点の数で固定。春一番(turn軽減)と同型。軽減札は基準で1〜3（特売3・大特価7は次の1スキルのみ）、このターン全体に効くが条件（ロックが場に要る）があるので1
+    onClickLockDiscount: 1,
+    // 大岩(idx 136・ユーザー指定): 効果は無く2ターンのロック付きで設置するだけ。基準(docs/skill-cost-rules.md)の下限より安いが、ユーザー指定で1
+    onClickBoulder: 1,
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

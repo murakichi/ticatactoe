@@ -683,6 +683,26 @@ test('頑丈な建材: 設置するオブジェクトの初期ライフが+3(5�
     assert.strictEqual(place([[], []]), 5);
 });
 
+test('大岩: コスト1で、2ターンのロック付きの効果なしオブジェクトを設置する(頑丈な建材は+3)', () => {
+    const objects = require('./shared/objects');
+    const place = (gears) => {
+        const s = game(gears);
+        s.magic[0] = 5;
+        e.SKILLS.boulder(s); // スキルを使う(空きマスを選ぶ構え)
+        assert.strictEqual(s.magic[0], 4, 'コスト1');
+        assert.strictEqual(s.objectPlacing, 'boulder');
+        e.placeMove(s, 5);
+        return s.board[5];
+    };
+    const sq = place([[], []]);
+    assert.strictEqual(sq.object, 'boulder');
+    assert.strictEqual(sq.player, H);
+    assert.strictEqual(sq.bind, objects.OBJECT_DEFS.boulder.life);
+    const lock = sq.effects.find((x) => x.effect === '🔑');
+    assert.ok(lock && lock.stack === 2, '2ターンのロック');
+    assert.strictEqual(place([['sturdyBuild'], []]).bind, 8);
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

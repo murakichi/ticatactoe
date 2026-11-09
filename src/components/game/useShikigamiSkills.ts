@@ -113,7 +113,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
     const exeObjectPlace = (i: number) => {
         if (!objectPlacing || !objectLandable(currentBoard[i])) return; // 埋まっている・氷結中・ロック中のマスは選び直せる
         const board = currentBoard.slice();
-        board[i] = { ...newObject(currentTurnPlayer, objectPlacing, objectBuildLife(turnGears)), effects: currentBoard[i].effects.filter((e) => e.effect === '🔥') }; // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
+        board[i] = newObject(currentTurnPlayer, objectPlacing, objectBuildLife(turnGears), currentBoard[i].effects.filter((e) => e.effect === '🔥')); // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
         sweepBurntTrees(board);
         addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
         flashCells([i]);
