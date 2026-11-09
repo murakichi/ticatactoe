@@ -1,7 +1,6 @@
 // tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
+import { readGameSource } from './gameSource';
 import React from 'react';
-import * as fs from 'fs';
-import * as path from 'path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Game, PlayerConfig } from './Game';
 import { BoardEffects, BurstType } from './BoardEffects';
@@ -45,7 +44,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     springThunder: 'trigger', // 氷結した空きマスの❄を解く
 };
 
-const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
+const gameSource = readGameSource();
 
 describe('ギアの発動の演出', () => {
     it('全ギアが登録表にある(新ギアの演出の付け忘れ防止)', () => {
@@ -87,9 +86,21 @@ describe('ギア発動のマス演出', () => {
         ['gearBloom', '🌺'],
         ['gearSpread', '🌊'],
         ['gearEmpty', '🕳️'],
+        ['gearSeed', '🌷'],
+        ['gearThunder', '🌩️'],
+        ['gearReap', '💀'],
     ])('%s は指定マスの数だけ「%s」を出す', (type, emoji) => {
         const { container } = render(<BoardEffects effect={null} burst={{ type, cells: [1, 2], nonce: 1 }} size={4} />);
         expect(container.textContent?.split(emoji).length).toBe(3);
+    });
+
+    // 芽吹き・春雷・死神の鎌は、発動したマスに小演出を出す(チップだけで終わらない)
+    it.each([
+        ['budSeed', 'gearSeed'],
+        ['springThunder', 'gearThunder'],
+        ['reaper', 'gearReap'],
+    ])('ギア %s の発動では、盤面に playBurst(%s) を出す', (_gear, burst) => {
+        expect(gameSource).toContain(`playBurst('${burst}'`);
     });
 
     it('土壇場の防壁(bulwark)はバナーと演出要素を出す', () => {

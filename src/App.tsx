@@ -1,5 +1,5 @@
 import './App.css';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Game, PlayerConfig } from './components/game/Game';
 import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
 import { CharacterId } from './types/Character';
@@ -97,6 +97,14 @@ export const App = () => {
     const [startedPlayers, setStartedPlayers] = useState<PlayerConfig[]>([]);
     // 作成したオリジナルスキル（ブラウザに1枚だけ保存。人間席のデッキに1枚まで入れられる）
     const [customSkill, setCustomSkill] = useState<CustomSkillSpec | undefined>(() => loadCustomSkill());
+    // オリジナルスキルの編集サブウィンドウ（デッキ編集の最下部のボタンから開く）
+    const [isCustomOpen, setIsCustomOpen] = useState<boolean>(false);
+    useEffect(() => {
+        if (!isCustomOpen) return;
+        const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsCustomOpen(false);
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isCustomOpen]);
 
     const updatePlayer = (seat: number, patch: Partial<PlayerConfig>) =>
         setPlayers((prev) =>
@@ -209,21 +217,6 @@ export const App = () => {
                             </button>
                         </div>
                     </section>
-                    <section className={styles.rules} aria-label='オリジナルスキル'>
-                        <CustomSkillCreator
-                            key={customSkill ? 'saved' : 'new'}
-                            initial={customSkill}
-                            onSave={(spec) => {
-                                const saved = saveCustomSkill(spec);
-                                if (saved) setCustomSkill(saved);
-                                return !!saved;
-                            }}
-                            onDelete={() => {
-                                clearCustomSkill();
-                                setCustomSkill(undefined);
-                            }}
-                        />
-                    </section>
                     <div className={styles.players}>
                         {range(0, playerCount).map((seat) => (
                             <PlayerSetting
@@ -239,6 +232,7 @@ export const App = () => {
                                 onRandomGears={() => randomizeGears(seat)}
                                 deck={players[seat].deck}
                                 customSkill={customSkill}
+                                onEditCustom={() => setIsCustomOpen(true)}
                                 onChangeDeck={(deck) => updatePlayer(seat, { deck })}
                             />
                         ))}
@@ -246,6 +240,31 @@ export const App = () => {
                     {invalidDeckSeat >= 0 && (
                         <div className={styles.deckWarn}>
                             プレイヤー{invalidDeckSeat + 1}のデッキが{DECK_SIZE}枚ではありません（「推奨」に戻すか、{DECK_SIZE}枚に調整してください）
+                        </div>
+                    )}
+                    {isCustomOpen && (
+                        <div className={styles.modalBackdrop} onClick={() => setIsCustomOpen(false)}>
+                            <div className={styles.modal} role='dialog' aria-modal='true' aria-label='オリジナルスキルの編集' onClick={(e) => e.stopPropagation()}>
+                                <div className={styles.modalHead}>
+                                    <span>🛠 オリジナルスキル{customSkill ? `（保存済み: ${customSkill.name}）` : '（未作成）'}</span>
+                                    <button className={styles.gearMiniBtn} onClick={() => setIsCustomOpen(false)} aria-label='閉じる'>
+                                        ✕ 閉じる
+                                    </button>
+                                </div>
+                                <CustomSkillCreator
+                                    key={customSkill ? 'saved' : 'new'}
+                                    initial={customSkill}
+                                    onSave={(spec) => {
+                                        const saved = saveCustomSkill(spec);
+                                        if (saved) setCustomSkill(saved);
+                                        return !!saved;
+                                    }}
+                                    onDelete={() => {
+                                        clearCustomSkill();
+                                        setCustomSkill(undefined);
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                     <div className={styles.startBar}>
@@ -305,6 +324,7 @@ type PlayerSettingProps = {
     /** 組んだデッキ（未指定なら推奨デッキ） */
     deck: number[] | undefined;
     customSkill: CustomSkillSpec | undefined;
+    onEditCustom: () => void;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -389,6 +409,7 @@ const PlayerSetting = (props: PlayerSettingProps) => {
                     isAI={props.isAI}
                     deck={props.deck}
                     customSkill={props.customSkill}
+                    onEditCustom={props.onEditCustom}
                     onChangeDeck={props.onChangeDeck}
                 />
                 {props.gears.length > 0 && (
@@ -411,6 +432,7 @@ type DeckBoxProps = {
     isAI: boolean;
     deck: number[] | undefined;
     customSkill: CustomSkillSpec | undefined;
+    onEditCustom: () => void;
     onChangeDeck: (deck: number[] | undefined) => void;
 };
 
@@ -520,9 +542,12 @@ const DeckBox = (props: DeckBoxProps) => {
                         onFocus={() => setPointed(CUSTOM_SKILL_IDX)}
                         disabled={(!shown.includes(CUSTOM_SKILL_IDX) && shown.length >= DECK_SIZE) || (!props.customSkill && !shown.includes(CUSTOM_SKILL_IDX)) || props.isAI}
                         aria-pressed={shown.includes(CUSTOM_SKILL_IDX)}
-                        title={props.isAI ? 'AI席は使えません' : props.customSkill ? describeCustom(props.customSkill) : '先に「オリジナルスキル」を作成して保存してください'}
+                        title={props.isAI ? 'AI席は使えません' : props.customSkill ? describeCustom(props.customSkill) : '先に右の「作成」でオリジナルスキルを作って保存してください'}
                     >
-                        {props.customSkill ? `${customIcon(props.customSkill)} ${props.customSkill.name}` : '🛠 （未作成）'}
+                        {props.customSkill ? `${customIcon(props.customSkill)} ${props.customSkill.name}` : '（未作成）'}
+                    </button>
+                    <button className={styles.gearMiniBtn} onClick={props.onEditCustom} aria-label={`プレイヤー${props.seat + 1}のオリジナルスキルを${props.customSkill ? '編集' : '作成'}`}>
+                        🛠 {props.customSkill ? '編集' : '作成'}
                     </button>
                 </div>
             </div>
