@@ -76,6 +76,8 @@ class AIPlayer {
     hasEmptyLock: boolean = false;
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
     deck?: number[];
+    /** 自席の装備ギア（ギアに合わせた立ち回りに使う。未指定は空） */
+    gears: readonly string[] = [];
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
     inDeck(idx: number, availableSkills: number[]): boolean {
         return !this.deck || this.deck.includes(idx) || availableSkills.includes(idx);
@@ -95,8 +97,10 @@ class AIPlayer {
         gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
         hasToxicBloom: boolean = false,
         hasEmptyLock: boolean = false,
-        deck?: number[]
+        deck?: number[],
+        gears: readonly string[] = []
     ) {
+        this.gears = gears;
         this.playerSymbol = playerSymbol;
         this.character = character;
         this.opponents = opponents;
@@ -105,6 +109,7 @@ class AIPlayer {
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
         this.deck = deck;
+        this.gears = gears;
     }
 
     /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */

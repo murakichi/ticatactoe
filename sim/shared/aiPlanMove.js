@@ -870,6 +870,17 @@ function planBudsAndFire(c) {
             // 大岩は敵の勝ち筋(リーチの空き・敵が並ぶ列の空き)を塞ぐマスに置く。それが無いときは自陣のオブジェクトを作るためだけに中央寄りへ
             if (plan.kind === 'boulder') {
                 cell = this.bestBoulderCell(board);
+                // 地代: 自陣のオブジェクト1つにつき手番開始時にマジック+1。大岩(1コスト)は2手番で元が取れる魔力の元手になるので、塞ぐ先が無くても
+                // 空きに余裕があるかぎり(自陣の大岩 RENT_BOULDER_MAX 個まで)置く。置く場所は盤の隅寄り（列づくりの邪魔をしない）
+                const ownBoulders = board.filter((sq) => sq.object === 'boulder' && sq.player === this.playerSymbol).length;
+                if (cell === null && this.gears.includes('groundRent') && ownBoulders < aiConstants_1.RENT_BOULDER_MAX && board.filter((sq) => (0, objects_1.objectLandable)(sq)).length >= 4) {
+                    const geo2 = (0, boardGeometry_1.geometryForCells)(board.length);
+                    let low = 99;
+                    board.forEach((sq, k) => { if ((0, objects_1.objectLandable)(sq) && geo2.surroundRange(k).length < low) {
+                        low = geo2.surroundRange(k).length;
+                        cell = k;
+                    } });
+                }
                 if (cell === null && board.some((sq) => sq.object === 'boulder' && sq.player === this.playerSymbol))
                     continue; // 塞ぐ先が無く、既に持っているなら置かない
             }

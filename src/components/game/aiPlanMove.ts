@@ -17,7 +17,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, RENT_BOULDER_MAX, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
 export type PlanMoveArgs = Parameters<typeof planMove>;
@@ -879,6 +879,14 @@ function planBudsAndFire(this: AIPlayer, c: PlanContext): AIResult | null {
             // 大岩は敵の勝ち筋(リーチの空き・敵が並ぶ列の空き)を塞ぐマスに置く。それが無いときは自陣のオブジェクトを作るためだけに中央寄りへ
             if (plan.kind === 'boulder') {
                 cell = this.bestBoulderCell(board);
+                // 地代: 自陣のオブジェクト1つにつき手番開始時にマジック+1。大岩(1コスト)は2手番で元が取れる魔力の元手になるので、塞ぐ先が無くても
+                // 空きに余裕があるかぎり(自陣の大岩 RENT_BOULDER_MAX 個まで)置く。置く場所は盤の隅寄り（列づくりの邪魔をしない）
+                const ownBoulders = board.filter((sq) => sq.object === 'boulder' && sq.player === this.playerSymbol).length;
+                if (cell === null && this.gears.includes('groundRent') && ownBoulders < RENT_BOULDER_MAX && board.filter((sq) => objectLandable(sq)).length >= 4) {
+                    const geo2 = geometryForCells(board.length);
+                    let low = 99;
+                    board.forEach((sq, k) => { if (objectLandable(sq) && geo2.surroundRange(k).length < low) { low = geo2.surroundRange(k).length; cell = k; } });
+                }
                 if (cell === null && board.some((sq) => sq.object === 'boulder' && sq.player === this.playerSymbol)) continue; // 塞ぐ先が無く、既に持っているなら置かない
             }
             let bestN = -1;
