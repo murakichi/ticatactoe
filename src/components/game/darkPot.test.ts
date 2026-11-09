@@ -1,7 +1,5 @@
 import { darkPotRolls, DARK_POT_EFFECTS, DARK_POT_CHANCE } from './darkPot';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const sim = require('../../../sim/darkPot');
 
 const seq = (values: number[]) => {
     let i = 0;
@@ -28,17 +26,5 @@ describe('一寸先は闇鍋の抽選', () => {
     });
     it('元から🔥があるコマには❄🌱🍂を乗せない', () => {
         expect(darkPotRolls([['🔥']], seq([0.1, 0.1, 0.1, 0.1, 0.1, 0.1]))[0]).toEqual(['⚡', '☠']);
-    });
-    it('sim/darkPot.js と一致する', () => {
-        expect(sim.DARK_POT_EFFECTS).toEqual(Array.from(DARK_POT_EFFECTS));
-        expect(sim.DARK_POT_CHANCE).toBe(DARK_POT_CHANCE);
-        const existing = [[], ['🔥'], ['❄'], ['🌱', '🍂'], ['⚡', '☠']];
-        for (let s = 1; s <= 30; s++) {
-            const mk = () => {
-                let x = s * 2654435761;
-                return () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; };
-            };
-            expect(sim.darkPotRolls(existing, mk())).toEqual(darkPotRolls(existing, mk()));
-        }
     });
 });

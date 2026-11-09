@@ -1,7 +1,6 @@
 // tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
+import { readGameSource } from './gameSource';
 import React from 'react';
-import * as fs from 'fs';
-import * as path from 'path';
 import { render } from '@testing-library/react';
 import { BoardEffects, SkillEffectType } from './BoardEffects';
 import { SKILL_CATALOG } from './deck';
@@ -44,7 +43,9 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickJammer: 'zap',
     onClickHailMary: { own: 'setHailMarySpin(' },
     onClickRandomCast: { own: 'picked.idx' },
+    onClickSecondCatch: { own: 'second.idx' },
     onClickSilence: 'silence',
+    onClickBoltSilence: 'boltSilence',
     onClickFreeze: 'freeze',
     onClickFrostArea: 'freeze',
     onClickIcicle: 'freeze',
@@ -79,31 +80,69 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickStrip: 'strip',
     onClickChargeSeason: 'staticSeason',
     onClickBristle: 'bristle',
-    onClickLeafDrop: 'autumn',
-    onClickKindling: 'flame',
-    onClickTinder: 'flame',
-    onClickSmallFry: 'silence',
-    onClickFirstFrost: 'freeze',
-    onClickGather: 'token',
-    onClickBurnOff: 'flame',
-    onClickFreeToken: 'token',
-    onClickLeafCloak: 'autumn',
+    onClickLeafDrop: 'leafDrop',
+    onClickKindling: 'kindling',
+    onClickTinder: 'tinder',
+    onClickSpark: 'sparkJump',
+    onClickSmallFry: 'smallFry',
+    onClickPerfectGame: 'perfectGame',
+    onClickHelper: 'helper',
+    // オブジェクト(設置先を選ぶ): 設置の演出はトークンと同じ。バナーはオブジェクト名(Game.tsx の exeObjectPlace)
+    onClickBigTree: 'buildObject',
+    onClickDeadTree: 'buildObject',
+    onClickSpring: 'buildObject',
+    onClickFort: 'buildObject',
+    onClickThundercloud: 'buildObject',
+    onClickMarket: 'buildObject',
+    onClickSanctuary: 'buildObject',
+    onClickPoisonSwamp: 'buildObject',
+    onClickWorkshop: 'buildObject',
+    onClickBarrierStone: 'buildObject',
+    onClickAmuletShrine: 'buildObject',
+    onClickLuckyCat: 'buildObject',
+    onClickMudField: 'buildObject',
+    onClickTongueKing: 'buildObject',
+    onClickEightTrigrams: 'buildObject',
+    onClickSoloSign: 'buildObject',
+    onClickOneWord: 'buildObject',
+    onClickBlindMonkey: 'buildObject',
+    onClickBoulder: 'buildObject',
+    onClickLockRaid: 'lockRaid',
+    onClickLockExtend: 'lockExtend',
+    onClickLockBlessing: 'lockBlessing',
+    onClickLockConvert: 'lockConvert',
+    onClickLockDiscount: 'lockDiscount',
+    onClickVacantSeal: 'vacantSeal',
+    onClickDemolish: 'demolish',
+    onClickWeather: 'weather',
+    onClickLevelAll: 'levelAll',
+    onClickReinforce: 'reinforce',
+    onClickExpandAll: 'expandAll',
+    onClickDuplicate: 'duplicate',
+    onClickFirstFrost: 'firstFrost',
+    onClickGather: 'gather',
+    onClickBurnOff: 'burnOff',
+    onClickFreeToken: 'freeToken',
+    onClickNightVeil: 'nightVeil',
+    onClickGraveDiscount: 'graveDiscount',
+    onClickPoisonWard: 'poisonWard',
+    onClickGraveOffering: 'graveOffering',
+    onClickLeafCloak: 'leafCloak',
     onClickRelease: 'thunderFall',
     onClickStash: 'stash',
     onClickThunderFire: 'thunderFire',
     onClickDarkPot: 'darkPot',
     onClickChargeHeal: 'thunderHeal',
     onClickBoost: 'rain',
-    onClickRelocate: 'dash',
     onClickClone: 'clone',
     onClickPlunder: 'plunder',
     onClickShikigamiAll: 'shikigami',
     onClickShikigamiRandom: 'shikigami',
     onClickShikigamiFlood: 'shikigami',
-    onClickShikigamiBless: 'shikigami',
-    onClickShikigamiCurse: 'poison',
-    onClickShikigamiPurge: 'shikigamiBlast',
-    onClickShikigamiDiscount: 'discount',
+    onClickShikigamiBless: 'scrollBless',
+    onClickShikigamiCurse: 'scrollCurse',
+    onClickShikigamiPurge: 'scrollPurge',
+    onClickShikigamiDiscount: 'scrollDiscount',
     onClickMarkdown: 'discount',
     onClickEffectDiscount: 'discount',
     onClickTokenDiscount: 'discount',
@@ -132,7 +171,7 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
     絶対零度: 'glacier',
 };
 
-const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
+const gameSource = readGameSource();
 
 // 他のスキルと演出(の種類)を共有するスキルは、バナーに自分の名前が出ること(別スキルの名前が出ないこと)を守る。
 // 名前は Game.tsx の playEffect / freezeCells の引数に文字列で渡している
@@ -142,19 +181,6 @@ const OWN_BANNER_LABELS: Record<string, string> = {
     onClickSpringWind: '春一番',
     onClickKimon: '鬼門封じ',
     onClickFireWheel: '火の車',
-    onClickLeafDrop: '落ち葉の置き土産',
-    onClickKindling: '焚きつけ',
-    onClickShikigamiBless: '式神の加護',
-    onClickShikigamiCurse: '式神の呪詛',
-    onClickShikigamiPurge: '式神の供犠',
-    onClickShikigamiDiscount: '式神割引',
-    onClickTinder: '火口',
-    onClickSmallFry: '一寸の虫に魂なし',
-    onClickFirstFrost: '初霜',
-    onClickGather: '吹き寄せ',
-    onClickBurnOff: '山焼き',
-    onClickFreeToken: '無礼講',
-    onClickLeafCloak: '落葉の衣',
     onClickBonfire: '焚き火の唄',
     onClickMulch: '腐葉土の目覚め',
     onClickAutumn: '一葉知秋',
@@ -251,7 +277,7 @@ describe('全スキルに演出がある', () => {
     });
 
     // 専用の演出を持つ新作スキルは、バナーの名前がそのままスキル名で、演出も多段(要素が十分ある)であること
-    const DEDICATED: Record<string, string> = {strip: '裸の王様', staticSeason: '静電気の季節', bristle: '総毛立つ', thunderFall: '落雷は忘れた頃に', stash: '雷神のへそくり', thunderFire: '雷のない所に火は立たぬ', darkPot: '一寸先は闇鍋', thunderHeal: '雷を食らわば皿まで'};
+    const DEDICATED: Record<string, string> = {strip: '裸の王様', staticSeason: '静電気の季節', bristle: '総毛立つ', thunderFall: '落雷は忘れた頃に', stash: '雷神のへそくり', thunderFire: '雷のない所に火は立たぬ', darkPot: '一寸先は闇鍋', thunderHeal: '雷を食らわば皿まで', tinder: '火口', scrollBless: '式神の加護', scrollCurse: '式神の呪詛', scrollDiscount: '式神割引', scrollPurge: '式神の供犠', smallFry: '一寸の虫に魂なし', firstFrost: '初霜', gather: '吹き寄せ', burnOff: '山焼き', freeToken: '無礼講', leafDrop: '落ち葉の置き土産', leafCloak: '落葉の衣', kindling: '焚きつけ', demolish: '解体', weather: '風化', levelAll: '地ならし', reinforce: '補強工事', expandAll: '増築', duplicate: '分譲', lockRaid: '錠前荒らし', lockExtend: 'ロックの増築', vacantSeal: '空き家封じ', lockConvert: '錠の転換', lockBlessing: '施錠の加護', lockDiscount: '錠前割引', sealBreak: '封鎖の断', boltSilence: '沈黙は雷なり', sparkJump: '飛び火', perfectGame: 'パーフェクトゲーム', helper: '超助っ人', nightVeil: '夜の帳', graveDiscount: '弔い割引', poisonWard: '毒返しの構え', graveOffering: '墓守の供物', buildObject: '建設'};
     it.each(Object.entries(DEDICATED))('専用演出 %s のバナーは「%s」', (type, label) => {
         const { container } = render(<BoardEffects effect={{ type: type as SkillEffectType, index: 5, indexes: [5, 6, 9, 10], nonce: 1 }} size={4} />);
         expect(container.querySelector('[class*="banner"]')?.textContent).toBe(label);

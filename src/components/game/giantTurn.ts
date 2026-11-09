@@ -1,7 +1,7 @@
 // 巨人は「GIANT_ACT_EVERY ラウンドに1回」しか行動しない。
 // 手番の並びは「全員が1周 → 巨人を除いて (GIANT_ACT_EVERY-1) 周」の繰り返し。
 // 並びは currentTurn だけで決まる（judgeNextSeat が何度呼ばれても同じ答えになる）。
-// sim/config.js の giantActEvery と同じ値に揃えること（sim/engine.js judgeNextSeat が同じ並びを返す）。
+// sim は judgeNextSeat からこの seatForTurn を直接呼ぶ（A/B 検証では actEvery だけ上書きする）。
 
 /** 巨人が何ラウンドに1回行動するか（2 なら2ターンに1回） */
 export const GIANT_ACT_EVERY = 2;

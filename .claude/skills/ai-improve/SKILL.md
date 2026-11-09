@@ -5,6 +5,11 @@ description: Iteratively strengthen the game AI (AIPlayer.ts / sim/ai.js). Phase
 
 # ai-improve
 
+> **2026-10 更新 (#289)**: sim の既定AIは本番の `AIPlayer.ts` そのもの（`sim/shared/` の生成物を `sim/aiDriver.js` が動かす）。
+> AIを直すのは `AIPlayer.ts`（と、手番の流れなら `aiTurn.ts`）だけでよく、ts を直したら `node scripts/gen-sim-shared.js` を実行する。
+> 旧 sim 版AI（`sim/ai.js` の `F.xxx` ノブ・`--mode faithful/capture`・`probe-ai.js`・`SIM_AI=legacy`）は #307 で削除した。「sim で測ってから本番へ移植」の手順は無い。
+> 改修前後の比較は、改修前の checkout（`git worktree add ../before <rev>`）と改修後で、同一seedの `probe-top.js` などを回して比べる。以下に `sim/ai.js` / `F.xxx` / `probe-ai.js` 前提の記述が残っていたら、この方針で読み替える。
+
 Two-phase AI improvement loop for the tactical tic-tac-toe variant.
 Uses the headless sim (`sim/`) to detect weaknesses, fix them, then push
 win rate higher through optimization.
@@ -28,17 +33,17 @@ node sim/cli.js metrics --games 800 --mode faithful --seed 1 # full balance snap
 
 paired A/B と使用率の計測（`cli.js` は全ペア総当たりで遅いので、AI の改修検証はこちらを使う）:
 ```bash
-# 改修前後を同一シードで比較。flags は sim/ai.js の AI_DEFAULTS / F.xxx、--modB で別版 ai ファイルとも比較できる
-node sim/probe-ai.js --mode vs --chars cryomancer,you --games 100 --seed 1 --flagsA frzBlock=0 [--modB ai.old.js]  # ai.old.js は git show <旧コミット>:sim/ai.js > sim/ai.old.js で作る | node sim/probe-sum.js
-node sim/probe-ai.js --mode h2h --chars you,you --games 200 --flagsA ban=36    # ban='33|36' でスキルidxを使わない版との対戦
+# 改修前後を同一シードで比較する（改修前の checkout を git worktree で作る）
+node sim/probe-top.js --rank --games 100 --seed 1   # 改修前後で同じコマンドを回して順位表を比べる
 node sim/probe-usage.js --chars magician,cryomancer --games 400 --size 4       # スキルの使用回数/試合と、使った試合の勝率
 ```
 4 コアなら `xargs -P4` で seed を変えた複数ジョブを並列に回し、`probe-sum.js` に流すと合算の勝率と 95%CI が出る。
 
-## AI source files (keep in sync)
+## AI source files
 
-| sim (headless) | src (React) |
-|---|---|
+AI の実装は `src/components/game/AIPlayer.ts`（と手番の流れの `aiTurn.ts`）が唯一。`sim/` はその生成物（`sim/shared/AIPlayer.js`）を `sim/aiDriver.js` で動かすので、二重に書かない（旧 `sim/ai.js` は廃止予定）。
+
+---|---|
 | `sim/ai.js` — `getEnhancedBestMove`, `chooseSkills`, `minimax`, `faithfulMakeMove` | `src/components/game/AIPlayer.ts` — `getBestMove`, `chooseSkills`, `minimax`, `makeMove` |
 
 Any fix to one MUST be mirrored to the other.
@@ -138,7 +143,7 @@ AIは自分のキャラだけでなく **相手のキャラと盤面ステータ
 | 魔法使い: 審判の前に十字内バッズ駒を🔑ロックして自陣保護 | ❌ 却下 | 総合52.6%→53.0%(中立)・対ネクロ35.7%→34.7%(改善せず)。複雑化に見合う効果なし。 |
 | テンポ/レース強化: リーチ作成を重視(フォーク+100→+200, シングルリーチ+40) | ✅ **採用** | レース強化AI vs 現状AI(同キャラミラー)で **58.1%**(全キャラ汎用)。リーチを先に作って盤面を取りに行く=テンポで押し切るのが強い。`getBestMove`/`getEnhancedBestMove`。軍師のみ46%とやや不利だが全体は大幅プラス。 |
 
-| **氷結・火炎ギミック追随 (2026-10-19, paired A/B: `sim/probe-ai.js`, 同一シード, vs 基準AI)** | | 計測は `node sim/probe-ai.js --mode vs --chars テスト対象,相手 --flagsA k=v`（A=設定あり/B=なし、席を交互に先手）。n は表記のとおり、差は 95%CI 付き |
+| **氷結・火炎ギミック追随 (2026-10-19, paired A/B: `sim/probe-ai.js`, 同一シード, vs 基準AI)** | | 計測は `node sim/probe-top.js --rank --games 100 --seed 1   # 改修前後で同じコマンドを回して順位表を比べる
 | 氷室の番人: 相手の**単独リーチ**を氷結(ロック置換・コスト2)で塞ぎ、着手は攻めに使う (`frzBlock`) | ✅ **採用** | 氷室の番人 vs あなた 57.8%→**69.5%**(+11.7±6.6, n=400) / vs 軍師 +17.0 / 魔法使い +9.5 / 巨人 **+34.5** / 陰陽師 +19.0 / 雷霆 +11.0 / 煉獄 +10.5 (n=200〜400)、ネクロ +5.5・毒使い +6.0 は誤差内。煉獄の鍛冶師は差 0.0。⚠ AI が強くなりすぎるのでバランス側の注意（あなた vs 氷室 21〜29%） |
 | 氷結を全キャラが使う (汎用idx30 で塞ぐ) / 複数脅威でも氷結で1つ塞ぐ (`frzBlock=2`) | ❌ 対象外 | 煉獄の鍛冶師 +0.0〜+1.0pt（idx30 が手札に来ないと撃てない）。複数脅威は結果が `frzBlock=1` と同一。氷室の番人限定の単独脅威のみ採用 |
 | evaluateBoard に状態効果の項 (自陣❄+/敵❄−/自陣🔥−/敵🔥+, 重み 2 と 5) | ❌ 却下 | 4組×300 で差 **0.0pt**。AI 同士の試合では❄/🔥が付いたコマ自体がほぼ発生せず、評価が手を変えない（発生しないので重みの良し悪しも測れない） |

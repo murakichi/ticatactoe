@@ -28,8 +28,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const engine = require('./engine');
-const gearMod = require('./gear');
-const deckMod = require('./deck');
+const gearMod = require('./shared/gear');
+const deckMod = require('./shared/deck');
 const live = require('./live');
 
 const args = {};
@@ -57,10 +57,16 @@ function play(chars, cfgs, seed) {
     const s = engine.newGame({ chars, rng, size, decks: cfgs.map((c) => c.deck || null), gears: cfgs.map((c) => c.gears) });
     s.aiFlags = cfgs.map((c) => c.flags || {});
     let g = 0;
-    while (!s.winner && g++ < maxTurns) {
-        const r = cfgs[s.turn].mod.makeMove(s, 'faithful');
-        if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move);
-        else if (!r.turnEnded) engine.SKILLS.charge(s);
+    try {
+        while (!s.winner && g++ < maxTurns) {
+            const r = cfgs[s.turn].mod.makeMove(s, 'faithful');
+            if (!r.turnEnded && r.move != null) engine.placeMove(s, r.move);
+            else if (!r.turnEnded) engine.SKILLS.charge(s);
+        }
+    } catch (e) {
+        // 効果のスタックが際限なく増えて配列が作れなくなる試合(#204)。計測全体を落とさず引き分け扱いにし、条件を記録する
+        console.error(`CRASH(引分扱い) ${e.message} chars=${chars.join(',')} gears=${cfgs.map((c) => (c.gears || []).join('+')).join(' | ')} seed=${seed} turn=${g}`);
+        return -1;
     }
     return s.winner ? engine.seatOf(s.winner) : -1;
 }
@@ -95,7 +101,7 @@ function pairTally(a, b, cfgA, cfgB, mods, from, to, seedBase) {
 // ---- ワーカー（子プロセス）----
 if (args.worker) {
     const job = JSON.parse(process.env.TOP_JOB || '{}');
-    const base = require(path.resolve(__dirname, 'ai.js'));
+    const base = require(path.resolve(__dirname, 'aiDriver.js'));
     const mods = { base, A: job.modA ? require(path.resolve(__dirname, job.modA)) : base };
     const out = [];
     for (const t of job.tasks) {
@@ -122,12 +128,15 @@ if (args.worker) {
 /**
  * --cache <dir> 指定時はタスクを小分け(--chunk、既定12)にして結果をファイルに保存する。
  * コンテナ再起動などで途切れても、同じコマンドを打ち直せば済んだ分は読み込んで再開する。
- * キーは (タスク・変種・games・seed・size・オプション・sim/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
+ * キーは (タスク・変種・games・seed・size・オプション・sim/*.js と sim/shared/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
  */
 function simHash() {
     const h = require('crypto').createHash('sha1');
     const dir = __dirname;
     for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
+    // 本番AI・ルールの生成物(sim/shared/*.js)も含める。含めないと AIPlayer.ts を変えても古い結果がキャッシュから返る
+    const shared = require('path').join(dir, 'shared');
+    if (require('fs').existsSync(shared)) for (const f of require('fs').readdirSync(shared).filter((x) => x.endsWith('.js')).sort()) h.update('shared/' + f + require('fs').readFileSync(require('path').join(shared, f)));
     if (args.modA) h.update(require('fs').readFileSync(args.modA));
     return h.digest('hex');
 }
@@ -204,7 +213,7 @@ async function main() {
     const cand = {};
     if (args.deck) {
         const d = ints(args.deck);
-        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.CATALOG_SIZE - 1) + ' の重複なし12個');
+        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.SKILL_IDX_END - 1) + '（欠番を除く）の重複なし12個');
         cand.deck = d;
     }
     if (args.gears) cand.gears = args.gears === 'none' ? [] : args.gears.split(',');
@@ -301,7 +310,7 @@ async function main() {
             const keep = base.slice();
             const outs = [], ins = [];
             for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
@@ -309,7 +318,7 @@ async function main() {
             seen.add(key);
             const d = keep.concat(ins).sort((a, b) => a - b);
             variants.push({ ...cand, deck: d });
-            const nm = (i) => `${i}(${deckMod.SKILL_CATALOG[i].name})`;
+            const nm = (i) => `${i}(${deckMod.skillOf(i).name})`;
             labels.push(`-${outs.map(nm).join(',')} +${ins.map(nm).join(',')}  [${d.join(',')}]`);
         }
     }
@@ -321,7 +330,7 @@ async function main() {
         variants = [{ ...cand, deck, gears }]; labels = ['base'];
         for (const idx of deck) {
             variants.push({ ...cand, deck, gears, flags: { ...(cand.flags || {}), ban: idx } });
-            labels.push(`card ${idx}(${deckMod.SKILL_CATALOG[idx].name}) を禁止`);
+            labels.push(`card ${idx}(${deckMod.skillOf(idx).name}) を禁止`);
         }
         for (const g of gears) {
             variants.push({ ...cand, deck, gears: gears.filter((x) => x !== g) });

@@ -4,8 +4,8 @@ import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
-import { orthoNeighbors } from './boardGeometry';
-import { applyDamage, isFrozen, isDormant, ignite } from './thermal';
+import { orthoNeighbors, geometryOf } from './boardGeometry';
+import { applyDamage, isFrozen, isDormant, ignite, thawOne, thunderFireVictims } from './thermal';
 
 export { orthoNeighbors };
 
@@ -15,9 +15,23 @@ export type PlayerCharacters = readonly CharacterId[];
 const charOf = (chars: PlayerCharacters, player: Player): CharacterId | undefined => chars[seatOf(player)];
 
 /** ⚡の個数（スタック数） */
+/** 沈黙は雷なり: 払う⚡の数（自陣の⚡が合計でこれ以上ないと使えない） */
+export const BOLT_SILENCE_BOLTS = 2;
+
 export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '⚡').length;
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
+
+const cellsWhere = (board: SquareInfo[], pred: (sq: SquareInfo) => boolean): number[] => board.map((sq, i) => (pred(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** ⚡のある自陣のマス（雷神のへそくり・沈黙は雷なりの対象） */
+export const ownChargedCells = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0);
+export const stashTargets = ownChargedCells;
+export const boltSilenceTargets = ownChargedCells;
+/** ロックされていない自陣のマス（総毛立つの対象） */
+export const bristleTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && !hasLock(sq));
+/** ライフを回復できる⚡の自陣マス（雷を食らわば皿まで。休眠中は除く） */
+export const chargeHealTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0 && !isDormant(sq));
 
 /** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 export const isShielded = (sq: SquareInfo, chars: PlayerCharacters): boolean =>
@@ -39,13 +53,16 @@ export type FireResult = {
     carried: number[];
 };
 
+/** 発火で隣のコマが受けるダメージ。sim は A/B 検証用に fireCharges の damage 引数で上書きする（CHG_FIRE_DMG） */
+export const FIRE_DAMAGE = 1;
+
 /**
  * 着手マス i の隣にある⚡を発火させる（size は盤の一辺。board を直接書き換える）。
  * 発火した帯電マス k の縦横隣接のうち、ライフ>0・🔑なしのコマが1ダメージ（k 自身は対象外、
  * 着手したコマが k の隣ならそれも含む）。発火した k の⚡は全部消える。連鎖はしない。
  * ギア「伝導」: conductors[席] が真の席のコマが載った帯電マス k に☠/🔥が付いていれば、ダメージを受けた**敵**（k のコマの持ち主以外）のマスに同じ効果を1スタックずつ付与する（🔥は ignite の規則どおり）。
  */
-export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = []): FireResult => {
+export const fireCharges = (board: SquareInfo[], i: number, size: number, chars: readonly CharacterId[] = [], conductors: readonly boolean[] = [], damage: number = FIRE_DAMAGE): FireResult => {
     const fired: number[] = [];
     const damaged: number[] = [];
     const carried: number[] = [];
@@ -59,7 +76,7 @@ export const fireCharges = (board: SquareInfo[], i: number, size: number, chars:
             if (isFrozen(sq)) continue; // 氷結中のマスは隣接⚡のダメージを受けない
             // 雷霆の巫は、自陣由来（自分のコマが載っている⚡マス）の発火ダメージを受けない
             if (sq.player === board[k].player && chars[seatOf(sq.player)] === 'electrician') continue;
-            board[n] = applyDamage(sq, 1, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
+            board[n] = applyDamage(sq, damage, 'electric').sq; // 隣接⚡のダメージは氷結中のマスには通らない。🔥は消えない（帯電と火炎は重複する）
             damaged.push(n);
             // 帯電していたコマの毒・火炎を、ダメージを受けた敵のマスへ1スタック移す
             const owner = board[k].player;
@@ -188,7 +205,7 @@ export const applyJammer = (board: SquareInfo[], i: number, size: number, curren
     const damaged = jammerTargets(board, i, size, current);
     const zeroed: number[] = [];
     for (const j of damaged) {
-        // ジャマーの電気ダメージも氷結を貫通する
+        // 氷結中のコマは jammerTargets で除外済み（ジャマーのダメージは氷結中のマスに通らない）。ここに来るのは氷結していないコマだけ
         board[j] = applyDamage(board[j], stacks, 'electric').sq;
         if (board[j].bind === 0) zeroed.push(j);
     }
@@ -229,4 +246,48 @@ export const healCharged = (board: SquareInfo[], player: Player | undefined): { 
         total += stacks * CHARGE_HEAL;
     });
     return { healed, total };
+};
+
+/** 雷のない所に火は立たぬの対象: ⚡のあるコマ（ロック中は除く。敵の無敵マスは除く） */
+export const thunderFireTargets = (board: SquareInfo[], me: Player, chars: PlayerCharacters): number[] =>
+    cellsWhere(board, (sq) => !!sq.player && chargeStacks(sq) > 0 && !hasLock(sq) && (sq.player === me || !isShielded(sq, chars)));
+
+/** 雷神のへそくり: マスの⚡を全て外す。board を直接書き換え、外した数（次のスキルの軽減に回る）を返す */
+export const stashBolts = (board: SquareInfo[], cell: number): number => {
+    const n = chargeStacks(board[cell]);
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((e) => e.effect !== '⚡') };
+    return n;
+};
+
+/** 沈黙は雷なり: マスの⚡を1個払う。board を直接書き換え、払えたら true（⚡が無ければ false） */
+export const payBolt = (board: SquareInfo[], cell: number): boolean => {
+    const at = board[cell].effects.findIndex((e) => e.effect === '⚡');
+    if (at === -1) return false;
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((_, k) => k !== at) };
+    return true;
+};
+
+/**
+ * 雷のない所に火は立たぬ: 氷結中のコマなら❄を1つ砕くだけ（frozen=true。コマは壊れず火も移らない）。
+ * そうでなければコマを壊して空きマスにし、周囲8マスの敵コマ（ロック・無敵を除く）の無作為な一部に🔥を付ける。
+ * board を直接書き換える。壊したときの墓地（addCorpses）は呼び出し側が数える。rng は [0,1) を返す関数
+ */
+export const thunderFire = (
+    board: SquareInfo[],
+    cell: number,
+    me: Player,
+    chars: PlayerCharacters,
+    size: number,
+    rng: () => number,
+    keepBuds?: (sq: SquareInfo) => boolean
+): { frozen: boolean; picks: number[]; thawed: number[] } => {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { frozen: true, picks: [], thawed: [] };
+    }
+    board[cell] = { player: undefined, bind: 0, effects: [] };
+    const cands = geometryOf(size).surroundRange(cell).filter((j) => board[j].player && board[j].player !== me && !isGuarded(board[j], chars));
+    const picks = thunderFireVictims(cands, rng);
+    const { thawed } = ignite(board, picks, size, 1, keepBuds);
+    return { frozen: false, picks, thawed };
 };

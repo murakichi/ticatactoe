@@ -25,7 +25,7 @@ test('不正な操作は適用されず理由が返る（置けないマス・�
     const c = cfg({ actions: ['p 5'] });
     assert.ok(duel.replay(c, ['p 99']).failed);
     assert.ok(/手札にない/.test(duel.replay(c, ['h 75']).failed.err));
-    const hand = duel.replay(c).s.skills.find((i) => duel.costOf(duel.replay(c).s, duel.IDX_SKILL[i]) > duel.replay(c).s.magic[0]);
+    const hand = duel.replay(c).s.skills.filter((i) => duel.IDX_SKILL[i]).find((i) => duel.costOf(duel.replay(c).s, duel.IDX_SKILL[i]) > duel.replay(c).s.magic[0]);
     if (hand !== undefined) assert.ok(/魔力不足/.test(duel.replay(c, [`h ${hand}`]).failed.err));
 });
 
@@ -61,13 +61,23 @@ test('見落とし防止: 相手の3連の空き1マスが勝ち手として検�
     assert.deepStrictEqual(cells(threat.winCells(s, s.board, OP, false)), [8]);
 });
 
-test('見落とし防止: ライフ0の自駒は奪取されるので勝ち手に含まれ、ライフが残る駒は含まれない', () => {
+test('見落とし防止: ライフ0の自駒は奪取されるので勝ち手に含まれ、ライフが残る駒は含まれない（雷霆の巫以外）', () => {
     const s = fresh();
+    s.chars = ['poisoner', 'cryomancer']; // 雷霆の巫のコマはライフ0でも奪われない（下のテスト）
     [0, 4, 12].forEach((i) => put(s, i, OP));
     put(s, 8, ME, 0);
     assert.deepStrictEqual(cells(threat.winCells(s, s.board, OP, false)), [8]);
     put(s, 8, ME, 3);
     assert.deepStrictEqual(threat.winCells(s, s.board, OP, false), []);
+});
+
+test('雷霆の巫のコマは、ライフ0でも着手で奪われない（勝ち手に含まれない）', () => {
+    const s = fresh();
+    s.chars = ['electrician', 'cryomancer'];
+    [0, 4, 12].forEach((i) => put(s, i, OP));
+    put(s, 8, ME, 0);
+    assert.deepStrictEqual(threat.winCells(s, s.board, OP, false), []);
+    assert.strictEqual(threat.takeable(s, s.board, 8, OP, true), false);
 });
 
 test('見落とし防止: 着手後の減衰・毒でライフが尽きる駒は decayed=true のときだけ勝ち手に含まれる', () => {
@@ -109,6 +119,27 @@ test('見落とし防止: フォーク（勝ち手が2つ）は fork=true。duel
     const c = cfg({ me: 'electrician', opp: 'poisoner', seed: 228, actions: ['p 5', 'p 6'] });
     assert.ok(/勝ち手が残ります/.test(duel.replay(c, ['p 10']).failed.err));
     assert.ok(!duel.replay(c, ['p! 10']).failed);
+});
+
+test('ジャマーは自陣に⚡のコマが無いと撃てない（魔力を払って対象待ちで固まるのを防ぐ）', () => {
+    const c = cfg({ me: 'electrician', opp: 'cryomancer', seat: 0, seed: 21, deck: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94] });
+    const s = duel.replay(c).s;
+    s.skills = [26, 21, 23];
+    s.magic[0] = 9;
+    const err = duel.apply(s, c, 'h 26');
+    assert.ok(err && /ジャマーは自陣に⚡/.test(err), String(err));
+    assert.strictEqual(s.magic[0], 9); // 魔力は払われない
+    s.board[5] = { player: e.symbolOfSeat(0), bind: 3, effects: [{ effect: '⚡' }] };
+    assert.strictEqual(duel.apply(s, c, 'h 26'), null); // ⚡のコマがあれば撃てる
+});
+
+test('コスト0の軽減札（返し特売）も効果ありと扱う（魔力も盤面も変わらないが、軽減とライフが変わる）', () => {
+    const c = cfg({ me: 'electrician', opp: 'cryomancer', seat: 0, seed: 31, deck: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94] });
+    const s = duel.replay(c).s;
+    s.skills = [60, 21, 23];
+    s.magic[0] = 0;
+    const err = duel.apply(s, c, 'h 60'); // 直前の相手のスキルが無ければ2コスト。魔力不足は別の理由で止まる
+    assert.ok(!err || /魔力不足/.test(err), String(err));
 });
 
 

@@ -33,6 +33,14 @@ export const reduceCount = (board: SquareInfo[]): number =>
         return n + sq.effects.filter((e) => e.effect !== '📜' && e.effect !== '🔑').length;
     }, 0);
 
+/** 焚きつけ: 盤面（敵味方とも）の🍂1枚につき3、🌱1つにつき2だけ軽減する */
+export const KINDLING_LEAF_CUT = 3;
+export const KINDLING_BUD_CUT = 2;
+
+/** 盤面のエフェクト effect の総数（敵味方・空きマスとも。休眠中も数える） */
+const effectCount = (board: SquareInfo[], effect: '🍂' | '🌱'): number =>
+    board.reduce((n, sq) => n + sq.effects.filter((e) => e.effect === effect).length, 0);
+
 /** 盤面にあるコマの数（敵味方とも） */
 export const boardPieceCount = (board: SquareInfo[]): number => board.filter((sq) => !!sq.player).length;
 
@@ -46,6 +54,7 @@ export const ownCharges = (board: SquareInfo[], player: Player): number => count
  * - 静電気の季節: 自陣に⚡が1つもなければ
  * - 一寸先は闇鍋: 盤面のエフェクトの数だけ（カウント型）
  * - 一寸の虫に魂なし: 盤面のコマの数だけ（敵味方とも。カウント型）
+ * - 焚きつけ: 盤面の🍂1枚につき3、🌱1つにつき2（カウント型。敵味方とも）
  * - 雷を食らわば皿まで: この手番に付与した⚡の数だけ（自陣の⚡が手番開始時 chargeBase より増えたぶん。撃つと基準がリセットされる）
  */
 export const comboCut = (skillKey: string | undefined, board: SquareInfo[], player: Player, leafBase: number, kinds: ReadonlySet<string>, chargeBase: number = 0): number => {
@@ -53,6 +62,7 @@ export const comboCut = (skillKey: string | undefined, board: SquareInfo[], play
     if (skillKey === 'onClickBristle') return Array.from(kinds).some((k) => CHARGE_GRANT_KEYS.has(k)) ? COMBO_CUT : 0;
     if (skillKey === 'onClickChargeSeason') return ownCharges(board, player) === 0 ? COMBO_CUT : 0;
     if (skillKey === 'onClickDarkPot') return boardEffectCount(board);
+    if (skillKey === 'onClickKindling') return KINDLING_LEAF_CUT * effectCount(board, '🍂') + KINDLING_BUD_CUT * effectCount(board, '🌱');
     if (skillKey === 'onClickSmallFry') return boardPieceCount(board);
     if (skillKey === 'onClickGather') return GATHER_CUT * reduceCount(board);
     if (skillKey === 'onClickBurnOff') return BURN_OFF_CUT * reduceCount(board);
@@ -61,4 +71,4 @@ export const comboCut = (skillKey: string | undefined, board: SquareInfo[], play
 };
 
 /** 軽減の下限が1のスキル（カウント型で、軽減しきると0円になってしまうもの） */
-export const comboFloor = (skillKey: string | undefined): number => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' || skillKey === 'onClickSmallFry' || skillKey === 'onClickGather' || skillKey === 'onClickBurnOff' ? 1 : 0);
+export const comboFloor = (skillKey: string | undefined): number => (skillKey === 'onClickDarkPot' || skillKey === 'onClickChargeHeal' || skillKey === 'onClickSmallFry' || skillKey === 'onClickGather' || skillKey === 'onClickBurnOff' || skillKey === 'onClickKindling' ? 1 : 0);

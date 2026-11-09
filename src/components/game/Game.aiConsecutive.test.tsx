@@ -5,9 +5,24 @@ import AIPlayer from './AIPlayer';
 
 // 巨人が休む回は同じ席が連続で動く。AIのタイマーが描画時の古い状態を握ると、2手番目のAIが
 // 手番開始の魔力・手札の更新前の値で計画してしまう（sim では毎手番更新される。sim と本番AIのずれの原因だった）
+// 乱数を seed 固定にする。固定しないと、連続する2手番で『魔力も手札も偶然同じ』になる試合（seed 18 など。約1/40）で落ちる
+// （使った魔力と次の手番の獲得が同額で、手札が全部ロックされているとき）。seed 7 はそうならず、連続で動く場面も起きる
+const seededRandom = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
 describe('同じ席が連続で動く手番のAI', () => {
-    beforeEach(() => jest.useFakeTimers());
-    afterEach(() => jest.useRealTimers());
+    beforeEach(() => {
+        jest.useFakeTimers();
+        jest.spyOn(Math, 'random').mockImplementation(seededRandom(7));
+    });
+    afterEach(() => {
+        jest.restoreAllMocks();
+        jest.useRealTimers();
+    });
 
     it('2手番目のAIに渡る魔力と手札は、1手番目の値のままではない', () => {
         const players: PlayerConfig[] = [

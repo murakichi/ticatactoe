@@ -60,7 +60,6 @@ const SKILL_CATALOG = [
     { idx: 47, name: '砕氷', icon: '🔨', category: 'ice' },
     { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice' },
     { idx: 49, name: '慈雨', icon: '⬆️', category: 'support' },
-    { idx: 50, name: '縮地', icon: '👣', category: 'support' },
     { idx: 51, name: '写し身', icon: '🪞', category: 'support' },
     { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack' },
     { idx: 53, name: '特売', icon: '🏷️', category: 'support' },
@@ -107,25 +106,34 @@ const SKILL_CATALOG = [
     { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control' },
     { idx: 95, name: '山焼き', icon: '🔥', category: 'fire' },
     { idx: 96, name: '無礼講', icon: '🎉', category: 'support' },
+    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外）。直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
+    { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
+    { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
+    { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
+    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1を得ます（コマが消えるので、ネクロマンサーはさらに自動で墓地が貯まる仕組みと二重には数えません）' },
 ];
 
 
 /** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1） */
 const CATALOG_SIZE = SKILL_CATALOG.length;
+/** 削除したスキルの idx（欠番）。縮地(50)を削除（deck.ts の REMOVED_SKILL_IDX と同じ） */
+const REMOVED_SKILL_IDX = [50];
+const SKILL_IDX_END = CATALOG_SIZE + REMOVED_SKILL_IDX.length;
+const AVAILABLE_SKILL_IDX = SKILL_CATALOG.map((c) => c.idx);
 
 /** キャラ別の推奨デッキ（12枚）。deck.ts の RECOMMENDED_DECKS と同じ */
 const RECOMMENDED_DECKS = {
     you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 14, 28, 32],
     tactician: [3, 9, 11, 16, 45, 46, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 12, 13, 35, 47, 53, 56, 60, 78],
+    magician: [2, 9, 10, 11, 13, 35, 47, 53, 56, 60, 78, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 92, 71, 72, 73, 53],
     necromancer: [0, 2, 3, 5, 6, 8, 11, 12, 32, 53, 57, 58],
     poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 31, 45, 46, 48],
-    electrician: [21, 22, 23, 24, 26, 28, 51, 52, 53, 58, 60, 92],
-    cryomancer: [8, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
+    electrician: [21, 22, 23, 24, 26, 28, 49, 51, 52, 53, 58, 60],
+    cryomancer: [92, 12, 28, 37, 41, 43, 44, 45, 46, 47, 48, 73],
     pyromancer: [0, 3, 5, 8, 11, 12, 28, 31, 53, 56, 58, 87], // バーンアウト(61)はAIが撃たないので、火口(87)と入れ替え(tune-top #35)
-    witch: [5, 8, 12, 28, 36, 44, 53, 56, 62, 63, 64, 85], // 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
+    witch: [5, 8, 12, 28, 44, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
@@ -145,14 +153,14 @@ const pickRecommendedDeck = (character, rng = Math.random) => {
 
 /** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
 const isValidDeck = (deck) =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && i >= 0 && i < CATALOG_SIZE);
+    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && AVAILABLE_SKILL_IDX.includes(i));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 const resolveDeck = (deck, character) => (isValidDeck(deck) ? [...deck].sort((a, b) => a - b) : recommendedDeck(character));
 
 /** ランダムなデッキ（rng は [0,1) を返す関数） */
 function randomDeck(rng = Math.random) {
-    const pool = Array.from({ length: CATALOG_SIZE }, (_, i) => i);
+    const pool = [...AVAILABLE_SKILL_IDX];
     const out = [];
     for (let k = 0; k < DECK_SIZE; k++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     return out.sort((a, b) => a - b);
@@ -167,7 +175,7 @@ const CORE_CARDS = { yinYangMaster: [53, 71, 73] };
 
 function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     const deck = pickRecommendedDeck(character, rng);
-    const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
+    const outside = AVAILABLE_SKILL_IDX.filter((i) => !deck.includes(i));
     const core = CORE_CARDS[character] || [];
     const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
     for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
@@ -179,4 +187,4 @@ function variedAIDeck(character, rng = Math.random, swaps = AI_DECK_SWAPS) {
     return deck.sort((a, b) => a - b);
 }
 
-module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
+module.exports = { CORE_CARDS, DECK_SIZE, CATALOG_SIZE, REMOVED_SKILL_IDX, SKILL_IDX_END, AVAILABLE_SKILL_IDX, SKILL_CATALOG, RECOMMENDED_DECKS, ALT_RECOMMENDED_DECKS, AI_DECK_SWAPS, recommendedDeck, pickRecommendedDeck, isValidDeck, resolveDeck, randomDeck, variedAIDeck };
