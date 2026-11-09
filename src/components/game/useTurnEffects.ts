@@ -1,5 +1,6 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragonMagicBonus, newDragonState } from './dragon';
 import { BurstType } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
@@ -31,6 +32,9 @@ export interface TurnEffectsScope {
     rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
     currentBoard: SquareInfo[];
     lastStandHolderFor: (w: Player) => number;
+    /** 龍神の巫女（#527）: 席ごとの形態と、更新関数 */
+    dragon: DragonState[];
+    setDragonAt: (seat: number, value: DragonState | ((prev: DragonState) => DragonState)) => void;
     lastStandUsed: React.MutableRefObject<boolean[]>;
     geo: BoardGeometry;
     symbols: ("💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷")[];
@@ -80,7 +84,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
+    const { dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -88,6 +92,17 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
     useEffect(() => {
         const w = calculateWinner(lineSymbols(currentBoard));
         if (!w) return;
+        // 龍の防壁（龍神の巫女・#527）: 龍のあいだに相手が列を揃えたら、かわりにその列と自陣のコマが消滅して巫女に戻る
+        const dragonHolder = dragonBulwarkHolder(characters, dragon, symbols, w);
+        if (dragonHolder >= 0) {
+            const board = currentBoard.slice();
+            applyBulwark(board, w, symbols[dragonHolder]);
+            setDragonAt(dragonHolder, newDragonState());
+            addLog(`${symbols[dragonHolder]}の龍の防壁: ${w}の揃った列と自陣のコマが消滅。巫女に戻る`);
+            setCurrentBoard(board);
+            playEffect('bulwark');
+            return;
+        }
         const holder = lastStandHolderFor(w);
         if (holder < 0) return;
         lastStandUsed.current[holder] = true;
@@ -266,6 +281,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             root,
             objects: objectMagicForNext,
             rent,
+            dragon: dragonMagicBonus(dragon[nextSeat]),
         });
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
@@ -297,6 +313,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
                 gearLifeBonus(nextGears) +
                 (rampOn ? ramp.bonus : 0) +
                 objectLifeForNext + // 生命の泉
+                dragonLifeBonus(dragon[nextSeat]) + // 龍神の巫女（龍）: ベース+N+4
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );

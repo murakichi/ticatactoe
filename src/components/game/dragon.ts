@@ -189,3 +189,7 @@ export const applyBulwark = (board: SquareInfo[], winner: Player, holder: Player
     }
     for (let idx = 0; idx < board.length; idx++) if (board[idx].player === holder) board[idx] = empty();
 };
+
+/** 龍の防壁を持つ席（龍の形態の龍神の巫女で、勝者 winner 以外）。いなければ -1 */
+export const dragonBulwarkHolder = (characters: readonly CharacterId[], dragon: readonly DragonState[], symbols: readonly Player[], winner: Player): number =>
+    characters.findIndex((c, seat) => c === 'dragonMiko' && dragon[seat]?.form === 'dragon' && symbols[seat] !== winner);

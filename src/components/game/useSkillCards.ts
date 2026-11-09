@@ -33,7 +33,9 @@ import { ShikigamiSkillsResult } from './useShikigamiSkills';
 import { NecroSkillsResult } from './useNecroSkills';
 import { GenericSkillsResult } from './useGenericSkills';
 import { ElementSkillsResult } from './useElementSkills';
-import { FrostLockSkillsResult } from './useFrostLockSkills';import { GameLate } from './gameLate';
+import { FrostLockSkillsResult } from './useFrostLockSkills';
+import { DragonSkillsResult } from './useDragonSkills';
+import { GameLate } from './gameLate';
 
 export interface SkillCardsScope {
     onClickLockDiscount: () => void;
@@ -44,7 +46,7 @@ export interface SkillCardsScope {
     customBase: number;
     customSpec: CustomSkillSpec | undefined;
     /** スキルのハンドラ群（各 use*Skills の戻り値をまとめたもの） */
-    handlers: BasicSkillsResult & BlastSkillsResult & ShikigamiSkillsResult & NecroSkillsResult & GenericSkillsResult & ElementSkillsResult & FrostLockSkillsResult;
+    handlers: BasicSkillsResult & BlastSkillsResult & ShikigamiSkillsResult & NecroSkillsResult & GenericSkillsResult & ElementSkillsResult & FrostLockSkillsResult & DragonSkillsResult;
     calculateCost: (cost: number, isToken?: boolean, isPoison?: boolean, player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷", skillKey?: string | undefined) => number;
     seatCosts: SkillCosts;
     currentTurnPlayer: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷";
@@ -82,7 +84,7 @@ export interface SkillCardsScope {
     toggleLock: (i: number) => void;
 }
 export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
-    const { onClickAddLife, calculateCost, seatCosts, currentTurnPlayer, checkSkillDisable, onClickBibine, onClickBuds, onClickToken, calculateTokenBind, onClickBothToken, onClickSlash, geo, showPreview, slashPreview, clearPreview, onClickBackSlash, backSlashPreview, onClickTsunami, onClickOpium, opiumPreview, onClickBudsToken, onClickDoubleBuds, onClickDoubleToken, onClickUseDoubleLock, turnGears, onClickUseTripleLock, onClickWalpurgisNight, onClickInjection, onClickPoisonToken, onClickSerum, onClickIntensify, onClickPandemic, onClickProliferate, proliferateTokenLife, proliferateUpkeepStep, proliferateMaxStacks, proliferate, turnSeat, onClickChargeToken, onClickChargeOne, chargeOneCost, magic, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, currentBoard, onClickHailMary, onClickSilence, otherSeats, silenced, onClickPoisonMist, onClickFreeze, onClickIgnite, onClickCleanse, ownAilmentCells, onClickHarvestEve, ownBudTotal, onClickSolstice, budGuard, onClickSucker, suckerSources, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickSacrifice, sacrificeCandidates, onClickFrostArea, onClickIcicle, onClickRandomFreeze, onClickFreezeSpread, onClickFrostToken, onClickDoubleFrostToken, onClickShatter, onClickFrostfall, onClickBoost, onClickClone, cloneSources, onClickPlunder, characters, onClickDiscount, canUseDiscount, onClickRandomCast, onClickBurnout, burnoutCost, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, leafAllCandidates, onClickBonfire, onClickMulch, onClickAutumn, onClickLeafFrost, notShielded, onClickSpringWind, onClickShikigamiAll, ownShikigami, onClickShikigamiRandom, onClickShikigamiFlood, onClickShikigamiBless, blessTargets, onClickShikigamiCurse, curseTargets, onClickShikigamiDiscount, onClickShikigamiPurge, purgeTargets, onClickKimon, kimonCandidates, onClickFireWheel, fireWheelGuard, onClickSpark, onClickNightVeil, onClickGraveDiscount, graveDiscountNow, onClickPoisonWard, gearTurn, onClickGraveOffering, onClickStrip, stripTargets, onClickChargeSeason, chargeBuff, onClickBristle, bristleTargets, onClickRelease, ownChargeStacks, onClickStash, stashTargets, onClickThunderFire, thunderFireTargets, onClickDarkPot, onClickChargeHeal, chargeHealCells, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickBoltSilence, boltSilenceLegal, onClickSecondCatch, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, vacantSealCost, onClickObjectSkill, onClickObject, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickLeafDrop, leafDropCandidates, onClickKindling, kindlingCandidates, onClickTinder, tinderCandidates, onClickLeafCloak, leafCloakCandidates, onClickCharge, charge, onClickShuffle, shuffleCost, onClickUseLock, currentCharacter, onClickCryoFreeze, onClickTotalAssault, totalAssaultCost, onClickStomp, gearCost, onClickJudgeDay, judgeDayCost, onClickToggleYingYang, yinYangModeName, onClickNecromancy, currentNecroCost, currentNecroRemain, necromancySummonCap, necromancyReviveLife, necromancyDuration, lifeBan, onClickMiasma, miasmaCost, miasmaPlan, onClickChargeSpread, chargeSpreadCost, onClickGlacier, glacierCost, glacierPending, onClickInferno, infernoCost, onClickMogaribue, mogaribueCost, onClickSeal, sealCost, onClickShikigamiPlace, currentYinYangMode, onClickShikigamiBlast, skills, currentLockedSkills, toggleLock, customSpec, customBase, customCost, customHasPoison, onClickCustom, onClickLockConvert, onClickLockDiscount } = { ...g, ...g.handlers };
+    const { onClickAddLife, calculateCost, seatCosts, currentTurnPlayer, checkSkillDisable, onClickBibine, onClickBuds, onClickToken, calculateTokenBind, onClickBothToken, onClickSlash, geo, showPreview, slashPreview, clearPreview, onClickBackSlash, backSlashPreview, onClickTsunami, onClickOpium, opiumPreview, onClickBudsToken, onClickDoubleBuds, onClickDoubleToken, onClickUseDoubleLock, turnGears, onClickUseTripleLock, onClickWalpurgisNight, onClickInjection, onClickPoisonToken, onClickSerum, onClickIntensify, onClickPandemic, onClickProliferate, proliferateTokenLife, proliferateUpkeepStep, proliferateMaxStacks, proliferate, turnSeat, onClickChargeToken, onClickChargeOne, chargeOneCost, magic, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, currentBoard, onClickHailMary, onClickSilence, otherSeats, silenced, onClickPoisonMist, onClickFreeze, onClickIgnite, onClickCleanse, ownAilmentCells, onClickHarvestEve, ownBudTotal, onClickSolstice, budGuard, onClickSucker, suckerSources, onClickWindborne, onClickFlameToken, onClickDoubleFlameToken, onClickSwidden, onClickSacrifice, sacrificeCandidates, onClickFrostArea, onClickIcicle, onClickRandomFreeze, onClickFreezeSpread, onClickFrostToken, onClickDoubleFrostToken, onClickShatter, onClickFrostfall, onClickBoost, onClickClone, cloneSources, onClickPlunder, characters, onClickDiscount, canUseDiscount, onClickRandomCast, onClickBurnout, burnoutCost, onClickLeafToken, onClickTwinLeafToken, onClickDoubleLeafToken, onClickLeafAll, leafAllCandidates, onClickBonfire, onClickMulch, onClickAutumn, onClickLeafFrost, notShielded, onClickSpringWind, onClickShikigamiAll, ownShikigami, onClickShikigamiRandom, onClickShikigamiFlood, onClickShikigamiBless, blessTargets, onClickShikigamiCurse, curseTargets, onClickShikigamiDiscount, onClickShikigamiPurge, purgeTargets, onClickKimon, kimonCandidates, onClickFireWheel, fireWheelGuard, onClickSpark, onClickNightVeil, onClickGraveDiscount, graveDiscountNow, onClickPoisonWard, gearTurn, onClickGraveOffering, onClickStrip, stripTargets, onClickChargeSeason, chargeBuff, onClickBristle, bristleTargets, onClickRelease, ownChargeStacks, onClickStash, stashTargets, onClickThunderFire, thunderFireTargets, onClickDarkPot, onClickChargeHeal, chargeHealCells, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickBoltSilence, boltSilenceLegal, onClickSecondCatch, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, vacantSealCost, onClickObjectSkill, onClickObject, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickLeafDrop, leafDropCandidates, onClickKindling, kindlingCandidates, onClickTinder, tinderCandidates, onClickLeafCloak, leafCloakCandidates, onClickCharge, charge, onClickShuffle, shuffleCost, onClickUseLock, currentCharacter, onClickCryoFreeze, onClickTotalAssault, totalAssaultCost, onClickStomp, gearCost, onClickJudgeDay, judgeDayCost, onClickToggleYingYang, yinYangModeName, onClickNecromancy, currentNecroCost, currentNecroRemain, necromancySummonCap, necromancyReviveLife, necromancyDuration, lifeBan, onClickMiasma, miasmaCost, miasmaPlan, onClickChargeSpread, chargeSpreadCost, onClickGlacier, glacierCost, glacierPending, onClickInferno, infernoCost, onClickMogaribue, mogaribueCost, onClickSeal, sealCost, onClickPrayer, onClickRoar, prayerCost, roarCost, prayerLegal, roarLegal, onClickShikigamiPlace, currentYinYangMode, onClickShikigamiBlast, skills, currentLockedSkills, toggleLock, customSpec, customBase, customCost, customHasPoison, onClickCustom, onClickLockConvert, onClickLockDiscount } = { ...g, ...g.handlers };
 
 
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
@@ -333,6 +335,22 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
             hidden: currentCharacter !== 'witch',
             exclusive: true,
             disabled: magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer),
+        },
+        {
+            onClick: onClickPrayer,
+            buttonText: `八百万の祈り-${prayerCost()}`,
+            paragraph: 'デッキ内のオブジェクト設置スキルをランダムに発動',
+            hidden: currentCharacter !== 'dragonMiko',
+            exclusive: true,
+            disabled: magic[turnSeat] < prayerCost() || !prayerLegal(),
+        },
+        {
+            onClick: onClickRoar,
+            buttonText: `龍の咆哮-${roarCost()}`,
+            paragraph: '自陣のオブジェクトの周囲8マスの敵を破壊し、オブジェクトに⚡',
+            hidden: currentCharacter !== 'dragonMiko' || !roarLegal(),
+            exclusive: true,
+            disabled: magic[turnSeat] < roarCost(),
         },
         {
             onClick: onClickSeal,

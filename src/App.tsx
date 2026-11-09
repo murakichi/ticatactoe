@@ -80,6 +80,12 @@ const CHARACTERS: CharacterDef[] = [
         icon: '🗝️',
         passive: 'ロックスキルが安く、空きマスのロックを無視して設置可能。固有: 封鎖の断',
     },
+    {
+        id: 'dragonMiko',
+        name: '龍神の巫女',
+        icon: '🐉',
+        passive: '勝利に4連が2本必要。巫女はライフ-2で、八百万の祈りで建造物を置く。建造物4つで龍に覚醒し、囲んだ範囲を消して強化。固有: 八百万の祈り / 龍の咆哮',
+    },
 ];
 
 const MIN_PLAYERS = 2;
