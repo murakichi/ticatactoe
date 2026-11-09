@@ -2918,7 +2918,7 @@ class AIPlayer {
         }
         // 砦・市場（鍵師）: 自陣にオブジェクトが無い間だけ1つ立てる。普請道楽ギア（自陣にオブジェクトがある間は全スキル-3）の起点にする。
         // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
-        if (this.character === 'keysmith' && this.ownObjectCount === 0
+        if ((this.character === 'keysmith' || this.character === 'witch') && this.ownObjectCount === 0
             && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
             && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
             for (const [def, key] of [[OBJECT_DEFS.fort, 'onClickFort'], [OBJECT_DEFS.market, 'onClickMarket']] as const) {
