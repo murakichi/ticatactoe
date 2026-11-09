@@ -231,6 +231,8 @@ class AIPlayer {
         this.leafCount = 0;
         /** 他の席のコマに乗っている効力のある🍂の総数（スキルコストの増加分。updateShield で更新する） */
         this.foeLeaves = 0;
+        /** ネクロマンサーのパッシブ: 墓地の死体の数（上限）だけ蘇生以外の全スキルが安い（cost.ts の characterCostOf と同じ） */
+        this.corpseCut = 0;
         /** これまでの着手数と参加人数。先読みで着手後のライフ減衰(ライフ1→0で奪われる)を見込むのに使う。Game が手番ごとに設定する */
         this.placements = 0;
         this.seatCount = 2;
@@ -1559,6 +1561,8 @@ class AIPlayer {
             cost = Math.max(1, cost - this.leafCount); // 盤面の🍂1枚につき-1（下限1）
         else if (this.character === 'yinYangMaster' && this.yinYangMode === 'yang')
             cost += 1; // 陽は全スキル+1
+        else if (this.character === 'necromancer' && this.corpseCut > 0 && skillKey !== 'onClickNecromancy' && cost > 1)
+            cost = Math.max(1, cost - this.corpseCut); // 墓地の死体の数だけ軽減
         const paid = this.gearCostFn ? this.gearCostFn(cost, isToken, skillKey) : cost;
         // 軽減札を撃つ前提の比較中は、軽減札でないスキルに「次に打つスキル」の軽減を掛ける（下限1）
         return this.hypoCut > 0 && paid > 0 && !(skillKey && (0, discount_1.isDiscountSkill)(skillKey)) ? Math.max(1, paid - this.hypoCut) : paid;
@@ -1600,7 +1604,7 @@ class AIPlayer {
         const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
         if (mine < 2)
             return null;
-        const order = ['sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'];
+        const order = ['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'];
         for (const kind of order) {
             const idx = objects_1.OBJECT_DEFS[kind].idx;
             if (!availableSkills.includes(idx))
@@ -1614,6 +1618,9 @@ class AIPlayer {
                 continue;
             const cost = this.calculateAICost(costs[objects_1.OBJECT_DEFS[kind].costKey], false, false, objects_1.OBJECT_DEFS[kind].costKey);
             if (left - cost < 1)
+                continue;
+            // 市場は普請道楽(オブジェクトが無いとき設置が-2)で1コストになるときだけ。全スキルが安くなる『最初のオブジェクト』として置く
+            if (kind === 'market' && cost > 1)
                 continue;
             let best = -1;
             let bestScore = -1;
@@ -2602,6 +2609,7 @@ class AIPlayer {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
+        var _a;
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
@@ -2609,6 +2617,7 @@ class AIPlayer {
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
+        this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = args[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const result = this.planMove(...args);
         const magic = args[1];
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
