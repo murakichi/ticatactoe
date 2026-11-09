@@ -490,9 +490,9 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     return [...keep, ...fill];
 }
 
-// 式神(📜)は列の並びに数えない
-const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
-const symbolsOf = (board) => board.map((x) => (isShikigami(x) || x.object ? undefined : x.player)); // 式神・オブジェクトは列に数えない
+// 式神はオブジェクトの一種（SquareInfo.object = 'shikigami'）。オブジェクトは列の並びに数えない
+const isShikigami = (sq) => sq.object === 'shikigami';
+const symbolsOf = (board) => board.map((x) => (x.object ? undefined : x.player));
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
@@ -1343,7 +1343,7 @@ function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
     const base = shikigamiAllBase(s);
     if (base === 0) return;
-    for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
+    s.board.forEach((sq, k) => { if (sq.player === cur && isShikigami(sq)) s.board[k] = shikiMod.toPiece(sq); });
     spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
@@ -1711,7 +1711,7 @@ function onClickBurnOff(s) {
     bumpStat(s, 'burnOffFlames', lit);
 }
 
-// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
+// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
 // 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {

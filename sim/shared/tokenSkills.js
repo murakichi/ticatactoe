@@ -13,9 +13,9 @@ exports.firstFrostTargets = firstFrostTargets;
 /** 初霜: 対象を全て凍結する（バッズトークンの設置は呼び出し側）。凍結したマスを返す。board を直接書き換える */
 const firstFrost = (board, player, chars) => (0, thermal_1.freeze)(board, (0, exports.firstFrostTargets)(board, player, chars));
 exports.firstFrost = firstFrost;
-/** 山焼きの対象: 使用者以外のコマのうち、🔑・📜以外のエフェクトがあり、氷結中でも⚡無敵でもないもの（🔑ロックのマスの他のエフェクトは対象）（昇順） */
+/** 山焼きの対象: 使用者以外のコマのうち、🔑以外のエフェクトがあり、氷結中でも⚡無敵でもないもの（🔑ロックのマスの他のエフェクトは対象）（昇順） */
 const burnOffTargets = (board, player, chars) => board
-    .map((sq, i) => (sq.player && sq.player !== player && sq.effects.some((e) => e.effect !== '📜' && e.effect !== '🔑') && !hasEffect(sq, '❄') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
+    .map((sq, i) => (sq.player && sq.player !== player && sq.effects.some((e) => e.effect !== '🔑') && !hasEffect(sq, '❄') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
     .filter((i) => i !== -1);
 exports.burnOffTargets = burnOffTargets;
 /** 山焼き: 対象全てに🔥を1つ付ける（ロック付きトークンの設置は呼び出し側）。実際に🔥が増えたマス数・解けた氷結・破壊されたマスを返す。board を直接書き換える */
@@ -30,7 +30,7 @@ const burnOff = (board, player, chars, size, keepBuds) => {
 };
 exports.burnOff = burnOff;
 /** 吹き寄せ: 空きマス token にトークン（tokenSq: 持ち主とライフ）を置き、盤面のエフェクト（token のマスに元からあったものを含む）を全部そのマスに集める。
- *  氷結(❄)のあるマスと⚡無敵のマスは動かさない。🔑ロックと式神の印📜はその場に残る。🔥は集め終えてから token のマスで処理する。
+ *  氷結(❄)のあるマスと⚡無敵のマスは動かさない。🔑ロックはその場に残る（式神はエフェクトではなくオブジェクトなので集めない）。🔥は集め終えてから token のマスで処理する。
  *  移したエフェクトの数（🔥を含む）を返す。board を直接書き換える */
 const gather = (board, token, tokenSq, chars, size, keepBuds) => {
     const moved = [];
@@ -40,7 +40,7 @@ const gather = (board, token, tokenSq, chars, size, keepBuds) => {
             return;
         const keep = [];
         for (const e of sq.effects) {
-            if (e.effect === '📜' || e.effect === '🔑')
+            if (e.effect === '🔑')
                 keep.push(e);
             else if (e.effect === '🔥')
                 flames++;

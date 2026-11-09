@@ -13,6 +13,7 @@ import { BIG_CAST_BASE } from './bigSkills';
 import { WORKSHOP_PARAMS, ownPieceCount } from './objects';
 import { skillCosts } from './skillCosts';
 import { LOCK_SKILL_KEYS, LOCK_USED_KEYS } from './keysmith';
+import { isBuilding } from '../../types/ObjectKind';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -241,6 +242,6 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
 export const lifeZeroVictims = (board: readonly SquareInfo[], chars: readonly CharacterId[], gears: readonly Gears[]): number[] => {
     if (!gears.some((g) => hasGear(g, 'reaper'))) return [];
     return board
-        .map((sq, i) => (sq.player && !sq.object && sq.bind <= 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isShielded(sq, chars) ? i : -1))
+        .map((sq, i) => (sq.player && !isBuilding(sq) && sq.bind <= 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isShielded(sq, chars) ? i : -1))
         .filter((i) => i >= 0);
 };

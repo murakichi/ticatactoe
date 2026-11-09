@@ -340,7 +340,7 @@ test('大工房: 設置は直前に相手がベースコスト7以上のスキ�
     assert.strictEqual(s.board[5].object, 'workshop');
 });
 
-test('結界石・護符の社: 式神が減衰しない／式神の数だけ手番開始時にマジック（最大+3）。コスト4/6', () => {
+test('結界石・護符の社: 式神は自然減衰しない／式神の数だけ手番開始時にマジック（最大+3）。コスト4/6', () => {
     assert.deepStrictEqual([e.skillCosts.onClickBarrierStone, e.skillCosts.onClickAmuletShrine], [4, 6]);
     const s = e.newGame({ chars: ['yinYangMaster', 'you'], rng: e.makeRng(81) });
     s.life = 4;
@@ -348,8 +348,8 @@ test('結界石・護符の社: 式神が減衰しない／式神の数だけ手
     s.board[4] = e.newShikigami('💙');
     s.board[15] = e.newShikigami('💙');
     e.placeMove(s, 0);
-    assert.strictEqual(s.board[4].bind, e.SHIKIGAMI_LIFE, '結界石の隣の式神は減らない');
-    assert.ok(s.board[15].bind < e.SHIKIGAMI_LIFE);
+    assert.strictEqual(s.board[4].bind, e.SHIKIGAMI_LIFE, '式神は自然減衰を受けない');
+    assert.strictEqual(s.board[15].bind, e.SHIKIGAMI_LIFE, '結界石の外の式神も減らない（オブジェクトの規則）');
     const t = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(82) });
     t.board[5] = { player: '⭕', bind: 5, effects: [], object: 'amuletShrine' };
     for (const k of [0, 1, 2, 4, 6]) t.board[k] = e.newShikigami('⭕');

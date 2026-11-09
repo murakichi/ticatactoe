@@ -6,8 +6,17 @@ export const OBJECT_KINDS = ['bigTree', 'deadTree', 'spring', 'fort', 'thundercl
 
 export type ObjectKind = typeof OBJECT_KINDS[number];
 
+/** SquareInfo.object に入る種類: 設置できるオブジェクトに、式神（紙の分身。陰陽師のスキルで生まれる）を加えたもの */
+export type SquareObject = ObjectKind | 'shikigami';
+
 /** マスがオブジェクトか（thermal.ts などの低レイヤーから循環 import なしで使えるよう、ここに置く） */
-export const isObject = (sq: { object?: ObjectKind }): boolean => sq.object !== undefined;
+export const isObject = (sq: { object?: SquareObject }): boolean => sq.object !== undefined;
+
+/** 設置したオブジェクト（建造物）か。式神は含まない — 式神は『コマ』として数える・狙うなど、従来の扱いのまま残す場所で使う */
+export const isBuilding = (sq: { object?: SquareObject }): boolean => sq.object !== undefined && sq.object !== 'shikigami';
+
+/** 式神か。式神はオブジェクトの一種（列に数えない・コマ数に数えない…の特例を持たず、オブジェクトの規則に従う）。自然減衰も受けない。式神だけの特例は、乗っ取られると消える・自分で補強するとバッズ付きの通常のコマになる、の2点（placement.ts） */
+export const isShikigami = (sq: { object?: SquareObject }): boolean => sq.object === 'shikigami';
 
 /** 火炎を付けられると即座に壊れるオブジェクト（大木・枯れた大木） */
-export const isTree = (sq: { object?: ObjectKind }): boolean => sq.object === 'bigTree' || sq.object === 'deadTree';
+export const isTree = (sq: { object?: SquareObject }): boolean => sq.object === 'bigTree' || sq.object === 'deadTree';
