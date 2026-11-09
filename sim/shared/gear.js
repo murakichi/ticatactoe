@@ -266,7 +266,7 @@ exports.RECOMMENDED_GEARS = {
     magician: ['spellWard', 'luckyPurse'],
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'chainDiscount'],
-    necromancer: ['vengeance', 'lastStand'],
+    necromancer: ['reaper', 'lastStand'],
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
@@ -283,7 +283,7 @@ exports.recommendedGears = recommendedGears;
  */
 exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'luckyPurse']],
-    necromancer: [['luckyPurse', 'lastStand'], ['spellWard', 'lastStand']],
+    necromancer: [['reaper', 'snowball']],
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 /**
