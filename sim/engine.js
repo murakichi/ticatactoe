@@ -101,6 +101,7 @@ const POOL_SIZE = Number(process.env.SIM_POOL_SIZE) || config.poolSize || 49; //
 
 // ---- util.ts（本番の生成物。乱数は rng を渡す） ---------------------------------
 const utilMod = require('./shared/util');
+const winRuleMod = require('./shared/winRule');
 const { LIFE_STD, calculateWinner, findEmptyIndexes, normRand } = utilMod;
 // lifeBonus: 毒使いの「自陣の毒の数だけライフ期待値+1」用
 function calculateLife(characterId, yinYangMode, rng, lifeBonus = 0, std = LIFE_STD) {
@@ -334,6 +335,7 @@ function newGame(opts = {}) {
     const chars = opts.chars ? opts.chars.slice() : [opts.heartChar || 'you', opts.circleChar || 'you'];
     if (chars.length < 2 || chars.length > MAX_PLAYERS) throw new Error(`players must be 2..${MAX_PLAYERS}`);
     const n = chars.length;
+    winRuleMod.setWinNeeds(chars); // 席ごとの勝利に必要な4連の本数（#526）
     // opts.size で盤面サイズ(4〜10)を人数と無関係に指定できる。省略時は人数に応じた既定
     const size = opts.size != null ? Math.min(10, Math.max(4, Math.round(opts.size))) : boardSizeFor(n);
     const rng = opts.rng || makeRng(opts.seed == null ? 12345 : opts.seed);

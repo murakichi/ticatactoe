@@ -6,6 +6,7 @@ const boardGeometry_1 = require("./boardGeometry");
 const ObjectKind_1 = require("./ObjectKind");
 Object.defineProperty(exports, "isObject", { enumerable: true, get: function () { return ObjectKind_1.isObject; } });
 Object.defineProperty(exports, "isShikigami", { enumerable: true, get: function () { return ObjectKind_1.isShikigami; } });
+const winRule_1 = require("./winRule");
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
  * ここが唯一の出典で、キャラ選択画面の説明文もこの値を参照する（説明文と実装のズレ防止 / issue #13）。
@@ -20,6 +21,7 @@ exports.LIFE_MEANS = {
     cryomancer: 4,
     pyromancer: 6,
     witch: 4,
+    dragonMiko: 3,
     keysmith: 4,
     default: 5,
 };
@@ -42,7 +44,9 @@ exports.calculateLife = calculateLife;
 const lineSymbols = (board) => board.map((x) => ((0, ObjectKind_1.isObject)(x) ? undefined : x.player));
 exports.lineSymbols = lineSymbols;
 const calculateWinner = (squares) => {
+    var _a;
     const lines = (0, boardGeometry_1.geometryForCells)(squares.length).winLines;
+    let own;
     for (let l = 0; l < lines.length; l++) {
         const line = lines[l];
         const first = squares[line[0]];
@@ -54,7 +58,15 @@ const calculateWinner = (squares) => {
                 all = false;
                 break;
             }
-        if (all)
+        if (!all)
+            continue;
+        // 必要本数が1の席（ほぼ全員）は、揃った時点で勝ち。2本の席は、別々の2本（共有は1マスまで）が揃うまで勝たない（#526）
+        if (!own)
+            own = new Map();
+        const mine = (_a = own.get(first)) !== null && _a !== void 0 ? _a : [];
+        mine.push(line);
+        own.set(first, mine);
+        if ((0, winRule_1.meetsWinNeed)(first, mine))
             return first;
     }
     return undefined;

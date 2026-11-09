@@ -1,3 +1,4 @@
+import { setWinNeeds } from './winRule';
 import React, { useState, useEffect, useRef } from 'react';
 import { DamageEffect } from './BoardEffects';
 import { buildDamagePops } from './damagePops';
@@ -68,6 +69,7 @@ export const Game = (props: GameProps) => {
     const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : boardSizeFor(seatCount));
     const symbols: Player[] = PLAYER_SYMBOLS.slice(0, seatCount);
     const characters: CharacterId[] = props.players.map((p) => p.character);
+    setWinNeeds(characters); // 席ごとの勝利に必要な4連の本数（#526）。描画のたびに同じ値を登録するだけなので副作用は無い
     const makeBoard = (): SquareInfo[] => Array.from({ length: geo.cells }, () => ({ player: undefined, bind: 0, effects: [] }));
     const initialBoard = makeBoard();
     const [history, setHistory] = useState<SquareInfo[][]>([initialBoard]);
