@@ -1056,6 +1056,27 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     this.hypoCut = 0;
     const skills = planned;
+    // 大岩(136): 相手に即勝ちの手（リーチの要の空きマス）があるとき、そのマスに大岩を置いて塞ぐ。大岩は2ターンのロック付きでライフ5・減衰しないので、
+    // ライフ1〜2で減衰してすぐ消える自コマの壁より持つ。コスト1で1手番に複数置ける。ネクロマンサーだけ（#399）
+    if (this.character === 'necromancer' && availableSkills.includes(objects_1.OBJECT_DEFS.boulder.idx) && !skills.some(sk => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+        const threats = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o)))).filter((c) => (0, objects_1.objectLandable)(board[c]));
+        const bcost = this.calculateAICost(costs.onClickBoulder, false, false, 'onClickBoulder');
+        let left = magic - this.lastSpent;
+        const clicks = [];
+        const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        for (const c of threats) {
+            if (left - bcost < 0)
+                break;
+            post[c] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] }; // AIには『ロック中の空きマス』として見せる（makeMove の他のオブジェクトと同じ）
+            clicks.push({ skill: 'onClickBoulder', target: c });
+            left -= bcost;
+        }
+        if (clicks.length > 0) {
+            const followup = this.getBestMove(post, life);
+            if (followup !== null)
+                return { move: followup, skills, chargeClicks: [...(chargeResult !== null && chargeResult !== void 0 ? chargeResult : []), ...clicks] };
+        }
+    }
     // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木・市場などを自陣の近くに1つずつ設置する。
     // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
     if (this.character === 'necromancer' && !skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
