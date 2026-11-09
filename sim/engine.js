@@ -755,6 +755,7 @@ function advanceTurn(s) {
         scorch: scorchForNext, // 焦土(上で計算)
         root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
         objects: objRes.magic, // 大木
+        rent: hasGear(s.gears[next], 'groundRent') ? gear.rentGain(objectsMod.activeObjectCount(s.board, sym)) : 0, // 地代: 働いている自陣のオブジェクト1つにつき+1
     });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
@@ -934,7 +935,7 @@ function placeMove(s, i) {
     }
     if (s.objectTool) {
         // オブジェクトのスキル（解体・風化・補強工事・分譲）: 対象のマスを選ぶ。対象でないマスは選び直せる [FAITHFUL] Game.tsx exeObjectTool
-        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng);
+        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng, gear.objectBuildLife(s.gears[s.turn]));
         if (!r) return false;
         bumpStat(s, 'objectSkill_' + s.objectTool);
         s.objectTool = null;
@@ -943,7 +944,7 @@ function placeMove(s, i) {
     if (s.objectPlacing) {
         // オブジェクト: 空きマスに設置する。埋まっている/氷結中/ロック中のマスは選び直せる [FAITHFUL] Game.tsx exeObjectPlace
         if (!objectsMod.objectLandable(board[i])) return false;
-        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing), effects: board[i].effects.filter((e) => e.effect === '🔥') };
+        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing, gear.objectBuildLife(s.gears[s.turn])), effects: board[i].effects.filter((e) => e.effect === '🔥') };
         objectsMod.sweepBurntTrees(board);
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
