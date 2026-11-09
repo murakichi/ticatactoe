@@ -465,7 +465,7 @@ export const skillChoiceMethods = {
             (this.character === 'magician' && (this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[seatOf(o)] === 'yinYangMaster') ? MAGICIAN_HOLD_VS_YINYANG : MAGICIAN_HOLD).includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
-            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
+            (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99 || (process.env.NB_LOCK && idx === 136))) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
             (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
