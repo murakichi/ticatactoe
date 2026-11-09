@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/keysmith.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.lockedSquareCount = exports.lockConvert = exports.lockConvertCells = exports.blessPlacedPiece = exports.blessingActive = exports.lockRaid = exports.lockRaidCells = exports.lockExtend = exports.lockExtendCells = exports.vacantSeal = exports.vacantSealCells = exports.vacantSealBaseCost = exports.opponentReaches = exports.reachCount = exports.BLESSING_TURNS = exports.BLESSING_STACK = exports.LOCK_EXTEND_STACK = exports.VACANT_SEAL_REACH_CUT = exports.VACANT_SEAL_STACK = exports.seal = exports.sealBaseCost = exports.sealReleaseCells = exports.lockBlocksPlacement = exports.ignoresEmptyLock = exports.LOCK_USED_KEYS = exports.LOCK_SKILL_KEYS = exports.SEAL_MIN_COST = exports.SEAL_EMPTY_STACK = exports.SEAL_OWN_STACK = void 0;
+exports.lockedSquareCount = exports.lockConvert = exports.lockConvertCells = exports.blessPlacedPiece = exports.blessingActive = exports.lockRaid = exports.lockRaidCells = exports.lockExtend = exports.lockExtendCells = exports.vacantSeal = exports.vacantSealCells = exports.vacantSealBaseCost = exports.opponentReaches = exports.reachCount = exports.BLESSING_TURNS = exports.BLESSING_STACK = exports.LOCK_EXTEND_STACK = exports.VACANT_SEAL_REACH_CUT = exports.VACANT_SEAL_STACK = exports.seal = exports.sealBaseCost = exports.sealReleaseCells = exports.lockBlocksPlacement = exports.ignoresEmptyLock = exports.LOCK_USED_KEYS = exports.LOCK_SKILL_KEYS = exports.SEAL_FIRST_CUT = exports.SEAL_MIN_COST = exports.SEAL_EMPTY_STACK = exports.SEAL_OWN_STACK = void 0;
 const Player_1 = require("./Player");
 const util_1 = require("./util");
 const boardGeometry_1 = require("./boardGeometry");
@@ -13,6 +13,8 @@ exports.SEAL_OWN_STACK = 7;
 exports.SEAL_EMPTY_STACK = 2;
 /** 封鎖の断の基礎コストの下限（敵陣のロックの数だけ軽減したあと） */
 exports.SEAL_MIN_COST = 5;
+/** 鍵師のパッシブ（手番の最初のロック系が無料）で、封鎖の断だけは無料にせず、この分だけ安くする（完全無料だと毎手番撃てて環境が崩れる: 対強豪95%・全体75%。-6で約43%、-7で約76%） */
+exports.SEAL_FIRST_CUT = 6;
 /** ロック系スキル（鍵師はコスト-1）。Game.tsx の skillKey / sim/engine.js の costsOf のキー */
 exports.LOCK_SKILL_KEYS = new Set([
     'onClickUseLock', 'onClickDoubleLock', 'onClickTripleLock', 'onClickSeal',

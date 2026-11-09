@@ -3823,10 +3823,12 @@ test('鍵師: 空きマスのロックを無視して置ける。他キャラは
     assert.strictEqual(e.placeMove(t, 5), false);
 });
 
-test('鍵師: ロック系スキルはコスト-1（ダブルロック）。他のキャラは変わらない。常設のロックは無料の1回があるので0', () => {
+test('鍵師: 手番の最初のロック系スキルは何でも無料、2つ目からはコスト-1。他のキャラは変わらない', () => {
     const s = game('keysmith', 'you');
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), 0); // 手番の最初
+    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), 0);
+    s.lockFreeUsed[s.turn] = true;
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock - 1);
-    assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickUseLock, false, false, 'onClickUseLock'), 0); // 手番ごとの無料の1回
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickAddLife, false, false, 'onClickAddLife'), e.skillCosts.onClickAddLife);
     const t = game('you', 'keysmith');
     assert.strictEqual(e.calculateCost(t, e.skillCosts.onClickDoubleLock, false, false, 'onClickDoubleLock'), e.skillCosts.onClickDoubleLock);
@@ -3838,6 +3840,7 @@ test('鍵師: 封鎖の断は自陣7・空きマス2をロックしてターン�
     s.magic[0] = 30;
     s.board[0] = { player: '💙', bind: 3, effects: [] };
     s.board[1] = { player: '⭕', bind: 4, effects: [{ effect: '🔑', stack: 3 }] };
+    s.lockFreeUsed[s.turn] = true; // 無料の1回は使用済みにして、通常のコスト(-1)を確かめる
     assert.strictEqual(e.sealCost(s), 8); // 基礎10 - 解除できる敵のロック1つ = 9、鍵師のロック系 -1 で 8
     const turn = s.turn;
     e.SKILLS.seal(s);
@@ -3882,9 +3885,18 @@ test('空き家封じ: 空きマス全てを2スタックでロック。ター�
     assert.strictEqual(e.placeMove(s, 3), false);
 });
 
+test('鍵師: 最初のロック系スキルが無料になり、使うと2つ目以降は通常（-1）になる', () => {
+    const s = game('keysmith', 'you');
+    s.magic[0] = 30;
+    e.SKILLS.vacantSeal(s);
+    assert.strictEqual(s.magic[0], 30, '手番の最初のロック系は無料');
+    assert.strictEqual(e.vacantSealCost(s), 9);
+});
+
 test('空き家封じ: 鍵師なら、ロックした空きマスに自分は置ける（ロック系スキルのコスト-1）', () => {
     const s = game('keysmith', 'you');
     s.magic[0] = 30;
+    s.lockFreeUsed[s.turn] = true; // 無料の1回は使用済み
     assert.strictEqual(e.vacantSealCost(s), 9); // 基礎10 - 鍵師のロック系-1
     e.SKILLS.vacantSeal(s);
     assert.strictEqual(e.placeMove(s, 5), true);

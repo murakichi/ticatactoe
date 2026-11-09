@@ -1,4 +1,4 @@
-import { advanceGearState, GearTurnState, RuinState } from './gearTurn';
+import { advanceGearState, GearTurnState, noteSkillUsed, RuinState } from './gearTurn';
 import { decayBoard } from './decay';
 import { absorbDefeated, resolvePlacement } from './placement';
 import { proliferateStep } from './proliferate';
@@ -144,6 +144,15 @@ describe('ギアの手番状態 advanceGearState', () => {
         g.lockFreeUsed[0] = true;
         advanceGearState(g, r, { board: board(), symbols, gears: [[], []], endSeat: 0, nextSeat: 1 });
         expect(g.lockFreeUsed).toEqual([false, false]);
+    });
+    it('鍵師の無料ロック: ロック系スキルを使うと lockFreeUsed が立つ（ロック系でないスキルでは立たない）', () => {
+        const [base] = mk();
+        const g = { ...base, infernoReady: [false, false] };
+        noteSkillUsed(g, 0, 'onClickBuds');
+        expect(g.lockFreeUsed[0]).toBe(false);
+        noteSkillUsed(g, 0, 'onClickDoubleLock');
+        expect(g.lockFreeUsed[0]).toBe(true);
+        expect(g.lockFreeUsed[1]).toBe(false);
     });
     it('施錠の加護: 使った手番は減らさず、その後は自分の手番が終わるたびに1減る（使った手番を含めて3手番）', () => {
         const [g, r] = mk();
