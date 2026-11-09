@@ -9,19 +9,20 @@
  *   kind: bigTree | deadTree | spring | fort | thundercloud | market | sanctuary | poisonSwamp | none(基準)
  *
  * 置くマス: 毒沼は周囲の敵コマが多い空きマス、それ以外は周囲の自陣コマが多い空きマス。置くのは魔力がコスト+4以上あるときだけ(以降の手番を潰さない)。
- * 相手は強豪 cryomancer,tactician,witch,magician,yinYangMaster(対象自身は除く)。1相手あたり games 試合・席交互。標準誤差は大きい(30試合で±8pt程度)ので、基準(none)と同じ条件で並べて見る。
+ * 相手は環境変数 OPPS(既定 cryomancer,tactician,witch,magician,yinYangMaster。対象自身は除く)、対象のギアは GEARS で上書きできる(例: GEARS=lastStand,buildMania)。1相手あたり games 試合・席交互。標準誤差は大きい(30試合で±8pt程度)ので、基準(none)と同じ条件で並べて見る。
  */
 const P = require('path').join(__dirname, '/');
 const engine=require(P+'engine'),gearMod=require(P+'shared/gear'),deckMod=require(P+'shared/deck'),drv=require(P+'aiDriver.js'),objs=require(P+'shared/objects');
 const CH=process.argv[5]||'poisoner';
 const kind=process.argv[2]||'none', N=+process.argv[3]||30, MAXOBJ=+process.argv[4]||2;
-const opps=['cryomancer','tactician','witch','magician','yinYangMaster'].filter(x=>x!==CH);
+const opps=(process.env.OPPS||'cryomancer,tactician,witch,magician,yinYangMaster').split(',').filter(x=>x!==CH);
+const GEARS=process.env.GEARS?process.env.GEARS.split(','):null; // 対象キャラのギアを上書き(例: GEARS=lastStand,buildMania)
 let W=0,L=0,D=0; const per={};
 const adj=(i,size)=>{const r=Math.floor(i/size),c=i%size,o=[];for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const rr=r+dr,cc=c+dc;if(rr>=0&&rr<size&&cc>=0&&cc<size)o.push(rr*size+cc);}return o;};
 for(const o of opps){ let w=0,l=0;
   for(let g=0;g<N;g++){
     const first=g%2===0; const chars=first?[CH,o]:[o,CH]; const me=first?0:1;
-    const s=engine.newGame({chars,rng:engine.makeRng(31000+g),decks:chars.map(c=>deckMod.recommendedDeck(c)),gears:chars.map(c=>gearMod.recommendedGears(c))}); s.aiFlags=[{},{}];
+    const s=engine.newGame({chars,rng:engine.makeRng(31000+g),decks:chars.map(c=>deckMod.recommendedDeck(c)),gears:chars.map(c=>(c===CH&&GEARS)?GEARS:gearMod.recommendedGears(c))}); s.aiFlags=[{},{}];
     let n=0, errs=0;
     try{
     while(!s.winner&&n++<400){

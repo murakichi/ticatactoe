@@ -1141,7 +1141,6 @@ function onClickUseLock(s) {
     }
     s.useLock += 1;
     const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
-    if (curChar(s) === 'keysmith' && lockCost === 0) s.lockFreeUsed[s.turn] = true; // 鍵師のパッシブ: 手番ごとに1回、常設のロックが無料
     spendMagic(s, lockCost, 'onClickUseLock');
     bumpMagicCount(s);
 }
