@@ -38,47 +38,47 @@ type CharacterDef = {
 
 // 説明文の書き方は docs/description-guidelines.md。数値などの細かい仕様は docs/characters.md に書く
 const CHARACTERS: CharacterDef[] = [
-    { id: 'you', name: 'あなた', icon: '🧑', passive: '補正も固有スキルもない基準のキャラです' },
-    { id: 'tactician', name: '軍師', icon: '🎖️', passive: 'トークン系のスキルが安く、置くコマのライフが高くなります。固有: 全軍突撃' },
-    { id: 'magician', name: '魔法使い', icon: '🧙', passive: '毎ターンのマジックが増え、自陣のバッズが多いほどさらに増えます。固有: 審判の日' },
-    { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフが高いコマを置けますが、数ターンに1回休みます。固有: ストンプ' },
+    { id: 'you', name: 'あなた', icon: '🧑', passive: '補正も固有スキルもない基準のキャラ' },
+    { id: 'tactician', name: '軍師', icon: '🎖️', passive: 'トークン系スキルが安く、置くコマのライフが高い。固有: 全軍突撃' },
+    { id: 'magician', name: '魔法使い', icon: '🧙', passive: '毎ターンのマジックが増え、自陣のバッズが多いほどさらに増加。固有: 審判の日' },
+    { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフの高いコマを置けるが、数ターンに1回休み。固有: ストンプ' },
     {
         id: 'yinYangMaster',
         name: '陰陽師',
         icon: '☯️',
-        passive: '陰と陽を切り替えて戦います。固有: 式神設置・式神爆破',
+        passive: '陰と陽を切り替えて戦う。固有: 式神設置・式神爆破',
     },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強くなります。固有: 蘇生' },
-    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒のスキルが安く、毒が付いた自陣のコマが強くなります。固有: ミアズマ' },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強化。固有: 蘇生' },
+    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒スキルが安く、毒の付いた自陣のコマが強化。固有: ミアズマ' },
     {
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: '⚡が付いた自陣のコマは敵から触れられず、⚡のダメージも受けません。固有: 帯電拡散',
+        passive: '⚡の付いた自陣のコマは敵から触れられず、⚡のダメージも受けない。固有: 帯電拡散',
     },
     {
         id: 'cryomancer',
         name: '氷室の番人',
         icon: '🧊',
-        passive: 'ロックの代わりに氷結を使い、毎ターンのマジックが増えます。固有: 絶対零度',
+        passive: 'ロックの代わりに氷結を使い、毎ターンのマジックが増加。固有: 絶対零度',
     },
     {
         id: 'pyromancer',
         name: '煉獄の鍛冶師',
         icon: '🔥',
-        passive: '🔥のスキルが安く、🔥を受けた敵にさらにダメージを与えます。固有: 業火・火遁',
+        passive: '🔥スキルが安く、🔥を受けた敵に追加ダメージ。固有: 業火・火遁',
     },
     {
         id: 'witch',
         name: '凩の魔女',
         icon: '🍂',
-        passive: '毎ターンのマジックが増え、盤面の🍂が多いほどスキルが安くなります。固有: 虎落笛',
+        passive: '毎ターンのマジックが増え、盤面の🍂が多いほどスキルが安い。固有: 虎落笛',
     },
     {
         id: 'keysmith',
         name: '鍵師',
         icon: '🗝️',
-        passive: 'ロックのスキルが安く、空きマスのロックを無視して置けます。固有: 封鎖の断',
+        passive: 'ロックスキルが安く、空きマスのロックを無視して設置可能。固有: 封鎖の断',
     },
 ];
 

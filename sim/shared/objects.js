@@ -45,24 +45,24 @@ exports.OBJECT_LIFE = 5;
 /** 大工房: 軽減の対象になるスキルのベースコスト・軽減量・設置スキルが無料になる相手の手番の支出 */
 exports.WORKSHOP_PARAMS = { bigBase: 7, cut: 3, freeSpent: 7 };
 exports.OBJECT_DEFS = {
-    bigTree: { idx: 105, name: '大木', icon: '🌳', life: exports.OBJECT_LIFE, costKey: 'onClickBigTree', desc: '手番開始時にマジックを得ます' },
-    deadTree: { idx: 106, name: '枯れた大木', icon: '🪵', life: exports.OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲のコマに🍂を付けます' },
-    spring: { idx: 107, name: '生命の泉', icon: '⛲', life: exports.OBJECT_LIFE, costKey: 'onClickSpring', desc: '手番開始時のライフが増えます' },
-    fort: { idx: 108, name: '砦', icon: '🏰', life: exports.OBJECT_LIFE, costKey: 'onClickFort', desc: '手番開始時、周囲の自陣のコマのライフが増えます' },
-    thundercloud: { idx: 109, name: '雷雲', icon: '🌩️', life: exports.OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲のコマに⚡を付けます' },
-    market: { idx: 110, name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: 'シャッフルが無料になります' },
-    sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲の自陣のコマのライフが減らなくなります' },
-    poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲の敵のコマに毒を付けます' },
-    workshop: { idx: 120, name: '大工房', icon: '🏭', life: exports.OBJECT_LIFE, costKey: 'onClickWorkshop', desc: 'コストの高いスキルが安くなります' },
-    barrierStone: { idx: 121, name: '結界石', icon: '🪨', life: exports.OBJECT_LIFE, costKey: 'onClickBarrierStone', desc: '周囲の自陣の式神のライフが減らなくなります' },
-    amuletShrine: { idx: 122, name: '護符の社', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickAmuletShrine', desc: '手番開始時、周囲の自陣の式神の数だけマジックを得ます' },
-    luckyCat: { idx: 123, name: '招き猫', icon: '🐈', life: exports.OBJECT_LIFE, costKey: 'onClickLuckyCat', desc: '自分のスキルのコストが下がります' },
-    mudField: { idx: 124, name: '泥田坊', icon: '🌾', life: exports.OBJECT_LIFE, costKey: 'onClickMudField', desc: '相手がトークンで置くコマのライフが0になります' },
-    tongueKing: { idx: 125, name: '閻魔の舌', icon: '👅', life: exports.OBJECT_LIFE, costKey: 'onClickTongueKing', desc: '相手が自陣のコマにエフェクトを付けると、そのコマのライフが0になります' },
-    eightTrigrams: { idx: 126, name: '八卦の陣', icon: '🔯', life: exports.OBJECT_LIFE, costKey: 'onClickEightTrigrams', desc: '周囲が全て自陣のコマで埋まると勝利します' },
-    soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: exports.OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '相手は1ターンにコマを1つしか置けなくなります' },
-    oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: exports.OBJECT_LIFE, costKey: 'onClickOneWord', desc: '相手は1ターンにスキルを1つしか使えなくなります' },
-    blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: exports.OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲にはエフェクトを付けられなくなります' },
+    bigTree: { idx: 105, name: '大木', icon: '🌳', life: exports.OBJECT_LIFE, costKey: 'onClickBigTree', desc: '手番開始時にマジックを獲得' },
+    deadTree: { idx: 106, name: '枯れた大木', icon: '🪵', life: exports.OBJECT_LIFE, costKey: 'onClickDeadTree', desc: '手番開始時、周囲のコマに🍂を付与' },
+    spring: { idx: 107, name: '生命の泉', icon: '⛲', life: exports.OBJECT_LIFE, costKey: 'onClickSpring', desc: '手番開始時のライフが増加' },
+    fort: { idx: 108, name: '砦', icon: '🏰', life: exports.OBJECT_LIFE, costKey: 'onClickFort', desc: '手番開始時、周囲の自陣のコマのライフが増加' },
+    thundercloud: { idx: 109, name: '雷雲', icon: '🌩️', life: exports.OBJECT_LIFE, costKey: 'onClickThundercloud', desc: '手番開始時、周囲のコマに⚡を付与' },
+    market: { idx: 110, name: '市場', icon: '🏪', life: exports.OBJECT_LIFE, costKey: 'onClickMarket', desc: 'シャッフルが無料' },
+    sanctuary: { idx: 111, name: '聖域', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickSanctuary', desc: '周囲の自陣のコマのライフが減らない' },
+    poisonSwamp: { idx: 112, name: '毒沼', icon: '🐸', life: exports.OBJECT_LIFE, costKey: 'onClickPoisonSwamp', desc: '手番開始時、周囲の敵のコマに毒を付与' },
+    workshop: { idx: 120, name: '大工房', icon: '🏭', life: exports.OBJECT_LIFE, costKey: 'onClickWorkshop', desc: 'コストの高いスキルが安くなる' },
+    barrierStone: { idx: 121, name: '結界石', icon: '🪨', life: exports.OBJECT_LIFE, costKey: 'onClickBarrierStone', desc: '周囲の自陣の式神のライフが減らない' },
+    amuletShrine: { idx: 122, name: '護符の社', icon: '⛩️', life: exports.OBJECT_LIFE, costKey: 'onClickAmuletShrine', desc: '手番開始時、周囲の自陣の式神の数だけマジックを獲得' },
+    luckyCat: { idx: 123, name: '招き猫', icon: '🐈', life: exports.OBJECT_LIFE, costKey: 'onClickLuckyCat', desc: '自分のスキルのコストが低下' },
+    mudField: { idx: 124, name: '泥田坊', icon: '🌾', life: exports.OBJECT_LIFE, costKey: 'onClickMudField', desc: '相手がトークンで置くコマのライフが0' },
+    tongueKing: { idx: 125, name: '閻魔の舌', icon: '👅', life: exports.OBJECT_LIFE, costKey: 'onClickTongueKing', desc: '相手が自陣のコマにエフェクトを付けると、そのコマのライフが0' },
+    eightTrigrams: { idx: 126, name: '八卦の陣', icon: '🔯', life: exports.OBJECT_LIFE, costKey: 'onClickEightTrigrams', desc: '周囲が全て自陣のコマで埋まると勝利' },
+    soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: exports.OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '相手は1ターンにコマを1つしか置けない' },
+    oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: exports.OBJECT_LIFE, costKey: 'onClickOneWord', desc: '相手は1ターンにスキルを1つしか使えない' },
+    blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: exports.OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲にはエフェクトを付与できない' },
 };
 /** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
 exports.OBJECT_PLACE_KEYS = new Set(Object.values(exports.OBJECT_DEFS).map((d) => d.costKey));
@@ -290,12 +290,12 @@ const objectTurnStart = (board, player, chars, rng = Math.random) => {
 };
 exports.objectTurnStart = objectTurnStart;
 exports.OBJECT_SKILLS = {
-    demolish: { idx: 114, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで壊します' },
-    weather: { idx: 115, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にします' },
-    levelAll: { idx: 116, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て壊します' },
-    reinforce: { idx: 117, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: '自陣のオブジェクトを1つ選んで、ライフを増やします' },
-    expandAll: { idx: 118, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: '自陣のオブジェクトの全てのライフを増やします' },
-    duplicate: { idx: 119, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じものをもう1つ置きます' },
+    demolish: { idx: 114, name: '解体', icon: '🧨', costKey: 'onClickDemolish', target: true, desc: '敵のオブジェクトを1つ選んで破壊' },
+    weather: { idx: 115, name: '風化', icon: '🌫️', costKey: 'onClickWeather', target: true, desc: '敵のオブジェクトを1つ選んで、ライフを0にする' },
+    levelAll: { idx: 116, name: '地ならし', icon: '🚜', costKey: 'onClickLevelAll', target: false, desc: '敵のオブジェクトを全て破壊' },
+    reinforce: { idx: 117, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: '自陣のオブジェクトを1つ選んで、ライフを増加' },
+    expandAll: { idx: 118, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: '自陣のオブジェクトの全てのライフを増加' },
+    duplicate: { idx: 119, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じものをもう1つ設置' },
 };
 // 型の確認用（OBJECT_SKILLS の各要素が ObjectSkillDef に合うこと）
 const _check = exports.OBJECT_SKILLS;

@@ -4316,31 +4316,31 @@ export const Game = (props: GameProps) => {
                         </button>
                     )}
                     <div className={styles.skillGrid} ref={skillGridRef} onScroll={updateStripEdge}>
-                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph='ターンを終了し、マジックを得ます' />
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph='ターンを終了し、マジックを獲得' />
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShuffle}
                         buttonText={`シャッフル-${shuffleCost}`}
-                        paragraph='固定でないスキルを引き直します'
+                        paragraph='固定でないスキルを引き直す'
                         disabled={magic[turnSeat] < shuffleCost}
                     />
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickUseLock}
                         hidden={currentCharacter === 'cryomancer'}
                         buttonText={`ロック-${calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock')}`}
-                        paragraph='マスを選んでロックします'
+                        paragraph='マスを選んでロック'
                         disabled={checkSkillDisable(seatCosts.onClickUseLock)}
                     />
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickCryoFreeze}
                         buttonText={`氷結-${calculateCost(seatCosts.onClickCryoFreeze, false, false, currentTurnPlayer, 'onClickCryoFreeze')}`}
-                        paragraph='マスを選んで❄を付与します'
+                        paragraph='マスを選んで❄を付与'
                         hidden={currentCharacter !== 'cryomancer'}
                         disabled={checkSkillDisable(seatCosts.onClickCryoFreeze)}
                     />
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickTotalAssault}
                         buttonText={`全軍突撃-${totalAssaultCost}`}
-                        paragraph='数ターンの間、ターン終了時にランダムにトークンを置きます'
+                        paragraph='数ターンの間、ターン終了時にランダムにトークンを設置'
                         hidden={currentCharacter !== 'tactician'}
                         exclusive
                         disabled={magic[turnSeat] < totalAssaultCost}
@@ -4348,7 +4348,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickStomp}
                         buttonText={`ストンプ-${gearCost(seatCosts.onClickStomp, turnSeat, false, 'onClickStomp')}`}
-                        paragraph='マスを選び、周囲のコマを破壊します'
+                        paragraph='マスを選び、周囲のコマを破壊'
                         hidden={currentCharacter !== 'giant'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickStomp)}
@@ -4356,7 +4356,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickJudgeDay}
                         buttonText={`審判の日-${judgeDayCost}`}
-                        paragraph='マスを選び、敵のコマにダメージを与えます'
+                        paragraph='マスを選び、敵のコマにダメージ'
                         hidden={currentCharacter !== 'magician'}
                         exclusive
                         disabled={magic[turnSeat] < judgeDayCost}
@@ -4364,7 +4364,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickToggleYingYang}
                         buttonText={`陰陽転化-${gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang')}`}
-                        paragraph={`陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`}
+                        paragraph={`陰陽のモードを切り替え 現在のモード:${yinYangModeName(turnSeat)}`}
                         hidden={currentCharacter !== 'yinYangMaster'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickToggleYingYang)}
@@ -4372,7 +4372,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickNecromancy}
                         buttonText={`蘇生-${gearCost(currentNecroCost, turnSeat, false, 'onClickNecromancy')}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`}
-                        paragraph='墓地の死体の数だけコマを召喚します'
+                        paragraph='墓地の死体の数だけコマを召喚'
                         hidden={currentCharacter !== 'necromancer'}
                         exclusive
                         disabled={checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())}
@@ -4380,7 +4380,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMiasma}
                         buttonText={`ミアズマ-${miasmaCost()}`}
-                        paragraph='自陣の毒を周囲の敵コマに広げます'
+                        paragraph='自陣の毒を周囲の敵コマに拡散'
                         hidden={currentCharacter !== 'poisoner'}
                         exclusive
                         disabled={magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0}
@@ -4388,7 +4388,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickChargeSpread}
                         buttonText={`帯電拡散-${chargeSpreadCost()}`}
-                        paragraph='コマを選び、繋がる全てのコマに⚡を付与します'
+                        paragraph='コマを選び、繋がる全てのコマに⚡を付与'
                         hidden={currentCharacter !== 'electrician'}
                         exclusive
                         disabled={magic[turnSeat] < chargeSpreadCost()}
@@ -4396,7 +4396,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickGlacier}
                         buttonText={`絶対零度-${glacierCost()}`}
-                        paragraph='全てのマスに❄を付与し、次の手番に敵の❄にダメージを与えます'
+                        paragraph='全てのマスに❄を付与し、次の手番に敵の❄でダメージ'
                         hidden={currentCharacter !== 'cryomancer'}
                         exclusive
                         disabled={magic[turnSeat] < glacierCost() || glacierPending[turnSeat]}
@@ -4404,7 +4404,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickInferno}
                         buttonText={`業火-${infernoCost()}`}
-                        paragraph='敵のコマ全てに🔥を付与します'
+                        paragraph='敵のコマ全てに🔥を付与'
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
@@ -4412,7 +4412,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMogaribue}
                         buttonText={`虎落笛-${mogaribueCost()}`}
-                        paragraph='自陣の🍂の数だけ敵のコマ全てにダメージを与えます'
+                        paragraph='自陣の🍂の数だけ敵のコマ全てにダメージ'
                         hidden={currentCharacter !== 'witch'}
                         exclusive
                         disabled={magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer)}
@@ -4420,7 +4420,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickSeal}
                         buttonText={`封鎖の断-${sealCost()}`}
-                        paragraph='自陣のコマと空きマスをロックし、敵のロックを解除してダメージを与えます'
+                        paragraph='自陣のコマと空きマスをロックし、敵のロックを解除してダメージ'
                         hidden={currentCharacter !== 'keysmith'}
                         exclusive
                         disabled={magic[turnSeat] < sealCost()}
@@ -4428,7 +4428,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickIgnite}
                         buttonText={`火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`}
-                        paragraph='マスを選んで🔥を付与します'
+                        paragraph='マスを選んで🔥を付与'
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickIgnite)}
@@ -4436,7 +4436,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShikigamiPlace}
                         buttonText={`式神設置-${gearCost(seatCosts.onClickShikigamiPlace, turnSeat, false, 'onClickShikigamiPlace')}`}
-                        paragraph='空きマスに式神を置きます'
+                        paragraph='空きマスに式神を設置'
                         hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode === 'yang'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickShikigamiPlace) || findEmptyIndexes(currentBoard).length === 0 || placeBlocked(lifeBan[turnSeat], 'onClickShikigamiPlace', calculateTokenBind())}
@@ -4444,7 +4444,7 @@ export const Game = (props: GameProps) => {
                     <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShikigamiBlast}
                         buttonText={`式神爆破-${gearCost(seatCosts.onClickShikigamiBlast, turnSeat, false, 'onClickShikigamiBlast')}`}
-                        paragraph='式神を1つ選んで爆破し、周囲の敵のコマにダメージを与えます'
+                        paragraph='式神を1つ選んで爆破し、周囲の敵のコマにダメージ'
                         hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode !== 'yang'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickShikigamiBlast) || ownShikigami().length === 0}
