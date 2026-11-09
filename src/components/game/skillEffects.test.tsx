@@ -106,7 +106,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickSoloSign: 'buildObject',
     onClickOneWord: 'buildObject',
     onClickBlindMonkey: 'buildObject',
-    onClickUnlockStone: 'buildObject',
+    onClickBoulder: 'buildObject',
     onClickLockRaid: 'lockRaid',
     onClickLockExtend: 'lockExtend',
     onClickLockBlessing: 'lockBlessing',

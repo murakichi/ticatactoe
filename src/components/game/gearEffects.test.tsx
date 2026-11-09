@@ -38,6 +38,8 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     conduction: 'trigger', // 毒・火炎が移る
     buildMania: 'passive', // コスト表示に反映される
     budSeed: 'trigger', // 設置したコマにバッズが付く
+    groundRent: 'trigger', // 手番開始の魔力
+    sturdyBuild: 'passive', // オブジェクトの初期ライフ
     reaper: 'trigger', // ライフ0の駒が壊れる
     snowball: 'trigger', // 積み上げがリセットされる
     spellWard: 'passive', // スキルを使ったターンだけ効果ダメージが通らない

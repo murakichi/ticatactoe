@@ -12,7 +12,7 @@ import { shikigamiLandable, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIG
 import { OBJECT_SKILLS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, OBJECT_DEFS, ObjectKind, newObject, releaseAroundStone, objectLandable, sweepBurntTrees } from './objects';
 import { SkillEffectType, BurstType } from './BoardEffects';
 import { SHIKIGAMI_DISCOUNT_BASE, Discount } from './discount';
-import { GearId, gearTokenBindDelta } from './gear';
+import { GearId, gearTokenBindDelta, objectBuildLife } from './gear';
 import { PendingMode } from './pendingMode';
 import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
@@ -90,7 +90,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         if (!objectTool) return;
         const def = OBJECT_SKILLS[objectTool];
         const board = currentBoard.slice();
-        const r = runObjectSkill(objectTool, board, currentTurnPlayer, characters, i);
+        const r = runObjectSkill(objectTool, board, currentTurnPlayer, characters, i, Math.random, objectBuildLife(turnGears));
         if (!r) return; // 対象でないマスは選び直せる
         addLog(`${posName(i)}に「${def.name}」${r.destroyed.length > 0 ? '（破壊）' : r.blocked.length > 0 ? '（氷結が身代わり）' : ''}`);
         flashCells([i, ...r.destroyed, ...r.blocked, ...r.affected]);
@@ -113,7 +113,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
     const exeObjectPlace = (i: number) => {
         if (!objectPlacing || !objectLandable(currentBoard[i])) return; // 埋まっている・氷結中・ロック中のマスは選び直せる
         const board = currentBoard.slice();
-        board[i] = { ...newObject(currentTurnPlayer, objectPlacing), effects: currentBoard[i].effects.filter((e) => e.effect === '🔥') }; // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
+        board[i] = newObject(currentTurnPlayer, objectPlacing, objectBuildLife(turnGears), currentBoard[i].effects.filter((e) => e.effect === '🔥')); // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
         sweepBurntTrees(board);
         if (objectPlacing === 'unlockStone') { // 解錠の碑: 設置したとき周囲八マスのロックを全て解除する
             const freed = releaseAroundStone(board, i);

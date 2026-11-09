@@ -70,7 +70,7 @@ export interface CellClickScope {
     exeSucker: (i: number) => void;
     useShikigamiPlace: boolean;
     exeShikigamiPlace: (i: number) => void;
-    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "unlockStone" | null;
+    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null;
     exeObjectPlace: (i: number) => void;
     objectTool: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null;
     exeObjectTool: (i: number) => void;

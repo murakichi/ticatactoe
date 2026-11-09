@@ -14,11 +14,11 @@ import { calculateWinner, isShikigami, lineSymbols, randomPick, calculateLife, L
 import { breakDeadlock, isDeadlocked } from './deadlock';
 import { advanceGearState } from './gearTurn';
 import { turnStartMagic, proliferateUpkeep } from './turn';
-import { effectSnapshot, EffectSnapshot, enforceEffectRules, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
+import { activeObjectCount, effectSnapshot, EffectSnapshot, enforceEffectRules, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { SkillEffectType } from './BoardEffects';
 import { placeWardPiece } from './graveSkills';
 import { detonate } from './thermal';
-import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, emberGain } from './gear';
+import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PlayEffectExtra } from './usePresentation';
@@ -248,12 +248,11 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         if (garden > 0) gearTrigger('colorGarden', `魔力+${garden}`);
         const standBonus = lastStandActiveAgainst(nextSeat);
         // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
-        const frostRootGain = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
-        if (frostRootGain > 0) gearTrigger('frostRoot', `魔力+${frostRootGain}`);
-        // 熾火の脈: 盤面の🔥1つにつき+1
-        const ember = hasGear(gearsBySeat[nextSeat], 'emberVein') ? emberGain(currentBoard) : 0;
-        if (ember > 0) gearTrigger('emberVein', `魔力+${ember}`);
-        const root = frostRootGain + ember;
+        const root = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
+        if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
+        // 地代: 働いている自陣のオブジェクト1つにつき+1（上限なし）
+        const rent = hasGear(gearsBySeat[nextSeat], 'groundRent') ? rentGain(activeObjectCount(currentBoard, nextSymbol)) : 0;
+        if (rent > 0) gearTrigger('groundRent', `魔力+${rent}`);
         let nextMagic: number = turnStartMagic({
             magic: magic[nextSeat],
             turn: currentTurn,
@@ -266,6 +265,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             scorch: scorchForNext,
             root,
             objects: objectMagicForNext,
+            rent,
         });
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる

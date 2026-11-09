@@ -29,7 +29,7 @@ export interface GameLate {
     setUseShikigamiBless: (on: boolean) => void;
     setUseShikigamiCurse: (on: boolean) => void;
     setUseShikigamiPurge: (on: boolean) => void;
-    setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "unlockStone" | null>>;
+    setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null>>;
     setObjectTool: React.Dispatch<React.SetStateAction<"reinforce" | "demolish" | "weather" | "levelAll" | "expandAll" | "duplicate" | null>>;
     setCaptureChoice: React.Dispatch<React.SetStateAction<number | null>>;
     activeBudsCount: (player: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;

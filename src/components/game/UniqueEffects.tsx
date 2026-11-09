@@ -197,7 +197,7 @@ const OBJECT_FX: Record<ObjectKind, { color: string; flourish: string }> = {
     soloSign: { color: '#e6e0cf', flourish: '☝️' },
     oneWord: { color: '#8c93a6', flourish: '💬' },
     blindMonkey: { color: '#d9b99b', flourish: '🙈' },
-    unlockStone: { color: '#c9b458', flourish: '🗝️' },
+    boulder: { color: '#8a8a8a', flourish: '⛰️' },
 };
 
 export const renderUniqueEffect = (effect: SkillEffect, size: number): React.ReactNode => {

@@ -42,7 +42,9 @@ export type GearId =
     | 'buildMania'
     | 'snowball'
     | 'reaper'
-    | 'budSeed';
+    | 'budSeed'
+    | 'groundRent'
+    | 'sturdyBuild';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -110,6 +112,10 @@ export const GEAR_PARAMS = {
     reaperLife: 2,
     /** 芽吹き: この値以上のライフのコマを設置するとき、🌱を付けて置く */
     budSeedLife: 7,
+    /** 地代: 働いている自陣のオブジェクト1つにつきの手番開始時の魔力（上限なし） */
+    rentMagic: 1,
+    /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+    buildLife: 3,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -147,6 +153,8 @@ export const GEARS: GearDef[] = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
+    { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクトの数だけマジックを獲得` },
+    { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフが上昇` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
 ];
@@ -243,6 +251,11 @@ export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic
 /** 手番開始時の🌱の数の記録 */
 export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(burnableCount);
 
+/** 地代: 働いている自陣のオブジェクトの数 → 手番開始時の魔力 */
+export const rentGain = (activeObjects: number): number => activeObjects * P.rentMagic;
+/** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
+export const objectBuildLife = (gears: Gears): number => (hasGear(gears, 'sturdyBuild') ? P.buildLife : 0);
+
 /** 雪だるま: 席ごとの積み上げ(stack)と、10以上のライフが出た回数(hits)。最初は+0から */
 export type RampState = { stack: number; hits: number };
 export const rampStart = (): RampState => ({ stack: 0, hits: 0 });
@@ -325,7 +338,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     magician: ['spellWard', 'luckyPurse'], // 旧主案に戻す: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['lastStand', 'chainDiscount'], // 対強豪平均 42→46%（3シード各400: seed2 +5.5/seed8 +5.0/seed21 +3.7。氷室 21→36%）。旧: lastStand,afterglow
-    necromancer: ['vengeance', 'lastStand'],
+    necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
     poisoner: ['lastStand', 'spellWard'],
     electrician: ['lightToken', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
@@ -344,6 +357,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
  */
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
     yinYangMaster: [['lastStand', 'luckyPurse']], // 主案 lastStand,chainDiscount との差 -1.5pt（seed8 43.6 vs 45.1）で同程度
+    necromancer: [['reaper', 'snowball']], // 主案 reaper,lastStand 61.2 に対し 60.3（seed200/200, 対強豪）で同程度。対giant 30→41%、対poisoner 59→69%
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
 

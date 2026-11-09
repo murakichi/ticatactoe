@@ -1,7 +1,7 @@
 // Game.tsx から切り出したハンドラ群: ギアの実行時の状態（手番内のスキル使用・廃墟・土壇場の防壁・コスト補正）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { hasOwnObject } from './objects';
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -11,6 +11,7 @@ import { CostEnv, gearCostOf } from './cost';
 import { emptyDiscount } from './discount';
 import { GearId, hasGear, countAilmentKinds, CostContext } from './gear';
 import { GameLate } from './gameLate';
+import { NECROMANCY } from './turn';
 
 export interface GearRuntimeScope {
     seatCount: number;
@@ -19,9 +20,11 @@ export interface GearRuntimeScope {
     currentBoard: SquareInfo[];
     turnSeat: number;
     characters: CharacterId[];
+    /** 席ごとの蘇生コスト（墓地の死体の数 = 基本コスト − これ）。墓地の state は後で宣言されるので ref で受ける */
+    necroCostRef: React.MutableRefObject<number[]>;
 }
 export const useGearRuntime = (g: GearRuntimeScope, late: () => GameLate) => {
-    const { seatCount, gearsBySeat, symbols, currentBoard, turnSeat, characters } = g;
+    const { seatCount, gearsBySeat, symbols, currentBoard, turnSeat, characters, necroCostRef } = g;
 
     // 手番内のスキル使用状況（四連の極意・連鎖割引・余韻の入力）。AIが同じ描画のうちに続けて使うスキルにも
     // すぐ反映したいので state でなく ref に持つ。echoNext=次の手番に余韻が付く / echoReady=この手番の1つ目に余韻が効く
@@ -107,6 +110,7 @@ export const useGearRuntime = (g: GearRuntimeScope, late: () => GameLate) => {
         bigCast: gearTurn.current.bigCast[seat],
         oppBigPrev: gearTurn.current.oppBigPrev[seat],
         veil: gearTurn.current.veil[seat],
+        corpses: NECROMANCY.baseCost - (necroCostRef.current[seat] ?? NECROMANCY.baseCost),
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
         lockFreeUsed: gearTurn.current.lockFreeUsed[seat],

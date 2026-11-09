@@ -37,7 +37,7 @@ export interface HoverPreviewScope {
     sacrificeCandidates: () => number[];
     useSwidden: boolean;
     useShikigamiPlace: boolean;
-    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "unlockStone" | null;
+    objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null;
     objectTool: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null;
     objectSkillTargetsNow: (skill: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate") => number[];
     useShikigamiBlast: boolean;

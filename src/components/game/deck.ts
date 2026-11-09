@@ -155,7 +155,7 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てをロック' },
     { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除した分のライフを自分に加算' },
     { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面のロックの数だけ、打つスキルのコストを軽減' },
-    { idx: 136, name: '解錠の碑（仮称）', icon: '🗝️', category: 'object', costKey: 'onClickUnlockStone', desc: '空きマスを選んで解錠の碑を設置します。設置したとき周囲八マスのロックを全て解除し、働いている間は周囲八マスに新しくロックを掛けられません' },
+    { idx: 136, name: '大岩', icon: '⛰️', category: 'object', costKey: 'onClickBoulder', desc: '空きマスに大岩を設置。2ターンのロック付きで、効果は無い' },
 ];
 
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
@@ -235,6 +235,9 @@ export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {
     necromancer: [
         [0, 2, 3, 6, 8, 11, 52, 53, 57, 58, 92, 95],
         [0, 2, 6, 8, 11, 52, 58, 86, 87, 92, 95, 96],
+        // オブジェクト入り(聖域・大木)。主案と同等(seed60/100: 主案44.0に対し45.2/45.8)。AIはネクロマンサーに限り設置する(AIPlayer.planObject)。縮地の削除に合わせて50→52
+        [2, 3, 6, 8, 11, 111, 40, 52, 58, 89, 92, 95],
+        [2, 3, 6, 8, 11, 22, 105, 52, 58, 89, 92, 95],
     ],
 };
 

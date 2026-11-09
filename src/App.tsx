@@ -48,7 +48,7 @@ const CHARACTERS: CharacterDef[] = [
         icon: '☯️',
         passive: '陰と陽を切り替えて戦う。固有: 式神設置・式神爆破',
     },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強化。固有: 蘇生' },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強化。死体の数だけ他のスキルも安い。固有: 蘇生' },
     { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒スキルが安く、毒の付いた自陣のコマが強化。固有: ミアズマ' },
     {
         id: 'electrician',
