@@ -35,6 +35,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     ashOffering: 'trigger', // 敵に🔥を付与して割引開始
     frostRoot: 'trigger', // 休眠した🌱で魔力
     conduction: 'trigger', // 毒・火炎が移る
+    lockBloom: 'trigger', // ロックを掛けた低ライフの自陣のコマにバッズ
     buildMania: 'passive', // コスト表示に反映される
     budSeed: 'trigger', // 設置したコマにバッズが付く
     groundRent: 'trigger', // 手番開始の魔力

@@ -1,4 +1,3 @@
-import { SEAL_FIRST_CUT } from './keysmith';
 import { CostEnv, calculateCostOf, characterCostOf, gearCostOf, tokenBindOf } from './cost';
 import { skillCosts } from './skillCosts';
 import { emptyDiscount, afterSkill } from './discount';
@@ -9,7 +8,7 @@ const board = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: un
 const env = (character: CharacterId, over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: [character, 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, magic: 99, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 describe('柳の下に二匹目がいた', () => {
@@ -59,12 +58,11 @@ describe('鍵師のパッシブ: 手番の最初のロック系スキルは何�
         }
         expect(calculateCostOf(env('keysmith', { lockFreeUsed: false }), skillCosts.onClickBuds, false, false, 'onClickBuds')).toBeGreaterThan(0);
     });
-    it('封鎖の断だけは無料でなく、最初の1回が -SEAL_FIRST_CUT（完全無料だと環境が崩れる）', () => {
+    it('通常のコストが手持ちの魔力を超えるロック系は無料にならない（払える額のときだけ無料）', () => {
         const base = skillCosts.onClickSeal;
-        const first = calculateCostOf(env('keysmith', { lockFreeUsed: false }), base, false, false, 'onClickSeal');
-        const later = calculateCostOf(env('keysmith', { lockFreeUsed: true }), base, false, false, 'onClickSeal');
-        expect(first).toBe(Math.max(1, later - SEAL_FIRST_CUT));
-        expect(first).toBeGreaterThan(0);
+        const normal = calculateCostOf(env('keysmith', { lockFreeUsed: true }), base, false, false, 'onClickSeal');
+        expect(calculateCostOf(env('keysmith', { magic: normal }), base, false, false, 'onClickSeal')).toBe(0);
+        expect(calculateCostOf(env('keysmith', { magic: normal - 1 }), base, false, false, 'onClickSeal')).toBe(normal);
     });
     it('手番でない席（パネル表示用）には掛からない', () => {
         expect(lock('keysmith', { lockFreeUsed: false, turnSeat: 1 })).toBe(Math.max(1, skillCosts.onClickUseLock - 1));

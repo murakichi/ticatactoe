@@ -5,6 +5,7 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isObject, isShikigami } from '../../util';
 import { SkillCosts } from './skillCosts';
+import { GEAR_PARAMS } from './gear';
 import { geometryForCells } from './boardGeometry';
 import { tinderTargets, canFreeze, budStacks, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, frozenStacks, isDormant, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets } from './poison';
@@ -61,6 +62,24 @@ export const targetMethods = {
      * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
      * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
      */
+    bestBloomLockTarget(this: AIPlayer, board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let bestIdx: number | null = null;
+        let bestVal = -Infinity;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || isObject(sq) || isShikigami(sq) || isFrozen(sq) || sq.bind > GEAR_PARAMS.lockBloomMaxLife || this.shield.has(i)) continue;
+            if (sq.effects.some((e) => e.effect === '🔑' || e.effect === '🌱')) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player))) continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            if (val > bestVal) { bestVal = val; bestIdx = i; }
+        }
+        return bestIdx;
+    },
+
     bestOwnLockTarget(this: AIPlayer, board: SquareInfo[]): number | null {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = geometryForCells(board.length);

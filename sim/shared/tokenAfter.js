@@ -2,6 +2,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.afterTokenPlaced = exports.seedBud = exports.propagate = exports.propagateCandidates = exports.applyLockAt = void 0;
+// トークン系スキルで駒を置いた後の、ギアの盤面への効果（道連れの鍵のロック・伝播）。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
+const Player_1 = require("./Player");
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
 const gear_1 = require("./gear");
@@ -18,7 +20,12 @@ const applyLockAt = (board, idx, gears, turnSeat) => {
     if (!(0, thermal_1.lockable)(sq))
         return false;
     const owner = (0, gear_1.hasGear)(gears, 'emptyLock') && !sq.player ? turnSeat + 1 : undefined;
-    board[idx] = (0, lock_1.addLock)(sq, (0, gear_1.gearLockStack)(gears), owner); // ライフは変えず、ロックのスタックを足す (#438)
+    let locked = (0, lock_1.addLock)(sq, (0, gear_1.gearLockStack)(gears), owner); // ライフは変えず、ロックのスタックを足す (#438)
+    // 芽吹きの錠: ライフが低くバッズの無い自陣のコマにロックを掛けると、そのコマにバッズ+1
+    if ((0, gear_1.hasGear)(gears, 'lockBloom') && sq.player === Player_1.PLAYER_SYMBOLS[turnSeat] && sq.bind <= gear_1.GEAR_PARAMS.lockBloomMaxLife && !sq.effects.some((e) => e.effect === '🌱')) {
+        locked = { ...locked, effects: [...locked.effects, { effect: '🌱' }] };
+    }
+    board[idx] = locked;
     return true;
 };
 exports.applyLockAt = applyLockAt;

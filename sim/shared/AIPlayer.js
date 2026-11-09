@@ -31,7 +31,7 @@ class AIPlayer {
     comboReachable(availableSkills) {
         return this.inDeck(71, availableSkills) && this.inDeck(73, availableSkills);
     }
-    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasGroundRent = false) {
+    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasLockBloom = false, hasGroundRent = false) {
         this.necroActive = false;
         /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
         this.shield = new Set();
@@ -86,6 +86,8 @@ class AIPlayer {
         /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（旧sim AI の毒使い×毒花と同じ） */
         this.hasToxicBloom = false;
         this.hasEmptyLock = false;
+        /** 芽吹きの錠を装備しているか（ロックを掛けたライフ2以下の自陣のコマにバッズが付く） */
+        this.hasLockBloom = false;
         /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
         this.hasGroundRent = false;
         /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
@@ -99,6 +101,7 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+        this.hasLockBloom = hasLockBloom;
         this.deck = deck;
         this.hasGroundRent = hasGroundRent;
     }

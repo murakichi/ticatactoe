@@ -74,6 +74,8 @@ class AIPlayer {
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（旧sim AI の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
+    /** 芽吹きの錠を装備しているか（ロックを掛けたライフ2以下の自陣のコマにバッズが付く） */
+    hasLockBloom: boolean = false;
     /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
     hasGroundRent: boolean = false;
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
@@ -98,6 +100,7 @@ class AIPlayer {
         hasToxicBloom: boolean = false,
         hasEmptyLock: boolean = false,
         deck?: number[],
+        hasLockBloom: boolean = false,
         hasGroundRent: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
@@ -107,6 +110,7 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+        this.hasLockBloom = hasLockBloom;
         this.deck = deck;
         this.hasGroundRent = hasGroundRent;
     }

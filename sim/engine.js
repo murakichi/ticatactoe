@@ -536,6 +536,7 @@ function costEnv(s, seat) {
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
         lockFreeUsed: s.lockFreeUsed[seat],
+        magic: s.magic[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],

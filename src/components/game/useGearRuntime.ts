@@ -114,6 +114,7 @@ export const useGearRuntime = (g: GearRuntimeScope, late: () => GameLate) => {
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
         lockFreeUsed: gearTurn.current.lockFreeUsed[seat],
+        magic: late().magic[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
