@@ -1,11 +1,12 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: e2c8264
+- 最後に検証したmaster: be4fe88
 - 現在の推奨設定: gears=[lightToken,harvest](別案 [lightToken,afterglow]) deck=[21,22,23,24,26,28,52,53,58,60,92,94] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
 - 連続不採用回数: 0(2026-10-28 に返し特売の採用で戻した)
 - 2026-10-27(play-learn A1): 対策ロックを撃たない(elecNoAnti)で環境 50.3→57.8%、rank seed12/100 で3位 59.8%(1位 poisoner 68.0)。状態は blocked を維持（1位との差 約8pt）
+- 基準線(2026-11-09 master be4fe88, 主指標=対強豪平均): seed1/60 --write-strong は 1位 55.7%(2位 necromancer 54.7%・3位 giant 53.3%)、seed3/200 --target(条件1)は **2位 58.8%** / 1位 necromancer 64.1%(差5.3pt)・3位 giant 58.1%。最悪対面は対necromancer 36.5%。強豪(seed1/60)=necromancer,electrician,magician,keysmith,giant,cryomancer。状態は running 継続(条件2は未測定)。
 - 状態: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
 - 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
@@ -19,6 +20,12 @@
 - 最新master cc22236(seed6/300, --target): 基本 1位 64.1 vs magician 62.8 / envDeck varied 2位 60.2 vs magician 60.4(-0.2、実質同率。seed4:-1.6 seed5:-2.0 seed6:-0.2)
 - envDeck varied seed7/600: 2位 60.6 vs magician 61.5(-0.9)。4条件中3条件は1位、残り1条件が約1pt差 → issue #109 を起票して blocked。
 - 現行(デッキX+主案ギア, seed8/400, --target): 基本 2位 64.2 vs magician 66.1(-1.9) / envDeck varied 2位 62.2 vs 63.6(-1.4) / oppGears none 1位 74.6 vs 67.0 / random 1位 72.1 vs 64.1。seedごとにmagicianの値が±2〜3ptぶれ、基本・envDeck variedは平均すると互角〜-1.5pt。
+## 診断(2026-11-09) 対ネクロマンサー(36.5%)
+- アブレーション(--opp necromancer, seed9/100): 基準42% / 降霊無効 93% / 降霊の吸収(absorbDefeated)だけ無効 63% / slash・perfectGame・sacrifice 無効 42% / smallFry 無効 37%。降霊が原因で、吸収が約21pt・召喚が約30pt。
+- 機構: absorbDefeated はライフ0の敵コマを無条件で吸収する(isShielded を見ない)ので、⚡コマも吸収される。
+- 試行(deck): 夜の帳(98)を推奨デッキの1枠に入れる8通り(seed11/200, 対necro)= 32〜37% / 基準35% → 全て誤差内、不採用。AIが夜の帳を撃つ根拠も確認できていない。
+- 範囲外: 吸収が⚡コマを避けるルール変更は issue #513 に起票(ルール側)。
+
 ## 診断(2026-11-05) 対氷室(cryomancer)に勝てない理由
 - 実測: 氷室の絶対零度(固有・全コマ氷結, コスト10)を無効にすると、雷霆の対氷室勝率が 41.0% → 65.0%(seed9/200, `NOGLACIER` で engine.SKILLS.glacier を空にした差。無効化では氷室の魔力が減らないので、実際の差はこれ以上)。差の約24ptが絶対零度。
 - 機構: `isShielded` は氷結中(休眠)のコマの⚡無敵を働かせない。絶対零度は⚡のコマにも❄を付けるので、盤面の⚡の無敵を一斉に止める(コマ自体は壊れず、四目の数にも入る)。
