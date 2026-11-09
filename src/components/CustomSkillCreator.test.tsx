@@ -60,13 +60,36 @@ describe('オリジナルスキル作成画面', () => {
 describe('セットアップ画面のオリジナルスキル', () => {
     beforeEach(() => window.localStorage.clear());
 
-    it('作って保存すると、デッキ編集に「オリジナル」として出る', () => {
+    it('トップ画面には作成欄がなく、デッキ編集の最下部のボタンからサブウィンドウで編集する', () => {
         render(<App />);
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(screen.queryByLabelText('オリジナルスキルの名前')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'プレイヤー1のオリジナルスキルを作成' }));
+        expect(screen.getByRole('dialog', { name: 'オリジナルスキルの編集' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('Esc と背景のクリックでも閉じる', () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: 'プレイヤー1のオリジナルスキルを作成' }));
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'プレイヤー1のオリジナルスキルを作成' }));
+        fireEvent.click((screen.getByRole('dialog').parentElement as HTMLElement));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('作って保存すると、デッキ編集に「オリジナル」として出て、ボタンが「編集」に変わる', () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: 'プレイヤー1のオリジナルスキルを作成' }));
         const input = screen.getByLabelText('オリジナルスキルの名前');
         fireEvent.change(input, { target: { value: '落雷' } });
         const save = (input.parentElement as HTMLElement).querySelector('button') as HTMLElement; // 名前欄の隣の「保存」
         fireEvent.click(save);
-        expect(screen.getAllByRole('button', { name: /落雷/ }).length).toBeGreaterThan(0);
         expect(window.localStorage.getItem('ticatactoe.customSkill')).toContain('落雷');
+        fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+        expect(screen.getAllByRole('button', { name: /落雷/ }).length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'プレイヤー1のオリジナルスキルを編集' })).toBeInTheDocument();
     });
 });
