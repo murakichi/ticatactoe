@@ -3415,6 +3415,37 @@ class AIPlayer {
                 chargeClicks.push({ skill: 'onClickLockRaid' });
                 magic -= raidCost;
             }
+            // オブジェクトを置く（普請道楽などで安くなったとき）。自陣に同じ種類が無く、コストが上限以下で、魔力に余裕があれば中央寄りに置く。
+            // 大木(手番開始のマジック+3)だけは高めでも置く。各種類は1つまで。候補の順が優先度
+            const objectPlans = [
+                { idx: 105, kind: 'bigTree', key: 'onClickBigTree', cap: 6 },
+                { idx: 128, kind: 'oneWord', key: 'onClickOneWord', cap: 3 },
+                { idx: 110, kind: 'market', key: 'onClickMarket', cap: 3 },
+                { idx: 123, kind: 'luckyCat', key: 'onClickLuckyCat', cap: 3 },
+                { idx: 129, kind: 'blindMonkey', key: 'onClickBlindMonkey', cap: 3 },
+            ];
+            for (const plan of objectPlans) {
+                const pc = this.calculateAICost(costs[plan.key], false, false, plan.key);
+                if (necroFoe || !availableSkills.includes(plan.idx) || this.skillKinds.has(plan.key) || chargeClicks.some((c) => c.skill === plan.key))
+                    continue;
+                if (pc > plan.cap || magic < pc || board.some((sq) => sq.object === plan.kind && sq.player === this.playerSymbol))
+                    continue;
+                if (worth && magic >= infernoNow() && magic - pc < infernoNow())
+                    continue;
+                const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+                let cell = null;
+                let bestN = -1;
+                board.forEach((sq, k) => { if ((0, objects_1.objectLandable)(sq) && geo.surroundRange(k).length > bestN) {
+                    bestN = geo.surroundRange(k).length;
+                    cell = k;
+                } });
+                if (cell === null)
+                    continue;
+                chargeClicks.push({ skill: plan.key, target: cell });
+                board = board.slice();
+                board[cell] = { player: this.playerSymbol, bind: objects_1.OBJECT_DEFS[plan.kind].life, effects: [], object: plan.kind };
+                magic -= pc;
+            }
             // 解錠の碑(134。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないときに置く
             const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
             if (!necroFoe && availableSkills.includes(136) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
