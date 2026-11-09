@@ -4,9 +4,9 @@
 - 現在の推奨設定: gears=[lastStand, priceWreck] deck=[3,9,11,16,45,46,64,92,93,94,95,96](新スキル4種+一寸の虫に魂なし, 試行#26〜#27) AIフラグ=lsAggro=1・lockNew=1・witchDig=2・digMargin=3・freeTok=1・smallFryMin=2(既定)
 - 強豪リスト(2026-11-09 固定): necromancer,electrician,magician,keysmith,giant,cryomancer
 - 基準線(対強豪平均基準, master 2f1b091, seed1/60): **対強豪平均 39.7% / 7位** / 1位 electrician 55.7% / (参考)field 49.2%・最悪対面 electrician 27%・不利4/有利2。対強豪の内訳: giant 62 / necromancer 50 / magician 37 / keysmith 33 / cryomancer 30 / electrician 27。以下の古い数値(66.7%・2位など)は field 基準で、今の基準線と比べない。
-- 連続不採用回数: 5(#33 gear, #34 deck, #35 meta, #36 strategy, #37 joint。基準変更で数え直し。2026-11-09)
-- 関連 issue: #85(魔力律速・数値案), #256(新推奨デッキの環境順位未測定)。調べた日 2026-11-09
-- 状態: running(7位。1位まで16pt)
+- 連続不採用回数: 6(#38 synergy。#33 gear, #34 deck, #35 meta, #36 strategy, #37 joint。基準変更で数え直し。2026-11-09)
+- 関連 issue: **#522(本件の数値案)**, #85(クローズ済み・魔力律速), #256(新推奨デッキの環境順位未測定)。調べた日 2026-11-09
+- 状態: blocked(issue #522。魔力の数値案)
 ## master 80d796c で再基準(seed3, 100試合, --cache)
 - 基本条件の順位表: 1位 magician 70.0% / **2位 tactician 61.2%** / 3位 giant 57.7%。魔法使いの推奨デッキ更新(別セッション, +5.8pt)で軍師は2位に陥落。
 - 軍師の対キャラ別: magician 40% / giant 49% / 他は58〜75%。
@@ -25,6 +25,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 38 | synergy(デッキ2枚同時, 16近傍, 対強豪6体, seed1/60) | 基準39.7±4.9。最良 -11,-93 +85,+22 が 47.2(+7.5, z≈1.1)、次点 -11,-95 +13,+85 が 46.9。閾値(n≤40: 3.0)に遠く、追試に進まない。下位は氷結系抜きで 23〜29 に大崩れ | 誤差(勝者の呪いが#34で実証済み) | 不採用 |
 | 37 | joint(ギア組の再測定, 対強豪6体) | seed4/150: 基準 lastStand+priceWreck 33.4±3.0 / lightToken+priceWreck 37.0±3.1(+3.6) / chainDiscount+priceWreck 27.3 / lastStand+harvest 20.7。最良 lightToken+priceWreck を追試: seed2/200 42.0(基準40.0, +2.0)、seed3/400 39.0(基準40.3, -1.3) | 追試で+2.0→-1.3 と符号が変わり誤差。lightToken(軽量トークン化)は軍師に効かない。harvest/chainDiscount は大幅悪化 | 不採用 |
 | 36 | strategy(一寸の虫の撃つ条件) | #35 の `smallFryMin` はフラグでなく `aiSkillChoice.ts` の直書き `>= 2`（フラグは存在しない）。軍師だけ `>= 1` に緩めて対強豪6体 seed2/200: 基準 40.0±2.7 → 40.0±2.7(±0.0, 対キャラ別も同じ) | 敵の低ライフ(≤3)コマがちょうど1個の場面は撃つ価値が低く起きないため変化なし。電気使いの帯電コマは壊せる対象にならない。コードは元に戻した | 不採用 |
 | 35 | meta(対電気使い 26%, 強豪の最悪対面) | 推奨設定の probe-usage(--deck/--gears を明示。`probe-usage` を引数なしで回すと別構成で勝率7%になり、診断にならない)で、一寸の虫(smallFry)は使った試合の勝率67%だが15%の試合でしか撃たれない。撃つ条件 `smallFryMin` 2→1 で対電気・魔法使い・鍵師・氷室(seed2/200) | 2も1も 35.2% で全相手とも完全一致=フラグが sim の本番AIに効いていない(または条件に入らない)。効果は測れていない | 不採用(測定不能。smallFryMin を sim で効かせる経路が要調査) |
