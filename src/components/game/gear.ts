@@ -376,14 +376,27 @@ export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };
 
-/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+/**
+ * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。
+ * 春雷（自陣のリーチを塞ぐ氷結を1つ解く）は氷室の番人の氷結の壁に効く:
+ * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
+ */
+export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<CharacterId, GearId[]>>>> = {
+    tactician: { cryomancer: ['springThunder', 'priceWreck'] },
+    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+};
+
+/** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
+export const counterGearsFor = (character: CharacterId, opponents: CharacterId[]): GearId[] | undefined => {
+    const kinds = Array.from(new Set(opponents));
+    if (kinds.length !== 1) return undefined;
+    const counter = character === 'you' ? COUNTER_GEARS_FOR_YOU[kinds[0]] : COUNTER_GEARS[character]?.[kinds[0]];
+    return counter ? counter.slice(0, gearSlotsFor(character)) : undefined;
+};
+
+/** character の推奨ギア。相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
 export const recommendedGearsAgainst = (character: CharacterId, opponents: CharacterId[]): GearId[] => {
-    if (character === 'you') {
-        const kinds = Array.from(new Set(opponents));
-        const counter = kinds.length === 1 ? COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
-        if (counter) return counter.slice(0, gearSlotsFor(character));
-    }
-    return recommendedGears(character);
+    return counterGearsFor(character, opponents) ?? recommendedGears(character);
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */

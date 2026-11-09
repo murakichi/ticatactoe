@@ -13,6 +13,7 @@ import {
     randomGears,
     recommendedGears,
     recommendedGearsAgainst,
+    counterGearsFor,
     COUNTER_GEARS_FOR_YOU,
     RECOMMENDED_GEARS,
     ALT_RECOMMENDED_GEARS,
@@ -366,5 +367,17 @@ describe('死神の鎌（ライフ0の駒を壊す）', () => {
         expect(lifeZeroVictims(board, chars, [[], ['reaper']])).toEqual([0, 1]);
         expect(lifeZeroVictims(board, chars, [[], []])).toEqual([]);
         expect(gearLifeBonus(['reaper'])).toBe(2);
+    });
+});
+
+describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
+    it('軍師・毒使いは、相手が氷室の番人1種類のときだけ春雷。他の相手・複数種類・専用が無いキャラは通常の推奨', () => {
+        expect(counterGearsFor('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(counterGearsFor('poisoner', ['cryomancer', 'cryomancer'])).toEqual(['springThunder', 'spellWard']);
+        expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('tactician', ['cryomancer', 'magician'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['cryomancer'])).toBeUndefined();
+        expect(recommendedGearsAgainst('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(recommendedGearsAgainst('tactician', ['magician'])).toEqual(recommendedGears('tactician'));
     });
 });

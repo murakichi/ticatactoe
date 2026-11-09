@@ -5,7 +5,7 @@ import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { range } from './util';
-import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst } from './components/game/gear';
+import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst, counterGearsFor } from './components/game/gear';
 import {
     DECK_SIZE,
     CUSTOM_SKILL_IDX,
@@ -133,7 +133,7 @@ export const App = () => {
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p, seat, all) => {
             const others = all.filter((_, i) => i !== seat).map((q) => q.character);
-            const aiGears = () => (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
+            const aiGears = () => counterGearsFor(p.character, others) ?? (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: aiGears() } : p;
             // オリジナルスキルは人間席だけ。AI席のデッキに入っていたら推奨デッキに戻す
             const hasCustom = !!p.deck?.includes(CUSTOM_SKILL_IDX);

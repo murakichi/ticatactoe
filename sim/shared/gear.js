@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.counterGearsFor = exports.COUNTER_GEARS = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
@@ -315,15 +315,29 @@ exports.COUNTER_GEARS_FOR_YOU = {
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };
-/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+/**
+ * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。
+ * 春雷（自陣のリーチを塞ぐ氷結を1つ解く）は氷室の番人の氷結の壁に効く:
+ * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
+ */
+exports.COUNTER_GEARS = {
+    tactician: { cryomancer: ['springThunder', 'priceWreck'] },
+    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+};
+/** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
+const counterGearsFor = (character, opponents) => {
+    var _a;
+    const kinds = Array.from(new Set(opponents));
+    if (kinds.length !== 1)
+        return undefined;
+    const counter = character === 'you' ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : (_a = exports.COUNTER_GEARS[character]) === null || _a === void 0 ? void 0 : _a[kinds[0]];
+    return counter ? counter.slice(0, (0, exports.gearSlotsFor)(character)) : undefined;
+};
+exports.counterGearsFor = counterGearsFor;
+/** character の推奨ギア。相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
 const recommendedGearsAgainst = (character, opponents) => {
-    if (character === 'you') {
-        const kinds = Array.from(new Set(opponents));
-        const counter = kinds.length === 1 ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
-        if (counter)
-            return counter.slice(0, (0, exports.gearSlotsFor)(character));
-    }
-    return (0, exports.recommendedGears)(character);
+    var _a;
+    return (_a = (0, exports.counterGearsFor)(character, opponents)) !== null && _a !== void 0 ? _a : (0, exports.recommendedGears)(character);
 };
 exports.recommendedGearsAgainst = recommendedGearsAgainst;
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
