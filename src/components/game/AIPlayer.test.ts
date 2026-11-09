@@ -1099,7 +1099,7 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
     describe('ロックの計画に手札の他の札を足す（extendPlan）', () => {
         const withHand = (character: 'keysmith' | 'you') => {
             const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
-            return ai.makeMove(board(), 12, skillCosts, 2, 5, [11, 2, 0], false);
+            return ai.makeMove(board(), 8, skillCosts, 2, 5, [11, 2, 0], false); // 封鎖の断(9〜10)は払えない魔力
         };
         it('鍵師は、ロックを撃つ手番でも余った魔力で手札の札（バッズ）を足す', () => {
             const r = withHand('keysmith');
@@ -1121,20 +1121,24 @@ describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', ()
         return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
     };
     it('鍵師は、砦(108)が手札にあり魔力が足りれば立てる', () => {
-        const r = run('keysmith', 12, [108, 2, 0]);
+        const r = run('keysmith', 8, [108, 2, 0]);
         expect(r.chargeClicks?.some((c) => c.skill === 'onClickFort')).toBe(true);
     });
     it('市場(110)でも立てる。魔力が足りなければ立てない', () => {
-        expect(run('keysmith', 12, [110, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickMarket')).toBe(true);
+        expect(run('keysmith', 8, [110, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickMarket')).toBe(true);
         expect(run('keysmith', 1, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
     });
     it('自陣にオブジェクトが既にあれば、2つ目は立てない', () => {
         const b = board();
         b[15] = { player: '💙', bind: 3, effects: [], object: 'fort' };
-        expect(run('keysmith', 12, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+        expect(run('keysmith', 8, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+    it('魔力が封鎖の断(9〜10)に届くなら、安いロックではなく封鎖の断を優先する（無料の1回を封鎖の断に使う）', () => {
+        const r = run('keysmith', 14, [11, 2, 0]);
+        expect(r.skills).toEqual(['onClickSeal']);
     });
     it('鍵師以外は立てない', () => {
-        expect(run('you', 12, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+        expect(run('you', 8, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
     });
 });
 
