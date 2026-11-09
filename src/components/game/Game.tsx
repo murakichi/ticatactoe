@@ -54,6 +54,11 @@ import {
     gearLockStack,
     gearTokenBindDelta,
     adjustCostByGear,
+    RampState,
+    rampStart,
+    rampBump,
+    rampBonus,
+    rampAfterRoll,
     countVarietySquares,
     burnedBudCount,
     scorchGain,
@@ -774,8 +779,17 @@ export const Game = (props: GameProps) => {
     const currentYinYangMode = yinYangMode[turnSeat];
     const yinYangModeName = (seat: number) => (yinYangMode[seat] === 'yang' ? '陽' : '陰');
 
+    // 雪だるま: 席ごとのライフ期待値の積み上げ。先手の最初の手番は1段積み上がった状態から始まる。
+    // turn/counted は同じ手番の効果が二重に走っても積み上げ・回数を二重に数えないための印
+    const initialRamp = (): RampState[] => gearsBySeat.map((g, seat) => (seat === 0 && hasGear(g, 'snowball') ? rampBump(rampStart()) : rampStart()));
+    const rampRef = useRef({ states: initialRamp(), turn: 0, counted: false });
     const [life, setLife] = useState<number>(
-        calculateLife(characters[0], yinYangMode[0], gearLifeBonus(gearsBySeat[0]), gearLifeStd(gearsBySeat[0], LIFE_STD))
+        calculateLife(
+            characters[0],
+            yinYangMode[0],
+            gearLifeBonus(gearsBySeat[0]) + (hasGear(gearsBySeat[0], 'snowball') ? rampBonus(rampRef.current.states[0]) : 0),
+            gearLifeStd(gearsBySeat[0], LIFE_STD)
+        )
     );
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
@@ -987,15 +1001,29 @@ export const Game = (props: GameProps) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextGears = gearsBySeat[nextSeat];
+        // 雪だるま: 手番ごとに期待値が1段積み上がり、10以上のライフが3回出たらリセット
+        const rampOn = hasGear(nextGears, 'snowball');
+        const ramp = rampRef.current;
+        if (rampOn && ramp.turn !== currentTurn) {
+            ramp.states[nextSeat] = rampBump(ramp.states[nextSeat]);
+            ramp.turn = currentTurn;
+            ramp.counted = false;
+        }
         const nextLife = calculateLife(
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
+                (rampOn ? rampBonus(ramp.states[nextSeat]) : 0) +
                 objectLifeForNext + // 生命の泉
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );
+        if (rampOn && !ramp.counted) {
+            ramp.states[nextSeat] = rampAfterRoll(ramp.states[nextSeat], nextLife);
+            ramp.counted = true;
+            if (ramp.states[nextSeat].stack === 0) gearTrigger('snowball', '積み上げがリセット');
+        }
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
         setSkillBanAt(turnSeat, null);
@@ -3838,6 +3866,7 @@ export const Game = (props: GameProps) => {
             lastMove: null,
         };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
+        rampRef.current = { states: initialRamp(), turn: 0, counted: false };
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };

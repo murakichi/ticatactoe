@@ -554,6 +554,33 @@ test('術中の加護: 帯電の発火も、🔥を付けた瞬間のダメー�
     }
 });
 
+test('雪だるま: 手番ごとに自分のライフ期待値が+1ずつ積み上がり、10以上が3回出たらリセット', () => {
+    const s = game([['snowball'], []]);
+    assert.deepStrictEqual(s.ramp[0], { stack: 1, hits: 0 }, '先手の最初の手番は1段積み上がった状態から');
+    e.placeMove(s, 0); // → ⭕
+    e.placeMove(s, 1); // → 💙(2回目の手番)
+    assert.ok(s.ramp[0].stack === 2 || s.ramp[0].stack === 0, '2段積み上がる(または10以上3回でリセット)');
+    assert.deepStrictEqual(s.ramp[1], { stack: 0, hits: 0 }, '装備していない席は積み上がらない');
+    // 手で10以上を3回出した扱いにするとリセット
+    const t = gear.rampAfterRoll(gear.rampAfterRoll(gear.rampAfterRoll(gear.rampBump(gear.rampStart()), 10), 12), 15);
+    assert.deepStrictEqual(t, { stack: 0, hits: 0 });
+});
+
+test('雪だるま: 長い試合では平均ライフが装備なしより高い(乱数固定)', () => {
+    const avg = (gears) => {
+        let sum = 0, n = 0;
+        for (let seed = 1; seed <= 20; seed++) {
+            const s = game(gears, ['you', 'you'], seed);
+            for (let k = 0; k < 8; k++) { // 💙の手番を4回ぶん
+                if (k % 2 === 0) { sum += s.life; n++; }
+                e.placeMove(s, s.board.findIndex((sq) => !sq.player));
+            }
+        }
+        return sum / n;
+    };
+    assert.ok(avg([['snowball'], []]) > avg([[], []]) + 0.5);
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

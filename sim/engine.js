@@ -397,6 +397,8 @@ function newGame(opts = {}) {
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
+        // 雪だるま: 席ごとのライフ期待値の積み上げとリセットまでの回数
+        ramp: gears.map(() => gear.rampStart()),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(rng)) : null)),
         useChargeArea: false,
@@ -456,7 +458,9 @@ function newGame(opts = {}) {
         log: [],
     };
     defineLegacyAliases(state);
-    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], LIFE_STD)));
+    // 雪だるま: 先手の最初の手番も1段積み上がった状態から始まる（引いたライフは数えない）
+    if (hasGear(gears[0], 'snowball')) state.ramp[0] = gear.rampBump(state.ramp[0]);
+    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]) + (hasGear(gears[0], 'snowball') ? gear.rampBonus(state.ramp[0]) : 0), gear.gearLifeStd(gears[0], LIFE_STD)));
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     armWard(state);
     return state;
@@ -746,7 +750,14 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    // 雪だるま: 手番ごとに期待値が1段積み上がり、10以上のライフが3回出たらリセット
+    const rampOn = hasGear(s.gears[next], 'snowball');
+    if (rampOn) s.ramp[next] = gear.rampBump(s.ramp[next]);
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    if (rampOn) {
+        s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
+        if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
+    }
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;

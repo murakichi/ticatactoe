@@ -38,7 +38,8 @@ export type GearId =
     | 'frostRoot'
     | 'conduction'
     | 'spellWard'
-    | 'buildMania';
+    | 'buildMania'
+    | 'snowball';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -97,6 +98,10 @@ export const GEAR_PARAMS = {
     buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
+    /** 雪だるま: 自分の手番ごとに足されるライフ期待値 / リセットの目安にするライフの値 / その回数 */
+    rampStep: 1,
+    rampHighLife: 10,
+    rampResetHits: 3,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -130,6 +135,7 @@ export const GEARS: GearDef[] = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
+    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が+${P.rampStep}ずつ積み上がる。${P.rampHighLife}以上のライフが${P.rampResetHits}回出たら、積み上げがリセットされる` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
@@ -224,6 +230,19 @@ export const frozenBudCount = (squares: readonly SquareLike[]): number => square
 export const rootGain = (frozenBuds: number): number => frozenBuds * P.rootMagic;
 /** 手番開始時の🌱の数の記録 */
 export const budCounts = (squares: readonly SquareLike[]): number[] => squares.map(burnableCount);
+
+/** 雪だるま: 席ごとの積み上げ(stack)と、10以上のライフが出た回数(hits) */
+export type RampState = { stack: number; hits: number };
+export const rampStart = (): RampState => ({ stack: 0, hits: 0 });
+/** 手番開始: 期待値の積み上げを1段上げる */
+export const rampBump = (s: RampState): RampState => ({ ...s, stack: s.stack + 1 });
+/** いまの積み上げぶんのライフ期待値の加算 */
+export const rampBonus = (s: RampState): number => s.stack * P.rampStep;
+/** 引いたライフを数える。10以上が規定回数に達したら積み上げと回数をリセット */
+export const rampAfterRoll = (s: RampState, life: number): RampState => {
+    const hits = s.hits + (life >= P.rampHighLife ? 1 : 0);
+    return hits >= P.rampResetHits ? rampStart() : { stack: s.stack, hits };
+};
 
 /**
  * キャラ補正を済ませたコストに、ギアのコスト補正を掛ける。

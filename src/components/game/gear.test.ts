@@ -30,6 +30,10 @@ import {
     frozenBudCount,
     rootGain,
     budCounts,
+    rampStart,
+    rampBump,
+    rampBonus,
+    rampAfterRoll,
 } from './gear';
 import { skillCosts } from './skillCosts';
 
@@ -178,6 +182,30 @@ describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根�
         expect(rootGain(6)).toBe(6);
         expect(rootGain(2)).toBe(2);
         expect(budCounts(board)).toEqual([1, 2, 1, 3]);
+    });
+});
+
+describe('雪だるま（ライフ期待値の積み上げ）', () => {
+    it('手番ごとに+1ずつ積み上がる', () => {
+        let r = rampStart();
+        expect(rampBonus(r)).toBe(0);
+        r = rampBump(r);
+        r = rampBump(r);
+        r = rampBump(r);
+        expect(rampBonus(r)).toBe(3);
+    });
+
+    it('10以上のライフが3回出たら、積み上げと回数がリセットされる(9以下は数えない)', () => {
+        let r = rampBump(rampBump(rampStart()));
+        r = rampAfterRoll(r, 9);
+        expect(r).toEqual({ stack: 2, hits: 0 });
+        r = rampAfterRoll(r, 10);
+        r = rampAfterRoll(r, 14);
+        expect(r).toEqual({ stack: 2, hits: 2 });
+        r = rampAfterRoll(r, 10);
+        expect(r).toEqual({ stack: 0, hits: 0 });
+        // リセット後はまた最初から積み上がる
+        expect(rampBonus(rampBump(r))).toBe(1);
     });
 });
 
