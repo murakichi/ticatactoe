@@ -1143,7 +1143,7 @@ exports.planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
-        var _a;
+        var _a, _b, _c, _d, _e;
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
@@ -1154,8 +1154,26 @@ exports.planMoveMethods = {
         const args = argsIn[0].some((sq) => (0, ObjectKind_1.isBuilding)(sq))
             ? [argsIn[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
-        const result = this.planMove(...args);
+        let result = this.planMove(...args);
         const magic = args[1];
+        let saving = false;
+        // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
+        if (aiConstants_1.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
+            && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
+            const released = (0, keysmith_1.sealReleaseCells)(args[0], this.playerSymbol).length;
+            const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(args[2].onClickSeal, released), false, false, 'onClickSeal');
+            if (magic < sealCost) {
+                const isLock = (sk) => sk === 'onClickUseLock';
+                const kept = { ...result, skills: result.skills.filter(isLock), chargeClicks: (_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.filter((c) => isLock(c.skill)) };
+                if (kept.skills.length === 0 && ((_d = (_c = kept.chargeClicks) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0) === 0 && !kept.lockTargets) {
+                    const move = (_e = result.move) !== null && _e !== void 0 ? _e : this.getBestMove(args[0], args[4]);
+                    result = { move, skills: [] };
+                }
+                else
+                    result = kept;
+                saving = true; // 貯める間は、残りの魔力で手札のスキルを足す処理（extendPlan）も止める
+            }
+        }
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
         // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
@@ -1165,7 +1183,7 @@ exports.planMoveMethods = {
             // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
             if (this.sealWanted(args))
                 return { move: null, skills: ['onClickSeal'] };
-            return this.extendPlan(result, args);
+            return saving ? result : this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_1.MAGICIAN_REROLL_MAGIC : aiConstants_1.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
             return result;
