@@ -328,7 +328,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     keysmith: ['lastStand', 'buildMania'], // 普請道楽: 砦/市場を1つ立てると全スキル-3（魔力が律速の鍵師の資源になる）。対強豪平均 seed9/11/13・各200: 26.3/25.6/27.1→29.7/30.8/29.8（docs/tune/keysmith.md 試行14）
-    witch: ['buildMania', 'bindingLock'], // 普請道楽+砦/市場を立てるAI(tune-top 試行40: 対強豪平均 seed2/100 41.5→47.0, seed3/200 41.4→47.3%。ギアだけ・札だけでは悪化するセット)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
+    witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(tune-top 試行43: 対強豪平均 seed2/100 47.0→58.0、環境順位 seed3/200 9位39.3→3位53.1%)。旧: buildMania+bindingLock(47.3%)。以下は旧: 普請道楽+砦/市場を立てるAI(tune-top 試行40: 対強豪平均 seed2/100 41.5→47.0, seed3/200 41.4→47.3%。ギアだけ・札だけでは悪化するセット)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
