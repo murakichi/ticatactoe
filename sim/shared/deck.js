@@ -1,10 +1,15 @@
 // 自動生成: src/components/game/deck.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSavedDeck = exports.saveDeck = exports.loadSavedDecks = exports.MAX_SAVED_DECKS = exports.SAVED_DECKS_KEY = exports.describeSkill = exports.baseCostOf = exports.CATEGORY_ORDER = exports.variedAIDeck = exports.CORE_CARDS = exports.AI_DECK_SWAPS = exports.randomDeck = exports.resolveDeck = exports.isValidDeck = exports.pickRecommendedDeck = exports.ALT_RECOMMENDED_DECKS = exports.recommendedDeckAgainst = exports.COUNTER_DECKS_FOR_YOU = exports.recommendedDeck = exports.RECOMMENDED_DECKS = exports.skillOf = exports.AVAILABLE_SKILL_IDX = exports.CATALOG_SIZE = exports.SKILL_IDX_END = exports.REMOVED_SKILL_IDX = exports.SKILL_CATALOG = exports.DECK_SIZE = void 0;
+exports.deleteSavedDeck = exports.saveDeck = exports.loadSavedDecks = exports.MAX_SAVED_DECKS = exports.SAVED_DECKS_KEY = exports.describeSkill = exports.baseCostOf = exports.CATEGORY_ORDER = exports.variedAIDeck = exports.CORE_CARDS = exports.AI_DECK_SWAPS = exports.randomDeck = exports.resolveDeck = exports.isValidDeck = exports.pickRecommendedDeck = exports.ALT_RECOMMENDED_DECKS = exports.recommendedDeckAgainst = exports.COUNTER_DECKS_FOR_YOU = exports.recommendedDeck = exports.RECOMMENDED_DECKS = exports.skillOf = exports.AVAILABLE_SKILL_IDX = exports.CATALOG_SIZE = exports.SKILL_IDX_END = exports.REMOVED_SKILL_IDX = exports.SKILL_CATALOG = exports.CUSTOM_SKILL_IDX = exports.DECK_SIZE = void 0;
 const skillCosts_1 = require("./skillCosts");
 /** デッキの枚数（同じスキルは1枚まで） */
 exports.DECK_SIZE = 12;
+/**
+ * オリジナルスキル（customSkill.ts）がデッキに入るときの idx。汎用スキルの idx とは重ならない。
+ * デッキの1枠を使うので、入るのは最大1枚（重複不可）。使えるのは人間席だけで、AI席・仕様が無い席では Game が外す。
+ */
+exports.CUSTOM_SKILL_IDX = 200;
 /** 汎用スキルの一覧（添字 = 手札の idx。Game.tsx の shuffleSkillDefs / AIPlayer.ts の SKILL_POOL_SIZE と同じ並び） */
 exports.SKILL_CATALOG = [
     { idx: 0, name: 'ライフ3', icon: '💚', category: 'support', costKey: 'onClickAddLife', desc: 'ライフを3追加します' },
@@ -219,8 +224,11 @@ const pickRecommendedDeck = (character, rng = Math.random) => {
     return patterns[Math.floor(rng() * patterns.length)];
 };
 exports.pickRecommendedDeck = pickRecommendedDeck;
-/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
-const isValidDeck = (deck) => !!deck && deck.length === exports.DECK_SIZE && new Set(deck).size === exports.DECK_SIZE && deck.every((i) => Number.isInteger(i) && exports.AVAILABLE_SKILL_IDX.includes(i));
+/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx（オリジナルスキルの idx は1枚まで） */
+const isValidDeck = (deck) => !!deck &&
+    deck.length === exports.DECK_SIZE &&
+    new Set(deck).size === exports.DECK_SIZE &&
+    deck.every((i) => Number.isInteger(i) && (exports.AVAILABLE_SKILL_IDX.includes(i) || i === exports.CUSTOM_SKILL_IDX));
 exports.isValidDeck = isValidDeck;
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 const resolveDeck = (deck, character) => (0, exports.isValidDeck)(deck) ? [...deck].sort((a, b) => a - b) : (0, exports.recommendedDeck)(character);
