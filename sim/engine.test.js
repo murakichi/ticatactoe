@@ -4023,14 +4023,14 @@ test('錠前割引: 盤面のロックのマスの数だけ、このターンに
     assert.strictEqual(e.calculateCost(s, e.skillCosts.onClickLockDiscount, false, false, 'onClickLockDiscount'), e.skillCosts.onClickLockDiscount);
 });
 
-test('普請道楽（sim）: 自陣にオブジェクトがあるとき全スキル-3、オブジェクトを設置するスキルは-2。ギアを持たない席は変わらない', () => {
+test('普請道楽（sim）: 自陣にオブジェクトが無いときオブジェクトを設置するスキルは-2、あるとき全スキル-3。ギアを持たない席は変わらない', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(95), gears: [['buildMania'], []] });
     const price = (key) => e.calculateCost(s, e.skillCosts[key], false, false, key);
     assert.strictEqual(price('onClickBibine'), e.skillCosts.onClickBibine);
     assert.strictEqual(price('onClickBigTree'), e.skillCosts.onClickBigTree - 2);
     s.board[0] = { player: '💙', bind: 5, effects: [], object: 'fort' };
     assert.strictEqual(price('onClickBibine'), Math.max(1, e.skillCosts.onClickBibine - 3));
-    assert.strictEqual(price('onClickBigTree'), e.skillCosts.onClickBigTree - 5);
+    assert.strictEqual(price('onClickBigTree'), e.skillCosts.onClickBigTree - 3, '設置スキルもオブジェクトがあれば-3だけ（-2は上乗せされない）');
     s.board[0] = { ...s.board[0], player: '⭕' };
     assert.strictEqual(price('onClickBibine'), e.skillCosts.onClickBibine, '相手のオブジェクトは数えない');
 });

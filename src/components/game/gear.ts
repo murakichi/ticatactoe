@@ -92,7 +92,7 @@ export const GEAR_PARAMS = {
     scorchCap: 6,
     /** 灰の供物: 敵のマスに🔥を付与したマス1つにつき、次の自分の手番の終わりまで全スキルのコスト-N（重複する） */
     ashDiscount: 1,
-    /** 普請道楽: オブジェクトを設置するスキルのコスト割引と、自陣にオブジェクトがある間の全スキルの割引 */
+    /** 普請道楽: 自陣にオブジェクトが無いときのオブジェクト設置スキルの割引と、ある間の全スキルの割引（重ならない） */
     buildPlaceCut: 2,
     buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
@@ -130,7 +130,7 @@ export const GEARS: GearDef[] = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
-    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間、全てのスキルのコスト-${P.buildAllCut}（下限1）` },
+    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 
@@ -241,8 +241,8 @@ export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, i
     if (hasGear(gears, 'ailmentPact') && !(skillKey && EXCLUSIVE_SKILL_KEYS.includes(skillKey))) delta -= P.ailmentDiscount * (ctx.ailments ?? 0);
     if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
     if (hasGear(gears, 'ashOffering')) delta -= P.ashDiscount * (ctx.ash ?? 0);
-    // 普請道楽: オブジェクトを設置するスキルは-2、自陣にオブジェクトがある間は全スキル-3（重なる）
-    if (hasGear(gears, 'buildMania')) delta -= (skillKey && OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0) + (ctx.ownObjects ? P.buildAllCut : 0);
+    // 普請道楽: 自陣にオブジェクトが無いときはオブジェクトを設置するスキルが-2、ある間は全スキル-3（設置スキルの-2は無いときだけ。重ならない）
+    if (hasGear(gears, 'buildMania')) delta -= ctx.ownObjects ? P.buildAllCut : skillKey && OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 };
