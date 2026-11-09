@@ -10,6 +10,9 @@ import { OBJECT_DEFS, objectLandable } from './objects';
 import { isBuilding } from '../../types/ObjectKind';
 import { AIResult } from './aiConstants';
 import { PlanMoveArgs } from './aiPlanMove';
+import { BOLT_SILENCE_IDX } from './aiConstants';
+import { BOLT_SILENCE_BOLTS, chargeStacks } from './charge';
+import { isDormant } from './thermal';
 
 /** 咆哮を撃つ最小の巻き込み数 */
 export const ROAR_MIN_VICTIMS = 3;
@@ -32,6 +35,9 @@ const lockedEmpty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [{
 
 export interface DragonMethods {
     planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
+    planDragonCore(this: AIPlayer, args: PlanMoveArgs): AIResult | null;
+    /** 沈黙は雷なり: 自陣の⚡2つを払って相手の次の手番のスキルを封じる計画（撃つべきでなければ null） */
+    boltSilencePlan(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[]): { clicks: { skill: string; target: number; target2?: number }[]; cost: number } | null;
     /** 巫女/龍: 相手の即勝ちマスに大岩を置いて塞ぐ（手札に大岩があり、魔力が足りるとき）。置けなければ null */
     blockWithBoulders(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[], masked: SquareInfo[]): AIResult | null;
     /** 巫女: 次に建造物を置く（祈りで引く）マス。角を斜めに切る型のうち、すでに建造物が多く置けるものへ寄せる。無ければ null */
@@ -69,6 +75,41 @@ export const dragonMethods: DragonMethods = {
         return best ? best.cell : null;
     },
 
+    boltSilencePlan(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[]): { clicks: { skill: string; target: number; target2?: number }[]; cost: number } | null {
+        const magic = args[1];
+        const costs = args[2];
+        const available = args[5];
+        const seatMagic = args[12] ?? [];
+        if (!available.includes(BOLT_SILENCE_IDX)) return null;
+        const masked = real.map((sq) => (isBuilding(sq) ? lockedEmpty() : sq));
+        if (this.opponents.some((o) => this.countReaches(masked, o) > 0)) return null;
+        const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
+        const total = real.reduce((n, sq) => (sq.player === this.playerSymbol && !isDormant(sq) ? n + chargeStacks(sq) : n), 0);
+        if (total < BOLT_SILENCE_BOLTS || magic < cost || !this.opponentsCanCastBig(real, seatMagic)) return null;
+        const targets: number[] = [];
+        let b = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        for (let k = 0; k < BOLT_SILENCE_BOLTS; k++) {
+            const t = this.boltSilenceTarget(b);
+            if (t === null) return null;
+            targets.push(t);
+            const at = b[t].effects.findIndex((e) => e.effect === '⚡');
+            b[t] = { ...b[t], effects: b[t].effects.filter((_, j) => j !== at) };
+        }
+        return { clicks: [{ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }], cost };
+    },
+
+    planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
+        const silence = this.boltSilencePlan(args, args[0]);
+        if (!silence) return this.planDragonCore(args);
+        const rest = [...args] as unknown as PlanMoveArgs;
+        (rest as unknown as unknown[])[1] = args[1] - silence.cost;
+        const core = this.planDragonCore(rest);
+        if (core) return { ...core, chargeClicks: [...silence.clicks, ...(core.chargeClicks ?? [])] };
+        const masked = args[0].map((sq) => (isBuilding(sq) ? lockedEmpty() : sq));
+        const move = this.getBestMove(masked, args[4]);
+        return { move, skills: move === null ? ['onClickCharge'] : [], chargeClicks: silence.clicks };
+    },
+
     blockWithBoulders(this: AIPlayer, args: PlanMoveArgs, real: SquareInfo[], masked: SquareInfo[]): AIResult | null {
         const magic = args[1];
         const costs = args[2];
@@ -100,7 +141,7 @@ export const dragonMethods: DragonMethods = {
         return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
     },
 
-    planDragon(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
+    planDragonCore(this: AIPlayer, args: PlanMoveArgs): AIResult | null {
         const real = args[0];
         const magic = args[1];
         const costs = args[2];

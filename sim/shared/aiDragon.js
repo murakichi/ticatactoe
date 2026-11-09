@@ -6,6 +6,9 @@ const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
 const ObjectKind_1 = require("./ObjectKind");
+const aiConstants_1 = require("./aiConstants");
+const charge_1 = require("./charge");
+const thermal_1 = require("./thermal");
 /** 咆哮を撃つ最小の巻き込み数 */
 exports.ROAR_MIN_VICTIMS = 3;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
@@ -54,6 +57,47 @@ exports.dragonMethods = {
         }
         return best ? best.cell : null;
     },
+    boltSilencePlan(args, real) {
+        var _a;
+        const magic = args[1];
+        const costs = args[2];
+        const available = args[5];
+        const seatMagic = (_a = args[12]) !== null && _a !== void 0 ? _a : [];
+        if (!available.includes(aiConstants_1.BOLT_SILENCE_IDX))
+            return null;
+        const masked = real.map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? lockedEmpty() : sq));
+        if (this.opponents.some((o) => this.countReaches(masked, o) > 0))
+            return null;
+        const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
+        const total = real.reduce((n, sq) => (sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq) ? n + (0, charge_1.chargeStacks)(sq) : n), 0);
+        if (total < charge_1.BOLT_SILENCE_BOLTS || magic < cost || !this.opponentsCanCastBig(real, seatMagic))
+            return null;
+        const targets = [];
+        let b = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        for (let k = 0; k < charge_1.BOLT_SILENCE_BOLTS; k++) {
+            const t = this.boltSilenceTarget(b);
+            if (t === null)
+                return null;
+            targets.push(t);
+            const at = b[t].effects.findIndex((e) => e.effect === '⚡');
+            b[t] = { ...b[t], effects: b[t].effects.filter((_, j) => j !== at) };
+        }
+        return { clicks: [{ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }], cost };
+    },
+    planDragon(args) {
+        var _a;
+        const silence = this.boltSilencePlan(args, args[0]);
+        if (!silence)
+            return this.planDragonCore(args);
+        const rest = [...args];
+        rest[1] = args[1] - silence.cost;
+        const core = this.planDragonCore(rest);
+        if (core)
+            return { ...core, chargeClicks: [...silence.clicks, ...((_a = core.chargeClicks) !== null && _a !== void 0 ? _a : [])] };
+        const masked = args[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? lockedEmpty() : sq));
+        const move = this.getBestMove(masked, args[4]);
+        return { move, skills: move === null ? ['onClickCharge'] : [], chargeClicks: silence.clicks };
+    },
     blockWithBoulders(args, real, masked) {
         const magic = args[1];
         const costs = args[2];
@@ -88,7 +132,7 @@ exports.dragonMethods = {
         const followup = this.getBestMove(post, life);
         return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
     },
-    planDragon(args) {
+    planDragonCore(args) {
         const real = args[0];
         const magic = args[1];
         const costs = args[2];
