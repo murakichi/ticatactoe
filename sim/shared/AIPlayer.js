@@ -11,6 +11,7 @@ const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const thermal_1 = require("./thermal");
 const lock_1 = require("./lock");
+const gear_1 = require("./gear");
 const keysmith_1 = require("./keysmith");
 const decay_1 = require("./decay");
 const poison_1 = require("./poison");
@@ -185,7 +186,7 @@ class AIPlayer {
     comboReachable(availableSkills) {
         return this.inDeck(71, availableSkills) && this.inDeck(73, availableSkills);
     }
-    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck) {
+    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasLockBloom = false) {
         this.necroActive = false;
         /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
         this.shield = new Set();
@@ -238,6 +239,8 @@ class AIPlayer {
         /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（旧sim AI の毒使い×毒花と同じ） */
         this.hasToxicBloom = false;
         this.hasEmptyLock = false;
+        /** 芽吹きの錠を装備しているか（ロックを掛けたライフ2以下の自陣のコマにバッズが付く） */
+        this.hasLockBloom = false;
         /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
         this.floodCoverWeight = exports.FLOOD_COVER_WEIGHT;
         /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
@@ -249,6 +252,7 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+        this.hasLockBloom = hasLockBloom;
         this.deck = deck;
     }
     /** 相手に陰陽師がいるか */
@@ -324,6 +328,29 @@ class AIPlayer {
      * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
      * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
      */
+    bestBloomLockTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = -Infinity;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > gear_1.GEAR_PARAMS.lockBloomMaxLife || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑' || e.effect === '🌱'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player)))
+                    continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
     bestOwnLockTarget(board) {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
@@ -3539,6 +3566,20 @@ class AIPlayer {
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
                     return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
+            }
+        }
+        // 鍵師+芽吹きの錠: ライフ2以下でバッズの無い自陣のコマをロックすると、そのコマにバッズが付く（バッズは毎手番の魔力になり、ロックで奪われない）。
+        // 無料の1回で撃てるので、守りの判断のあとに1手番1つだけ。列づくりに効いているコマを優先する
+        if (this.character === 'keysmith' && this.hasLockBloom &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
+            const sprout = this.bestBloomLockTarget(board);
+            if (sprout !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[sprout] = (0, lock_1.addLock)(post[sprout], 6);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null)
+                    return { move: followup, skills: ['onClickUseLock'], lockTargets: [sprout] };
             }
         }
         // 鍵師は空きマスのロックを無視して置けるので、ギアが無くても常にこの判断を行う（敵だけが置けない空きマスを作る）

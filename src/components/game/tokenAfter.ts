@@ -1,9 +1,9 @@
 // トークン系スキルで駒を置いた後の、ギアの盤面への効果（道連れの鍵のロック・伝播）。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
-import { Player } from '../../types/Player';
+import { PLAYER_SYMBOLS, Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
 import { PlayerCharacters, isGuarded } from './charge';
-import { Gears, TokenEffect, gearLockStack, hasGear } from './gear';
+import { GEAR_PARAMS, Gears, TokenEffect, gearLockStack, hasGear } from './gear';
 import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { lockable } from './thermal';
@@ -16,7 +16,12 @@ export const applyLockAt = (board: SquareInfo[], idx: number, gears: Gears, turn
     const sq = board[idx];
     if (!lockable(sq)) return false;
     const owner = hasGear(gears, 'emptyLock') && !sq.player ? turnSeat + 1 : undefined;
-    board[idx] = addLock(sq, gearLockStack(gears), owner); // ライフは変えず、ロックのスタックを足す (#438)
+    let locked = addLock(sq, gearLockStack(gears), owner); // ライフは変えず、ロックのスタックを足す (#438)
+    // 芽吹きの錠: ライフが低くバッズの無い自陣のコマにロックを掛けると、そのコマにバッズ+1
+    if (hasGear(gears, 'lockBloom') && sq.player === PLAYER_SYMBOLS[turnSeat] && sq.bind <= GEAR_PARAMS.lockBloomMaxLife && !sq.effects.some((e) => e.effect === '🌱')) {
+        locked = { ...locked, effects: [...locked.effects, { effect: '🌱' }] };
+    }
+    board[idx] = locked;
     return true;
 };
 

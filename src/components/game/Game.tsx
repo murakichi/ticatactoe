@@ -257,6 +257,7 @@ export const Game = (props: GameProps) => {
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
         lockFreeUsed: gearTurn.current.lockFreeUsed[seat],
+        magic: magic[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
@@ -370,7 +371,7 @@ export const Game = (props: GameProps) => {
 
     const aiBySeat = props.players.map((p, seat) =>
         p.isAI
-            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken, skillKey) => gearCost(cost, seat, isToken, skillKey, false), hasGear(gearsBySeat[seat], 'toxicBloom'), hasGear(gearsBySeat[seat], 'emptyLock'), deckBySeat[seat])
+            ? new AIPlayer(symbols[seat], p.character, symbols.filter((_, i) => i !== seat), characters, (cost, isToken, skillKey) => gearCost(cost, seat, isToken, skillKey, false), hasGear(gearsBySeat[seat], 'toxicBloom'), hasGear(gearsBySeat[seat], 'emptyLock'), deckBySeat[seat], hasGear(gearsBySeat[seat], 'lockBloom'))
             : null
     );
     const currentAI = aiBySeat[turnSeat];
@@ -1485,7 +1486,12 @@ export const Game = (props: GameProps) => {
     // --- ギアのエフェクト系ヘルパー（sim/engine.js の同名関数と同じ規則） ---
     // ロックを付ける。期間(ライフ)は堅牢の鍵で延びる。空きマスなら空蔵の持ち主を記録しておく
     const applyLock = (board: SquareInfo[], idx: number) => {
+        const budsBefore = board[idx].effects.filter((e) => e.effect === '🌱').length;
         applyLockAt(board, idx, turnGears, turnSeat);
+        if (board[idx].effects.filter((e) => e.effect === '🌱').length > budsBefore) {
+            addLog(`芽吹きの錠: ${posName(idx)}にバッズ`);
+            gearTrigger('lockBloom', 'バッズ付与');
+        }
     };
     // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。
     // 誰が付けた毒でも発動する（自分で付けた毒でも、相手から付けられた毒でも。毒を付ける側の装備は関係ない）

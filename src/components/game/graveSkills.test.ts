@@ -12,7 +12,7 @@ const symbols: Player[] = ['💙', '⭕'];
 const costEnv = (over: Partial<CostEnv> = {}): CostEnv => ({
     board: board(), seat: 0, player: '💙', turnSeat: 0, characters: ['you', 'you'], yinYangMode: 'ying', gears: [],
     ctx: { skillsThisTurn: 0, echoReady: false }, leafBase: 0, kinds: new Set(), chargeBase: 0, shikiPlaced: false,
-    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
+    tokenFree: false, bigCast: false, oppBigPrev: false, veil: false, oppSkillPrev: false, lockPrev: false, lockFreeUsed: false, magic: 99, plantPrev: false, placedPrev: false, fireBase: 0, discount: emptyDiscount(), ...over,
 });
 
 const mkState = (): [GearTurnState, RuinState] => {

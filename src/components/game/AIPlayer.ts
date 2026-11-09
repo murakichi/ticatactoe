@@ -9,6 +9,7 @@ import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { leafStacks, tinderTargets, ailmentStacks, cleanse, frostfallTargets, canFreeze, budStacks, budReceivers, canBud, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, infernoCostOf, FLAME_SKILL_KEYS, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, emptyBlocked, applyDamage, absorbDestroy, freeze, shatter, frozenStacks, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, leafFrostTargets, fireWheelTargets, decayTick, overwriteBlocked, boardLeaves, mogaribue, mogaribueDamage, mogaribueTargets, leafDropTargets, kindlingTargets, SHATTER_DAMAGE_PER_STACK } from './thermal';
 import { addLock, isLocked, lockEffect, tickLock } from './lock';
+import { GEAR_PARAMS } from './gear';
 import { lockBlocksPlacement, lockedSquareCount, opponentReaches, sealBaseCost, sealReleaseCells, seal, vacantSealBaseCost } from './keysmith';
 import { shouldDecay } from './decay';
 import { miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
@@ -263,6 +264,8 @@ class AIPlayer {
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（旧sim AI の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
+    /** 芽吹きの錠を装備しているか（ロックを掛けたライフ2以下の自陣のコマにバッズが付く） */
+    hasLockBloom: boolean = false;
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
     deck?: number[];
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
@@ -284,7 +287,8 @@ class AIPlayer {
         gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
         hasToxicBloom: boolean = false,
         hasEmptyLock: boolean = false,
-        deck?: number[]
+        deck?: number[],
+        hasLockBloom: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -293,6 +297,7 @@ class AIPlayer {
         this.gearCostFn = gearCostFn;
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
+        this.hasLockBloom = hasLockBloom;
         this.deck = deck;
     }
 
@@ -365,6 +370,24 @@ class AIPlayer {
      * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
      * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
      */
+    private bestBloomLockTarget(board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let bestIdx: number | null = null;
+        let bestVal = -Infinity;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || isObject(sq) || isShikigami(sq) || isFrozen(sq) || sq.bind > GEAR_PARAMS.lockBloomMaxLife || this.shield.has(i)) continue;
+            if (sq.effects.some((e) => e.effect === '🔑' || e.effect === '🌱')) continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i) || line.some((idx) => this.isEnemy(board[idx].player))) continue;
+                val += line.filter((idx) => board[idx].player === this.playerSymbol).length;
+            }
+            if (val > bestVal) { bestVal = val; bestIdx = i; }
+        }
+        return bestIdx;
+    }
+
     private bestOwnLockTarget(board: SquareInfo[]): number | null {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = geometryForCells(board.length);
@@ -3327,6 +3350,21 @@ class AIPlayer {
                 post[own] = addLock(post[own], 6);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [own] };
+            }
+        }
+        // 鍵師+芽吹きの錠: ライフ2以下でバッズの無い自陣のコマをロックすると、そのコマにバッズが付く（バッズは毎手番の魔力になり、ロックで奪われない）。
+        // 無料の1回で撃てるので、守りの判断のあとに1手番1つだけ。列づくりに効いているコマを優先する
+        if (
+            this.character === 'keysmith' && this.hasLockBloom &&
+            this.countReaches(board, this.playerSymbol) === 0 &&
+            magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')
+        ) {
+            const sprout = this.bestBloomLockTarget(board);
+            if (sprout !== null) {
+                const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+                post[sprout] = addLock(post[sprout], 6);
+                const followup = this.getBestMove(post, life);
+                if (followup !== null) return { move: followup, skills: ['onClickUseLock'], lockTargets: [sprout] };
             }
         }
         // 鍵師は空きマスのロックを無視して置けるので、ギアが無くても常にこの判断を行う（敵だけが置けない空きマスを作る）

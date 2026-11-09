@@ -38,9 +38,12 @@ export type GearId =
     | 'frostRoot'
     | 'conduction'
     | 'spellWard'
-    | 'buildMania';
+    | 'buildMania'
+    | 'lockBloom';
 
 export const GEAR_PARAMS = {
+    /** 芽吹きの錠: ロックを掛けた自陣のコマのうち、ライフがこの値以下でバッズの無いものにバッズが付く */
+    lockBloomMaxLife: 2,
     /** 通常のロック期間(ライフ) */
     lockStack: 6,
     /** 堅牢の鍵のロック期間 */
@@ -104,6 +107,7 @@ export type GearDef = { id: GearId; name: string; icon: string; desc: string };
 const P = GEAR_PARAMS;
 
 export const GEARS: GearDef[] = [
+    { id: 'lockBloom', name: '芽吹きの錠', icon: '🌸', desc: `ライフ${P.lockBloomMaxLife}以下でバッズの無い自陣のコマにロックをかけると、そのコマにバッズ+1` },
     { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスがライフ${P.emptyLockLife}の自陣のコマになる` },
     { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockStack}ターンになる（通常${P.lockStack}）` },
     { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークン系スキルで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
