@@ -1073,7 +1073,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     const skills = planned;
     // 大岩(136): 相手に即勝ちの手（リーチの要の空きマス）があるとき、そのマスに大岩を置いて塞ぐ。大岩は2ターンのロック付きでライフ5・減衰しないので、
     // ライフ1〜2で減衰してすぐ消える自コマの壁より持つ。コスト1で1手番に複数置ける。ネクロマンサーだけ（#399）
-    if (this.character === 'necromancer' && availableSkills.includes(objects_1.OBJECT_DEFS.boulder.idx) && !skills.some(sk => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+    if ((this.character === 'necromancer' || this.character === 'keysmith') && availableSkills.includes(objects_1.OBJECT_DEFS.boulder.idx) && !skills.some(sk => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
         const threats = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o)))).filter((c) => (0, objects_1.objectLandable)(board[c]));
         const bcost = this.calculateAICost(costs.onClickBoulder, false, false, 'onClickBoulder');
         let left = magic - this.lastSpent;
