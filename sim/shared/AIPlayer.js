@@ -3419,7 +3419,16 @@ class AIPlayer {
             const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
             if (!necroFoe && availableSkills.includes(136) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
                 && !(worth && magic >= infernoNow() && magic - stoneCost < infernoNow())) {
-                const cell = this.bestUnlockStoneCell(board);
+                // 普請道楽: 自陣にオブジェクトが無く、碑が1コスト(=ギアで割引)なら、ロックが無くても中央寄りに置いて全スキル-3を得る
+                let cell = this.bestUnlockStoneCell(board);
+                if (cell === null && stoneCost <= 1 && !(0, objects_1.hasOwnObject)(board, this.playerSymbol)) {
+                    const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+                    let bestN = -1;
+                    board.forEach((sq, k) => { if ((0, objects_1.objectLandable)(sq) && geo.surroundRange(k).length > bestN) {
+                        bestN = geo.surroundRange(k).length;
+                        cell = k;
+                    } });
+                }
                 if (cell !== null) {
                     chargeClicks.push({ skill: 'onClickUnlockStone', target: cell });
                     board = board.slice();
