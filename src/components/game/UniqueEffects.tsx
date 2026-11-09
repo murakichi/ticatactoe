@@ -1,5 +1,7 @@
 import React from 'react';
 import { boardLayoutOf, cellCenterUnits } from './boardGeometry';
+import { OBJECT_DEFS } from './objects';
+import { ObjectKind } from '../../types/ObjectKind';
 import type { SkillEffect } from './BoardEffects';
 import base from './BoardEffects.module.css';
 import styles from './UniqueEffects.module.css';
@@ -44,6 +46,29 @@ export const UNIQUE_EFFECT_TYPES = [
     'leafDrop',
     'leafCloak',
     'kindling',
+    // オブジェクト(設置・操作)、ロック系、その他の新作スキル
+    'buildObject',
+    'demolish',
+    'weather',
+    'levelAll',
+    'reinforce',
+    'expandAll',
+    'duplicate',
+    'lockRaid',
+    'lockExtend',
+    'vacantSeal',
+    'lockConvert',
+    'lockBlessing',
+    'lockDiscount',
+    'sealBreak',
+    'boltSilence',
+    'sparkJump',
+    'perfectGame',
+    'helper',
+    'nightVeil',
+    'graveDiscount',
+    'poisonWard',
+    'graveOffering',
 ] as const;
 
 export const isUniqueEffect = (type: string): boolean => (UNIQUE_EFFECT_TYPES as readonly string[]).includes(type);
@@ -151,6 +176,28 @@ const DIRS_8: [number, number][] = [
     [0.7, -0.7],
 ];
 const radial = (c: Pt, d: [number, number], r: number): Pt => ({ x: c.x + d[0] * r, y: c.y + d[1] * r });
+
+/** オブジェクト設置の演出の、種類ごとの色と飾り(周りに集まってくる絵文字)。アイコンは OBJECT_DEFS から引く */
+const OBJECT_FX: Record<ObjectKind, { color: string; flourish: string }> = {
+    bigTree: { color: '#5fd06a', flourish: '🍃' },
+    deadTree: { color: '#a0794a', flourish: '🍂' },
+    spring: { color: '#5ac8fa', flourish: '💧' },
+    fort: { color: '#c0c8d8', flourish: '🧱' },
+    thundercloud: { color: '#fde047', flourish: '⚡' },
+    market: { color: '#ffc24a', flourish: '🪙' },
+    sanctuary: { color: '#ffd966', flourish: '✨' },
+    poisonSwamp: { color: '#8a4fd6', flourish: '🫧' },
+    workshop: { color: '#ff9f43', flourish: '⚙️' },
+    barrierStone: { color: '#9aa5b8', flourish: '🔷' },
+    amuletShrine: { color: '#ff7a7a', flourish: '📜' },
+    luckyCat: { color: '#ffc24a', flourish: '🪙' },
+    mudField: { color: '#8b6b3e', flourish: '🟤' },
+    tongueKing: { color: '#ff4d79', flourish: '💢' },
+    eightTrigrams: { color: '#c7a6ff', flourish: '☯️' },
+    soloSign: { color: '#e6e0cf', flourish: '☝️' },
+    oneWord: { color: '#8c93a6', flourish: '💬' },
+    blindMonkey: { color: '#d9b99b', flourish: '🙈' },
+};
 
 export const renderUniqueEffect = (effect: SkillEffect, size: number): React.ReactNode => {
     const cells = effect.indexes ?? (effect.index !== undefined ? [effect.index] : []);
@@ -776,6 +823,353 @@ export const renderUniqueEffect = (effect: SkillEffect, size: number): React.Rea
                     ))}
                     {pts.length === 0 && pop('core', MID, '🔥', 200, styles.bigPop)}
                     {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'buildObject': {
+            // オブジェクト設置: 地面から光の柱が立ち、砂煙とともに建物がせり上がる。種類ごとの飾りが周りから集まる
+            const kind = effect.variant as ObjectKind | undefined;
+            const fx = (kind && OBJECT_FX[kind]) || { color: '#ffd966', flourish: '✨' };
+            const icon = kind && OBJECT_DEFS[kind] ? OBJECT_DEFS[kind].icon : '🏗️';
+            return (
+                <>
+                    {beam('pillar', { x: target.x, y: 112 }, target, 0, fx.color, 16, 450)}
+                    {DIRS_8.map((d, i) => fly(`dust-${i}`, target, radial(target, d, 9), '💨', 250 + i * 20, 500))}
+                    {pop('obj', target, icon, 380, styles.bigPop)}
+                    {ring('ring-0', target, 400, fx.color, 3.6)}
+                    {ring('ring-1', target, 540, '#ffffff', 4.8)}
+                    {DIRS_8.map((d, i) => fly(`fl-${i}`, radial(target, d, 14), target, fx.flourish, 450 + i * 45, 550))}
+                    {rise(fx.flourish, 'fl')}
+                </>
+            );
+        }
+        case 'demolish': {
+            // 解体: 導火線に火がつき、どかんと崩れて瓦礫が四方へ飛ぶ
+            return (
+                <>
+                    {pop('tnt', target, '🧨', 0)}
+                    {fly('fuse', { x: target.x - 8, y: target.y - 8 }, target, '✨', 0, 400)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '420ms' }} />
+                    {pop('boom', target, '💥', 420, styles.bigPop)}
+                    {ring('ring-0', target, 440, '#ff7a2f', 4)}
+                    {DIRS_8.map((d, i) => fly(`brick-${i}`, target, radial(target, d, 16), '🧱', 460, 600))}
+                    {DIRS_8.map((d, i) => fly(`dust-${i}`, target, radial(target, d, 10), '💨', 500, 600))}
+                    {rise('💨', 'dust')}
+                </>
+            );
+        }
+        case 'weather': {
+            // 風化: 建物が風に吹かれて砂のように崩れ、風に乗って消える
+            return (
+                <>
+                    <div className={base.haze} style={{ background: 'rgba(210, 200, 180, 0.4)' }} />
+                    {pop('old', target, '🏚️', 0, styles.bigPop)}
+                    {[0, 1, 2, 3, 4, 5].map((k) => fly(`sand-${k}`, target, { x: target.x + 30 + k * 6, y: target.y - 6 + (k % 3) * 6 }, '🌫️', 300 + k * 90, 800))}
+                    {[0, 1, 2, 3].map((k) => fly(`leaf-${k}`, { x: target.x - 10, y: target.y }, { x: 108, y: target.y - 10 + k * 8 }, '🍃', 200 + k * 120, 900))}
+                    {ring('ring-0', target, 700, '#d8cdb5', 3)}
+                </>
+            );
+        }
+        case 'levelAll': {
+            // 地ならし: ブルドーザーが盤面を往復して、オブジェクトを押しつぶして更地にする
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    {fly('dozer-1', { x: -10, y: 35 }, { x: 110, y: 35 }, '🚜', 0, 800)}
+                    {fly('dozer-2', { x: 110, y: 68 }, { x: -10, y: 68 }, '🚜', 600, 800)}
+                    {[0, 1, 2, 3, 4].map((k) => fly(`dust-${k}`, { x: -5, y: 30 + k * 8 }, { x: 105, y: 32 + k * 8 }, '💨', k * 110, 800))}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`l-${k}`}>
+                            {pop(`crush-${k}`, p, '💥', 250 + (p.x / 100) * 600, pts.length <= 6 ? styles.bigPop : '')}
+                            {ring(`ring-${k}`, p, 250 + (p.x / 100) * 600, '#d8cdb5', 2.6)}
+                        </React.Fragment>
+                    ))}
+                    {rise('💨', 'dust')}
+                </>
+            );
+        }
+        case 'reinforce': {
+            // 補強工事: 金槌がかんかんと打たれて火花が散り、建物が頑丈になる
+            const pts = cells.filter((k) => k !== effect.index).slice(0, 20).map((k) => center(k, size));
+            return (
+                <>
+                    {[0, 1, 2].map((k) => pop(`hammer-${k}`, { x: target.x + 6, y: target.y - 6 }, '🔨', k * 220))}
+                    {[0, 1, 2].map((k) => DIRS_8.slice(0, 4).map((d, i) => beam(`spark-${k}-${i}`, target, radial(target, d, 6), k * 220 + 120, '#ffd966', 3, 200)))}
+                    {pop('shield', target, '🛡️', 700, styles.bigPop)}
+                    {ring('ring-0', target, 720, '#ffd966', 3.6)}
+                    {pts.map((p, k) => pop(`plus-${k}`, p, '✨', 800 + k * 50))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'expandAll': {
+            // 増築: レンガが上から次々と積み上がり、自陣のオブジェクトが大きくなる
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`e-${k}`}>
+                            {fly(`brick-${k}`, { x: p.x, y: -6 }, p, '🧱', k * 90, 500)}
+                            {pop(`up-${k}`, p, '🏗️', 480 + k * 90)}
+                            {ring(`ring-${k}`, p, 500 + k * 90, '#ffd966', 2.6)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '🏗️', 0, styles.bigPop)}
+                    {rise('🧱', 'brick')}
+                </>
+            );
+        }
+        case 'duplicate': {
+            // 分譲: 建物が分身して、周りの空き地へ同じ建物が建つ
+            const pts = cells.filter((k) => k !== effect.index).slice(0, 12).map((k) => center(k, size));
+            return (
+                <>
+                    {pop('src', target, '🏘️', 0, styles.bigPop)}
+                    {ring('ring-0', target, 200, '#ffd966', 3.4)}
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`d-${k}`}>
+                            {fly(`copy-${k}`, target, p, '🏘️', 350 + k * 70, 600)}
+                            {pop(`new-${k}`, p, '✨', 950 + k * 70)}
+                        </React.Fragment>
+                    ))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'lockRaid': {
+            // 錠前荒らし: 針金(🗝️)が錠前に差し込まれ、かちゃりと外れて、鎖が弾け飛ぶ
+            return (
+                <>
+                    {fly('pick', { x: target.x - 14, y: target.y - 14 }, target, '🗝️', 0, 500)}
+                    {pop('lock', target, '🔒', 400)}
+                    {pop('open', target, '🔓', 700, styles.bigPop)}
+                    {ring('ring-0', target, 700, '#e7c84b', 3.4)}
+                    {DIRS_8.map((d, i) => fly(`chain-${i}`, target, radial(target, d, 14), '⛓️', 720, 600))}
+                    {DIRS_8.map((d, i) => beam(`crack-${i}`, target, radial(target, d, 7), 700, '#e7c84b', 4, 250))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'lockExtend': {
+            // ロックの増築: 鍵のかかったマスに、さらに錠前が増えて鎖でつながる
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`x-${k}`}>
+                            {pop(`lock-${k}`, p, '🔐', k * 70, pts.length <= 6 ? styles.bigPop : '')}
+                            {ring(`ring-${k}`, p, k * 70 + 60, '#e7c84b', 2.6)}
+                            {k > 0 && beam(`chain-${k}`, pts[k - 1], p, k * 70, '#e7c84b', 4, 250)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '🔐', 0, styles.bigPop)}
+                    {rise('🔑', 'key')}
+                </>
+            );
+        }
+        case 'vacantSeal': {
+            // 空き家封じ: 空きマスに鎖が×の字にかかり、錠前がかかって封印される
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`v-${k}`}>
+                            {beam(`x1-${k}`, { x: p.x - 4, y: p.y - 4 }, { x: p.x + 4, y: p.y + 4 }, k * 60, '#9aa5b8', 4, 250)}
+                            {beam(`x2-${k}`, { x: p.x + 4, y: p.y - 4 }, { x: p.x - 4, y: p.y + 4 }, k * 60 + 80, '#9aa5b8', 4, 250)}
+                            {pop(`lock-${k}`, p, '🔒', k * 60 + 200)}
+                        </React.Fragment>
+                    ))}
+                    {pts.length === 0 && pop('core', MID, '🏚️', 0, styles.bigPop)}
+                    {rise('⛓️', 'chain')}
+                </>
+            );
+        }
+        case 'lockConvert': {
+            // 錠の転換: 鍵がくるりと回って、錠前が別の錠前に入れ替わる
+            return (
+                <>
+                    {pop('a', target, '🔒', 0)}
+                    {pop('b', target, '🗝️', 250, styles.bigPop)}
+                    {ring('ring-0', target, 300, '#e7c84b', 3.4)}
+                    {pop('c', target, '🔑', 600)}
+                    {pop('d', target, '🔐', 850, styles.bigPop)}
+                    {ring('ring-1', target, 850, '#ffffff', 4.4)}
+                    {DIRS_8.slice(0, 6).map((d, i) => fly(`spin-${i}`, radial(target, d, 10), target, '🔑', 300 + i * 60, 450))}
+                </>
+            );
+        }
+        case 'lockBlessing': {
+            // 施錠の加護: 盤面が金色の光に包まれ、守りの錠前が降り注ぐ
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {pop('shield', MID, '🛡️', 100, styles.bigPop)}
+                    {ring('ring-0', MID, 200, '#e7c84b', 6)}
+                    {ring('ring-1', MID, 400, '#ffd966', 7)}
+                    {fall('🔑', 'key')}
+                    {fall('✨', 'spark')}
+                </>
+            );
+        }
+        case 'lockDiscount': {
+            // 錠前割引: 鍵が集まって、領収書(🧾)に割引が印字される
+            const keys: Pt[] = [{ x: 10, y: 20 }, { x: 90, y: 20 }, { x: 10, y: 80 }, { x: 90, y: 80 }, { x: 50, y: 8 }, { x: 50, y: 92 }];
+            return (
+                <>
+                    {keys.map((k, i) => fly(`key-${i}`, k, MID, '🔑', i * 70, 600))}
+                    {pop('receipt', MID, '🧾', 550, styles.bigPop)}
+                    {ring('ring-0', MID, 580, '#e7c84b', 5)}
+                    {[0, 1, 2, 3, 4].map((k) => fly(`coin-${k}`, MID, { x: 30 + k * 10, y: 72 - (k % 2) * 8 }, '🪙', 750 + k * 70, 600))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'sealBreak': {
+            // 封鎖の断: 斧が一閃して、盤面をふさぐ鎖が断ち切られる
+            const pts = cells.slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    {pop('axe', MID, '🪓', 0, styles.bigPop)}
+                    {beamThrough('cut-1', MID, 35, 150, 200, '#ffffff', 8)}
+                    {beamThrough('cut-2', MID, -35, 150, 350, '#ffffff', 8)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '200ms' }} />
+                    {pts.map((p, k) => (
+                        <React.Fragment key={`s-${k}`}>
+                            {pop(`chain-${k}`, p, '⛓️', 300 + k * 40)}
+                            {pop(`free-${k}`, p, '🔓', 600 + k * 40)}
+                        </React.Fragment>
+                    ))}
+                    {ring('ring-0', MID, 250, '#ffffff', 6)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'boltSilence': {
+            // 沈黙は雷なり: 稲妻が落ちて、辺りが水を打ったように静まり返る
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1300ms' }} />
+                    {beam('bolt', { x: target.x, y: -4 }, target, 0, '#fde047', 10, 250)}
+                    {beam('core', { x: target.x, y: -4 }, target, 0, '#ffffff', 4, 250)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '200ms' }} />
+                    {pop('zap', target, '⚡', 200, styles.bigPop)}
+                    {ring('ring-0', target, 300, '#fde047', 5)}
+                    {ring('ring-1', target, 500, '#c7d0ff', 7)}
+                    {ring('ring-2', target, 700, '#8c93a6', 9)}
+                    {pop('quiet', target, '🤐', 750, styles.bigPop)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'sparkJump': {
+            // 飛び火: 火の粉が1マスから次のマスへ、ぴょんぴょん飛び移って燃え広がる
+            const pts = cells.slice(0, 12).map((k) => center(k, size));
+            return (
+                <>
+                    {pts.map((p, k) => {
+                        const from: Pt = k === 0 ? { x: p.x - 12, y: -4 } : pts[k - 1];
+                        return (
+                            <React.Fragment key={`j-${k}`}>
+                                {fly(`spark-${k}`, from, p, '🔥', k * 200, 280)}
+                                {pop(`burn-${k}`, p, '🔥', k * 200 + 260, styles.bigPop)}
+                                {ring(`ring-${k}`, p, k * 200 + 280, '#ff7a2f', 2.8)}
+                            </React.Fragment>
+                        );
+                    })}
+                    {pts.length === 0 && pop('core', MID, '🔥', 0, styles.bigPop)}
+                    {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'perfectGame': {
+            // パーフェクトゲーム: ボールが一直線に転がり、ピンが全部はじけ飛んでストライク
+            const pins: Pt[] = [
+                { x: 50, y: 14 },
+                { x: 44, y: 22 },
+                { x: 56, y: 22 },
+                { x: 38, y: 30 },
+                { x: 50, y: 30 },
+                { x: 62, y: 30 },
+            ];
+            return (
+                <>
+                    {pins.map((p, i) => pop(`pin-${i}`, p, '🎳', 0))}
+                    {fly('ball', { x: 50, y: 112 }, { x: 50, y: 14 }, '🎳', 100, 650)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '720ms' }} />
+                    {pop('strike', { x: 50, y: 22 }, '💥', 720, styles.bigPop)}
+                    {pins.map((p, i) => fly(`fly-${i}`, p, { x: p.x + (i % 2 ? 1 : -1) * (20 + i * 6), y: p.y - 14 + i * 4 }, '🎳', 740, 600))}
+                    {ring('ring-0', { x: 50, y: 22 }, 740, '#ffffff', 6)}
+                    {fall('🎉', 'party')}
+                    {fall('✨', 'spark')}
+                </>
+            );
+        }
+        case 'helper': {
+            // 超助っ人: 助っ人が颯爽と駆けつけて、マスにコマを置いていく
+            return (
+                <>
+                    {fly('hero', { x: -8, y: target.y - 18 }, target, '🦸', 0, 650)}
+                    {fly('dash', { x: -8, y: target.y - 10 }, target, '💨', 80, 600)}
+                    {pop('muscle', target, '💪', 600, styles.bigPop)}
+                    {ring('ring-0', target, 620, '#ffc24a', 3.6)}
+                    {ring('ring-1', target, 760, '#ffffff', 4.8)}
+                    {DIRS_8.map((d, i) => beam(`ray-${i}`, target, radial(target, d, 8), 640, '#ffd966', 4, 300))}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'nightVeil': {
+            // 夜の帳: 左右から夜の幕が閉じていき、月が昇って星が降る
+            return (
+                <>
+                    {beam('curtain-l', { x: -2, y: 50 }, { x: 52, y: 50 }, 0, '#10173d', 140, 650)}
+                    {beam('curtain-r', { x: 102, y: 50 }, { x: 48, y: 50 }, 0, '#10173d', 140, 650)}
+                    <div className={styles.veil} style={{ animationDuration: '1800ms' }} />
+                    {pop('moon', { x: 50, y: 24 }, '🌙', 500, styles.bigPop)}
+                    {ring('ring-0', { x: 50, y: 24 }, 520, '#c7d0ff', 4)}
+                    {fall('✨', 'star')}
+                    {fall('⭐', 'star2')}
+                </>
+            );
+        }
+        case 'graveDiscount': {
+            // 弔い割引: 墓標に値札が付き、弔われた魂が立ち昇って、次のスキルが安くなる
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraNight}`} />
+                    {pop('grave', MID, '🪦', 0, styles.bigPop)}
+                    {pop('tag', { x: 58, y: 40 }, '🏷️', 350, styles.bigPop)}
+                    {ring('ring-0', MID, 300, '#8a4fd6', 5)}
+                    {[0, 1, 2, 3, 4].map((k) => fly(`soul-${k}`, { x: 38 + k * 6, y: 56 }, { x: 36 + k * 7, y: 8 }, '👻', 450 + k * 110, 800))}
+                    {rise('🕯️', 'candle')}
+                </>
+            );
+        }
+        case 'poisonWard': {
+            // 毒返しの構え: 蛇が鎌首をもたげ、毒の盾が盤面を守る。破られたら毒で返す
+            return (
+                <>
+                    <div className={base.haze} style={{ background: 'rgba(110, 40, 160, 0.35)' }} />
+                    {pop('snake', MID, '🐍', 0, styles.bigPop)}
+                    {pop('shield', { x: 50, y: 66 }, '🛡️', 300, styles.bigPop)}
+                    {ring('ring-0', MID, 250, '#8a4fd6', 5)}
+                    {ring('ring-1', MID, 450, '#c98bff', 7)}
+                    {DIRS_8.map((d, i) => pop(`skull-${i}`, radial(MID, d, 26), '☠', 500 + i * 60))}
+                    {rise('🫧', 'bubble')}
+                </>
+            );
+        }
+        case 'graveOffering': {
+            // 墓守の供物: 自分のコマを棺に納め、ろうそくが灯って、魂が昇り魔力に変わる
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraNight}`} />
+                    {pop('coffin', target, '⚰️', 0, styles.bigPop)}
+                    {DIRS_8.slice(0, 4).map((d, i) => pop(`candle-${i}`, radial(target, d, 8), '🕯️', 250 + i * 80))}
+                    {[0, 1, 2].map((k) => fly(`soul-${k}`, target, { x: target.x + (k - 1) * 8, y: target.y - 26 }, '👻', 500 + k * 150, 800))}
+                    {ring('ring-0', target, 500, '#8a4fd6', 3.6)}
+                    {pop('magic', { x: target.x, y: target.y - 22 }, '✨', 1100)}
+                    {rise('🕯️', 'candle')}
                 </>
             );
         }

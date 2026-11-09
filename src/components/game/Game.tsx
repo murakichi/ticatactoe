@@ -972,6 +972,7 @@ export const Game = (props: GameProps) => {
                     addLog(`春雷が${thawed.map(posName).join('・')}の❄を1つ解いた`);
                     flashCells(thawed);
                     gearTrigger('springThunder', `${thawed.map(posName).join('・')}の❄を解く`);
+                    playBurst('gearThunder', thawed);
                 }
             }
             // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（objects.ts。魔力とライフの分は下の手番開始の計算に足す）
@@ -1084,6 +1085,7 @@ export const Game = (props: GameProps) => {
         addCorpses(victims.length);
         addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
         gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        playBurst('gearReap', victims);
         flashCells(victims);
         setReaperSweeps((c) => c + 1);
     }, [currentTurn]);
@@ -1417,6 +1419,7 @@ export const Game = (props: GameProps) => {
             if (seeded) {
                 nextBoard[i] = seeded;
                 gearTrigger('budSeed', 'バッズ付きで設置');
+                playBurst('gearSeed', [i]);
             }
         }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
@@ -1599,6 +1602,7 @@ export const Game = (props: GameProps) => {
         if (seeded) {
             board[idx] = seeded;
             gearTrigger('budSeed', 'バッズ付きで設置');
+            playBurst('gearSeed', [idx]);
         }
         // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
         if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
@@ -1963,7 +1967,7 @@ export const Game = (props: GameProps) => {
         setUseBoltSilence(left);
         if (left === 0) {
             addLog(`${posName(i)}の⚡を払い切った。相手は次の手番スキルを使えない`);
-            playEffect('silence');
+            playEffect('boltSilence', i);
             otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
         } else {
             addLog(`${posName(i)}の⚡1個を払った（あと${left}個）`);
@@ -2094,7 +2098,8 @@ export const Game = (props: GameProps) => {
         const r = runObjectSkill(skill, board, currentTurnPlayer, characters, -1) as NonNullable<ReturnType<typeof runObjectSkill>>;
         addLog(`「${def.name}」を使用（${skill === 'levelAll' ? `${r.destroyed.length}個のオブジェクトを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}` : `自陣${r.affected.length}個のオブジェクトのライフ+2`}）`);
         flashCells([...r.destroyed, ...r.blocked, ...r.affected]);
-        playEffect(skill === 'levelAll' ? 'tsunami' : 'heal', undefined, [...r.destroyed, ...r.blocked, ...r.affected], def.name);
+        if (skill === 'levelAll') playEffect('levelAll', undefined, [...r.destroyed, ...r.blocked, ...r.affected]);
+        else playEffect('expandAll', undefined, [...r.destroyed, ...r.blocked, ...r.affected]);
         setCurrentBoard(board);
         pay();
     };
@@ -2106,7 +2111,11 @@ export const Game = (props: GameProps) => {
         if (!r) return; // 対象でないマスは選び直せる
         addLog(`${posName(i)}に「${def.name}」${r.destroyed.length > 0 ? '（破壊）' : r.blocked.length > 0 ? '（氷結が身代わり）' : ''}`);
         flashCells([i, ...r.destroyed, ...r.blocked, ...r.affected]);
-        playEffect(objectTool === 'reinforce' ? 'heal' : objectTool === 'duplicate' ? 'token' : 'tsunami', i, [i, ...r.affected], def.name);
+        const toolCells = [i, ...r.affected];
+        if (objectTool === 'demolish') playEffect('demolish', i, toolCells);
+        else if (objectTool === 'weather') playEffect('weather', i, toolCells);
+        else if (objectTool === 'reinforce') playEffect('reinforce', i, toolCells);
+        else playEffect('duplicate', i, toolCells);
         setObjectTool(null);
         setCurrentBoard(board);
     };
@@ -2125,7 +2134,7 @@ export const Game = (props: GameProps) => {
         sweepBurntTrees(board);
         addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
         flashCells([i]);
-        playEffect('token', i, [i], OBJECT_DEFS[objectPlacing].name);
+        playEffect('buildObject', i, [i], OBJECT_DEFS[objectPlacing].name, { variant: objectPlacing });
         setObjectPlacing(null);
         setObjectTool(null);
         setCaptureChoice(null);
@@ -2620,7 +2629,7 @@ export const Game = (props: GameProps) => {
         const pay = calculateCost(seatCosts.onClickNightVeil, false, false, currentTurnPlayer, 'onClickNightVeil');
         otherSeats(turnSeat).forEach((seat) => { gearTurn.current.veilNext[seat] = true; });
         addLog('「夜の帳」を使用（次の相手の手番の間、相手のスキルのコスト+3）');
-        playEffect('discount', undefined, undefined, '夜の帳');
+        playEffect('nightVeil');
         spendMagic(pay, true, true, 'onClickNightVeil');
     };
     // 弔い割引(idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
@@ -2632,7 +2641,7 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickGraveDiscount, false, false, currentTurnPlayer, 'onClickGraveDiscount'), true, true, 'onClickGraveDiscount');
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n };
-        playEffect('discount', undefined, undefined, '弔い割引');
+        playEffect('graveDiscount');
     };
     // 毒返しの構え(idx 100): 3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊/乗っ取られたらライフ4・☠付きの自陣コマを置く（置く処理は手番が変わるときの advanceGearState の結果から）
     const onClickPoisonWard = () => {
@@ -2640,7 +2649,7 @@ export const Game = (props: GameProps) => {
         gearTurn.current.ward[turnSeat] = POISON_WARD_TURNS;
         gearTurn.current.wardFresh[turnSeat] = true;
         addLog(`「毒返しの構え」を使用（${POISON_WARD_TURNS}手番の間、自陣が破壊/乗っ取られたら毒付きのコマを置く）`);
-        playEffect('token', undefined, undefined, '毒返しの構え');
+        playEffect('poisonWard');
         spendMagic(calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard'), true, true, 'onClickPoisonWard');
     };
 
@@ -2651,7 +2660,7 @@ export const Game = (props: GameProps) => {
         if (r.destroyed.length > 0) addCorpses(r.destroyed.length);
         addLog(`「パーフェクトゲーム」を使用（${r.destroyed.length}個のコマを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}）`);
         flashCells([...r.destroyed, ...r.blocked]);
-        playEffect('tsunami', undefined, undefined, 'パーフェクトゲーム');
+        playEffect('perfectGame');
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame'), true, true, 'onClickPerfectGame');
     };
@@ -2666,7 +2675,7 @@ export const Game = (props: GameProps) => {
             const r = placeHelperToken(board, index, currentTurnPlayer, calculateTokenBind(), effect, characters, geo.size);
             addLog(`「超助っ人」を使用（${posName(index)}に${effect}付きのコマを設置）`);
             if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
-            playEffect('token', index, [index], '超助っ人');
+            playEffect('helper', index, [index]);
             playBurst('thaw', r.thawed);
             // 🌱☠⚡はトークンのエフェクトとして収穫・伝播に数える。🔥❄🍂は持たない扱い（火炎・氷結・落ち葉トークンと同じ）
             harvestMagic(afterTokenPlaced(board, index, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined));
@@ -2706,7 +2715,7 @@ export const Game = (props: GameProps) => {
         board[at] = { player: undefined, bind: 0, effects: [] };
         addLog(`「墓守の供物」を使用（${posName(at)}の自コマを消して死体+1・魔力+1）`);
         flashCells([at]);
-        playEffect('token', at, [at], '墓守の供物');
+        playEffect('graveOffering', at, [at]);
         addCorpses(1);
         if (characters[turnSeat] !== 'necromancer') setNecroCostAt(turnSeat, (cost) => Math.max(0, cost - 1));
         setCurrentBoard(board);
@@ -3361,7 +3370,7 @@ export const Game = (props: GameProps) => {
         const n = lockedSquareCount(currentBoard);
         if (n === 0) return;
         addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
-        playEffect('discount', undefined, undefined, '錠前割引');
+        playEffect('lockDiscount');
         spendMagic(calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
@@ -3378,7 +3387,7 @@ export const Game = (props: GameProps) => {
         const gained = lockConvert(board, i);
         addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
         flashCells([i]);
-        playEffect('lock', i, [i], '錠の転換');
+        playEffect('lockConvert', i, [i]);
         setUseLockConvert(false);
         setCurrentBoard(board);
         setLife(life + gained);
@@ -3433,7 +3442,7 @@ export const Game = (props: GameProps) => {
         addLog(`「飛び火」を使用（${picks.map(posName).join('・')}に🔥）`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(picks);
-        playEffect('flame', undefined, picks, '飛び火');
+        playEffect('sparkJump', undefined, picks);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark'), true, true, 'onClickSpark');
@@ -3500,7 +3509,7 @@ export const Game = (props: GameProps) => {
         const r = seal(board, currentTurnPlayer, characters);
         addLog(`「封鎖の断」を使用（自陣${r.own.length}・空き${r.empty.length}マスをロック、敵のロック${r.released.length}個を解除して敵${r.hit.length}コマに${r.damage}ダメージ・ターン終了）`);
         flashCells(r.hit);
-        playEffect('lock', undefined, [...r.own, ...r.empty], '封鎖の断');
+        playEffect('sealBreak', undefined, [...r.own, ...r.empty]);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickSeal');
         setCurrentTurn(currentTurn + 1);
@@ -3514,7 +3523,7 @@ export const Game = (props: GameProps) => {
         gearTurn.current.lockPrev[turnSeat] = false; // 無料で撃てるのは1手番に1回まで
         addLog(`「錠前荒らし」を使用（${posName(r.cell)}のロックを解除して${r.effect}を付与）`);
         flashCells([r.cell]);
-        playEffect('lock', r.cell, [r.cell], '錠前荒らし');
+        playEffect('lockRaid', r.cell, [r.cell]);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickLockRaid');
     };
@@ -3526,7 +3535,7 @@ export const Game = (props: GameProps) => {
         if (cells.length === 0) return;
         addLog(`「ロックの増築」を使用（自陣${cells.length}コマのロック+${LOCK_EXTEND_STACK}）`);
         flashCells(cells);
-        playEffect('lock', undefined, cells, 'ロックの増築');
+        playEffect('lockExtend', undefined, cells);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickLockExtend');
     };
@@ -3535,7 +3544,7 @@ export const Game = (props: GameProps) => {
         gearTurn.current.blessing[turnSeat] = BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
         gearTurn.current.blessingFresh[turnSeat] = true;
         addLog(`「施錠の加護」を使用（${BLESSING_TURNS}手番の間、設置したコマに🔑${BLESSING_STACK}）`);
-        playEffect('auraGreen');
+        playEffect('lockBlessing');
         spendMagic(calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing'), true, true, 'onClickLockBlessing');
     };
     // 空き家封じ（汎用 idx 133）: 空きマス全てを2スタックでロック（ターンは続く）。相手のリーチ1つにつきコスト-3
@@ -3548,7 +3557,7 @@ export const Game = (props: GameProps) => {
         if (cells.length === 0) return;
         addLog(`「空き家封じ」を使用（空きマス${cells.length}マスを${VACANT_SEAL_STACK}ターンロック）`);
         flashCells(cells);
-        playEffect('lock', undefined, cells, '空き家封じ');
+        playEffect('vacantSeal', undefined, cells);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickVacantSeal');
     };

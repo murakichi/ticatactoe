@@ -73,10 +73,32 @@ export type SkillEffectType =
     | 'freeToken'
     | 'leafDrop'
     | 'leafCloak'
-    | 'kindling';
+    | 'kindling'
+    | 'buildObject'
+    | 'demolish'
+    | 'weather'
+    | 'levelAll'
+    | 'reinforce'
+    | 'expandAll'
+    | 'duplicate'
+    | 'lockRaid'
+    | 'lockExtend'
+    | 'vacantSeal'
+    | 'lockConvert'
+    | 'lockBlessing'
+    | 'lockDiscount'
+    | 'sealBreak'
+    | 'boltSilence'
+    | 'sparkJump'
+    | 'perfectGame'
+    | 'helper'
+    | 'nightVeil'
+    | 'graveDiscount'
+    | 'poisonWard'
+    | 'graveOffering';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
-export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty';
+export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty' | 'gearSeed' | 'gearThunder' | 'gearReap';
 
 export type BurstEffect = {
     type: BurstType;
@@ -198,6 +220,28 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     leafDrop: { label: '落ち葉の置き土産', bg: '#e8a24a', fg: '#3a1d00' },
     leafCloak: { label: '落葉の衣', bg: '#e8a24a', fg: '#3a1d00' },
     kindling: { label: '焚きつけ', bg: '#ff7a2f', fg: '#2a0d00' },
+    buildObject: { label: '建設', bg: '#ffd966', fg: '#3a2a00' },
+    demolish: { label: '解体', bg: '#ff7a2f', fg: '#2a0d00' },
+    weather: { label: '風化', bg: '#d8cdb5', fg: '#2a2418' },
+    levelAll: { label: '地ならし', bg: '#ffc24a', fg: '#2a1d00' },
+    reinforce: { label: '補強工事', bg: '#ffd966', fg: '#3a2a00' },
+    expandAll: { label: '増築', bg: '#ffc24a', fg: '#2a1d00' },
+    duplicate: { label: '分譲', bg: '#ffd966', fg: '#3a2a00' },
+    lockRaid: { label: '錠前荒らし', bg: '#e7c84b', fg: '#2a2500' },
+    lockExtend: { label: 'ロックの増築', bg: '#e7c84b', fg: '#2a2500' },
+    vacantSeal: { label: '空き家封じ', bg: '#9aa5b8', fg: '#10131c' },
+    lockConvert: { label: '錠の転換', bg: '#e7c84b', fg: '#2a2500' },
+    lockBlessing: { label: '施錠の加護', bg: '#ffd966', fg: '#3a2a00' },
+    lockDiscount: { label: '錠前割引', bg: '#e7c84b', fg: '#2a2500' },
+    sealBreak: { label: '封鎖の断', bg: '#ffffff', fg: '#10131c' },
+    boltSilence: { label: '沈黙は雷なり', bg: '#fff44f', fg: '#2a2500' },
+    sparkJump: { label: '飛び火', bg: '#ff7a2f', fg: '#2a0d00' },
+    perfectGame: { label: 'パーフェクトゲーム', bg: '#ffffff', fg: '#10131c' },
+    helper: { label: '超助っ人', bg: '#ffc24a', fg: '#2a1d00' },
+    nightVeil: { label: '夜の帳', bg: '#1d2a5a', fg: '#cfe0ff' },
+    graveDiscount: { label: '弔い割引', bg: '#5a2896', fg: '#fff' },
+    poisonWard: { label: '毒返しの構え', bg: '#8a4fd6', fg: '#fff' },
+    graveOffering: { label: '墓守の供物', bg: '#5a2896', fg: '#fff' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
@@ -212,6 +256,9 @@ const BURST_EMOJI: Record<BurstType, string> = {
     gearBloom: '🌺',
     gearSpread: '🌊',
     gearEmpty: '🕳️',
+    gearSeed: '🌷',
+    gearThunder: '🌩️',
+    gearReap: '💀',
 };
 
 export const BoardEffects: React.FC<Props> = ({ effect, burst, damage, size }) => {
