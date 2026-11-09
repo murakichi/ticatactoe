@@ -30,6 +30,22 @@ describe('canPlaceAt / resolveMoveCell', () => {
         expect(canPlaceAt(b, 2, '💙', 'giant', chars)).toBe(true); // 巨人は奪える
     });
 
+    it('盤面が埋まり自陣が⚡無敵で打てるマスが無いとき、計画も打ち直しも打てないマスを返さずチャージでパスする', () => {
+        const el: CharacterId[] = ['electrician', 'tactician'];
+        const b = emptyBoard();
+        for (let i = 0; i < 16; i++) b[i] = { player: '⭕', bind: 6, effects: [{ effect: '❄' }] }; // 敵はライフあり・氷結
+        b[7] = { player: '💙', bind: 0, effects: [{ effect: '⚡' }] }; // 自陣の⚡コマは無敵で本人も触れない
+        b[9] = { player: '💙', bind: 1, effects: [{ effect: '⚡' }] };
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], el);
+        expect(resolveMoveCell(ai, b, el, 5, 9)).toBeNull();
+        const plan = planAITurn(ai, input(b, { characters: el, magic: [3, 3] }), () => 'x');
+        if (plan.kind === 'direct') {
+            const moves = plan.clicks.filter((c) => canPlaceAt(b, c, '💙', 'electrician', el));
+            expect(moves.length).toBe(plan.clicks.length); // 打てないクリックは含まれない
+            if (plan.clicks.length === 0) expect(plan.chargeWhenEmpty).toBe(true);
+        }
+    });
+
     it('スキルでロック付きトークンが着手マスに置かれたら、今の盤面で打ち直す（打てる手が無ければ null）', () => {
         const ai = new AIPlayer('💙', 'witch', ['⭕'], ['witch', 'you']);
         const b = emptyBoard();

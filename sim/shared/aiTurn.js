@@ -144,6 +144,10 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(result.move);
         return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
     }
+    // スキルも対象クリックも無い手番の着手は、実行時に打ち直されない（最初のクリックはそのまま打つ）。打てないマス（⚡無敵の自陣マスなど）なら、ここで打ち直すかチャージでパスにする
+    if (result.skills.length === 0 && !result.lockTargets && result.stompTarget === undefined && result.move !== null) {
+        result.move = (0, exports.resolveMoveCell)(ai, board, input.characters, life, result.move, input.lifeBan);
+    }
     const clicks = [];
     if (result.lockTargets)
         clicks.push(...result.lockTargets);
@@ -186,6 +190,8 @@ const resolveMoveCell = (ai, board, characters, life, cell, lifeBan = false, sol
         return cell;
     ai.updateShield(board);
     const alt = ai.getBestMove(board, life);
+    if (alt !== null && !(0, exports.canPlaceAt)(board, alt, ai.playerSymbol, ai.character, characters))
+        return null; // 打てるマスが無いときの代替も打てない手を返すことがある（盤面が埋まり自陣が⚡で無敵など）。チャージでパスする
     return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };
 exports.resolveMoveCell = resolveMoveCell;
