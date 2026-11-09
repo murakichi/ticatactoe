@@ -582,6 +582,22 @@ function planChargeAndObjects(c) {
             magic -= cost;
         }
     }
+    // 閻魔の舌（毒使い×氷室の番人）: 相手が自分のコマにエフェクトを付けると、そのコマのライフが手番終わりに0になる。氷室の番人は自陣のコマに❄を付け続けるので、
+    // ❄で毒を止めていたコマがライフ0になって奪える（毒使いの最悪対面。上限実験 対氷室 9→24%: docs/tune/poisoner.md）。1つあれば働くので1つだけ立てる。
+    // 置き場所の条件と選び方は大木と同じ（相手にリーチも自分に勝ち筋も無いとき、自分の列を潰さず敵の列を潰せるマス）
+    if (this.character === 'poisoner' && availableSkills.includes(objects_1.OBJECT_DEFS.tongueKing.idx) && this.ownTongues === 0
+        && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        const cost = this.calculateAICost(costs.onClickTongueKing, false, false, 'onClickTongueKing');
+        const cell = this.bestTreeCell(board);
+        if (cell !== null && magic >= cost) {
+            chargeClicks.push({ skill: 'onClickTongueKing', target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+        }
+    }
     c.board = board;
     c.magic = magic;
     return null;
@@ -1132,6 +1148,7 @@ exports.planMoveMethods = {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const args = argsIn[0].some((sq) => (0, ObjectKind_1.isBuilding)(sq))

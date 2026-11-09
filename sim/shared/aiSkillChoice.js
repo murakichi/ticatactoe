@@ -397,6 +397,12 @@ exports.skillChoiceMethods = {
             && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch')) {
             return [92];
         }
+        // 毒使い×氷室の番人: 閻魔の舌(125)を手札に固定して、立てられる手番まで持ち続ける（立てたら外す。舌は1つあれば働く）。置く処理は aiPlanMove.ts
+        if (this.character === 'poisoner' && availableSkills.includes(125)
+            && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'cryomancer')
+            && !board.some((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol)) {
+            return [125];
+        }
         if (this.character === 'giant') {
             return [];
         }
