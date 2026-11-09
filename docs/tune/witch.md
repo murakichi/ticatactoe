@@ -13,7 +13,7 @@
 - 基準線(master 61d9c50・オブジェクト導入/雷霆のコマがライフ0でも奪われない仕様の後、`--rank --games 60 --seed 1 --write-strong`): **4位 witch 49.3%** / 1位 cryomancer 60.7%(差11.4pt) / 2位 electrician 54.0% / 3位 tactician 49.7%。強豪=cryomancer,electrician,poisoner,witch,tactician,magician。対面: electrician 23%(前回50%)・tactician 35%・necromancer 28%・cryomancer 57%。**トップ陥落**（原因: 雷霆への対面が約27pt悪化。雷霆のコマがライフ0でも着手で奪われなくなったため）。
 - 基準線(master 55043be・鍵師追加/縮地削除/審判の日の新仕様の後、`--rank --games 60 --seed 1 --write-strong`): **5位 witch 44.4%** / 1位 magician 62.7%(差18.3pt) / 2位 electrician 59.7% / 3位 cryomancer 54.6%。強豪=electrician,magician,cryomancer,tactician,poisoner,giant。対面: electrician 22%・magician 27%・necromancer 28%・tactician 30%・yinYangMaster 45%。
 - 基準線(master b709763・再検証、`--rank --games 60 --seed 1 --write-strong`): **7位 witch 43.6%**(field 48.6%) / 1位 magician 62.4%(差18.8pt) / 2位 electrician 57.2%。強豪=electrician,magician,giant,keysmith,cryomancer,poisoner。対面: electrician 22%・keysmith 22%・necromancer 28%・magician 30%・tactician 37%。**blocked のまま変わらず**(issue #461 の数値案待ち)。
-- 連続不採用回数: 1（試行44で採用→試行45不採用）
+- 連続不採用回数: 2（試行44で採用→試行45・46不採用）
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running(試行40で普請道楽+砦/市場を採用、9位 39.3%。以前の blocked(issue #461。master 55043be で5位 44.4%、1位 magician 62.7%。ギア・デッキ・AI・オブジェクト札の6軸を測ったが +6pt が上限。枯れた大木のコスト案などの数値相談)
 
@@ -49,6 +49,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 46 | strategy(メタ: 対巨人) | 診断: 巨人のストンプを無効にすると対巨人 26→84%(probe-usage、アブレーション)。ストンプは3×3の敵コマを全て破壊(氷結だけ身代わりになる)。対策案: サイレンス(28)を巨人戦で手札に固定、サイレンスを撃つ魔力の目安を巨人戦だけ3に下げる。seed7/150 対巨人 | 基準 23.3 / 固定 24.7 / 固定+目安3 23.3 / 目安3のみ 26.0（SE ±7、全て誤差内） | 不採用（コードは戻した。サイレンスはストンプ対策として効かない=巨人は2ターンに1回行動で、封じても次の行動で撃たれる等の見込み。未検証: 氷結拡散(44)で自陣を凍らせてストンプを吸わせる案は、❄で🍂が休眠するため理屈が弱く測らず） |
 | 45 | deck(joint: 採用セットの上で1枚差し替え38近傍) | gears=[buildMania,reaper] deck=[5,28,44,52,53,56,62,63,64,92,108,110]、対強豪平均 seed41/60（基準 52.0%±4.7、最新master 9bf7211） | 最良 スラッシュ(5)→弔い割引(99)/吹き寄せ(94) 54.6%(+2.6pt、z≈0.4、閾値 z≥3.0 に遠い)。上位8件は 52.2〜54.6% で誤差内 | 不採用（再測定せず）。デッキの近傍は飽和。次: 対巨人(最悪対面22%)のメタ、対ネクロ |
 | 44 | gear+deck+strategy(最新master a1b1b09で測り直し) | 試行40〜43(古いmaster上)の普請道楽+死神の鎌+砦/市場+立てるAIを最新masterで再測定。seed2/100 対強豪平均: 現行41.3 / ギアのみ16.3 / 札+AIのみ22.8 / **ギア+札+AI 52.3** / 普請道楽+道連れの鍵 42.8 / 軽い札+死神の鎌 19.0 | seed3/200: 現行 29.9→**52.7%**(+22.8pt)。順位表(seed3/200、`--rank --target witch`): **4位 45.0%**(1位 necromancer 62.4%、差17.4pt)。基準線(seed1/60): 9位 33.9%(1位 necromancer 54.7%) | **採用**（3つ揃いで初めて効く。1つ欠けると悪化。aiPlanMove.ts の砦/市場を立てるAIに魔女を追加） |
 | 43 | gear(joint: 普請道楽の上で2枠目) | デッキ[5,28,44,52,53,56,62,63,64,92,108,110]固定で、2枠目を替える(seed2/100、対強豪平均、基準 buildMania+bindingLock 47.0)。buildMania+snowball 46.7 / **+reaper 58.0(+11.0)** / +budSeed 40.5 / +priceWreck 36.8 / +lastStand 42.0。1枠目に置いても同じ(snowball,buildMania 46.7 / reaper,buildMania 58.0) | 環境順位表(seed3/200、`--rank --target witch --gears buildMania,reaper`): 試行40の9位 39.3% → **3位 53.1%**(1位 giant 61.1%、2位 magician 53.5%、差8.0pt)。field 60.0%、最悪対面 巨人22%。有意な不利4・有利6 | **採用**（死神の鎌=ライフ+2・ライフ0の駒を手番終了時に壊す。虎落笛・🍂でライフ0にした敵コマがその場で消え、場を空ける。ライフ+2は🍂の長生きにも効く。戦略(AI)は追加なし=ギアだけでセットの効果が出た） |
