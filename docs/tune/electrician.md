@@ -8,7 +8,7 @@
 - 2026-10-27(play-learn A1): 対策ロックを撃たない(elecNoAnti)で環境 50.3→57.8%、rank seed12/100 で3位 59.8%(1位 poisoner 68.0)。状態は blocked を維持（1位との差 約8pt）
 - 基準線(2026-11-09 master be4fe88, 主指標=対強豪平均): seed1/60 --write-strong は 1位 55.7%(2位 necromancer 54.7%・3位 giant 53.3%)、seed3/200 --target(条件1)は **2位 58.8%** / 1位 necromancer 64.1%(差5.3pt)・3位 giant 58.1%。最悪対面は対necromancer 36.5%。強豪(seed1/60)=necromancer,electrician,magician,keysmith,giant,cryomancer。状態は running 継続(条件2は未測定)。
 - 基準線(2026-11-09 master a48fffc, 新ギア budSeed,harvest, seed1/100 --write-strong): 雷霆 3位 対強豪 52.2%(field 63.1%) / 1位 necromancer 70.4%(2位 yinYangMaster 57.2%)。差18.2pt。最悪対面は対necromancer 33%。強豪=necromancer,electrician,yinYangMaster,magician,giant,pyromancer。1位は雷霆だけでなく全キャラから13pt以上離れた一強で、ギア・デッキの調整では覆せない見込み(降霊が雷霆に対して約50pt効く=診断参照)。ルール側の案は #513。残る未測定の軸: synergy / strategy / joint。
-- 状態: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
+- 状態: blocked(issue #513。ギア・デッキ・synergy・strategy・メタ・joint の6種類を測っても対強豪平均の差が詰まらない: 一強 necromancer 70.4% / 雷霆 3位 52.2%)。以前の記述: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
 - 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
 - 基準線(主指標=対強豪平均, 吹き寄せ採用後, master e2c8264, seed1/100 --write-strong): 5位 対強豪 45.3% / field 56.2% / 最悪対面 対毒使い30%・不利対面2。1位 witch 65.2%(field 69.6%)・2位 tactician 54.1%・3位 pyromancer 48.6%・4位 cryomancer 46.7%。差(1位) 19.9pt。強豪=witch,cryomancer,tactician,poisoner,electrician,pyromancer。
@@ -53,6 +53,7 @@
 - 次の一手(ルール側、要判断): 帯電トークンのコスト3→2(rank seed12/100 で 65.6%=1位)、ライフ平均6→8(66.4%=1位)。issue #44 に記載。
 
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
+| 69 | synergy | 新ギア固定で `--scan deck --swap 3 --cat charge --neighbors 40`(seed41/60): 最良も基準と同値(60.0, z=0.00)。新札 77〜83 を3枚入れる組は -0.26〜-0.43 | 全候補が基準以下 | 不採用 |
 | 68 | strategy | 対ネクロのとき、自分にリーチがあってもサイレンス(28)を撃つ(`aiSkillChoice.ts` の条件緩和) | `--opp necromancer` seed7/400 paired: 34%→34%(変化なし)。サイレンスは手札にある試合が少なく、撃つ場面がほぼ来ない | 不採用(撤回) |
 | 67 | deck | 新ギア固定で `--scan deck --neighbors 30`(seed31/60): 最良 -94(吹き寄せ)+6(バックスラッシュ) 66.0 vs 基準 57.0(z=2.45 < 閾値3.0)。次点 -28+119 62.3 / -52+118 62.0 (z 1.2〜1.5) | 再測定 seed6/300: 基準 61.1 → 候補 60.4(-0.7, 対witch 62→37)。走査の+9ptは上振れ | 不採用 |
 | 66 | gear | `--scan gears`(seed21/60, 63候補): 最良 slot0→budSeed `[budSeed,harvest]` 62.7 vs 基準 51.7(+11, z=3.00 < 閾値3.3) | 再測定 seed2/200: 基準 57.0±1.4 → `[budSeed,harvest]` 62.8(+5.7)・`[lightToken,budSeed]` 61.3(+4.2)。対火の使い手 74→53・対巨人 66→50 は-15pt超の悪化(対魔法使い 37→81 が相殺)。 | 採用確定: seed5/300 でも 57.7→62.0(+4.3, SE約1.6)。完了判定(seed3/200 --target, 新ギア)は条件1 2位 57.0 vs necromancer 63.8 / 条件2 2位 58.6 vs 65.5 でトップ未達(強豪集合が実行ごとに異なるため順位表の絶対値は比べにくい)。 |

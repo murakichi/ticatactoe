@@ -310,7 +310,7 @@ async function main() {
             const keep = base.slice();
             const outs = [], ins = [];
             for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || (deckMod.SKILL_CATALOG.find((c) => c.idx === i) || {}).category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
