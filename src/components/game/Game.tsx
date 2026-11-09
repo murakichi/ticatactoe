@@ -229,6 +229,8 @@ export const Game = (props: GameProps) => {
         return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments);
     };
     /** コストを払う席の状況（実コストの計算は cost.ts で sim と共有） */
+    // 墓地（ネクロマンサーの蘇生コスト。コストの計算 costEnvFor が死体の数として読むので、それより前に宣言する）
+    const [necroCost, setNecroCostAt, setNecroCostAll] = useSeatArray<number>(() => Array(seatCount).fill(NECROMANCY.baseCost));
     const costEnvFor = (seat: number): CostEnv => ({
         board: currentBoard,
         seat,
@@ -246,6 +248,7 @@ export const Game = (props: GameProps) => {
         bigCast: gearTurn.current.bigCast[seat],
         oppBigPrev: gearTurn.current.oppBigPrev[seat],
         veil: gearTurn.current.veil[seat],
+        corpses: NECROMANCY.baseCost - necroCost[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
         lockPrev: gearTurn.current.lockPrev[seat],
         fireBase: gearTurn.current.fireBase[seat],
@@ -2153,7 +2156,6 @@ export const Game = (props: GameProps) => {
     const necromancyDuration = NECROMANCY.duration;
     const necromancyReviveLife = NECROMANCY.reviveLife;
     const necromancySummonCap = NECROMANCY.summonCap;
-    const [necroCost, setNecroCostAt, setNecroCostAll] = useSeatArray<number>(() => Array(seatCount).fill(baseNecromancyCost));
     const [remainNecro, setRemainNecroAt, setRemainNecroAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
 
     // 盤上で駒が消える/奪われるたびに「墓地」を貯める＝ネクロの蘇生コストを軽減（敵味方問わず）

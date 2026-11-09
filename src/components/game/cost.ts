@@ -50,6 +50,8 @@ export type CostEnv = {
     oppBigPrev: boolean;
     /** 夜の帳が効いているか（この席の手番の間、スキルコスト+3。手番の席にだけ掛かる） */
     veil: boolean;
+    /** この席の墓地の死体の数（ネクロマンサーの全スキル軽減の入力） */
+    corpses?: number;
     /** 自分の前の手番以降の相手のスキル使用（返し特売の0コスト条件）と、手番開始時点の盤面全体の🔥の総数（火の車の無料条件） */
     oppSkillPrev: boolean;
     /** 直前の相手ターンにロックが使われたか（錠前荒らしの0コスト条件） */
@@ -72,6 +74,12 @@ export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + leafSurcharge(env.board, env.player) + veilSurcharge(env);
+    // ネクロマンサー(実験): 墓地の死体の数（上限NC_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    if (characterId === 'necromancer') {
+        const cap = process.env.NC_CAP ? +process.env.NC_CAP : 0;
+        const cut = Math.min(env.corpses ?? 0, cap);
+        return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
+    }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer') return skillKey && FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
