@@ -1,4 +1,5 @@
 // Game の入力(props)の型と、キャラの表示名。Game.tsx とそこから切り出したフックが共有する
+import { CustomSkillSpec } from './customSkill';
 import { CharacterId } from '../../types/Character';
 import { GearId } from './gear';
 
@@ -9,6 +10,8 @@ export type PlayerConfig = {
     gears?: GearId[];
     /** デッキ（手札3枠を引く汎用スキルの idx、DECK_SIZE枚）。省略・不正ならキャラの推奨デッキ */
     deck?: number[];
+    /** オリジナルスキル（人間席のデッキに CUSTOM_SKILL_IDX があれば手札に出る。AI席では使わない） */
+    customSkill?: CustomSkillSpec;
 };
 
 export type GameProps = {

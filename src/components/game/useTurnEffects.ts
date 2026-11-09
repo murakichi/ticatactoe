@@ -1,5 +1,9 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { RampState } from './gear';
+import { GearTurnState } from './gearTurn';
+import { lifeZeroVictims } from './gearTurn';
+import { rampAfterRoll, rampBonus } from './gear';
 import React from 'react';
 import { useEffect } from 'react';
 import { CharacterId, YingYangMode } from '../../types/Character';
@@ -20,6 +24,9 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface TurnEffectsScope {
+    setSkillBanAt: (seat: number, value: { mode: "max" | "min"; n: number; } | ((prev: { mode: "max" | "min"; n: number; } | null) => { mode: "max" | "min"; n: number; } | null) | null) => void;
+    setReaperSweeps: React.Dispatch<React.SetStateAction<number>>;
+    rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
     currentBoard: SquareInfo[];
     lastStandHolderFor: (w: Player) => number;
     lastStandUsed: React.MutableRefObject<boolean[]>;
@@ -37,7 +44,7 @@ export interface TurnEffectsScope {
     seatCount: number;
     setGameLog: React.Dispatch<React.SetStateAction<string[]>>;
     flashCells: (indexes: number[]) => void;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     effectSnap: React.MutableRefObject<EffectSnapshot | null>;
     turnSeat: number;
     posName: (i: number) => string;
@@ -71,7 +78,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history } = g;
+    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -268,17 +275,32 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextGears = gearsBySeat[nextSeat];
+        // 雪だるま: 手番ごとに期待値が1段積み上がり、10以上のライフが3回出たらリセット
+        const rampOn = hasGear(nextGears, 'snowball');
+        const ramp = rampRef.current;
+        if (rampOn && ramp.turn !== currentTurn) {
+            ramp.bonus = rampBonus(ramp.states[nextSeat]);
+            ramp.turn = currentTurn;
+            ramp.counted = false;
+        }
         const nextLife = calculateLife(
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? late().poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
+                (rampOn ? ramp.bonus : 0) +
                 objectLifeForNext + // 生命の泉
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );
+        if (rampOn && !ramp.counted) {
+            ramp.states[nextSeat] = rampAfterRoll(ramp.states[nextSeat], nextLife);
+            ramp.counted = true;
+            if (ramp.states[nextSeat].stack === 0) gearTrigger('snowball', '積み上げがリセット');
+        }
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
+        setSkillBanAt(turnSeat, null);
         setLifeBanAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
         setGearOffAt(turnSeat, false);
@@ -291,6 +313,22 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         setLife(nextLife > 0 ? nextLife : 1);
         setUseToken(false);
         setTurnSeat(nextSeat);
+    }, [currentTurn]);
+
+    // 死神の鎌: ライフ0の駒を手番の終わりに壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
+    useEffect(() => {
+        if (currentTurn === 1) return;
+        if (calculateWinner(currentBoard.map((x) => x.player))) return;
+        const victims = lifeZeroVictims(currentBoard, characters, gearsBySeat);
+        if (victims.length === 0) return;
+        const board = currentBoard.slice();
+        for (const k of victims) board[k] = { player: undefined, bind: 0, effects: [] };
+        setCurrentBoard(board);
+        late().addCorpses(victims.length);
+        addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
+        gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        flashCells(victims);
+        setReaperSweeps((c) => c + 1);
     }, [currentTurn]);
 
     useEffect(() => {

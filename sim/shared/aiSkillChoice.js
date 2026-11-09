@@ -2,6 +2,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.skillChoiceMethods = void 0;
+// AIPlayer のメソッド群: スキルの選択（コストの見積もり・引き直し・ロックの選び方・手札から使う札の決定）
+// メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
+const aiConstants_1 = require("./aiConstants");
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const bigSkills_1 = require("./bigSkills");
@@ -13,7 +16,7 @@ const turn_1 = require("./turn");
 const tokenSkills_1 = require("./tokenSkills");
 const lifeBan_1 = require("./lifeBan");
 const charge_1 = require("./charge");
-const aiConstants_1 = require("./aiConstants");
+const aiConstants_2 = require("./aiConstants");
 /** 固有スキル・サイレンス・毒霧（相手リーチがなければ積極的に使う）。決まれば確定したスキル列を返し、そうでなければ null（次の段階へ） */
 function chooseFinisherSkills(c) {
     const { board, costs, availableSkills, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay, mana, oppReaches, myPieces, spend } = c;
@@ -22,9 +25,9 @@ function chooseFinisherSkills(c) {
     // 次の手番の魔力が実コスト以上で、+3 しても届かなくならない（実コスト+3未満）ときだけ撃つ。他のスキルより先に払う（トークンで魔力を使い切ると撃てない）
     if (this.character === 'electrician' && availableSkills.includes(98)) {
         const frost = board.reduce((n, sq) => n + (0, thermal_1.frozenStacks)(sq), 0);
-        const glacierCost = Math.max(1, aiConstants_1.GLACIER_COST - frost);
+        const glacierCost = Math.max(1, aiConstants_2.GLACIER_COST - frost);
         const nextCryoMagic = this.opponents.filter((o) => this.characters[(0, Player_1.seatOf)(o)] === 'cryomancer').map((o) => { var _a; return ((_a = seatMagic[(0, Player_1.seatOf)(o)]) !== null && _a !== void 0 ? _a : 0) + 1; });
-        if (nextCryoMagic.some((m) => m >= glacierCost && m < glacierCost + aiConstants_1.NIGHT_VEIL_RAISE)) {
+        if (nextCryoMagic.some((m) => m >= glacierCost && m < glacierCost + aiConstants_2.NIGHT_VEIL_RAISE)) {
             spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
         }
     }
@@ -81,7 +84,7 @@ function chooseFinisherSkills(c) {
         this.opponents.some((o) => {
             var _a, _b;
             const seat = (0, Player_1.seatOf)(o);
-            return ((_a = seatMagic[seat]) !== null && _a !== void 0 ? _a : 0) + 1 >= ((_b = aiConstants_1.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _b !== void 0 ? _b : Infinity);
+            return ((_a = seatMagic[seat]) !== null && _a !== void 0 ? _a : 0) + 1 >= ((_b = aiConstants_2.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _b !== void 0 ? _b : Infinity);
         })) {
         spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
     }
@@ -95,7 +98,7 @@ function chooseTurnEndingSkills(c) {
     // → getBestMoveでブロック配置させる
     // 劣勢時の破壊系 (ターン終了するので、相手リーチ時は使わない→ブロック優先)
     // 魔力が有り余るとき(RICH_MAGIC以上残る)は劣勢でなくても撃つ（斜めの敵コマが自陣より多いときだけ。オピウムは敵コマが多いとき）
-    const richFor = (cost) => mana.remaining >= cost + aiConstants_1.RICH_MAGIC;
+    const richFor = (cost) => mana.remaining >= cost + aiConstants_2.RICH_MAGIC;
     if (skills.length === 0 && oppReaches === 0 && (isLosing || richFor(this.calculateAICost(costs.onClickSlash, false, false, 'onClickSlash')))) {
         if (availableSkills.includes(5)) {
             let oppOn = 0, myOn = 0;
@@ -136,21 +139,23 @@ function chooseTurnEndingSkills(c) {
         if (mana.remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2))
             spend(vsCost, 'onClickVacantSeal');
     }
-    // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+    // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 払えれば撃つ（自分の手番は着手が先になるので、自分にリーチがあるときは撃たない）。
     // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
     if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
         const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
         const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
-        if (mana.remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost))))
+        // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
+        // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
+        if (mana.remaining >= sealCost)
             spend(sealCost, 'onClickSeal');
     }
     if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
         const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
-        if (richFor(opiumCost) && oppHitTotal >= aiConstants_1.RICH_OPIUM_MIN_HIT && oppHitTotal > myPieces)
+        if (richFor(opiumCost) && oppHitTotal >= aiConstants_2.RICH_OPIUM_MIN_HIT && oppHitTotal > myPieces)
             spend(opiumCost, 'onClickOpium');
     }
     // ターン終了スキルが選ばれていたらここで返す
-    if (skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s))) {
+    if (skills.some(s => aiConstants_2.TURN_ENDING_SKILLS.includes(s))) {
         this.lastSpent = magic - mana.remaining;
         this.lastSpent = magic - mana.remaining;
         return skills;
@@ -283,8 +288,8 @@ function chooseTokenSkills(c) {
             spend(this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
         }
         else if (this.character === 'yinYangMaster' && availableSkills.includes(72)
-            && board.filter((sq) => sq.player === this.playerSymbol && (0, util_1.isShikigami)(sq)).length < aiConstants_1.SH_MAX
-            && mana.remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + aiConstants_1.SH_RESERVE) {
+            && board.filter((sq) => sq.player === this.playerSymbol && (0, util_1.isShikigami)(sq)).length < aiConstants_2.SH_MAX
+            && mana.remaining >= this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom') + aiConstants_2.SH_RESERVE) {
             spend(this.calculateAICost(costs.onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
         }
         else if (frostUse && freeCells >= 4 && availableSkills.includes(46) && mana.remaining >= this.calculateAICost(costs.onClickDoubleFrostToken, true, false, 'onClickDoubleFrostToken')) {
@@ -330,7 +335,7 @@ function chooseLeftoverSkills(c) {
     // 雷霆の巫: 他に撃つものが無く、魔力に余裕があるときだけランダム帯電（コスト+1 以上残る）
     if (this.character === 'electrician' && skills.length === 0 && availableSkills.includes(25)) {
         const rc = this.calculateAICost(costs.onClickChargeRandom, false, false, 'onClickChargeRandom');
-        if (mana.remaining >= rc + aiConstants_1.CHARGE_RANDOM_MARGIN)
+        if (mana.remaining >= rc + aiConstants_2.CHARGE_RANDOM_MARGIN)
             spend(rc, 'onClickChargeRandom');
     }
     // 裸の王様: 相手の有効なギアが2つ以上ある、または自分に勝ち筋(リーチ)があって相手に使える土壇場の防壁があるとき、ギアを封じる (旧sim AI と同一)
@@ -344,22 +349,22 @@ function chooseLeftoverSkills(c) {
         spend(this.calculateAICost(costs.onClickFireWheel, false, false, 'onClickFireWheel'), 'onClickFireWheel');
     }
     // 夜の帳: 次の相手の手番のスキルコストを+3。他に撃つものが無く、相手が高いスキルを撃てそうな魔力を持っているときだけ
-    if (availableSkills.includes(98) && skills.length === 0 && opponentMagic >= aiConstants_1.NIGHT_VEIL_OPP_MAGIC) {
+    if (availableSkills.includes(98) && skills.length === 0 && opponentMagic >= aiConstants_2.NIGHT_VEIL_OPP_MAGIC) {
         spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
     }
     // 毒返しの構え: 自陣のコマが3つ以上あり、構えが無く、他に撃つものが無いとき（壊されると毒付きのコマが返る）
     if (availableSkills.includes(100) && !this.wardActive && skills.length === 0 &&
-        board.filter((sq) => sq.player === this.playerSymbol).length >= aiConstants_1.POISON_WARD_MIN_PIECES) {
+        board.filter((sq) => sq.player === this.playerSymbol).length >= aiConstants_2.POISON_WARD_MIN_PIECES) {
         spend(this.calculateAICost(costs.onClickPoisonWard, false, false, 'onClickPoisonWard'), 'onClickPoisonWard');
     }
     // 墓守の供物: ネクロマンサーが、降霊が未発動で、自陣のコマが3つ以上・死体が3体以下のとき、最も弱いコマを供物にして死体と魔力を作る
     if (availableSkills.includes(101) && this.character === 'necromancer' && necroRemain === 0 && skills.length === 0 &&
-        turn_1.NECROMANCY.baseCost - necroCost <= aiConstants_1.GRAVE_OFFERING_MAX_CORPSES &&
-        board.filter((sq) => sq.player === this.playerSymbol).length >= aiConstants_1.GRAVE_OFFERING_MIN_PIECES) {
+        turn_1.NECROMANCY.baseCost - necroCost <= aiConstants_2.GRAVE_OFFERING_MAX_CORPSES &&
+        board.filter((sq) => sq.player === this.playerSymbol).length >= aiConstants_2.GRAVE_OFFERING_MIN_PIECES) {
         spend(this.calculateAICost(costs.onClickGraveOffering, false, false, 'onClickGraveOffering'), 'onClickGraveOffering');
     }
     // 魔力が有り余るとき: 置くコマのライフを厚くする（ライフ+3 → 2倍の順。減衰で盤面が空になる長期戦でコマが残りやすくなる）
-    if (mana.remaining >= aiConstants_1.RICH_MAGIC) {
+    if (mana.remaining >= aiConstants_2.RICH_MAGIC) {
         for (const [idx, key] of [[0, 'onClickAddLife'], [1, 'onClickBibine']]) {
             if (availableSkills.includes(idx) && !skills.includes(key))
                 spend(this.calculateAICost(costs[key], false, false, key), key);
@@ -370,6 +375,13 @@ function chooseLeftoverSkills(c) {
 }
 const SKILL_PHASES = [chooseFinisherSkills, chooseTurnEndingSkills, choosePrepSkills, chooseTokenSkills, chooseLeftoverSkills];
 exports.skillChoiceMethods = {
+    /** 「あなた」: 相手が1キャラだけで、その相手向けに固定する札（YOU_HOLD_VS）か */
+    holdsVsOpponent(idx) {
+        var _a;
+        const foes = this.characters.filter((_, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol));
+        const kinds = Array.from(new Set(foes));
+        return kinds.length === 1 && ((_a = aiConstants_1.YOU_HOLD_VS[kinds[0]]) !== null && _a !== void 0 ? _a : []).includes(idx);
+    },
     chooseLocks(board, opponentMagic, life, availableSkills) {
         // A/B検証の結果、固有スキル依存のキャラ(巨人/魔法使い/陰陽師)はロックが柔軟性を削いで不利だったため無効化。
         // 有益だったキャラ(軍師=トークン固定 / あなた / ネクロ=中立)のみロックする。
@@ -416,11 +428,12 @@ exports.skillChoiceMethods = {
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
-            (this.character === 'magician' && aiConstants_1.MAGICIAN_HOLD.includes(idx)) ||
+            (this.character === 'magician' && (this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer') ? aiConstants_1.MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'yinYangMaster') ? aiConstants_1.MAGICIAN_HOLD_VS_YINYANG : aiConstants_2.MAGICIAN_HOLD).includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
+            (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'magician' || c === 'witch')));
         // 盤面的に価値が高いスキル
         const valued = (idx) => {
@@ -446,7 +459,7 @@ exports.skillChoiceMethods = {
         };
         const locks = [];
         for (const idx of availableSkills) {
-            if (idx < 0 || idx >= aiConstants_1.SKILL_POOL_SIZE)
+            if (idx < 0 || idx >= aiConstants_2.SKILL_POOL_SIZE)
                 continue;
             if (preferred(idx) || valued(idx))
                 locks.push(idx);
@@ -486,7 +499,7 @@ exports.skillChoiceMethods = {
         if (this.discountActive)
             return magic >= costs.onClickShuffle + 2 ? {} : null;
         // 軽減札を撃てば撃てるスキルが出るなら、引き直しではなく通常の軽減札プランに任せる
-        for (const r of aiConstants_1.REROLL_REDUCERS) {
+        for (const r of aiConstants_2.REROLL_REDUCERS) {
             if (!availableSkills.includes(r.idx))
                 continue;
             const rc = this.calculateAICost(costs[r.key], false, false, r.key);
@@ -499,7 +512,7 @@ exports.skillChoiceMethods = {
                 return null;
         }
         // 軽減札 + シャッフル(+2の余裕) + 引き直し後に撃つ分(+4) の魔力があるとき
-        const r = aiConstants_1.REROLL_REDUCERS.find((x) => availableSkills.includes(x.idx) && magic >= this.calculateAICost(costs[x.key], false, false, x.key) + 2 + 4);
+        const r = aiConstants_2.REROLL_REDUCERS.find((x) => availableSkills.includes(x.idx) && magic >= this.calculateAICost(costs[x.key], false, false, x.key) + 2 + 4);
         return r ? { discount: r.key } : null;
     },
     /** 戦略的スキル選択（複数スキルを返す場合あり） */
@@ -547,7 +560,7 @@ exports.skillChoiceMethods = {
         }
         const RESERVE_SKIP = ['onClickBuds', 'onClickAddLife', 'onClickToken', 'onClickBudsToken', 'onClickDoubleToken'];
         const spend = (cost, skill) => {
-            if (this.holdPG > 0 && !aiConstants_1.PG_HOLD_FREE.includes(skill) && mana.remaining - cost < this.holdPG)
+            if (this.holdPG > 0 && !aiConstants_2.PG_HOLD_FREE.includes(skill) && mana.remaining - cost < this.holdPG)
                 return false;
             if (reserve > 0 && (RESERVE_SKIP.includes(skill) || (this.character === 'witch' && !WITCH_LEAF_SPEND.includes(skill))) && mana.remaining - cost < reserve)
                 return false;

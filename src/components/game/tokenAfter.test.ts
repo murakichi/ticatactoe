@@ -11,7 +11,7 @@ describe('afterTokenPlaced（トークン後の盤面処理の順序。Game / si
         const b = emptyBoard();
         b[5] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] };
         const rng = jest.fn(() => 0);
-        expect(afterTokenPlaced(b, 5, '🌱', opts(undefined, rng))).toEqual({ granted: 1, locked: false, spreadTo: null });
+        expect(afterTokenPlaced(b, 5, '🌱', opts(undefined, rng))).toEqual({ granted: 1, locked: false, spreadTo: null, seeded: false });
         expect(afterTokenPlaced(b, 5, undefined, opts(undefined, rng)).granted).toBe(0);
         expect(rng).not.toHaveBeenCalled();
     });
@@ -28,7 +28,7 @@ describe('afterTokenPlaced（トークン後の盤面処理の順序。Game / si
         const b = emptyBoard();
         b[5] = { player: '💙', bind: 4, effects: [] };
         const hit = afterTokenPlaced(b, 5, undefined, opts(['bindingLock'], () => 0));
-        expect(hit).toEqual({ granted: 1, locked: true, spreadTo: null });
+        expect(hit).toEqual({ granted: 1, locked: true, spreadTo: null, seeded: false });
         expect(has(b[5], '🔑')).toBe(true);
         const c = emptyBoard();
         c[5] = { player: '💙', bind: 4, effects: [] };
@@ -42,11 +42,27 @@ describe('afterTokenPlaced（トークン後の盤面処理の順序。Game / si
         b[5] = { player: '💙', bind: 4, effects: [{ effect: '🌱' }] };
         b[6] = { player: '💙', bind: 4, effects: [] };
         const r = afterTokenPlaced(b, 5, '🌱', opts(['propagate'], () => 0));
-        expect(r).toEqual({ granted: 2, locked: false, spreadTo: 6 });
+        expect(r).toEqual({ granted: 2, locked: false, spreadTo: 6, seeded: false });
         expect(has(b[6], '🌱')).toBe(true);
         const c = emptyBoard();
         c[5] = { player: '💙', bind: 4, effects: [] };
         c[6] = { player: '💙', bind: 4, effects: [] };
         expect(afterTokenPlaced(c, 5, undefined, opts(['propagate'], () => 0)).spreadTo).toBeNull();
+    });
+
+    it('芽吹き: ライフが基準以上の自陣のコマに🌱が付く（収穫・伝播には数えない）。ギアが無ければ付かない', () => {
+        const mk = (): SquareInfo[] => {
+            const b = emptyBoard();
+            b[5] = { player: '💙', bind: 9, effects: [] };
+            return b;
+        };
+        const b = mk();
+        const r = afterTokenPlaced(b, 5, undefined, opts(['budSeed'], () => 0.99));
+        expect(r.seeded).toBe(true);
+        expect(r.granted).toBe(0);
+        expect(has(b[5], '🌱')).toBe(true);
+        const c = mk();
+        expect(afterTokenPlaced(c, 5, undefined, opts(undefined, () => 0.99)).seeded).toBe(false);
+        expect(has(c[5], '🌱')).toBe(false);
     });
 });

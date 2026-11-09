@@ -1,5 +1,9 @@
 // Game.tsx から切り出したハンドラ群: ログのコピー・保存、設定画面に戻る、再スタート
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { RampState } from './gear';
+import { GearTurnState } from './gearTurn';
+import { GearId } from './gear';
+import { rampStart } from './gear';
 import React from 'react';
 import { useState } from 'react';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -12,6 +16,9 @@ import { PendingMode } from './pendingMode';
 import { GameLate } from './gameLate';
 
 export interface GameControlsScope {
+    setSkillBanAll: React.Dispatch<React.SetStateAction<({ mode: "max" | "min"; n: number; } | null)[]>>;
+    rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
+    gearsBySeat: GearId[][];
     geo: BoardGeometry;
     seatCount: number;
     props: GameProps;
@@ -59,15 +66,15 @@ export interface GameControlsScope {
     setBoardEffect: React.Dispatch<React.SetStateAction<SkillEffect | null>>;
     setBoardBurst: React.Dispatch<React.SetStateAction<BurstEffect | null>>;
     setLockedSkillsAll: React.Dispatch<React.SetStateAction<number[][]>>;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     ruinState: React.MutableRefObject<{ active: boolean[]; pending: boolean[]; snap: ("💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷" | undefined)[] | null; snapBuds: number[] | null; snapFlames: number[] | null; ashActive: number[]; ashPending: number[]; lastMove: number | null; }>;
     lastStandUsed: React.MutableRefObject<boolean[]>;
     setLastStandSaves: React.Dispatch<React.SetStateAction<number>>;
-    setPriceTables: React.Dispatch<React.SetStateAction<({ onClickToken: number; onClickTotalAssault: number; onClickToggleYingYang: number; onClickShikigamiPlace: number; onClickShikigamiBlast: number; onClickShikigamiAll: number; onClickShikigamiRandom: number; onClickShikigamiFlood: number; onClickShikigamiBless: number; onClickShikigamiPurge: number; onClickShikigamiCurse: number; onClickShikigamiDiscount: number; onClickStomp: number; onClickJudgeDay: number; onClickCharge: number; onClickAddLife: number; onClickDepressionCherry: number; onClickShuffle: number; onClickBibine: number; onClickUseLock: number; onClickDoubleLock: number; onClickTripleLock: number; onClickBuds: number; onClickDoubleBuds: number; onClickBudsToken: number; onClickBothToken: number; onClickDoubleToken: number; onClickSlash: number; onClickBackSlash: number; onClickTsunami: number; onClickOpium: number; onClickWalpurgisNight: number; onClickMiasma: number; onClickInjection: number; onClickPoisonToken: number; onClickSerum: number; onClickIntensify: number; onClickPandemic: number; onClickProliferate: number; onClickChargeToken: number; onClickChargeOne: number; onClickChargeSpread: number; onClickDoubleChargeToken: number; onClickChargeArea: number; onClickChargeRandom: number; onClickJammer: number; onClickHailMary: number; onClickSilence: number; onClickPoisonMist: number; onClickFreeze: number; onClickIgnite: number; onClickGlacier: number; onClickCryoFreeze: number; onClickCleanse: number; onClickInferno: number; onClickMogaribue: number; onClickSeal: number; onClickHarvestEve: number; onClickSolstice: number; onClickSucker: number; onClickWindborne: number; onClickFlameToken: number; onClickDoubleFlameToken: number; onClickSwidden: number; onClickSacrifice: number; onClickFrostArea: number; onClickIcicle: number; onClickRandomFreeze: number; onClickFreezeSpread: number; onClickFrostToken: number; onClickDoubleFrostToken: number; onClickShatter: number; onClickFrostfall: number; onClickBoost: number; onClickClone: number; onClickPlunder: number; onClickMarkdown: number; onClickEffectDiscount: number; onClickTokenDiscount: number; onClickVitalMarkdown: number; onClickUniqueDiscount: number; onClickClearance: number; onClickRandomCast: number; onClickCounterMarkdown: number; onClickBurnout: number; onClickLeafToken: number; onClickTwinLeafToken: number; onClickDoubleLeafToken: number; onClickLeafAll: number; onClickBonfire: number; onClickMulch: number; onClickAutumn: number; onClickLeafFrost: number; onClickSpringWind: number; onClickKimon: number; onClickFireWheel: number; onClickStrip: number; onClickChargeSeason: number; onClickBristle: number; onClickRelease: number; onClickStash: number; onClickThunderFire: number; onClickDarkPot: number; onClickChargeHeal: number; onClickLeafDrop: number; onClickKindling: number; onClickLeafCloak: number; onClickTinder: number; onClickSmallFry: number; onClickFirstFrost: number; onClickGather: number; onClickBurnOff: number; onClickFreeToken: number; onClickSpark: number; onClickNightVeil: number; onClickGraveDiscount: number; onClickPoisonWard: number; onClickGraveOffering: number; onClickPerfectGame: number; onClickHelper: number; onClickSecondCatch: number; onClickBigTree: number; onClickDeadTree: number; onClickSpring: number; onClickFort: number; onClickThundercloud: number; onClickMarket: number; onClickSanctuary: number; onClickPoisonSwamp: number; onClickBoltSilence: number; onClickDemolish: number; onClickWeather: number; onClickLevelAll: number; onClickReinforce: number; onClickExpandAll: number; onClickDuplicate: number; onClickWorkshop: number; onClickBarrierStone: number; onClickAmuletShrine: number; onClickLuckyCat: number; onClickMudField: number; onClickTongueKing: number; onClickEightTrigrams: number; onClickSoloSign: number; onClickOneWord: number; onClickBlindMonkey: number; onClickLockRaid: number; onClickLockExtend: number; onClickLockBlessing: number; onClickVacantSeal: number; } | null)[]>>;
+    setPriceTables: React.Dispatch<React.SetStateAction<(SkillCosts | null)[]>>;
     rollPriceTables: () => (SkillCosts | null)[];
 }
 export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
-    const { geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables } = g;
+    const { geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll } = g;
 
 
     const buildLogText = (): string => {
@@ -126,6 +133,7 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
+        setSkillBanAll(Array(seatCount).fill(null));
         setLifeBanAll(Array(seatCount).fill(false));
         setGearOffAll(Array(seatCount).fill(false));
         setChargeBuffAll(Array(seatCount).fill(0));
@@ -183,6 +191,7 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
             ward: Array<number>(seatCount).fill(0),
             wardFresh: Array<boolean>(seatCount).fill(false),
             lockSeen: Array<boolean>(seatCount).fill(false),
+            lockFreeUsed: Array<boolean>(seatCount).fill(false),
             lockPrev: Array<boolean>(seatCount).fill(false),
             blessing: Array<number>(seatCount).fill(0),
             blessingFresh: Array<boolean>(seatCount).fill(false),
@@ -201,6 +210,7 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
             lastMove: null,
         };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
+        rampRef.current = { states: gearsBySeat.map(() => rampStart()), turn: 0, counted: false, bonus: 0, first: rampRef.current.first };
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };

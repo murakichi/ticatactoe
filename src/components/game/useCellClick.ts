@@ -1,5 +1,7 @@
 // Game.tsx から切り出したハンドラ群: マスのクリック（スキルの対象選択・通常の着手）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { GearTurnState } from './gearTurn';
+import { seedBud } from './tokenAfter';
 import React from 'react';
 import AIPlayer from './AIPlayer';
 import { CharacterId } from '../../types/Character';
@@ -24,6 +26,10 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface CellClickScope {
+    useLockConvert: boolean;
+    useCustom: boolean;
+    exeLockConvert: (i: number) => void;
+    exeCustom: (i: number) => void;
     hailMarySpin: { label: string; phase: 'intro' | 'spin' | 'reveal'; } | null;
     setPreviewCells: React.Dispatch<React.SetStateAction<number[]>>;
     useThunderFire: boolean;
@@ -131,7 +137,7 @@ export interface CellClickScope {
     addCorpses: (n: number) => void;
     useBuds: [boolean, number];
     setUseBuds: React.Dispatch<React.SetStateAction<[boolean, number]>>;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     gearsBySeat: GearId[][];
     turnGears: GearId[];
     useAssault: number[];
@@ -148,7 +154,7 @@ export interface CellClickScope {
     setCurrentTurn: React.Dispatch<React.SetStateAction<number>>;
 }
 export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
-    const { hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn } = g;
+    const { hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn, exeCustom, exeLockConvert, useCustom, useLockConvert } = g;
 
     // asObject: 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣のコマで置き換え）。人間の手番で未指定なら選択ダイアログを出す
     const onCellClick = (i: number, asObject?: boolean) => {
@@ -275,6 +281,10 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             exeKimon(i);
             return;
         }
+        if (useLockConvert) {
+            exeLockConvert(i);
+            return;
+        }
 
         if (useFrostArea) {
             exeFrostArea(i);
@@ -315,6 +325,16 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
 
         if (useIgnite) {
             exeIgnite(i);
+            return;
+        }
+
+        if (useCustom) {
+            exeCustom(i);
+            return;
+        }
+
+        if (useCustom) {
+            exeCustom(i);
             return;
         }
 
@@ -438,6 +458,14 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
         }
 
         nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+        // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+        if (!placed.reinforced) {
+            const seeded = seedBud(nextBoard[i], currentTurnPlayer, turnGears);
+            if (seeded) {
+                nextBoard[i] = seeded;
+                gearTrigger('budSeed', 'バッズ付きで設置');
+            }
+        }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
         if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 

@@ -28,7 +28,9 @@ export type PendingMode =
     | 'freezeSpread'
     | 'shatter'
     | 'sacrifice'
-    | 'kimon';
+    | 'kimon'
+    | 'custom'
+    | 'lockConvert';
 
 export const usePendingMode = () => {
     const [mode, setMode] = useState<PendingMode | null>(null);

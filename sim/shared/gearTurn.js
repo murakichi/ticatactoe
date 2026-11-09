@@ -1,10 +1,11 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
+exports.lifeZeroVictims = exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
+const charge_1 = require("./charge");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
@@ -84,6 +85,8 @@ const advanceGearState = (g, r, input) => {
     g.oppSkilled[nextSeat] = false;
     g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
     g.lockSeen[nextSeat] = false;
+    g.lockFreeUsed[endSeat] = false; // 鍵師の無料ロックは手番ごと
+    g.lockFreeUsed[nextSeat] = false;
     g.fireBase[nextSeat] = (0, thermal_1.fireStacksTotal)(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = (0, exports.plantedStacksTotal)(board);
@@ -124,10 +127,11 @@ exports.advanceGearState = advanceGearState;
 /**
  * ギア補正（adjustCostByGear）の入力。手番の席は今の手番内の状態、手番でない席（パネルで非手番側のコストを出すとき）は『その席の次の手番の頭』の状態で出す。
  * @param ailments 病炎の契りの入力（自陣にある毒・火炎の種類数。ギア未装備なら 0）
+ * @param ownObjects 普請道楽の入力（自陣にオブジェクトがあるか。ギア未装備なら false）
  */
-const gearCostContext = (g, r, seat, turnSeat, ailments) => seat === turnSeat
-    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat] }
-    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat] };
+const gearCostContext = (g, r, seat, turnSeat, ailments, ownObjects = false) => seat === turnSeat
+    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects }
+    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects };
 exports.gearCostContext = gearCostContext;
 /**
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
@@ -140,6 +144,8 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (keysmith_1.LOCK_SKILL_KEYS.has(skillId))
+            g.lockFreeUsed[seat] = true; // 鍵師のパッシブ: 手番の最初のロック系スキルが無料。使ったので以降は通常
         if (keysmith_1.LOCK_USED_KEYS.has(skillId))
             g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
@@ -156,3 +162,15 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     g.echoReady[seat] = false;
 };
 exports.noteSkillUsed = noteSkillUsed;
+/**
+ * 死神の鎌: 誰かが装備していれば、ライフ0になった駒（プレイヤーを問わず）を手番の終わりに壊す。
+ * 氷結中・🔑ロック中・雷霆の巫の⚡無敵の駒、オブジェクトは壊れない。壊すマスの添字を返す（盤は書き換えない）。
+ */
+const lifeZeroVictims = (board, chars, gears) => {
+    if (!gears.some((g) => (0, gear_1.hasGear)(g, 'reaper')))
+        return [];
+    return board
+        .map((sq, i) => (sq.player && !sq.object && sq.bind <= 0 && !(0, thermal_1.isFrozen)(sq) && !sq.effects.some((e) => e.effect === '🔑') && !(0, charge_1.isShielded)(sq, chars) ? i : -1))
+        .filter((i) => i >= 0);
+};
+exports.lifeZeroVictims = lifeZeroVictims;

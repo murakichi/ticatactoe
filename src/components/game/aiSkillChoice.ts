@@ -1,5 +1,6 @@
 // AIPlayer のメソッド群: スキルの選択（コストの見積もり・引き直し・ロックの選び方・手札から使う札の決定）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
+import { MAGICIAN_HOLD_VS_NECRO, MAGICIAN_HOLD_VS_YINYANG, YOU_HOLD_VS } from './aiConstants';
 import type AIPlayer from './AIPlayer';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -156,12 +157,14 @@ function chooseTurnEndingSkills(this: AIPlayer, c: SkillChoiceContext): string[]
         // 鍵師以外は自分も置けなくなる（空きマスが全部ロック）ので、敵のリーチが2つ以上（1手で塞げない）のときだけ撃つ
         if (mana.remaining >= vsCost && (this.character === 'keysmith' || oppReaches >= 2)) spend(vsCost, 'onClickVacantSeal');
     }
-    // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 敵のリーチが2つ以上あって1手で塞ぎきれないとき、または魔力が有り余り敵陣のロックを2つ以上解除できるときに撃つ。
+    // 鍵師の封鎖の断（ターン終了・固有スキルなので手札に依らない）: 払えれば撃つ（自分の手番は着手が先になるので、自分にリーチがあるときは撃たない）。
     // 自分にリーチがあるなら着手が先（鍵師は空きマスのロックを無視して置ける）
     if (this.character === 'keysmith' && skills.length === 0 && this.countReaches(board, this.playerSymbol) === 0) {
         const released = sealReleaseCells(board, this.playerSymbol).length;
         const sealCost = this.calculateAICost(sealBaseCost(costs.onClickSeal, released), false, false, 'onClickSeal');
-        if (mana.remaining >= sealCost && (oppReaches >= 2 || (released >= 2 && richFor(sealCost)))) spend(sealCost, 'onClickSeal');
+        // 払えれば撃つ。かつては『敵のリーチ2つ以上、または魔力に余裕かつ敵のロック2つ以上解除』に絞っていたが、ほぼ撃たれなかった（60試合で0回）。
+        // 払えれば常に撃つ版は、対強豪平均 seed2/200: 18.0→22.6, seed3/200: 18.7→22.0（+4.6/+3.3pt）。撃った試合の勝率が高い（10試合中5勝）。条件を絞る案: 敵リーチ1つ以上は撃たれず（3回/60試合）、魔力に余裕(richFor)も2回/60試合
+        if (mana.remaining >= sealCost) spend(sealCost, 'onClickSeal');
     }
     if (skills.length === 0 && oppReaches === 0 && availableSkills.includes(8)) {
         const opiumCost = this.calculateAICost(costs.onClickOpium, false, false, 'onClickOpium');
@@ -401,6 +404,13 @@ const SKILL_PHASES = [chooseFinisherSkills, chooseTurnEndingSkills, choosePrepSk
 
 export const skillChoiceMethods = {
 
+    /** 「あなた」: 相手が1キャラだけで、その相手向けに固定する札（YOU_HOLD_VS）か */
+    holdsVsOpponent(this: AIPlayer, idx: number): boolean {
+        const foes = this.characters.filter((_, seat) => seat !== seatOf(this.playerSymbol));
+        const kinds = Array.from(new Set(foes));
+        return kinds.length === 1 && (YOU_HOLD_VS[kinds[0]] ?? []).includes(idx);
+    },
+
     chooseLocks(
         this: AIPlayer,
         board: SquareInfo[],
@@ -450,11 +460,12 @@ export const skillChoiceMethods = {
             (this.character === 'tactician' && tokenIdx.includes(idx)) ||
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
-            (this.character === 'magician' && MAGICIAN_HOLD.includes(idx)) ||
+            (this.character === 'magician' && (this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer') ? MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[seatOf(o)] === 'yinYangMaster') ? MAGICIAN_HOLD_VS_YINYANG : MAGICIAN_HOLD).includes(idx)) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99)) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
+            (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'magician' || c === 'witch')));
 
         // 盤面的に価値が高いスキル

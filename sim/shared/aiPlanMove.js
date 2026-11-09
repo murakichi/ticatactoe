@@ -2,6 +2,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.planMoveMethods = exports.planMove = void 0;
+// AIPlayer のメソッド群: 1手番の計画のエントリ（makeMove → planMove）
+// メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
+const keysmith_1 = require("./keysmith");
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const objects_1 = require("./objects");
@@ -531,6 +534,25 @@ function planChargeAndObjects(c) {
             magic -= cost;
         }
     }
+    // 砦・市場（鍵師）: 自陣にオブジェクトが無い間だけ1つ立てる。普請道楽ギア（自陣にオブジェクトがある間は全スキル-3）の起点にする。
+    // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
+    if (this.character === 'keysmith' && this.ownObjectCount === 0
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        for (const [def, key] of [[objects_1.OBJECT_DEFS.fort, 'onClickFort'], [objects_1.OBJECT_DEFS.market, 'onClickMarket']]) {
+            if (!availableSkills.includes(def.idx))
+                continue;
+            const cost = this.calculateAICost(costs[key], false, false, key);
+            const cell = this.bestTreeCell(board);
+            if (cell === null || magic < cost)
+                continue;
+            chargeClicks.push({ skill: key, target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+            break;
+        }
+    }
     // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
     // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
     if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.thundercloud.idx) && this.ownClouds < aiConstants_1.CLOUD_MAX
@@ -1005,6 +1027,10 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         const graveCut = (0, graveSkills_1.graveDiscountAmount)((0, graveSkills_1.corpseCount)(turn_1.NECROMANCY.baseCost, necroCost));
         if (graveCut >= 2)
             reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
+        // 錠前割引（idx 135）: 盤面のロックのマスの数だけ、このターンの全スキルを軽減する。コスト1より多く軽減できる（ロック2つ以上）ときだけ候補にする
+        const lockCut = (0, keysmith_1.lockedSquareCount)(board);
+        if (lockCut >= 2)
+            reducers.push({ idx: 135, key: 'onClickLockDiscount', cut: lockCut });
         let best = null;
         for (const r of reducers) {
             if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key))
@@ -1056,17 +1082,25 @@ exports.planMoveMethods = {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
-        if (result.reroll || result.hailMary || result.win || magic < aiConstants_1.RICH_REROLL_MAGIC || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
+        // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
+        // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
+        // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
+        // 対強豪平均: seed9/200 21.4→26.3, seed7/100 21.3→28.8（+4.9/+7.5pt）。魔力のしきい値を1〜7で振ってもどれも26〜29%で、8以上では効果が消える
+        if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+            return this.extendPlan(result, args);
+        }
+        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_1.MAGICIAN_REROLL_MAGIC : aiConstants_1.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
             return result;
         if (this.character === 'yinYangMaster')
             return result; // コンボ待ちの温存があるため別ロジック
-        if (result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk)))
+        if (result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay'))
             return result;
         const goal = Math.max(aiConstants_1.RICH_SPEND_GOAL, Math.min(aiConstants_1.RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
         if (this.plannedSpend(result, args[2]) >= goal)

@@ -1,5 +1,6 @@
 // AIPlayer のメソッド群: 1手番の計画のエントリ（makeMove → planMove）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
+import { lockedSquareCount } from './keysmith';
 import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -15,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
 export type PlanMoveArgs = Parameters<typeof planMove>;
@@ -559,6 +560,23 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
             magic -= cost;
         }
     }
+    // 砦・市場（鍵師）: 自陣にオブジェクトが無い間だけ1つ立てる。普請道楽ギア（自陣にオブジェクトがある間は全スキル-3）の起点にする。
+    // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
+    if (this.character === 'keysmith' && this.ownObjectCount === 0
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+        for (const [def, key] of [[OBJECT_DEFS.fort, 'onClickFort'], [OBJECT_DEFS.market, 'onClickMarket']] as const) {
+            if (!availableSkills.includes(def.idx)) continue;
+            const cost = this.calculateAICost(costs[key], false, false, key);
+            const cell = this.bestTreeCell(board);
+            if (cell === null || magic < cost) continue;
+            chargeClicks.push({ skill: key, target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+            break;
+        }
+    }
     // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
     // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
     if (this.character === 'electrician' && availableSkills.includes(OBJECT_DEFS.thundercloud.idx) && this.ownClouds < CLOUD_MAX
@@ -1040,6 +1058,9 @@ export function planMove(
         // 弔い割引: 墓地の死体の数（上限3）だけ次のスキルを軽減する。コスト1より多く軽減できる（死体2体以上）ときだけ候補にする
         const graveCut = graveDiscountAmount(corpseCount(NECROMANCY.baseCost, necroCost));
         if (graveCut >= 2) reducers.push({ idx: 99, key: 'onClickGraveDiscount', cut: graveCut });
+        // 錠前割引（idx 135）: 盤面のロックのマスの数だけ、このターンの全スキルを軽減する。コスト1より多く軽減できる（ロック2つ以上）ときだけ候補にする
+        const lockCut = lockedSquareCount(board);
+        if (lockCut >= 2) reducers.push({ idx: 135, key: 'onClickLockDiscount', cut: lockCut });
         let best: { r: (typeof reducers)[number]; rc: number; plan: string[]; left: number } | null = null;
         for (const r of reducers) {
             if (!availableSkills.includes(r.idx) || chargeClicks.some((c) => c.skill === r.key)) continue;
@@ -1092,15 +1113,23 @@ export const planMoveMethods = {
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => isObject(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         const args: PlanMoveArgs = argsIn[0].some((sq) => isObject(sq))
             ? [argsIn[0].map((sq) => (isObject(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
         const result = this.planMove(...args);
         const magic = args[1];
-        if (result.reroll || result.hailMary || result.win || magic < RICH_REROLL_MAGIC || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
+        // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
+        // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
+        // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
+        // 対強豪平均: seed9/200 21.4→26.3, seed7/100 21.3→28.8（+4.9/+7.5pt）。魔力のしきい値を1〜7で振ってもどれも26〜29%で、8以上では効果が消える
+        if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
+            return this.extendPlan(result, args);
+        }
+        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック
-        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) return result;
+        if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) return result;
         const goal = Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
         if (this.plannedSpend(result, args[2]) >= goal) return result;
         // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す

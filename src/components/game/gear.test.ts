@@ -12,6 +12,8 @@ import {
     gearTokenBindDelta,
     randomGears,
     recommendedGears,
+    recommendedGearsAgainst,
+    COUNTER_GEARS_FOR_YOU,
     RECOMMENDED_GEARS,
     ALT_RECOMMENDED_GEARS,
     pickRecommendedGears,
@@ -28,8 +30,12 @@ import {
     frozenBudCount,
     rootGain,
     budCounts,
+    rampStart,
+    rampBonus,
+    rampAfterRoll,
 } from './gear';
 import { skillCosts } from './skillCosts';
+import { lifeZeroVictims } from './gearTurn';
 
 const ctx = (skillsThisTurn = 0, echoReady = false, ailments = 0, ruin = false) => ({ skillsThisTurn, echoReady, ailments, ruin });
 
@@ -179,6 +185,29 @@ describe('下位キャラ向けギア（焦土・灰の供物・凍てつく根�
     });
 });
 
+describe('雪だるま（ライフ期待値の積み上げ）', () => {
+    it('最初は+0で、引くたびに+1ずつ積み上がる', () => {
+        let r = rampStart();
+        expect(rampBonus(r)).toBe(0);
+        r = rampAfterRoll(r, 5);
+        r = rampAfterRoll(r, 5);
+        r = rampAfterRoll(r, 5);
+        expect(rampBonus(r)).toBe(3);
+    });
+
+    it('10以上のライフが3回出たら、積み上げと回数がリセットされる(9以下は数えない。最初に引いた分も数える)', () => {
+        let r = rampAfterRoll(rampStart(), 10); // 最初の10以上も数える
+        expect(r).toEqual({ stack: 1, hits: 1 });
+        r = rampAfterRoll(r, 9);
+        expect(r).toEqual({ stack: 2, hits: 1 });
+        r = rampAfterRoll(r, 14);
+        expect(r).toEqual({ stack: 3, hits: 2 });
+        r = rampAfterRoll(r, 10);
+        expect(r).toEqual({ stack: 0, hits: 0 });
+        expect(rampBonus(r)).toBe(0); // リセット後は次の抽選が+0
+    });
+});
+
 describe('価格破壊', () => {
     it('対象外のスキルが決まっている（シャッフル・チャージは固定）', () => {
         expect(PRICEABLE_KEYS).not.toContain('onClickShuffle');
@@ -288,5 +317,54 @@ describe('春雷（springThunderThaw）', () => {
         d[2] = { player: '⭕', bind: 3, effects: [] };
         d[3] = { player: undefined, bind: 0, effects: [{ effect: '❄' }] }; // 敵のコマが入った列
         expect(springThunderThaw(d, '💙')).toEqual([]);
+    });
+});
+
+describe('「あなた」の相手別ギア', () => {
+    it('相手が1キャラで専用ギアがあればそれ、複数キャラ・専用なしなら通常の推奨', () => {
+        expect(recommendedGearsAgainst('you', ['poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
+        expect(recommendedGearsAgainst('you', ['poisoner', 'poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
+        expect(recommendedGearsAgainst('you', ['poisoner', 'giant'])).toEqual(recommendedGears('you'));
+        expect(recommendedGearsAgainst('you', ['magician'])).toEqual(['lastStand', 'sturdy', 'luckyPurse']);
+        expect(recommendedGearsAgainst('you', ['giant'])).toEqual(['lastStand', 'emptyLock', 'luckyPurse']);
+        expect(recommendedGearsAgainst('you', ['tactician'])).toEqual(recommendedGears('you'));
+        expect(recommendedGearsAgainst('magician', ['poisoner'])).toEqual(recommendedGears('magician'));
+    });
+    it('専用ギアはすべて実在し、枠数に収まる', () => {
+        for (const g of Object.values(COUNTER_GEARS_FOR_YOU)) {
+            expect(g!.length).toBeLessThanOrEqual(gearSlotsFor('you'));
+            for (const id of g!) expect(GEAR_IDS).toContain(id);
+        }
+    });
+});
+
+describe('普請道楽（オブジェクトのギア）', () => {
+    const own = { skillsThisTurn: 0, echoReady: false, ownObjects: true };
+    const none = { skillsThisTurn: 0, echoReady: false, ownObjects: false };
+    it('自陣にオブジェクトが無いときはオブジェクトを設置するスキルがコスト-2、あれば全スキル-3（設置スキルの-2は無いときだけ。重ならない）。下限1', () => {
+        expect(adjustCostByGear(8, ['buildMania'], none, false, 'onClickBigTree')).toBe(6);
+        expect(adjustCostByGear(5, ['buildMania'], none, false, 'onClickFort')).toBe(3);
+        expect(adjustCostByGear(4, ['buildMania'], none, false, 'onClickBibine')).toBe(4); // 設置でもオブジェクトも無いスキルは変わらない
+        expect(adjustCostByGear(4, ['buildMania'], own, false, 'onClickBibine')).toBe(1);
+        expect(adjustCostByGear(8, ['buildMania'], own, false, 'onClickBigTree')).toBe(5); // 設置スキルも-3だけ（-2は上乗せされない）
+        expect(adjustCostByGear(5, ['buildMania'], own, false, 'onClickFort')).toBe(2);
+        expect(adjustCostByGear(3, ['buildMania'], own, false, 'onClickBibine')).toBe(1); // 下限1
+        expect(adjustCostByGear(1, ['buildMania'], own, false, 'onClickShuffle')).toBe(1);
+    });
+    it('ギアを持たない席には何も起きない。壊す・強くするスキルは設置ではないので-2の対象外', () => {
+        expect(adjustCostByGear(8, [], own, false, 'onClickBigTree')).toBe(8);
+        expect(adjustCostByGear(6, ['buildMania'], none, false, 'onClickDuplicate')).toBe(6);
+    });
+});
+
+describe('死神の鎌（ライフ0の駒を壊す）', () => {
+    const sq = (player: '💙' | '⭕' | undefined, bind: number, ...effects: string[]) => ({ player, bind, effects: effects.map((effect) => ({ effect })) } as never);
+    const chars = ['you', 'electrician'] as const;
+
+    it('誰かが装備していれば、誰の駒でもライフ0を壊す。氷結・ロック・⚡無敵・ライフありは壊さない', () => {
+        const board = [sq('💙', 0), sq('⭕', 0), sq('⭕', 0, '🔑'), sq('⭕', 0, '❄'), sq('⭕', 0, '⚡'), sq('💙', 3), sq(undefined, 0)];
+        expect(lifeZeroVictims(board, chars, [[], ['reaper']])).toEqual([0, 1]);
+        expect(lifeZeroVictims(board, chars, [[], []])).toEqual([]);
+        expect(gearLifeBonus(['reaper'])).toBe(2);
     });
 });

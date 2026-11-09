@@ -1,5 +1,7 @@
 // Game.tsx から切り出したハンドラ群: AI の手番の進行（キュー・ステップ実行・ヘイルメアリー演出・止まったときの打開）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { GearTurnState } from './gearTurn';
+import { SkillCosts } from './skillCosts';
 import React from 'react';
 import AIPlayer from './AIPlayer';
 import { useState, useEffect, useRef } from 'react';
@@ -14,18 +16,19 @@ import { Discount } from './discount';
 import { GameLate } from './gameLate';
 
 export interface AIRunnerScope {
+    reaperSweeps: number;
     currentAI: AIPlayer | null;
     currentBoard: SquareInfo[];
     characters: CharacterId[];
     turnSeat: number;
     currentTurnPlayer: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷";
-    seatCosts: { onClickToken: number; onClickTotalAssault: number; onClickToggleYingYang: number; onClickShikigamiPlace: number; onClickShikigamiBlast: number; onClickShikigamiAll: number; onClickShikigamiRandom: number; onClickShikigamiFlood: number; onClickShikigamiBless: number; onClickShikigamiPurge: number; onClickShikigamiCurse: number; onClickShikigamiDiscount: number; onClickStomp: number; onClickJudgeDay: number; onClickCharge: number; onClickAddLife: number; onClickDepressionCherry: number; onClickShuffle: number; onClickBibine: number; onClickUseLock: number; onClickDoubleLock: number; onClickTripleLock: number; onClickBuds: number; onClickDoubleBuds: number; onClickBudsToken: number; onClickBothToken: number; onClickDoubleToken: number; onClickSlash: number; onClickBackSlash: number; onClickTsunami: number; onClickOpium: number; onClickWalpurgisNight: number; onClickMiasma: number; onClickInjection: number; onClickPoisonToken: number; onClickSerum: number; onClickIntensify: number; onClickPandemic: number; onClickProliferate: number; onClickChargeToken: number; onClickChargeOne: number; onClickChargeSpread: number; onClickDoubleChargeToken: number; onClickChargeArea: number; onClickChargeRandom: number; onClickJammer: number; onClickHailMary: number; onClickSilence: number; onClickPoisonMist: number; onClickFreeze: number; onClickIgnite: number; onClickGlacier: number; onClickCryoFreeze: number; onClickCleanse: number; onClickInferno: number; onClickMogaribue: number; onClickSeal: number; onClickHarvestEve: number; onClickSolstice: number; onClickSucker: number; onClickWindborne: number; onClickFlameToken: number; onClickDoubleFlameToken: number; onClickSwidden: number; onClickSacrifice: number; onClickFrostArea: number; onClickIcicle: number; onClickRandomFreeze: number; onClickFreezeSpread: number; onClickFrostToken: number; onClickDoubleFrostToken: number; onClickShatter: number; onClickFrostfall: number; onClickBoost: number; onClickClone: number; onClickPlunder: number; onClickMarkdown: number; onClickEffectDiscount: number; onClickTokenDiscount: number; onClickVitalMarkdown: number; onClickUniqueDiscount: number; onClickClearance: number; onClickRandomCast: number; onClickCounterMarkdown: number; onClickBurnout: number; onClickLeafToken: number; onClickTwinLeafToken: number; onClickDoubleLeafToken: number; onClickLeafAll: number; onClickBonfire: number; onClickMulch: number; onClickAutumn: number; onClickLeafFrost: number; onClickSpringWind: number; onClickKimon: number; onClickFireWheel: number; onClickStrip: number; onClickChargeSeason: number; onClickBristle: number; onClickRelease: number; onClickStash: number; onClickThunderFire: number; onClickDarkPot: number; onClickChargeHeal: number; onClickLeafDrop: number; onClickKindling: number; onClickLeafCloak: number; onClickTinder: number; onClickSmallFry: number; onClickFirstFrost: number; onClickGather: number; onClickBurnOff: number; onClickFreeToken: number; onClickSpark: number; onClickNightVeil: number; onClickGraveDiscount: number; onClickPoisonWard: number; onClickGraveOffering: number; onClickPerfectGame: number; onClickHelper: number; onClickSecondCatch: number; onClickBigTree: number; onClickDeadTree: number; onClickSpring: number; onClickFort: number; onClickThundercloud: number; onClickMarket: number; onClickSanctuary: number; onClickPoisonSwamp: number; onClickBoltSilence: number; onClickDemolish: number; onClickWeather: number; onClickLevelAll: number; onClickReinforce: number; onClickExpandAll: number; onClickDuplicate: number; onClickWorkshop: number; onClickBarrierStone: number; onClickAmuletShrine: number; onClickLuckyCat: number; onClickMudField: number; onClickTongueKing: number; onClickEightTrigrams: number; onClickSoloSign: number; onClickOneWord: number; onClickBlindMonkey: number; onClickLockRaid: number; onClickLockExtend: number; onClickLockBlessing: number; onClickVacantSeal: number; };
+    seatCosts: SkillCosts;
     gearCost: (cost: number, seat?: number, isToken?: boolean, skillKey?: string, withLeaf?: boolean) => number;
     placements: number;
     seatCount: number;
     gearsBySeat: GearId[][];
     lastStandUsed: React.MutableRefObject<boolean[]>;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     otherSeats: (seat: number) => number[];
     currentTurn: number;
     isAllAI: boolean;
@@ -34,7 +37,7 @@ export interface AIRunnerScope {
     lastStandSaves: number;
 }
 export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
-    const { currentAI, currentBoard, characters, turnSeat, currentTurnPlayer, seatCosts, gearCost, placements, seatCount, gearsBySeat, lastStandUsed, gearTurn, otherSeats, currentTurn, isAllAI, currentCharacter, restartCount, lastStandSaves } = g;
+    const { currentAI, currentBoard, characters, turnSeat, currentTurnPlayer, seatCosts, gearCost, placements, seatCount, gearsBySeat, lastStandUsed, gearTurn, otherSeats, currentTurn, isAllAI, currentCharacter, restartCount, lastStandSaves, reaperSweeps } = g;
 
     // AIの実行キュー。number=そのマスをクリック / string=そのスキルを実行（帯電系は「スキル→クリック」を順に並べる）
     const [pendingAIMove, setPendingAIMove] = useState<(number | string)[] | null>(null);
@@ -185,7 +188,7 @@ export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
 
         return () => clearTimeout(timer);
         // currentTurn も依存に含める: 巨人のスキップで turnSeat が変わらず同じ席が連続手番になる場合でも再発火させる
-    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves]);
+    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves, reaperSweeps]);
 
     // 「次の手番」ボタン押下でAI同士の対戦を1ターン進める
     useEffect(() => {

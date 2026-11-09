@@ -7,6 +7,7 @@ import { SkillCosts } from './skillCosts';
 import { GameLate } from './gameLate';
 
 export interface PanelInfoScope {
+    skillBan: ({ mode: "max" | "min"; n: number; } | null)[];
     useAssault: number[];
     silenced: boolean[];
     lifeBan: boolean[];
@@ -33,7 +34,7 @@ export interface PanelInfoScope {
     sealCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
 }
 export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
-    const { useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost } = g;
+    const { useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
 
 
     // 継続中スキルの残りターン数を返す
@@ -42,6 +43,8 @@ export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        const ban = skillBan[seat];
+        if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
         if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');

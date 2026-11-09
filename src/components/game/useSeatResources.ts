@@ -1,7 +1,9 @@
 // Game.tsx から切り出したハンドラ群: 席ごとの魔力・手札・ロック・ライフ・増殖などの状態と、それに結びつく小さな関数
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { GearTurnState } from './gearTurn';
+import { RampState, rampAfterRoll, rampBonus, rampStart } from './gear';
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CharacterId, YingYangMode } from '../../types/Character';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -16,7 +18,7 @@ import { GameLate } from './gameLate';
 
 export interface SeatResourcesScope {
     seatCount: number;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     turnGears: GearId[];
     addLog: (message: string) => void;
     gearTrigger: (gearId: GearId, text?: string | undefined) => void;
@@ -95,6 +97,13 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
     const proliferateMaxStacks = PROLIFERATE.maxStacks;
     // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
     const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // オリジナルスキルの「コストn以下/n以上のスキル封じ」: 立っている席は、その席の次の手番の終わりまで、表示コストが範囲内のスキルを使えない
+    // （チャージ・シャッフル・ロックを除く）。サイレンスと同じく、封じられた側の手番が終わるたびに解除
+    const [skillBan, setSkillBanAt, setSkillBanAll] = useSeatArray<{ mode: 'max' | 'min'; n: number } | null>(() => Array(seatCount).fill(null));
+    const bannedByCost = (seat: number, cost: number): boolean => {
+        const ban = skillBan[seat];
+        return !!ban && (ban.mode === 'max' ? cost <= ban.n : cost >= ban.n);
+    };
     // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
     const [lifeBan, setLifeBanAt, setLifeBanAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     // 静電気の季節: 立っている間（残りターン数）、その席が設置する駒（着手・トークン・全軍突撃のトークン）に⚡が付く
@@ -106,9 +115,26 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
     const currentYinYangMode = yinYangMode[turnSeat];
     const yinYangModeName = (seat: number) => (yinYangMode[seat] === 'yang' ? '陽' : '陰');
 
-    const [life, setLife] = useState<number>(
-        calculateLife(characters[0], yinYangMode[0], gearLifeBonus(gearsBySeat[0]), gearLifeStd(gearsBySeat[0], LIFE_STD))
-    );
+    // 雪だるま: 席ごとのライフ期待値の積み上げ(最初は+0から)。先手の最初に引いたライフも数える。
+    // turn/counted/bonus は同じ手番の効果が二重に走っても、積み上げ・回数を二重に数えず同じ加算で引くための印
+    const rampRef = useRef<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>({
+        states: gearsBySeat.map(() => rampStart()),
+        turn: 0,
+        counted: false,
+        bonus: 0,
+        first: null,
+    });
+    if (rampRef.current.first === null) {
+        const first = calculateLife(
+            characters[0],
+            yinYangMode[0],
+            gearLifeBonus(gearsBySeat[0]) + (hasGear(gearsBySeat[0], 'snowball') ? rampBonus(rampRef.current.states[0]) : 0),
+            gearLifeStd(gearsBySeat[0], LIFE_STD)
+        );
+        rampRef.current.first = first;
+        if (hasGear(gearsBySeat[0], 'snowball')) rampRef.current.states[0] = rampAfterRoll(rampRef.current.states[0], first);
+    }
+    const [life, setLife] = useState<number>(rampRef.current.first);
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
     const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
@@ -122,5 +148,5 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
         if (n > 0) setGlacierChargeAll((prev) => prev.map((c) => c + n));
     };
 
-    return { yinYangMode, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, magic, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setChargeBuffAt, setLife, setUseToken, setSkills, reshuffledSkills, lockedSkills, life, lifeBan, skills, useToken, chargeBuff, currentYinYangMode, silenced, glacierCharge, setLockedSkillsAt, spendMagic, currentLockedSkills, harvestMagic, pendingFlag, useTokenCount, setUseTokenCountAt, proliferateTokenLife, keepBuds, proliferateUpkeepStep, useMagicCount, setUseMagicCountAt, setYinYangModeAt, bumpGlacierCharge, setGlacierChargeAt, proliferateMaxStacks, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setProliferateAll, setSilencedAll, setLifeBanAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setLockedSkillsAll, yinYangModeName, toggleLock };
+    return { yinYangMode, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, magic, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setChargeBuffAt, setLife, setUseToken, setSkills, reshuffledSkills, lockedSkills, life, lifeBan, skills, useToken, chargeBuff, currentYinYangMode, silenced, glacierCharge, setLockedSkillsAt, spendMagic, currentLockedSkills, harvestMagic, pendingFlag, useTokenCount, setUseTokenCountAt, proliferateTokenLife, keepBuds, proliferateUpkeepStep, useMagicCount, setUseMagicCountAt, setYinYangModeAt, bumpGlacierCharge, setGlacierChargeAt, proliferateMaxStacks, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setProliferateAll, setSilencedAll, setLifeBanAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setLockedSkillsAll, yinYangModeName, toggleLock, skillBan, setSkillBanAt, setSkillBanAll, bannedByCost, rampRef };
 };

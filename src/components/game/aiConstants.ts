@@ -1,8 +1,8 @@
 // AIPlayer の調整値・定数・型。AIPlayer.ts から分離（AIPlayer.ts が再エクスポートする）
 import { CharacterId } from '../../types/Character';
 
-// 汎用スキルプールの大きさ (idx 0..133)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 134;
+// 汎用スキルプールの大きさ (idx 0..135)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 136;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 export const CHARGE_ONE_MIN_SCORE = 2;
@@ -36,6 +36,8 @@ export const PANDEMIC_MIN_SCORE = 3;
 export const INTENSIFY_MIN_FOE_POISON = 3;
 /** この魔力以上あるときは、手札で使う額が RICH_SPEND_GOAL に届かなければ、引き直し回数(rerollBudget)を使い切っても RICH_EXTRA_REROLLS 回まで引き直す */
 export const RICH_REROLL_MAGIC = 24;
+/** 魔法使いは魔力が余りやすい（7手番目以降は毎手番20以上）ので、もっと低い魔力から引き直す。24→10: 全相手 62.7→約65（seed922/200）、対ネクロ 24→40%。5以下は引き直しすぎて悪化（0で崩壊） */
+export const MAGICIAN_REROLL_MAGIC = 10;
 /** 手札で使う額の目標は魔力の1/4（RICH_SPEND_GOAL〜RICH_SPEND_GOAL_MAX）。魔力が多いほど、もっと使える手札が出るまで引き直す */
 export const RICH_SPEND_GOAL = 5;
 export const RICH_SPEND_GOAL_MAX = 12;
@@ -97,7 +99,23 @@ export const NIGHT_VEIL_OPP_MAGIC = 7;
 export const GLACIER_COST = 10;
 export const NIGHT_VEIL_RAISE = 3;
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
+/**
+ * 「あなた」が相手キャラ別に手札へ固定する札。他キャラの対策札(一寸の虫=魔女・氷室対策、火口=魔法使い・魔女対策)を、
+ * 引いたら固定して毎手番使えるようにする（対応する専用デッキは deck.ts COUNTER_DECKS_FOR_YOU。seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%、対魔法使い 11.0→14.7%、対軍師 17.0→29.0%）。相手が1キャラだけのときに限る（固定が裏目の相手がいるため。docs/tune/you.md）
+ */
+export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
+    magician: [87, 92],
+    witch: [92, 87],
+    cryomancer: [92],
+    electrician: [92],
+    tactician: [92, 74],
+};
+
 export const MAGICIAN_HOLD = [53, 60, 92];
+/** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
+export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
+/** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
+export const MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
 export const PG_HOLD_GAP = 6;
 /** 大木を立てる条件: 自陣の大木の上限 / 盤面の空きマスの下限 */

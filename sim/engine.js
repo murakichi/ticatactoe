@@ -265,6 +265,7 @@ function noteAfter(s, r) {
     if (!r) return;
     if (r.locked) bumpStat(s, 'bindingLock');
     if (r.spreadTo !== null) bumpStat(s, 'propagate');
+    if (r.seeded) bumpStat(s, 'budSeed');
 }
 function afterTokenPlaced(s, idx, effect) {
     const r = tokenAfterMod.afterTokenPlaced(s.board, idx, effect, afterOptions(s));
@@ -407,6 +408,8 @@ function newGame(opts = {}) {
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
+        // 雪だるま: 席ごとのライフ期待値の積み上げとリセットまでの回数
+        ramp: gears.map(() => gear.rampStart()),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(rng)) : null)),
         useChargeArea: false,
@@ -429,6 +432,7 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        useLockConvert: false, // 錠の転換（汎用 idx 134）: ロックのかかったマスを選んで解除し、スタックを自分のライフに足す
         usePlunder: false,
         useStash: false,
         useBoltSilence: 0, // あと何個の⚡を選んで払うか
@@ -447,6 +451,7 @@ function newGame(opts = {}) {
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
         lockSeen: fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
         lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
         blessing: fill(0), // 施錠の加護: 残りの手番数
         blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
@@ -464,7 +469,10 @@ function newGame(opts = {}) {
         log: [],
     };
     defineLegacyAliases(state);
-    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], LIFE_STD)));
+    // 雪だるま: 最初は+0から。先手の最初に引いたライフも数える
+    const firstRoll = calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]) + (hasGear(gears[0], 'snowball') ? gear.rampBonus(state.ramp[0]) : 0), gear.gearLifeStd(gears[0], LIFE_STD));
+    if (hasGear(gears[0], 'snowball')) state.ramp[0] = gear.rampAfterRoll(state.ramp[0], firstRoll);
+    state.life = Math.max(1, firstRoll);
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     armWard(state);
     return state;
@@ -502,7 +510,7 @@ function costsOf(s, seat = s.turn) {
 function gearCtx(s, seat) {
     const ailments = hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0;
     const [g, r] = gearTurnView(s);
-    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments);
+    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments, hasGear(s.gears[seat], 'buildMania') && objectsMod.hasOwnObject(s.board, SYMBOLS[seat]));
 }
 // 実コスト(キャラ補正 → ギア補正 → 導線 → 軽減スキル)の計算は本番(cost.ts)の生成物。ここは席の状況を詰めるだけ
 const costMod = require('./shared/cost');
@@ -526,6 +534,7 @@ function costEnv(s, seat) {
         veil: s.veil[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
         lockPrev: s.lockPrev[seat],
+        lockFreeUsed: s.lockFreeUsed[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],
@@ -620,7 +629,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, blessing: s.blessing, blessingFresh: s.blessingFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -659,7 +668,7 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useLockConvert', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
     s.useLock = 0;
@@ -668,6 +677,15 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
+    if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
+        const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
+        if (victims.length > 0) {
+            for (const k of victims) s.board[k] = newSquare();
+            addCorpses(s, victims.length);
+            bumpStat(s, 'reaperKill', victims.length);
+        }
+    }
     // 膠着の打開(本番 deadlock.ts): 着手が何周も無いと氷結とロックが一段解ける
     if (!s.deadlock || s.deadlock.placements !== s.placements) s.deadlock = { placements: s.placements, turn: s.currentTurn };
     else if (deadlockMod.isDeadlocked(s.currentTurn, s.deadlock.turn, seatCount(s))) {
@@ -753,7 +771,13 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    // 雪だるま: 引いたライフを数えて、手番ごとに期待値が1段積み上がる。10以上が3回出たらリセット
+    const rampOn = hasGear(s.gears[next], 'snowball');
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    if (rampOn) {
+        s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
+        if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
+    }
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;
@@ -853,6 +877,11 @@ function placeMove(s, i) {
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
+        return true;
+    }
+    if (s.useLockConvert) {
+        if (!exeLockConvert(s, i)) return false; // ロックの無いマスは選び直せる
+        s.useLockConvert = false;
         return true;
     }
     if (s.useSacrifice) {
@@ -1002,6 +1031,11 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+    // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+    if (!placed.reinforced) {
+        const seeded = tokenAfterMod.seedBud(board[i], cur, s.gears[s.turn]);
+        if (seeded) { board[i] = seeded; bumpStat(s, 'budSeed'); }
+    }
     // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く [FAITHFUL] Game.tsx onCellClick
     if (keysmithMod.blessingActive(s.blessing[s.turn]) && newPlayer === cur && !board[i].object) board[i] = keysmithMod.blessPlacedPiece(board[i]);
 
@@ -1131,7 +1165,8 @@ function onClickUseLock(s) {
         return;
     }
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock'), 'onClickUseLock');
+    const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+    spendMagic(s, lockCost, 'onClickUseLock');
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {
@@ -2218,6 +2253,29 @@ function onClickPlunder(s) {
 }
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+// 錠の転換 (idx 134): ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す [FAITHFUL] Game.tsx onClickLockConvert
+// 錠前割引 (idx 135): 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）[FAITHFUL] Game.tsx onClickLockDiscount
+function onClickLockDiscount(s) {
+    const n = keysmithMod.lockedSquareCount(s.board);
+    if (n === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockDiscount, false, false, 'onClickLockDiscount'), 'onClickLockDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + n });
+    bumpMagicCount(s);
+    bumpStat(s, 'lockDiscount');
+}
+function lockConvertCandidates(s) { return keysmithMod.lockConvertCells(s.board); }
+function onClickLockConvert(s) {
+    if (lockConvertCandidates(s).length === 0) return;
+    s.useLockConvert = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockConvert, false, false, 'onClickLockConvert'), 'onClickLockConvert');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockConvert');
+}
+function exeLockConvert(s, i) {
+    if (!lockConvertCandidates(s).includes(i)) return false;
+    s.life += keysmithMod.lockConvert(s.board, i);
+    return true;
+}
 function onClickKimon(s) {
     if (kimonCandidates(s).length === 0) return;
     s.useKimon = true;
@@ -2584,6 +2642,8 @@ const SKILLS = {
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
     seal: onClickSeal,
+    lockConvert: onClickLockConvert,
+    lockDiscount: onClickLockDiscount,
     lockRaid: onClickLockRaid,
     lockExtend: onClickLockExtend,
     lockBlessing: onClickLockBlessing,

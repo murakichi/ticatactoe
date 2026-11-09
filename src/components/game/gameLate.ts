@@ -7,7 +7,7 @@ export interface GameLate {
     calculateCost: (cost: number, isToken?: boolean, isPoison?: boolean, player?: Player, skillKey?: string) => number;
     addCorpses: (n: number) => void;
     setUseChargeSpread: (on: boolean) => void;
-    shuffleSkillDefs: { idx: number; onClick: () => void; buttonText: string; paragraph: string; disabled: boolean; onHoverStart?: (() => void) | undefined; onHoverEnd?: (() => void) | undefined; }[];
+    shuffleSkillDefs: { idx: number; onClick: () => void; buttonText: string; disabled: boolean; onHoverStart?: (() => void) | undefined; onHoverEnd?: (() => void) | undefined; }[];
     notShielded: (cells: number[]) => number[];
     judgeNextSeat: () => number;
     setUseLock: React.Dispatch<React.SetStateAction<number>>;

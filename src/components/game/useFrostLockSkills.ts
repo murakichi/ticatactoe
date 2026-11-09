@@ -1,5 +1,7 @@
 // Game.tsx から切り出したスキルのハンドラ群: 氷結系の範囲スキル・火炎系の固有スキル・鍵師のロック系スキル
 // 本体は Game.tsx の同じ位置にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { GearTurnState } from './gearTurn';
+import { lockConvert, lockConvertCells, lockedSquareCount } from './keysmith';
 import React from 'react';
 import { useState } from 'react';
 import { CharacterId } from '../../types/Character';
@@ -19,6 +21,9 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface FrostLockSkillsScope {
+    setUseLockConvert: (on: boolean) => void;
+    setLife: React.Dispatch<React.SetStateAction<number>>;
+    life: number;
     pendingFlag: (m: PendingMode) => [boolean, (on: boolean) => void];
     currentBoard: SquareInfo[];
     characters: CharacterId[];
@@ -28,7 +33,7 @@ export interface FrostLockSkillsScope {
     playEffect: (type: SkillEffectType, index?: number | undefined, indexes?: number[] | undefined, label?: string | undefined, extra?: PlayEffectExtra | undefined) => void;
     setCurrentBoard: React.Dispatch<React.SetStateAction<SquareInfo[]>>;
     spendMagic: (cost: number, bumpCount?: boolean, isSkill?: boolean, skillId?: string) => void;
-    seatCosts: { onClickToken: number; onClickTotalAssault: number; onClickToggleYingYang: number; onClickShikigamiPlace: number; onClickShikigamiBlast: number; onClickShikigamiAll: number; onClickShikigamiRandom: number; onClickShikigamiFlood: number; onClickShikigamiBless: number; onClickShikigamiPurge: number; onClickShikigamiCurse: number; onClickShikigamiDiscount: number; onClickStomp: number; onClickJudgeDay: number; onClickCharge: number; onClickAddLife: number; onClickDepressionCherry: number; onClickShuffle: number; onClickBibine: number; onClickUseLock: number; onClickDoubleLock: number; onClickTripleLock: number; onClickBuds: number; onClickDoubleBuds: number; onClickBudsToken: number; onClickBothToken: number; onClickDoubleToken: number; onClickSlash: number; onClickBackSlash: number; onClickTsunami: number; onClickOpium: number; onClickWalpurgisNight: number; onClickMiasma: number; onClickInjection: number; onClickPoisonToken: number; onClickSerum: number; onClickIntensify: number; onClickPandemic: number; onClickProliferate: number; onClickChargeToken: number; onClickChargeOne: number; onClickChargeSpread: number; onClickDoubleChargeToken: number; onClickChargeArea: number; onClickChargeRandom: number; onClickJammer: number; onClickHailMary: number; onClickSilence: number; onClickPoisonMist: number; onClickFreeze: number; onClickIgnite: number; onClickGlacier: number; onClickCryoFreeze: number; onClickCleanse: number; onClickInferno: number; onClickMogaribue: number; onClickSeal: number; onClickHarvestEve: number; onClickSolstice: number; onClickSucker: number; onClickWindborne: number; onClickFlameToken: number; onClickDoubleFlameToken: number; onClickSwidden: number; onClickSacrifice: number; onClickFrostArea: number; onClickIcicle: number; onClickRandomFreeze: number; onClickFreezeSpread: number; onClickFrostToken: number; onClickDoubleFrostToken: number; onClickShatter: number; onClickFrostfall: number; onClickBoost: number; onClickClone: number; onClickPlunder: number; onClickMarkdown: number; onClickEffectDiscount: number; onClickTokenDiscount: number; onClickVitalMarkdown: number; onClickUniqueDiscount: number; onClickClearance: number; onClickRandomCast: number; onClickCounterMarkdown: number; onClickBurnout: number; onClickLeafToken: number; onClickTwinLeafToken: number; onClickDoubleLeafToken: number; onClickLeafAll: number; onClickBonfire: number; onClickMulch: number; onClickAutumn: number; onClickLeafFrost: number; onClickSpringWind: number; onClickKimon: number; onClickFireWheel: number; onClickStrip: number; onClickChargeSeason: number; onClickBristle: number; onClickRelease: number; onClickStash: number; onClickThunderFire: number; onClickDarkPot: number; onClickChargeHeal: number; onClickLeafDrop: number; onClickKindling: number; onClickLeafCloak: number; onClickTinder: number; onClickSmallFry: number; onClickFirstFrost: number; onClickGather: number; onClickBurnOff: number; onClickFreeToken: number; onClickSpark: number; onClickNightVeil: number; onClickGraveDiscount: number; onClickPoisonWard: number; onClickGraveOffering: number; onClickPerfectGame: number; onClickHelper: number; onClickSecondCatch: number; onClickBigTree: number; onClickDeadTree: number; onClickSpring: number; onClickFort: number; onClickThundercloud: number; onClickMarket: number; onClickSanctuary: number; onClickPoisonSwamp: number; onClickBoltSilence: number; onClickDemolish: number; onClickWeather: number; onClickLevelAll: number; onClickReinforce: number; onClickExpandAll: number; onClickDuplicate: number; onClickWorkshop: number; onClickBarrierStone: number; onClickAmuletShrine: number; onClickLuckyCat: number; onClickMudField: number; onClickTongueKing: number; onClickEightTrigrams: number; onClickSoloSign: number; onClickOneWord: number; onClickBlindMonkey: number; onClickLockRaid: number; onClickLockExtend: number; onClickLockBlessing: number; onClickVacantSeal: number; };
+    seatCosts: SkillCosts;
     currentTurnPlayer: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷";
     geo: BoardGeometry;
     posName: (i: number) => string;
@@ -36,7 +41,7 @@ export interface FrostLockSkillsScope {
     setUseToken: React.Dispatch<React.SetStateAction<boolean>>;
     addCorpses: (n: number) => void;
     playBurst: (type: BurstType, cells: number[]) => void;
-    gearTurn: React.MutableRefObject<{ skills: number[]; echoReady: boolean[]; echoNext: boolean[]; kinds: Set<string>[]; infernoReady: boolean[]; discount: Discount[]; freeCast: boolean; oppSkilled: boolean[]; oppSkillPrev: boolean[]; shikiPlaced: boolean[]; plantPrev: boolean[]; plantBase: number[]; placedPrev: boolean[]; placeBase: number[]; fireBase: number[]; leafBase: number[]; darkPotUsed: boolean[]; tokenFree: boolean[]; pieceBase: number[]; turnSpent: number[]; oppBigSeen: boolean[]; oppBigPrev: boolean[]; marketUsed: number[]; bigCast: boolean[]; veil: boolean[]; veilNext: boolean[]; ward: number[]; wardFresh: boolean[]; lockSeen: boolean[]; lockPrev: boolean[]; blessing: number[]; blessingFresh: boolean[]; chargeBase: number[]; processedTurn: number; }>;
+    gearTurn: React.MutableRefObject<GearTurnState & { infernoReady: boolean[]; freeCast: boolean; processedTurn: number }>;
     turnSeat: number;
     keepBuds: (sq: SquareInfo) => boolean;
     setSkills: React.Dispatch<React.SetStateAction<number[]>>;
@@ -51,7 +56,7 @@ export interface FrostLockSkillsScope {
     setUseIgnite: (on: boolean) => void;
 }
 export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate) => {
-    const { pendingFlag, currentBoard, characters, bumpGlacierCharge, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, currentTurnPlayer, geo, posName, putTokens, setUseToken, addCorpses, playBurst, gearTurn, turnSeat, keepBuds, setSkills, reshuffledSkills, deckBySeat, currentLockedSkills, setUseFreeze, costTableFor, setCurrentTurn, currentTurn, setUseTinder, setUseIgnite } = g;
+    const { pendingFlag, currentBoard, characters, bumpGlacierCharge, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, currentTurnPlayer, geo, posName, putTokens, setUseToken, addCorpses, playBurst, gearTurn, turnSeat, keepBuds, setSkills, reshuffledSkills, deckBySeat, currentLockedSkills, setUseFreeze, costTableFor, setCurrentTurn, currentTurn, setUseTinder, setUseIgnite, life, setLife, setUseLockConvert } = g;
 
 
     // --- 氷結系の汎用スキル（idx 41-48）。作った❄は1個ずつ絶対零度のコスト軽減に数える ---
@@ -262,6 +267,33 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         spendMagic(late().calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
     };
     const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    // 錠前割引（汎用 idx 135）: 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）
+    const onClickLockDiscount = () => {
+        const n = lockedSquareCount(currentBoard);
+        if (n === 0) return;
+        addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
+        playEffect('discount', undefined, undefined, '錠前割引');
+        spendMagic(late().calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
+    };
+    const onClickLockConvert = () => {
+        if (lockConvertCells(currentBoard).length === 0) return;
+        addLog('「錠の転換」を使用（ロックのかかっているマスを選択）');
+        setUseLockConvert(true);
+        spendMagic(late().calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert'), true, true, 'onClickLockConvert');
+    };
+    const exeLockConvert = (i: number) => {
+        if (!lockConvertCells(currentBoard).includes(i)) return; // ロックの無いマスは選び直せる
+        const board = currentBoard.slice();
+        const gained = lockConvert(board, i);
+        addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
+        flashCells([i]);
+        playEffect('lock', i, [i], '錠の転換');
+        setUseLockConvert(false);
+        setCurrentBoard(board);
+        setLife(life + gained);
+    };
     const onClickKimon = () => {
         addLog('「鬼門封じ」を使用（敵のコマを選択）');
         setUseKimon(true);
@@ -468,7 +500,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         igniteCells(board, [i]);
     };
 
-    return { onClickCryoFreeze, onClickShatter, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickCleanse, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickSacrifice, onClickRandomFreeze, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickInferno, onClickMogaribue, onClickSeal, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, setUseSacrifice, setUseKimon, setUseFrostArea, setUseIcicle, setUseFreezeSpread, setUseShatter, exeFreeze, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, exeTinder, exeIgnite, notShielded, infernoCost, mogaribueCost, sealCost, kimonCandidates, sacrificeCandidates, ownAilmentCells, onClickFrostArea, onClickIcicle, onClickFreezeSpread, onClickSpringWind, fireWheelGuard, vacantSealCost, leafDropCandidates, kindlingCandidates, leafCloakCandidates, icicleCell, exeIcicle };
+    return { onClickCryoFreeze, onClickShatter, onClickLeafDrop, onClickKindling, onClickLeafCloak, onClickCleanse, onClickLockRaid, onClickLockExtend, onClickLockBlessing, onClickVacantSeal, onClickSacrifice, onClickRandomFreeze, onClickFrostToken, onClickDoubleFrostToken, onClickFrostfall, onClickInferno, onClickMogaribue, onClickSeal, onClickLeafFrost, onClickKimon, onClickFireWheel, onClickSpark, setUseSacrifice, setUseKimon, setUseFrostArea, setUseIcicle, setUseFreezeSpread, setUseShatter, exeFreeze, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, exeTinder, exeIgnite, notShielded, infernoCost, mogaribueCost, sealCost, kimonCandidates, sacrificeCandidates, ownAilmentCells, onClickFrostArea, onClickIcicle, onClickFreezeSpread, onClickSpringWind, fireWheelGuard, vacantSealCost, leafDropCandidates, kindlingCandidates, leafCloakCandidates, icicleCell, exeIcicle, exeLockConvert, onClickLockConvert, onClickLockDiscount };
 };
 
 export type FrostLockSkillsResult = ReturnType<typeof useFrostLockSkills>;

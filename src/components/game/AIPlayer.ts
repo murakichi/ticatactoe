@@ -41,6 +41,8 @@ class AIPlayer {
     hypoCut: number = 0;
     /** 自陣の働いている大木の数（makeMove の入口で数える。盤面はオブジェクトを『ロック中の空きマス』に置き換えて計画するため） */
     ownTrees: number = 0;
+    /** 自陣のオブジェクトの数（鍵師の砦の設置判断に使う） */
+    ownObjectCount: number = 0;
     /** 自陣の働いている雷雲の数 */
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
