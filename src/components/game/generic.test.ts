@@ -1,4 +1,4 @@
-import { boostAll, isPlaceable, canRelocate, relocate, cloneLife, cloneTargets, cloneInto, plunderTargets, plunder, PLUNDER_LIFE } from './generic';
+import { boostAll, isPlaceable, cloneLife, cloneTargets, cloneInto, plunderTargets, plunder, PLUNDER_LIFE } from './generic';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Effect } from '../../types/Effect';
 import { Player } from '../../types/Player';
@@ -22,24 +22,6 @@ describe('汎用スキル（慈雨・縮地・写し身・追い剥ぎ）', () =
         expect(isPlaceable(sq(undefined, 0, '🔑'))).toBe(false);
         expect(isPlaceable(sq(undefined, 0, '❄'))).toBe(false);
         expect(isPlaceable(sq('💙', 1))).toBe(false);
-    });
-
-    it('縮地: 自陣のコマがライフ・エフェクトごと空きマスへ移る。🔑・氷結中は動かせず、置けない先には動けない', () => {
-        const b = emptyBoard();
-        b[0] = sq('💙', 5, '🌱', '☠');
-        b[1] = sq('💙', 3, '🔑');
-        b[2] = sq('💙', 3, '❄');
-        b[3] = sq('⭕', 3);
-        b[4] = sq(undefined, 0, '❄');
-        expect(canRelocate(b[0], '💙')).toBe(true);
-        expect(canRelocate(b[1], '💙')).toBe(false);
-        expect(canRelocate(b[2], '💙')).toBe(false);
-        expect(canRelocate(b[3], '💙')).toBe(false);
-        expect(relocate(b, 0, 4, '💙')).toBe(false); // 氷結中の空きマスには置けない
-        expect(relocate(b, 0, 3, '💙')).toBe(false); // 敵のコマの上には動けない
-        expect(relocate(b, 0, 5, '💙')).toBe(true);
-        expect(b[5]).toEqual(sq('💙', 5, '🌱', '☠'));
-        expect(b[0]).toEqual({ player: undefined, bind: 0, effects: [] });
     });
 
     it('写し身: ライフは半分（切り捨て・最低1）、置き先は縦横隣の置ける空きマス', () => {

@@ -26,6 +26,7 @@ const gearMod = require('./shared/gear');
 const deckMod = require('./shared/deck');
 const ai = require('./aiDriver');
 const threat = require('./duel-threat');
+const chargeMod = require('./shared/charge');
 
 const { SKILLS } = engine;
 
@@ -41,9 +42,9 @@ const IDX_SKILL = {
     56: 'vitalMarkdown', 57: 'uniqueDiscount', 58: 'clearance', 60: 'counterMarkdown', 61: 'burnout', 62: 'leafToken',
     63: 'twinLeafToken', 64: 'doubleLeafToken', 65: 'leafAll', 66: 'bonfire', 67: 'mulch', 68: 'autumn', 69: 'leafFrost',
     70: 'springWind', 71: 'shikigamiAll', 72: 'shikigamiRandom', 73: 'shikigamiFlood', 74: 'kimon', 75: 'fireWheel',
-    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
+    77: 'chargeSeason', 78: 'bristle', 79: 'release', 80: 'stash', 113: 'boltSilence', 81: 'thunderFire', 82: 'darkPot', 83: 'chargeHeal',
     84: 'leafDrop', 85: 'kindling', 86: 'leafCloak', 87: 'tinder', 92: 'smallFry', 93: 'firstFrost', 94: 'gather',
-    95: 'burnOff', 96: 'freeToken', 97: 'spark', 98: 'nightVeil', 99: 'graveDiscount', 100: 'poisonWard', 101: 'graveOffering', 102: 'perfectGame', 103: 'helper',
+    95: 'burnOff', 96: 'freeToken', 97: 'spark', 98: 'nightVeil', 99: 'graveDiscount', 100: 'poisonWard', 101: 'graveOffering', 102: 'perfectGame', 103: 'helper', 105: 'bigTree', 106: 'deadTree', 107: 'spring', 108: 'fort', 109: 'thundercloud', 110: 'market', 111: 'sanctuary', 112: 'poisonSwamp', 114: 'demolish', 115: 'weather', 116: 'levelAll', 117: 'reinforce', 118: 'expandAll', 119: 'duplicate', 120: 'workshop', 121: 'barrierStone', 122: 'amuletShrine', 123: 'luckyCat', 124: 'mudField', 125: 'tongueKing', 126: 'eightTrigrams', 127: 'soloSign', 128: 'oneWord', 129: 'blindMonkey',
 };
 
 /** キャラ固有の SKILLS キー */
@@ -110,7 +111,7 @@ function build(cfg) {
 
 const PENDING = ['useLock', 'useStomp', 'useJudgeDay', 'useInjection', 'usePandemic', 'useBuds', 'useChargeOne', 'useChargeSpread', 'useChargeArea',
     'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter', 'useSwidden', 'useKimon', 'useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze',
-    'useSucker', 'useIgnite', 'useSacrifice', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
+    'useSucker', 'useIgnite', 'useSacrifice', 'useStash', 'useBoltSilence', 'useThunderFire', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
 const pendingOf = (s) => PENDING.filter((k) => { const v = s[k]; return Array.isArray(v) ? v[0] : !!v; });
 
 function wrapSkills(log) {
@@ -181,9 +182,12 @@ function apply(s, cfg, act) {
         const c = costOf(s, name);
         if (c != null && c > s.magic[me]) return `魔力不足（${name} は ${c}、手持ち ${s.magic[me]}）`;
         if (pendingOf(s).length) return `対象マスの指定待ち（${pendingOf(s).join(',')}）。p N で指定してください`;
-        const before = JSON.stringify([s.magic, s.board.length]);
+        // 対象マスが一つも無い『対象選択型』は撃たせない（撃つと魔力を払って対象待ちで固まる。本番ではボタンが押せない）
+        if (name === 'jammer' && !s.board.some((_, i) => chargeMod.canJam(s.board, i, engine.curPlayer(s), s.chars))) return 'ジャマーは自陣に⚡のコマが無いと撃てません（対象なし）';
+        if (name === 'boltSilence' && !engine.boltSilenceLegal(s)) return '沈黙は雷なりは自陣の⚡が合計2個ないと撃てません（対象なし）';
+        const before = JSON.stringify([s.magic, s.board.length, s.discount, s.life]);
         SKILLS[name](s);
-        if (JSON.stringify([s.magic, s.board.length]) === before && !pendingOf(s).length && name !== 'charge') return `${name} は効果なし（対象がない等）`;
+        if (JSON.stringify([s.magic, s.board.length, s.discount, s.life]) === before && !pendingOf(s).length && name !== 'charge') return `${name} は効果なし（対象がない等）`;
         return null;
     }
     if (cmd === 'lock') {
@@ -256,7 +260,7 @@ function show(cfg, res) {
     if (engine.findEmptyIndexes(s.board).length === 0) console.log('\n（着手できるマスなし: charge で手番を終えられる）');
     const pend = pendingOf(s);
     if (pend.length) console.log(`待ち状態: ${pend.join(',')} → p N で対象マスを指定`);
-    const cat = deckMod.SKILL_CATALOG;
+    const cat = new Proxy({}, { get: (_, k) => deckMod.skillOf(Number(k)) });
     console.log('\n手札（h IDX で使用 / lock IDX で次手番に固定）:');
     for (const idx of s.skills) {
         const name = IDX_SKILL[idx];

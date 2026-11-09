@@ -7,12 +7,14 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
-import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
-import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
+import { advanceGearState, gearCostContext, lifeZeroVictims, noteSkillUsed } from './gearTurn';
+import { applyLockAt, propagate as propagateEffect, seedBud } from './tokenAfter';
+import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
 import { addPoison, clearOwnPoison, poisonCountFor, intensify as intensifyOf, miasma as miasmaOf, miasmaPlan as miasmaPlanOf, pandemicTargets, poisonMistTargets, poisonStrike as poisonStrikeOf } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf } from './blast';
 import { shikigamiLandable, SHIKIGAMI_BLAST_DAMAGE, SHIKIGAMI_BLESS_LIFE, SHIKIGAMI_CURSE_STACKS, SHIKIGAMI_LIFE, blast as shikigamiBlast, bless as shikigamiBless, blessTargets as blessTargetsOf, curse as shikigamiCurse, curseTargets as curseTargetsOf, newShikigami, ownShikigamiCells, purge as shikigamiPurge, purgeTargets as purgeTargetsOf } from './shikigami';
+import { hasOwnObject, boardWinner, effectSnapshot, EffectSnapshot, enforceEffectRules, encircleWinner, mudAdjustedBind, newPieceBlocked, ownPieceCount, skillRestricted, OBJECT_SKILLS, OBJECT_SKILL_KEYS, ObjectSkill, objectSkillTargets, objectSkillUsable, runObjectSkill, marketCount, OBJECT_DEFS, OBJECT_KINDS, ObjectKind, newObject, objectLandable, objectLandableCells, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { CostEnv, calculateCostOf, gearCostOf, judgeDayBase, totalAssaultBase, tokenBindOf, SHIKIGAMI_PURGE_FREE } from './cost';
 import { Board } from './Board';
 import { BoardEffects, SkillEffect, SkillEffectType, BurstEffect, BurstType, DamageEffect, DamagePop } from './BoardEffects';
@@ -22,15 +24,17 @@ import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 import { SkillButton } from './SkillButton';
 import { boardSizeFor, boardSqCss, clampBoardSize, geometryOf, lineCells, LineDir } from './boardGeometry';
-import { decayBoard, shouldDecay, isCrowded, canHitBound } from './decay';
+import { decayBoard, shouldDecay, isCrowded, canHitBound, isTakeProtected } from './decay';
 import { proliferateStep } from './proliferate';
 import { absorbDefeated, resolvePlacement } from './placement';
-import { resolveDeck, baseCostOf, SKILL_CATALOG } from './deck';
-import { boostAll, canRelocate, relocate, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
+import { resolveDeck, baseCostOf, SKILL_CATALOG, skillOf, CUSTOM_SKILL_IDX } from './deck';
+import { CustomSkillSpec, normalizeSpec, isValidSpec, customSkillCost, describeCustom, customTargets, customCellsAuto, applyCustom, applyDrawbacks, canCastCustom, selectCount, customEffectType, customIcon, customCategory, hasCellOps, globalOps } from './customSkill';
+import { parseSkillText, registerCustomMeta } from './skillMeta';
+import { boostAll, cloneTargets, cloneInto, plunderTargets, plunder, isPlaceable } from './generic';
 import { lateMagicBonus } from './lateMagic';
 import { seatForTurn } from './giantTurn';
 import { giantAura } from './giantAura';
-import { isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
+import { BOLT_SILENCE_BOLTS, isShielded, isGuarded, shieldedCells, fireCharges, connectedPieces, withCharge, addCharge, landCharge, releaseCharges, healCharged, chargeStacks, boardChargeCount, reducedChargeCost, randomChargeCandidates, canJam, jammerTargets, applyJammer, isFullyCharged, applyOverload } from './charge';
 import { comboCut, comboFloor, ownLeaves, ownCharges } from './comboCost';
 import { firstFrost, firstFrostTargets, burnOff, burnOffTargets, gather, FIRST_FROST_FREE_LEAVES } from './tokenSkills';
 import { smallFry, placeBlocked, moveBlocked } from './lifeBan';
@@ -45,11 +49,16 @@ import {
     GEAR_PARAMS,
     gearDefOf,
     hasGear,
+    springThunderThaw,
     gearLifeBonus,
     gearLifeStd,
-    gearLockBind,
+    gearLockStack,
     gearTokenBindDelta,
     adjustCostByGear,
+    RampState,
+    rampStart,
+    rampBonus,
+    rampAfterRoll,
     countVarietySquares,
     burnedBudCount,
     scorchGain,
@@ -80,6 +89,8 @@ export type PlayerConfig = {
     gears?: GearId[];
     /** デッキ（手札3枠を引く汎用スキルの idx、DECK_SIZE枚）。省略・不正ならキャラの推奨デッキ */
     deck?: number[];
+    /** オリジナルスキル（人間席のデッキに CUSTOM_SKILL_IDX があれば手札に出る。AI席では使わない） */
+    customSkill?: CustomSkillSpec;
 };
 
 type GameProps = {
@@ -105,6 +116,7 @@ const CHARACTER_NAMES: Record<CharacterId, string> = {
     cryomancer: '氷室の番人',
     pyromancer: '煉獄の鍛冶師',
     witch: '凩の魔女',
+    keysmith: '鍵師',
 };
 
 const AVATAR_CLASSES = [
@@ -152,7 +164,11 @@ export const Game = (props: GameProps) => {
     const baseGearsBySeat: GearId[][] = props.players.map((p) => p.gears ?? []);
     const gearsBySeat: GearId[][] = baseGearsBySeat.map((g, seat) => (gearOff[seat] ? [] : g));
     // 席ごとのデッキ（手札3枠の引き元）。指定が無い・不正ならキャラの推奨デッキ
-    const deckBySeat: number[][] = props.players.map((p) => resolveDeck(p.deck, p.character));
+    // オリジナルスキルは人間席だけ。仕様が無い・AI席ならデッキから外す（その分デッキは1枚減る）
+    const customBySeat: (CustomSkillSpec | undefined)[] = props.players.map((p) => (!p.isAI && p.customSkill && isValidSpec(normalizeSpec(p.customSkill)) ? normalizeSpec(p.customSkill) : undefined));
+    const deckBySeat: number[][] = props.players.map((p, seat) => resolveDeck(p.deck, p.character).filter((i) => i !== CUSTOM_SKILL_IDX || customBySeat[seat] !== undefined));
+    const customSpec = customBySeat[turnSeat];
+    customBySeat.forEach((c) => c && registerCustomMeta(c.name, customIcon(c), customCategory(c)));
     const turnGears = gearsBySeat[turnSeat];
     // 価格破壊: 席ごとのコスト表。試合開始時(リスタート時)に1回だけ抽選して固定する
     const rollPriceTables = (): (SkillCosts | null)[] =>
@@ -162,6 +178,8 @@ export const Game = (props: GameProps) => {
     const seatCosts = costTableFor(turnSeat);
     // 手番内のスキル使用状況（四連の極意・連鎖割引・余韻の入力）。AIが同じ描画のうちに続けて使うスキルにも
     // すぐ反映したいので state でなく ref に持つ。echoNext=次の手番に余韻が付く / echoReady=この手番の1つ目に余韻が効く
+    // 手番の頭の各マスのエフェクト（見ざる地蔵・閻魔の舌が、手番の終わりに増えた分を調べる）
+    const effectSnap = useRef<EffectSnapshot | null>(null);
     const gearTurn = useRef({
         skills: Array<number>(seatCount).fill(0),
         echoReady: Array<boolean>(seatCount).fill(false),
@@ -181,11 +199,21 @@ export const Game = (props: GameProps) => {
         leafBase: Array<number>(seatCount).fill(0), // 手番開始時点の自陣の🍂の総数（紅葉狩りの導線: 増えていれば軽減）
         darkPotUsed: Array<boolean>(seatCount).fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         tokenFree: Array<boolean>(seatCount).fill(false), // 無礼講: この手番、トークン系スキルのコストが0
+        pieceBase: Array<number>(seatCount).fill(0), // 各席の手番開始時点の非オブジェクトのコマの数（お一人様限りの札）
+        turnSpent: Array<number>(seatCount).fill(0), // この手番にスキルに払ったマジックの合計
+        oppBigSeen: Array<boolean>(seatCount).fill(false),
+        oppBigPrev: Array<boolean>(seatCount).fill(false), // 大工房の設置の無料条件
+        marketUsed: Array<number>(seatCount).fill(0), // 市場の無料シャッフルをこの手番に使った回数
         bigCast: Array<boolean>(seatCount).fill(false), // 柳の下に二匹目がいた: この手番に基礎コスト7以上のスキルを使った
         veil: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の今の手番はスキルコスト+3
         veilNext: Array<boolean>(seatCount).fill(false), // 夜の帳: この席の次の手番から効く
         ward: Array<number>(seatCount).fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: Array<boolean>(seatCount).fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
+        lockSeen: Array<boolean>(seatCount).fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: Array<boolean>(seatCount).fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
+        lockPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での lockSeen
+        blessing: Array<number>(seatCount).fill(0), // 施錠の加護: 残りの手番数（その席の手番が終わるたびに1減る）
+        blessingFresh: Array<boolean>(seatCount).fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
         chargeBase: Array<number>(seatCount).fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数。増えたぶんがこの手番に付与した⚡
         processedTurn: 1,
     });
@@ -205,13 +233,14 @@ export const Game = (props: GameProps) => {
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
     const lastStandUsed = useRef<boolean[]>(Array<boolean>(seatCount).fill(false));
     const [lastStandSaves, setLastStandSaves] = useState<number>(0);
+    const [reaperSweeps, setReaperSweeps] = useState<number>(0); // 死神の鎌でコマが壊れた回数（AIの手番の効果を、盤面が変わったあとにやり直すため）
     const lastStandActiveAgainst = (seat: number): boolean => lastStandUsed.current.some((used, holder) => used && holder !== seat);
     // 勝者 w に対して発動できる土壇場の防壁の持ち主（未使用・w 以外）。いなければ -1
     const lastStandHolderFor = (w: Player): number =>
         gearsBySeat.findIndex((g, seat) => hasGear(g, 'lastStand') && !lastStandUsed.current[seat] && symbols[seat] !== w);
     const gearCtxFor = (seat: number): CostContext => {
         const ailments = hasGear(gearsBySeat[seat], 'ailmentPact') ? countAilmentKinds(currentBoard, symbols[seat]) : 0;
-        return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments);
+        return gearCostContext(gearTurn.current, ruinState.current, seat, turnSeat, ailments, hasGear(gearsBySeat[seat], 'buildMania') && hasOwnObject(currentBoard, symbols[seat]));
     };
     /** コストを払う席の状況（実コストの計算は cost.ts で sim と共有） */
     const costEnvFor = (seat: number): CostEnv => ({
@@ -229,8 +258,11 @@ export const Game = (props: GameProps) => {
         shikiPlaced: gearTurn.current.shikiPlaced[seat],
         tokenFree: gearTurn.current.tokenFree[seat],
         bigCast: gearTurn.current.bigCast[seat],
+        oppBigPrev: gearTurn.current.oppBigPrev[seat],
         veil: gearTurn.current.veil[seat],
         oppSkillPrev: gearTurn.current.oppSkillPrev[seat],
+        lockPrev: gearTurn.current.lockPrev[seat],
+        lockFreeUsed: gearTurn.current.lockFreeUsed[seat],
         fireBase: gearTurn.current.fireBase[seat],
         plantPrev: gearTurn.current.plantPrev[seat],
         placedPrev: gearTurn.current.placedPrev[seat],
@@ -383,7 +415,10 @@ export const Game = (props: GameProps) => {
     // 魔法使いAIの引き直し（軽減札→シャッフル→再計画）の手番内の状態。手番開始時に初期化する
     const aiReroll = useRef({ left: MAX_REROLLS, started: false });
     const executeSkillForAI = (skill: string) => {
+        const aiBase = (seatCosts as Record<string, unknown>)[skill];
+        if (skillBan[turnSeat] && typeof aiBase === 'number' && !['onClickShuffle', 'onClickUseLock', 'onClickCharge'].includes(skill) && bannedByCost(turnSeat, calculateCost(aiBase, false, false, currentTurnPlayer, skill))) return; // スキル封じ
         if (placeBlocked(lifeBan[turnSeat], skill, calculateTokenBind())) return; // ライフ3以下のコマを置けない縛り
+        if (skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skill, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(skill), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn })) return; // 相手の一言居士・お一人様限りの札の縛り
         // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
         if (skill.startsWith('onClickHailMary:')) {
             exeHailMary(skill.slice('onClickHailMary:'.length));
@@ -411,7 +446,6 @@ export const Game = (props: GameProps) => {
             case 'onClickUseTripleLock': onClickUseTripleLock(); break;
             case 'onClickStomp': onClickStomp(); break;
             case 'onClickPlunder': onClickPlunder(); break;
-            case 'onClickRelocate': onClickRelocate(); break;
             case 'onClickShatter': onClickShatter(); break;
             case 'onClickJudgeDay': onClickJudgeDay(); break;
             case 'onClickProliferate': onClickProliferate(); break;
@@ -429,6 +463,7 @@ export const Game = (props: GameProps) => {
             case 'onClickBristle': onClickBristle(); break;
             case 'onClickRelease': onClickRelease(); break;
             case 'onClickStash': onClickStash(); break;
+            case 'onClickBoltSilence': onClickBoltSilence(); break;
             case 'onClickThunderFire': onClickThunderFire(); break;
             case 'onClickDarkPot': onClickDarkPot(); break;
             case 'onClickChargeHeal': onClickChargeHeal(); break;
@@ -466,6 +501,34 @@ export const Game = (props: GameProps) => {
             case 'onClickNightVeil': onClickNightVeil(); break;
             case 'onClickGraveDiscount': onClickGraveDiscount(); break;
             case 'onClickPoisonWard': onClickPoisonWard(); break;
+            case 'onClickDemolish': onClickObjectSkill('demolish'); break;
+            case 'onClickWeather': onClickObjectSkill('weather'); break;
+            case 'onClickLevelAll': onClickObjectSkill('levelAll'); break;
+            case 'onClickReinforce': onClickObjectSkill('reinforce'); break;
+            case 'onClickExpandAll': onClickObjectSkill('expandAll'); break;
+            case 'onClickDuplicate': onClickObjectSkill('duplicate'); break;
+            case 'onClickWorkshop': onClickObject('workshop'); break;
+            case 'onClickBarrierStone': onClickObject('barrierStone'); break;
+            case 'onClickAmuletShrine': onClickObject('amuletShrine'); break;
+            case 'onClickLuckyCat': onClickObject('luckyCat'); break;
+            case 'onClickMudField': onClickObject('mudField'); break;
+            case 'onClickTongueKing': onClickObject('tongueKing'); break;
+            case 'onClickEightTrigrams': onClickObject('eightTrigrams'); break;
+            case 'onClickSoloSign': onClickObject('soloSign'); break;
+            case 'onClickOneWord': onClickObject('oneWord'); break;
+            case 'onClickBlindMonkey': onClickObject('blindMonkey'); break;
+            case 'onClickLockRaid': onClickLockRaid(); break;
+            case 'onClickLockExtend': onClickLockExtend(); break;
+            case 'onClickLockBlessing': onClickLockBlessing(); break;
+            case 'onClickVacantSeal': onClickVacantSeal(); break;
+            case 'onClickMarket': onClickObject('market'); break;
+            case 'onClickSanctuary': onClickObject('sanctuary'); break;
+            case 'onClickPoisonSwamp': onClickObject('poisonSwamp'); break;
+            case 'onClickBigTree': onClickObject('bigTree'); break;
+            case 'onClickDeadTree': onClickObject('deadTree'); break;
+            case 'onClickSpring': onClickObject('spring'); break;
+            case 'onClickFort': onClickObject('fort'); break;
+            case 'onClickThundercloud': onClickObject('thundercloud'); break;
             case 'onClickGraveOffering': onClickGraveOffering(); break;
             case 'onClickWindborne': onClickWindborne(); break;
             case 'onClickFlameToken': onClickFlameToken(); break;
@@ -482,6 +545,7 @@ export const Game = (props: GameProps) => {
             case 'onClickTinder': onClickTinder(); break;
             case 'onClickInferno': onClickInferno(); break;
             case 'onClickMogaribue': onClickMogaribue(); break;
+            case 'onClickSeal': onClickSeal(); break;
             case 'onClickRandomCast': onClickRandomCast(); break;
             case 'onClickBurnout': onClickBurnout(); break;
             case 'onClickLeafToken': onClickLeafToken(); break;
@@ -493,6 +557,8 @@ export const Game = (props: GameProps) => {
             case 'onClickAutumn': onClickAutumn(); break;
             case 'onClickLeafFrost': onClickLeafFrost(); break;
             case 'onClickKimon': onClickKimon(); break;
+            case 'onClickLockConvert': onClickLockConvert(); break;
+            case 'onClickLockDiscount': onClickLockDiscount(); break;
             case 'onClickFireWheel': onClickFireWheel(); break;
             case 'onClickSpark': onClickSpark(); break;
             case 'onClickShuffle': onClickShuffle(); break;
@@ -518,7 +584,7 @@ export const Game = (props: GameProps) => {
                 else if (rest.length === 0 && currentAI) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
                     // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
-                    const cell = resolveMoveCell(currentAI, currentBoard, characters, life, next, lifeBan[turnSeat]);
+                    const cell = resolveMoveCell(currentAI, currentBoard, characters, life, next, lifeBan[turnSeat], newPieceBlocked(currentBoard, currentTurnPlayer, placedThisTurn));
                     if (cell !== null) onCellClick(cell);
                     else onClickCharge();
                 } else onCellClick(next);
@@ -629,7 +695,7 @@ export const Game = (props: GameProps) => {
     useEffect(() => {
         if (!currentAI) return;
 
-        const winner = calculateWinner(lineSymbols(currentBoard));
+        const winner = boardWinner(currentBoard);
         if (winner) return;
 
         // 全員AIでステップ実行モードのときは自動進行せず、「次の手番」ボタンを待つ
@@ -642,13 +708,13 @@ export const Game = (props: GameProps) => {
 
         return () => clearTimeout(timer);
         // currentTurn も依存に含める: 巨人のスキップで turnSeat が変わらず同じ席が連続手番になる場合でも再発火させる
-    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves]);
+    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves, reaperSweeps]);
 
     // 「次の手番」ボタン押下でAI同士の対戦を1ターン進める
     useEffect(() => {
         if (stepRequest === 0) return;
         if (!currentAI) return;
-        if (calculateWinner(lineSymbols(currentBoard))) return;
+        if (boardWinner(currentBoard)) return;
         aiReroll.current = { left: MAX_REROLLS, started: false };
         runAIMove();
     }, [stepRequest]);
@@ -671,7 +737,7 @@ export const Game = (props: GameProps) => {
                 addLog('幸運の財布でコストが0になった');
                 gearTrigger('luckyPurse', 'コスト0');
             }
-            noteSkillUsed(gearTurn.current, turnSeat, skillId);
+            noteSkillUsed(gearTurn.current, turnSeat, skillId, pay);
             // 四連の極意: この回数に達したので、次のスキルは無料
             if (hasGear(turnGears, 'quadMastery') && gearTurn.current.skills[turnSeat] === GEAR_PARAMS.quadCount) gearTrigger('quadMastery', '次のスキルが無料');
         }
@@ -718,6 +784,13 @@ export const Game = (props: GameProps) => {
     const proliferateMaxStacks = PROLIFERATE.maxStacks;
     // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
     const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // オリジナルスキルの「コストn以下/n以上のスキル封じ」: 立っている席は、その席の次の手番の終わりまで、表示コストが範囲内のスキルを使えない
+    // （チャージ・シャッフル・ロックを除く）。サイレンスと同じく、封じられた側の手番が終わるたびに解除
+    const [skillBan, setSkillBanAt, setSkillBanAll] = useSeatArray<{ mode: 'max' | 'min'; n: number } | null>(() => Array(seatCount).fill(null));
+    const bannedByCost = (seat: number, cost: number): boolean => {
+        const ban = skillBan[seat];
+        return !!ban && (ban.mode === 'max' ? cost <= ban.n : cost >= ban.n);
+    };
     // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
     const [lifeBan, setLifeBanAt, setLifeBanAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     // 静電気の季節: 立っている間（残りターン数）、その席が設置する駒（着手・トークン・全軍突撃のトークン）に⚡が付く
@@ -729,9 +802,26 @@ export const Game = (props: GameProps) => {
     const currentYinYangMode = yinYangMode[turnSeat];
     const yinYangModeName = (seat: number) => (yinYangMode[seat] === 'yang' ? '陽' : '陰');
 
-    const [life, setLife] = useState<number>(
-        calculateLife(characters[0], yinYangMode[0], gearLifeBonus(gearsBySeat[0]), gearLifeStd(gearsBySeat[0], LIFE_STD))
-    );
+    // 雪だるま: 席ごとのライフ期待値の積み上げ(最初は+0から)。先手の最初に引いたライフも数える。
+    // turn/counted/bonus は同じ手番の効果が二重に走っても、積み上げ・回数を二重に数えず同じ加算で引くための印
+    const rampRef = useRef<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>({
+        states: gearsBySeat.map(() => rampStart()),
+        turn: 0,
+        counted: false,
+        bonus: 0,
+        first: null,
+    });
+    if (rampRef.current.first === null) {
+        const first = calculateLife(
+            characters[0],
+            yinYangMode[0],
+            gearLifeBonus(gearsBySeat[0]) + (hasGear(gearsBySeat[0], 'snowball') ? rampBonus(rampRef.current.states[0]) : 0),
+            gearLifeStd(gearsBySeat[0], LIFE_STD)
+        );
+        rampRef.current.first = first;
+        if (hasGear(gearsBySeat[0], 'snowball')) rampRef.current.states[0] = rampAfterRoll(rampRef.current.states[0], first);
+    }
+    const [life, setLife] = useState<number>(rampRef.current.first);
 
     // 絶対零度（氷室の番人）: 使用済みで、その席の次の手番開始時に発動待ちのフラグ
     const [glacierPending, setGlacierPendingAt, setGlacierPendingAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
@@ -791,10 +881,14 @@ export const Game = (props: GameProps) => {
         setUseFreeze(false);
         setUseSucker(false);
         setUseIgnite(false);
+        setUseCustom(false);
+        setCustomPicks([]);
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseKimon(false);
+        setUseLockConvert(false);
         setUseStash(false);
+        setUseBoltSilence(0);
         setUseThunderFire(false);
         setUseFrostArea(false);
         setUseIcicle(false);
@@ -805,23 +899,43 @@ export const Game = (props: GameProps) => {
         setUseShikigamiBless(false);
         setUseShikigamiCurse(false);
         setUseShikigamiPurge(false);
+        setObjectPlacing(null);
+        setObjectTool(null);
+        setCaptureChoice(null);
         // ギア: 新しい手番のスキル使用数をリセットし、余韻を引き継ぐ（StrictMode の二重実行に備えて1ターンに1回だけ）
         let scorchForNext = 0;
+        let objectMagicForNext = 0; // 手番開始時のオブジェクト（大木）の魔力
+        let objectLifeForNext = 0; // 生命の泉のライフ期待値ボーナス
+        let turnBoard = currentBoard; // この手番開始時の処理で盤面が変わったら差し替える
         if (gearTurn.current.processedTurn !== currentTurn) {
             gearTurn.current.processedTurn = currentTurn;
             // 席ごとのギア・導線・廃墟の状態の更新は gearTurn.ts で sim と共有。魔力や演出は戻り値を見て行う
-            const change = advanceGearState(gearTurn.current, ruinState.current, { board: currentBoard, symbols, gears: gearsBySeat, endSeat: turnSeat, nextSeat });
+            // 見ざる地蔵・閻魔の舌: 終わった手番で付いたエフェクトを処理する（手番の頭の盤面との差分。objects.ts の enforceEffectRules）
+            let startBoard = currentBoard;
+            {
+                const eb = currentBoard.slice();
+                const er = enforceEffectRules(eb, effectSnap.current, symbols[turnSeat]);
+                if (er.removed.length > 0 || er.zeroed.length > 0) {
+                    if (er.removed.length > 0) addLog(`見ざる地蔵: ${er.removed.map(posName).join('・')}に付いたエフェクトが消えた`);
+                    if (er.zeroed.length > 0) addLog(`閻魔の舌: ${er.zeroed.map(posName).join('・')}のコマのライフが0になった`);
+                    flashCells([...er.removed, ...er.zeroed]);
+                    startBoard = eb;
+                    setCurrentBoard(eb);
+                }
+            }
+            const change = advanceGearState(gearTurn.current, ruinState.current, { board: startBoard, symbols, gears: gearsBySeat, endSeat: turnSeat, nextSeat });
             // 毒返しの構え: 終わった手番の間に自陣が破壊/乗っ取られた席に、ライフ4・☠付きのコマを置く
-            let wardBoard = currentBoard;
+            let wardBoard = startBoard;
             change.wardPlace.forEach((seat) => {
-                if (wardBoard === currentBoard) wardBoard = currentBoard.slice();
+                if (wardBoard === startBoard) wardBoard = startBoard.slice();
                 const at = placeWardPiece(wardBoard, symbols[seat], randomPick);
                 if (at < 0) return;
                 addLog(`${symbols[seat]}の毒返しの構えが発動（${posName(at)}にライフ4・☠付きのコマを置いた）`);
                 flashCells([at]);
                 playEffect('token', at, [at], '毒返しの構え');
             });
-            if (wardBoard !== currentBoard) setCurrentBoard(wardBoard);
+            if (wardBoard !== startBoard) setCurrentBoard(wardBoard);
+            turnBoard = wardBoard;
             change.scorch.forEach((gain, seat) => {
                 if (gain <= 0) return;
                 // 焦土: 次の手番の席の分は、下の手番開始の魔力に足す
@@ -840,6 +954,7 @@ export const Game = (props: GameProps) => {
                 const r = detonate(board, nextSymbol);
                 setGlacierPendingAt(nextSeat, false);
                 setCurrentBoard(board);
+                turnBoard = board;
                 setGameLog((prev) => [
                     ...prev,
                     `ターン${currentTurn} ${nextSymbol}: 絶対零度が発動（${r.damaged.length}コマにダメージ${r.destroyed.length > 0 ? `・${r.destroyed.length}コマが破壊` : ''}）`,
@@ -850,6 +965,37 @@ export const Game = (props: GameProps) => {
                 }
                 addCorpses(r.destroyed.length);
             }
+            // 春雷: 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く（gear.ts）
+            if (hasGear(gearsBySeat[seatOf(nextSymbol)], 'springThunder')) {
+                const thawed = springThunderThaw(turnBoard, nextSymbol);
+                if (thawed.length > 0) {
+                    addLog(`春雷が${thawed.map(posName).join('・')}の❄を1つ解いた`);
+                    flashCells(thawed);
+                    gearTrigger('springThunder', `${thawed.map(posName).join('・')}の❄を解く`);
+                }
+            }
+            // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（objects.ts。魔力とライフの分は下の手番開始の計算に足す）
+            const objBoard = turnBoard.slice();
+            const burnt = sweepBurntTrees(objBoard);
+            const objRes = objectTurnStart(objBoard, nextSymbol, characters);
+            if (burnt.length > 0) {
+                addLog(`🔥で${burnt.map(posName).join('・')}のオブジェクトが燃え尽きた`);
+                flashCells(burnt);
+            }
+            if (objRes.magic > 0) addLog(`${nextSymbol}のオブジェクト（大木・護符の社）で魔力+${objRes.magic}`);
+            if (objRes.leaves.length > 0) addLog(`枯れた大木が${objRes.leaves.map(posName).join('・')}に🍂を付けた`);
+            if (objRes.charged.length > 0) addLog(`雷雲が${objRes.charged.map(posName).join('・')}に⚡を付けた`);
+            if (objRes.poisoned.length > 0) addLog(`毒沼が${objRes.poisoned.map(posName).join('・')}に☠を付けた`);
+            if (objRes.fortified.length > 0) addLog(`砦が自陣${objRes.fortified.length}コマのライフ+1`);
+            const objTouched = [...objRes.leaves, ...objRes.charged, ...objRes.fortified, ...objRes.poisoned];
+            if (burnt.length > 0 || objTouched.length > 0) {
+                flashCells(objTouched);
+                turnBoard = objBoard;
+                setCurrentBoard(withOverload(objBoard));
+            }
+            objectMagicForNext = objRes.magic;
+            objectLifeForNext = objectLifeBonus(objBoard, nextSymbol);
+            effectSnap.current = effectSnapshot(turnBoard); // 次の手番の頭のエフェクト（手番の終わりに増えた分を調べる）
         }
         // 手番開始時の魔力（標準+1に、長期戦ボーナス・自陣の🌱・キャラ補正・ギアを足す。規則は turn.ts で sim と共有）
         const garden = hasGear(gearsBySeat[nextSeat], 'colorGarden') ? countVarietySquares(currentBoard, nextSymbol) * GEAR_PARAMS.varietyMagic : 0;
@@ -869,6 +1015,7 @@ export const Game = (props: GameProps) => {
             standBonus,
             scorch: scorchForNext,
             root,
+            objects: objectMagicForNext,
         });
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
@@ -885,16 +1032,32 @@ export const Game = (props: GameProps) => {
 
         setMagicAt(nextSeat, nextMagic);
         const nextGears = gearsBySeat[nextSeat];
+        // 雪だるま: 手番ごとに期待値が1段積み上がり、10以上のライフが3回出たらリセット
+        const rampOn = hasGear(nextGears, 'snowball');
+        const ramp = rampRef.current;
+        if (rampOn && ramp.turn !== currentTurn) {
+            ramp.bonus = rampBonus(ramp.states[nextSeat]);
+            ramp.turn = currentTurn;
+            ramp.counted = false;
+        }
         const nextLife = calculateLife(
             nextCharacter,
             yinYangMode[nextSeat],
             (nextCharacter === 'poisoner' ? poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
+                (rampOn ? ramp.bonus : 0) +
+                objectLifeForNext + // 生命の泉
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );
+        if (rampOn && !ramp.counted) {
+            ramp.states[nextSeat] = rampAfterRoll(ramp.states[nextSeat], nextLife);
+            ramp.counted = true;
+            if (ramp.states[nextSeat].stack === 0) gearTrigger('snowball', '積み上げがリセット');
+        }
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
+        setSkillBanAt(turnSeat, null);
         setLifeBanAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
         setGearOffAt(turnSeat, false);
@@ -909,6 +1072,22 @@ export const Game = (props: GameProps) => {
         setTurnSeat(nextSeat);
     }, [currentTurn]);
 
+    // 死神の鎌: ライフ0の駒を手番の終わりに壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
+    useEffect(() => {
+        if (currentTurn === 1) return;
+        if (calculateWinner(currentBoard.map((x) => x.player))) return;
+        const victims = lifeZeroVictims(currentBoard, characters, gearsBySeat);
+        if (victims.length === 0) return;
+        const board = currentBoard.slice();
+        for (const k of victims) board[k] = { player: undefined, bind: 0, effects: [] };
+        setCurrentBoard(board);
+        addCorpses(victims.length);
+        addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
+        gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        flashCells(victims);
+        setReaperSweeps((c) => c + 1);
+    }, [currentTurn]);
+
     useEffect(() => {
         // 次に手番が来るプレイヤーのロックを固定して再シャッフル。
         // チャージのように盤面(history)が変わらずにターンだけ進む場合も、次の席の手札を引き直す（currentTurn も依存に含める）。
@@ -916,7 +1095,21 @@ export const Game = (props: GameProps) => {
         setSkills(reshuffledSkills(deckBySeat[judgeNextSeat()], lockedSkills[judgeNextSeat()]));
     }, [history, currentTurn]);
 
-    const onCellClick = (i: number) => {
+    // この手番に置いた新しいコマの数（手番開始時との差。お一人様限りの札の入力）
+    const placedThisTurn = Math.max(0, ownPieceCount(currentBoard, currentTurnPlayer) - gearTurn.current.pieceBase[turnSeat]);
+    // 相手のオブジェクト（一言居士・お一人様限りの札）に縛られて、そのスキルを今は使えないか。ボタンの文言（名前-コスト）から判定する
+    const skillKeyByName = (name: string): string | undefined => {
+        const hit = SKILL_CATALOG.find((e) => e.name === name);
+        return hit ? hit.costKey : ({ 式神設置: 'onClickShikigamiPlace', 蘇生: 'onClickNecromancy', 全軍突撃: 'onClickTotalAssault' } as Record<string, string>)[name];
+    };
+    const restrictSkill = (text: string): boolean => {
+        const parsed = parseSkillText(text);
+        if (!parsed || parsed.sign === '+') return false;
+        if (!['シャッフル', 'ロック'].includes(parsed.name) && bannedByCost(turnSeat, parsed.amount)) return true; // スキル封じ（表示コストで判定）
+        return skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skillKeyByName(parsed.name), basic: ['シャッフル', 'ロック'].includes(parsed.name), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn });
+    };
+    // asObject: 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣のコマで置き換え）。人間の手番で未指定なら選択ダイアログを出す
+    const onCellClick = (i: number, asObject?: boolean) => {
         if (hailMarySpin) return;
         setPreviewCells([]);
         // 雷のない所に火は立たぬ: ⚡のあるコマを選ぶ。無敵マスでも自分のものは選べる（無敵の早期リターンより前に判定する）
@@ -926,6 +1119,12 @@ export const Game = (props: GameProps) => {
             return;
         }
         // 雷神のへそくり: ⚡のある自陣のコマを選ぶ。無敵マスでも自分のものは選べる（雷霆の巫の⚡マスはすべて無敵なので、無敵の早期リターンより前に判定する）
+        if (useBoltSilence > 0) {
+            if (!boltSilenceTargets().includes(i)) return; // ⚡のない・自陣でないマスは選び直せる
+            exeBoltSilence(i);
+            return;
+        }
+
         if (useStash) {
             if (!stashTargets().includes(i)) return; // ⚡のない・自陣でないマスは選び直せる
             exeStash(i);
@@ -990,6 +1189,16 @@ export const Game = (props: GameProps) => {
             return;
         }
 
+        if (objectPlacing) {
+            exeObjectPlace(i);
+            return;
+        }
+
+        if (objectTool) {
+            exeObjectTool(i);
+            return;
+        }
+
         if (useShikigamiBlast) {
             exeShikigamiBlast(i);
             return;
@@ -1024,14 +1233,13 @@ export const Game = (props: GameProps) => {
             exeKimon(i);
             return;
         }
-
-        if (useFrostArea) {
-            exeFrostArea(i);
+        if (useLockConvert) {
+            exeLockConvert(i);
             return;
         }
 
-        if (useRelocate) {
-            exeRelocate(i);
+        if (useFrostArea) {
+            exeFrostArea(i);
             return;
         }
 
@@ -1072,6 +1280,11 @@ export const Game = (props: GameProps) => {
             return;
         }
 
+        if (useCustom) {
+            exeCustom(i);
+            return;
+        }
+
         if (useLock > 0) {
             if (!lockable(nextBoard[i])) return; // 氷結中のマスにはロックできない。選び直せる
             applyLock(nextBoard, i);
@@ -1109,17 +1322,17 @@ export const Game = (props: GameProps) => {
             return;
         }
 
-        if (calculateWinner(lineSymbols(currentBoard))) {
+        if (boardWinner(currentBoard)) {
             return;
         } else if (moveBlocked(lifeBan[turnSeat], life)) {
             return; // ライフ3以下のコマは置けない（ライフを上げるか、チャージで手番を終える）
         } else if (currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer) {
-            if (currentBoard[i].bind > 0 && !canHitBound(currentCharacter, currentBoard, seatCount)) {
+            if ((currentBoard[i].bind > 0 || isTakeProtected(currentBoard[i], characters)) && !canHitBound(currentCharacter, currentBoard, seatCount)) {
                 return;
             }
         }
 
-        if (nextBoard[i].effects.find((x) => x.effect === '🔑') && nextBoard[i].bind > 0) {
+        if (lockBlocksPlacement(nextBoard[i], currentCharacter)) {
             return;
         }
 
@@ -1132,6 +1345,17 @@ export const Game = (props: GameProps) => {
         if (currentBoard[i].player === currentTurnPlayer && overwriteBlocked(currentBoard[i])) {
             return;
         }
+
+        if (asObject === undefined && !currentAI && currentBoard[i].object && currentBoard[i].player && currentBoard[i].player !== currentTurnPlayer && currentBoard[i].bind <= 0) {
+            setCaptureChoice(i);
+            return;
+        }
+        // お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない
+        if (!currentBoard[i].player && newPieceBlocked(currentBoard, currentTurnPlayer, placedThisTurn)) {
+            addLog('お一人様限りの札: この手番はもう新しいコマを置けない');
+            return;
+        }
+        setCaptureChoice(null);
 
         const nextHistory = [...history.slice(0, currentTurn + 1), nextBoard];
         playSfx('place');
@@ -1175,7 +1399,7 @@ export const Game = (props: GameProps) => {
         }
 
         // 着手の結果（強化・奪取・破壊・攻撃・新規）は placement.ts で sim と共有
-        const placed = resolvePlacement(nextBoard[i], currentTurnPlayer, life);
+        const placed = resolvePlacement(nextBoard[i], currentTurnPlayer, life, !!asObject);
         const capturedFrom = placed.capturedFrom; // 通常の攻撃で奪取した相手（復讐の刃）
         if (placed.poisonSpread) spreadOrigins.push(i); // 毒持ちの敵コマを奪取/破壊した場合は拡散の起点にする
         if (placed.corpse) addCorpses(1); // 敵味方問わずコマが奪われる/消えるたびに墓地+1
@@ -1186,7 +1410,17 @@ export const Game = (props: GameProps) => {
             setUseBuds([false, 0]);
         }
 
-        nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects };
+        nextBoard[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+        // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+        if (!placed.reinforced) {
+            const seeded = seedBud(nextBoard[i], currentTurnPlayer, turnGears);
+            if (seeded) {
+                nextBoard[i] = seeded;
+                gearTrigger('budSeed', 'バッズ付きで設置');
+            }
+        }
+        // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
+        if (blessingActive(gearTurn.current.blessing[turnSeat]) && newPlayer === currentTurnPlayer && !nextBoard[i].object) nextBoard[i] = blessPlacedPiece(nextBoard[i]);
 
         // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
         const vengeanceGained: Record<number, number> = {};
@@ -1310,12 +1544,19 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife'), true, true, 'onClickAddLife');
     };
 
+    // 市場: 手番ごとに、働いている市場の数だけシャッフルが無料
+    const marketFree = gearTurn.current.marketUsed[turnSeat] < marketCount(currentBoard, currentTurnPlayer);
+    const shuffleCost = marketFree ? 0 : seatCosts.onClickShuffle;
     const onClickShuffle = () => {
         addLog('「シャッフル」を使用');
         playEffect('shuffle');
         // 手札はデッキ（12枚）から引く
         setSkills(reshuffledSkills(deckBySeat[turnSeat], currentLockedSkills));
-        spendMagic(seatCosts.onClickShuffle, true, false);
+        if (marketFree) {
+            gearTurn.current.marketUsed[turnSeat]++;
+            addLog('市場でシャッフルが無料になった');
+        }
+        spendMagic(shuffleCost, true, false);
     };
 
     const onClickBibine = () => {
@@ -1353,6 +1594,12 @@ export const Game = (props: GameProps) => {
     // effect はトークンが持つエフェクト。収穫に渡す「付与したエフェクト数」を返す
     const afterTokenPlaced = (board: SquareInfo[], idx: number, effect?: TokenEffect): number => {
         let granted = effect ? 1 : 0;
+        // 芽吹き: ライフの高いトークンにも🌱（収穫・伝播には数えない）
+        const seeded = seedBud(board[idx], currentTurnPlayer, turnGears);
+        if (seeded) {
+            board[idx] = seeded;
+            gearTrigger('budSeed', 'バッズ付きで設置');
+        }
         // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
         if (chargeBuff[turnSeat] > 0 && board[idx].player === currentTurnPlayer) board[idx] = addCharge(board[idx], characters);
         if (hasGear(turnGears, 'bindingLock') && Math.random() < GEAR_PARAMS.bindingLockChance) {
@@ -1420,9 +1667,10 @@ export const Game = (props: GameProps) => {
 
     const [useLock, setUseLock] = useState<number>(0);
     const onClickUseLock = () => {
+        const lockCost = calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock');
         addLog('「ロック」を使用（マスを選択）');
         setUseLock(useLock + 1);
-        spendMagic(calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock'), true, true, 'onClickUseLock');
+        spendMagic(lockCost, true, true, 'onClickUseLock');
     };
 
     const onClickUseDoubleLock = () => {
@@ -1554,7 +1802,8 @@ export const Game = (props: GameProps) => {
         setUseToken(true);
     };
 
-    const calculateTokenBind = (): number => tokenBindOf(currentCharacter, turnGears);
+    // 泥田坊: 相手の泥田坊が働いていると、トークンで置くコマのライフは0
+    const calculateTokenBind = (): number => mudAdjustedBind(currentBoard, currentTurnPlayer, tokenBindOf(currentCharacter, turnGears));
 
     const onClickBudsToken = () => {
         const board = currentBoard.slice();
@@ -1693,6 +1942,35 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
     };
 
+    // 沈黙は雷なり: 自陣の⚡を1つ選んで1スタック払い、相手全員が次の手番スキルを使えなくなる（自陣に⚡が無いと使えない）
+    const [useBoltSilence, setUseBoltSilence] = useState<number>(0); // あと何個の⚡を選んで払うか（0=使っていない）
+    const boltSilenceTargets = (): number[] =>
+        currentBoard.map((sq, i) => (sq.player === currentTurnPlayer && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1);
+    const boltSilenceLegal = (): boolean => boltSilenceTargets().reduce((n, i) => n + chargeStacks(currentBoard[i]), 0) >= BOLT_SILENCE_BOLTS;
+    const onClickBoltSilence = () => {
+        if (!boltSilenceLegal()) return;
+        addLog(`「沈黙は雷なり」を使用（⚡のある自陣のコマを選んで⚡を${BOLT_SILENCE_BOLTS}個払う）`);
+        setUseBoltSilence(BOLT_SILENCE_BOLTS);
+        spendMagic(calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence'), true, true, 'onClickBoltSilence');
+    };
+    const exeBoltSilence = (i: number) => {
+        const board = currentBoard.slice();
+        const at = board[i].effects.findIndex((e) => e.effect === '⚡');
+        if (at === -1) return;
+        board[i] = { ...board[i], effects: board[i].effects.filter((_, k) => k !== at) };
+        flashCells([i]);
+        const left = useBoltSilence - 1;
+        setUseBoltSilence(left);
+        if (left === 0) {
+            addLog(`${posName(i)}の⚡を払い切った。相手は次の手番スキルを使えない`);
+            playEffect('silence');
+            otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+        } else {
+            addLog(`${posName(i)}の⚡1個を払った（あと${left}個）`);
+        }
+        setCurrentBoard(board);
+    };
+
     // 落雷は忘れた頃に: 自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与える（ロック・無敵・氷結中・ライフ0のコマは受けない）。無敵だった自陣の⚡コマは普通のコマに戻る
     const ownChargeStacks = (): number => currentBoard.reduce((n, sq) => (sq.player === currentTurnPlayer ? n + chargeStacks(sq) : n), 0);
     const onClickRelease = () => {
@@ -1766,7 +2044,7 @@ export const Game = (props: GameProps) => {
 
     const exeJudgeDay = (i: number) => {
         const board = currentBoard.slice();
-        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer);
+        const { range: judgeIndexes, destroyed, broken } = judgeDayOf(board, i, currentTurnPlayer, { gears: turnGears, seat: turnSeat });
         addCorpses(destroyed);
 
         setUseMagicCountAt(turnSeat, 0);
@@ -1796,6 +2074,63 @@ export const Game = (props: GameProps) => {
     const [useShikigamiCurse, setUseShikigamiCurse] = useState<boolean>(false);
     const [useShikigamiPurge, setUseShikigamiPurge] = useState<boolean>(false);
     const ownShikigami = (): number[] => ownShikigamiCells(currentBoard, currentTurnPlayer);
+    // オブジェクト(idx 105-109): 空きマスを選んで設置する。列に数えず、ライフは減らない。効果は手番開始時（下の [currentTurn] の effect）。仕様は objects.ts
+    const [objectPlacing, setObjectPlacing] = useState<ObjectKind | null>(null);
+    // オブジェクトのスキル（解体・風化・補強工事・分譲）で、対象のマスを選んでいる最中のスキル
+    const [objectTool, setObjectTool] = useState<ObjectSkill | null>(null);
+    const objectSkillTargetsNow = (skill: ObjectSkill): number[] => objectSkillTargets(skill, currentBoard, currentTurnPlayer, characters);
+    // 解体・風化・補強工事・分譲は使ってから対象を選ぶ。地ならし・増築は即座に発動する
+    const onClickObjectSkill = (skill: ObjectSkill) => {
+        const def = OBJECT_SKILLS[skill];
+        if (!objectSkillUsable(skill, currentBoard, currentTurnPlayer, characters)) return;
+        const pay = () => spendMagic(calculateCost(seatCosts[def.costKey], false, false, currentTurnPlayer, def.costKey), true, true, def.costKey);
+        if (def.target) {
+            addLog(`「${def.name}」を使用（対象のオブジェクトを選択）`);
+            setObjectTool(skill);
+            pay();
+            return;
+        }
+        const board = currentBoard.slice();
+        const r = runObjectSkill(skill, board, currentTurnPlayer, characters, -1) as NonNullable<ReturnType<typeof runObjectSkill>>;
+        addLog(`「${def.name}」を使用（${skill === 'levelAll' ? `${r.destroyed.length}個のオブジェクトを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}` : `自陣${r.affected.length}個のオブジェクトのライフ+2`}）`);
+        flashCells([...r.destroyed, ...r.blocked, ...r.affected]);
+        playEffect(skill === 'levelAll' ? 'tsunami' : 'heal', undefined, [...r.destroyed, ...r.blocked, ...r.affected], def.name);
+        setCurrentBoard(board);
+        pay();
+    };
+    const exeObjectTool = (i: number) => {
+        if (!objectTool) return;
+        const def = OBJECT_SKILLS[objectTool];
+        const board = currentBoard.slice();
+        const r = runObjectSkill(objectTool, board, currentTurnPlayer, characters, i);
+        if (!r) return; // 対象でないマスは選び直せる
+        addLog(`${posName(i)}に「${def.name}」${r.destroyed.length > 0 ? '（破壊）' : r.blocked.length > 0 ? '（氷結が身代わり）' : ''}`);
+        flashCells([i, ...r.destroyed, ...r.blocked, ...r.affected]);
+        playEffect(objectTool === 'reinforce' ? 'heal' : objectTool === 'duplicate' ? 'token' : 'tsunami', i, [i, ...r.affected], def.name);
+        setObjectTool(null);
+        setCurrentBoard(board);
+    };
+    // 敵のオブジェクト（ライフ0）を乗っ取る着手の選択ダイアログが開いているマス
+    const [captureChoice, setCaptureChoice] = useState<number | null>(null);
+    const onClickObject = (kind: ObjectKind) => {
+        const def = OBJECT_DEFS[kind];
+        addLog(`「${def.name}」を使用（空きマスを選択）`);
+        setObjectPlacing(kind);
+        spendMagic(calculateCost(seatCosts[def.costKey], false, false, currentTurnPlayer, def.costKey), true, true, def.costKey);
+    };
+    const exeObjectPlace = (i: number) => {
+        if (!objectPlacing || !objectLandable(currentBoard[i])) return; // 埋まっている・氷結中・ロック中のマスは選び直せる
+        const board = currentBoard.slice();
+        board[i] = { ...newObject(currentTurnPlayer, objectPlacing), effects: currentBoard[i].effects.filter((e) => e.effect === '🔥') }; // 空きマスに乗っていた🔥は引き継ぐ（大木は即座に燃え尽きる）
+        sweepBurntTrees(board);
+        addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
+        flashCells([i]);
+        playEffect('token', i, [i], OBJECT_DEFS[objectPlacing].name);
+        setObjectPlacing(null);
+        setObjectTool(null);
+        setCaptureChoice(null);
+        setCurrentBoard(board);
+    };
     const onClickShikigamiPlace = () => {
         addLog('「式神設置」を使用（空きマスを選択）');
         setUseShikigamiPlace(true);
@@ -2346,9 +2681,9 @@ export const Game = (props: GameProps) => {
     // この手番に基礎コスト7以上のスキルを使っていれば0コスト（cost.ts）
     const secondCatchPool = () =>
         deckBySeat[turnSeat]
-            .filter((i) => i !== 59 && i !== 104 && baseCostOf(i) <= SECOND_CATCH_MAX_BASE)
+            .filter((i) => i !== 59 && i !== 104 && !!skillOf(i) && baseCostOf(i) <= SECOND_CATCH_MAX_BASE)
             .map((i) => shuffleSkillDefs.find((d) => d.idx === i))
-            .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled && !placeBlocked(lifeBan[turnSeat], SKILL_CATALOG[d.idx].costKey, calculateTokenBind()));
+            .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled && !placeBlocked(lifeBan[turnSeat], skillOf(d.idx)?.costKey, calculateTokenBind()));
     const onClickSecondCatch = () => {
         const pool = secondCatchPool();
         if (pool.length === 0) {
@@ -2356,7 +2691,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         const second = randomPick(pool);
-        addLog(`「柳の下に二匹目がいた」を使用 → ${SKILL_CATALOG[second.idx].name}が発動`);
+        addLog(`「柳の下に二匹目がいた」を使用 → ${skillOf(second.idx)?.name}が発動`);
         spendMagic(calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch'), true, true, 'onClickSecondCatch');
         gearTurn.current.freeCast = true;
         second.onClick();
@@ -2469,6 +2804,9 @@ export const Game = (props: GameProps) => {
     const [useFreeze, setUseFreeze] = useState<boolean>(false);
     const [useIgnite, setUseIgnite] = useState<boolean>(false);
     const [useTinder, setUseTinder] = useState<boolean>(false);
+    // オリジナルスキル: 対象のマスを選ぶ待ち（範囲が one / area のとき）
+    const [useCustom, setUseCustom] = useState<boolean>(false);
+    const [customPicks, setCustomPicks] = useState<number[]>([]);
     // 氷結: 選んだコマに❄を付与する（敵味方どちらでも。付与しただけではダメージは出ない）
     const onClickFreeze = () => {
         addLog('「氷結」を使用（コマを選択）');
@@ -2622,15 +2960,13 @@ export const Game = (props: GameProps) => {
     };
 
     // --- 汎用スキル（idx 49-52）: 慈雨・縮地・写し身・追い剥ぎ ---
-    const [useRelocate, setUseRelocate] = useState<boolean>(false);
-    const [relocateFrom, setRelocateFrom] = useState<number | null>(null);
     const [useClone, setUseClone] = useState<boolean>(false);
     const [usePlunder, setUsePlunder] = useState<boolean>(false);
     // 慈雨: 自陣の全コマのライフ+1（クリック不要・手番は続く）
     // 福引き(idx 59): 自分のデッキから、基礎コスト3以下で今撃てるスキルをランダムに1つ、コストを払わず発動する（手札に出ていないスキルも対象）
     const lotteryPool = () =>
         deckBySeat[turnSeat]
-            .filter((i) => i !== 59 && baseCostOf(i) <= 3)
+            .filter((i) => i !== 59 && !!skillOf(i) && baseCostOf(i) <= 3)
             .map((i) => shuffleSkillDefs.find((d) => d.idx === i))
             .filter((d): d is NonNullable<typeof d> => !!d && !d.disabled);
     const onClickRandomCast = () => {
@@ -2640,7 +2976,7 @@ export const Game = (props: GameProps) => {
             return;
         }
         const picked = randomPick(pool);
-        addLog(`「福引き」を使用 → ${SKILL_CATALOG[picked.idx].name}が発動`);
+        addLog(`「福引き」を使用 → ${skillOf(picked.idx)?.name}が発動`);
         spendMagic(calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast'), true, true, 'onClickRandomCast');
         gearTurn.current.freeCast = true;
         picked.onClick();
@@ -2770,33 +3106,6 @@ export const Game = (props: GameProps) => {
         playEffect('rain', undefined, done);
         setCurrentBoard(board);
         spendMagic(calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost'), true, true, 'onClickBoost');
-    };
-    // 縮地: 自陣のコマ（🔑・氷結中は不可）を選び、空きマスを選ぶと、ライフ・エフェクトごと移動する
-    const relocateSources = (): number[] =>
-        currentBoard.map((sq, i) => (canRelocate(sq, currentTurnPlayer) ? i : -1)).filter((i) => i !== -1);
-    const onClickRelocate = () => {
-        addLog('「縮地」を使用（動かす自陣のコマを選択）');
-        setUseRelocate(true);
-        setRelocateFrom(null);
-        spendMagic(calculateCost(seatCosts.onClickRelocate, false, false, currentTurnPlayer, 'onClickRelocate'), true, true, 'onClickRelocate');
-    };
-    const exeRelocate = (i: number) => {
-        if (relocateFrom === null) {
-            if (canRelocate(currentBoard[i], currentTurnPlayer)) setRelocateFrom(i); // 動かせるコマだけ選べる
-            return;
-        }
-        if (canRelocate(currentBoard[i], currentTurnPlayer)) {
-            setRelocateFrom(i); // 別のコマに選び直せる
-            return;
-        }
-        const board = currentBoard.slice();
-        if (!relocate(board, relocateFrom, i, currentTurnPlayer)) return; // 置けないマスは選び直せる
-        addLog(`${posName(relocateFrom)}のコマを${posName(i)}へ移動`);
-        flashCells([i]);
-        playEffect('dash', i, [relocateFrom, i]);
-        setUseRelocate(false);
-        setRelocateFrom(null);
-        setCurrentBoard(board);
     };
     // 写し身: 自陣のコマを選ぶと、縦横隣のランダムな空きマスにライフ半分の写しが現れる
     const cloneSources = (): number[] =>
@@ -3001,6 +3310,8 @@ export const Game = (props: GameProps) => {
 
     // 鬼門封じ: 敵のコマを1つ選んで破壊する（氷結中は❄-1だけ）。破壊して空きマスになったら3ターンロックする。🔑ロック・⚡無敵のコマは選べない
     const [useKimon, setUseKimon] = useState<boolean>(false);
+    // 錠の転換（汎用 idx 134）: ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す。自分のロックでも敵のロックでもよい
+    const [useLockConvert, setUseLockConvert] = useState<boolean>(false);
     // 落ち葉の置き土産: ランダムな敵のコマ1つに🍂を1つ付ける（🔑ロック・⚡無敵は除く）。クリック不要・手番は続く
     const leafDropCandidates = (): number[] => leafDropTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
     const onClickLeafDrop = () => {
@@ -3045,6 +3356,33 @@ export const Game = (props: GameProps) => {
         spendMagic(calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling'), true, true, 'onClickKindling');
     };
     const kimonCandidates = (): number[] => kimonTargets(currentBoard, currentTurnPlayer, (sq) => isGuarded(sq, characters));
+    // 錠前割引（汎用 idx 135）: 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）
+    const onClickLockDiscount = () => {
+        const n = lockedSquareCount(currentBoard);
+        if (n === 0) return;
+        addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
+        playEffect('discount', undefined, undefined, '錠前割引');
+        spendMagic(calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
+        const d = gearTurn.current.discount[turnSeat];
+        gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
+    };
+    const onClickLockConvert = () => {
+        if (lockConvertCells(currentBoard).length === 0) return;
+        addLog('「錠の転換」を使用（ロックのかかっているマスを選択）');
+        setUseLockConvert(true);
+        spendMagic(calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert'), true, true, 'onClickLockConvert');
+    };
+    const exeLockConvert = (i: number) => {
+        if (!lockConvertCells(currentBoard).includes(i)) return; // ロックの無いマスは選び直せる
+        const board = currentBoard.slice();
+        const gained = lockConvert(board, i);
+        addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
+        flashCells([i]);
+        playEffect('lock', i, [i], '錠の転換');
+        setUseLockConvert(false);
+        setCurrentBoard(board);
+        setLife(life + gained);
+    };
     const onClickKimon = () => {
         addLog('「鬼門封じ」を使用（敵のコマを選択）');
         setUseKimon(true);
@@ -3153,6 +3491,67 @@ export const Game = (props: GameProps) => {
         setCurrentBoard(board);
         spendMagic(mogaribueCost(), false, true, 'onClickMogaribue');
     };
+    // 固有スキル 封鎖の断（鍵師）: 自陣のコマ全てに7・空きマス全てに2のロック。敵のコマのロックを全て解除し、解除した数（最低1）だけ敵全てにダメージ。ターン終了
+    const sealCost = (player: Player = currentTurnPlayer): number =>
+        calculateCost(sealBaseCost(costTableFor(seatOf(player)).onClickSeal, sealReleaseCells(currentBoard, player).length), false, false, player, 'onClickSeal');
+    const onClickSeal = () => {
+        const cost = sealCost();
+        const board = currentBoard.slice();
+        const r = seal(board, currentTurnPlayer, characters);
+        addLog(`「封鎖の断」を使用（自陣${r.own.length}・空き${r.empty.length}マスをロック、敵のロック${r.released.length}個を解除して敵${r.hit.length}コマに${r.damage}ダメージ・ターン終了）`);
+        flashCells(r.hit);
+        playEffect('lock', undefined, [...r.own, ...r.empty], '封鎖の断');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickSeal');
+        setCurrentTurn(currentTurn + 1);
+    };
+    // 錠前荒らし（汎用 idx 130）: 敵陣のロックを1つランダムに解除し、そのコマに🔥☠⚡のどれかをランダムに付与する。直前の相手ターンにロックが使われていたら0コスト
+    const onClickLockRaid = () => {
+        const board = currentBoard.slice();
+        const cost = calculateCost(seatCosts.onClickLockRaid, false, false, currentTurnPlayer, 'onClickLockRaid');
+        const r = lockRaid(board, currentTurnPlayer, characters, Math.random);
+        if (!r) return;
+        gearTurn.current.lockPrev[turnSeat] = false; // 無料で撃てるのは1手番に1回まで
+        addLog(`「錠前荒らし」を使用（${posName(r.cell)}のロックを解除して${r.effect}を付与）`);
+        flashCells([r.cell]);
+        playEffect('lock', r.cell, [r.cell], '錠前荒らし');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickLockRaid');
+    };
+    // ロックの増築（汎用 idx 131）: 自陣のコマのロックのスタックを全て +2
+    const onClickLockExtend = () => {
+        const board = currentBoard.slice();
+        const cost = calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend');
+        const cells = lockExtend(board, currentTurnPlayer);
+        if (cells.length === 0) return;
+        addLog(`「ロックの増築」を使用（自陣${cells.length}コマのロック+${LOCK_EXTEND_STACK}）`);
+        flashCells(cells);
+        playEffect('lock', undefined, cells, 'ロックの増築');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickLockExtend');
+    };
+    // 施錠の加護（汎用 idx 132）: 使った手番を含む自分の3手番の間、設置したコマにロックが2スタック付く
+    const onClickLockBlessing = () => {
+        gearTurn.current.blessing[turnSeat] = BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
+        gearTurn.current.blessingFresh[turnSeat] = true;
+        addLog(`「施錠の加護」を使用（${BLESSING_TURNS}手番の間、設置したコマに🔑${BLESSING_STACK}）`);
+        playEffect('auraGreen');
+        spendMagic(calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing'), true, true, 'onClickLockBlessing');
+    };
+    // 空き家封じ（汎用 idx 133）: 空きマス全てを2スタックでロック（ターンは続く）。相手のリーチ1つにつきコスト-3
+    const vacantSealCost = (player: Player = currentTurnPlayer): number =>
+        calculateCost(vacantSealBaseCost(costTableFor(seatOf(player)).onClickVacantSeal, opponentReaches(currentBoard, player, characters)), false, false, player, 'onClickVacantSeal');
+    const onClickVacantSeal = () => {
+        const cost = vacantSealCost();
+        const board = currentBoard.slice();
+        const cells = vacantSeal(board);
+        if (cells.length === 0) return;
+        addLog(`「空き家封じ」を使用（空きマス${cells.length}マスを${VACANT_SEAL_STACK}ターンロック）`);
+        flashCells(cells);
+        playEffect('lock', undefined, cells, '空き家封じ');
+        setCurrentBoard(board);
+        spendMagic(cost, true, true, 'onClickVacantSeal');
+    };
     const exeFreeze = (i: number) => {
         if (!canFreeze(currentBoard[i])) return; // 🔑ロック・🔥のあるマスは選び直せる
         const board = currentBoard.slice();
@@ -3205,14 +3604,19 @@ export const Game = (props: GameProps) => {
         calculateCostOf(costEnvFor(seatOf(player)), cost, isToken, isPoison, skillKey);
 
     // 土壇場の防壁が発動する勝利は、列が消えるまで勝ちとして扱わない
-    const rawWinner = calculateWinner(lineSymbols(currentBoard));
-    const winner = rawWinner && lastStandHolderFor(rawWinner) < 0 ? rawWinner : undefined;
+    // 八卦の陣の勝利は4つ並びではないので、土壇場の防壁（列を消す）の対象にならない
+    const lineWinner = calculateWinner(lineSymbols(currentBoard));
+    const encircle = encircleWinner(currentBoard);
+    const rawWinner = lineWinner ?? encircle?.player;
+    const winner = rawWinner && (!lineWinner || lastStandHolderFor(rawWinner) < 0) ? rawWinner : undefined;
     // AIの手番の間は、人間の操作(マス・スキル・ロック切替)を受け付けない。AIは onCellClick/executeSkillForAI を直接呼ぶので影響しない
     const aiTurn = currentAI !== null && !winner;
     stallRef.current = { turn: currentTurn, over: !!winner || currentAI === null, queued: pendingAIMove !== null, spinning: hailMarySpin !== null, charge: onClickCharge };
     // 勝ちを決めた列(複数同時に揃ったら全部)。盤面で光らせる
     const winCells = winner
-        ? Array.from(new Set(geo.winLines.filter((line) => line.every((idx) => lineSymbols(currentBoard)[idx] === winner)).flat()))
+        ? lineWinner
+            ? Array.from(new Set(geo.winLines.filter((line) => line.every((idx) => lineSymbols(currentBoard)[idx] === winner)).flat()))
+            : encircle?.cells ?? []
         : [];
     const currentNecroCost = necroCost[turnSeat];
     const currentNecroRemain = remainNecro[turnSeat];
@@ -3229,8 +3633,8 @@ export const Game = (props: GameProps) => {
     const canPlaceAt = (i: number): boolean => {
         const sq = currentBoard[i];
         if (isShielded(sq, characters)) return false;
-        if (sq.player && sq.player !== currentTurnPlayer && sq.bind > 0 && !canHitBound(currentCharacter, currentBoard, seatCount)) return false;
-        if (sq.effects.some((x) => x.effect === '🔑') && sq.bind > 0) return false;
+        if (sq.player && sq.player !== currentTurnPlayer && (sq.bind > 0 || isTakeProtected(sq, characters)) && !canHitBound(currentCharacter, currentBoard, seatCount)) return false;
+        if (lockBlocksPlacement(sq, currentCharacter)) return false;
         if (emptyBlocked(sq)) return false;
         if (sq.player === currentTurnPlayer && overwriteBlocked(sq)) return false;
         return true;
@@ -3251,6 +3655,8 @@ export const Game = (props: GameProps) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        const ban = skillBan[seat];
+        if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
         if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');
@@ -3296,6 +3702,8 @@ export const Game = (props: GameProps) => {
                 return [{ name: '業火', cost: infernoCost(symbols[seat]) }];
             case 'witch':
                 return [{ name: '虎落笛', cost: mogaribueCost(symbols[seat]) }];
+            case 'keysmith':
+                return [{ name: '封鎖の断', cost: sealCost(symbols[seat]) }];
             default:
                 return [];
         }
@@ -3423,6 +3831,7 @@ export const Game = (props: GameProps) => {
         setUseAssaultAll(zeros());
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
+        setSkillBanAll(Array(seatCount).fill(null));
         setLifeBanAll(Array(seatCount).fill(false));
         setGearOffAll(Array(seatCount).fill(false));
         setChargeBuffAll(Array(seatCount).fill(0));
@@ -3439,6 +3848,8 @@ export const Game = (props: GameProps) => {
         setUseJammer(false);
         setUseFreeze(false);
         setUseIgnite(false);
+        setUseCustom(false);
+        setCustomPicks([]);
         setUseTinder(false);
         setGlacierPendingAll(Array(seatCount).fill(false));
         setGlacierChargeAll(Array(seatCount).fill(0));
@@ -3449,11 +3860,12 @@ export const Game = (props: GameProps) => {
         setUseShikigamiBless(false);
         setUseShikigamiCurse(false);
         setUseShikigamiPurge(false);
+        setObjectPlacing(null);
+        setObjectTool(null);
+        setCaptureChoice(null);
         setUseSwidden(false);
         setUseSacrifice(false);
         setUseFrostArea(false);
-        setUseRelocate(false);
-        setRelocateFrom(null);
         setUseClone(false);
         setUsePlunder(false);
         setUseIcicle(false);
@@ -3493,11 +3905,21 @@ export const Game = (props: GameProps) => {
             shikiPlaced: Array<boolean>(seatCount).fill(false),
             leafBase: Array<number>(seatCount).fill(0),
             tokenFree: Array<boolean>(seatCount).fill(false),
+            pieceBase: Array<number>(seatCount).fill(0),
+            turnSpent: Array<number>(seatCount).fill(0),
+            oppBigSeen: Array<boolean>(seatCount).fill(false),
+            oppBigPrev: Array<boolean>(seatCount).fill(false),
+            marketUsed: Array<number>(seatCount).fill(0),
             bigCast: Array<boolean>(seatCount).fill(false),
             veil: Array<boolean>(seatCount).fill(false),
             veilNext: Array<boolean>(seatCount).fill(false),
             ward: Array<number>(seatCount).fill(0),
             wardFresh: Array<boolean>(seatCount).fill(false),
+            lockSeen: Array<boolean>(seatCount).fill(false),
+            lockFreeUsed: Array<boolean>(seatCount).fill(false),
+            lockPrev: Array<boolean>(seatCount).fill(false),
+            blessing: Array<number>(seatCount).fill(0),
+            blessingFresh: Array<boolean>(seatCount).fill(false),
             darkPotUsed: Array<boolean>(seatCount).fill(false),
             chargeBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,
@@ -3513,6 +3935,7 @@ export const Game = (props: GameProps) => {
             lastMove: null,
         };
         lastStandUsed.current = Array<boolean>(seatCount).fill(false);
+        rampRef.current = { states: gearsBySeat.map(() => rampStart()), turn: 0, counted: false, bonus: 0, first: rampRef.current.first };
         setLastStandSaves(0);
         setPriceTables(rollPriceTables());
     };
@@ -3538,7 +3961,6 @@ export const Game = (props: GameProps) => {
         else if (useChargeOne) setPreviewCells([i]);
         else if (useChargeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useChargeArea) setPreviewCells(geo.stompRange(i));
-        else if (useRelocate) setPreviewCells(relocateFrom === null ? (canRelocate(currentBoard[i], currentTurnPlayer) ? [i] : []) : isPlaceable(currentBoard[i]) ? [i] : []);
         else if (useClone) setPreviewCells(cloneSources().includes(i) ? [i, ...cloneTargets(currentBoard, i, geo.size)] : []);
         else if (usePlunder) setPreviewCells(plunderTargets(currentBoard, currentTurnPlayer, characters).includes(i) ? [i] : []);
         else if (useFrostArea) setPreviewCells(geo.stompRange(i));
@@ -3546,9 +3968,12 @@ export const Game = (props: GameProps) => {
         else if (useFreezeSpread) setPreviewCells(connectedPieces(currentBoard, i, geo.size));
         else if (useShatter) setPreviewCells(currentBoard[i].player && isFrozen(currentBoard[i]) ? [i] : []);
         else if (useKimon) setPreviewCells(kimonCandidates().includes(i) ? [i] : []);
+        else if (useLockConvert) setPreviewCells(lockConvertCells(currentBoard).includes(i) ? [i] : []);
         else if (useSacrifice) setPreviewCells(sacrificeCandidates().includes(i) ? [i, ...sacrificeTargets(currentBoard, currentBoard[i].bind, currentTurnPlayer, characters)] : []);
         else if (useSwidden) setPreviewCells(budStacks(currentBoard[i]) > 0 ? [i] : []);
         else if (useShikigamiPlace) setPreviewCells(shikigamiLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
+        else if (objectPlacing) setPreviewCells(objectLandable(currentBoard[i]) ? [i, ...geo.surroundRange(i)] : []);
+        else if (objectTool) setPreviewCells(objectSkillTargetsNow(objectTool).includes(i) ? [i] : []);
         else if (useShikigamiBlast) setPreviewCells(ownShikigami().includes(i) ? [i, ...geo.surroundRange(i)] : []);
         else if (useShikigamiBless) setPreviewCells(ownShikigami().includes(i) ? [i, ...blessTargets()] : []);
         else if (useShikigamiCurse) setPreviewCells(ownShikigami().includes(i) ? [i, ...curseTargets()] : []);
@@ -3556,13 +3981,15 @@ export const Game = (props: GameProps) => {
         else if (useSucker) setPreviewCells(suckerSources().includes(i) ? [i, ...budReceivers(currentBoard, i, currentTurnPlayer, geo.size)] : []);
         else if (useFreeze) setPreviewCells(canFreeze(currentBoard[i]) ? [i] : []);
         else if (useIgnite) setPreviewCells([i]);
+        else if (useCustom && customSpec) setPreviewCells([...customPicks, ...(customTargets(currentBoard, customSpec, currentTurnPlayer, characters).includes(i) ? [i] : [])]);
         else if (useTinder) setPreviewCells(tinderCandidates().includes(i) ? [i] : []);
         else if (useThunderFire) setPreviewCells(thunderFireTargets().includes(i) ? [i, ...geo.surroundRange(i)] : []);
         else if (useStash) setPreviewCells(stashTargets().includes(i) ? [i] : []);
+        else if (useBoltSilence) setPreviewCells(boltSilenceTargets().includes(i) ? [i] : []);
         else if (useJammer) setPreviewCells(canJam(currentBoard, i, currentTurnPlayer, characters) ? jammerTargets(currentBoard, i, geo.size, currentTurnPlayer) : []);
     };
     const onCellLeave = () => {
-        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useThunderFire || useFreeze || useIgnite || useTinder || useSucker || useShikigamiPlace || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useRelocate || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
+        if (useStomp || useJudgeDay || usePandemic || useInjection > 0 || useChargeOne || useChargeSpread || useChargeArea || useJammer || useStash || useBoltSilence || useThunderFire || useFreeze || useIgnite || useCustom || useTinder || useSucker || useShikigamiPlace || objectPlacing || objectTool || objectPlacing || useShikigamiBlast || useShikigamiBless || useShikigamiCurse || useShikigamiPurge || useSwidden || useSacrifice || useKimon || useLockConvert || useClone || usePlunder || useFrostArea || useIcicle || useFreezeSpread || useShatter) setPreviewCells([]);
     };
 
     // マス選択待ちのスキル名。選択後の演出より先に「何が発動したか」を盤面上に出す
@@ -3570,6 +3997,8 @@ export const Game = (props: GameProps) => {
         ? 'ストンプ'
         : useThunderFire
         ? '雷のない所に火は立たぬ'
+        : useBoltSilence
+        ? '沈黙は雷なり'
         : useStash
         ? '雷神のへそくり'
         : useJudgeDay
@@ -3582,8 +4011,6 @@ export const Game = (props: GameProps) => {
         ? 'インジェクション'
         : useChargeOne
         ? '帯電付与'
-        : useRelocate
-        ? '縮地'
         : useClone
         ? '写し身'
         : usePlunder
@@ -3600,8 +4027,14 @@ export const Game = (props: GameProps) => {
         ? '殉火'
         : useKimon
         ? '鬼門封じ'
+        : useLockConvert
+        ? '錠の転換'
         : useSwidden
         ? '焼畑'
+        : objectPlacing
+        ? OBJECT_DEFS[objectPlacing].name
+        : objectTool
+        ? OBJECT_SKILLS[objectTool].name
         : useShikigamiPlace
         ? '式神設置'
         : useShikigamiBlast
@@ -3618,6 +4051,8 @@ export const Game = (props: GameProps) => {
         ? '氷結'
         : useIgnite
         ? '火遁'
+        : useCustom && customSpec
+        ? customSpec.name
         : useTinder
         ? '火口'
         : null;
@@ -3627,127 +4062,221 @@ export const Game = (props: GameProps) => {
         ? `ヘイルメアリー → ${hailMaryPick}`
         : null;
 
+    // --- オリジナルスキル（idx CUSTOM_SKILL_IDX）: 作成画面で選んだ「対象・選び方・効果・代償」を実行する（customSkill.ts） ---
+    // コストは仕様から自動算出（customSkillCost）して、キャラ・ギアの補正を通す
+    const customBase = customSpec ? customSkillCost(customSpec) : 0;
+    const customHasPoison = !!customSpec?.ops.some((o) => o.op === 'effect' && o.effect === 'poison');
+    const customCost = (): number => calculateCost(customBase, false, customHasPoison, currentTurnPlayer, 'onClickCustom');
+    const customEnv = () => ({ me: currentTurnPlayer, chars: characters, size: geo.size, keepBuds });
+    const pickRandom = (cells: number[], n: number): number[] => randomAnyPick([...cells], n);
+    // 効果と代償を盤面に反映して、演出・ログ・手番終了までを行う
+    const runCustom = (spec: CustomSkillSpec, cells: number[], label: string) => {
+        const board = currentBoard.slice();
+        const res = applyCustom(board, cells, spec, customEnv());
+        const cost = applyDrawbacks(board, spec, currentTurnPlayer, customEnv(), pickRandom);
+        const blocked = [...res.blocked, ...cost.blocked];
+        const thawed = [...res.thawed, ...cost.thawed];
+        const destroyed = [...res.destroyed, ...cost.destroyed];
+        if (blocked.length > 0) addLog(`氷結が身代わりになった（${blocked.map(posName).join('・')}）`);
+        if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
+        if (destroyed.length > 0) addLog(`破壊された（${destroyed.map(posName).join('・')}）`);
+        if (cost.affected.length > 0) addLog(`代償: ${cost.affected.map(posName).join('・')}に効果`);
+        addLog(`「${spec.name}」を使用（${label}・${res.affected.length}マスに効果）`);
+        flashCells([...res.affected, ...cost.affected]);
+        playEffect(customEffectType(spec), undefined, res.affected, spec.name);
+        playBurst('thaw', thawed);
+        playBurst('iceBreak', blocked);
+        // サイレンス・ギア封じ: 相手全員の席に掛ける（ギアのない相手には掛けない）
+        globalOps(spec).forEach((op) => {
+            if (op.op === 'silence' && op.mode === 'all') {
+                otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
+                addLog('相手は次の手番スキルを使えない');
+            } else if (op.op === 'silence') {
+                otherSeats(turnSeat).forEach((seat) => setSkillBanAt(seat, { mode: op.mode as 'max' | 'min', n: op.n }));
+                addLog(`相手は次の手番、コスト${op.n}${op.mode === 'max' ? '以下' : '以上'}のスキルを使えない`);
+            } else if (op.op === 'gearOff') {
+                const seats = stripTargets();
+                seats.forEach((seat) => setGearOffAt(seat, true));
+                if (seats.length > 0) addLog(`${seats.map((seat) => symbols[seat]).join('・')}のギアが次の手番の終わりまで無効`);
+            }
+        });
+        if (spec.ops.some((o) => o.op === 'effect')) harvestMagic(res.affected.length);
+        setCurrentBoard(spec.ops.some((o) => o.op === 'effect' && o.effect === 'charge') ? withOverload(board) : board);
+        setUseCustom(false);
+        setCustomPicks([]);
+        if (spec.endTurn) setCurrentTurn(currentTurn + 1);
+    };
+    const onClickCustom = () => {
+        if (!customSpec || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters, stripTargets().length > 0)) return;
+        if (!hasCellOps(customSpec)) {
+            // サイレンス・ギア封じだけ: マスを選ばずに発動
+            spendMagic(customCost(), true, true, 'onClickCustom');
+            runCustom(customSpec, [], '相手全員');
+            return;
+        }
+        if (customSpec.pick === 'select') {
+            addLog(`「${customSpec.name}」を使用（マスを${selectCount(currentBoard, customSpec, currentTurnPlayer, characters)}つ選択）`);
+            setCustomPicks([]);
+            setUseCustom(true);
+            spendMagic(customCost(), true, true, 'onClickCustom');
+            return;
+        }
+        const cells = customCellsAuto(currentBoard, customSpec, currentTurnPlayer, characters, pickRandom);
+        if (cells.length === 0) return;
+        spendMagic(customCost(), true, true, 'onClickCustom');
+        runCustom(customSpec, cells, customSpec.pick === 'all' ? '全体' : 'ランダム');
+    };
+    // 対象のマスを選んだ: 対象でないマス・選んだマスは無視（選び直せる）。必要な数がそろったら実行する
+    const exeCustom = (i: number) => {
+        if (!customSpec || customPicks.includes(i) || !customTargets(currentBoard, customSpec, currentTurnPlayer, characters).includes(i)) return;
+        const picks = [...customPicks, i];
+        if (picks.length < selectCount(currentBoard, customSpec, currentTurnPlayer, characters)) {
+            setCustomPicks(picks);
+            return;
+        }
+        runCustom(customSpec, picks, picks.map(posName).join('・'));
+    };
+
     // シャッフル対象スキル(index 0-14)の定義。ロックトグル付きで .map() 描画する
     const shuffleSkillDefs: {
         idx: number;
         onClick: () => void;
         buttonText: string;
-        paragraph: string;
         disabled: boolean;
         onHoverStart?: () => void;
         onHoverEnd?: () => void;
     }[] = [
-        { idx: 0, onClick: onClickAddLife, buttonText: `ライフ3-${calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife')}`, paragraph: 'ライフを3追加します', disabled: checkSkillDisable(seatCosts.onClickAddLife) },
-        { idx: 1, onClick: onClickBibine, buttonText: `バイバイン-${calculateCost(seatCosts.onClickBibine, false, false, currentTurnPlayer, 'onClickBibine')}`, paragraph: 'ライフが倍になります', disabled: checkSkillDisable(seatCosts.onClickBibine) },
-        { idx: 2, onClick: onClickBuds, buttonText: `バッズ-${calculateCost(seatCosts.onClickBuds, false, false, currentTurnPlayer, 'onClickBuds')}`, paragraph: '次の一手でバッズを植えます', disabled: checkSkillDisable(seatCosts.onClickBuds) },
-        { idx: 3, onClick: onClickToken, buttonText: `トークン-${calculateCost(seatCosts.onClickToken, true, false, currentTurnPlayer, 'onClickToken')}`, paragraph: `空きマスにランダムにライフが${calculateTokenBind()}の${currentTurnPlayer}を置きます。\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickToken, true) },
-        { idx: 4, onClick: onClickBothToken, buttonText: `両トークン-${calculateCost(seatCosts.onClickBothToken, true, false, currentTurnPlayer, 'onClickBothToken')}`, paragraph: `空きマスにランダムにライフが4の全プレイヤーのコマを1つずつ置きます(自分はライフ${calculateTokenBind()})。\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickBothToken, true) },
-        { idx: 5, onClick: onClickSlash, buttonText: `スラッシュ-${calculateCost(seatCosts.onClickSlash, false, false, currentTurnPlayer, 'onClickSlash')}`, paragraph: `右上から左下にかけての${geo.size}マスのライフを0にします`, disabled: checkSkillDisable(seatCosts.onClickSlash), onHoverStart: () => showPreview(slashPreview()), onHoverEnd: clearPreview },
-        { idx: 6, onClick: onClickBackSlash, buttonText: `バックスラッシュ-${calculateCost(seatCosts.onClickBackSlash, false, false, currentTurnPlayer, 'onClickBackSlash')}`, paragraph: `左上から右下にかけての${geo.size}マスのライフを0にします`, disabled: checkSkillDisable(seatCosts.onClickBackSlash), onHoverStart: () => showPreview(backSlashPreview()), onHoverEnd: clearPreview },
-        { idx: 7, onClick: onClickTsunami, buttonText: `チューチュートレイン-${calculateCost(seatCosts.onClickTsunami, false, false, currentTurnPlayer, 'onClickTsunami')}`, paragraph: `相手全員のマジックを0にします`, disabled: checkSkillDisable(seatCosts.onClickTsunami) },
-        { idx: 8, onClick: onClickOpium, buttonText: `オピウム-${calculateCost(seatCosts.onClickOpium, false, false, currentTurnPlayer, 'onClickOpium')}`, paragraph: `相手の駒全てのライフを-2し、ターンを終了します`, disabled: checkSkillDisable(seatCosts.onClickOpium), onHoverStart: () => showPreview(opiumPreview()), onHoverEnd: clearPreview },
-        { idx: 9, onClick: onClickBudsToken, buttonText: `バッズトークン-${calculateCost(seatCosts.onClickBudsToken, true, false, currentTurnPlayer, 'onClickBudsToken')}`, paragraph: `バッズ付き・ライフ3のコマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickBudsToken, true) },
-        { idx: 10, onClick: onClickDoubleBuds, buttonText: `ダブルバッズ-${calculateCost(seatCosts.onClickDoubleBuds, false, false, currentTurnPlayer, 'onClickDoubleBuds')}`, paragraph: '次の一手でバッズを2つ植えます', disabled: checkSkillDisable(seatCosts.onClickDoubleBuds) },
-        { idx: 11, onClick: onClickDoubleToken, buttonText: `ダブルトークン-${calculateCost(seatCosts.onClickDoubleToken, true, false, currentTurnPlayer, 'onClickDoubleToken')}`, paragraph: `空きマスにランダムにライフが${calculateTokenBind()}の${currentTurnPlayer}を2つ置きます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleToken) },
-        { idx: 12, onClick: onClickUseDoubleLock, buttonText: `ダブルロック-${calculateCost(seatCosts.onClickDoubleLock, false, false, currentTurnPlayer, 'onClickDoubleLock')}`, paragraph: `マスを2つ選択し、${gearLockBind(turnGears)}ターン以上ロックします`, disabled: checkSkillDisable(seatCosts.onClickDoubleLock) },
-        { idx: 13, onClick: onClickUseTripleLock, buttonText: `トリプルロック-${calculateCost(seatCosts.onClickTripleLock, false, false, currentTurnPlayer, 'onClickTripleLock')}`, paragraph: `マスを3つ選択し、${gearLockBind(turnGears)}ターン以上ロックします`, disabled: checkSkillDisable(seatCosts.onClickTripleLock) },
-        { idx: 14, onClick: onClickWalpurgisNight, buttonText: `ワルプルギスの夜-${calculateCost(seatCosts.onClickWalpurgisNight, false, false, currentTurnPlayer, 'onClickWalpurgisNight')}`, paragraph: `全コマにバッズを植えます`, disabled: checkSkillDisable(seatCosts.onClickWalpurgisNight) },
-        { idx: 15, onClick: onClickInjection, buttonText: `インジェクション-${calculateCost(seatCosts.onClickInjection, false, true, currentTurnPlayer, 'onClickInjection')}`, paragraph: `マスを選択し、毒を1付与します（毒は毎ターンbind-1・重複可）`, disabled: checkSkillDisable(seatCosts.onClickInjection, false, true) },
-        { idx: 16, onClick: onClickPoisonToken, buttonText: `ポイズントークン-${calculateCost(seatCosts.onClickPoisonToken, true, true, currentTurnPlayer, 'onClickPoisonToken')}`, paragraph: `毒付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickPoisonToken, true, true) },
-        { idx: 17, onClick: onClickSerum, buttonText: `血清-${calculateCost(seatCosts.onClickSerum, false, true, currentTurnPlayer, 'onClickSerum')}`, paragraph: `自陣のコマの毒をすべて除去します`, disabled: checkSkillDisable(seatCosts.onClickSerum, false, true) },
-        { idx: 18, onClick: onClickIntensify, buttonText: `猛毒化-${calculateCost(seatCosts.onClickIntensify, false, true, currentTurnPlayer, 'onClickIntensify')}`, paragraph: `毒が付与されている全マスの毒の数を倍にします`, disabled: checkSkillDisable(seatCosts.onClickIntensify, false, true) },
-        { idx: 19, onClick: onClickPandemic, buttonText: `パンデミック-${calculateCost(seatCosts.onClickPandemic, false, true, currentTurnPlayer, 'onClickPandemic')}`, paragraph: `マスを選択し、そのマスと周囲1マス(3x3)のコマに毒を1付与します`, disabled: checkSkillDisable(seatCosts.onClickPandemic, false, true) },
+        { idx: 0, onClick: onClickAddLife, buttonText: `ライフ3-${calculateCost(seatCosts.onClickAddLife, false, false, currentTurnPlayer, 'onClickAddLife')}`, disabled: checkSkillDisable(seatCosts.onClickAddLife) },
+        { idx: 1, onClick: onClickBibine, buttonText: `バイバイン-${calculateCost(seatCosts.onClickBibine, false, false, currentTurnPlayer, 'onClickBibine')}`, disabled: checkSkillDisable(seatCosts.onClickBibine) },
+        { idx: 2, onClick: onClickBuds, buttonText: `バッズ-${calculateCost(seatCosts.onClickBuds, false, false, currentTurnPlayer, 'onClickBuds')}`, disabled: checkSkillDisable(seatCosts.onClickBuds) },
+        { idx: 3, onClick: onClickToken, buttonText: `トークン-${calculateCost(seatCosts.onClickToken, true, false, currentTurnPlayer, 'onClickToken')}`, disabled: checkSkillDisable(seatCosts.onClickToken, true) },
+        { idx: 4, onClick: onClickBothToken, buttonText: `両トークン-${calculateCost(seatCosts.onClickBothToken, true, false, currentTurnPlayer, 'onClickBothToken')}`, disabled: checkSkillDisable(seatCosts.onClickBothToken, true) },
+        { idx: 5, onClick: onClickSlash, buttonText: `スラッシュ-${calculateCost(seatCosts.onClickSlash, false, false, currentTurnPlayer, 'onClickSlash')}`, disabled: checkSkillDisable(seatCosts.onClickSlash), onHoverStart: () => showPreview(slashPreview()), onHoverEnd: clearPreview },
+        { idx: 6, onClick: onClickBackSlash, buttonText: `バックスラッシュ-${calculateCost(seatCosts.onClickBackSlash, false, false, currentTurnPlayer, 'onClickBackSlash')}`, disabled: checkSkillDisable(seatCosts.onClickBackSlash), onHoverStart: () => showPreview(backSlashPreview()), onHoverEnd: clearPreview },
+        { idx: 7, onClick: onClickTsunami, buttonText: `チューチュートレイン-${calculateCost(seatCosts.onClickTsunami, false, false, currentTurnPlayer, 'onClickTsunami')}`, disabled: checkSkillDisable(seatCosts.onClickTsunami) },
+        { idx: 8, onClick: onClickOpium, buttonText: `オピウム-${calculateCost(seatCosts.onClickOpium, false, false, currentTurnPlayer, 'onClickOpium')}`, disabled: checkSkillDisable(seatCosts.onClickOpium), onHoverStart: () => showPreview(opiumPreview()), onHoverEnd: clearPreview },
+        { idx: 9, onClick: onClickBudsToken, buttonText: `バッズトークン-${calculateCost(seatCosts.onClickBudsToken, true, false, currentTurnPlayer, 'onClickBudsToken')}`, disabled: checkSkillDisable(seatCosts.onClickBudsToken, true) },
+        { idx: 10, onClick: onClickDoubleBuds, buttonText: `ダブルバッズ-${calculateCost(seatCosts.onClickDoubleBuds, false, false, currentTurnPlayer, 'onClickDoubleBuds')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleBuds) },
+        { idx: 11, onClick: onClickDoubleToken, buttonText: `ダブルトークン-${calculateCost(seatCosts.onClickDoubleToken, true, false, currentTurnPlayer, 'onClickDoubleToken')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleToken) },
+        { idx: 12, onClick: onClickUseDoubleLock, buttonText: `ダブルロック-${calculateCost(seatCosts.onClickDoubleLock, false, false, currentTurnPlayer, 'onClickDoubleLock')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleLock) },
+        { idx: 13, onClick: onClickUseTripleLock, buttonText: `トリプルロック-${calculateCost(seatCosts.onClickTripleLock, false, false, currentTurnPlayer, 'onClickTripleLock')}`, disabled: checkSkillDisable(seatCosts.onClickTripleLock) },
+        { idx: 14, onClick: onClickWalpurgisNight, buttonText: `ワルプルギスの夜-${calculateCost(seatCosts.onClickWalpurgisNight, false, false, currentTurnPlayer, 'onClickWalpurgisNight')}`, disabled: checkSkillDisable(seatCosts.onClickWalpurgisNight) },
+        { idx: 15, onClick: onClickInjection, buttonText: `インジェクション-${calculateCost(seatCosts.onClickInjection, false, true, currentTurnPlayer, 'onClickInjection')}`, disabled: checkSkillDisable(seatCosts.onClickInjection, false, true) },
+        { idx: 16, onClick: onClickPoisonToken, buttonText: `ポイズントークン-${calculateCost(seatCosts.onClickPoisonToken, true, true, currentTurnPlayer, 'onClickPoisonToken')}`, disabled: checkSkillDisable(seatCosts.onClickPoisonToken, true, true) },
+        { idx: 17, onClick: onClickSerum, buttonText: `血清-${calculateCost(seatCosts.onClickSerum, false, true, currentTurnPlayer, 'onClickSerum')}`, disabled: checkSkillDisable(seatCosts.onClickSerum, false, true) },
+        { idx: 18, onClick: onClickIntensify, buttonText: `猛毒化-${calculateCost(seatCosts.onClickIntensify, false, true, currentTurnPlayer, 'onClickIntensify')}`, disabled: checkSkillDisable(seatCosts.onClickIntensify, false, true) },
+        { idx: 19, onClick: onClickPandemic, buttonText: `パンデミック-${calculateCost(seatCosts.onClickPandemic, false, true, currentTurnPlayer, 'onClickPandemic')}`, disabled: checkSkillDisable(seatCosts.onClickPandemic, false, true) },
         {
             idx: 20,
             onClick: onClickProliferate,
             buttonText: `増殖-${calculateCost(seatCosts.onClickProliferate, false, false, currentTurnPlayer, 'onClickProliferate')}`,
-            paragraph: `発動後は着手のたびに「ライフ${proliferateTokenLife}のコマ」→「アイテム(🌱/毒使いは敵に☠)」を交互に追加し続けます\n維持コストは手番開始時に払い、追加のたび+${proliferateUpkeepStep}増加。払えなくなるか${proliferateMaxStacks}回で終了`,
             disabled: checkSkillDisable(seatCosts.onClickProliferate) || proliferate[turnSeat],
         },
-        { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(seatCosts.onClickChargeToken, true, false, currentTurnPlayer, 'onClickChargeToken')}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\n雷霆の巫以外は⚡が乗った時点で2ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickChargeToken, true) },
-        { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${chargeOneCost()}`, paragraph: `マスを選択し、⚡を1つ付与します（空きマスも可）\n雷霆の巫以外のコマは、⚡が乗った時点で2ダメージを受けます（空きマス・ライフ0・🔑・氷結中は除く）\nコストは盤面の⚡の数だけ軽減されます`, disabled: magic[turnSeat] < chargeOneCost() },
-        { idx: 23, onClick: onClickDoubleChargeToken, buttonText: `帯電ダブルトークン-${calculateCost(seatCosts.onClickDoubleChargeToken, true, false, currentTurnPlayer, 'onClickDoubleChargeToken')}`, paragraph: `⚡付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n⚡の隣に誰かが置くと、⚡マスの縦横隣のコマに1ダメージ\n雷霆の巫以外は⚡が乗った時点で2ダメージ\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleChargeToken, true) },
-        { idx: 24, onClick: onClickChargeArea, buttonText: `範囲帯電-${calculateCost(seatCosts.onClickChargeArea, false, false, currentTurnPlayer, 'onClickChargeArea')}`, paragraph: `マスを選択し、そのマスと周囲1マス(3x3)に⚡を1つずつ付与します（空きマスも可）\n雷霆の巫以外のコマは、⚡が乗った時点で2ダメージを受けます`, disabled: checkSkillDisable(seatCosts.onClickChargeArea) },
-        { idx: 25, onClick: onClickChargeRandom, buttonText: `ランダム帯電-${calculateCost(seatCosts.onClickChargeRandom, false, false, currentTurnPlayer, 'onClickChargeRandom')}`, paragraph: `ランダムな1〜4マスに⚡を1つずつ付与します（空きマスも可）\n無敵のマスと🔑ロック中のマスは対象外です\n雷霆の巫以外は⚡が乗った時点で2ダメージ`, disabled: checkSkillDisable(seatCosts.onClickChargeRandom) },
-        { idx: 26, onClick: onClickJammer, buttonText: `ジャマー-${calculateCost(seatCosts.onClickJammer, false, false, currentTurnPlayer, 'onClickJammer')}`, paragraph: `⚡のあるマスを選択し、縦横に隣接する相手のコマのライフを⚡の数だけ減らして、そのマスの⚡を取り除きます\n自分のコマと🔑ロック中のコマは影響を受けません\n自分の無敵マスも選べます（弱点を解除できます）`, disabled: checkSkillDisable(seatCosts.onClickJammer) || boardChargeCount(currentBoard) === 0 },
-        { idx: 27, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(seatCosts.onClickHailMary, false, false, currentTurnPlayer, 'onClickHailMary')}`, paragraph: `陰陽転化を除く固有スキルをランダムに1つ、追加コストなしで発動します`, disabled: checkSkillDisable(seatCosts.onClickHailMary) },
-        { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(seatCosts.onClickSilence, false, false, currentTurnPlayer, 'onClickSilence')}`, paragraph: `相手全員が次の手番、スキルを使えなくなります（駒を置くことはできます）`, disabled: checkSkillDisable(seatCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
-        { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true, currentTurnPlayer, 'onClickPoisonMist')}`, paragraph: `盤上の全コマ（敵味方問わず）に毒を1付与します 🔑ロック中・無敵のコマは対象外です`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
-        { idx: 30, onClick: onClickFreeze, buttonText: `氷結-${calculateCost(seatCosts.onClickFreeze, false, false, currentTurnPlayer, 'onClickFreeze')}`, paragraph: `コマを選択し、❄氷結を付与します（敵味方どちらでも）\n氷結中はターン進行でライフが減らず、隣接⚡のダメージも受けず（そのマスの⚡は休眠）、スキルのダメージは氷結が解除される代わりに無効になります（毒は通ります）\n自陣の氷結コマには重ねて強化できません`, disabled: checkSkillDisable(seatCosts.onClickFreeze) || !currentBoard.some(canFreeze) },
-        { idx: 31, onClick: onClickIgnite, buttonText: `火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`, paragraph: `マスを選択し、🔥火炎を1つ付与します（重複可。空きマスにも置け、置かれたコマに引き継がれます）\n付与した瞬間に1ダメージ。毎ターン1スタックにつき2ダメージ。ダメージを受けると消え、スキルのダメージは1.5倍に\n付与したマスと縦横隣の氷結は即座に解けます`, disabled: checkSkillDisable(seatCosts.onClickIgnite) },
-        { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse, false, false, currentTurnPlayer, 'onClickCleanse')}`, paragraph: `自陣のコマの状態異常（☠毒・🔥火炎・❄氷結・⚡帯電）をすべて回復します\n🌱バッズと🔑ロックはそのままです`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
-        { idx: 33, onClick: onClickHarvestEve, buttonText: `刈り入れ前夜-${calculateCost(seatCosts.onClickHarvestEve, false, false, currentTurnPlayer, 'onClickHarvestEve')}`, paragraph: `自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます\n氷結や火炎で失う前に現金化できます`, disabled: checkSkillDisable(seatCosts.onClickHarvestEve) || ownBudTotal() === 0 },
-        { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice, false, false, currentTurnPlayer, 'onClickSolstice')}`, paragraph: `次の自分の手番が来るまで、自陣のコマの🌱が🔥で消えず、氷結中のマスでも休眠せず働きます（魔力・刈り入れ前夜）`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
-        { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker, false, false, currentTurnPlayer, 'onClickSucker')}`, paragraph: `🌱を持つ自陣のコマを選ぶと、縦横に隣り合う自陣のコマに🌱が1つずつ付きます（隣が3つ以上ならランダムに2つ）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
-        { idx: 36, onClick: onClickWindborne, buttonText: `風の落とし子-${calculateCost(seatCosts.onClickWindborne, false, false, currentTurnPlayer, 'onClickWindborne')}`, paragraph: `自陣のコマにランダムで🌱を2つ配ります（1マスに1つまで）\n氷結・火炎中のコマには付きません`, disabled: checkSkillDisable(seatCosts.onClickWindborne) || sowCandidates(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 37, onClick: onClickFlameToken, buttonText: `火炎トークン-${calculateCost(seatCosts.onClickFlameToken, true, false, currentTurnPlayer, 'onClickFlameToken')}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickFlameToken, true) },
-        { idx: 38, onClick: onClickDoubleFlameToken, buttonText: `火炎ダブルトークン-${calculateCost(seatCosts.onClickDoubleFlameToken, true, false, currentTurnPlayer, 'onClickDoubleFlameToken')}`, paragraph: `🔥付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n置いたマスの縦横隣の氷結は即座に解けます\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFlameToken, true) },
-        { idx: 39, onClick: onClickSwidden, buttonText: `焼畑-${calculateCost(seatCosts.onClickSwidden, false, false, currentTurnPlayer, 'onClickSwidden')}`, paragraph: `🌱のあるマス（敵味方どちらでも）を選ぶと、そのマスの🌱を全て同じ数の🔥に変えます\n氷結中のマスは先に氷結が解除されます`, disabled: checkSkillDisable(seatCosts.onClickSwidden) || !currentBoard.some((sq) => budStacks(sq) > 0) },
-        { idx: 40, onClick: onClickSacrifice, buttonText: `殉火-${calculateCost(seatCosts.onClickSacrifice, false, false, currentTurnPlayer, 'onClickSacrifice')}`, paragraph: `自陣のコマを1つ選ぶと、そのコマのライフをゼロにして、そのライフ以下の敵のコマ全てに🔥を付与します\n氷結中の敵は🔥の代わりに氷結が解除されます`, disabled: checkSkillDisable(seatCosts.onClickSacrifice) || sacrificeCandidates().length === 0 },
-        { idx: 41, onClick: onClickFrostArea, buttonText: `範囲氷結-${calculateCost(seatCosts.onClickFrostArea, false, false, currentTurnPlayer, 'onClickFrostArea')}`, paragraph: `マスを選択し、そのマスと周囲8マス(3x3)に❄を1つずつ付与します（空きマスも可）\n氷結中の空きマスには誰も着手できません`, disabled: checkSkillDisable(seatCosts.onClickFrostArea) },
-        { idx: 42, onClick: onClickIcicle, buttonText: `氷柱-${calculateCost(seatCosts.onClickIcicle, false, false, currentTurnPlayer, 'onClickIcicle')}`, paragraph: `マスを選んで方向（横・縦・斜め）を選ぶと、盤の端から端までの線上のマスに❄を1つずつ付与します（空きマスも可）`, disabled: checkSkillDisable(seatCosts.onClickIcicle) },
-        { idx: 43, onClick: onClickRandomFreeze, buttonText: `ランダム氷結-${calculateCost(seatCosts.onClickRandomFreeze, false, false, currentTurnPlayer, 'onClickRandomFreeze')}`, paragraph: `ランダムな1〜4マス（空きマスも可）に❄を1つずつ付与します`, disabled: checkSkillDisable(seatCosts.onClickRandomFreeze) || randomFreezeCandidates(currentBoard).length === 0 },
-        { idx: 44, onClick: onClickFreezeSpread, buttonText: `氷結拡散-${calculateCost(seatCosts.onClickFreezeSpread, false, false, currentTurnPlayer, 'onClickFreezeSpread')}`, paragraph: `コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に❄を1つ付与します`, disabled: checkSkillDisable(seatCosts.onClickFreezeSpread) || !currentBoard.some((sq) => sq.player) },
-        { idx: 45, onClick: onClickFrostToken, buttonText: `氷結トークン-${calculateCost(seatCosts.onClickFrostToken, true, false, currentTurnPlayer, 'onClickFrostToken')}`, paragraph: `❄付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickFrostToken, true) },
-        { idx: 46, onClick: onClickDoubleFrostToken, buttonText: `氷結ダブルトークン-${calculateCost(seatCosts.onClickDoubleFrostToken, true, false, currentTurnPlayer, 'onClickDoubleFrostToken')}`, paragraph: `❄付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleFrostToken, true) },
-        { idx: 47, onClick: onClickShatter, buttonText: `砕氷-${calculateCost(seatCosts.onClickShatter, false, false, currentTurnPlayer, 'onClickShatter')}`, paragraph: `氷結中のコマを選択し、❄を全て砕いて❄1つにつき3ダメージを与えます（ライフが0になったら破壊）\n自陣のコマにも使えます`, disabled: checkSkillDisable(seatCosts.onClickShatter) || !currentBoard.some((sq) => sq.player && isFrozen(sq)) },
-        { idx: 48, onClick: onClickFrostfall, buttonText: `霜降り-${calculateCost(seatCosts.onClickFrostfall, false, false, currentTurnPlayer, 'onClickFrostfall')}`, paragraph: `自陣のライフ2以下のコマすべてに❄を1つ付与します`, disabled: checkSkillDisable(seatCosts.onClickFrostfall) || frostfallTargets(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 49, onClick: onClickBoost, buttonText: `慈雨-${calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost')}`, paragraph: `自陣の全コマのライフを+1します（ライフ0のコマも）`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
-        { idx: 50, onClick: onClickRelocate, buttonText: `縮地-${calculateCost(seatCosts.onClickRelocate, false, false, currentTurnPlayer, 'onClickRelocate')}`, paragraph: `自陣のコマを選び、空きマスを選ぶと、ライフ・エフェクトごと移動します\n🔑ロック中・氷結中のコマは動かせません`, disabled: checkSkillDisable(seatCosts.onClickRelocate) || relocateSources().length === 0 || !currentBoard.some(isPlaceable) },
-        { idx: 51, onClick: onClickClone, buttonText: `写し身-${calculateCost(seatCosts.onClickClone, false, false, currentTurnPlayer, 'onClickClone')}`, paragraph: `自陣のコマを選ぶと、縦横隣のランダムな空きマスに、ライフが半分（切り捨て・最低1）の写しが現れます`, disabled: checkSkillDisable(seatCosts.onClickClone) || cloneSources().length === 0 },
-        { idx: 52, onClick: onClickPlunder, buttonText: `追い剥ぎ-${calculateCost(seatCosts.onClickPlunder, false, false, currentTurnPlayer, 'onClickPlunder')}`, paragraph: `ライフ0の敵のコマを1つ選んで、自陣のコマ（ライフ1）にします\n🔑ロック中のコマ・無敵のコマは奪えません。手番は続きます`, disabled: checkSkillDisable(seatCosts.onClickPlunder) || plunderTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
-        { idx: 53, onClick: () => onClickDiscount('onClickMarkdown'), buttonText: `特売-${calculateCost(seatCosts.onClickMarkdown, false, false, currentTurnPlayer, 'onClickMarkdown')}`, paragraph: `次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: !canUseDiscount('onClickMarkdown') },
-        { idx: 54, onClick: () => onClickDiscount('onClickEffectDiscount'), buttonText: `付与割引-${calculateCost(seatCosts.onClickEffectDiscount, false, false, currentTurnPlayer, 'onClickEffectDiscount')}`, paragraph: `このターン、エフェクト（🌱⚡☠❄🔥）を付与するスキルのコストを、打つたびに1軽減します`, disabled: !canUseDiscount('onClickEffectDiscount') },
-        { idx: 55, onClick: () => onClickDiscount('onClickTokenDiscount'), buttonText: `トークン割引-${calculateCost(seatCosts.onClickTokenDiscount, false, false, currentTurnPlayer, 'onClickTokenDiscount')}`, paragraph: `このターン、トークンを付与するスキルのコストを、打つたびに1軽減します`, disabled: !canUseDiscount('onClickTokenDiscount') },
-        { idx: 56, onClick: () => onClickDiscount('onClickVitalMarkdown'), buttonText: `活力特売-${calculateCost(seatCosts.onClickVitalMarkdown, false, false, currentTurnPlayer, 'onClickVitalMarkdown')}`, paragraph: `次に打つスキルのコストを4軽減し、次の一手のライフを+1します`, disabled: !canUseDiscount('onClickVitalMarkdown') },
-        { idx: 57, onClick: () => onClickDiscount('onClickUniqueDiscount'), buttonText: `固有割引-${calculateCost(seatCosts.onClickUniqueDiscount, false, false, currentTurnPlayer, 'onClickUniqueDiscount')}`, paragraph: `このターン、固有スキルのコストを6軽減します\n1ターンに一度のみ・ライフ-1（ライフ2以上で使用可）`, disabled: !canUseDiscount('onClickUniqueDiscount') },
-        { idx: 58, onClick: () => onClickDiscount('onClickClearance'), buttonText: `大特価-${calculateCost(seatCosts.onClickClearance, false, false, currentTurnPlayer, 'onClickClearance')}`, paragraph: `次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: !canUseDiscount('onClickClearance') },
-        { idx: 59, onClick: onClickRandomCast, buttonText: `福引き-${calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast')}`, paragraph: `自分のデッキ（12枚）から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します\n手札に出ていないスキルも対象です（今撃てるものだけ）`, disabled: checkSkillDisable(seatCosts.onClickRandomCast) },
-        { idx: 60, onClick: () => onClickDiscount('onClickCounterMarkdown'), buttonText: `返し特売-${calculateCost(seatCosts.onClickCounterMarkdown, false, false, currentTurnPlayer, 'onClickCounterMarkdown')}`, paragraph: `次に打つスキルのコストを3軽減し、次の一手のライフを+1します\n直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます`, disabled: !canUseDiscount('onClickCounterMarkdown') },
-        { idx: 61, onClick: onClickBurnout, buttonText: `バーンアウト-${burnoutCost()}`, paragraph: `🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）\n盤面に🔥が${BURNOUT_FREE_FLAMES}つ以上あればコスト0で使えます（現在${totalFlames(currentBoard)}つ）`, disabled: magic[turnSeat] < burnoutCost() || burnoutTargets(currentBoard, characters).length === 0 },
-        { idx: 62, onClick: onClickLeafToken, buttonText: `木枯らしの使い-${calculateCost(seatCosts.onClickLeafToken, true, false, currentTurnPlayer, 'onClickLeafToken')}`, paragraph: `🍂付き・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします（氷結中は休眠・🔥で消える）\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickLeafToken, true) },
-        { idx: 63, onClick: onClickTwinLeafToken, buttonText: `落葉松の双子-${calculateCost(seatCosts.onClickTwinLeafToken, true, false, currentTurnPlayer, 'onClickTwinLeafToken')}`, paragraph: `🍂が2枚付いた・ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします（氷結中は休眠・🔥で消える）\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickTwinLeafToken, true) },
-        { idx: 64, onClick: onClickDoubleLeafToken, buttonText: `紅葉狩り-${calculateCost(seatCosts.onClickDoubleLeafToken, true, false, currentTurnPlayer, 'onClickDoubleLeafToken')}`, paragraph: `🍂付き・ライフ${calculateTokenBind()}の自陣コマをランダムに2つ設置します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします（氷結中は休眠・🔥で消える）\nこのターン自陣の🍂が増えていれば、コスト-2\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickDoubleLeafToken, true, false, 'onClickDoubleLeafToken') },
-        { idx: 65, onClick: onClickLeafAll, buttonText: `枯野の相席-${calculateCost(seatCosts.onClickLeafAll, false, false, currentTurnPlayer, 'onClickLeafAll')}`, paragraph: `盤面の全てのコマ（敵味方問わず。🔑ロックと⚡無敵のコマは除く）に🍂を1つずつ付与します\n自陣の🍂は相手のコストを増やし、敵の🍂は自分のコストを増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafAll) || leafAllCandidates().length === 0 },
-        { idx: 66, onClick: onClickBonfire, buttonText: `焚き火の唄-${calculateCost(seatCosts.onClickBonfire, false, false, currentTurnPlayer, 'onClickBonfire')}`, paragraph: `敵陣の🍂をすべて取り除きます（🔑ロックと❄氷結のマスは対象外）`, disabled: checkSkillDisable(seatCosts.onClickBonfire) || bonfireTargets(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 67, onClick: onClickMulch, buttonText: `腐葉土の目覚め-${calculateCost(seatCosts.onClickMulch, false, false, currentTurnPlayer, 'onClickMulch')}`, paragraph: `自陣のランダムな🍂を1枚、🌱に変えます`, disabled: checkSkillDisable(seatCosts.onClickMulch) || mulchCandidates(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 68, onClick: onClickAutumn, buttonText: `一葉知秋-${calculateCost(seatCosts.onClickAutumn, false, false, currentTurnPlayer, 'onClickAutumn')}`, paragraph: `盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）`, disabled: checkSkillDisable(seatCosts.onClickAutumn) || autumnTargets(currentBoard).length === 0 },
-        { idx: 69, onClick: onClickLeafFrost, buttonText: `霜枯れ-${calculateCost(seatCosts.onClickLeafFrost, false, false, currentTurnPlayer, 'onClickLeafFrost')}`, paragraph: `自陣の🍂を持つコマすべてに❄を付けます（🔥や上書きから守れますが、氷結中は🍂が休眠してコスト上乗せが止まります）`, disabled: checkSkillDisable(seatCosts.onClickLeafFrost) || notShielded(leafFrostTargets(currentBoard, currentTurnPlayer)).length === 0 },
-        { idx: 70, onClick: onClickSpringWind, buttonText: `春一番-${calculateCost(seatCosts.onClickSpringWind, false, false, currentTurnPlayer, 'onClickSpringWind')}`, paragraph: `自陣の❄をすべて解除し、解除した❄の数だけ、このターンに打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickSpringWind) || thawTargets(currentBoard, currentTurnPlayer).length === 0 },
-        { idx: 71, onClick: onClickShikigamiAll, buttonText: `式神一括-${calculateCost(seatCosts.onClickShikigamiAll * Math.max(1, ownShikigami().length), false, false, currentTurnPlayer, 'onClickShikigamiAll')}`, paragraph: `自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）\nコストは式神1体につき${seatCosts.onClickShikigamiAll}です`, disabled: ownShikigami().length === 0 || checkSkillDisable(seatCosts.onClickShikigamiAll * ownShikigami().length) },
-        { idx: 72, onClick: onClickShikigamiRandom, buttonText: `式神ランダム設置-${calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom')}`, paragraph: `ランダムな空きマスにライフ${Math.max(1, SHIKIGAMI_LIFE + gearTokenBindDelta(turnGears))}の式神を置きます 式神は列の並びに数えません\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickShikigamiRandom, true) },
-        { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, paragraph: '着手できる全ての空きマスに、ライフ0の式神を置きます', disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
-        { idx: 88, onClick: onClickShikigamiBless, buttonText: `式神の加護-${calculateCost(seatCosts.onClickShikigamiBless, false, false, currentTurnPlayer, 'onClickShikigamiBless')}`, paragraph: `自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフ+${SHIKIGAMI_BLESS_LIFE}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiBless) || ownShikigami().length === 0 || blessTargets().length === 0 },
-        { idx: 89, onClick: onClickShikigamiCurse, buttonText: `式神の呪詛-${calculateCost(seatCosts.onClickShikigamiCurse, false, false, currentTurnPlayer, 'onClickShikigamiCurse')}`, paragraph: `自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を${SHIKIGAMI_CURSE_STACKS}つ（🔑ロック・⚡無敵は除く）`, disabled: checkSkillDisable(seatCosts.onClickShikigamiCurse) || ownShikigami().length === 0 || curseTargets().length === 0 },
-        { idx: 90, onClick: onClickShikigamiDiscount, buttonText: `式神割引-${calculateCost(seatCosts.onClickShikigamiDiscount, false, false, currentTurnPlayer, 'onClickShikigamiDiscount')}`, paragraph: `次に打つスキルのコストを、${SHIKIGAMI_DISCOUNT_BASE}＋盤面にある式神の数だけ軽減します（現在-${SHIKIGAMI_DISCOUNT_BASE + currentBoard.filter((sq) => isShikigami(sq)).length}）`, disabled: checkSkillDisable(seatCosts.onClickShikigamiDiscount) },
-        { idx: 91, onClick: onClickShikigamiPurge, buttonText: `式神の供犠-${calculateCost(seatCosts.onClickShikigamiPurge, false, false, currentTurnPlayer, 'onClickShikigamiPurge')}`, paragraph: `自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）\n自陣の式神が${SHIKIGAMI_PURGE_FREE}体以上ならコスト0`, disabled: checkSkillDisable(seatCosts.onClickShikigamiPurge, false, false, 'onClickShikigamiPurge') || ownShikigami().length === 0 || purgeTargets().length === 0 },
-        { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, paragraph: `敵のコマを1つ選んで破壊します（氷結中のコマは❄が1つ減るだけ）。破壊して空きマスになったら、そのマスを3ターンロックします`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
-        { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, paragraph: `ランダムな敵のコマ2つに🔥を1つずつ付け、その後自分の手札をシャッフルします。このターン敵か自陣に🔥を付与していれば、コスト0で使えます（使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickFireWheel, false, false, 'onClickFireWheel') || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
-        { idx: 97, onClick: onClickSpark, buttonText: `飛び火-${calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark')}`, paragraph: `ランダムな敵のコマ2つに🔥火炎を1つずつ付与します\n付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外です\n直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料です\n鍛冶師は🔥付与のスキルが-1`, disabled: checkSkillDisable(seatCosts.onClickSpark) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
-        { idx: 98, onClick: onClickNightVeil, buttonText: `夜の帳-${calculateCost(seatCosts.onClickNightVeil, false, false, currentTurnPlayer, 'onClickNightVeil')}`, paragraph: `次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）`, disabled: checkSkillDisable(seatCosts.onClickNightVeil) },
-        { idx: 99, onClick: onClickGraveDiscount, buttonText: `弔い割引-${calculateCost(seatCosts.onClickGraveDiscount, false, false, currentTurnPlayer, 'onClickGraveDiscount')}`, paragraph: `墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効。現在-${graveDiscountNow()}）\n死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります`, disabled: checkSkillDisable(seatCosts.onClickGraveDiscount) || graveDiscountNow() === 0 },
-        { idx: 100, onClick: onClickPoisonWard, buttonText: `毒返しの構え-${calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard')}`, paragraph: `${POISON_WARD_TURNS}手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます`, disabled: checkSkillDisable(seatCosts.onClickPoisonWard) || gearTurn.current.ward[turnSeat] > 0 },
-        { idx: 101, onClick: onClickGraveOffering, buttonText: `墓守の供物-${calculateCost(seatCosts.onClickGraveOffering, false, false, currentTurnPlayer, 'onClickGraveOffering')}`, paragraph: `自陣のライフが最も低いコマを1つ消して、自分の墓地に死体を+1し、魔力を+1得ます\n墓地は全員が持ちますが、コマが消えるたびに自動で貯まるのはネクロマンサーだけです`, disabled: checkSkillDisable(seatCosts.onClickGraveOffering) || graveOfferingTarget(currentBoard, currentTurnPlayer) < 0 },
-        { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, paragraph: `相手全員のギアを、その相手の次の手番の終わりまで無効にします（ギアを装備している相手だけが対象）`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
-        { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, paragraph: `今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます（雷霆の巫以外は乗った時点でダメージ）\n自陣に⚡が1つもなければ、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason, false, false, 'onClickChargeSeason') || chargeBuff[turnSeat] > 0 },
-        { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, paragraph: `自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます（雷霆の巫以外は乗った時点でダメージ）\nこのターンに⚡を付与するスキルを使っていれば、コスト-2`, disabled: checkSkillDisable(seatCosts.onClickBristle, false, false, 'onClickBristle') || bristleTargets().length === 0 },
-        { idx: 79, onClick: onClickRelease, buttonText: `落雷は忘れた頃に-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, paragraph: `自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
-        { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, paragraph: `⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき、次に打つスキルのコストを-1します（軽減後は最低1。この手番の間だけ有効）`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
-        { idx: 81, onClick: onClickThunderFire, buttonText: `雷のない所に火は立たぬ-${calculateCost(seatCosts.onClickThunderFire, false, false, currentTurnPlayer, 'onClickThunderFire')}`, paragraph: `⚡のあるコマ（自分の無敵マスも可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を1つずつ付けます（氷結中のコマは❄が1つ減るだけで、火は燃え移りません）`, disabled: checkSkillDisable(seatCosts.onClickThunderFire) || thunderFireTargets().length === 0 },
-        { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, paragraph: `敵味方を問わず全コマ（🔑ロック・無敵は除く）に🔥❄⚡☠🌱🍂をランダムに付けます\n盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます\n各エフェクトはコマごとに最大1で、複数の種類が同居します（🔥は❄🌱🍂と同居できず、出会うと半々で🔥が勝つか消えます）`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || gearTurn.current.darkPotUsed[turnSeat] || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
-        { idx: 83, onClick: onClickChargeHeal, buttonText: `雷を食らわば皿まで-${calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal')}`, paragraph: `⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します\nこのターンに付与した⚡の数だけコストが下がります（最低1。使うとリセット）`, disabled: checkSkillDisable(seatCosts.onClickChargeHeal, false, false, 'onClickChargeHeal') || chargeHealCells().length === 0 },
-        { idx: 92, onClick: onClickSmallFry, buttonText: `一寸の虫に魂なし-${calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry')}`, paragraph: `敵のライフ3以下のコマを全て破壊します（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）\n相手全員は次の手番の終わりまで、ライフ3以下のコマを置けません（トークン・式神などのスキルも含む）\n盤面のコマの数だけコストが下がります（最低1）`, disabled: checkSkillDisable(seatCosts.onClickSmallFry, false, false, 'onClickSmallFry') },
-        { idx: 102, onClick: onClickPerfectGame, buttonText: `パーフェクトゲーム-${calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame')}`, paragraph: `盤面のコマを敵味方とも全て破壊します\n🔑ロック・⚡無敵のコマは壊れず、氷結中のコマは❄が1つ減るだけです`, disabled: checkSkillDisable(seatCosts.onClickPerfectGame, false, false, 'onClickPerfectGame') || !currentBoard.some((sq) => sq.player) },
-        { idx: 103, onClick: onClickHelper, buttonText: `超助っ人-${calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper')}`, paragraph: `🔥❄⚡☠🌱🍂のうちランダムな1つを付けた、ライフ${calculateTokenBind()}の自陣コマをランダムに設置します\nトークンはターンに一度しか使用できません`, disabled: checkSkillDisable(seatCosts.onClickHelper, true, false, 'onClickHelper') },
-        { idx: 104, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, paragraph: `自分のデッキから、基礎コスト${SECOND_CATCH_MAX_BASE}以下で今撃てるスキルをランダムに1つ、コストを払わず発動します\nこのターンに基礎コスト7以上のスキルを使っていれば、0コストで使えます`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
-        { idx: 93, onClick: onClickFirstFrost, buttonText: `初霜-${calculateCost(seatCosts.onClickFirstFrost, true, false, currentTurnPlayer, 'onClickFirstFrost')}`, paragraph: `敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置きます\nトークンはターンに一度だけ。盤面の🍂が3枚以上ならコスト0`, disabled: checkSkillDisable(seatCosts.onClickFirstFrost, true, false, 'onClickFirstFrost') || firstFrostTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
-        { idx: 94, onClick: onClickGather, buttonText: `吹き寄せ-${calculateCost(seatCosts.onClickGather, true, false, currentTurnPlayer, 'onClickGather')}`, paragraph: `自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑と📜はその場に残ります。🔥は集め終えてから処理）\nエフェクト1つにつきコスト-2（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）`, disabled: checkSkillDisable(seatCosts.onClickGather, true, false, 'onClickGather') || findEmptyIndexes(currentBoard).length === 0 },
-        { idx: 95, onClick: onClickBurnOff, buttonText: `山焼き-${calculateCost(seatCosts.onClickBurnOff, true, false, currentTurnPlayer, 'onClickBurnOff')}`, paragraph: `敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きトークンを1つ置きます\nエフェクト1つにつきコスト-3（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）`, disabled: checkSkillDisable(seatCosts.onClickBurnOff, true, false, 'onClickBurnOff') },
-        { idx: 96, onClick: onClickFreeToken, buttonText: `無礼講-${calculateCost(seatCosts.onClickFreeToken, false, false, currentTurnPlayer, 'onClickFreeToken')}`, paragraph: `このターン、トークン系スキルのコストを0にします（手番が終わると切れます）`, disabled: checkSkillDisable(seatCosts.onClickFreeToken) || gearTurn.current.tokenFree[turnSeat] },
-        { idx: 84, onClick: onClickLeafDrop, buttonText: `落ち葉の置き土産-${calculateCost(seatCosts.onClickLeafDrop, false, false, currentTurnPlayer, 'onClickLeafDrop')}`, paragraph: `ランダムな敵のコマ1つに🍂を1つ付与します（🔑ロックと⚡無敵のコマは対象外）\n敵の🍂は、その持ち主以外のスキルコストを増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafDrop, false, false) || leafDropCandidates().length === 0 },
-        { idx: 85, onClick: onClickKindling, buttonText: `焚きつけ-${calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling')}`, paragraph: `敵の🍂と🌱を全て🔥に変換します（1つにつき🔥1つ。🔑ロックと⚡無敵のコマは対象外）\n氷結中のコマは🔥の代わりに❄が解除されます\n盤面の🍂1枚につき3・🌱1つにつき2だけコストが下がります（最低1）`, disabled: checkSkillDisable(seatCosts.onClickKindling, false, false, 'onClickKindling') || kindlingCandidates().length === 0 },
-        { idx: 87, onClick: onClickTinder, buttonText: `火口-${calculateCost(seatCosts.onClickTinder, false, false, currentTurnPlayer, 'onClickTinder')}`, paragraph: `🌱バッズ・🍂・❄氷結のいずれかを持つ敵のコマを1つ選び、🔥火炎を1つ付与します（氷結中は氷結が解けます）\n付与した瞬間に1ダメージ。🔥は🌱・🍂を焼いて消します（🔑ロックと⚡無敵のコマは選べません）\n直前の手番に🌱か🍂が植えられていれば、各ターン1回まで無料です\n鍛冶師は🔥付与のスキルが-1`, disabled: checkSkillDisable(seatCosts.onClickTinder) || tinderCandidates().length === 0 },
-        { idx: 86, onClick: onClickLeafCloak, buttonText: `落葉の衣-${calculateCost(seatCosts.onClickLeafCloak, false, false, currentTurnPlayer, 'onClickLeafCloak')}`, paragraph: `ランダムな自陣のコマ1つ（🔑ロック中も含む）に🍂を1つ付与します\n自陣の🍂は、相手全員のスキルコストを🍂の数だけ増やします`, disabled: checkSkillDisable(seatCosts.onClickLeafCloak) || leafCloakCandidates().length === 0 },
+        { idx: 21, onClick: onClickChargeToken, buttonText: `帯電トークン-${calculateCost(seatCosts.onClickChargeToken, true, false, currentTurnPlayer, 'onClickChargeToken')}`, disabled: checkSkillDisable(seatCosts.onClickChargeToken, true) },
+        { idx: 22, onClick: onClickChargeOne, buttonText: `帯電付与-${chargeOneCost()}`, disabled: magic[turnSeat] < chargeOneCost() },
+        { idx: 23, onClick: onClickDoubleChargeToken, buttonText: `帯電ダブルトークン-${calculateCost(seatCosts.onClickDoubleChargeToken, true, false, currentTurnPlayer, 'onClickDoubleChargeToken')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleChargeToken, true) },
+        { idx: 24, onClick: onClickChargeArea, buttonText: `範囲帯電-${calculateCost(seatCosts.onClickChargeArea, false, false, currentTurnPlayer, 'onClickChargeArea')}`, disabled: checkSkillDisable(seatCosts.onClickChargeArea) },
+        { idx: 25, onClick: onClickChargeRandom, buttonText: `ランダム帯電-${calculateCost(seatCosts.onClickChargeRandom, false, false, currentTurnPlayer, 'onClickChargeRandom')}`, disabled: checkSkillDisable(seatCosts.onClickChargeRandom) },
+        { idx: 26, onClick: onClickJammer, buttonText: `ジャマー-${calculateCost(seatCosts.onClickJammer, false, false, currentTurnPlayer, 'onClickJammer')}`, disabled: checkSkillDisable(seatCosts.onClickJammer) || boardChargeCount(currentBoard) === 0 },
+        { idx: 27, onClick: onClickHailMary, buttonText: `ヘイルメアリー-${calculateCost(seatCosts.onClickHailMary, false, false, currentTurnPlayer, 'onClickHailMary')}`, disabled: checkSkillDisable(seatCosts.onClickHailMary) },
+        { idx: 28, onClick: onClickSilence, buttonText: `サイレンス-${calculateCost(seatCosts.onClickSilence, false, false, currentTurnPlayer, 'onClickSilence')}`, disabled: checkSkillDisable(seatCosts.onClickSilence) || otherSeats(turnSeat).every((seat) => silenced[seat]) },
+        { idx: 29, onClick: onClickPoisonMist, buttonText: `毒霧-${calculateCost(seatCosts.onClickPoisonMist, false, true, currentTurnPlayer, 'onClickPoisonMist')}`, disabled: checkSkillDisable(seatCosts.onClickPoisonMist, false, true) || !currentBoard.some((sq) => sq.player) },
+        { idx: 30, onClick: onClickFreeze, buttonText: `氷結-${calculateCost(seatCosts.onClickFreeze, false, false, currentTurnPlayer, 'onClickFreeze')}`, disabled: checkSkillDisable(seatCosts.onClickFreeze) || !currentBoard.some(canFreeze) },
+        { idx: 31, onClick: onClickIgnite, buttonText: `火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`, disabled: checkSkillDisable(seatCosts.onClickIgnite) },
+        { idx: 32, onClick: onClickCleanse, buttonText: `浄化-${calculateCost(seatCosts.onClickCleanse, false, false, currentTurnPlayer, 'onClickCleanse')}`, disabled: checkSkillDisable(seatCosts.onClickCleanse) || ownAilmentCells().length === 0 },
+        { idx: 33, onClick: onClickHarvestEve, buttonText: `刈り入れ前夜-${calculateCost(seatCosts.onClickHarvestEve, false, false, currentTurnPlayer, 'onClickHarvestEve')}`, disabled: checkSkillDisable(seatCosts.onClickHarvestEve) || ownBudTotal() === 0 },
+        { idx: 34, onClick: onClickSolstice, buttonText: `冬至の種子-${calculateCost(seatCosts.onClickSolstice, false, false, currentTurnPlayer, 'onClickSolstice')}`, disabled: checkSkillDisable(seatCosts.onClickSolstice) || budGuard[turnSeat] },
+        { idx: 35, onClick: onClickSucker, buttonText: `ひこばえ-${calculateCost(seatCosts.onClickSucker, false, false, currentTurnPlayer, 'onClickSucker')}`, disabled: checkSkillDisable(seatCosts.onClickSucker) || suckerSources().length === 0 },
+        { idx: 36, onClick: onClickWindborne, buttonText: `風の落とし子-${calculateCost(seatCosts.onClickWindborne, false, false, currentTurnPlayer, 'onClickWindborne')}`, disabled: checkSkillDisable(seatCosts.onClickWindborne) || sowCandidates(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 37, onClick: onClickFlameToken, buttonText: `火炎トークン-${calculateCost(seatCosts.onClickFlameToken, true, false, currentTurnPlayer, 'onClickFlameToken')}`, disabled: checkSkillDisable(seatCosts.onClickFlameToken, true) },
+        { idx: 38, onClick: onClickDoubleFlameToken, buttonText: `火炎ダブルトークン-${calculateCost(seatCosts.onClickDoubleFlameToken, true, false, currentTurnPlayer, 'onClickDoubleFlameToken')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleFlameToken, true) },
+        { idx: 39, onClick: onClickSwidden, buttonText: `焼畑-${calculateCost(seatCosts.onClickSwidden, false, false, currentTurnPlayer, 'onClickSwidden')}`, disabled: checkSkillDisable(seatCosts.onClickSwidden) || !currentBoard.some((sq) => budStacks(sq) > 0) },
+        { idx: 40, onClick: onClickSacrifice, buttonText: `殉火-${calculateCost(seatCosts.onClickSacrifice, false, false, currentTurnPlayer, 'onClickSacrifice')}`, disabled: checkSkillDisable(seatCosts.onClickSacrifice) || sacrificeCandidates().length === 0 },
+        { idx: 41, onClick: onClickFrostArea, buttonText: `範囲氷結-${calculateCost(seatCosts.onClickFrostArea, false, false, currentTurnPlayer, 'onClickFrostArea')}`, disabled: checkSkillDisable(seatCosts.onClickFrostArea) },
+        { idx: 42, onClick: onClickIcicle, buttonText: `氷柱-${calculateCost(seatCosts.onClickIcicle, false, false, currentTurnPlayer, 'onClickIcicle')}`, disabled: checkSkillDisable(seatCosts.onClickIcicle) },
+        { idx: 43, onClick: onClickRandomFreeze, buttonText: `ランダム氷結-${calculateCost(seatCosts.onClickRandomFreeze, false, false, currentTurnPlayer, 'onClickRandomFreeze')}`, disabled: checkSkillDisable(seatCosts.onClickRandomFreeze) || randomFreezeCandidates(currentBoard).length === 0 },
+        { idx: 44, onClick: onClickFreezeSpread, buttonText: `氷結拡散-${calculateCost(seatCosts.onClickFreezeSpread, false, false, currentTurnPlayer, 'onClickFreezeSpread')}`, disabled: checkSkillDisable(seatCosts.onClickFreezeSpread) || !currentBoard.some((sq) => sq.player) },
+        { idx: 45, onClick: onClickFrostToken, buttonText: `氷結トークン-${calculateCost(seatCosts.onClickFrostToken, true, false, currentTurnPlayer, 'onClickFrostToken')}`, disabled: checkSkillDisable(seatCosts.onClickFrostToken, true) },
+        { idx: 46, onClick: onClickDoubleFrostToken, buttonText: `氷結ダブルトークン-${calculateCost(seatCosts.onClickDoubleFrostToken, true, false, currentTurnPlayer, 'onClickDoubleFrostToken')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleFrostToken, true) },
+        { idx: 47, onClick: onClickShatter, buttonText: `砕氷-${calculateCost(seatCosts.onClickShatter, false, false, currentTurnPlayer, 'onClickShatter')}`, disabled: checkSkillDisable(seatCosts.onClickShatter) || !currentBoard.some((sq) => sq.player && isFrozen(sq)) },
+        { idx: 48, onClick: onClickFrostfall, buttonText: `霜降り-${calculateCost(seatCosts.onClickFrostfall, false, false, currentTurnPlayer, 'onClickFrostfall')}`, disabled: checkSkillDisable(seatCosts.onClickFrostfall) || frostfallTargets(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 49, onClick: onClickBoost, buttonText: `慈雨-${calculateCost(seatCosts.onClickBoost, false, false, currentTurnPlayer, 'onClickBoost')}`, disabled: checkSkillDisable(seatCosts.onClickBoost) || !currentBoard.some((sq) => sq.player === currentTurnPlayer) },
+        { idx: 51, onClick: onClickClone, buttonText: `写し身-${calculateCost(seatCosts.onClickClone, false, false, currentTurnPlayer, 'onClickClone')}`, disabled: checkSkillDisable(seatCosts.onClickClone) || cloneSources().length === 0 },
+        { idx: 52, onClick: onClickPlunder, buttonText: `追い剥ぎ-${calculateCost(seatCosts.onClickPlunder, false, false, currentTurnPlayer, 'onClickPlunder')}`, disabled: checkSkillDisable(seatCosts.onClickPlunder) || plunderTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
+        { idx: 53, onClick: () => onClickDiscount('onClickMarkdown'), buttonText: `特売-${calculateCost(seatCosts.onClickMarkdown, false, false, currentTurnPlayer, 'onClickMarkdown')}`, disabled: !canUseDiscount('onClickMarkdown') },
+        { idx: 54, onClick: () => onClickDiscount('onClickEffectDiscount'), buttonText: `付与割引-${calculateCost(seatCosts.onClickEffectDiscount, false, false, currentTurnPlayer, 'onClickEffectDiscount')}`, disabled: !canUseDiscount('onClickEffectDiscount') },
+        { idx: 55, onClick: () => onClickDiscount('onClickTokenDiscount'), buttonText: `トークン割引-${calculateCost(seatCosts.onClickTokenDiscount, false, false, currentTurnPlayer, 'onClickTokenDiscount')}`, disabled: !canUseDiscount('onClickTokenDiscount') },
+        { idx: 56, onClick: () => onClickDiscount('onClickVitalMarkdown'), buttonText: `活力特売-${calculateCost(seatCosts.onClickVitalMarkdown, false, false, currentTurnPlayer, 'onClickVitalMarkdown')}`, disabled: !canUseDiscount('onClickVitalMarkdown') },
+        { idx: 57, onClick: () => onClickDiscount('onClickUniqueDiscount'), buttonText: `固有割引-${calculateCost(seatCosts.onClickUniqueDiscount, false, false, currentTurnPlayer, 'onClickUniqueDiscount')}`, disabled: !canUseDiscount('onClickUniqueDiscount') },
+        { idx: 58, onClick: () => onClickDiscount('onClickClearance'), buttonText: `大特価-${calculateCost(seatCosts.onClickClearance, false, false, currentTurnPlayer, 'onClickClearance')}`, disabled: !canUseDiscount('onClickClearance') },
+        { idx: 59, onClick: onClickRandomCast, buttonText: `福引き-${calculateCost(seatCosts.onClickRandomCast, false, false, currentTurnPlayer, 'onClickRandomCast')}`, disabled: checkSkillDisable(seatCosts.onClickRandomCast) },
+        { idx: 60, onClick: () => onClickDiscount('onClickCounterMarkdown'), buttonText: `返し特売-${calculateCost(seatCosts.onClickCounterMarkdown, false, false, currentTurnPlayer, 'onClickCounterMarkdown')}`, disabled: !canUseDiscount('onClickCounterMarkdown') },
+        { idx: 61, onClick: onClickBurnout, buttonText: `バーンアウト-${burnoutCost()}`, disabled: magic[turnSeat] < burnoutCost() || burnoutTargets(currentBoard, characters).length === 0 },
+        { idx: 62, onClick: onClickLeafToken, buttonText: `木枯らしの使い-${calculateCost(seatCosts.onClickLeafToken, true, false, currentTurnPlayer, 'onClickLeafToken')}`, disabled: checkSkillDisable(seatCosts.onClickLeafToken, true) },
+        { idx: 63, onClick: onClickTwinLeafToken, buttonText: `落葉松の双子-${calculateCost(seatCosts.onClickTwinLeafToken, true, false, currentTurnPlayer, 'onClickTwinLeafToken')}`, disabled: checkSkillDisable(seatCosts.onClickTwinLeafToken, true) },
+        { idx: 64, onClick: onClickDoubleLeafToken, buttonText: `紅葉狩り-${calculateCost(seatCosts.onClickDoubleLeafToken, true, false, currentTurnPlayer, 'onClickDoubleLeafToken')}`, disabled: checkSkillDisable(seatCosts.onClickDoubleLeafToken, true, false, 'onClickDoubleLeafToken') },
+        { idx: 65, onClick: onClickLeafAll, buttonText: `枯野の相席-${calculateCost(seatCosts.onClickLeafAll, false, false, currentTurnPlayer, 'onClickLeafAll')}`, disabled: checkSkillDisable(seatCosts.onClickLeafAll) || leafAllCandidates().length === 0 },
+        { idx: 66, onClick: onClickBonfire, buttonText: `焚き火の唄-${calculateCost(seatCosts.onClickBonfire, false, false, currentTurnPlayer, 'onClickBonfire')}`, disabled: checkSkillDisable(seatCosts.onClickBonfire) || bonfireTargets(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 67, onClick: onClickMulch, buttonText: `腐葉土の目覚め-${calculateCost(seatCosts.onClickMulch, false, false, currentTurnPlayer, 'onClickMulch')}`, disabled: checkSkillDisable(seatCosts.onClickMulch) || mulchCandidates(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 68, onClick: onClickAutumn, buttonText: `一葉知秋-${calculateCost(seatCosts.onClickAutumn, false, false, currentTurnPlayer, 'onClickAutumn')}`, disabled: checkSkillDisable(seatCosts.onClickAutumn) || autumnTargets(currentBoard).length === 0 },
+        { idx: 69, onClick: onClickLeafFrost, buttonText: `霜枯れ-${calculateCost(seatCosts.onClickLeafFrost, false, false, currentTurnPlayer, 'onClickLeafFrost')}`, disabled: checkSkillDisable(seatCosts.onClickLeafFrost) || notShielded(leafFrostTargets(currentBoard, currentTurnPlayer)).length === 0 },
+        { idx: 70, onClick: onClickSpringWind, buttonText: `春一番-${calculateCost(seatCosts.onClickSpringWind, false, false, currentTurnPlayer, 'onClickSpringWind')}`, disabled: checkSkillDisable(seatCosts.onClickSpringWind) || thawTargets(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 71, onClick: onClickShikigamiAll, buttonText: `式神一括-${calculateCost(seatCosts.onClickShikigamiAll * Math.max(1, ownShikigami().length), false, false, currentTurnPlayer, 'onClickShikigamiAll')}`, disabled: ownShikigami().length === 0 || checkSkillDisable(seatCosts.onClickShikigamiAll * ownShikigami().length) },
+        { idx: 72, onClick: onClickShikigamiRandom, buttonText: `式神ランダム設置-${calculateCost(seatCosts.onClickShikigamiRandom, true, false, currentTurnPlayer, 'onClickShikigamiRandom')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiRandom, true) },
+        { idx: 73, onClick: onClickShikigamiFlood, buttonText: `百鬼夜行-${calculateCost(seatCosts.onClickShikigamiFlood, false, false, currentTurnPlayer, 'onClickShikigamiFlood')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiFlood) || !currentBoard.some((sq) => !sq.player && !emptyBlocked(sq)) },
+        { idx: 88, onClick: onClickShikigamiBless, buttonText: `式神の加護-${calculateCost(seatCosts.onClickShikigamiBless, false, false, currentTurnPlayer, 'onClickShikigamiBless')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiBless) || ownShikigami().length === 0 || blessTargets().length === 0 },
+        { idx: 89, onClick: onClickShikigamiCurse, buttonText: `式神の呪詛-${calculateCost(seatCosts.onClickShikigamiCurse, false, false, currentTurnPlayer, 'onClickShikigamiCurse')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiCurse) || ownShikigami().length === 0 || curseTargets().length === 0 },
+        { idx: 90, onClick: onClickShikigamiDiscount, buttonText: `式神割引-${calculateCost(seatCosts.onClickShikigamiDiscount, false, false, currentTurnPlayer, 'onClickShikigamiDiscount')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiDiscount) },
+        { idx: 91, onClick: onClickShikigamiPurge, buttonText: `式神の供犠-${calculateCost(seatCosts.onClickShikigamiPurge, false, false, currentTurnPlayer, 'onClickShikigamiPurge')}`, disabled: checkSkillDisable(seatCosts.onClickShikigamiPurge, false, false, 'onClickShikigamiPurge') || ownShikigami().length === 0 || purgeTargets().length === 0 },
+        { idx: 74, onClick: onClickKimon, buttonText: `鬼門封じ-${calculateCost(seatCosts.onClickKimon, false, false, currentTurnPlayer, 'onClickKimon')}`, disabled: checkSkillDisable(seatCosts.onClickKimon) || kimonCandidates().length === 0 },
+        { idx: 75, onClick: onClickFireWheel, buttonText: `火の車-${calculateCost(seatCosts.onClickFireWheel, false, false, currentTurnPlayer, 'onClickFireWheel')}`, disabled: checkSkillDisable(seatCosts.onClickFireWheel, false, false, 'onClickFireWheel') || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
+        { idx: 97, onClick: onClickSpark, buttonText: `飛び火-${calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark')}`, disabled: checkSkillDisable(seatCosts.onClickSpark) || fireWheelTargets(currentBoard, currentTurnPlayer, fireWheelGuard).length === 0 },
+        { idx: 98, onClick: onClickNightVeil, buttonText: `夜の帳-${calculateCost(seatCosts.onClickNightVeil, false, false, currentTurnPlayer, 'onClickNightVeil')}`, disabled: checkSkillDisable(seatCosts.onClickNightVeil) },
+        { idx: 99, onClick: onClickGraveDiscount, buttonText: `弔い割引-${calculateCost(seatCosts.onClickGraveDiscount, false, false, currentTurnPlayer, 'onClickGraveDiscount')}`, disabled: checkSkillDisable(seatCosts.onClickGraveDiscount) || graveDiscountNow() === 0 },
+        { idx: 100, onClick: onClickPoisonWard, buttonText: `毒返しの構え-${calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard')}`, disabled: checkSkillDisable(seatCosts.onClickPoisonWard) || gearTurn.current.ward[turnSeat] > 0 },
+        { idx: 101, onClick: onClickGraveOffering, buttonText: `墓守の供物-${calculateCost(seatCosts.onClickGraveOffering, false, false, currentTurnPlayer, 'onClickGraveOffering')}`, disabled: checkSkillDisable(seatCosts.onClickGraveOffering) || graveOfferingTarget(currentBoard, currentTurnPlayer) < 0 },
+        { idx: 76, onClick: onClickStrip, buttonText: `裸の王様-${calculateCost(seatCosts.onClickStrip, false, false, currentTurnPlayer, 'onClickStrip')}`, disabled: checkSkillDisable(seatCosts.onClickStrip) || stripTargets().length === 0 },
+        { idx: 77, onClick: onClickChargeSeason, buttonText: `静電気の季節-${calculateCost(seatCosts.onClickChargeSeason, false, false, currentTurnPlayer, 'onClickChargeSeason')}`, disabled: checkSkillDisable(seatCosts.onClickChargeSeason, false, false, 'onClickChargeSeason') || chargeBuff[turnSeat] > 0 },
+        { idx: 78, onClick: onClickBristle, buttonText: `総毛立つ-${calculateCost(seatCosts.onClickBristle, false, false, currentTurnPlayer, 'onClickBristle')}`, disabled: checkSkillDisable(seatCosts.onClickBristle, false, false, 'onClickBristle') || bristleTargets().length === 0 },
+        { idx: 79, onClick: onClickRelease, buttonText: `落雷は忘れた頃に-${calculateCost(seatCosts.onClickRelease, false, false, currentTurnPlayer, 'onClickRelease')}`, disabled: checkSkillDisable(seatCosts.onClickRelease) || ownChargeStacks() === 0 },
+        { idx: 80, onClick: onClickStash, buttonText: `雷神のへそくり-${calculateCost(seatCosts.onClickStash, false, false, currentTurnPlayer, 'onClickStash')}`, disabled: checkSkillDisable(seatCosts.onClickStash) || stashTargets().length === 0 },
+        { idx: 81, onClick: onClickThunderFire, buttonText: `雷のない所に火は立たぬ-${calculateCost(seatCosts.onClickThunderFire, false, false, currentTurnPlayer, 'onClickThunderFire')}`, disabled: checkSkillDisable(seatCosts.onClickThunderFire) || thunderFireTargets().length === 0 },
+        { idx: 82, onClick: onClickDarkPot, buttonText: `一寸先は闇鍋-${calculateCost(seatCosts.onClickDarkPot, false, false, currentTurnPlayer, 'onClickDarkPot')}`, disabled: checkSkillDisable(seatCosts.onClickDarkPot, false, false, 'onClickDarkPot') || gearTurn.current.darkPotUsed[turnSeat] || !currentBoard.some((sq) => sq.player && !isGuarded(sq, characters)) },
+        { idx: 83, onClick: onClickChargeHeal, buttonText: `雷を食らわば皿まで-${calculateCost(seatCosts.onClickChargeHeal, false, false, currentTurnPlayer, 'onClickChargeHeal')}`, disabled: checkSkillDisable(seatCosts.onClickChargeHeal, false, false, 'onClickChargeHeal') || chargeHealCells().length === 0 },
+        { idx: 92, onClick: onClickSmallFry, buttonText: `一寸の虫に魂なし-${calculateCost(seatCosts.onClickSmallFry, false, false, currentTurnPlayer, 'onClickSmallFry')}`, disabled: checkSkillDisable(seatCosts.onClickSmallFry, false, false, 'onClickSmallFry') },
+        { idx: 102, onClick: onClickPerfectGame, buttonText: `パーフェクトゲーム-${calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame')}`, disabled: checkSkillDisable(seatCosts.onClickPerfectGame, false, false, 'onClickPerfectGame') || !currentBoard.some((sq) => sq.player) },
+        { idx: 103, onClick: onClickHelper, buttonText: `超助っ人-${calculateCost(seatCosts.onClickHelper, true, false, currentTurnPlayer, 'onClickHelper')}`, disabled: checkSkillDisable(seatCosts.onClickHelper, true, false, 'onClickHelper') },
+        { idx: 113, onClick: onClickBoltSilence, buttonText: `沈黙は雷なり-${calculateCost(seatCosts.onClickBoltSilence, false, false, currentTurnPlayer, 'onClickBoltSilence')}`, disabled: checkSkillDisable(seatCosts.onClickBoltSilence, false, false, 'onClickBoltSilence') || !boltSilenceLegal() },
+        { idx: 104, onClick: onClickSecondCatch, buttonText: `柳の下に二匹目がいた-${calculateCost(seatCosts.onClickSecondCatch, false, false, currentTurnPlayer, 'onClickSecondCatch')}`, disabled: checkSkillDisable(seatCosts.onClickSecondCatch, false, false, 'onClickSecondCatch') },
+        // オブジェクトを壊す・強くするスキル(idx 114-119)
+        // 鍵師向けの汎用スキル（#439, idx 130〜133）
+        { idx: 130, onClick: onClickLockRaid, buttonText: `錠前荒らし-${calculateCost(seatCosts.onClickLockRaid, false, false, currentTurnPlayer, 'onClickLockRaid')}`, disabled: checkSkillDisable(seatCosts.onClickLockRaid, false, false, 'onClickLockRaid') || lockRaidCells(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 131, onClick: onClickLockExtend, buttonText: `ロックの増築-${calculateCost(seatCosts.onClickLockExtend, false, false, currentTurnPlayer, 'onClickLockExtend')}`, disabled: checkSkillDisable(seatCosts.onClickLockExtend, false, false, 'onClickLockExtend') || lockExtendCells(currentBoard, currentTurnPlayer).length === 0 },
+        { idx: 132, onClick: onClickLockBlessing, buttonText: `施錠の加護-${calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing')}`, disabled: checkSkillDisable(seatCosts.onClickLockBlessing, false, false, 'onClickLockBlessing') },
+        { idx: 133, onClick: onClickVacantSeal, buttonText: `空き家封じ-${vacantSealCost()}`, disabled: magic[turnSeat] < vacantSealCost() || vacantSealCells(currentBoard).length === 0 },
+        { idx: 134, onClick: onClickLockConvert, buttonText: `錠の転換-${calculateCost(seatCosts.onClickLockConvert, false, false, currentTurnPlayer, 'onClickLockConvert')}`, disabled: checkSkillDisable(seatCosts.onClickLockConvert, false, false, 'onClickLockConvert') || lockConvertCells(currentBoard).length === 0 },
+        { idx: 135, onClick: onClickLockDiscount, buttonText: `錠前割引-${calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount')}`, disabled: checkSkillDisable(seatCosts.onClickLockDiscount, false, false, 'onClickLockDiscount') || lockedSquareCount(currentBoard) === 0 },
+        ...OBJECT_SKILL_KEYS.map((skill) => ({
+            idx: OBJECT_SKILLS[skill].idx,
+            onClick: () => onClickObjectSkill(skill),
+            buttonText: `${OBJECT_SKILLS[skill].name}-${calculateCost(seatCosts[OBJECT_SKILLS[skill].costKey], false, false, currentTurnPlayer, OBJECT_SKILLS[skill].costKey)}`,
+            disabled: checkSkillDisable(seatCosts[OBJECT_SKILLS[skill].costKey], false, false, OBJECT_SKILLS[skill].costKey) || !objectSkillUsable(skill, currentBoard, currentTurnPlayer, characters),
+        })),
+        // オブジェクト(idx 105-109): 空きマスを選んで設置する。OBJECT_KINDS の順が idx の順（deck.ts の SKILL_CATALOG と同じ）
+        ...OBJECT_KINDS.map((kind) => ({
+            idx: OBJECT_DEFS[kind].idx,
+            onClick: () => onClickObject(kind),
+            buttonText: `${OBJECT_DEFS[kind].name}-${calculateCost(seatCosts[OBJECT_DEFS[kind].costKey], false, false, currentTurnPlayer, OBJECT_DEFS[kind].costKey)}`,
+            disabled: checkSkillDisable(seatCosts[OBJECT_DEFS[kind].costKey], false, false, OBJECT_DEFS[kind].costKey) || objectLandableCells(currentBoard).length === 0,
+        })),
+        { idx: 93, onClick: onClickFirstFrost, buttonText: `初霜-${calculateCost(seatCosts.onClickFirstFrost, true, false, currentTurnPlayer, 'onClickFirstFrost')}`, disabled: checkSkillDisable(seatCosts.onClickFirstFrost, true, false, 'onClickFirstFrost') || firstFrostTargets(currentBoard, currentTurnPlayer, characters).length === 0 },
+        { idx: 94, onClick: onClickGather, buttonText: `吹き寄せ-${calculateCost(seatCosts.onClickGather, true, false, currentTurnPlayer, 'onClickGather')}`, disabled: checkSkillDisable(seatCosts.onClickGather, true, false, 'onClickGather') || findEmptyIndexes(currentBoard).length === 0 },
+        { idx: 95, onClick: onClickBurnOff, buttonText: `山焼き-${calculateCost(seatCosts.onClickBurnOff, true, false, currentTurnPlayer, 'onClickBurnOff')}`, disabled: checkSkillDisable(seatCosts.onClickBurnOff, true, false, 'onClickBurnOff') },
+        { idx: 96, onClick: onClickFreeToken, buttonText: `無礼講-${calculateCost(seatCosts.onClickFreeToken, false, false, currentTurnPlayer, 'onClickFreeToken')}`, disabled: checkSkillDisable(seatCosts.onClickFreeToken) || gearTurn.current.tokenFree[turnSeat] },
+        { idx: 84, onClick: onClickLeafDrop, buttonText: `落ち葉の置き土産-${calculateCost(seatCosts.onClickLeafDrop, false, false, currentTurnPlayer, 'onClickLeafDrop')}`, disabled: checkSkillDisable(seatCosts.onClickLeafDrop, false, false) || leafDropCandidates().length === 0 },
+        { idx: 85, onClick: onClickKindling, buttonText: `焚きつけ-${calculateCost(seatCosts.onClickKindling, false, false, currentTurnPlayer, 'onClickKindling')}`, disabled: checkSkillDisable(seatCosts.onClickKindling, false, false, 'onClickKindling') || kindlingCandidates().length === 0 },
+        { idx: 87, onClick: onClickTinder, buttonText: `火口-${calculateCost(seatCosts.onClickTinder, false, false, currentTurnPlayer, 'onClickTinder')}`, disabled: checkSkillDisable(seatCosts.onClickTinder) || tinderCandidates().length === 0 },
+        { idx: 86, onClick: onClickLeafCloak, buttonText: `落葉の衣-${calculateCost(seatCosts.onClickLeafCloak, false, false, currentTurnPlayer, 'onClickLeafCloak')}`, disabled: checkSkillDisable(seatCosts.onClickLeafCloak) || leafCloakCandidates().length === 0 },
     ];
 
     return (
@@ -3757,6 +4286,20 @@ export const Game = (props: GameProps) => {
                 <div className={styles.boardWrap}>
                     <Status winner={winner} nextPlayer={currentTurnPlayer} life={life} magicBonus={lateMagicBonus(currentTurn, seatCount)} />
                     {skillAnnounce && <div className={styles.announce}>{skillAnnounce}</div>}
+                    {captureChoice !== null && currentBoard[captureChoice]?.object && (
+                        <div className={styles.dialogBackdrop} onClick={() => setCaptureChoice(null)}>
+                            <div className={styles.dialog} role="dialog" aria-label="オブジェクトの乗っ取り" onClick={(e) => e.stopPropagation()}>
+                                <p>
+                                    {posName(captureChoice)}の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}（{currentBoard[captureChoice].player}）を乗っ取ります
+                                </p>
+                                <button onClick={() => onCellClick(captureChoice, false)}>自陣のコマにする</button>
+                                <button onClick={() => onCellClick(captureChoice, true)}>
+                                    自分の{OBJECT_DEFS[currentBoard[captureChoice].object as ObjectKind].name}にする
+                                </button>
+                                <button onClick={() => setCaptureChoice(null)}>キャンセル</button>
+                            </div>
+                        </div>
+                    )}
                     {useIcicle && icicleCell !== null && (
                         <div className={styles.announce}>
                             {posName(icicleCell)}を通る線:{' '}
@@ -3873,140 +4416,146 @@ export const Game = (props: GameProps) => {
                         </button>
                     )}
                     <div className={styles.skillGrid} ref={skillGridRef} onScroll={updateStripEdge}>
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph={`ターンを終了し、マジックを+${charge}します`} />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc} onClick={onClickCharge} buttonText={`チャージ+${charge}`} paragraph='ターンを終了し、マジックを獲得' />
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShuffle}
-                        buttonText={`シャッフル-${seatCosts.onClickShuffle}`}
-                        paragraph='固定でないスキルをシャッフルします'
-                        disabled={magic[turnSeat] < seatCosts.onClickShuffle}
+                        buttonText={`シャッフル-${shuffleCost}`}
+                        paragraph='固定でないスキルを引き直す'
+                        disabled={magic[turnSeat] < shuffleCost}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickUseLock}
                         hidden={currentCharacter === 'cryomancer'}
                         buttonText={`ロック-${calculateCost(seatCosts.onClickUseLock, false, false, currentTurnPlayer, 'onClickUseLock')}`}
-                        paragraph={`選択したマスを${gearLockBind(turnGears)}ターン以上ロックします`}
+                        paragraph='マスを選んでロック'
                         disabled={checkSkillDisable(seatCosts.onClickUseLock)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickCryoFreeze}
                         buttonText={`氷結-${calculateCost(seatCosts.onClickCryoFreeze, false, false, currentTurnPlayer, 'onClickCryoFreeze')}`}
-                        paragraph={'マスを1つ選び、❄氷結を付与します（空きマスも可）\n氷結中の空きマスには誰も着手できません。氷結したコマはターン進行でライフが減らず、スキルのダメージを❄1つで肩代わりしますが、自分も重ねて強化できません'}
+                        paragraph='マスを選んで❄を付与'
                         hidden={currentCharacter !== 'cryomancer'}
                         disabled={checkSkillDisable(seatCosts.onClickCryoFreeze)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickTotalAssault}
                         buttonText={`全軍突撃-${totalAssaultCost}`}
-                        paragraph={
-                            '3ターンの間、ターン終了時にランダムにトークンを設置します コストは使用したトークンの回数×2軽減されます(使用後はカウントがリセットされます)'
-                        }
+                        paragraph='数ターンの間、ターン終了時にランダムにトークンを設置'
                         hidden={currentCharacter !== 'tactician'}
                         exclusive
                         disabled={magic[turnSeat] < totalAssaultCost}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickStomp}
                         buttonText={`ストンプ-${gearCost(seatCosts.onClickStomp, turnSeat, false, 'onClickStomp')}`}
-                        paragraph={'クリックしたセルと周囲1マスを破壊します'}
+                        paragraph='マスを選び、周囲のコマを破壊'
                         hidden={currentCharacter !== 'giant'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickStomp)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickJudgeDay}
                         buttonText={`審判の日-${judgeDayCost}`}
-                        paragraph='セルをクリックし、審判を下します コストは使用したスキルの回数軽減されます(使用後はカウントがリセットされます)'
+                        paragraph='マスを選び、敵のコマにダメージ'
                         hidden={currentCharacter !== 'magician'}
                         exclusive
                         disabled={magic[turnSeat] < judgeDayCost}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickToggleYingYang}
                         buttonText={`陰陽転化-${gearCost(seatCosts.onClickToggleYingYang, turnSeat, false, 'onClickToggleYingYang')}`}
-                        paragraph={`陰陽のモードを切り替えます 現在のモード:${yinYangModeName(turnSeat)}`}
+                        paragraph={`陰陽のモードを切り替え 現在のモード:${yinYangModeName(turnSeat)}`}
                         hidden={currentCharacter !== 'yinYangMaster'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickToggleYingYang)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickNecromancy}
                         buttonText={`蘇生-${gearCost(currentNecroCost, turnSeat, false, 'onClickNecromancy')}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`}
-                        paragraph={`発動時に墓地の死体数だけ(最大${necromancySummonCap})ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを自動吸収します 墓地は盤上でコマが奪われる/消えるたびに貯まり、コスト軽減と召喚数になります(使用後リセット)`}
+                        paragraph='墓地の死体の数だけコマを召喚'
                         hidden={currentCharacter !== 'necromancer'}
                         exclusive
                         disabled={checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind())}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMiasma}
                         buttonText={`ミアズマ-${miasmaCost()}`}
-                        paragraph={'自陣の毒が乗っているマスの周囲1マスの敵コマに毒を付与します（毒マスが重なると積み上がります） 自陣の毒はすべて消えます コストは自陣の毒の数だけ軽減されます'}
+                        paragraph='自陣の毒を周囲の敵コマに拡散'
                         hidden={currentCharacter !== 'poisoner'}
                         exclusive
                         disabled={magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickChargeSpread}
                         buttonText={`帯電拡散-${chargeSpreadCost()}`}
-                        paragraph={'コマを選択し、そこからコマのあるマスだけを縦横に辿って届くすべてのコマ(敵味方問わず)に⚡を1つ付与します（雷霆の巫以外のコマは乗った時点で2ダメージ） コストは盤面の⚡の数だけ軽減されます'}
+                        paragraph='コマを選び、繋がる全てのコマに⚡を付与'
                         hidden={currentCharacter !== 'electrician'}
                         exclusive
                         disabled={magic[turnSeat] < chargeSpreadCost()}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickGlacier}
                         buttonText={`絶対零度-${glacierCost()}`}
-                        paragraph={`全てのマス（空きマス含む。🔑ロック中を除く）に❄を1つ足します\n次の自分の手番開始時に、他のプレイヤーの氷結マスへ❄1つにつき3ダメージを与えて氷結を解除し、ライフが0になったマスを破壊します\nコストは盤面の氷結マスの数だけ軽減されます（下限1）${glacierPending[turnSeat] ? '\n発動待ちです' : ''}`}
+                        paragraph='全てのマスに❄を付与し、次の手番に敵の❄でダメージ'
                         hidden={currentCharacter !== 'cryomancer'}
                         exclusive
                         disabled={magic[turnSeat] < glacierCost() || glacierPending[turnSeat]}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickInferno}
                         buttonText={`業火-${infernoCost()}`}
-                        paragraph={'敵のコマ全て(🔑ロック中・⚡無敵を除く)に🔥火炎を2つずつ付与します\n氷結中のマスは🔥の代わりに❄が全て解除されます。🔥が付いたマスの縦横隣の氷結は即座に解けます\n1手番に異なるスキルを3種類以上使うと、次の業火がコスト0になります（手番を跨いで持ち越し。同じスキルの連打は1種類と数えます。撃つとリセット）'}
+                        paragraph='敵のコマ全てに🔥を付与'
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickMogaribue}
                         buttonText={`虎落笛-${mogaribueCost()}`}
-                        paragraph={`自陣の🍂の枚数(${mogaribueDamage(currentBoard, currentTurnPlayer)})ぶん、敵のコマ全てにダメージを与えます(🔑ロック中・⚡無敵を除く。氷結中は❄が1つ減るだけ、🔥中は1.5倍)\n同時に自陣のコマ全てのライフが+${MOGARIBUE_LIFE}されます`}
+                        paragraph='自陣の🍂の数だけ敵のコマ全てにダメージ'
                         hidden={currentCharacter !== 'witch'}
                         exclusive
                         disabled={magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                        onClick={onClickSeal}
+                        buttonText={`封鎖の断-${sealCost()}`}
+                        paragraph='自陣のコマと空きマスをロックし、敵のロックを解除してダメージ'
+                        hidden={currentCharacter !== 'keysmith'}
+                        exclusive
+                        disabled={magic[turnSeat] < sealCost()}
+                    />
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickIgnite}
                         buttonText={`火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`}
-                        paragraph={'マスを選択し、🔥火炎を1つ付与します（重複可）。空きマスにも置けます\n空きマスの🔥は、そこに置かれたコマ（誰のコマでも）に引き継がれます\n付与したマスと縦横隣の氷結は即座に解けます'}
+                        paragraph='マスを選んで🔥を付与'
                         hidden={currentCharacter !== 'pyromancer'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickIgnite)}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShikigamiPlace}
                         buttonText={`式神設置-${gearCost(seatCosts.onClickShikigamiPlace, turnSeat, false, 'onClickShikigamiPlace')}`}
-                        paragraph={'任意の空きマスに式神（ライフ2の紙の分身）を置きます 式神は列の並びに数えません\n自分で補強すると🌱付きの自陣のコマになり、相手に乗っ取られると空きマスになります'}
+                        paragraph='空きマスに式神を設置'
                         hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode === 'yang'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickShikigamiPlace) || findEmptyIndexes(currentBoard).length === 0 || placeBlocked(lifeBan[turnSeat], 'onClickShikigamiPlace', calculateTokenBind())}
                     />
-                    <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                    <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                         onClick={onClickShikigamiBlast}
                         buttonText={`式神爆破-${gearCost(seatCosts.onClickShikigamiBlast, turnSeat, false, 'onClickShikigamiBlast')}`}
-                        paragraph={`自分の式神を1つ選んで爆破します 式神は消え、周囲8マスの敵のコマに${SHIKIGAMI_BLAST_DAMAGE}ダメージ（0になったコマは破壊）\n周囲の空きマスは自分の式神になります`}
+                        paragraph='式神を1つ選んで爆破し、周囲の敵のコマにダメージ'
                         hidden={currentCharacter !== 'yinYangMaster' || currentYinYangMode !== 'yang'}
                         exclusive
                         disabled={checkSkillDisable(seatCosts.onClickShikigamiBlast) || ownShikigami().length === 0}
                     />
                     {shuffleSkillDefs.map((s) => (
-                        <SkillButton inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                        <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
                             key={s.idx}
                             onClick={s.onClick}
                             buttonText={s.buttonText}
-                            paragraph={s.paragraph}
-                            disabled={s.disabled || placeBlocked(lifeBan[turnSeat], SKILL_CATALOG[s.idx]?.costKey, calculateTokenBind())}
+                            paragraph={skillOf(s.idx)?.desc ?? ''}
+                            disabled={s.disabled || placeBlocked(lifeBan[turnSeat], skillOf(s.idx)?.costKey, calculateTokenBind())}
                             hidden={!skills.includes(s.idx) || (s.idx === 30 && currentCharacter === 'cryomancer')}
                             locked={currentLockedSkills.includes(s.idx)}
                             onToggleLock={() => toggleLock(s.idx)}
@@ -4014,6 +4563,18 @@ export const Game = (props: GameProps) => {
                             onHoverEnd={s.onHoverEnd}
                         />
                     ))}
+                    {customSpec && (
+                        <SkillButton restrict={restrictSkill} inputBlocked={aiTurn} magic={magic[turnSeat]} tokenUsed={useToken} expandAll={expandAllDesc}
+                            key={CUSTOM_SKILL_IDX}
+                            onClick={onClickCustom}
+                            buttonText={`${customSpec.name}-${customCost()}`}
+                            paragraph={describeCustom(customSpec)}
+                            disabled={checkSkillDisable(customBase, false, customHasPoison, 'onClickCustom') || !canCastCustom(currentBoard, customSpec, currentTurnPlayer, characters, stripTargets().length > 0)}
+                            hidden={!skills.includes(CUSTOM_SKILL_IDX)}
+                            locked={currentLockedSkills.includes(CUSTOM_SKILL_IDX)}
+                            onToggleLock={() => toggleLock(CUSTOM_SKILL_IDX)}
+                        />
+                    )}
                     </div>
                     {stripEdge.right && (
                         <button type='button' className={`${styles.stripArrow} ${styles.stripRight}`} aria-label='右のスキルを見る' onClick={() => scrollStrip(1)}>

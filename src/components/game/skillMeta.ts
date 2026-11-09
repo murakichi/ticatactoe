@@ -31,12 +31,19 @@ const SKILL_META: Record<string, Meta> = {
     絶対零度: { icon: '🥶', category: 'ice' },
     業火: { icon: '💥', category: 'fire' },
     虎落笛: { icon: '🍂', category: 'buds' },
+    封鎖の断: { icon: '🗝️', category: 'control' },
 };
 
 /** カタログか、基本操作・固有スキルの表に載っているスキル名か(載っていなければカードは既定の「✨・基本」表示になる) */
 export const hasSkillMeta = (name: string): boolean => CATALOG_META.has(name) || name in SKILL_META;
 
-export const metaOf = (name: string): Meta => CATALOG_META.get(name) ?? SKILL_META[name] ?? { icon: '✨', category: 'basic' };
+// オリジナルスキル(customSkill.ts)の見た目。名前が自由なので、対戦開始時に登録する
+const CUSTOM_META = new Map<string, Meta>();
+export const registerCustomMeta = (name: string, icon: string, category: SkillCategory): void => {
+    CUSTOM_META.set(name, { icon, category });
+};
+
+export const metaOf = (name: string): Meta => CATALOG_META.get(name) ?? CUSTOM_META.get(name) ?? SKILL_META[name] ?? { icon: '✨', category: 'basic' };
 
 export type ParsedSkillText = {
     name: string;

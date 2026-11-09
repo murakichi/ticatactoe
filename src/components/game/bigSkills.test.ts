@@ -81,7 +81,7 @@ describe('柳の下に二匹目がいた', () => {
         const g = {
             skills: [0, 0], echoReady: f(), echoNext: f(), kinds: [new Set<string>(), new Set<string>()], discount: [emptyDiscount(), emptyDiscount()],
             oppSkilled: f(), oppSkillPrev: f(), shikiPlaced: f(), fireBase: [0, 0], plantPrev: f(), plantBase: [0, 0], placedPrev: f(), placeBase: [0, 0],
-            leafBase: [0, 0], darkPotUsed: f(), tokenFree: f(), bigCast: f(), chargeBase: [0, 0], veil: f(), veilNext: f(), ward: [0, 0], wardFresh: f(),
+            leafBase: [0, 0], darkPotUsed: f(), tokenFree: f(), bigCast: f(), turnSpent: [0, 0], pieceBase: [0, 0], chargeBase: [0, 0], veil: f(), veilNext: f(), ward: [0, 0], wardFresh: f(), lockSeen: f(), lockPrev: f(), lockFreeUsed: f(), blessing: [0, 0], blessingFresh: f(),
             infernoReady: f(),
         } as GearTurnState & { infernoReady: boolean[] };
         noteSkillUsed(g, 0, 'onClickStomp'); // 基礎3

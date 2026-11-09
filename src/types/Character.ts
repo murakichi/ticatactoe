@@ -1,2 +1,2 @@
-export type CharacterId = 'you' | 'tactician' | 'magician' | 'fighter' | 'healer' | 'giant' | 'yinYangMaster' | 'necromancer' | 'poisoner' | 'electrician' | 'cryomancer' | 'pyromancer' | 'witch';
+export type CharacterId = 'you' | 'tactician' | 'magician' | 'fighter' | 'healer' | 'giant' | 'yinYangMaster' | 'necromancer' | 'poisoner' | 'electrician' | 'cryomancer' | 'pyromancer' | 'witch' | 'keysmith';
 export type YingYangMode = 'ying' | 'yang';

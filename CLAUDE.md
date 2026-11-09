@@ -22,6 +22,14 @@ npm test     # Jest in watch mode
 
 **sim と本番の共有 (#289):** ルールの純粋ロジックと AI は `src/components/game/*.ts` が唯一の実装で、ヘッドレス `sim/` は `scripts/gen-sim-shared.js` が生成した `sim/shared/*.js`（コミットする）を使う。**共有対象の TS を直したら `node scripts/gen-sim-shared.js` を実行してコミットする**（`npm start/build` の前にも自動で走る。古いと `simShared.test.ts` が落ちる）。AIの1手番の計画（AIに渡す状態・返った結果の実行順・止まらないためのチャージ・着手マスが埋まったときの打ち直し）は `aiTurn.ts` の `planAITurn` / `resolveMoveCell` で、`Game.tsx` の `runAIMove` と `sim/aiDriver.js` が同じ関数を呼ぶ。sim の既定の `--mode prod` は本番AIそのもの。共有済みの規則: 実コスト(`cost.ts`)、手番開始の魔力・増殖・蘇生の定数(`turn.ts`)、毒(`poison.ts`)、ストンプ・審判の日(`blast.ts`)、式神(`shikigami.ts`)、サーマル系(`thermal.ts`)、手番が変わるときのギア状態(`gearTurn.ts`)、減衰(`decay.ts` の `decayBoard`)、着手の結果と蘇生の吸収(`placement.ts`)、増殖(`proliferate.ts`)、電撃(`charge.ts`)、膠着の打開(`deadlock.ts`)など。残る二重実装は `engine.js` と `Game.tsx` の「状態の持ち方と更新の順序」（トークン系の抽選と `afterTokenPlaced`・フラグ・乱数）だけで、まだ両方に書いてあるスキルは盤面の計算を TS の純粋関数に出して両方から呼ぶ。新しい純粋ロジックは `Game.tsx`/`engine.js` の両方に書かず、TS の純粋関数に書いて両方から呼ぶ。旧 sim 版AI(`sim/ai.js`)は削除済みで、AI改修は `AIPlayer.ts` にだけ入れる（AIの調整ノブは無い。改修前後は同一seedの `probe-top.js` で比べる）。
 
+**オブジェクト:** 空きマスに置く建造物（大木・枯れた大木・生命の泉・砦・雷雲・市場・聖域・毒沼。汎用スキル idx 105〜112、大工房（仮称・ベースコスト7以上のスキル-3）は idx 120、陰陽師向けの結界石・護符の社は idx 121〜122、招き猫・泥田坊・閻魔の舌・八卦の陣・お一人様限りの札・一言居士・見ざる地蔵は idx 123〜129。壊す・強くするスキル 解体・風化・地ならし・補強工事・増築・分譲 は idx 114〜119）。`SquareInfo.object` で持ち、持ち主=`player`・ライフ=`bind`。列に数えず（`lineSymbols`）、自然減衰しない（`decayTick`）。自陣のものは通常のコマでいつでも乗っ取れ、敵のものはライフ0で奪える（`placement.ts`）。🔥で大木系は即壊れる（`thermal.ts` の `ignite`）。仕様・数値・手番開始時の効果は `objects.ts` が唯一の実装で、`Game.tsx` と `sim/engine.js` が同じ関数を呼ぶ。共通の仕様・新しい種類を足す手順は `docs/objects.md`。
+
+**ロック(🔑):** `Effect.stack` が残りターン数、`owner` が空蔵の持ち主。掛けるとスタックを加算しライフは変えない（`lock.ts` の `addLock`）。減衰のたびに `tickLock` で-1、0で外れる。ロック中はライフ0でも乗っ取れず、ライフは普通に減る。`bind` でロックの期限を数えない（#438）。
+
+**説明文:** スキル・キャラ・ギア・オブジェクトの説明を書く・直すときは `docs/description-guidelines.md` に従う（エフェクトの意味は `deck.ts` の `CATEGORY_HELP` だけに書き、個別の説明には書かない。細かい仕様は書かない。書式は1文・体言止め。「ターン1回」の制限だけは必ず残す）。汎用スキルの説明は `SKILL_CATALOG[].desc` が唯一の出典で、`Game.tsx` に二重に書かない。
+
+**ダメージ・破壊・消滅:** 効果を実装する・説明を書くときは `docs/damage-terms.md` の定義に従う（ダメージ=ライフを減らすだけで空きマスにはならない／破壊=空きマスにする・効果の影響を受ける／消滅=効果を無視して空きマスにする）。
+
 **スキルのコスト:** スキルを新規に作る・コストを変えるときは、必ず `docs/skill-cost-rules.md` の基準（単価・複数付与の割引式・派手さと導線）で値を出す。基準から外すなら理由を日記に書く。
 
 **ギア:** キャラ選択時に席ごとに装備する追加パッシブ(通常2枠、「あなた」だけ3枠)。定義と純粋関数は `src/components/game/gear.ts`(`GEAR_PARAMS` が数値の唯一の出典。説明文もここから描画)、ヘッドレス版は `sim/shared/gear.js`(生成物)。`PlayerConfig.gears` で `Game` に渡し、`Game.tsx` では `gearCost`(コスト補正) / `spendMagic`(幸運の財布・スキル使用数) / `applyLock` / `afterTokenPlaced` などが、`sim/engine.js` では `gearCost` / `spendMagic` / `applyLock` / `afterTokenPlaced` / `costsOf` が対応する。コスト表は席ごとに `costTableFor(seat)`(価格破壊で引き直す)から引き、`skillCosts` を直接参照しない。手番内のスキル使用数は `Game.tsx` では ref(`gearTurn`)、sim では `s.gearSkills` で持つ。ギアなしの試合は乱数を消費しないので従来と同じ結果になる。

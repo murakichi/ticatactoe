@@ -2,6 +2,7 @@ import { CharacterId, YingYangMode } from './types/Character';
 import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 import { geometryForCells } from './components/game/boardGeometry';
+import { isObject } from './types/ObjectKind';
 
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
@@ -17,6 +18,7 @@ export const LIFE_MEANS = {
     cryomancer: 4, // 魔力+1(Game.tsx)とセット。鍛冶師と互角（対鍛冶師 53%）にするため、魔法使い並みに紙
     pyromancer: 6,
     witch: 4, // 魔力+1(Game.tsx)とセット（ユーザー指示）
+    keysmith: 4, // 通常(5)から-1（#439）。空きマスのロック無視・ロック系スキル無料/-1とセット
     default: 5,
 } as const;
 
@@ -41,8 +43,8 @@ const isShikigami = (sq: { effects: readonly { effect: string }[] }): boolean =>
     for (let i = 0; i < ef.length; i++) if (ef[i].effect === '📜') return true;
     return false;
 };
-/** 列判定用のシンボル配列（式神はコマ無し扱い） */
-const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isShikigami(x) ? undefined : x.player));
+/** 列判定用のシンボル配列（式神・オブジェクトはコマ無し扱い） */
+const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((x) => (isShikigami(x) || isObject(x) ? undefined : x.player));
 
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
     const lines = geometryForCells(squares.length).winLines;
@@ -101,4 +103,4 @@ const findEmptyIndexes = (ary: (SquareInfo | undefined)[]) => {
     return out;
 };
 
-export {isShikigami, lineSymbols, calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };
+export {isShikigami, isObject, lineSymbols, calculateLife, lifeMeanOf, calculateWinner, randomPick, randomAnyPick, normRand, range, findEmptyIndexes };

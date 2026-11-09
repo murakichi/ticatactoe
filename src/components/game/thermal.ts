@@ -19,7 +19,9 @@ import { CharacterId } from '../../types/Character';
 import { Effect } from '../../types/Effect';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
+import { isObject, isTree } from '../../types/ObjectKind';
 import { orthoNeighbors } from './boardGeometry';
+import { lockEffect } from './lock';
 
 /** 火炎1スタックあたりの継続ダメージ */
 export const FLAME_BURN_DAMAGE = 2;
@@ -134,15 +136,22 @@ export const ignite = (
     cells: number[],
     size: number,
     n: number = 1,
-    keepBuds?: (sq: SquareInfo) => boolean
+    keepBuds?: (sq: SquareInfo) => boolean,
+    immune?: (sq: SquareInfo) => boolean
 ): { thawed: number[] } => {
     const thawed = new Set<number>();
     for (const k of cells) {
+        if (immune?.(board[k])) continue; // 帯電中の雷霆の巫のコマには🔥が付かない
         for (let c = 0; c < n; c++) {
             if (isFrozen(board[k])) {
                 board[k] = thaw(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
                 thawed.add(k);
                 continue;
+            }
+            // 大木・枯れた大木は、🔥を付けられると即座に壊れて空きマスになる（氷結中は上の解凍で守られる）。そのマスにはそれ以上🔥を付けない
+            if (isTree(board[k])) {
+                board[k] = { player: undefined, bind: 0, effects: [] };
+                break;
             }
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = keepBuds?.(board[k]) ?? false;
@@ -172,10 +181,10 @@ export const ignite = (
 export const canFreeze = (sq: SquareInfo): boolean => !hasLock(sq) && flameStacks(sq) === 0;
 
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-export const freeze = (board: SquareInfo[], cells: number[]): number[] => {
+export const freeze = (board: SquareInfo[], cells: number[], immune?: (sq: SquareInfo) => boolean): number[] => {
     const done: number[] = [];
     for (const k of cells) {
-        if (!canFreeze(board[k])) continue;
+        if (!canFreeze(board[k]) || immune?.(board[k])) continue; // 帯電中の雷霆の巫のコマには❄が付かない
         board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] }; // 🌱は消えないが、氷結中は休眠する（activeBuds）
         done.push(k);
     }
@@ -219,10 +228,11 @@ export const INFERNO_FREE_SKILLS = 3;
 export const infernoCostOf = (baseCost: number, infernoReady: boolean, calc: (cost: number) => number): number =>
     infernoReady ? 0 : calc(baseCost);
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-export const freezeAll = (board: SquareInfo[]): number[] =>
+export const freezeAll = (board: SquareInfo[], immune?: (sq: SquareInfo) => boolean): number[] =>
     freeze(
         board,
-        board.map((_, i) => i)
+        board.map((_, i) => i),
+        immune
     );
 
 export type DetonateResult = {
@@ -281,17 +291,17 @@ export const infernoTargets = (board: SquareInfo[], me: SquareInfo['player'], ch
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[]): SquareInfo => decayParts(sq, chars).sq;
+export const decayTick = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): SquareInfo => decayParts(sq, chars, natural).sq;
 
 /** decayTick で減ったライフの内訳(実際に減った量)。natural=自然減衰、burn=🔥の継続ダメージ、poison=☠の継続ダメージ */
 export type DecayParts = { sq: SquareInfo; natural: number; burn: number; poison: number };
 
 /** decayTick と同じ計算で、ライフが何でいくつ減ったかも返す(ダメージの表示用。減った量は実際に減った分で、0未満にはならない) */
-export const decayParts = (sq: SquareInfo, chars: readonly CharacterId[]): DecayParts => {
+export const decayParts = (sq: SquareInfo, chars: readonly CharacterId[], natural: boolean = true): DecayParts => {
     let next: SquareInfo = { ...sq, effects: [...sq.effects] };
     const parts = { natural: 0, burn: 0, poison: 0 };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !isFrozen(next)) {
-        next = { ...next, bind: next.bind - 1 };
+    if (next.player && next.bind > 0 && !isFrozen(next) && !isObject(next) && natural) {
+        next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
         parts.natural = 1;
     }
     const burn = burnDamageOf(next, chars);
@@ -697,7 +707,7 @@ export const kimon = (board: SquareInfo[], cell: number): { destroyed: boolean; 
         board[cell] = thawOne(board[cell]);
         return { destroyed: false, thawed: true, locked: false };
     }
-    board[cell] = { player: undefined, bind: KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    board[cell] = { player: undefined, bind: 0, effects: [lockEffect(KIMON_LOCK_TURNS)] };
     return { destroyed: true, thawed: false, locked: true };
 };
 

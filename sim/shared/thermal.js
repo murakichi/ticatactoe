@@ -4,7 +4,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.graft = exports.GRAFT_MAX = exports.budReceivers = exports.harvestBuds = exports.canBud = exports.activeBuds = exports.budStacks = exports.burnout = exports.burnoutTargets = exports.burnoutCostOf = exports.totalFlames = exports.BURNOUT_FREE_FLAMES = exports.decayParts = exports.decayTick = exports.infernoTargets = exports.INFERNO_STACKS = exports.INFERNO_COST = exports.detonate = exports.freezeAll = exports.infernoCostOf = exports.INFERNO_FREE_SKILLS = exports.FLAME_SKILL_KEYS = exports.reducedGlacierCost = exports.GLACIER_DAMAGE_PER_STACK = exports.GLACIER_BASE_COST = exports.cleanse = exports.ailmentStacks = exports.AILMENTS = exports.freeze = exports.canFreeze = exports.ignite = exports.zeroOut = exports.absorbDestroy = exports.applyDamage = exports.isEffectWarded = exports.setEffectWard = exports.burnDamageOf = exports.lockable = exports.emptyBlocked = exports.overwriteBlocked = exports.thawOne = exports.thaw = exports.isDormant = exports.flameStacks = exports.isFrozen = exports.frozenStacks = exports.FLAME_INSTANT_DAMAGE = exports.FLAME_SKILL_MULT = exports.PYROMANCER_EXTRA_BURN = exports.FLAME_BURN_DAMAGE = void 0;
 exports.shatter = exports.SHATTER_DAMAGE_PER_STACK = exports.FROSTFALL_MAX_LIFE = exports.leafFrostTargets = exports.fireWheel = exports.FIRE_WHEEL_COUNT = exports.fireWheelTargets = exports.kimon = exports.kimonTargets = exports.fireStacksTotal = exports.KIMON_LOCK_TURNS = exports.thunderFireVictims = exports.THUNDER_FIRE_MIN = exports.thawAll = exports.thawTargets = exports.frostfallTargets = exports.placeFrostToken = exports.randomFreezeCandidates = exports.sacrificeFlame = exports.sacrificeTargets = exports.canSacrifice = exports.placeFlameToken = exports.swidden = exports.autumn = exports.autumnTargets = exports.mulch = exports.mulchCandidates = exports.bonfire = exports.bonfireTargets = exports.placeLeafToken = exports.mogaribue = exports.canMogaribue = exports.mogaribueTargets = exports.mogaribueDamage = exports.MOGARIBUE_LIFE = exports.kindling = exports.kindlingTargets = exports.tinderTargets = exports.leafCloakTargets = exports.leafAllTargets = exports.leafDrop = exports.leafDropTargets = exports.witchCostOf = exports.boardLeaves = exports.leafSurcharge = exports.activeLeaves = exports.leafStacks = exports.sow = exports.SOW_COUNT = exports.sowCandidates = void 0;
 const Player_1 = require("./Player");
+const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
+const lock_1 = require("./lock");
 /** 火炎1スタックあたりの継続ダメージ */
 exports.FLAME_BURN_DAMAGE = 2;
 /** 煉獄の鍛冶師のパッシブ: 敵（持ち主以外）が火炎ダメージを受けるとき追加で与えるダメージ */
@@ -108,15 +110,22 @@ exports.zeroOut = zeroOut;
  * 氷結中のマスなら🔥は付かず代わりに❄が全スタック解除される。🔥が実際に付いたときは、そのマスの縦横隣の氷結が全スタック即座に解除される。
  * cells は先頭から順に処理する。氷結が減った/解けたマスを返す
  */
-const ignite = (board, cells, size, n = 1, keepBuds) => {
+const ignite = (board, cells, size, n = 1, keepBuds, immune) => {
     var _a;
     const thawed = new Set();
     for (const k of cells) {
+        if (immune === null || immune === void 0 ? void 0 : immune(board[k]))
+            continue; // 帯電中の雷霆の巫のコマには🔥が付かない
         for (let c = 0; c < n; c++) {
             if ((0, exports.isFrozen)(board[k])) {
                 board[k] = (0, exports.thaw)(board[k]); // 後から火炎を付けようとすると氷結は全スタック解除される（🔥は付かない）
                 thawed.add(k);
                 continue;
+            }
+            // 大木・枯れた大木は、🔥を付けられると即座に壊れて空きマスになる（氷結中は上の解凍で守られる）。そのマスにはそれ以上🔥を付けない
+            if ((0, ObjectKind_1.isTree)(board[k])) {
+                board[k] = { player: undefined, bind: 0, effects: [] };
+                break;
             }
             // 🔥が付くと🌱と🍂は燃えて消える（冬至の種子のガード中は🌱だけ消えない）。⚡☠は消えず、休眠もしない
             const guarded = (_a = keepBuds === null || keepBuds === void 0 ? void 0 : keepBuds(board[k])) !== null && _a !== void 0 ? _a : false;
@@ -146,11 +155,11 @@ exports.ignite = ignite;
 const canFreeze = (sq) => !hasLock(sq) && (0, exports.flameStacks)(sq) === 0;
 exports.canFreeze = canFreeze;
 /** 指定マスに❄を付ける（付けられないマスは飛ばす）。⚡は消さない。付いたマスを返す。board を直接書き換える */
-const freeze = (board, cells) => {
+const freeze = (board, cells, immune) => {
     const done = [];
     for (const k of cells) {
-        if (!(0, exports.canFreeze)(board[k]))
-            continue;
+        if (!(0, exports.canFreeze)(board[k]) || (immune === null || immune === void 0 ? void 0 : immune(board[k])))
+            continue; // 帯電中の雷霆の巫のコマには❄が付かない
         board[k] = { ...board[k], effects: [...board[k].effects, { effect: '❄' }] }; // 🌱は消えないが、氷結中は休眠する（activeBuds）
         done.push(k);
     }
@@ -193,7 +202,7 @@ exports.INFERNO_FREE_SKILLS = 3;
 const infernoCostOf = (baseCost, infernoReady, calc) => infernoReady ? 0 : calc(baseCost);
 exports.infernoCostOf = infernoCostOf;
 /** 絶対零度の使用時: 🔑のない全マス（空きマス含む）に❄を1スタック足す。付いたマスを返す。board を直接書き換える */
-const freezeAll = (board) => (0, exports.freeze)(board, board.map((_, i) => i));
+const freezeAll = (board, immune) => (0, exports.freeze)(board, board.map((_, i) => i), immune);
 exports.freezeAll = freezeAll;
 /**
  * 絶対零度の発動（使用者 me の次の手番開始時）: me 以外のコマのうち❄が付いているマスに、スタック数×3ダメージ
@@ -247,14 +256,14 @@ exports.infernoTargets = infernoTargets;
  * 氷結中は自然減衰と🔥の継続ダメージを受けず、毒は氷結を貫通する（🔥は消さない）。
  * 🔑の期限切れや毒で消えるコマの処理は呼び出し側（Game.tsx / sim/engine.js）が続けて行う。
  */
-const decayTick = (sq, chars) => (0, exports.decayParts)(sq, chars).sq;
+const decayTick = (sq, chars, natural = true) => (0, exports.decayParts)(sq, chars, natural).sq;
 exports.decayTick = decayTick;
 /** decayTick と同じ計算で、ライフが何でいくつ減ったかも返す(ダメージの表示用。減った量は実際に減った分で、0未満にはならない) */
-const decayParts = (sq, chars) => {
+const decayParts = (sq, chars, natural = true) => {
     let next = { ...sq, effects: [...sq.effects] };
     const parts = { natural: 0, burn: 0, poison: 0 };
-    if ((next.player || hasLock(next)) && next.bind > 0 && !(0, exports.isFrozen)(next)) {
-        next = { ...next, bind: next.bind - 1 };
+    if (next.player && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next) && natural) {
+        next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
         parts.natural = 1;
     }
     const burn = (0, exports.burnDamageOf)(next, chars);
@@ -621,7 +630,7 @@ const kimon = (board, cell) => {
         board[cell] = (0, exports.thawOne)(board[cell]);
         return { destroyed: false, thawed: true, locked: false };
     }
-    board[cell] = { player: undefined, bind: exports.KIMON_LOCK_TURNS, effects: [{ effect: '🔑' }] };
+    board[cell] = { player: undefined, bind: 0, effects: [(0, lock_1.lockEffect)(exports.KIMON_LOCK_TURNS)] };
     return { destroyed: true, thawed: false, locked: true };
 };
 exports.kimon = kimon;

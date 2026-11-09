@@ -43,6 +43,28 @@ describe('canPlaceAt / resolveMoveCell', () => {
     });
 });
 
+describe('ロックとランダム帯電トークンを同じ手番で撃つ計画（ロックの対象クリックを先に済ませる）', () => {
+    // makeMove の返り値を固定して、planAITurn が積むステップの順序だけを見る
+    const planWith = (result: Record<string, unknown>) => {
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], ['electrician', 'you']);
+        (ai as unknown as { makeMove: () => unknown }).makeMove = () => result;
+        return planAITurn(ai, input(emptyBoard(49), { characters: ['electrician', 'you'] }), () => 'ストンプ'); // 7×7（対象のマス36・40が実在する）
+    };
+    it('ロックのスキル→ロックの対象→トークン→着手の順に並べる（トークンの着地で対象が⚡無敵になる前にロックを済ませる）', () => {
+        const p = planWith({ move: 40, skills: ['onClickUseLock', 'onClickDoubleChargeToken'], lockTargets: [36] });
+        expect(p.kind).toBe('queue');
+        expect(p.kind === 'queue' && p.steps).toEqual(['onClickUseLock', 36, 'onClickDoubleChargeToken', 40]);
+    });
+    it('ロックの対象が無い計画や、ランダム帯電トークンを含まない計画は従来どおり（スキル→クリックの順）', () => {
+        const noLock = planWith({ move: 40, skills: ['onClickDoubleChargeToken'] });
+        expect(noLock.kind).toBe('queue'); // 従来: 撃ってから着手を選び直す
+        expect(noLock.kind === 'queue' && noLock.steps).toEqual(['onClickDoubleChargeToken', 'aiReplan']);
+        const noToken = planWith({ move: 40, skills: ['onClickUseLock'], lockTargets: [36] });
+        expect(noToken.kind).toBe('direct');
+        expect(noToken.kind === 'direct' && noToken.clicks).toEqual([36, 40]);
+    });
+});
+
 describe('一寸の虫に魂なし（ライフ3以下のコマを置けない）', () => {
     it('置けないときは着手せず、置くスキルも撃たず、チャージでパスする', () => {
         const ai = new AIPlayer('💙', 'you', ['⭕'], chars);
@@ -128,3 +150,22 @@ describe('AIPlayer が返すスキル名の実行側の対応', () => {
         expect(missing).toEqual([]);
     });
 });
+
+describe('雷霆の巫のランダム帯電トークン (#429)', () => {
+    it('撃ったあとに着地後の盤で着手を選び直す（計画の最後が aiReplan で、着手は積まない）', () => {
+        const chs: CharacterId[] = ['electrician', 'cryomancer'];
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 5, effects: [] };
+        b[0] = { player: '⭕', bind: 6, effects: [] };
+        b[12] = { player: '⭕', bind: 5, effects: [] };
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], chs);
+        const plan = planAITurn(ai, input(b, { characters: chs, magic: [9, 2], hand: [23, 22, 58], life: 5, seatCount: 2 }), () => 'onClickIgnite');
+        expect(plan.kind).toBe('queue');
+        if (plan.kind === 'queue') {
+            expect(plan.steps[plan.steps.length - 1]).toBe('aiReplan');
+            expect(plan.steps.some((st) => st === 'onClickDoubleChargeToken' || st === 'onClickChargeToken')).toBe(true);
+            expect(plan.steps.some((st) => typeof st === 'number')).toBe(false);
+        }
+    });
+});
+

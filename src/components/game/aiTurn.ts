@@ -10,10 +10,19 @@ import { SquareInfo } from '../../types/SquareInfo';
 import AIPlayer, { TURN_ENDING_SKILLS } from './AIPlayer';
 import { SkillCosts } from './skillCosts';
 import { placeBlocked, moveBlocked } from './lifeBan';
+import { isTakeProtected } from './decay';
 import { canFreeze, lockable, emptyBlocked, overwriteBlocked } from './thermal';
 import { isShielded } from './charge';
+import { lockBlocksPlacement } from './keysmith';
+import { isShikigami } from '../../util';
+
+/** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
+const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
 
 /** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
+/** 自分の式神を対象に撃つスキル（置いた式神がなければ撃てない） */
+const SHIKIGAMI_TARGET_SKILLS = new Set(['onClickShikigamiBlast', 'onClickShikigamiBless', 'onClickShikigamiCurse']);
+
 export type AIStep = string | number;
 
 export type AITurnInput = {
@@ -132,8 +141,13 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         // 帯電拡散→帯電付与などの『スキル→対象クリック』も、置くスキルは撃てない。対象クリックも一緒に外す
         if (result.chargeClicks) {
             const kept: typeof result.chargeClicks = [];
+            // 縛りで外した『式神を置く』クリックのあとの爆破・加護・呪詛は、盤面にもとからある自分の式神にしか撃てない
+            // （置く式神も、爆破で空きマスに生まれる式神も無いので、残すと対象が不正のまま手番が進まない）
+            let placeDropped = false;
+            const ownShiki = (t: number) => board[t].player === ai.playerSymbol && isShikigami(board[t]);
             for (const c of result.chargeClicks) {
-                if (placeBlocked(true, c.skill, input.tokenBind)) continue;
+                if (placeBlocked(true, c.skill, input.tokenBind)) { placeDropped = true; continue; }
+                if (placeDropped && c.target !== undefined && SHIKIGAMI_TARGET_SKILLS.has(c.skill) && !ownShiki(c.target)) continue;
                 kept.push(c);
             }
             result.chargeClicks = kept;
@@ -176,6 +190,21 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
     }
 
+    // 雷霆の巫のランダム帯電トークン(21/23)は着地位置が撃つまで分からない。撃ってから、着地後の盤で着手を選び直す (#429)
+    if (!result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        return { kind: 'queue', steps: [...result.skills, 'aiReplan'], locks };
+    }
+
+    // ロックとランダム帯電トークンを同じ手番で撃つ計画は、ロックの対象クリックを先に済ませる。
+    // 『スキルを全部撃ってから対象クリック』の順だと、トークンの着地で対象の自コマが⚡無敵になり、ロックが拒否されて『ロック待ち』が残り、
+    // 次の着手がロックの対象として消費されて手番が進まなくなる。sim/engine.js の skillCosts にキーを足すと価格破壊の乱数表が変わって露呈した (#439)
+    if (result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        const isLockSkill = (sk: string) => sk.startsWith('onClickUse') && sk.endsWith('Lock');
+        const steps: AIStep[] = [...result.skills.filter(isLockSkill), ...result.lockTargets, ...result.skills.filter((sk) => !isLockSkill(sk))];
+        if (result.move !== null) steps.push(result.move);
+        return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
+    }
+
     const clicks: number[] = [];
     if (result.lockTargets) clicks.push(...result.lockTargets);
     if (result.stompTarget !== undefined) clicks.push(result.stompTarget);
@@ -189,8 +218,8 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
 export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, character: CharacterId, characters: readonly CharacterId[]): boolean => {
     const sq = board[cell];
     if (isShielded(sq, characters)) return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
-    if (sq.player && sq.player !== player && sq.bind > 0 && character !== 'giant') return false; // ライフの残った敵コマは巨人しか奪えない
-    if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0) return false; // ロック中
+    if (sq.player && sq.player !== player && (sq.bind > 0 || isTakeProtected(sq, characters)) && character !== 'giant') return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
+    if (lockBlocksPlacement(sq, character)) return false; // ロック中（鍵師は空きマスのロックを無視できる）
     if (emptyBlocked(sq)) return false; // 氷結中の空きマス
     if (sq.player === player && overwriteBlocked(sq)) return false; // 氷結中の自コマには重ねられない
     return true;
@@ -201,9 +230,11 @@ export const canPlaceAt = (board: SquareInfo[], cell: number, player: Player, ch
  * ⚡付き自陣コマが無敵で触れない、などで着手できなくなると、クリックが無視されて手番が進まず止まる。
  * 打てるならそのまま cell を、打てなければ今の盤面で打ち直した手を返す。打てる手が無ければ null（呼び出し側はチャージでパスする）。
  */
-export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false): number | null => {
+export const resolveMoveCell = (ai: AIPlayer, board: SquareInfo[], characters: readonly CharacterId[], life: number, cell: number, lifeBan: boolean = false, soloBlock: boolean = false): number | null => {
     if (moveBlocked(lifeBan, life)) return null; // ライフ3以下のコマを置けない縛り: 打てる手は無いのでチャージでパスする
+    if (soloBlock && !board[cell].player) return null; // お一人様限りの札: この手番はもう空きマスに新しいコマを置けない（チャージでパスする）
     if (canPlaceAt(board, cell, ai.playerSymbol, ai.character, characters)) return cell;
     ai.updateShield(board);
-    return ai.getBestMove(board, life);
+    const alt = ai.getBestMove(board, life);
+    return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };

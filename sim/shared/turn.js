@@ -11,6 +11,7 @@ const lateMagic_1 = require("./lateMagic");
 exports.MAGIC_BONUS_CHARACTERS = ['magician', 'cryomancer', 'witch'];
 /** 手番開始時の魔力（増殖の維持コストを払う前）。標準は+1に、長期戦ボーナス・自陣の🌱・キャラ補正・ギアを足す */
 const turnStartMagic = (i) => {
+    var _a;
     let next = i.magic + 1 + (0, lateMagic_1.lateMagicBonus)(i.turn, i.seatCount) + i.buds;
     if (exports.MAGIC_BONUS_CHARACTERS.includes(i.character))
         next++;
@@ -22,7 +23,7 @@ const turnStartMagic = (i) => {
     next += i.garden;
     if (i.standBonus)
         next += gear_1.GEAR_PARAMS.lastStandMagic;
-    return next + i.scorch + i.root;
+    return next + i.scorch + i.root + ((_a = i.objects) !== null && _a !== void 0 ? _a : 0);
 };
 exports.turnStartMagic = turnStartMagic;
 /** 増殖(ループ召喚)の調整値。sim は A/B 検証用に config.proliferate で上書きできる */

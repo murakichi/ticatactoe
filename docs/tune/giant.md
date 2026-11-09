@@ -1,8 +1,9 @@
 # tune-top: giant
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 81ad8ce
+- 最後に検証したmaster: edb9fff（2026-10-28 再検証。順位のみ測定。blocked の前提は変わらず）
 - 現在の推奨設定: gears=[lastStand, sturdy] deck=[0,1,2,3,5,6,8,11,12,13,27,28] AIフラグ=stompMin=1,stompDef=1,auraSim=1(既定)
-- 基準線: 環境勝率 50.9% / 6位 / 1位 poisoner 70.7%, 2位 magician 56.4%   (--rank seed=3 games=100, master 取り込み後)
+- 基準線: 環境勝率 41.7% / 9位(11キャラ中) / 1位 witch 68.1%, 2位 poisoner 62.6%   (--rank --target giant --gears lastStand,sturdy seed=3 games=100, master edb9fff)
+  - 旧基準線(81ad8ce): 50.9% / 6位 / 1位 poisoner 70.7%
 - 連続不採用回数: 1
 - 状態: blocked(issue #97)。魔力+1とストンプ2の併用で1位になる上限実験の結果あり(台帳#26)。ルール数値の変更なのでオーナー判断待ち。本体には入れていない（#201 を revert 済み）
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
@@ -36,3 +37,8 @@
 - メタ: 対 electrician / tactician も同様に `--opp` で測れる
 - joint(次): `--gears priceWreck,sturdy --scan deck`
 - メタ: 対 cryomancer / electrician / tactician
+
+## シナジー精査: オブジェクト（2026-11-05, master bdb9fff。play-learn の検討）
+- 機構: 巨人は2ターンに1回しか動けず魔力が少ない。オブジェクトは巨人の休み手番にも働き、砦（周囲の自陣のライフ+1）は殴られても残るコマを作る可能性があった。候補は大木(105, +3/手番)・招き猫(123, 全スキル-1)・砦(108)。
+- 上限実験（`sim/probe-object.js` を『魔力がコスト+4』の条件なしに複製、`RES=0`, 最大1個, 60試合×4相手 cryomancer/tactician/witch/magician/yinYangMaster）: 基準 38.2 / 大木 30.6(-7.6) / 招き猫 34.0(-4.2) / 砦 31.0(-7.2)。条件付き（コスト+4）のツールでは巨人の魔力が足りず、ほぼ置かれず 基準と同じ数字になる（注意）。
+- 判断: **不採用**。巨人は魔力が少なく、設置の出費（5〜8）が試合の大半を占める。

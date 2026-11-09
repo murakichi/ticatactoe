@@ -68,6 +68,8 @@ exports.skillCosts = {
     onClickInferno: 7,
     // 凩の魔女の固有スキル 虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣のライフ+2。sim/engine.js の onClickMogaribue と一致させること
     onClickMogaribue: 7,
+    // 鍵師の固有スキル 封鎖の断（#439）: 自陣7・空きマス2のロック、敵陣のロックを解除して解除数ぶんダメージ。ターン終了。敵陣のロックの数だけ軽減（下限5, keysmith.ts の sealBaseCost）
+    onClickSeal: 10,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
@@ -90,7 +92,6 @@ exports.skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts
@@ -139,7 +140,42 @@ exports.skillCosts = {
     onClickGraveOffering: 2,
     onClickPerfectGame: 10,
     onClickHelper: 3,
-    onClickSecondCatch: 6, //    柳の下に二匹目がいた(idx 104): 自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動する。この手番に基礎コスト7以上のスキルを使っていれば0（コンボ型の導線）
+    onClickSecondCatch: 6,
+    // オブジェクト（objects.ts）。空きマスを選んで設置する。基準は docs/skill-cost-rules.md の「オブジェクトの算出」
+    onClickBigTree: 8,
+    onClickDeadTree: 5,
+    onClickSpring: 5,
+    onClickFort: 6,
+    onClickThundercloud: 5,
+    onClickMarket: 3,
+    onClickSanctuary: 5,
+    onClickPoisonSwamp: 5,
+    onClickBoltSilence: 4,
+    // オブジェクトを壊す・強くするスキル(idx 114〜119)。基準は docs/skill-cost-rules.md の「オブジェクトを壊す・強くするスキル」
+    onClickDemolish: 4,
+    onClickWeather: 3,
+    onClickLevelAll: 8,
+    onClickReinforce: 3,
+    onClickExpandAll: 4,
+    onClickDuplicate: 6,
+    onClickWorkshop: 6,
+    onClickBarrierStone: 4,
+    onClickAmuletShrine: 6,
+    // 相手を縛るオブジェクト・招き猫・八卦の陣(idx 123〜129)。基準は docs/skill-cost-rules.md の「縛りのオブジェクト」
+    onClickLuckyCat: 5,
+    onClickMudField: 5,
+    onClickTongueKing: 5,
+    onClickEightTrigrams: 8,
+    onClickSoloSign: 5,
+    onClickOneWord: 6,
+    onClickBlindMonkey: 5,
+    // 鍵師向けの汎用スキル（#439, idx 130〜133）。コストは docs/skill-cost-rules.md の基準から（日記 2026-11-06）
+    onClickLockRaid: 4,
+    onClickLockExtend: 5,
+    onClickLockBlessing: 4,
+    onClickVacantSeal: 10,
+    onClickLockConvert: 4,
+    onClickLockDiscount: 1, //    錠前割引(idx 135・ユーザー提案): 盤面のロックのマスの数だけ、このターンの全スキルを軽減。使った時点の数で固定。春一番(turn軽減)と同型。軽減札は基準で1〜3（特売3・大特価7は次の1スキルのみ）、このターン全体に効くが条件（ロックが場に要る）があるので1
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

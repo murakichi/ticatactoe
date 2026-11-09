@@ -1,8 +1,10 @@
 // 自動生成: src/util.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.findEmptyIndexes = exports.range = exports.normRand = exports.randomAnyPick = exports.randomPick = exports.calculateWinner = exports.lifeMeanOf = exports.calculateLife = exports.lineSymbols = exports.isShikigami = exports.LIFE_STD = exports.LIFE_MEANS = void 0;
+exports.findEmptyIndexes = exports.range = exports.normRand = exports.randomAnyPick = exports.randomPick = exports.calculateWinner = exports.lifeMeanOf = exports.calculateLife = exports.lineSymbols = exports.isObject = exports.isShikigami = exports.LIFE_STD = exports.LIFE_MEANS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
+const ObjectKind_1 = require("./ObjectKind");
+Object.defineProperty(exports, "isObject", { enumerable: true, get: function () { return ObjectKind_1.isObject; } });
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
  * ここが唯一の出典で、キャラ選択画面の説明文もこの値を参照する（説明文と実装のズレ防止 / issue #13）。
@@ -17,6 +19,7 @@ exports.LIFE_MEANS = {
     cryomancer: 4,
     pyromancer: 6,
     witch: 4,
+    keysmith: 4,
     default: 5,
 };
 exports.LIFE_STD = 3;
@@ -43,8 +46,8 @@ const isShikigami = (sq) => {
     return false;
 };
 exports.isShikigami = isShikigami;
-/** 列判定用のシンボル配列（式神はコマ無し扱い） */
-const lineSymbols = (board) => board.map((x) => (isShikigami(x) ? undefined : x.player));
+/** 列判定用のシンボル配列（式神・オブジェクトはコマ無し扱い） */
+const lineSymbols = (board) => board.map((x) => (isShikigami(x) || (0, ObjectKind_1.isObject)(x) ? undefined : x.player));
 exports.lineSymbols = lineSymbols;
 const calculateWinner = (squares) => {
     const lines = (0, boardGeometry_1.geometryForCells)(squares.length).winLines;
