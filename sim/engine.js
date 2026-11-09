@@ -666,6 +666,15 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
+    if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
+        const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
+        if (victims.length > 0) {
+            for (const k of victims) s.board[k] = newSquare();
+            addCorpses(s, victims.length);
+            bumpStat(s, 'reaperKill', victims.length);
+        }
+    }
     // 膠着の打開(本番 deadlock.ts): 着手が何周も無いと氷結とロックが一段解ける
     if (!s.deadlock || s.deadlock.placements !== s.placements) s.deadlock = { placements: s.placements, turn: s.currentTurn };
     else if (deadlockMod.isDeadlocked(s.currentTurn, s.deadlock.turn, seatCount(s))) {

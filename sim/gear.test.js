@@ -579,6 +579,40 @@ test('雪だるま: 長い試合では平均ライフが装備なしより高い
     assert.ok(avg([['snowball'], []]) > avg([[], []]) + 0.5);
 });
 
+test('死神の鎌: ライフ平均+2 / 誰かが装備していれば、ライフ0の駒(誰のものでも)が手番の終わりに壊れる', () => {
+    assert.strictEqual(gear.gearLifeBonus(['reaper']), 2);
+    const run = (gears) => {
+        const s = game(gears);
+        s.board[5] = { player: H, bind: 0, effects: [] }; // 自分のライフ0の駒
+        s.board[6] = { player: C, bind: 0, effects: [] }; // 相手のライフ0の駒
+        s.board[9] = { player: C, bind: 0, effects: [{ effect: '🔑', stack: 3 }] }; // ロック中は壊れない
+        s.board[10] = { player: C, bind: 0, effects: [{ effect: '❄' }] }; // 氷結中は壊れない
+        s.board[11] = { player: C, bind: 5, effects: [] }; // ライフが残っている駒は壊れない
+        e.placeMove(s, 0);
+        return s;
+    };
+    const s = run([[], ['reaper']]); // ⭕だけが装備していても、💙の駒も壊れる
+    assert.strictEqual(s.board[5].player, undefined);
+    assert.strictEqual(s.board[6].player, undefined);
+    assert.strictEqual(s.board[9].player, C, 'ロック中は壊れない');
+    assert.strictEqual(s.board[10].player, C, '氷結中は壊れない');
+    assert.strictEqual(s.board[11].player, C);
+    const t = run([[], []]);
+    assert.strictEqual(t.board[6].player, C, 'ギアなしなら残る');
+});
+
+test('死神の鎌: ⚡で無敵の雷霆の巫の駒は壊れない / 勝負が付いた手番は壊さない', () => {
+    const s = e.newGame({ chars: ['you', 'electrician'], gears: [[], ['reaper']], rng: e.makeRng(42) });
+    s.board[5] = { player: C, bind: 0, effects: [{ effect: '⚡' }] };
+    e.placeMove(s, 0);
+    assert.strictEqual(s.board[5].player, C);
+    const w = game([[], ['reaper']]);
+    [0, 1, 2].forEach((i) => { w.board[i] = { player: H, bind: 0, effects: [] }; });
+    e.placeMove(w, 3); // 💙が4つ揃える
+    assert.strictEqual(w.winner, H);
+    assert.strictEqual(w.board[0].player, H, '勝負が付いたら壊さない');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

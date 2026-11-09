@@ -7,7 +7,7 @@ import { randomAnyPick, range, calculateWinner, isShikigami, lineSymbols, findEm
 import AIPlayer, { TURN_ENDING_SKILLS, MAX_REROLLS, rerollBudget } from './AIPlayer';
 import { planAITurn, resolveMoveCell } from './aiTurn';
 import { breakDeadlock, isDeadlocked } from './deadlock';
-import { advanceGearState, gearCostContext, noteSkillUsed } from './gearTurn';
+import { advanceGearState, gearCostContext, lifeZeroVictims, noteSkillUsed } from './gearTurn';
 import { applyLockAt, propagate as propagateEffect } from './tokenAfter';
 import { BLESSING_STACK, BLESSING_TURNS, LOCK_EXTEND_STACK, SEAL_EMPTY_STACK, SEAL_MIN_COST, SEAL_OWN_STACK, VACANT_SEAL_REACH_CUT, VACANT_SEAL_STACK, blessPlacedPiece, blessingActive, lockBlocksPlacement, lockConvert, lockConvertCells, lockExtend, lockedSquareCount, lockExtendCells, lockRaid, lockRaidCells, opponentReaches, seal, sealBaseCost, sealReleaseCells, vacantSeal, vacantSealBaseCost, vacantSealCells } from './keysmith';
 import { turnStartMagic, NECROMANCY, PROLIFERATE, proliferateUpkeep } from './turn';
@@ -232,6 +232,7 @@ export const Game = (props: GameProps) => {
     // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
     const lastStandUsed = useRef<boolean[]>(Array<boolean>(seatCount).fill(false));
     const [lastStandSaves, setLastStandSaves] = useState<number>(0);
+    const [reaperSweeps, setReaperSweeps] = useState<number>(0); // 死神の鎌でコマが壊れた回数（AIの手番の効果を、盤面が変わったあとにやり直すため）
     const lastStandActiveAgainst = (seat: number): boolean => lastStandUsed.current.some((used, holder) => used && holder !== seat);
     // 勝者 w に対して発動できる土壇場の防壁の持ち主（未使用・w 以外）。いなければ -1
     const lastStandHolderFor = (w: Player): number =>
@@ -684,7 +685,7 @@ export const Game = (props: GameProps) => {
 
         return () => clearTimeout(timer);
         // currentTurn も依存に含める: 巨人のスキップで turnSeat が変わらず同じ席が連続手番になる場合でも再発火させる
-    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves]);
+    }, [turnSeat, currentTurn, restartCount, autoPlay, lastStandSaves, reaperSweeps]);
 
     // 「次の手番」ボタン押下でAI同士の対戦を1ターン進める
     useEffect(() => {
@@ -1046,6 +1047,22 @@ export const Game = (props: GameProps) => {
         setLife(nextLife > 0 ? nextLife : 1);
         setUseToken(false);
         setTurnSeat(nextSeat);
+    }, [currentTurn]);
+
+    // 死神の鎌: ライフ0の駒を手番の終わりに壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
+    useEffect(() => {
+        if (currentTurn === 1) return;
+        if (calculateWinner(currentBoard.map((x) => x.player))) return;
+        const victims = lifeZeroVictims(currentBoard, characters, gearsBySeat);
+        if (victims.length === 0) return;
+        const board = currentBoard.slice();
+        for (const k of victims) board[k] = { player: undefined, bind: 0, effects: [] };
+        setCurrentBoard(board);
+        addCorpses(victims.length);
+        addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
+        gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        flashCells(victims);
+        setReaperSweeps((c) => c + 1);
     }, [currentTurn]);
 
     useEffect(() => {

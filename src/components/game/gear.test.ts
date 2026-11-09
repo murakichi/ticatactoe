@@ -35,6 +35,7 @@ import {
     rampAfterRoll,
 } from './gear';
 import { skillCosts } from './skillCosts';
+import { lifeZeroVictims } from './gearTurn';
 
 const ctx = (skillsThisTurn = 0, echoReady = false, ailments = 0, ruin = false) => ({ skillsThisTurn, echoReady, ailments, ruin });
 
@@ -353,5 +354,17 @@ describe('普請道楽（オブジェクトのギア）', () => {
     it('ギアを持たない席には何も起きない。壊す・強くするスキルは設置ではないので-2の対象外', () => {
         expect(adjustCostByGear(8, [], own, false, 'onClickBigTree')).toBe(8);
         expect(adjustCostByGear(6, ['buildMania'], none, false, 'onClickDuplicate')).toBe(6);
+    });
+});
+
+describe('死神の鎌（ライフ0の駒を壊す）', () => {
+    const sq = (player: '💙' | '⭕' | undefined, bind: number, ...effects: string[]) => ({ player, bind, effects: effects.map((effect) => ({ effect })) } as never);
+    const chars = ['you', 'electrician'] as const;
+
+    it('誰かが装備していれば、誰の駒でもライフ0を壊す。氷結・ロック・⚡無敵・ライフありは壊さない', () => {
+        const board = [sq('💙', 0), sq('⭕', 0), sq('⭕', 0, '🔑'), sq('⭕', 0, '❄'), sq('⭕', 0, '⚡'), sq('💙', 3), sq(undefined, 0)];
+        expect(lifeZeroVictims(board, chars, [[], ['reaper']])).toEqual([0, 1]);
+        expect(lifeZeroVictims(board, chars, [[], []])).toEqual([]);
+        expect(gearLifeBonus(['reaper'])).toBe(2);
     });
 });

@@ -39,7 +39,8 @@ export type GearId =
     | 'conduction'
     | 'spellWard'
     | 'buildMania'
-    | 'snowball';
+    | 'snowball'
+    | 'reaper';
 
 export const GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
@@ -102,6 +103,8 @@ export const GEAR_PARAMS = {
     rampStep: 1,
     rampHighLife: 10,
     rampResetHits: 3,
+    /** 死神の鎌: 自陣のライフ期待値への加算 */
+    reaperLife: 2,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -136,6 +139,7 @@ export const GEARS: GearDef[] = [
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `最初は+0から、自分の手番ごとにライフの期待値が+${P.rampStep}ずつ積み上がる。${P.rampHighLife}以上のライフが${P.rampResetHits}回出たら、積み上げがリセットされる` },
+    { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `自陣のライフ期待値+${P.reaperLife}。プレイヤーを問わず、ライフ0になった駒は手番の終わりに自動で破壊される（氷結・ロック・雷霆の帯電状態の駒は壊れない）` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
@@ -151,7 +155,7 @@ export const hasGear = (gears: Gears, id: GearId): boolean => !!gears && gears.i
 
 /** ライフ平均への加算（頑健 / 剛腕の代償） */
 export const gearLifeBonus = (gears: Gears): number =>
-    (hasGear(gears, 'sturdy') ? P.sturdyLife : 0) + (hasGear(gears, 'titanCost') ? P.titanLife : 0);
+    (hasGear(gears, 'sturdy') ? P.sturdyLife : 0) + (hasGear(gears, 'titanCost') ? P.titanLife : 0) + (hasGear(gears, 'reaper') ? P.reaperLife : 0);
 
 /** ライフ値の標準偏差。賭博師の骰子があれば広がる */
 export const gearLifeStd = (gears: Gears, base: number): number => (hasGear(gears, 'gambler') ? P.gamblerStd : base);
