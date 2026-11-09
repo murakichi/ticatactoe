@@ -1,5 +1,6 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { BurstType } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
 import { lifeZeroVictims } from './gearTurn';
@@ -24,6 +25,7 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface TurnEffectsScope {
+    playBurst: (type: BurstType, cells: number[]) => void;
     setSkillBanAt: (seat: number, value: { mode: "max" | "min"; n: number; } | ((prev: { mode: "max" | "min"; n: number; } | null) => { mode: "max" | "min"; n: number; } | null) | null) => void;
     setReaperSweeps: React.Dispatch<React.SetStateAction<number>>;
     rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
@@ -78,7 +80,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt } = g;
+    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -215,6 +217,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
                     addLog(`春雷が${thawed.map(posName).join('・')}の❄を1つ解いた`);
                     flashCells(thawed);
                     gearTrigger('springThunder', `${thawed.map(posName).join('・')}の❄を解く`);
+                    playBurst('gearThunder', thawed);
                 }
             }
             // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（objects.ts。魔力とライフの分は下の手番開始の計算に足す）
@@ -327,6 +330,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         late().addCorpses(victims.length);
         addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
         gearTrigger('reaper', `${victims.length}コマが壊れた`);
+        playBurst('gearReap', victims);
         flashCells(victims);
         setReaperSweeps((c) => c + 1);
     }, [currentTurn]);

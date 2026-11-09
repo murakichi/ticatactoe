@@ -1,5 +1,6 @@
 // Game.tsx から切り出したハンドラ群: ログのコピー・保存、設定画面に戻る、再スタート
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { DamageEffect } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
 import { GearId } from './gear';
@@ -16,6 +17,8 @@ import { PendingMode } from './pendingMode';
 import { GameLate } from './gameLate';
 
 export interface GameControlsScope {
+    damageHints: React.MutableRefObject<Map<number, { icon?: string | undefined; amount: number; }[]>>;
+    setBoardDamage: React.Dispatch<React.SetStateAction<DamageEffect | null>>;
     setSkillBanAll: React.Dispatch<React.SetStateAction<({ mode: "max" | "min"; n: number; } | null)[]>>;
     rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
     gearsBySeat: GearId[][];
@@ -74,7 +77,7 @@ export interface GameControlsScope {
     rollPriceTables: () => (SkillCosts | null)[];
 }
 export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
-    const { geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll } = g;
+    const { geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
 
 
     const buildLogText = (): string => {
@@ -160,6 +163,8 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
         setPreviewCells([]);
         setBoardEffect(null);
         setBoardBurst(null);
+        setBoardDamage(null);
+        damageHints.current = new Map();
         setLockedSkillsAll(Array.from({ length: seatCount }, () => []));
         // ギア: 手番内のスキル使用状況をリセットし、価格破壊のコスト表を引き直す
         gearTurn.current = {

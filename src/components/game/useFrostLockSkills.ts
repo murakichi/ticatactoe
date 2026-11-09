@@ -272,7 +272,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         const n = lockedSquareCount(currentBoard);
         if (n === 0) return;
         addLog(`「錠前割引」を使用（ロックのマス${n}個・このターンのスキル-${n}）`);
-        playEffect('discount', undefined, undefined, '錠前割引');
+        playEffect('lockDiscount');
         spendMagic(late().calculateCost(seatCosts.onClickLockDiscount, false, false, currentTurnPlayer, 'onClickLockDiscount'), true, true, 'onClickLockDiscount');
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, turn: d.turn + n };
@@ -289,7 +289,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         const gained = lockConvert(board, i);
         addLog(`${posName(i)}のロックを解除し、ライフ+${gained}`);
         flashCells([i]);
-        playEffect('lock', i, [i], '錠の転換');
+        playEffect('lockConvert', i, [i]);
         setUseLockConvert(false);
         setCurrentBoard(board);
         setLife(life + gained);
@@ -344,7 +344,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         addLog(`「飛び火」を使用（${picks.map(posName).join('・')}に🔥）`);
         if (thawed.length > 0) addLog(`氷結が溶けた（${thawed.map(posName).join('・')}）`);
         flashCells(picks);
-        playEffect('flame', undefined, picks, '飛び火');
+        playEffect('sparkJump', undefined, picks);
         playBurst('thaw', thawed);
         setCurrentBoard(board);
         spendMagic(late().calculateCost(seatCosts.onClickSpark, false, false, currentTurnPlayer, 'onClickSpark'), true, true, 'onClickSpark');
@@ -411,7 +411,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         const r = seal(board, currentTurnPlayer, characters);
         addLog(`「封鎖の断」を使用（自陣${r.own.length}・空き${r.empty.length}マスをロック、敵のロック${r.released.length}個を解除して敵${r.hit.length}コマに${r.damage}ダメージ・ターン終了）`);
         flashCells(r.hit);
-        playEffect('lock', undefined, [...r.own, ...r.empty], '封鎖の断');
+        playEffect('sealBreak', undefined, [...r.own, ...r.empty]);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickSeal');
         setCurrentTurn(currentTurn + 1);
@@ -425,7 +425,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         gearTurn.current.lockPrev[turnSeat] = false; // 無料で撃てるのは1手番に1回まで
         addLog(`「錠前荒らし」を使用（${posName(r.cell)}のロックを解除して${r.effect}を付与）`);
         flashCells([r.cell]);
-        playEffect('lock', r.cell, [r.cell], '錠前荒らし');
+        playEffect('lockRaid', r.cell, [r.cell]);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickLockRaid');
     };
@@ -437,7 +437,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         if (cells.length === 0) return;
         addLog(`「ロックの増築」を使用（自陣${cells.length}コマのロック+${LOCK_EXTEND_STACK}）`);
         flashCells(cells);
-        playEffect('lock', undefined, cells, 'ロックの増築');
+        playEffect('lockExtend', undefined, cells);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickLockExtend');
     };
@@ -446,7 +446,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         gearTurn.current.blessing[turnSeat] = BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
         gearTurn.current.blessingFresh[turnSeat] = true;
         addLog(`「施錠の加護」を使用（${BLESSING_TURNS}手番の間、設置したコマに🔑${BLESSING_STACK}）`);
-        playEffect('auraGreen');
+        playEffect('lockBlessing');
         spendMagic(late().calculateCost(seatCosts.onClickLockBlessing, false, false, currentTurnPlayer, 'onClickLockBlessing'), true, true, 'onClickLockBlessing');
     };
     // 空き家封じ（汎用 idx 133）: 空きマス全てを2スタックでロック（ターンは続く）。相手のリーチ1つにつきコスト-3
@@ -459,7 +459,7 @@ export const useFrostLockSkills = (g: FrostLockSkillsScope, late: () => GameLate
         if (cells.length === 0) return;
         addLog(`「空き家封じ」を使用（空きマス${cells.length}マスを${VACANT_SEAL_STACK}ターンロック）`);
         flashCells(cells);
-        playEffect('lock', undefined, cells, '空き家封じ');
+        playEffect('vacantSeal', undefined, cells);
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickVacantSeal');
     };

@@ -199,7 +199,7 @@ export const useBlastSkills = (g: BlastSkillsScope, late: () => GameLate) => {
         setUseBoltSilence(left);
         if (left === 0) {
             addLog(`${posName(i)}の⚡を払い切った。相手は次の手番スキルを使えない`);
-            playEffect('silence');
+            playEffect('boltSilence', i);
             otherSeats(turnSeat).forEach((seat) => setSilencedAt(seat, true));
         } else {
             addLog(`${posName(i)}の⚡1個を払った（あと${left}個）`);

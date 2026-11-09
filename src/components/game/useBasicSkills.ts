@@ -131,7 +131,10 @@ export const useBasicSkills = (g: BasicSkillsScope, late: () => GameLate) => {
     // 置いたあとのギア処理（道連れの鍵・伝播）の結果をログ・演出にする
     const reportAfter = (idx: number, effect: TokenEffect | undefined, r: TokenAfterResult | null) => {
         if (!r) return;
-        if (r.seeded) gearTrigger('budSeed', 'バッズ付きで設置');
+        if (r.seeded) {
+            gearTrigger('budSeed', 'バッズ付きで設置');
+            playBurst('gearSeed', [idx]);
+        }
         if (r.locked) {
             addLog(`道連れの鍵: ${posName(idx)}にロックが付いた`);
             gearTrigger('bindingLock', 'ロック付与');

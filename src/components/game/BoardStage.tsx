@@ -4,7 +4,7 @@ import styles from './Game.module.css';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Board } from './Board';
-import { BoardEffects, SkillEffect, BurstEffect } from './BoardEffects';
+import { BoardEffects, SkillEffect, BurstEffect, DamageEffect } from './BoardEffects';
 import { VictoryEffect } from './VictoryEffect';
 import { GearToast, GearToasts } from './GearToasts';
 
@@ -25,6 +25,8 @@ export interface BoardStageProps {
     onCellLeave: () => void;
     effect: SkillEffect | null;
     burst: BurstEffect | null;
+    /** コマが受けたダメージの表示（赤字の -n） */
+    damage: DamageEffect | null;
     winner?: Player;
     /** 勝者の席 */
     winnerSeat: number;
@@ -48,7 +50,7 @@ export const BoardStage = (p: BoardStageProps) => (
             onCellHover={p.onCellHover}
             onCellLeave={p.onCellLeave}
         />
-        <BoardEffects effect={p.effect} burst={p.burst} size={p.size} />
+        <BoardEffects effect={p.effect} burst={p.burst} damage={p.damage} size={p.size} />
         {p.winner && <VictoryEffect key={p.winner} winner={p.winner} seat={p.winnerSeat} />}
         <GearToasts toasts={p.gearToasts} />
         {p.hailMarySpin && (

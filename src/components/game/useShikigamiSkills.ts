@@ -81,7 +81,8 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         const r = runObjectSkill(skill, board, currentTurnPlayer, characters, -1) as NonNullable<ReturnType<typeof runObjectSkill>>;
         addLog(`「${def.name}」を使用（${skill === 'levelAll' ? `${r.destroyed.length}個のオブジェクトを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}` : `自陣${r.affected.length}個のオブジェクトのライフ+2`}）`);
         flashCells([...r.destroyed, ...r.blocked, ...r.affected]);
-        playEffect(skill === 'levelAll' ? 'tsunami' : 'heal', undefined, [...r.destroyed, ...r.blocked, ...r.affected], def.name);
+        if (skill === 'levelAll') playEffect('levelAll', undefined, [...r.destroyed, ...r.blocked, ...r.affected]);
+        else playEffect('expandAll', undefined, [...r.destroyed, ...r.blocked, ...r.affected]);
         setCurrentBoard(board);
         pay();
     };
@@ -93,7 +94,11 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         if (!r) return; // 対象でないマスは選び直せる
         addLog(`${posName(i)}に「${def.name}」${r.destroyed.length > 0 ? '（破壊）' : r.blocked.length > 0 ? '（氷結が身代わり）' : ''}`);
         flashCells([i, ...r.destroyed, ...r.blocked, ...r.affected]);
-        playEffect(objectTool === 'reinforce' ? 'heal' : objectTool === 'duplicate' ? 'token' : 'tsunami', i, [i, ...r.affected], def.name);
+        const toolCells = [i, ...r.affected];
+        if (objectTool === 'demolish') playEffect('demolish', i, toolCells);
+        else if (objectTool === 'weather') playEffect('weather', i, toolCells);
+        else if (objectTool === 'reinforce') playEffect('reinforce', i, toolCells);
+        else playEffect('duplicate', i, toolCells);
         setObjectTool(null);
         setCurrentBoard(board);
     };
@@ -112,7 +117,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         sweepBurntTrees(board);
         addLog(`${posName(i)}に${OBJECT_DEFS[objectPlacing].name}を設置`);
         flashCells([i]);
-        playEffect('token', i, [i], OBJECT_DEFS[objectPlacing].name);
+        playEffect('buildObject', i, [i], OBJECT_DEFS[objectPlacing].name, { variant: objectPlacing });
         setObjectPlacing(null);
         setObjectTool(null);
         setCaptureChoice(null);

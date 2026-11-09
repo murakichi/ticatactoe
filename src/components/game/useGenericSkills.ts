@@ -159,7 +159,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         const pay = late().calculateCost(seatCosts.onClickNightVeil, false, false, currentTurnPlayer, 'onClickNightVeil');
         otherSeats(turnSeat).forEach((seat) => { gearTurn.current.veilNext[seat] = true; });
         addLog('「夜の帳」を使用（次の相手の手番の間、相手のスキルのコスト+3）');
-        playEffect('discount', undefined, undefined, '夜の帳');
+        playEffect('nightVeil');
         spendMagic(pay, true, true, 'onClickNightVeil');
     };
     // 弔い割引(idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
@@ -171,7 +171,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         spendMagic(late().calculateCost(seatCosts.onClickGraveDiscount, false, false, currentTurnPlayer, 'onClickGraveDiscount'), true, true, 'onClickGraveDiscount');
         const d = gearTurn.current.discount[turnSeat];
         gearTurn.current.discount[turnSeat] = { ...d, next: d.next + n };
-        playEffect('discount', undefined, undefined, '弔い割引');
+        playEffect('graveDiscount');
     };
     // 毒返しの構え(idx 100): 3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊/乗っ取られたらライフ4・☠付きの自陣コマを置く（置く処理は手番が変わるときの advanceGearState の結果から）
     const onClickPoisonWard = () => {
@@ -179,7 +179,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         gearTurn.current.ward[turnSeat] = POISON_WARD_TURNS;
         gearTurn.current.wardFresh[turnSeat] = true;
         addLog(`「毒返しの構え」を使用（${POISON_WARD_TURNS}手番の間、自陣が破壊/乗っ取られたら毒付きのコマを置く）`);
-        playEffect('token', undefined, undefined, '毒返しの構え');
+        playEffect('poisonWard');
         spendMagic(late().calculateCost(seatCosts.onClickPoisonWard, false, false, currentTurnPlayer, 'onClickPoisonWard'), true, true, 'onClickPoisonWard');
     };
 
@@ -190,7 +190,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         if (r.destroyed.length > 0) addCorpses(r.destroyed.length);
         addLog(`「パーフェクトゲーム」を使用（${r.destroyed.length}個のコマを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}）`);
         flashCells([...r.destroyed, ...r.blocked]);
-        playEffect('tsunami', undefined, undefined, 'パーフェクトゲーム');
+        playEffect('perfectGame');
         setCurrentBoard(board);
         spendMagic(late().calculateCost(seatCosts.onClickPerfectGame, false, false, currentTurnPlayer, 'onClickPerfectGame'), true, true, 'onClickPerfectGame');
     };
@@ -205,7 +205,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
             const r = t.placed[0];
             addLog(`「超助っ人」を使用（${posName(index)}に${effect}付きのコマを設置）`);
             if (r.thawed.length > 0) addLog(`氷結が溶けた（${r.thawed.map(posName).join('・')}）`);
-            playEffect('token', index, [index], '超助っ人');
+            playEffect('helper', index, [index]);
             playBurst('thaw', r.thawed);
             // 🌱☠⚡はトークンのエフェクトとして収穫・伝播に数える。🔥❄🍂は持たない扱い（火炎・氷結・落ち葉トークンと同じ）
             t.report();
@@ -245,7 +245,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         board[at] = { player: undefined, bind: 0, effects: [] };
         addLog(`「墓守の供物」を使用（${posName(at)}の自コマを消して死体+1・魔力+1）`);
         flashCells([at]);
-        playEffect('token', at, [at], '墓守の供物');
+        playEffect('graveOffering', at, [at]);
         addCorpses(1);
         if (characters[turnSeat] !== 'necromancer') setNecroCostAt(turnSeat, (cost) => Math.max(0, cost - 1));
         setCurrentBoard(board);

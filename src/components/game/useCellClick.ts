@@ -26,6 +26,7 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface CellClickScope {
+    addDamageHint: (cell: number, icon: string | undefined, amount: number) => void;
     useLockConvert: boolean;
     useCustom: boolean;
     exeLockConvert: (i: number) => void;
@@ -154,7 +155,7 @@ export interface CellClickScope {
     setCurrentTurn: React.Dispatch<React.SetStateAction<number>>;
 }
 export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
-    const { hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn, exeCustom, exeLockConvert, useCustom, useLockConvert } = g;
+    const { hailMarySpin, setPreviewCells, useThunderFire, thunderFireTargets, exeThunderFire, useBoltSilence, boltSilenceTargets, exeBoltSilence, useStash, stashTargets, exeStash, useJammer, currentBoard, currentTurnPlayer, characters, exeJammer, currentCharacter, remainNecro, turnSeat, useChargeOne, addLog, posName, playEffect, harvestMagic, setUseChargeOne, setCurrentBoard, withOverload, useChargeArea, geo, flashCells, setUseChargeArea, useChargeSpread, setUseChargeSpread, useFreeze, exeFreeze, useSucker, exeSucker, useShikigamiPlace, exeShikigamiPlace, objectPlacing, exeObjectPlace, objectTool, exeObjectTool, useShikigamiBlast, exeShikigamiBlast, useShikigamiBless, exeShikigamiBless, useShikigamiCurse, exeShikigamiCurse, useShikigamiPurge, exeShikigamiPurge, useSwidden, exeSwidden, useSacrifice, exeSacrifice, useKimon, exeKimon, useFrostArea, exeFrostArea, useClone, exeClone, usePlunder, exePlunder, useIcicle, setIcicleCell, useFreezeSpread, exeFreezeSpread, useShatter, exeShatter, useTinder, tinderCandidates, exeTinder, useIgnite, exeIgnite, useLock, applyLock, setUseLock, useInjection, poisonStrike, toxicBloom, setUseInjection, usePandemic, exePandemic, useStomp, exeStomp, useJudgeDay, exeJudgeDay, lifeBan, life, seatCount, currentAI, setCaptureChoice, placedThisTurn, history, currentTurn, setGiantShake, ruinState, placements, setPlacements, symbols, gearTrigger, playBurst, setMagicAt, poisonerInPlay, addCorpses, useBuds, setUseBuds, gearTurn, gearsBySeat, turnGears, useAssault, chargeBuff, setUseAssaultAt, proliferate, proliferateCount, applyProliferate, setProliferateCountAt, proliferateMaxStacks, setProliferateAt, spreadPoisonAround, setHistory, setCurrentTurn, exeCustom, exeLockConvert, useCustom, useLockConvert, addDamageHint } = g;
 
     // asObject: 敵のオブジェクト（ライフ0）を乗っ取るとき、自分のオブジェクトとして奪うか（false は自陣のコマで置き換え）。人間の手番で未指定なら選択ダイアログを出す
     const onCellClick = (i: number, asObject?: boolean) => {
@@ -425,6 +426,12 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は decay.ts で sim と共有
         const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols, isCrowded(nextBoard, seatCount)) : null; // 満杯の盤面は自然減衰がもう1回
         const burnCells = decayed?.burnCells ?? [];
+        // 受けたダメージの内訳(自然減衰は絵文字なし、🔥と☠は絵文字付き)
+        decayed?.damage.forEach((d) => {
+            addDamageHint(d.cell, undefined, d.natural);
+            addDamageHint(d.cell, '🔥', d.burn);
+            addDamageHint(d.cell, '☠', d.poison);
+        });
         if (decayed) {
             spreadOrigins.push(...decayed.spreadOrigins);
             poisonVanished = decayed.spreadOrigins.length;
@@ -464,6 +471,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             if (seeded) {
                 nextBoard[i] = seeded;
                 gearTrigger('budSeed', 'バッズ付きで設置');
+                playBurst('gearSeed', [i]);
             }
         }
         // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く
@@ -526,7 +534,9 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
         }
 
         // ⚡発火: 着手マスの隣にある帯電マスが、その縦横隣接のコマへ1ダメージ（蘇生の吸収より前）
+        const bindsBeforeFire = nextBoard.map((sq) => sq.bind);
         const fire = fireCharges(nextBoard, i, geo.size, characters, gearsBySeat.map((g) => hasGear(g, 'conduction')));
+        fire.damaged.forEach((n) => addDamageHint(n, '⚡', bindsBeforeFire[n] - nextBoard[n].bind));
         if (fire.fired.length > 0) {
             addLog(`⚡発火（${fire.fired.map(posName).join('・')}）${fire.damaged.length > 0 ? `で${fire.damaged.length}コマにダメージ` : ''}`);
             flashCells(fire.damaged);

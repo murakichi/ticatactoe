@@ -86,9 +86,21 @@ describe('ギア発動のマス演出', () => {
         ['gearBloom', '🌺'],
         ['gearSpread', '🌊'],
         ['gearEmpty', '🕳️'],
+        ['gearSeed', '🌷'],
+        ['gearThunder', '🌩️'],
+        ['gearReap', '💀'],
     ])('%s は指定マスの数だけ「%s」を出す', (type, emoji) => {
         const { container } = render(<BoardEffects effect={null} burst={{ type, cells: [1, 2], nonce: 1 }} size={4} />);
         expect(container.textContent?.split(emoji).length).toBe(3);
+    });
+
+    // 芽吹き・春雷・死神の鎌は、発動したマスに小演出を出す(チップだけで終わらない)
+    it.each([
+        ['budSeed', 'gearSeed'],
+        ['springThunder', 'gearThunder'],
+        ['reaper', 'gearReap'],
+    ])('ギア %s の発動では、盤面に playBurst(%s) を出す', (_gear, burst) => {
+        expect(gameSource).toContain(`playBurst('${burst}'`);
     });
 
     it('土壇場の防壁(bulwark)はバナーと演出要素を出す', () => {
