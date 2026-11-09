@@ -148,7 +148,7 @@ test('式神: 自分で補強すると式神ではなく🌱付きの自陣コ�
     s.life = 3;
     e.placeMove(s, 5);
     assert.strictEqual(s.board[5].player, '💙');
-    assert.strictEqual(s.board[5].bind, 1 + 3 + 1); // 着手前の減衰で式神のライフは2→1
+    assert.strictEqual(s.board[5].bind, 2 + 3 + 1); // 式神は自然減衰を受けない（ライフ2のまま）
     assert.deepStrictEqual(s.board[5].effects.map((x) => x.effect), ['🌱']);
 });
 

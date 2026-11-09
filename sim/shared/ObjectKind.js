@@ -13,7 +13,7 @@ exports.isObject = isObject;
 /** 設置したオブジェクト（建造物）か。式神は含まない — 式神は『コマ』として数える・狙うなど、従来の扱いのまま残す場所で使う */
 const isBuilding = (sq) => sq.object !== undefined && sq.object !== 'shikigami';
 exports.isBuilding = isBuilding;
-/** 式神か。式神はオブジェクトの一種（列に数えない・コマ数に数えない…の特例を持たず、オブジェクトの規則に従う）。ただし自然減衰は受け、乗っ取られると消え、自分で補強するとバッズ付きの通常のコマになる（placement.ts / thermal.ts） */
+/** 式神か。式神はオブジェクトの一種（列に数えない・コマ数に数えない…の特例を持たず、オブジェクトの規則に従う）。自然減衰も受けない。式神だけの特例は、乗っ取られると消える・自分で補強するとバッズ付きの通常のコマになる、の2点（placement.ts） */
 const isShikigami = (sq) => sq.object === 'shikigami';
 exports.isShikigami = isShikigami;
 /** 火炎を付けられると即座に壊れるオブジェクト（大木・枯れた大木） */

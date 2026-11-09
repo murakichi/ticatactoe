@@ -263,7 +263,7 @@ exports.decayTick = decayTick;
 const decayParts = (sq, chars, natural = true) => {
     let next = { ...sq, effects: [...sq.effects] };
     const parts = { natural: 0, burn: 0, poison: 0 };
-    if (next.player && next.bind > 0 && !(0, exports.isFrozen)(next) && (!(0, ObjectKind_1.isObject)(next) || (0, ObjectKind_1.isShikigami)(next)) && natural) {
+    if (next.player && next.bind > 0 && !(0, exports.isFrozen)(next) && !(0, ObjectKind_1.isObject)(next) && natural) {
         next = { ...next, bind: next.bind - 1 }; // オブジェクトのライフは時間経過で減らない。natural=false は聖域に守られたマス（自然減衰だけ受けない）
         parts.natural = 1;
     }

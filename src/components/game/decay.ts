@@ -1,7 +1,7 @@
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { isObject, isShikigami } from '../../types/ObjectKind';
+import { isObject } from '../../types/ObjectKind';
 import { GEAR_PARAMS } from './gear';
 import { isLocked, lockStack, tickLock } from './lock';
 import { sanctuaryProtected } from './objects';
@@ -35,7 +35,7 @@ export const isCrowded = (board: SquareInfo[], seatCount: number): boolean =>
 
 /** 満杯の追加減衰: コマのライフを1減らし、🔑ロックのスタックも1減らす（切れるのは通常の減衰のとき）。氷結中・ライフ0・オブジェクトはライフが対象外 */
 export const crowdedDecay = (sq: SquareInfo): SquareInfo => {
-    const aged = sq.player && sq.bind > 0 && !isFrozen(sq) && (!isObject(sq) || isShikigami(sq)) ? { ...sq, bind: sq.bind - 1 } : sq;
+    const aged = sq.player && sq.bind > 0 && !isFrozen(sq) && !isObject(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
     return lockStack(aged) > 1 ? tickLock(aged).sq : aged;
 };
 export type DecayResult = {

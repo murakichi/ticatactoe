@@ -334,19 +334,17 @@ describe('オブジェクトを壊す・強くするスキル', () => {
 });
 
 describe('結界石・護符の社（陰陽師向け）', () => {
-    it('結界石: 周囲八マスの自陣の式神だけ減衰を受けない（通常のコマ・敵の式神・周囲外の式神は減る）', () => {
+    it('結界石: 周囲八マスの自陣の式神だけを守りの対象にする（通常のコマ・敵の式神・周囲外は対象外）。式神は元から自然減衰を受けないので、現状は守りとして働く場面が無い', () => {
         const b = board();
         b[5] = newObject('💙', 'barrierStone');
-        b[0] = newShikigami('💙'); // 守られる
+        b[0] = newShikigami('💙');
         b[1] = { player: '💙', bind: 5, effects: [] }; // 通常のコマ
         b[2] = newShikigami('⭕'); // 敵の式神
         b[15] = newShikigami('💙'); // 周囲外
         expect(sanctuaryProtected(b)).toEqual(b.map((_, i) => i === 0));
         decayBoard(b, -1, chars, ['💙', '⭕'], false);
         expect(b[0].bind).toBe(2);
-        expect(b[1].bind).toBeLessThan(5);
-        expect(b[2].bind).toBeLessThan(2);
-        expect(b[15].bind).toBeLessThan(2);
+        expect(b[1].bind).toBeLessThan(5); // 通常のコマは結界石では守られない
     });
 
     it('護符の社: 周囲八マスの自陣の式神1体につきマジック+1、最大+3。通常のコマ・敵の式神・周囲外は数えない', () => {
@@ -450,20 +448,20 @@ describe('式神はオブジェクトの一種', () => {
         expect([isObject(fort), isShikigami(fort), isBuilding(fort)]).toEqual([true, false, true]);
     });
 
-    it('従来どおり: 列に数えず、自然減衰を受け、結界石で守れる。toPiece で通常のコマになる', () => {
+    it('列に数えず、自然減衰を受けない（オブジェクトの規則）。toPiece で通常のコマになる（通常のコマは減衰を受ける）', () => {
         const b = board();
         b[0] = newShikigami('💙');
         b[1] = newShikigami('💙');
         for (const k of [2, 3]) b[k] = { player: '💙', bind: 1, effects: [] };
         expect(calculateWinner(lineSymbols(b))).toBeUndefined();
         decayBoard(b, -1, chars, ['💙', '⭕'], false);
-        expect(b[0].bind).toBe(1); // 式神は減衰を受ける
-        expect(toPiece(b[0]).object).toBeUndefined();
-        const guarded = board();
-        guarded[5] = newObject('💙', 'barrierStone');
-        guarded[4] = newShikigami('💙');
-        decayBoard(guarded, -1, chars, ['💙', '⭕'], false);
-        expect(guarded[4].bind).toBe(2);
+        expect(b[0].bind).toBe(2); // 式神は減衰しない
+        const piece = toPiece(b[0]);
+        expect(piece.object).toBeUndefined();
+        const c = board();
+        c[0] = piece;
+        decayBoard(c, -1, chars, ['💙', '⭕'], false);
+        expect(c[0].bind).toBe(1); // 通常のコマになれば減衰する
     });
 
     it('敵に乗っ取られると空きマス、自分で補強すると🌱付きの通常のコマ。ライフが残る攻撃ではオブジェクトとして乗っ取られない', () => {
