@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/objects.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
+exports.runObjectSkill = exports.objectSkillUsable = exports.objectSkillTargets = exports.OBJECT_SKILL_KEYS = exports.OBJECT_SKILLS = exports.objectTurnStart = exports.sweepBurntTrees = exports.objectLifeBonus = exports.sanctuaryProtected = exports.marketCount = exports.workshopActive = exports.skillRestricted = exports.newPieceBlocked = exports.ownPieceCount = exports.ONE_PIECE_MULTI_KEYS = exports.boardWinner = exports.encircleWinner = exports.enforceEffectRules = exports.effectSnapshot = exports.mudAdjustedBind = exports.luckyCatActive = exports.enemyObjectActive = exports.activeObjectCells = exports.objectLandableCells = exports.newObject = exports.objectLandable = exports.hasOwnObject = exports.OBJECT_PLACE_KEYS = exports.OBJECT_DEFS = exports.WORKSHOP_PARAMS = exports.OBJECT_LIFE = exports.OBJECT_PARAMS = exports.isTree = exports.isObject = exports.OBJECT_KINDS = void 0;
 // オブジェクト（空きマスに設置して使う建造物）の純粋ロジック。Game.tsx と sim/engine.js が同じ関数を呼ぶ (#289)。
 //
 // ルール
@@ -64,6 +64,11 @@ exports.OBJECT_DEFS = {
     oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: exports.OBJECT_LIFE, costKey: 'onClickOneWord', desc: '働いている間、相手は1ターンにスキルを1つしか使えない（チャージ・シャッフル・ロックは数えない）' },
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: exports.OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲八マスには、新しくエフェクトを付けられない（手番の終わりに、その手番で付いたエフェクトが消える）' },
 };
+/** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
+exports.OBJECT_PLACE_KEYS = new Set(Object.values(exports.OBJECT_DEFS).map((d) => d.costKey));
+/** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
+const hasOwnObject = (board, player) => board.some((sq) => sq.object !== undefined && sq.player === player);
+exports.hasOwnObject = hasOwnObject;
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 const objectLandable = (sq) => (0, shikigami_1.shikigamiLandable)(sq) && !(0, ObjectKind_1.isObject)(sq);
 exports.objectLandable = objectLandable;

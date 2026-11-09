@@ -1112,6 +1112,32 @@ describe('鍵師AI: 空きマスのロックを優先して撃つ（#439）', ()
     });
 });
 
+describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => Array.from({ length: 16 }, (): SquareInfo => ({ player: undefined, bind: 0, effects: [] }));
+    const run = (character: 'keysmith' | 'you', magic: number, hand: number[], b: SquareInfo[] = board()) => {
+        const ai = new AIPlayer('💙', character, ['⭕'], [character, 'you'], undefined, false, false);
+        return ai.makeMove(b, magic, skillCosts, 2, 5, hand, false);
+    };
+    it('鍵師は、砦(108)が手札にあり魔力が足りれば立てる', () => {
+        const r = run('keysmith', 12, [108, 2, 0]);
+        expect(r.chargeClicks?.some((c) => c.skill === 'onClickFort')).toBe(true);
+    });
+    it('市場(110)でも立てる。魔力が足りなければ立てない', () => {
+        expect(run('keysmith', 12, [110, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickMarket')).toBe(true);
+        expect(run('keysmith', 1, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+    it('自陣にオブジェクトが既にあれば、2つ目は立てない', () => {
+        const b = board();
+        b[15] = { player: '💙', bind: 3, effects: [], object: 'fort' };
+        expect(run('keysmith', 12, [108, 2, 0], b).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+    it('鍵師以外は立てない', () => {
+        expect(run('you', 12, [108, 2, 0]).chargeClicks?.some((c) => c.skill === 'onClickFort') ?? false).toBe(false);
+    });
+});
+
 describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
@@ -2195,5 +2221,19 @@ describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
         // 行0は 大木(オブジェクト)+3コマ。オブジェクトは列に数えないので勝ち筋のリーチではない（誤認して0に置こうとしない）
         const r = run(b, 2, [21, 23, 22]);
         expect(r.move).not.toBe(0);
+    });
+});
+
+describe('「あなた」の相手別の手札固定', () => {
+    const locksVs = (foe: 'witch' | 'giant' | 'electrician', avail: number[]) =>
+        new AIPlayer('💙', 'you', ['⭕'], ['you', foe]).chooseLocks(emptyBoard(), 0, 5, avail);
+    it('相手が魔女・雷霆の巫なら一寸の虫(92)を固定する（固定しない相手には出ない）', () => {
+        expect(locksVs('witch', [92, 2, 8])).toContain(92);
+        expect(locksVs('electrician', [92, 2, 8])).toContain(92);
+        expect(locksVs('giant', [92, 2, 8])).not.toContain(92);
+    });
+    it('相手が複数キャラのときは固定しない', () => {
+        const ai = new AIPlayer('💙', 'you', ['⭕', '🟩'], ['you', 'witch', 'giant']);
+        expect(ai.chooseLocks(emptyBoard(), 0, 5, [92, 2, 8])).not.toContain(92);
     });
 });

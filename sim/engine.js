@@ -494,7 +494,7 @@ function costsOf(s, seat = s.turn) {
 function gearCtx(s, seat) {
     const ailments = hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0;
     const [g, r] = gearTurnView(s);
-    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments);
+    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments, hasGear(s.gears[seat], 'buildMania') && objectsMod.hasOwnObject(s.board, SYMBOLS[seat]));
 }
 // 実コスト(キャラ補正 → ギア補正 → 導線 → 軽減スキル)の計算は本番(cost.ts)の生成物。ここは席の状況を詰めるだけ
 const costMod = require('./shared/cost');

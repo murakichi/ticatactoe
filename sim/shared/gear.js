@@ -1,9 +1,10 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
+const objects_1 = require("./objects");
 exports.GEAR_PARAMS = {
     /** 通常のロック期間(ライフ) */
     lockStack: 6,
@@ -56,6 +57,9 @@ exports.GEAR_PARAMS = {
     scorchCap: 6,
     /** 灰の供物: 敵のマスに🔥を付与したマス1つにつき、次の自分の手番の終わりまで全スキルのコスト-N（重複する） */
     ashDiscount: 1,
+    /** 普請道楽: 自陣にオブジェクトが無いときのオブジェクト設置スキルの割引と、ある間の全スキルの割引（重ならない） */
+    buildPlaceCut: 2,
+    buildAllCut: 3,
     /** 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつきの魔力(上限なし) */
     rootMagic: 1,
 };
@@ -87,6 +91,7 @@ exports.GEARS = [
     { id: 'conduction', name: '伝導', icon: '🔌', desc: '敵が帯電したコマの隣に置いて発火し、ダメージを受けたとき、帯電していたコマに毒・火炎があれば、ダメージを受けた敵のマスにそれを1スタックずつ付与する' },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: '誰かがスキルを使ったターンの間、自陣のコマは効果（毒・火炎・帯電）によるダメージを受けない' },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: '手番開始時、自陣のリーチ（3つ＋空き1）の4つ目が氷結した空きマスなら、その❄を1つ解く（氷室の番人の氷結の壁に対抗）' },
+    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクトを設置するスキルのコスト-${P.buildPlaceCut}。自陣にオブジェクトがある間は、全てのスキルのコスト-${P.buildAllCut}（下限1。重ならない）` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列のマスと自陣のコマがすべて消滅する（ロック・氷結を貫通）。ただしその後は、相手の手番開始時の魔力+${P.lastStandMagic}、ライフ平均+${P.lastStandLife}` },
 ];
 exports.GEAR_IDS = exports.GEARS.map((g) => g.id);
@@ -184,6 +189,9 @@ const adjustCostByGear = (cost, gears, ctx, isToken = false, skillKey) => {
         delta -= P.ruinDiscount;
     if ((0, exports.hasGear)(gears, 'ashOffering'))
         delta -= P.ashDiscount * ((_b = ctx.ash) !== null && _b !== void 0 ? _b : 0);
+    // 普請道楽: 自陣にオブジェクトが無いときはオブジェクトを設置するスキルが-2、ある間は全スキル-3（設置スキルの-2は無いときだけ。重ならない）
+    if ((0, exports.hasGear)(gears, 'buildMania'))
+        delta -= ctx.ownObjects ? P.buildAllCut : skillKey && objects_1.OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
 };
@@ -242,6 +250,7 @@ exports.RECOMMENDED_GEARS = {
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'vengeance'],
+    keysmith: ['lastStand', 'buildMania'],
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => { var _a; return ((_a = exports.RECOMMENDED_GEARS[character]) !== null && _a !== void 0 ? _a : ['sturdy']).slice(0, (0, exports.gearSlotsFor)(character)); };
@@ -254,6 +263,31 @@ exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'luckyPurse']],
     electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
 };
+/**
+ * 「あなた」の相手キャラ別の専用ギア。「あなた」は固有スキルが無く全キャラ共通の1設定では最下位なので、相手を見て組み替える
+ * （docs/tune/you.md。lastStand は対 poisoner/yinYang/keysmith、spellWard は毒に効く）。相手が1キャラに決まるときだけ使う。
+ * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
+ */
+exports.COUNTER_GEARS_FOR_YOU = {
+    poisoner: ['lastStand', 'spellWard', 'sturdy'],
+    magician: ['lastStand', 'sturdy', 'luckyPurse'],
+    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'],
+    necromancer: ['ironLock', 'titanCost', 'sturdy'],
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+};
+/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+const recommendedGearsAgainst = (character, opponents) => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
+        if (counter)
+            return counter.slice(0, (0, exports.gearSlotsFor)(character));
+    }
+    return (0, exports.recommendedGears)(character);
+};
+exports.recommendedGearsAgainst = recommendedGearsAgainst;
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */
 const pickRecommendedGears = (character, rng = Math.random) => {
     var _a;

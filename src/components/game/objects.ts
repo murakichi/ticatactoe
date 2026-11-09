@@ -80,6 +80,12 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲八マスには、新しくエフェクトを付けられない（手番の終わりに、その手番で付いたエフェクトが消える）' },
 };
 
+/** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
+export const OBJECT_PLACE_KEYS: ReadonlySet<string> = new Set(Object.values(OBJECT_DEFS).map((d) => d.costKey));
+
+/** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
+export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => sq.object !== undefined && sq.player === player);
+
 /** オブジェクトの設置先として選べるマスか（式神と同じ: 空きで、氷結中でも🔑ロック中でもない） */
 export const objectLandable = (sq: SquareInfo): boolean => shikigamiLandable(sq) && !isObject(sq);
 
