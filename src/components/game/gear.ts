@@ -306,7 +306,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
-    keysmith: ['lastStand', 'buildMania'], // 普請道楽: 砦/市場を1つ立てると全スキル-3（魔力が律速の鍵師の資源になる）。対強豪平均 seed9/11/13・各200: 26.3/25.6/27.1→29.7/30.8/29.8（docs/tune/keysmith.md 試行14）
+    keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける（バッズは毎手番の魔力）。無料ロックを魔力以内に限定した後の対強豪平均 seed9/11・各200: 30.4/31.7（普請道楽+砦市場デッキ）→38.2/40.1（docs/tune/keysmith.md 試行16）
     witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 

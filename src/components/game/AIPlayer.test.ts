@@ -1138,6 +1138,28 @@ describe('鍵師AI: 砦・市場を1つ立てる（普請道楽の起点）', ()
     });
 });
 
+describe('鍵師AI: 芽吹きの錠でバッズを付ける', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[5] = { player: '💙', bind: 2, effects: [] };
+        return b;
+    };
+    const run = (bloom: boolean) => {
+        const ai = new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', 'you'], undefined, false, false, undefined, bloom);
+        return ai.makeMove(board(), 6, skillCosts, 2, 5, [11, 2, 0], false);
+    };
+    it('ライフ2以下でバッズの無い自陣のコマをロックする', () => {
+        const r = run(true);
+        expect(r.skills).toContain('onClickUseLock');
+        expect(r.lockTargets).toEqual([5]);
+    });
+    it('ギアが無ければこの盤面ではロックしない（ライフ2は守りの対象ではない）', () => {
+        expect(run(false).lockTargets).toBeUndefined();
+    });
+});
+
 describe('鍛冶師AI: 固有の火遁で敵コマを燃やす（旧sim AI の igniteSig=1 / igniteSkip=1）', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { skillCosts } = require('./skillCosts');
