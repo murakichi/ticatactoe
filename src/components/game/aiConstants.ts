@@ -2,7 +2,7 @@
 import { CharacterId } from '../../types/Character';
 
 // 汎用スキルプールの大きさ (idx 0..136)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 137;
+export const SKILL_POOL_SIZE = 138;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 export const CHARGE_ONE_MIN_SCORE = 2;

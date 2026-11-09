@@ -18,7 +18,7 @@ import { activeObjectCount, effectSnapshot, EffectSnapshot, enforceEffectRules, 
 import { SkillEffectType } from './BoardEffects';
 import { placeWardPiece } from './graveSkills';
 import { detonate } from './thermal';
-import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain } from './gear';
+import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain, emberGain } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PlayEffectExtra } from './usePresentation';
@@ -248,8 +248,12 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         if (garden > 0) gearTrigger('colorGarden', `魔力+${garden}`);
         const standBonus = lastStandActiveAgainst(nextSeat);
         // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
-        const root = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
-        if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
+        const frostRootGain = hasGear(gearsBySeat[nextSeat], 'frostRoot') ? rootGain(frozenBudCount(currentBoard)) : 0;
+        if (frostRootGain > 0) gearTrigger('frostRoot', `魔力+${frostRootGain}`);
+        // 熾火の脈: 盤面の🔥1つにつき+1
+        const ember = hasGear(gearsBySeat[nextSeat], 'emberVein') ? emberGain(currentBoard) : 0;
+        if (ember > 0) gearTrigger('emberVein', `魔力+${ember}`);
+        const root = frostRootGain + ember;
         // 地代: 働いている自陣のオブジェクト1つにつき+1（上限なし）
         const rent = hasGear(gearsBySeat[nextSeat], 'groundRent') ? rentGain(activeObjectCount(currentBoard, nextSymbol)) : 0;
         if (rent > 0) gearTrigger('groundRent', `魔力+${rent}`);

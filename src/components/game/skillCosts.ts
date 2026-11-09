@@ -174,6 +174,7 @@ export const skillCosts = {
     onClickLockDiscount: 1, //    錠前割引(idx 135・ユーザー提案): 盤面のロックのマスの数だけ、このターンの全スキルを軽減。使った時点の数で固定。春一番(turn軽減)と同型。軽減札は基準で1〜3（特売3・大特価7は次の1スキルのみ）、このターン全体に効くが条件（ロックが場に要る）があるので1
     // 大岩(idx 136・ユーザー指定): 効果は無く2ターンのロック付きで設置するだけ。基準(docs/skill-cost-rules.md)の下限より安いが、ユーザー指定で1
     onClickBoulder: 1,
+    onClickUnlockStone: 2, //     解錠の碑(idx 137。仮称): 設置時に周囲八マスのロックを全て解除し、働いている間は周囲に新しくロックを掛けられない（ユーザー指定コスト2）
 };
 
 export type SkillCosts = typeof skillCosts;

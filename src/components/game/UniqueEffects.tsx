@@ -198,6 +198,7 @@ const OBJECT_FX: Record<ObjectKind, { color: string; flourish: string }> = {
     oneWord: { color: '#8c93a6', flourish: '💬' },
     blindMonkey: { color: '#d9b99b', flourish: '🙈' },
     boulder: { color: '#8a8a8a', flourish: '⛰️' },
+    unlockStone: { color: '#c9b458', flourish: '🗝️' },
 };
 
 export const renderUniqueEffect = (effect: SkillEffect, size: number): React.ReactNode => {

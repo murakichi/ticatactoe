@@ -52,7 +52,7 @@ export interface GameControlsScope {
     setGlacierPendingAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setGlacierChargeAll: React.Dispatch<React.SetStateAction<number[]>>;
     setBudGuardAll: React.Dispatch<React.SetStateAction<boolean[]>>;
-    setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null>>;
+    setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | "unlockStone" | null>>;
     setObjectTool: React.Dispatch<React.SetStateAction<"demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null>>;
     setCaptureChoice: React.Dispatch<React.SetStateAction<number | null>>;
     setIcicleCell: React.Dispatch<React.SetStateAction<number | null>>;

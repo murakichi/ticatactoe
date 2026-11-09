@@ -435,8 +435,8 @@ exports.skillChoiceMethods = {
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
             (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'magician' || c === 'witch'))) ||
-            // 鍛冶師: 相手に魔法使いがいるとき、解錠の碑(136)を手札に固定する（魔法使いのロックで火遁が通らない）
-            (this.character === 'pyromancer' && idx === 136 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'magician'));
+            // 鍛冶師: 相手に魔法使いがいるとき、解錠の碑(137)を手札に固定する（魔法使いのロックで火遁が通らない）
+            (this.character === 'pyromancer' && idx === 137 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'magician'));
         // 盤面的に価値が高いスキル
         const valued = (idx) => {
             switch (idx) {

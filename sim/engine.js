@@ -2685,6 +2685,7 @@ const SKILLS = {
     oneWord: (s) => onClickObject(s, 'oneWord'),
     blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
     boulder: (s) => onClickObject(s, 'boulder'),
+    unlockStone: (s) => onClickObject(s, 'unlockStone'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),

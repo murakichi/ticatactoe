@@ -851,6 +851,7 @@ function planBudsAndFire(c) {
         // 大木(手番開始のマジック+3)だけは高めでも置く。各種類は1つまで。候補の順が優先度
         const objectPlans = [
             { idx: 105, kind: 'bigTree', key: 'onClickBigTree', cap: 6 },
+            { idx: 136, kind: 'boulder', key: 'onClickBoulder', cap: 1 },
             { idx: 128, kind: 'oneWord', key: 'onClickOneWord', cap: 3 },
             { idx: 110, kind: 'market', key: 'onClickMarket', cap: 3 },
             { idx: 123, kind: 'luckyCat', key: 'onClickLuckyCat', cap: 3 },
@@ -878,9 +879,9 @@ function planBudsAndFire(c) {
             board[cell] = { player: this.playerSymbol, bind: objects_1.OBJECT_DEFS[plan.kind].life, effects: [], object: plan.kind };
             magic -= pc;
         }
-        // 解錠の碑(136。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないとき、または普請道楽で1コストのときに置く
+        // 解錠の碑(137。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないとき、または普請道楽で1コストのときに置く
         const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
-        if (!necroFoe && availableSkills.includes(136) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
+        if (!necroFoe && availableSkills.includes(137) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
             && !(worth && magic >= infernoNow() && magic - stoneCost < infernoNow())) {
             let cell = this.bestUnlockStoneCell(board);
             if (cell === null && stoneCost <= 1 && !(0, objects_1.hasOwnObject)(board, this.playerSymbol)) {
@@ -1146,10 +1147,10 @@ exports.planMoveMethods = {
     makeMove(...argsIn) {
         var _a;
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
-        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => (0, util_1.isObject)(sq) && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const args = argsIn[0].some((sq) => (0, util_1.isObject)(sq))
             ? [argsIn[0].map((sq) => ((0, util_1.isObject)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]

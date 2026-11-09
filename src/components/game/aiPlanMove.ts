@@ -5,7 +5,8 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, objectLandable } from './objects';
+import { OBJECT_DEFS, ObjectKind, objectLandable, releaseAroundStone, hasOwnObject } from './objects';
+import { infernoIgnite } from './thermal';
 import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -862,6 +863,7 @@ function planBudsAndFire(this: AIPlayer, c: PlanContext): AIResult | null {
         // 大木(手番開始のマジック+3)だけは高めでも置く。各種類は1つまで。候補の順が優先度
         const objectPlans: { idx: number; kind: ObjectKind; key: keyof typeof costs; cap: number }[] = [
             { idx: 105, kind: 'bigTree', key: 'onClickBigTree', cap: 6 },
+            { idx: 136, kind: 'boulder', key: 'onClickBoulder', cap: 1 },
             { idx: 128, kind: 'oneWord', key: 'onClickOneWord', cap: 3 },
             { idx: 110, kind: 'market', key: 'onClickMarket', cap: 3 },
             { idx: 123, kind: 'luckyCat', key: 'onClickLuckyCat', cap: 3 },
@@ -882,9 +884,9 @@ function planBudsAndFire(this: AIPlayer, c: PlanContext): AIResult | null {
             board[cell] = { player: this.playerSymbol, bind: OBJECT_DEFS[plan.kind].life, effects: [], object: plan.kind };
             magic -= pc;
         }
-        // 解錠の碑(136。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないとき、または普請道楽で1コストのときに置く
+        // 解錠の碑(137。設置で周囲八マスのロックを解除し、周囲には新しくロックできない): 魔法使いのロックで火遁が通らないとき、または普請道楽で1コストのときに置く
         const stoneCost = this.calculateAICost(costs.onClickUnlockStone, false, false, 'onClickUnlockStone');
-        if (!necroFoe && availableSkills.includes(136) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
+        if (!necroFoe && availableSkills.includes(137) && !this.skillKinds.has('onClickUnlockStone') && !chargeClicks.some((c) => c.skill === 'onClickUnlockStone') && magic >= stoneCost
             && !(worth && magic >= infernoNow() && magic - stoneCost < infernoNow())) {
             let cell = this.bestUnlockStoneCell(board);
             if (cell === null && stoneCost <= 1 && !hasOwnObject(board, this.playerSymbol)) {

@@ -32,7 +32,7 @@ export type ObjectDef = {
     /** 設置したときのライフ */
     life: number;
     /** スキル名(skillCosts のキー) */
-    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine' | 'onClickLuckyCat' | 'onClickMudField' | 'onClickTongueKing' | 'onClickEightTrigrams' | 'onClickSoloSign' | 'onClickOneWord' | 'onClickBlindMonkey' | 'onClickBoulder';
+    costKey: 'onClickBigTree' | 'onClickDeadTree' | 'onClickSpring' | 'onClickFort' | 'onClickThundercloud' | 'onClickMarket' | 'onClickSanctuary' | 'onClickPoisonSwamp' | 'onClickWorkshop' | 'onClickBarrierStone' | 'onClickAmuletShrine' | 'onClickLuckyCat' | 'onClickMudField' | 'onClickTongueKing' | 'onClickEightTrigrams' | 'onClickSoloSign' | 'onClickOneWord' | 'onClickBlindMonkey' | 'onClickBoulder' | 'onClickUnlockStone';
     /** 手番開始時の効果(説明文) */
     desc: string;
 };
@@ -81,7 +81,7 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     eightTrigrams: { idx: 126, name: '八卦の陣', icon: '🔯', life: OBJECT_LIFE, costKey: 'onClickEightTrigrams', desc: '周囲が全て自陣のコマで埋まると勝利' },
     soloSign: { idx: 127, name: 'お一人様限りの札', icon: '🪧', life: OBJECT_LIFE, costKey: 'onClickSoloSign', desc: '相手は1ターンにコマを1つしか置けない' },
     oneWord: { idx: 128, name: '一言居士', icon: '🗿', life: OBJECT_LIFE, costKey: 'onClickOneWord', desc: '相手は1ターンにスキルを1つしか使えない' },
-    unlockStone: { idx: 136, name: '解錠の碑（仮称）', icon: '🗝️', life: OBJECT_LIFE, costKey: 'onClickUnlockStone', desc: '設置したとき、周囲八マスのロックを全て解除する。働いている間、周囲八マスには新しくロックを掛けられない（手番の終わりに、その手番で付いたロックが消える）' },
+    unlockStone: { idx: 137, name: '解錠の碑（仮称）', icon: '🗝️', life: OBJECT_LIFE, costKey: 'onClickUnlockStone', desc: '設置したとき、周囲八マスのロックを全て解除する。働いている間、周囲八マスには新しくロックを掛けられない（手番の終わりに、その手番で付いたロックが消える）' },
     blindMonkey: { idx: 129, name: '見ざる地蔵', icon: '🙈', life: OBJECT_LIFE, costKey: 'onClickBlindMonkey', desc: '周囲にはエフェクトを付与できない' },
     boulder: { idx: 136, name: '大岩', icon: '⛰️', life: OBJECT_LIFE, costKey: 'onClickBoulder', desc: '効果は無く、2ターンのロック付きで設置される' },
 };
