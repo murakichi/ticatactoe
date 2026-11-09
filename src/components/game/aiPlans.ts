@@ -10,7 +10,7 @@ import { emptyBlocked } from './thermal';
 import { lockBlocksPlacement } from './keysmith';
 import { stomp as stompOf } from './blast';
 import { plunderTargets as plunderTargetsOf } from './generic';
-import { SHIKIGAMI_LIFE, shikigamiLandable } from './shikigami';
+import { SHIKIGAMI_LIFE, newShikigami, shikigamiLandable, toPiece } from './shikigami';
 import { isGuarded } from './charge';
 import { PG_HOLD_GAP, PLUNDER_CHAIN_MAX, RICH_REROLL_MAGIC, SH_BLAST_MIN, SH_BLESS_WEAK, SH_COMBO_REAL, SH_CURSE_MIN, SH_MAX, SH_PURGE_FREE, SH_RESERVE, SH_RICH_BLAST_MIN, SH_RICH_GUARD, STOMP_CHAIN_MAX } from './aiConstants';
 
@@ -147,7 +147,7 @@ export const planMethods = {
     floodComboWins(this: AIPlayer, board: SquareInfo[]): boolean {
         const me = this.playerSymbol;
         const nb = board.map((sq) => (shikigamiLandable(sq) ? { player: me, bind: 0, effects: [] }
-            : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq))) as SquareInfo[];
+            : (sq.player === me && isShikigami(sq) ? toPiece(sq) : sq))) as SquareInfo[];
         return calculateWinner(lineSymbols(nb)) === me;
     },
 
@@ -174,7 +174,7 @@ export const planMethods = {
                 const combo = this.comboPlan(b, costs, availableSkills);
                 if (m >= combo.total) {
                     const nb: SquareInfo[] = b.map((sq) => (shikigamiLandable(sq) ? { player: me, bind: 0, effects: [] }
-                        : (sq.player === me && isShikigami(sq) ? { ...sq, effects: sq.effects.filter((e) => e.effect !== '📜') } : sq)));
+                        : (sq.player === me && isShikigami(sq) ? toPiece(sq) : sq)));
                     if (calculateWinner(lineSymbols(nb)) === me) {
                         // 特売(53)を重ね撃ちして、各スキルのコストを下げてから撃つ
                         for (let k = 0; k < combo.floodCasts; k++) clicks.push({ skill: 'onClickMarkdown' });
@@ -271,7 +271,7 @@ export const planMethods = {
                     if (cell === null) break;
                     clicks.push({ skill: 'onClickShikigamiPlace', target: cell });
                     m -= placeCost;
-                    b[cell] = { player: me, bind: SHIKIGAMI_LIFE, effects: [{ effect: '📜' }] };
+                    b[cell] = newShikigami(me);
                     continue;
                 }
                 break;

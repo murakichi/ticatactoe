@@ -24,8 +24,8 @@ describe('着手の結果 resolvePlacement / absorbDefeated', () => {
         expect([hit.square.player, hit.square.bind, hit.corpse]).toEqual(['⭕', 6, false]);
     });
     it('式神は補強すると🌱付きの自陣コマ、乗っ取られると空きマス', () => {
-        expect(resolvePlacement({ player: '💙', bind: 2, effects: [{ effect: '📜' }] }, '💙', 3).square.effects).toEqual([{ effect: '🌱' }]);
-        const r = resolvePlacement({ player: '⭕', bind: 1, effects: [{ effect: '📜' }] }, '💙', 4);
+        expect(resolvePlacement({ player: '💙', bind: 2, effects: [], object: 'shikigami' }, '💙', 3).square.effects).toEqual([{ effect: '🌱' }]);
+        const r = resolvePlacement({ player: '⭕', bind: 1, effects: [], object: 'shikigami' }, '💙', 4);
         expect([r.square.player, r.capturedFrom]).toEqual([undefined, undefined]);
     });
     it('蘇生中の吸収: ライフ0の敵コマ（ロック中を除く）が自陣のライフ2のコマになる', () => {

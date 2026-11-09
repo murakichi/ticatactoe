@@ -277,7 +277,7 @@ test('一寸の虫に魂なし: 縛られた席はライフ3以下のコマを�
     const magicBefore = s.magic[1];
     e.SKILLS.shikigamiRandom(s);             // 式神はライフ2 → 置けない（魔力も減らない）
     assert.strictEqual(s.magic[1], magicBefore);
-    assert.strictEqual(s.board.filter((sq) => sq.effects.some((x) => x.effect === '📜')).length, 0);
+    assert.strictEqual(s.board.filter((sq) => sq.object === 'shikigami').length, 0);
     s.life = 4;
     assert.strictEqual(e.placeMove(s, 0), true); // ライフ4なら置ける
     assert.strictEqual(s.lifeBan[1], false);     // 手番が終わったので解除

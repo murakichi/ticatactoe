@@ -23,7 +23,7 @@ exports.SHIKIGAMI_PURGE_FREE = 3;
 /** 夜の帳: 手番の席のスキルコストに足す量（コストが0のスキルは変えない） */
 const veilSurcharge = (env) => (env.veil && env.seat === env.turnSeat ? graveSkills_1.NIGHT_VEIL_SURCHARGE : 0);
 /** 自陣の式神の数 */
-const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
     var _a;
     const characterId = env.characters[env.seat];

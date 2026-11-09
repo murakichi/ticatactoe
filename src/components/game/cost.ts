@@ -70,7 +70,7 @@ export type CostEnv = {
 const veilSurcharge = (env: CostEnv): number => (env.veil && env.seat === env.turnSeat ? NIGHT_VEIL_SURCHARGE : 0);
 
 /** 自陣の式神の数 */
-const ownShikigami = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 
 export const characterCostOf = (env: CostEnv, baseCost: number, isToken: boolean, isPoison: boolean, skillKey?: string): number => {
     const characterId = env.characters[env.seat];
