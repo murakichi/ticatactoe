@@ -16,6 +16,8 @@ import { isDormant } from './thermal';
 
 /** 咆哮を撃つ最小の巻き込み数 */
 export const ROAR_MIN_VICTIMS = 3;
+/** 自陣の建造物の上限。建造物は列に数えないので、増やしすぎると自分の列を作るマスが無くなり、盤面が埋まって膠着する（sim で魔力1000超・盤面が建造物だらけの試合を確認） */
+export const BUILDING_CAP = 5;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
 export const PRAYER_MAX_PER_TURN = AWAKEN_BUILDINGS;
 
@@ -125,7 +127,10 @@ export const dragonMethods: DragonMethods = {
         // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
         // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
         let prayers = 0;
+        let room = BUILDING_CAP - ownBuildingCells(real, this.playerSymbol).length;
         for (const c of threats) {
+            if (room <= 0) break;
+            room--;
             if (prayers < PRAYER_MAX_PER_TURN && left >= prayCost && prayerUsable(real, this.deck)) {
                 clicks.push({ skill: 'onClickPrayer', target: c });
                 left -= prayCost;
@@ -165,7 +170,7 @@ export const dragonMethods: DragonMethods = {
         const clicks: { skill: string; target: number }[] = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-        const maxPrayers = isDragon ? 1 : PRAYER_MAX_PER_TURN - ownBuildingCells(real, me).length;
+        const maxPrayers = Math.min(isDragon ? 1 : PRAYER_MAX_PER_TURN - ownBuildingCells(real, me).length, BUILDING_CAP - ownBuildingCells(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && prayerUsable(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);
             if (cell === null) break;

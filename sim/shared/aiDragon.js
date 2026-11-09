@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/aiDragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.ROAR_MIN_VICTIMS = void 0;
+exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
@@ -11,6 +11,8 @@ const charge_1 = require("./charge");
 const thermal_1 = require("./thermal");
 /** 咆哮を撃つ最小の巻き込み数 */
 exports.ROAR_MIN_VICTIMS = 3;
+/** 自陣の建造物の上限。建造物は列に数えないので、増やしすぎると自分の列を作るマスが無くなり、盤面が埋まって膠着する（sim で魔力1000超・盤面が建造物だらけの試合を確認） */
+exports.BUILDING_CAP = 5;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
 exports.PRAYER_MAX_PER_TURN = dragon_1.AWAKEN_BUILDINGS;
 /** 盤の4つの角を斜めに切る4マスの組（囲める範囲が最大6マス） */
@@ -113,7 +115,11 @@ exports.dragonMethods = {
         // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
         // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
         let prayers = 0;
+        let room = exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, this.playerSymbol).length;
         for (const c of threats) {
+            if (room <= 0)
+                break;
+            room--;
             if (prayers < exports.PRAYER_MAX_PER_TURN && left >= prayCost && (0, dragon_1.prayerUsable)(real, this.deck)) {
                 clicks.push({ skill: 'onClickPrayer', target: c });
                 left -= prayCost;
@@ -155,7 +161,7 @@ exports.dragonMethods = {
         const clicks = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-        const maxPrayers = isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length;
+        const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && (0, dragon_1.prayerUsable)(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);
             if (cell === null)
