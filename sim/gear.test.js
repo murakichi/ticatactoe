@@ -183,6 +183,23 @@ test('道連れの鍵: 外れたらロックは付かない', () => {
     assert.ok(!sq.effects.some((x) => x.effect === '🔑'));
 });
 
+// 火炎・氷結・ダブル帯電のトークンも『トークン系スキル』なので、道連れの鍵・収穫が効く（本番(Game.tsx)も同じ。以前は本番だけ通していなかった）
+test('道連れの鍵・収穫: 火炎・氷結・ダブル帯電のトークンにも効く（rng=0 で必ず当たる）', () => {
+    for (const [skill, label] of [['flameToken', '火炎'], ['frostToken', '氷結'], ['doubleChargeToken', 'ダブル帯電']]) {
+        const s = game([['bindingLock', 'harvest'], []], ['electrician', 'you']);
+        s.magic[0] = 99;
+        s.rng = () => 0;
+        e.SKILLS[skill](s);
+        const mine = s.board.filter((x) => x.player === H);
+        assert.ok(mine.length >= 1, label + ': コマが置かれる');
+        const locked = mine.some((x) => x.effects.some((f) => f.effect === '🔑'));
+        const frozenOnly = skill === 'frostToken'; // 氷結中のマスにはロックが掛からない（道連れの鍵は働いた扱いで収穫には数える）
+        assert.ok(frozenOnly ? !locked : locked, label + ': ロック ' + (frozenOnly ? '(氷結中は付かない)' : ''));
+        assert.ok(s.stats.bindingLock >= 1, label + ': 道連れの鍵が働いた統計');
+        assert.ok(s.stats.harvestMagic >= 1, label + ': 収穫が働いた統計');
+    }
+});
+
 test('増援 / 軽量トークン: トークンのライフが+2 / -1（コストは軽量トークンだけ-1）', () => {
     const a = game([['reinforce'], []]);
     a.magic[0] = 99;

@@ -4,8 +4,8 @@ import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { CHARGE_MIN_COST } from './skillCosts';
-import { orthoNeighbors } from './boardGeometry';
-import { applyDamage, isFrozen, isDormant, ignite } from './thermal';
+import { orthoNeighbors, geometryOf } from './boardGeometry';
+import { applyDamage, isFrozen, isDormant, ignite, thawOne, thunderFireVictims } from './thermal';
 
 export { orthoNeighbors };
 
@@ -21,6 +21,17 @@ export const BOLT_SILENCE_BOLTS = 2;
 export const chargeStacks = (sq: SquareInfo): number => sq.effects.filter((e) => e.effect === '⚡').length;
 
 const hasLock = (sq: SquareInfo): boolean => sq.effects.some((e) => e.effect === '🔑');
+
+const cellsWhere = (board: SquareInfo[], pred: (sq: SquareInfo) => boolean): number[] => board.map((sq, i) => (pred(sq) ? i : -1)).filter((i) => i !== -1);
+
+/** ⚡のある自陣のマス（雷神のへそくり・沈黙は雷なりの対象） */
+export const ownChargedCells = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0);
+export const stashTargets = ownChargedCells;
+export const boltSilenceTargets = ownChargedCells;
+/** ロックされていない自陣のマス（総毛立つの対象） */
+export const bristleTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && !hasLock(sq));
+/** ライフを回復できる⚡の自陣マス（雷を食らわば皿まで。休眠中は除く） */
+export const chargeHealTargets = (board: SquareInfo[], me: Player): number[] => cellsWhere(board, (sq) => sq.player === me && chargeStacks(sq) > 0 && !isDormant(sq));
 
 /** 雷霆の巫の⚡付き自陣マスは「無敵」。弱点として本人も含め誰も触れない */
 export const isShielded = (sq: SquareInfo, chars: PlayerCharacters): boolean =>
@@ -235,4 +246,48 @@ export const healCharged = (board: SquareInfo[], player: Player | undefined): { 
         total += stacks * CHARGE_HEAL;
     });
     return { healed, total };
+};
+
+/** 雷のない所に火は立たぬの対象: ⚡のあるコマ（ロック中は除く。敵の無敵マスは除く） */
+export const thunderFireTargets = (board: SquareInfo[], me: Player, chars: PlayerCharacters): number[] =>
+    cellsWhere(board, (sq) => !!sq.player && chargeStacks(sq) > 0 && !hasLock(sq) && (sq.player === me || !isShielded(sq, chars)));
+
+/** 雷神のへそくり: マスの⚡を全て外す。board を直接書き換え、外した数（次のスキルの軽減に回る）を返す */
+export const stashBolts = (board: SquareInfo[], cell: number): number => {
+    const n = chargeStacks(board[cell]);
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((e) => e.effect !== '⚡') };
+    return n;
+};
+
+/** 沈黙は雷なり: マスの⚡を1個払う。board を直接書き換え、払えたら true（⚡が無ければ false） */
+export const payBolt = (board: SquareInfo[], cell: number): boolean => {
+    const at = board[cell].effects.findIndex((e) => e.effect === '⚡');
+    if (at === -1) return false;
+    board[cell] = { ...board[cell], effects: board[cell].effects.filter((_, k) => k !== at) };
+    return true;
+};
+
+/**
+ * 雷のない所に火は立たぬ: 氷結中のコマなら❄を1つ砕くだけ（frozen=true。コマは壊れず火も移らない）。
+ * そうでなければコマを壊して空きマスにし、周囲8マスの敵コマ（ロック・無敵を除く）の無作為な一部に🔥を付ける。
+ * board を直接書き換える。壊したときの墓地（addCorpses）は呼び出し側が数える。rng は [0,1) を返す関数
+ */
+export const thunderFire = (
+    board: SquareInfo[],
+    cell: number,
+    me: Player,
+    chars: PlayerCharacters,
+    size: number,
+    rng: () => number,
+    keepBuds?: (sq: SquareInfo) => boolean
+): { frozen: boolean; picks: number[]; thawed: number[] } => {
+    if (isFrozen(board[cell])) {
+        board[cell] = thawOne(board[cell]);
+        return { frozen: true, picks: [], thawed: [] };
+    }
+    board[cell] = { player: undefined, bind: 0, effects: [] };
+    const cands = geometryOf(size).surroundRange(cell).filter((j) => board[j].player && board[j].player !== me && !isGuarded(board[j], chars));
+    const picks = thunderFireVictims(cands, rng);
+    const { thawed } = ignite(board, picks, size, 1, keepBuds);
+    return { frozen: false, picks, thawed };
 };

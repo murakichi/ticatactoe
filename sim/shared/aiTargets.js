@@ -1,0 +1,900 @@
+// 自動生成: src/components/game/aiTargets.ts (node scripts/gen-sim-shared.js)。手で編集しない。
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.targetMethods = void 0;
+const Player_1 = require("./Player");
+const util_1 = require("./util");
+const boardGeometry_1 = require("./boardGeometry");
+const thermal_1 = require("./thermal");
+const poison_1 = require("./poison");
+const blast_1 = require("./blast");
+const shikigami_1 = require("./shikigami");
+const charge_1 = require("./charge");
+const aiConstants_1 = require("./aiConstants");
+exports.targetMethods = {
+    /**
+     * 鍵師のコンボ『二列並び → 片方をロック、もう片方に置く』: 敵のコマが無い列に自陣が2つ並び、残り2マスが置ける空きマスのとき、
+     * 片方 lock をロックして、もう片方 place に置く。鍵師だけがロックしたマスに置けるので、置いた手番の次に lock へ置いて揃う。敵が止められるのは、
+     * 自陣のコマを奪う（ライフ0が必要）か、先に自分が揃えるときだけ。
+     * 2つの自陣のコマのライフが KEYSMITH_COMBO_MIN_BIND 以上（ロック中のコマはロックが残る間は奪われないので可）を求める。値は実測で決めた（厳しくするほど悪化した）。
+     * 候補が複数あれば、2つの自陣のコマのライフの合計が大きい列。lock は敵の列に入っているマスを優先（そのマスを敵にも使わせない）
+     */
+    bestLockCombo(board, life) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const moves = new Set(this.getValidMoves(board, life));
+        let best = null;
+        let bestVal = -1;
+        for (const line of geo.winLines) {
+            if (line.some((idx) => (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
+                continue;
+            const mine = [];
+            const open = [];
+            let bad = false;
+            for (const idx of line) {
+                const sq = board[idx];
+                if (sq.player === this.playerSymbol)
+                    mine.push(idx);
+                else if (sq.player)
+                    bad = true;
+                else if (!(0, thermal_1.emptyBlocked)(sq) && !this.shield.has(idx))
+                    open.push(idx);
+                else
+                    bad = true;
+            }
+            if (bad || mine.length !== 2 || open.length !== 2)
+                continue;
+            if (!open.every((idx) => moves.has(idx) && !board[idx].effects.some((e) => e.effect === '🔑')))
+                continue;
+            // 2つの自陣のコマが奪われない（ロック中か、ライフが減衰2回を越えて残る）
+            const safe = mine.every((idx) => board[idx].effects.some((e) => e.effect === '🔑') || board[idx].bind >= aiConstants_1.KEYSMITH_COMBO_MIN_BIND);
+            if (!safe)
+                continue;
+            const val = mine.reduce((n, idx) => n + board[idx].bind, 0);
+            if (val <= bestVal)
+                continue;
+            // 敵の列に入っている回数が多いほうをロックする
+            const enemyLines = (cell) => geo.winLines.filter((l) => l.includes(cell) && l.some((idx) => this.isEnemy(board[idx].player))).length;
+            const [a, b] = open;
+            const lock = enemyLines(a) >= enemyLines(b) ? a : b;
+            best = { lock, place: lock === a ? b : a };
+            bestVal = val;
+        }
+        return best;
+    },
+    /**
+     * 鍵師: ロックして守る自陣のコマ。ライフが尽きかけ（KEYSMITH_OWN_LOCK_MAX_BIND 以下）で奪われそうな、自分の列づくりに効いているコマのうち価値が最大のもの。なければ null。
+     * 価値は、そのコマを含む『敵のコマが無い列』の自陣の数に応じた得点の合計（列が2つ並んでいれば10、3つなら50）。すでにロック中のコマは重ねない
+     */
+    bestOwnLockTarget(board) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = aiConstants_1.KEYSMITH_OWN_LOCK_MIN_VALUE - 1e-9;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || (0, util_1.isShikigami)(sq) || (0, thermal_1.isFrozen)(sq) || sq.bind > aiConstants_1.KEYSMITH_OWN_LOCK_MAX_BIND || this.shield.has(i))
+                continue;
+            if (sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let mine = 0;
+                let foreign = 0;
+                for (const idx of line) {
+                    const p = board[idx].player;
+                    if (p === this.playerSymbol)
+                        mine++;
+                    else if (p)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(mine, 4)];
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    },
+    /** 空蔵: 自分がかけた空きマスロック（まだ自陣のコマになっていないもの）の数 (旧sim AI myEmptyLocks) */
+    myEmptyLocks(board) {
+        // 鍵師のロックは持ち主を記録しない（空蔵ではない）ので、誰が掛けたかを問わず、ロック中の空きマスを数える
+        if (this.character === 'keysmith')
+            return board.filter((sq) => !sq.player && !sq.object && sq.effects.some((e) => e.effect === '🔑')).length;
+        const owner = (0, Player_1.seatOf)(this.playerSymbol) + 1;
+        return board.filter((sq) => !sq.player && sq.effects.some((e) => e.effect === '🔑' && e.owner === owner)).length;
+    },
+    /** 空蔵: ロックしておく空きマス。自分の列の要になるマス、または敵の列を止められるマスのうち価値が最大のもの。なければ null
+     * (旧sim AI bestEmptyLockTarget と同一。EL_MIN_VALUE=10, EL_DENY=2) */
+    bestEmptyLockTarget(board) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null;
+        let bestVal = (this.character === 'keysmith' ? aiConstants_1.KEYSMITH_LOCK_MIN_VALUE : aiConstants_1.EMPTY_LOCK_MIN_VALUE) - 1e-9;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || this.shield.has(i))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let mine = 0;
+                let foreign = 0;
+                const oc = new Map();
+                for (const idx of line) {
+                    const p = board[idx].player;
+                    if (p === this.playerSymbol)
+                        mine++;
+                    else if (p) {
+                        foreign++;
+                        oc.set(p, (oc.get(p) || 0) + 1);
+                    }
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(mine + 1, 4)] - lineScores[Math.min(mine, 4)];
+                else if (mine === 0 && oc.size === 1) {
+                    const c = Array.from(oc.values())[0];
+                    val += aiConstants_1.EMPTY_LOCK_DENY * (lineScores[Math.min(c + 1, 4)] - lineScores[Math.min(c, 4)]);
+                }
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    },
+    /** 火口(idx 87)の対象: 🌱か🍂か❄を持つ、ライフが残り🔥のない敵コマのうち、ライフ+🌱🍂の数×3+敵の列づくりの大きいもの。なければ null (旧sim AI bestTinderTarget と同一) */
+    bestTinderTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const guardedCell = (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑');
+        let best = null;
+        let bestVal = 0;
+        for (const i of (0, thermal_1.tinderTargets)(board, this.playerSymbol, guardedCell)) {
+            const sq = board[i];
+            if (sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔥'))
+                continue;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2)
+                    build += foes;
+            }
+            // ❄のコマは氷結を解いて攻撃の通る状態に戻す（❄1スタックにつき3）
+            const val = sq.bind + ((0, thermal_1.budStacks)(sq) + sq.effects.filter((e) => e.effect === '🍂').length + (0, thermal_1.frozenStacks)(sq)) * 3 + build * 2;
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
+    },
+    /** 火遁(鍛冶師の固有)の対象: ライフが残り🔥・❄の無い敵コマのうち、敵の列を作りかけているもの(列の敵コマが2つ以上・自コマなし)とライフが高いものを優先。
+     * なければ null (旧sim AI bestIgniteTarget の mode 1 と同一) */
+    bestIgniteTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!sq.player || sq.player === this.playerSymbol || sq.bind <= 0)
+                continue;
+            if (this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔥'))
+                continue;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2)
+                    build += foes;
+            }
+            let val = sq.bind + build * 2;
+            // 魔法使いの🌱は🔥で燃えて消える（🌱1つで魔力+3の稼ぎ頭）。優先して燃やす（旧sim AI の igniteBud=6）
+            if (this.characterOf(sq.player) === 'magician')
+                val += aiConstants_1.IGNITE_BUD_WEIGHT * sq.effects.filter((e) => e.effect === '🌱').length * 3;
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
+    },
+    /** 沈黙は雷なりで⚡を払うコマ: 自陣の⚡のコマのうち、自陣のリーチ列に入っていないものを優先し、⚡の多いものを選ぶ（無ければ null） */
+    boltSilenceTarget(board) {
+        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
+        const inReach = new Set();
+        for (const line of lines) {
+            const mine = line.filter((i) => board[i].player === this.playerSymbol);
+            if (mine.length >= 3 && line.every((i) => !board[i].player || board[i].player === this.playerSymbol))
+                mine.forEach((i) => inReach.add(i));
+        }
+        let best = null;
+        let bestKey = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || (0, thermal_1.isDormant)(sq))
+                return;
+            const n = (0, charge_1.chargeStacks)(sq);
+            if (n === 0)
+                return;
+            const key = (inReach.has(i) ? 0 : 100) + n;
+            if (key > bestKey) {
+                best = i;
+                bestKey = key;
+            }
+        });
+        return best;
+    },
+    /** 大木を置くマス: 敵の列（敵のコマがあり自陣のコマが無い列）を潰せて、自陣の列（自陣のコマがあり敵のコマが無い列）を潰さないマス。置ける空きマスが無ければ null */
+    bestTreeCell(board) {
+        const lines = (0, boardGeometry_1.geometryForCells)(board.length).winLines;
+        let best = null;
+        let bestScore = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            let score = 0;
+            for (const line of lines) {
+                if (!line.includes(i))
+                    continue;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                const foes = line.filter((j) => this.isEnemy(board[j].player)).length;
+                if (foes > 0 && mine === 0)
+                    score += foes * 2; // 敵の列を潰す
+                if (mine > 0 && foes === 0)
+                    score -= mine * 3; // 自陣の列を潰さない
+                if (mine === 0 && foes === 0)
+                    score -= 0.5; // 空の列も少し惜しい
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    },
+    /** 雷雲を置くマス: 周囲八マスに敵のコマ（⚡の無敵・🔑でない）が CLOUD_MIN_FOES 個以上あるマスのうち、敵が多く自陣が少ないもの。無ければ null */
+    bestCloudCell(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestScore = -Infinity;
+        board.forEach((sq, i) => {
+            if (sq.player || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.emptyBlocked)(sq))
+                return;
+            const around = geo.surroundRange(i);
+            const foes = around.filter((j) => this.isEnemy(board[j].player) && !(0, charge_1.isGuarded)(board[j], this.characters) && board[j].bind > 0).length;
+            const mine = around.filter((j) => board[j].player === this.playerSymbol).length;
+            if (foes < aiConstants_1.CLOUD_MIN_FOES)
+                return;
+            const score = foes * 2 - mine * 0.5;
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    },
+    bestChargeOneTarget(board) {
+        const size = this.sizeOf(board);
+        let bestIdx = null, bestScore = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i) || board[i].effects.some((e) => e.effect === '🔑'))
+                continue;
+            if ((0, charge_1.chargeStacks)(board[i]) > 0 || (0, thermal_1.isDormant)(board[i]))
+                continue; // 休眠マスの⚡は働かない
+            let attack = 0;
+            for (const n of (0, charge_1.orthoNeighbors)(i, size)) {
+                const sq = board[n];
+                if (!sq.player || sq.bind <= 0 || (0, thermal_1.isFrozen)(sq))
+                    continue; // 氷結中のコマは隣接⚡のダメージを受けない
+                if (this.isEnemy(sq.player))
+                    attack++;
+                else
+                    attack--;
+            }
+            let defend = 0;
+            if (board[i].player === this.playerSymbol && board[i].bind <= 1) {
+                const own = this.bestOwnLineCount(board, i);
+                if (own >= 3)
+                    defend = 4;
+                else if (own === 2)
+                    defend = 2;
+            }
+            const score = Math.max(attack, defend);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
+            }
+        }
+        return bestScore >= aiConstants_1.CHARGE_ONE_MIN_SCORE ? bestIdx : null;
+    },
+    /** 固有スキル(帯電拡散)の起点。リーチ列を無敵で守れる、または自コマ3つ以上で敵2体以上を巻き込めるとき */
+    bestChargeSpreadTarget(board) {
+        const size = this.sizeOf(board);
+        let bestIdx = null, bestScore = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (!board[i].player || this.shield.has(i))
+                continue;
+            const cells = (0, charge_1.connectedPieces)(board, i, size);
+            const mine = cells.filter((k) => board[k].player === this.playerSymbol).length;
+            let reach = false;
+            for (const k of cells)
+                if (board[k].player === this.playerSymbol && this.bestOwnLineCount(board, k) >= 3)
+                    reach = true;
+            const adj = new Set();
+            for (const k of cells) {
+                for (const n of (0, charge_1.orthoNeighbors)(k, size)) {
+                    if (this.isEnemy(board[n].player) && board[n].bind > 0 && !(0, thermal_1.isFrozen)(board[n]) && !cells.includes(n))
+                        adj.add(n);
+                }
+            }
+            // 範囲内の敵コマ自身も帯電させる(隣接で巻き込める)ので、範囲内の敵(ライフ>0)も数える
+            for (const k of cells)
+                if (this.isEnemy(board[k].player) && board[k].bind > 0 && !(0, thermal_1.isFrozen)(board[k]))
+                    adj.add(k);
+            const ok = reach || (mine >= 3 && adj.size >= 2);
+            if (!ok)
+                continue;
+            const score = adj.size + mine + (reach ? 10 : 0);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    },
+    /**
+     * 範囲帯電(3x3)の中心。範囲内の(敵コマ数−自コマ数)（ライフ>0のコマのみ）が最大で、CHARGE_AREA_MIN_SCORE 以上なら撃つ
+     * (旧sim AI bestChargeAreaTarget と同一)
+     */
+    bestChargeAreaTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null, bestScore = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            let score = 0;
+            for (const k of geo.stompRange(i)) {
+                const sq = board[k];
+                if (!sq.player || sq.bind <= 0 || (0, thermal_1.isFrozen)(sq))
+                    continue;
+                if (this.isEnemy(sq.player))
+                    score++;
+                else
+                    score--;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
+            }
+        }
+        return bestScore >= aiConstants_1.CHARGE_AREA_MIN_SCORE ? bestIdx : null;
+    },
+    /** 自陣の毒スタック数 */
+    ownPoisonCount(board) {
+        let n = 0;
+        for (const sq of board)
+            if (sq.player === this.playerSymbol)
+                n += sq.effects.filter((e) => e.effect === '☠').length;
+        return n;
+    },
+    /** ミアズマ: 自陣の毒マスの周囲1マスにいる敵マス（ロック/守りは除く）→ 付与される毒の数（Game・sim と共有の poison.ts） */
+    miasmaPlan(board) {
+        return (0, poison_1.miasmaPlan)(board, this.playerSymbol, this.characters);
+    },
+    /** ミアズマを撃つ価値: 毒が効く敵マスの数（氷結中は MIASMA_FROZEN_WEIGHT 倍）+ リーチ列の要のコマ×2 */
+    miasmaScore(board) {
+        const plan = this.miasmaPlan(board);
+        let effective = 0, critical = 0;
+        plan.forEach((_, j) => {
+            // 氷結中の敵マスの毒は休眠する（消えはしないが、氷結が解けるまでダメージが出ない）ので半分の価値で数える
+            if ((0, thermal_1.isDormant)(board[j])) {
+                effective += aiConstants_1.MIASMA_FROZEN_WEIGHT;
+                return;
+            }
+            effective++;
+            if (this.inOppReachLine(board, j))
+                critical++;
+        });
+        return effective + critical * 2;
+    },
+    /**
+     * 毒花を活かす: 自陣のコマ(敵に隣接・ライフに余裕あり)にインジェクションを打つ対象 (旧sim AI と同一)。なければ null。
+     * 毒を盛るとバッズが付き、毒はミアズマで敵に送れる。自陣の毒が多すぎると自コマが消えるので上限を設ける
+     */
+    findOwnBloomTarget(board) {
+        if (this.ownPoisonCount(board) >= aiConstants_1.BLOOM_MAX_OWN_POISON)
+            return null;
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestScore = -1;
+        board.forEach((sq, i) => {
+            if (sq.player !== this.playerSymbol || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+                return;
+            const own = sq.effects.filter((e) => e.effect === '☠').length;
+            if (sq.bind < aiConstants_1.BLOOM_MIN_BIND + own)
+                return;
+            const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player) && !board[j].effects.some((e) => e.effect === '🔑')).length;
+            const score = n * 10 + sq.bind - own * 5;
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        });
+        return best;
+    },
+    /**
+     * ジャマーの対象(⚡マス)。縦横隣接の敵コマ(ライフ>0・ロックなし)を⚡のスタック数でライフ0にできる数が2以上、
+     * 敵のリーチ列の要をライフ0にできる、または与ダメージ合計が JAMMER_MIN_DMG 以上なら撃つ。他人の無敵マスは選べない (旧sim AI bestJammerTarget と同一)
+     */
+    /**
+     * 砕氷で壊す敵コマ。氷結を重ねて ❄×3 ≥ ライフ にできるもの（重ねる回数は SHATTER_MAX_FREEZES まで）のうち、敵の列づくりに効くもの・ライフの低いものを優先。
+     * 🔑ロック・🔥・無敵は凍らせられない。なければ null
+     */
+    bestShatterTarget(board, freezeCost) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = -Infinity;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || sq.bind <= 0 || this.shield.has(i) || !(0, thermal_1.canFreeze)(sq))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            const freezes = Math.max(stacks > 0 ? 0 : 1, Math.ceil(sq.bind / 3) - stacks);
+            if (freezes > aiConstants_1.SHATTER_MAX_FREEZES)
+                return;
+            let build = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                if (mine === 0 && foes >= 2)
+                    build += foes;
+            }
+            const val = build * 3 - freezes * freezeCost;
+            if (val > bestVal) {
+                bestVal = val;
+                best = { cell: i, freezes };
+            }
+        });
+        return best;
+    },
+    /** パンデミックの中心: 3×3で毒が付く敵コマが多く(自陣の巻き込みは1つ1点減点)、合計が PANDEMIC_MIN_SCORE 以上のマス */
+    bestPandemicTarget(board) {
+        let best = null;
+        let bestScore = aiConstants_1.PANDEMIC_MIN_SCORE - 1;
+        for (let i = 0; i < board.length; i++) {
+            // ⚡で無敵のマスは中心に選べない（クリックが無視されて手番が進まなくなる）
+            if (this.shield.has(i))
+                continue;
+            let score = 0;
+            for (const j of (0, poison_1.pandemicTargets)(board, i, this.characters)) {
+                if (this.isEnemy(board[j].player) && !this.shield.has(j))
+                    score++;
+                else if (board[j].player === this.playerSymbol)
+                    score--;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        return best;
+    },
+    bestJammerTarget(board) {
+        const size = this.sizeOf(board);
+        let bestIdx = null, bestScore = 0;
+        for (let k = 0; k < board.length; k++) {
+            const n = (0, charge_1.chargeStacks)(board[k]);
+            if (n === 0 || (0, thermal_1.isDormant)(board[k]) || (this.shield.has(k) && board[k].player !== this.playerSymbol))
+                continue;
+            let zeroed = 0, critical = 0, dmg = 0;
+            for (const j of (0, charge_1.orthoNeighbors)(k, size)) {
+                const sq = board[j];
+                if (!this.isEnemy(sq.player) || sq.bind <= 0 || sq.effects.some((e) => e.effect === '🔑') || (0, thermal_1.isFrozen)(sq))
+                    continue;
+                dmg += Math.min(n, sq.bind);
+                if (sq.bind <= n) {
+                    zeroed++;
+                    if (this.inOppReachLine(board, j))
+                        critical++;
+                }
+            }
+            if (zeroed >= 2 || critical >= 1 || dmg >= aiConstants_1.JAMMER_MIN_DMG) {
+                const score = zeroed + critical * 2 + dmg * 0.1;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestIdx = k;
+                }
+            }
+        }
+        return bestIdx;
+    },
+    /** 絶対零度を撃つ価値があるか: ライフが残る敵コマが3個以上（全マスに❄が足され、次の手番に3ダメージ。旧sim AI と同方針） */
+    shouldGlacier(board) {
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
+    },
+    /** 業火を撃つ価値があるか: ライフが残る敵コマが3個以上（旧sim AI と同方針） */
+    shouldInferno(board) {
+        return board.filter((sq) => this.isEnemy(sq.player) && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑')).length >= 3;
+    },
+    /** 陰陽師: 砕氷（❄1つにつき3ダメージ）で壊せる、氷結中の敵コマのうち、壊すと列が空くもの。壊すと百鬼夜行→式神一括が組めるコマを最優先、無ければ敵が並びかけている列に乗るコマ。無ければ null */
+    yinShatterTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const comboNow = this.floodComboWins(board);
+        let best = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || (0, util_1.isShikigami)(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑'))
+                return;
+            const stacks = (0, thermal_1.frozenStacks)(sq);
+            if (stacks === 0 || stacks * thermal_1.SHATTER_DAMAGE_PER_STACK < sq.bind)
+                return; // 壊し切れない
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            post[i] = { player: undefined, bind: 0, effects: [] };
+            let val = 0;
+            if (!comboNow && this.floodComboWins(post))
+                val += 100; // 壊すとコンボが組める
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                const foes = line.filter((j) => board[j].player === sq.player).length;
+                if (line.every((j) => board[j].player !== this.playerSymbol))
+                    val += foes; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        });
+        return best;
+    },
+    /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
+    comboThawTarget(board) {
+        if (this.floodComboWins(board))
+            return null; // すでに組める
+        const size = this.sizeOf(board);
+        let own = null;
+        for (let n = 0; n < board.length; n++) {
+            const sq = board[n];
+            if (!sq.player || (0, thermal_1.isFrozen)(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            if (!(0, charge_1.orthoNeighbors)(n, size).some((m) => (0, thermal_1.emptyBlocked)(board[m])))
+                continue; // 溶かせる氷結が隣に無い
+            const post = board.map((x) => ({ ...x, effects: [...x.effects] }));
+            (0, thermal_1.ignite)(post, [n], size, 1);
+            if (!this.floodComboWins(post))
+                continue;
+            if (this.isEnemy(sq.player))
+                return n;
+            if (own === null)
+                own = n;
+        }
+        return own;
+    },
+    /** 火遁で k の氷結を解く対象: k の縦横隣のコマで氷結・ロック・無敵でないもの（敵を優先、無ければ自陣）。旧sim AI thawIgniteTarget(allowOwn) */
+    thawIgniteTarget(board, k) {
+        let own = null;
+        for (const n of (0, charge_1.orthoNeighbors)(k, this.sizeOf(board))) {
+            const sq = board[n];
+            if (!sq.player || (0, thermal_1.isFrozen)(sq) || this.shield.has(n) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            if (this.isEnemy(sq.player))
+                return n;
+            if (own === null)
+                own = n;
+        }
+        return own;
+    },
+    /** 🍂付きトークンの選択: ダブル(空き4以上)→双子→1枚の順に、払える最初のもの (旧sim AI pickLeafToken と同一) */
+    pickLeafToken(availableSkills, freeCells, remaining, costs) {
+        const options = [
+            { idx: 64, skill: 'onClickDoubleLeafToken', minFree: 4 },
+            { idx: 63, skill: 'onClickTwinLeafToken', minFree: 3 },
+            { idx: 62, skill: 'onClickLeafToken', minFree: 3 },
+        ];
+        for (const o of options) {
+            if (!availableSkills.includes(o.idx) || freeCells < o.minFree)
+                continue;
+            const cost = this.calculateAICost(costs[o.skill], true, false, o.skill);
+            if (remaining >= cost)
+                return { skill: o.skill, cost };
+        }
+        return null;
+    },
+    /**
+     * 鬼門封じ: 敵のコマを破壊して3ターンロックする対象。氷結中・🔑ロック・無敵のコマは選ばない。
+     * 破壊されたコマの持ち主のラインの価値（そのコマを含む、他の敵の駒が混ざらないライン）が大きいものを選び、minValue 未満なら null (旧sim AI bestKimonTarget と同一)
+     */
+    findKimonTarget(board, minValue) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player) || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player)
+                        oc++;
+                    else if (board[idx].player)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(oc, 4)];
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return bestVal >= minValue ? best : null;
+    },
+    /**
+     * 毒使い インジェクション: 敵コマ1つに毒を1付与。次の着手の減衰(1+毒数)で bind が 0 になれば消える。
+     * 消えるまでの手数が少なく、敵のライン価値が高いコマを狙う。なければ null (旧sim AI bestInjectionTarget と同一)
+     */
+    findInjectionTarget(board, minValue) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!this.isEnemy(sq.player) || this.shield.has(i))
+                continue;
+            if ((0, thermal_1.isDormant)(sq))
+                continue; // 休眠マス（氷結中）の毒は継続ダメージなし
+            const p = sq.effects.filter((e) => e.effect === '☠').length + 1;
+            const turns = Math.ceil(sq.bind / (1 + p));
+            if (turns > 2)
+                continue;
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let oc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === sq.player)
+                        oc++;
+                    else if (board[idx].player)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(oc, 4)];
+            }
+            if (turns !== 1)
+                val /= 2;
+            if (val > bestVal) {
+                bestVal = val;
+                best = { index: i, kills: turns === 1 };
+            }
+        }
+        return bestVal >= minValue ? best : null;
+    },
+    /**
+     * 対ネクロ: 吸収されそうな低bind(<=3)の未ロック自コマのうち、通っている自ラインの価値が最大のもの。
+     * なければ null (旧sim AI bestAntiNecroLockTarget と同一)
+     */
+    findAntiNecroLockTarget(board) {
+        const lineScores = [0, 1, 10, 50, 1000];
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let best = null;
+        let bestVal = 0;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
+            // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || sq.effects.some((e) => e.effect === '🔑'))
+                continue;
+            let val = 1;
+            for (const line of geo.winLines) {
+                if (!line.includes(i))
+                    continue;
+                let mc = 0, foreign = 0;
+                for (const idx of line) {
+                    if (board[idx].player === this.playerSymbol)
+                        mc++;
+                    else if (board[idx].player)
+                        foreign++;
+                }
+                if (foreign === 0)
+                    val += lineScores[Math.min(mc, 4)];
+            }
+            if (val > bestVal) {
+                bestVal = val;
+                best = i;
+            }
+        }
+        return best;
+    },
+    /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵1体以上で価値あり。コスト2なので積極的に撃つ)。なければ null */
+    findStompTarget(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let bestIdx = null, bestEnemies = 0, bestEmptyCenter = false;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            let enemies = 0;
+            // 氷結中の敵コマはスキルダメージを❄1つ肩代わりするだけで壊れないので数えない
+            for (const idx of geo.stompRange(i))
+                if (this.isEnemy(board[idx].player) && !(0, thermal_1.isFrozen)(board[idx]))
+                    enemies++;
+            const emptyCenter = !board[i].player;
+            if (enemies > bestEnemies || (enemies === bestEnemies && emptyCenter && !bestEmptyCenter)) {
+                bestEnemies = enemies;
+                bestIdx = i;
+                bestEmptyCenter = emptyCenter;
+            }
+        }
+        return bestEnemies >= 1 ? bestIdx : null;
+    },
+    /** ストンプ後の盤面を返す (Game.tsx exeStomp と同じ挙動) */
+    simulateStomp(board, i, player, life) {
+        const nb = board.map(sq => ({ ...sq, effects: [...sq.effects] }));
+        (0, blast_1.stomp)(nb, i, player, life);
+        return nb;
+    },
+    /** 魔法使い審判の日: 十字範囲で (敵破壊 - 自軍破壊) 最大の中心 (純増2以上で価値あり) */
+    findJudgeTarget(board) {
+        let bestIdx = null, bestNet = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            const victims = (0, blast_1.judgeDayVictims)(board, i, this.playerSymbol); // blast.ts の judgeDay と同じ処理で壊れるコマを数える
+            const enemy = victims.filter((v) => this.isEnemy(v.owner)).length;
+            const mine = victims.length - enemy;
+            const net = enemy - mine;
+            if (net > bestNet) {
+                bestNet = net;
+                bestIdx = i;
+            }
+        }
+        // 軍師は駒を並べ直して取り返すので、純増2では割に合わない（対軍師 20〜22→27〜31%, 純増3）
+        const minNet = this.opponents.some((o) => this.characterOf(o) === 'tactician') ? 3 : 2;
+        return bestNet >= minNet ? bestIdx : null;
+    },
+    /** 魔法使い: 相手にリーチがあるとき、敵の3つ揃いの列を全て崩せる審判の日の中心（純増1以上）。なければ null。sim/ai.js の judgeBreakingReach（judgeUnderThreat） */
+    findJudgeBreakingReach(board) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const me = this.playerSymbol;
+        const reachLines = [];
+        for (const line of geo.winLines) {
+            let owner, op = 0, other = 0, empty = 0, blocked = false;
+            for (const idx of line) {
+                const pl = board[idx].player;
+                if (!pl) {
+                    empty++;
+                    if ((0, thermal_1.emptyBlocked)(board[idx]))
+                        blocked = true;
+                    continue;
+                }
+                if (pl === me) {
+                    other++;
+                    continue;
+                }
+                if (owner === undefined)
+                    owner = pl;
+                if (pl === owner)
+                    op++;
+                else
+                    other++;
+            }
+            if (op === 3 && other === 0 && empty === 1 && !blocked)
+                reachLines.push(line);
+        }
+        if (reachLines.length === 0)
+            return null;
+        let bestIdx = null, bestNet = 0;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            const victims = (0, blast_1.judgeDayVictims)(board, i, me);
+            const gone = new Set(victims.filter((v) => this.isEnemy(v.owner)).map((v) => v.cell));
+            const enemy = gone.size;
+            const mine = victims.length - enemy;
+            if (!reachLines.every((line) => line.some((idx) => gone.has(idx))))
+                continue;
+            if (enemy - mine > bestNet) {
+                bestNet = enemy - mine;
+                bestIdx = i;
+            }
+        }
+        return bestNet >= 1 ? bestIdx : null;
+    },
+    /** ヘイルメアリー用: 範囲破壊(ストンプ/審判の日)後に敵の脅威マスが最も減る中心。同点なら壊せる敵が多い方 */
+    findRescueCenter(board, kind) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        const me = this.playerSymbol;
+        let bestIdx = null, bestThreats = Infinity, bestKilled = -1;
+        for (let i = 0; i < board.length; i++) {
+            if (this.shield.has(i))
+                continue;
+            const nb = board.map((sq) => ({ ...sq, effects: sq.effects.slice() }));
+            let killed = 0;
+            if (kind === 'judge') {
+                killed = (0, blast_1.judgeDayVictims)(board, i, me).filter((v) => this.isEnemy(v.owner)).length;
+                (0, blast_1.judgeDay)(nb, i, me); // blast.ts の judgeDay と同じ処理
+            }
+            else {
+                for (const idx of geo.stompRange(i)) {
+                    const sq = nb[idx];
+                    if (sq.player === me) {
+                        nb[idx] = (0, thermal_1.applyDamage)(sq, 5, 'skill').sq;
+                        continue;
+                    }
+                    const guard = (0, thermal_1.absorbDestroy)(sq);
+                    if (guard.blocked) {
+                        nb[idx] = guard.sq;
+                        continue;
+                    } // 氷結は❄1つが身代わりになる
+                    if (this.isEnemy(sq.player))
+                        killed++;
+                    nb[idx] = { player: undefined, bind: 0, effects: [] };
+                }
+            }
+            if (!nb[i].player)
+                nb[i] = { player: me, bind: kind === 'stomp' ? 1 : 2, effects: [] };
+            const threats = new Set(this.opponents.flatMap((o) => this.findThreatSquares(nb, o))).size;
+            if (threats < bestThreats || (threats === bestThreats && killed > bestKilled)) {
+                bestThreats = threats;
+                bestKilled = killed;
+                bestIdx = i;
+            }
+        }
+        this.lastRescueThreats = bestThreats;
+        return bestIdx;
+    },
+    /** 爆破の価値 (旧sim AI blastValue): 周囲8マスの敵陣（4ダメージで壊れるコマは3、それ以外は1）と、式神になる空きマス（0.5） */
+    blastValue(board, i) {
+        const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+        let v = 0;
+        for (const j of geo.surroundRange(i)) {
+            const sq = board[j];
+            if (!sq.player) {
+                if ((0, shikigami_1.shikigamiLandable)(sq))
+                    v += 0.5;
+                continue;
+            }
+            if (sq.player === this.playerSymbol || (0, charge_1.isGuarded)(sq, this.characters))
+                continue;
+            if ((0, thermal_1.isFrozen)(sq)) {
+                v += 0.2;
+                continue;
+            }
+            v += sq.bind <= shikigami_1.SHIKIGAMI_BLAST_DAMAGE ? 3 : 1;
+        }
+        return v;
+    },
+    bestShikigamiCell(board) {
+        let best = null, bestV = -1;
+        board.forEach((sq, i) => {
+            if (!(0, shikigami_1.shikigamiLandable)(sq) || this.shield.has(i))
+                return;
+            const v = this.blastValue(board, i);
+            if (v > bestV) {
+                bestV = v;
+                best = i;
+            }
+        });
+        return best;
+    },
+    /** 爆破の盤面反映（Game.tsx exeShikigamiBlast と同じ） */
+    applyShikigamiBlast(board, i) {
+        (0, shikigami_1.blast)(board, i, this.playerSymbol, this.characters);
+    },
+};

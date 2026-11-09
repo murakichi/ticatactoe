@@ -1,7 +1,6 @@
 // tsconfig の jsx は classic ("react") なので .tsx では React の import が必須
+import { readGameSource } from './gameSource';
 import React from 'react';
-import * as fs from 'fs';
-import * as path from 'path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Game, PlayerConfig } from './Game';
 import { BoardEffects, BurstType } from './BoardEffects';
@@ -45,7 +44,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     springThunder: 'trigger', // 氷結した空きマスの❄を解く
 };
 
-const gameSource = fs.readFileSync(path.join(__dirname, 'Game.tsx'), 'utf8');
+const gameSource = readGameSource();
 
 describe('ギアの発動の演出', () => {
     it('全ギアが登録表にある(新ギアの演出の付け忘れ防止)', () => {
