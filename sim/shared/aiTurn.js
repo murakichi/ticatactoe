@@ -29,7 +29,7 @@ exports.maxOppMagic = maxOppMagic;
  * @param pickHailMary 詰みのヘイルメアリーで当選させるスキル名を選ぶ（本番は Game の抽選、sim は rng）
  */
 const planAITurn = (ai, input, pickHailMary) => {
-    var _a;
+    var _a, _b;
     const { board, seat, life } = input;
     const oppMagic = (0, exports.maxOppMagic)(input.magic, seat);
     ai.placements = input.placements;
@@ -42,6 +42,7 @@ const planAITurn = (ai, input, pickHailMary) => {
     ai.oppGearCount = input.oppGearCount;
     ai.oppLastStand = input.oppLastStand;
     ai.yinYangMode = input.yinYangMode;
+    ai.dragonForm = (_a = input.dragonForm) !== null && _a !== void 0 ? _a : 'miko';
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (input.silenced) {
         ai.updateShield(board);
@@ -62,7 +63,7 @@ const planAITurn = (ai, input, pickHailMary) => {
     // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
     // （氷室の番人はロックの代わりに氷結を撃つので、氷結が付けられるかで見る）
     const canMark = (t) => (input.characters[seat] === 'cryomancer' ? (0, thermal_1.canFreeze)(board[t]) : (0, thermal_1.lockable)(board[t]));
-    if ((_a = result.lockTargets) === null || _a === void 0 ? void 0 : _a.some((t) => !canMark(t))) {
+    if ((_b = result.lockTargets) === null || _b === void 0 ? void 0 : _b.some((t) => !canMark(t))) {
         result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
         result.lockTargets = undefined;
     }

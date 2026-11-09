@@ -68,6 +68,8 @@ export type AITurnInput = {
     /** 一寸の虫に魂なし: この席は「ライフ3以下のコマを置けない」縛りか。tokenBind はトークンのライフ */
     lifeBan: boolean;
     tokenBind: number;
+    /** 龍神の巫女の形態（省略時は巫女）。#527 */
+    dragonForm?: 'miko' | 'dragon';
 };
 
 export type AITurnPlan =
@@ -108,6 +110,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     ai.oppGearCount = input.oppGearCount;
     ai.oppLastStand = input.oppLastStand;
     ai.yinYangMode = input.yinYangMode;
+    ai.dragonForm = input.dragonForm ?? 'miko';
     // サイレンス中はスキルを使えない: 通常の着手だけ行う
     if (input.silenced) {
         ai.updateShield(board);

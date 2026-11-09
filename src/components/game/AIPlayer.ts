@@ -6,6 +6,8 @@ import { targetMethods, TargetMethods } from './aiTargets';
 import { planMethods, PlanMethods } from './aiPlans';
 import { skillChoiceMethods, SkillChoiceMethods } from './aiSkillChoice';
 import { planMoveMethods, PlanMoveMethods } from './aiPlanMove';
+import { dragonMethods, DragonMethods } from './aiDragon';
+import { DragonForm } from './dragon';
 
 export * from './aiConstants';
 
@@ -43,6 +45,8 @@ class AIPlayer {
     ownTrees: number = 0;
     /** 自陣のオブジェクトの数（鍵師の砦の設置判断に使う） */
     ownObjectCount: number = 0;
+    /** 龍神の巫女の形態（planAITurn が毎手番セットする。#527） */
+    dragonForm: DragonForm = 'miko';
     /** 自陣の働いている雷雲の数 */
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
@@ -120,7 +124,7 @@ class AIPlayer {
 }
 
 // 本体の大きなメソッド群は別ファイル。型はインターフェース統合、実体はプロトタイプへの合成で AIPlayer に戻す
-interface AIPlayer extends SearchMethods, TargetMethods, PlanMethods, SkillChoiceMethods, PlanMoveMethods {}
-Object.assign(AIPlayer.prototype, searchMethods, targetMethods, planMethods, skillChoiceMethods, planMoveMethods);
+interface AIPlayer extends SearchMethods, TargetMethods, PlanMethods, SkillChoiceMethods, PlanMoveMethods, DragonMethods {}
+Object.assign(AIPlayer.prototype, searchMethods, targetMethods, planMethods, skillChoiceMethods, planMoveMethods, dragonMethods);
 
 export default AIPlayer;

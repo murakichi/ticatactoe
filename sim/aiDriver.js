@@ -75,6 +75,7 @@ function inputOf(s, reroll) {
         oppGearCount: others.reduce((n, o) => n + s.gears[o].length, 0),
         oppLastStand: others.some((o) => hasGear(s.gears[o], 'lastStand') && !s.lastStandUsed[o]),
         yinYangMode: s.yy[seat] === 'yang' ? 'yang' : 'ying',
+        dragonForm: s.dragon[seat].form,
         silenced: s.silenced[seat],
         glacierPending: s.glacierPending[seat],
         glacierCharge: s.glacierCharge[seat],
