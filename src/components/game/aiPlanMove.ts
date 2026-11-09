@@ -1181,16 +1181,22 @@ export type PlanMoveMethods = typeof planMoveMethods;
 
 
 /** 設置するオブジェクトと設置マス。聖域・砦は自陣のコマが2つ以上周囲にあるマス、それ以外は盤の隅に近いマス。置けなければ null */
+const BOULDER_MAX = 4;
+
 function planObject(this: AIPlayer, board: SquareInfo[], left: number, costs: SkillCosts, availableSkills: number[], heavyReady: boolean): { kind: keyof typeof OBJECT_DEFS; cell: number } | null {
     const geo = geometryForCells(board.length);
     const size = Math.round(Math.sqrt(board.length));
     const mine = board.filter((sq) => sq.player === this.playerSymbol && !sq.object).length;
     if (mine < 2) return null;
-    const order = ['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'] as const;
+    const order = this.hasGroundRent
+        ? (['boulder', 'market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'] as const)
+        : (['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'] as const);
     for (const kind of order) {
         const idx = OBJECT_DEFS[kind].idx;
         if (!availableSkills.includes(idx)) continue;
-        if (board.some((sq) => sq.player === this.playerSymbol && sq.object === kind)) continue;
+        // 大岩は地代のためにBOULDER_MAXまで重ねて置く。それ以外は1種類1つ
+        const owned = board.filter((sq) => sq.player === this.playerSymbol && sq.object === kind).length;
+        if (kind === 'boulder' ? owned >= BOULDER_MAX : owned > 0) continue;
         // 大工房はベースコスト7以上の札(降霊・一寸の虫)を撃てる見込みがあるときだけ。一言居士はスキルを連打する相手がいるときだけ
         if (kind === 'workshop' && !heavyReady) continue;
         if (kind === 'oneWord' && !this.opponents.some((o) => ['cryomancer', 'poisoner', 'witch', 'tactician', 'magician', 'pyromancer'].includes(this.characterOf(o) ?? ''))) continue;

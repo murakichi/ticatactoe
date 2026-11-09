@@ -74,6 +74,8 @@ class AIPlayer {
     /** 毒花を装備しているか。毒使いなら、自陣のコマに積極的に毒を盛る（旧sim AI の毒使い×毒花と同じ） */
     hasToxicBloom: boolean = false;
     hasEmptyLock: boolean = false;
+    /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
+    hasGroundRent: boolean = false;
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
     deck?: number[];
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
@@ -95,7 +97,8 @@ class AIPlayer {
         gearCostFn?: (cost: number, isToken: boolean, skillKey?: string) => number,
         hasToxicBloom: boolean = false,
         hasEmptyLock: boolean = false,
-        deck?: number[]
+        deck?: number[],
+        hasGroundRent: boolean = false
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -105,6 +108,7 @@ class AIPlayer {
         this.hasToxicBloom = hasToxicBloom;
         this.hasEmptyLock = hasEmptyLock;
         this.deck = deck;
+        this.hasGroundRent = hasGroundRent;
     }
 
     /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
