@@ -1,5 +1,6 @@
 // オリジナルスキルの作成画面。選択肢（対象・選び方・効果・代償）から選ぶだけで、コストは自動で出る。
 // 保存した1枚は、人間席のデッキ編集で「オリジナル」として1枚だけ入れられる。AIは使わない。
+// デッキ編集（スキル選択欄）の最下部のボタンから、App.tsx のサブウィンドウ（モーダル）で開く。
 import React, { useState } from 'react';
 import { OBJECT_KINDS } from '../types/ObjectKind';
 import { OBJECT_DEFS } from './game/objects';
@@ -87,10 +88,7 @@ export const CustomSkillCreator = (props: Props) => {
     };
 
     return (
-        <details className={styles.gearBox} open={!props.initial}>
-            <summary className={styles.gearHead}>
-                <span>🛠 オリジナルスキル {props.initial ? `（保存済み: ${props.initial.name}）` : '（未作成）'}</span>
-            </summary>
+        <div>
             <div className={styles.gearNote}>選択肢から効果を組み立てます。効果を重ねるほどコストは重く、代償（ネガティブな効果）を付けると軽くなります。デッキに1枚まで入れられ、AIは使いません。</div>
 
             <div className={styles.deckGroupLabel}>どこに（対象）</div>
@@ -358,6 +356,6 @@ export const CustomSkillCreator = (props: Props) => {
                 {describeCustom(shown)}
             </div>
             {message && <div className={styles.gearNote}>{message}</div>}
-        </details>
+        </div>
     );
 };
