@@ -382,7 +382,15 @@ export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
  * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
  */
 export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<CharacterId, GearId[]>>>> = {
-    tactician: { cryomancer: ['springThunder', 'priceWreck'] },
+    tactician: {
+        cryomancer: ['springThunder', 'priceWreck'],
+        magician: ['lastStand', 'budSeed'], // 42→56%（seed2/3, 各150試合）
+    },
+    giant: {
+        magician: ['lastStand', 'budSeed'], // 19→88%（同）
+        cryomancer: ['lastStand', 'budSeed'], // 35→60%（同）
+    },
+    pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
     necromancer: { cryomancer: ['springThunder', 'lastStand'] }, // 31→84%（seed2/3, 各150試合）
     cryomancer: {

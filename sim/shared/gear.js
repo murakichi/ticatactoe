@@ -321,7 +321,15 @@ exports.COUNTER_GEARS_FOR_YOU = {
  * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
  */
 exports.COUNTER_GEARS = {
-    tactician: { cryomancer: ['springThunder', 'priceWreck'] },
+    tactician: {
+        cryomancer: ['springThunder', 'priceWreck'],
+        magician: ['lastStand', 'budSeed'], // 42→56%（seed2/3, 各150試合）
+    },
+    giant: {
+        magician: ['lastStand', 'budSeed'],
+        cryomancer: ['lastStand', 'budSeed'], // 35→60%（同）
+    },
+    pyromancer: { yinYangMaster: ['afterglow', 'snowball'] },
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
     necromancer: { cryomancer: ['springThunder', 'lastStand'] },
     cryomancer: {
