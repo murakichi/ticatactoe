@@ -171,6 +171,19 @@ function planThawAndYinYang(this: AIPlayer, c: PlanContext): AIResult | null {
         }
     }
 
+    // 陰陽師・氷室以外: 砕氷(47)が手札にあれば、氷結で守られた敵コマを壊して自分の列を伸ばす／敵の並びを崩す
+    if (this.character !== 'yinYangMaster' && this.character !== 'cryomancer' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
+        const tg = this.shatterTarget(board);
+        if (tg !== null) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            shatter(post, tg);
+            this.updateShield(post);
+            const followup = this.getBestMove(post, life);
+            this.updateShield(board);
+            return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickShatter', target: tg }] };
+        }
+    }
+
     // 陰陽師: 氷結中の空きマスが百鬼夜行→式神一括の列を塞いでいるとき、火遁で隣のコマを燃やして溶かし、コンボを組める盤面にする
     // （氷室・軍師の氷結で列が作れず、コンボ待ちのまま遅くなるのを防ぐ）
     if (this.character === 'yinYangMaster' && availableSkills.includes(31) && magic >= this.calculateAICost(costs.onClickIgnite, false, false, 'onClickIgnite')) {
