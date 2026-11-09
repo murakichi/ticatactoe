@@ -16,6 +16,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 55 | 順位追試 | seed6/100(別シード) | **1位を再確認** 対強豪56.2%(field 68.7%)。2位 electrician 52.0%、giant 52.0%。差4.2pt(fieldでも3.6pt)。最悪対面 giant 33% |
 | 54 | 順位再測定(reaper,lastStand 採用後) | seed5/100。強豪=necromancer,electrician,magician,giant,cryomancer,keysmith | **1位** 対強豪55.0%(field 68.2%)。2位 giant 53.4%、3位 magician 52.2%、4位 electrician 50.5%。1位との差(対強豪)は1.6pt、fieldでは3.5pt。最悪対面 cryomancer 22% |
 | 53 | gear(新ギア) | master追加の新ギア 雪だるま/死神の鎌/芽吹きを測定(seed190/150, 強豪=magician,electrician,cryomancer,giant,tactician,yinYangMaster)。base[vengeance,lastStand] 40.8 / snowball,lastStand 50.6 / **reaper,lastStand 63.8** / budSeed,lastStand 43.1 / vengeance,reaper 54.9 / vengeance,snowball 42.7 / reaper,snowball 65.9。追試 seed200/200: base 38.3 / reaper,lastStand **61.2** / reaper,snowball 60.3 / reaper,vengeance 53.9 | **採用** `[reaper,lastStand]`(+23pt, 基準の数倍のSE)。別案 `[reaper,snowball]`。機構: 死神の鎌=ライフ0の駒が誰のものでも手番終わりに壊れる→墓地が貯まり、軽減パッシブ(死体の数だけ全スキル安い)と蘇生が効く。対pyromancer 67→94、対magician 58→96、対electrician 26→74、対poisoner 24→59。giant(33→30)とcryomancer(32→33)は動かず |
 | 52 | 順位再測定(軽減パッシブ採用後, master再取込後) | seed4/100。強豪=magician,electrician,cryomancer,giant,tactician,yinYangMaster | **7位** 対強豪41.2%(field 52.7%)。1位 magician 70.4%、2位 electrician 61.2%。最悪対面 poisoner 28%。10位→7位(強豪集合・環境が変わっており厳密な比較ではない) |
