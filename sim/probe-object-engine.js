@@ -6,6 +6,10 @@ const engine=require(P+'engine'),gearMod=require(P+'shared/gear'),deckMod=requir
 const MODE=process.argv[2]||'none',N=+process.argv[3]||20,CH=process.argv[4]||'you';
 const GEARS=process.env.GEARS?process.env.GEARS.split(','):null;
 const SIZE=process.env.SIZE?+process.env.SIZE:undefined;
+const DECK=process.env.DECK==='engine'; // 対象のデッキの3枚(2,10,28)を 大木/大工房/招き猫 に差し替える
+const HAND=process.env.HAND==='1'; // 手札にある札の分だけ建てる(手札制約)
+const LOCK=process.env.LOCK==='1'; // 手番の終わりに、手札のエンジン札をロックして残す(最大3枚。ロックのコストは無視)
+const IDX={workshop:120,luckyCat:123,bigTree:105};
 const MAXTREES=+(process.env.MAXTREES||99),RESERVE=+(process.env.RESERVE||0);
 const opps=(process.env.OPPS||engine.CHARACTERS.join(',')).split(',');
 const KEY={workshop:'onClickWorkshop',luckyCat:'onClickLuckyCat',bigTree:'onClickBigTree'};
@@ -26,6 +30,7 @@ function build(s,me){
     const mine=(k)=>s.board.filter(q=>q.object===k&&q.player===sym).length;
     const want=!mine('workshop')?'workshop':!mine('luckyCat')?'luckyCat':'bigTree';
     if(want==='bigTree'&&mine('bigTree')>=MAXTREES)break;
+    if(HAND&&!s.skills.includes(IDX[want]))break;
     const c=engine.calculateCost(s,engine.costsOf(s)[KEY[want]],false,false,KEY[want]);
     if(engine.curMagic(s)<c+RESERVE)break;
     const cell=pickCell(s,sym);if(cell<0)break;
@@ -38,11 +43,13 @@ let W=0,L=0,D=0;const per={};
 for(const o of opps){let w=0,l=0;
   for(let g=0;g<N;g++){
     const first=g%2===0,chars=first?[CH,o]:[o,CH],me=first?0:1;
-    const s=engine.newGame({chars,size:SIZE,rng:engine.makeRng(52000+g),decks:chars.map(c=>deckMod.recommendedDeck(c)),gears:chars.map(c=>(c===CH&&GEARS&&chars.indexOf(c)===me)?GEARS:gearMod.recommendedGears(c))});
+    const s=engine.newGame({chars,size:SIZE,rng:engine.makeRng(52000+g),decks:chars.map((c,i)=>{const d=deckMod.recommendedDeck(c).slice();if(DECK&&i===me){[2,10,28].forEach((k,j)=>{const at=d.indexOf(k);if(at>=0)d[at]=[105,120,123][j];});}return d;}),gears:chars.map(c=>(c===CH&&GEARS&&chars.indexOf(c)===me)?GEARS:gearMod.recommendedGears(c))});
     s.aiFlags=[{},{}];let n=0;
     try{while(!s.winner&&n++<500){
       if(MODE==='build'&&s.turn===me)build(s,me);
-      const r=drv.makeMove(s,'faithful');if(!r.turnEnded&&r.move!=null)engine.placeMove(s,r.move);else if(!r.turnEnded)engine.SKILLS.charge(s);
+      const hb=(s.turn===me)?s.skills.slice():null;
+      const r=drv.makeMove(s,'faithful');
+      if(LOCK&&hb&&r.turnEnded&&s.turn!==me)s.lockedSkills[me]=hb.filter(i=>Object.values(IDX).includes(i)).slice(0,3);if(!r.turnEnded&&r.move!=null)engine.placeMove(s,r.move);else if(!r.turnEnded)engine.SKILLS.charge(s);
     }}catch(e){stats.err=(stats.err||0)+1;}
     stats.games++;
     if(s.winner){if(engine.seatOf(s.winner)===me)w++;else l++;}else D++;
