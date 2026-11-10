@@ -84,8 +84,8 @@ export const OBJECT_DEFS: Record<ObjectKind, ObjectDef> = {
     boulder: { idx: 136, name: '大岩', icon: '⛰️', life: OBJECT_LIFE, costKey: 'onClickBoulder', desc: '効果は無く、2ターンのロック付きで設置される' },
 };
 
-/** オブジェクトを設置するスキルのコストキー（普請道楽の割引の対象） */
-export const OBJECT_PLACE_KEYS: ReadonlySet<string> = new Set(Object.values(OBJECT_DEFS).map((d) => d.costKey));
+/** 建造物を置くスキルのコストキー（普請道楽の『設置スキルが安い』の対象）。八百万の祈り（龍神の巫女・#527）も建造物を置くスキルとして数える（普請道楽の『設置スキルが安い』が祈りにも効く） */
+export const OBJECT_PLACE_KEYS: ReadonlySet<string> = new Set([...Object.values(OBJECT_DEFS).map((d) => d.costKey), 'onClickPrayer']);
 
 /** player のオブジェクトが盤面にあるか（氷結中で休眠しているものも含む。普請道楽の入力） */
 export const hasOwnObject = (board: SquareInfo[], player: Player): boolean => board.some((sq) => isBuilding(sq) && sq.player === player);

@@ -347,6 +347,9 @@ describe('普請道楽（オブジェクトのギア）', () => {
         expect(adjustCostByGear(4, ['buildMania'], none, false, 'onClickBibine')).toBe(4); // 設置でもオブジェクトも無いスキルは変わらない
         expect(adjustCostByGear(4, ['buildMania'], own, false, 'onClickBibine')).toBe(1);
         expect(adjustCostByGear(8, ['buildMania'], own, false, 'onClickBigTree')).toBe(5); // 設置スキルも-3だけ（-2は上乗せされない）
+        // 八百万の祈り（龍神の巫女）も建造物を置くスキルなので、オブジェクトが無いときは-2、ある間は-3
+        expect(adjustCostByGear(4, ['buildMania'], none, false, 'onClickPrayer')).toBe(2);
+        expect(adjustCostByGear(4, ['buildMania'], own, false, 'onClickPrayer')).toBe(1);
         expect(adjustCostByGear(5, ['buildMania'], own, false, 'onClickFort')).toBe(2);
         expect(adjustCostByGear(3, ['buildMania'], own, false, 'onClickBibine')).toBe(1); // 下限1
         expect(adjustCostByGear(1, ['buildMania'], own, false, 'onClickShuffle')).toBe(1);
