@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/aiDragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
+exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.DRAGON_EMPTY_RESERVE = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
@@ -13,6 +13,8 @@ const thermal_1 = require("./thermal");
 exports.ROAR_MIN_VICTIMS = 3;
 /** 自陣の建造物の上限。建造物は列に数えないので、増やしすぎると自分の列を作るマスが無くなり、盤面が埋まって膠着する（sim で魔力1000超・盤面が建造物だらけの試合を確認） */
 exports.BUILDING_CAP = 5;
+/** 龍が祈りで建造物を増やすのをやめる空きマスの数。建造物は列に数えないので、盤が建造物で埋まると2本目の窓が潰れて膠着する（4x4 の対強豪 +9.4pt: seed21/31/41 で +7.4/+11.8/+8.9、対ネクロが主） */
+exports.DRAGON_EMPTY_RESERVE = 4;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
 exports.PRAYER_MAX_PER_TURN = dragon_1.AWAKEN_BUILDINGS;
 /** 盤の4つの角を斜めに切る4マスの組（囲める範囲が最大6マス） */
@@ -206,6 +208,8 @@ exports.dragonMethods = {
         const clicks = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= exports.DRAGON_EMPTY_RESERVE)
+            return null;
         const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && (0, dragon_1.prayerUsable)(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);
