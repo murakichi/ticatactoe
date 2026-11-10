@@ -139,6 +139,9 @@ export const GRAVE_OFFERING_MIN_PIECES = 3;
 export const GRAVE_OFFERING_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
+/** 対ネクロの先回りロック: 1手番に掛ける最大数と、ロックの残りがこの値以下なら延長する */
+export const NECRO_LOCK_MAX = 3;
+export const NECRO_LOCK_REFRESH = 2;
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
 export const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (旧sim AI の EL_MAX / EL_MIN_VALUE / EL_DENY) */

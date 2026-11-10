@@ -980,6 +980,26 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
                 return { move: target, skills: ['onClickJudgeDay'] };
             }
         }
+        // 対ネクロ: 蘇生はライフ0のコマを吸収する（ロック中のコマは奪われない）。吸収されそうな自陣のコマ（ライフ1以下で未ロック）を先にロックし、
+        // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。魔法使い（別系統のロック規則）と氷室（ロックの代わりに氷結）は対象外
+        if (this.character !== 'magician' && this.character !== 'cryomancer' && this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer')) {
+            const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_1.NECRO_LOCK_MAX;
+            const guardCells = [];
+            for (let i = 0; i < board.length && guardCells.length < Math.min(aiConstants_1.NECRO_LOCK_MAX, afford); i++) {
+                const sq = board[i];
+                if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || !(0, thermal_1.lockable)(sq) || sq.bind > 1)
+                    continue;
+                const locked = sq.effects.some((e) => e.effect === '🔑');
+                const stack = (0, lock_1.lockStack)(sq);
+                if (!locked || (stack > 0 && stack <= aiConstants_1.NECRO_LOCK_REFRESH))
+                    guardCells.push(i);
+            }
+            if (guardCells.length === 1)
+                return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: guardCells };
+            if (guardCells.length > 1)
+                return { move: this.getBestMove(board, life), skills: [], chargeClicks: guardCells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
+        }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
         // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 MAGICIAN_MAX_LOCKS 個。旧sim AI の magLockN。
         // A/B: 環境勝率 +2.9pt(seed2/200)・+3.0pt(seed3/400)・+3.5pt(seed4/400)）
