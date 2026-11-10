@@ -1,12 +1,12 @@
 # tune-top: dragonMiko（龍神の巫女）
 - 目標: 環境1位（対強豪平均）に到達し、その後も対強豪平均が上がらなくなるまで洗練する
-- 最後に検証したmaster: 0faf505（2026-11-10 に取り込み）
+- 最後に検証したmaster: ec29e2f（2026-11-10 に取り込み・基準線取り直し）
 - 現在の推奨設定: gears=[buildMania,rubbleBase] deck=[3,11,12,28,52,92,5,8,108,127,128,136] AIフラグ=なし（試行3で採用。対強豪平均 37.8%（seed1/60）・追試 36.7%（seed2/100）。基準 2.8%）
-- 強豪リスト（基準線を取った時点で固定・`--strong` で復元）: electrician,necromancer,yinYangMaster,giant,magician,keysmith,witch
-- 基準線: 対強豪平均 41.3% / 順位 11位（13キャラ中。12位 poisoner 38.1%、13位 you 1.7%）/ 1位 electrician 58.6%（差17.3pt）/ field 49.4%・最悪対面 5%(cryomancer)・不利3/有利3（4x4・seed1・60試合・採用後・2026-11-10）。採用前は 2.3%・12位（1位 giant 62.5%）
+- 相手の重み（重み付き方式・beta=8・基準線 seed1/60 で固定。`--weights` で復元）: electrician 11.4%, pyromancer 11.3%, yinYangMaster 10.8%, dragonMiko 10.6%, keysmith 9.7%, necromancer 9.0%, giant 8.0%, tactician 7.9%, cryomancer 6.8%, witch 5.1%, magician 5.0%, poisoner 4.1%, you 0.3%
+- 基準線（ec29e2f・4x4・seed1・60試合・重み付き方式）: 対強豪平均 52.8% / 順位 4位（1位 electrician 54.1%、差1.3pt。2位 pyromancer 53.9%、3位 yinYangMaster 53.2%）/ field 53.8%・最悪対面 5%(cryomancer)・不利3/有利3・均衡10.5%。対キャラ: pyromancer 100 / magician 90 / witch 84 / yinYangMaster 74 / giant 62 / poisoner 58 / you 59 / electrician 46 / necromancer 39 / tactician 23 / keysmith 8 / cryomancer 5。（旧『強豪リスト方式』の 41.3%・11位は注記: 方式が違うので比べない）
 - 連続不採用回数: 3
 - 関連 issue: #526（二列勝利の基盤）, #527（本体）, #531（勝率の調整）, #532（AIの列判定が二列勝利を知らない）, #533（演出と本番の通し） / 検索日 2026-11-10
-- 状態: running（トップ未達）
+- 状態: running（トップ未達。1位まで1.3pt）
 
 ## 診断
 - 対キャラ別（採用後・4x4・seed1・60試合）: pyromancer 98 / magician 90 / witch 83 / yinYangMaster 76 / giant 57 / you 53 / poisoner 46 / electrician 43 / tactician 24 / necromancer 11 / keysmith 8 / cryomancer 5。強豪の中で勝てていないのは necromancer・keysmith。
@@ -54,3 +54,7 @@
 - 対氷室・対鍵師・対ネクロ（いずれも 0〜10%）: 氷結で建造物が置けない・ロックで列を止められる、が原因の見当。解凍・解錠の札や、サイレンス系を龍のあいだ連打する案（ユーザー案）。
 - 巫女のAIが一言居士・お一人様限りの札を手札から撃つか（現状は祈りの抽選で引く分だけ）。
 - 5x5 での挙動（本番の2人戦は4x4が既定）。
+
+## 次の一手（2026-11-10 基準線の後）
+- 伸ばせる余地×重み: keysmith(8%,重み9.7%) > cryomancer(5%,6.8%) > tactician(23%,7.9%) > necromancer(39%,9.0%)。まず対鍵師（ロックで列が止まる）を手順3-3の負け筋分析から。
+- 注: 基準線の rank は約90分かかった（4コア）。--target 単体を中心に回す。
