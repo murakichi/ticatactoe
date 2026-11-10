@@ -24,3 +24,18 @@ describe('軍師AI: 雷霆の巫が相手のとき、一寸の虫に魂なし(92
         expect(locks).toContain(92);
     });
 });
+
+describe('砕氷(47)の狙い（陰陽師以外）', () => {
+    it('氷結で守られた敵コマを壊し切れて、自分の列の邪魔なら狙う。壊し切れない・価値が無いなら null', () => {
+        const ai = new AIPlayer('💙', 'tactician', ['⭕'], ['tactician', 'cryomancer']);
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 3, effects: [] };
+        b[1] = { player: '💙', bind: 3, effects: [] };
+        b[2] = { player: '💙', bind: 3, effects: [] };
+        b[3] = { player: '⭕', bind: 3, effects: [{ effect: '❄' }] }; // 自分の3つ並びの4つ目を塞ぐ氷結コマ（❄1×3ダメージで壊れる）
+        ai.updateShield(b);
+        expect(ai.shatterTarget(b)).toBe(3);
+        b[3] = { player: '⭕', bind: 7, effects: [{ effect: '❄' }] }; // 壊し切れない
+        expect(ai.shatterTarget(b)).toBeNull();
+    });
+});

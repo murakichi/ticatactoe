@@ -120,6 +120,10 @@ exports.searchMethods = {
         return false;
     },
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
+    /** 自分がそのギアを装備しているか（装備に合わせて戦略を変える判断に使う） */
+    ownsGear(id) {
+        return this.gears.includes(id);
+    },
     isEnemy(player) {
         return player !== undefined && player !== this.playerSymbol;
     },

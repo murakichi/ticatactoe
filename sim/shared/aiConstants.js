@@ -1,8 +1,8 @@
 // 自動生成: src/components/game/aiConstants.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CLOUD_MAX = exports.BIG_TREE_MAX = exports.BOLT_SILENCE_IDX = exports.PG_HOLD_GAP = exports.MAGICIAN_HOLD_VS_YINYANG = exports.MAGICIAN_HOLD_VS_NECRO = exports.MAGICIAN_HOLD = exports.YOU_HOLD_VS = exports.NIGHT_VEIL_RAISE = exports.GLACIER_COST = exports.NIGHT_VEIL_OPP_MAGIC = exports.REROLL_REDUCERS = exports.TURN_ENDING_SKILLS = exports.TOKEN_SKILL_KEYS = exports.SH_COMBO_REAL = exports.NO_DIG_53_MIN = exports.SH_RESERVE = exports.SH_SMALL_FRY_MIN = exports.SH_PURGE_FREE = exports.SH_CURSE_MIN = exports.SH_BLESS_WEAK = exports.SH_RICH_GUARD = exports.SH_RICH_BLAST_MIN = exports.SH_BLAST_MIN = exports.SH_MAX = exports.YY_COVER_WEIGHT = exports.NO_CAP_NECRO_WEIGHT = exports.RICH_OPIUM_MIN_HIT = exports.RICH_EXTRA_REROLLS = exports.RICH_SPEND_GOAL_MAX = exports.RICH_SPEND_GOAL = exports.MAGICIAN_REROLL_MAGIC = exports.RICH_REROLL_MAGIC = exports.INTENSIFY_MIN_FOE_POISON = exports.PANDEMIC_MIN_SCORE = exports.MIST_MIASMA_MIN_SCORE = exports.POISON_RICH_RESERVE = exports.INTENSIFY_MAX_CELL_POISON = exports.STOMP_CHAIN_MAX = exports.PLUNDER_CHAIN_MAX = exports.SHATTER_RESERVE = exports.SHATTER_MAX_FREEZES = exports.SHATTER_MAX_PER_TURN = exports.RICH_MAGIC = exports.SURPLUS_MAGIC = exports.CHARGE_RANDOM_MARGIN = exports.JAMMER_MIN_DMG = exports.CHARGE_AREA_MIN_SCORE = exports.CHARGE_ONE_MIN_SCORE = exports.SKILL_POOL_SIZE = void 0;
-exports.FORCED_WIN_PLIES = exports.MIASMA_MIN_SCORE = exports.MIASMA_FROZEN_WEIGHT = exports.BLOOM_MIN_BIND = exports.BLOOM_MAX_OWN_POISON = exports.EXCLUSIVE_MIN_MAGIC = exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.WITCH_DIG_MARGIN = exports.MAX_REROLLS = exports.EMPTY_LOCK_DENY = exports.IGNITE_BUD_WEIGHT = exports.KEYSMITH_COMBO_EMPTY_LOCK_MAX = exports.KEYSMITH_COMBO_MIN_BIND = exports.KEYSMITH_SEAL_SAVE = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.CRYO_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.GRAVE_OFFERING_MAX_CORPSES = exports.GRAVE_OFFERING_MIN_PIECES = exports.POISON_WARD_MIN_PIECES = exports.PG_HOLD_FREE = exports.BIG_TREE_HOLD_GAP = exports.BIG_TREE_MIN_EMPTY = exports.CLOUD_MIN_FOES = exports.CLOUD_MIN_EMPTY = void 0;
+exports.BIG_TREE_MAX = exports.BOLT_SILENCE_IDX = exports.PG_HOLD_GAP = exports.MAGICIAN_HOLD_VS_YINYANG = exports.MAGICIAN_HOLD_VS_NECRO = exports.MAGICIAN_HOLD = exports.YOU_HOLD_VS = exports.NIGHT_VEIL_RAISE = exports.BUD_SEED_LIFE = exports.GLACIER_COST = exports.NIGHT_VEIL_OPP_MAGIC = exports.REROLL_REDUCERS = exports.TURN_ENDING_SKILLS = exports.TOKEN_SKILL_KEYS = exports.SH_COMBO_REAL = exports.NO_DIG_53_MIN = exports.SH_RESERVE = exports.SH_SMALL_FRY_MIN = exports.SH_PURGE_FREE = exports.SH_CURSE_MIN = exports.SH_BLESS_WEAK = exports.SH_RICH_GUARD = exports.SH_RICH_BLAST_MIN = exports.SH_BLAST_MIN = exports.SH_MAX = exports.YY_COVER_WEIGHT = exports.NO_CAP_NECRO_WEIGHT = exports.RICH_OPIUM_MIN_HIT = exports.RICH_EXTRA_REROLLS = exports.RICH_SPEND_GOAL_MAX = exports.RICH_SPEND_GOAL = exports.MAGICIAN_REROLL_MAGIC = exports.RICH_REROLL_MAGIC = exports.INTENSIFY_MIN_FOE_POISON = exports.PANDEMIC_MIN_SCORE = exports.MIST_MIASMA_MIN_SCORE = exports.POISON_RICH_RESERVE = exports.INTENSIFY_MAX_CELL_POISON = exports.STOMP_CHAIN_MAX = exports.PLUNDER_CHAIN_MAX = exports.SHATTER_RESERVE = exports.SHATTER_MAX_FREEZES = exports.SHATTER_MAX_PER_TURN = exports.RICH_MAGIC = exports.SURPLUS_MAGIC = exports.CHARGE_RANDOM_MARGIN = exports.JAMMER_MIN_DMG = exports.CHARGE_AREA_MIN_SCORE = exports.CHARGE_ONE_MIN_SCORE = exports.SKILL_POOL_SIZE = void 0;
+exports.FORCED_WIN_PLIES = exports.MIASMA_MIN_SCORE = exports.MIASMA_FROZEN_WEIGHT = exports.BLOOM_MIN_BIND = exports.BLOOM_MAX_OWN_POISON = exports.EXCLUSIVE_MIN_MAGIC = exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.WITCH_DIG_MARGIN = exports.MAX_REROLLS = exports.EMPTY_LOCK_DENY = exports.IGNITE_BUD_WEIGHT = exports.KEYSMITH_COMBO_EMPTY_LOCK_MAX = exports.KEYSMITH_COMBO_MIN_BIND = exports.KEYSMITH_SEAL_SAVE = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.CRYO_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.GRAVE_OFFERING_MAX_CORPSES = exports.GRAVE_OFFERING_MIN_PIECES = exports.POISON_WARD_MIN_PIECES = exports.PG_HOLD_FREE = exports.BIG_TREE_HOLD_GAP = exports.BIG_TREE_MIN_EMPTY = exports.CLOUD_MIN_FOES = exports.CLOUD_MIN_EMPTY = exports.CLOUD_MAX = void 0;
 // 汎用スキルプールの大きさ (idx 0..136)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 exports.SKILL_POOL_SIZE = 137;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
@@ -79,6 +79,8 @@ exports.REROLL_REDUCERS = [
 exports.NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 exports.GLACIER_COST = 10;
+/** 芽吹きでバッズが付くコマのライフ（gear.ts の GEAR_PARAMS.budSeedLife と同じ値） */
+exports.BUD_SEED_LIFE = 7;
 exports.NIGHT_VEIL_RAISE = 3;
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 /**
@@ -94,7 +96,7 @@ exports.YOU_HOLD_VS = {
 };
 exports.MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
-exports.MAGICIAN_HOLD_VS_NECRO = [60, 92, 52, 98];
+exports.MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
 /** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
 exports.MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */

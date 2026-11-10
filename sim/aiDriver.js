@@ -40,7 +40,8 @@ function aiFor(s, seat) {
         hasGear(s.gears[seat], 'emptyLock'),
         s.decks ? s.decks[seat] : undefined,
         hasGear(s.gears[seat], 'lockBloom'),
-        hasGear(s.gears[seat], 'groundRent')
+        hasGear(s.gears[seat], 'groundRent'),
+        s.gears[seat] || []
     );
     ai.placements = s.placements; // 着手後の減衰の先読み(simulatePlace)に使う。Game.tsx は計画時に設定済みの同じAIを打ち直しに渡す
     return ai;

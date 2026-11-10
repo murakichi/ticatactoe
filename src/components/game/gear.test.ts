@@ -13,6 +13,7 @@ import {
     randomGears,
     recommendedGears,
     recommendedGearsAgainst,
+    counterGearsFor,
     COUNTER_GEARS_FOR_YOU,
     RECOMMENDED_GEARS,
     ALT_RECOMMENDED_GEARS,
@@ -366,5 +367,25 @@ describe('死神の鎌（ライフ0の駒を壊す）', () => {
         expect(lifeZeroVictims(board, chars, [[], ['reaper']])).toEqual([0, 1]);
         expect(lifeZeroVictims(board, chars, [[], []])).toEqual([]);
         expect(gearLifeBonus(['reaper'])).toBe(2);
+    });
+});
+
+describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
+    it('相手が1種類で専用ギアがあるときだけそれを使う。他の相手・複数種類・専用が無い組み合わせは通常の推奨', () => {
+        expect(counterGearsFor('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(counterGearsFor('poisoner', ['cryomancer', 'cryomancer'])).toEqual(['springThunder', 'spellWard']);
+        expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('tactician', ['giant'])).toBeUndefined();
+        expect(counterGearsFor('tactician', ['cryomancer', 'magician'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['cryomancer'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['tactician'])).toBeUndefined();
+        expect(counterGearsFor('pyromancer', ['yinYangMaster'])).toEqual(['afterglow', 'snowball']);
+        expect(counterGearsFor('necromancer', ['cryomancer'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['electrician'])).toEqual(['lightToken', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['giant'])).toBeUndefined();
+        expect(recommendedGearsAgainst('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(recommendedGearsAgainst('tactician', ['giant'])).toEqual(recommendedGears('tactician'));
     });
 });

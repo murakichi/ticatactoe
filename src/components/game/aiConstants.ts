@@ -97,6 +97,8 @@ export const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'on
 export const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 export const GLACIER_COST = 10;
+/** 芽吹きでバッズが付くコマのライフ（gear.ts の GEAR_PARAMS.budSeedLife と同じ値） */
+export const BUD_SEED_LIFE = 7;
 export const NIGHT_VEIL_RAISE = 3;
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 /**
@@ -113,7 +115,7 @@ export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
 
 export const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
-export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52, 98];
+export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
 /** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
 export const MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */

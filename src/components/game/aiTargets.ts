@@ -483,6 +483,31 @@ export const targetMethods = {
         return best;
     },
 
+    /**
+     * 陰陽師以外の砕氷(47)の狙い: 氷結で守られた敵コマを❄×3ダメージで壊し切れるとき、壊すと自分の列が伸びる（自コマ2〜3つで他の敵が居ない列）／
+     * 敵の並びが崩れる（自コマの無い列で敵が並ぶ）コマのうち最も価値の高いもの。無ければ null
+     */
+    shatterTarget(this: AIPlayer, board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || isShikigami(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) return;
+            const stacks = frozenStacks(sq);
+            if (stacks === 0 || stacks * SHATTER_DAMAGE_PER_STACK < sq.bind) return; // 壊し切れない
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                const foes = line.filter((j) => j !== i && this.isEnemy(board[j].player)).length;
+                if (foes === 0 && mine >= 2) val += mine === 3 ? 50 : 10; // 自分の列の邪魔な1コマ
+                if (mine === 0) val += foes + 1; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        });
+        return bestVal >= 3 ? best : null;
+    },
+
     /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
     comboThawTarget(this: AIPlayer, board: SquareInfo[]): number | null {
         if (this.floodComboWins(board)) return null; // すでに組める
