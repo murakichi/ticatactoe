@@ -170,6 +170,10 @@ function choosePrepSkills(c) {
     if (life <= 2 && availableSkills.includes(0)) {
         spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
     }
+    // 芽吹き: ライフ7以上のコマに🌱が付く。+3で7に届くとき（ライフ4〜6）は、ライフ+3を撃ってから置いて🌱を付ける
+    else if (this.ownsGear('budSeed') && life >= aiConstants_1.BUD_SEED_LIFE - 3 && life < aiConstants_1.BUD_SEED_LIFE && availableSkills.includes(0)) {
+        spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
+    }
     // バッズ: コスト4で毎ターン+1マジック → 4ターン以上残りそうなら元が取れる
     if (availableSkills.includes(2)) {
         const budsCost = this.calculateAICost(costs.onClickBuds, false, false, 'onClickBuds');

@@ -343,7 +343,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     electrician: ['budSeed', 'harvest'], // 芽吹き+収穫: 旧主案 lightToken,harvest より対強豪平均 +5.7pt（57.0→62.8, seed2/200）。docs/tune/electrician.md
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'vengeance'], // 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
+    pyromancer: ['afterglow', 'budSeed'], // 2026-11-10: vengeance→budSeed。対6強豪 約41→58%（seed3/4, 各100試合。主に対魔法使い 33→83%）。強くて突出してもよい（ユーザー方針）。旧: 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
     witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
@@ -376,14 +376,37 @@ export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };
 
-/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+/**
+ * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。
+ * 春雷（自陣のリーチを塞ぐ氷結を1つ解く）は氷室の番人の氷結の壁に効く:
+ * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
+ */
+export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<CharacterId, GearId[]>>>> = {
+    tactician: {
+        cryomancer: ['springThunder', 'priceWreck'],
+    },
+    giant: {
+        cryomancer: ['lastStand', 'budSeed'], // 35→60%（同）
+    },
+    pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
+    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    necromancer: { cryomancer: ['springThunder', 'lastStand'] }, // 31→84%（seed2/3, 各150試合）。環境で突出するが、強いのは許容（ユーザー方針）
+    cryomancer: {
+        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+    },
+};
+
+/** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
+export const counterGearsFor = (character: CharacterId, opponents: CharacterId[]): GearId[] | undefined => {
+    const kinds = Array.from(new Set(opponents));
+    if (kinds.length !== 1) return undefined;
+    const counter = character === 'you' ? COUNTER_GEARS_FOR_YOU[kinds[0]] : COUNTER_GEARS[character]?.[kinds[0]];
+    return counter ? counter.slice(0, gearSlotsFor(character)) : undefined;
+};
+
+/** character の推奨ギア。相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
 export const recommendedGearsAgainst = (character: CharacterId, opponents: CharacterId[]): GearId[] => {
-    if (character === 'you') {
-        const kinds = Array.from(new Set(opponents));
-        const counter = kinds.length === 1 ? COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
-        if (counter) return counter.slice(0, gearSlotsFor(character));
-    }
-    return recommendedGears(character);
+    return counterGearsFor(character, opponents) ?? recommendedGears(character);
 };
 
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */

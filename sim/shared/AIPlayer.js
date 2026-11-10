@@ -31,7 +31,7 @@ class AIPlayer {
     comboReachable(availableSkills) {
         return this.inDeck(71, availableSkills) && this.inDeck(73, availableSkills);
     }
-    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasLockBloom = false, hasGroundRent = false) {
+    constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasLockBloom = false, hasGroundRent = false, gears = []) {
         this.necroActive = false;
         /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
         this.shield = new Set();
@@ -91,6 +91,8 @@ class AIPlayer {
         this.hasLockBloom = false;
         /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
         this.hasGroundRent = false;
+        /** 自分の装備ギア。ギアに合わせて戦略を変える判断に使う（`ownsGear('budSeed')`）。個別のフラグ（hasGroundRent など）は従来どおり */
+        this.gears = [];
         /** 雷霆の巫の対陰陽師の線カバー重み（テストで0にして比較できる） */
         this.floodCoverWeight = aiConstants_1.FLOOD_COVER_WEIGHT;
         /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */
@@ -105,6 +107,7 @@ class AIPlayer {
         this.hasLockBloom = hasLockBloom;
         this.deck = deck;
         this.hasGroundRent = hasGroundRent;
+        this.gears = gears;
     }
 }
 Object.assign(AIPlayer.prototype, aiSearch_1.searchMethods, aiTargets_1.targetMethods, aiPlans_1.planMethods, aiSkillChoice_1.skillChoiceMethods, aiPlanMove_1.planMoveMethods);

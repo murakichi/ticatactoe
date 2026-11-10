@@ -1,5 +1,6 @@
 // AIPlayer のメソッド群: 盤面の評価・先読み・着手の候補（minimax と脅威の検出）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
+import type { GearId } from './gear';
 import type AIPlayer from './AIPlayer';
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
@@ -114,6 +115,11 @@ export const searchMethods = {
     },
 
     /** 自分以外のコマか（盤上にあるのは参加者のコマだけなので、自分以外＝敵） */
+    /** 自分がそのギアを装備しているか（装備に合わせて戦略を変える判断に使う） */
+    ownsGear(this: AIPlayer, id: GearId): boolean {
+        return this.gears.includes(id);
+    },
+
     isEnemy(this: AIPlayer, player: Player | undefined): boolean {
         return player !== undefined && player !== this.playerSymbol;
     },
