@@ -338,7 +338,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
-    dragonMiko: ['buildMania', 'rubbleBase'], // 普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）、無いときも祈りは-2。瓦礫の礎: 壊された建造物の位置に大岩＋魔力+1。堅牢のみ 2.8% → 37.8%/36.7%（4x4・対強豪平均・seed1/60, seed2/100。docs/tune/dragonMiko.md）
+    dragonMiko: ['buildMania', 'lastStand'], // 普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）。土壇場の防壁: 巫女のあいだの1回分の保険（龍の防壁は別）。順位表（重み付き対強豪平均・4x4・seed1/60）で 瓦礫の礎の組 52.8%（4位）→ 58.9%（1位。2位 electrician 53.4%）。春雷の組は 55.1%（差0.9pt）。docs/tune/dragonMiko.md
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['snowball', 'ironLock'], // luckyPurse から差し替え（堅牢の鍵。強豪5体 seed71/100: 48.5→56.7、対ネクロ 7→19・対陰陽師 30→42。走査 seed62/40: 54.5→65.1。docs/tune/magician.md 試行91）
@@ -395,6 +395,12 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
         pyromancer: ['spellWard', 'priceWreck'], // 36→63%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
+    },
+    // 龍神の巫女（#527）: 氷室の氷結で建造物・列を凍らされる。春雷（自陣のリーチを塞ぐ氷結を1つ解く）が効く。
+    // 普請道楽は祈りをコスト1にする柱なので残し、瓦礫の礎と入れ替える。--target dragonMiko --opp cryomancer（4x4）:
+    // 7.3→75.0%（seed4/100）、4.4→77.0%（seed5/100）。鍵師向けの土壇場の防壁（12.8→34.4%、300試合、差は有意でない）は保留（docs/tune/dragonMiko.md）
+    dragonMiko: {
+        cryomancer: ['buildMania', 'springThunder'],
     },
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
