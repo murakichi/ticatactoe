@@ -162,5 +162,6 @@ exports.MIASMA_FROZEN_WEIGHT = 0.5;
 exports.MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ列(=3)
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
 exports.FORCED_WIN_PLIES = 4;
-/** 対策ロック: ロック済みの自コマも、残りスタックがこの値以下なら延長の対象にする（0=ロック済みは対象にしない=従来）。実験中は環境変数 ANTI_LOCK_REFRESH で上書き */
-exports.ANTI_LOCK_REFRESH = Number((typeof process !== 'undefined' && process.env && process.env.ANTI_LOCK_REFRESH) || 0);
+/** 対策ロック: ロック済みの自コマも、残りスタックがこの値以下なら延長の対象にする（魔法使いのみ。0=ロック済みは対象にしない=従来）。
+ *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化 */
+exports.ANTI_LOCK_REFRESH = 2;
