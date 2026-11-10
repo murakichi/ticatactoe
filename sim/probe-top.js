@@ -376,6 +376,11 @@ async function main() {
     for (const r of args.scan ? sorted : rows) {
         console.log(`${(M(r) * 100).toFixed(1)}% ±${(1.96 * SE(r) * 100).toFixed(1)}  (field ${(r.field * 100).toFixed(1)}%)  ${r.label}`);
         if (!args.scan) console.log('  対キャラ別: ' + Object.entries(r.per).map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`).join(' / '));
+        // 勝率は引分（600手打ち切り）を除いて数えるので、引分が多い対面は実態より強く/弱く見える（issue #612 #615 #617）。5%以上なら警告する
+        if (!args.scan && r.tally) {
+            const draws = r.tally.split(' ').map((t) => { const [o, wld] = t.split(':'); const [w, l, d] = wld.split('-').map(Number); return { o, rate: d / Math.max(1, w + l + d), n: w + l + d }; }).filter((x) => x.rate >= 0.05);
+            if (draws.length) console.log('  ⚠ 引分（打ち切り）が多い対面: ' + draws.map((x) => `${x.o} ${(x.rate * 100).toFixed(0)}%(${x.n}試合)`).join(' / ') + '（勝率は引分を除くので、半勝で数えた値とずれる）');
+        }
     }
     console.log('RESULT ' + JSON.stringify(out));
 }
