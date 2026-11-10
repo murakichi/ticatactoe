@@ -1,6 +1,6 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: 61d9c50（オブジェクト導入後。基準線の取り直しは未実施）（対強豪平均 1位 60.0% / 2位 cryomancer 58.0%、seed1/60）
+- 最後に検証したmaster: 3d8e7b4（2026-11-10 基準線を重み付き方式で取り直し）（対強豪平均 1位 60.0% / 2位 cryomancer 58.0%、seed1/60）
 - 現在の推奨設定: gears=[buildMania, reaper] deck=[5,28,44,52,53,56,62,63,64,92,108,110] （試行43。旧: gears=[buildMania, bindingLock](試行40)、gears=[lightToken, bindingLock] deck=[5,8,28,44,52,53,56,62,63,64,85,92]） AIフラグ=witchNoAnti=1・witchReserve=1（既定）
 - 完了判定の再確認（活力特売の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 81.2%** / 2位 poisoner 61.7%（差19.5pt）、条件2（`--envDeck varied`）**1位 witch 74.7%** / 2位 poisoner 60.5%（差14.2pt）。
 - 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
@@ -13,6 +13,8 @@
 - 基準線(master 61d9c50・オブジェクト導入/雷霆のコマがライフ0でも奪われない仕様の後、`--rank --games 60 --seed 1 --write-strong`): **4位 witch 49.3%** / 1位 cryomancer 60.7%(差11.4pt) / 2位 electrician 54.0% / 3位 tactician 49.7%。強豪=cryomancer,electrician,poisoner,witch,tactician,magician。対面: electrician 23%(前回50%)・tactician 35%・necromancer 28%・cryomancer 57%。**トップ陥落**（原因: 雷霆への対面が約27pt悪化。雷霆のコマがライフ0でも着手で奪われなくなったため）。
 - 基準線(master 55043be・鍵師追加/縮地削除/審判の日の新仕様の後、`--rank --games 60 --seed 1 --write-strong`): **5位 witch 44.4%** / 1位 magician 62.7%(差18.3pt) / 2位 electrician 59.7% / 3位 cryomancer 54.6%。強豪=electrician,magician,cryomancer,tactician,poisoner,giant。対面: electrician 22%・magician 27%・necromancer 28%・tactician 30%・yinYangMaster 45%。
 - 基準線(master b709763・再検証、`--rank --games 60 --seed 1 --write-strong`): **7位 witch 43.6%**(field 48.6%) / 1位 magician 62.4%(差18.8pt) / 2位 electrician 57.2%。強豪=electrician,magician,giant,keysmith,cryomancer,poisoner。対面: electrician 22%・keysmith 22%・necromancer 28%・magician 30%・tactician 37%。**blocked のまま変わらず**(issue #461 の数値案待ち)。
+- 相手の重み(2026-11-10 master 3d8e7b4、beta=8): electrician 11.8%, pyromancer 11.2%, dragonMiko 10.7%, yinYangMaster 10.7%, keysmith 10.4%, necromancer 9.1%, tactician 7.8%, cryomancer 6.2%, giant 6.2%, witch 6.1%, magician 5.5%, poisoner 4.0%, you 0.3%
+- 基準線(master 3d8e7b4・重み付き対強豪平均、`--rank --games 60 --seed 1 --write-strong`): **10位 witch 45.1%**(field 52.8%) / 1位 electrician 54.6%(差9.5pt)。`--target witch --games 60 --seed 1`: 46.4%±3.7。対面: dragonMiko 16%・magician 28%・pyromancer 30%・yinYangMaster 43%・necromancer 47%・keysmith 48%・tactician 52%・electrician 57%・giant 67%・cryomancer 77%・poisoner 78%。以前の数値は旧方式(field/強豪リスト)で比較不可。
 - 連続不採用回数: 0（試行43で採用）
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running(試行40で普請道楽+砦/市場を採用、9位 39.3%。以前の blocked(issue #461。master 55043be で5位 44.4%、1位 magician 62.7%。ギア・デッキ・AI・オブジェクト札の6軸を測ったが +6pt が上限。枯れた大木のコスト案などの数値相談)
@@ -128,6 +130,8 @@
 手札に🍂トークンあり 335（87%）→ 払える 189（56%）→ 撃った 158（41%）。**払えない手番が146（38%）**。魔力が再び律速（対策ロック停止後も、他スキルに魔力が回っている）。
 
 ## 次に試す候補
+- (2026-11-10) 重みの大きい不利対面から: dragonMiko(16%・重み10.7%)、pyromancer(30%・11.2%)。まず `probe-usage`＋アブレーションで負け筋を特定（手順「勝てない環境キャラの分析」）。
+- ユーザー案の新スキル #597（次の相手ターン、盤面の🍂の数以下のライフのコマを置けない・コスト4）。実装は diary-improve-loop 側。入ったらシナジー精査で測る。
 - 陥落の主因は対雷霆 50→23%（雷霆のコマがライフ0でも着手で奪われない仕様）。負け試合のスキル別ファネル（虎落笛が雷霆のコマに通るか、🍂トークンの寿命、雷霆の⚡で🍂付きコマが無敵化→こちらのダメージが通らない等）を取り、立ち回り（AIPlayer.ts）を直す。ギア・デッキの近傍は#28/#24/#26で打ち止め
 - オブジェクト(105〜112): #399（AIの設置）が入ったら再検討。大木(魔力+3)・枯れた大木(🍂)が魔女の律速に効く本命。聖域(自陣のコマの減衰なし)・砦も🍂を乗せたコマを守る点で候補。設置の立ち回りが無いと測れない
 - strategy: 対氷室の番人(57%)・軍師(50%)の負け試合で、スキル別の使用/不使用ファネルを取って負け筋を特定してから、立ち回り案を立てる（#26b。AIフラグは削除済みなので、TS を直接変更して旧 worktree と同一seedで比較する）
