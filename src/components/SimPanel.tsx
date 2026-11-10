@@ -33,9 +33,11 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
     const [boardChoice, setBoardChoice] = useState<'auto' | number>(initialBoardSize);
     const [useSkills, setUseSkills] = useState<boolean>(true);
     const [useGears, setUseGears] = useState<boolean>(true);
+    // 対面専用ギア: 1対1で、相手が決まっているときの専用ギア（本番のAI席と同じ）。外すと全員が通常の推奨ギア。環境の基準（順位）は通常の推奨で比べ、専用ギアは別に測る
+    const [useCounter, setUseCounter] = useState<boolean>(false);
     const [autoStop, setAutoStop] = useState<boolean>(true);
     // 実行中の対戦に使った設定（終了後にチェックを触っても表示は変えない）
-    const [ran, setRan] = useState<{ skills: boolean; gears: boolean }>({ skills: true, gears: true });
+    const [ran, setRan] = useState<{ skills: boolean; gears: boolean; counter: boolean }>({ skills: true, gears: true, counter: false });
     const [status, setStatus] = useState<Status>('idle');
     const [snap, setSnap] = useState<Snapshot | null>(null);
     const [error, setError] = useState<string>('');
@@ -71,7 +73,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
         const id = ++runId.current;
         setError('');
         setSnap(null);
-        setRan({ skills: useSkills, gears: useGears });
+        setRan({ skills: useSkills, gears: useGears, counter: useCounter });
         setStatus('running');
         let live: LiveApi;
         try {
@@ -132,7 +134,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
         workers.current.forEach((w, k) =>
             w.postMessage({
                 cmd: 'start', players, size: boardChoice === 'auto' ? undefined : boardChoice, mode: 'prod', seed,
-                fixedChars: null, skills: useSkills, gears: useGears, offset: k, stride: jobs, maxGames: null,
+                fixedChars: null, skills: useSkills, gears: useGears, counter: useCounter, offset: k, stride: jobs, maxGames: null,
             })
         );
         timer.current = window.setInterval(() => {
@@ -194,6 +196,10 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
                     <input type='checkbox' checked={useGears} disabled={running} onChange={(e) => setUseGears(e.target.checked)} />
                     ギアを装備する
                 </label>
+                <label className={styles.check} title='1対1で、相手キャラに合わせた専用ギアを使います（本番のAI席と同じ）。外すと全員が通常の推奨ギア。通常の推奨と専用ギアは、別々に測って比べてください。ギアを装備しない設定、3人以上では無関係です'>
+                    <input type='checkbox' checked={useCounter} disabled={running || !useGears} onChange={(e) => setUseCounter(e.target.checked)} />
+                    対面専用ギアを使う
+                </label>
                 <label className={styles.check}>
                     <input type='checkbox' checked={autoStop} disabled={running} onChange={(e) => setAutoStop(e.target.checked)} />
                     勝率が落ち着いたら自動で止める
@@ -220,7 +226,7 @@ export const SimPanel = ({ names, initialPlayers, initialBoardSize, onBack, load
                             {status === 'converged' && '勝率が落ち着いたので停止しました'}
                         </strong>
                         <span>
-                            {players}人 {size}x{size}・スキル{ran.skills ? 'あり' : 'なし'}・ギア{ran.gears ? 'あり' : 'なし'}・{s.games.toLocaleString()}局・並列{snap!.jobs}・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
+                            {players}人 {size}x{size}・スキル{ran.skills ? 'あり' : 'なし'}・ギア{ran.gears ? (ran.counter && players === 2 ? '対面専用' : '通常の推奨') : 'なし'}・{s.games.toLocaleString()}局・並列{snap!.jobs}・{(s.games / Math.max(snap!.elapsed, 0.001)).toFixed(1)}局/秒・引き分け {pct(s.drawRate)}・平均{s.avgTurns.toFixed(1)}手
                         </span>
                         <span>
                             勝率の変動幅（直近{CONV.window}回）: {pct(snap!.drift, 2)}

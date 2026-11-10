@@ -360,7 +360,7 @@ function watch(args) {
     const t0 = Date.now();
     let lastDraw = 0;
     // 既定は本番AIと同じ装備。--no-gear でギアなし、--no-skill でスキルを使わない（置くだけ）
-    const runOpts = { deck: !args['no-skill'], gears: !args['no-gear'], skills: !args['no-skill'] };
+    const runOpts = { deck: !args['no-skill'], gears: !args['no-gear'], skills: !args['no-skill'], counter: !!args['counter'] };
     const boardN = size != null ? size : engine.boardSizeFor(players);
 
     const render = (final) => {
@@ -443,7 +443,7 @@ function watch(args) {
     const { Worker } = require('worker_threads');
     for (let k = 0; k < jobs; k++) {
         const w = new Worker(require('path').join(__dirname, 'watch-worker.js'), {
-            workerData: { players, size, mode, seed: baseSeed, fixedChars: fixed, skills: runOpts.skills, gears: runOpts.gears, offset: k, stride: jobs, maxGames: Number.isFinite(maxGames) ? maxGames : null },
+            workerData: { players, size, mode, seed: baseSeed, fixedChars: fixed, skills: runOpts.skills, gears: runOpts.gears, counter: runOpts.counter, offset: k, stride: jobs, maxGames: Number.isFinite(maxGames) ? maxGames : null },
         });
         w.on('message', (m) => { latest[k] = m.stats; if (m.type === 'final') finals[k] = true; });
         w.on('error', (e) => { console.error(e); process.exit(1); });
