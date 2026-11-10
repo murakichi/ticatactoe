@@ -8,6 +8,7 @@
 const engine = require('./engine');
 const thermal = require('./shared/thermal');
 const keysmith = require('./shared/keysmith');
+const decay = require('./shared/decay');
 const ai = require('./aiDriver'); // 本番AI(AIPlayer.ts の生成物)
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
@@ -31,6 +32,7 @@ function winCells(s, player) {
         if (q.player && engine.isShikigami(q) && q.player !== player) continue; // 式神は奪うと空きマスになるだけ(自コマにならない)
         // 奪えるのは bind0 の敵コマ。巨人は自分のライフが bind+1 を超えれば bind>0 の敵コマも奪える(simulatePlace の calc<0)
         if (q.player && (q.player === player || (q.bind > 0 && !(giant && q.bind - s.life + 1 < 0)))) continue;
+        if (q.player && q.player !== player && decay.isTakeProtected(q, s.chars) && !decay.canHitBound(s.chars[engine.seatOf(player)], s.board, engine.seatCount(s))) continue; // 雷霆の巫のライフ0のコマは、巨人と満杯の盤面以外は奪えない
         if (q.player && engine.isShielded(s, q)) continue;
         const keep = syms[i]; syms[i] = player;
         if (engine.calculateWinner(syms) === player) out.push(i);
