@@ -124,7 +124,7 @@ exports.MAGICIAN_MAX_LOCKS = 3;
 exports.NECRO_LOCK_MAX = 3;
 exports.NECRO_LOCK_REFRESH = 2;
 /** 先回りロックを入れるキャラ（対ネクロ各100試合×2シードで改善または同等だったもの。雷霆 −8pt・毒使い −6pt は悪化したので外した） */
-exports.NECRO_LOCK_CHARACTERS = ['keysmith', 'yinYangMaster', 'tactician'];
+exports.NECRO_LOCK_CHARACTERS = ['keysmith', 'yinYangMaster'];
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
 exports.CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (旧sim AI の EL_MAX / EL_MIN_VALUE / EL_DENY) */
