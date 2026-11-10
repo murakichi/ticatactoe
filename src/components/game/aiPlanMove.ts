@@ -1228,9 +1228,9 @@ export const planMoveMethods = {
             : argsIn;
         let result = this.planMove(...args);
         const magic = args[1];
-        // 1手で勝てるのに、手番を終えるスキル（封鎖の断など）を選んでいたら、勝ちを優先する。
+        // 1手で勝てるのに、手番を終えるスキル（封鎖の断・審判の日など）を選んでいたら、勝ちを優先する。
         // スキルの発動条件は『自分のリーチ（空きマスで完成）』しか見ず、敵コマの奪取で完成する勝ちを取りこぼしていた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた）
-        if (!result.win && !result.reroll && !result.hailMary && result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk))) {
+        if (!result.win && !result.reroll && !result.hailMary && result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) {
             const winMove = this.immediateWinMove(args[0], args[4]);
             if (winMove !== null) return { move: winMove, skills: [] };
         }
@@ -1268,6 +1268,8 @@ export const planMoveMethods = {
         // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す
         const extended = this.extendPlan(result, args);
         if (this.plannedSpend(extended, args[2]) >= goal) return extended;
+        const winMove = this.immediateWinMove(args[0], args[4]);
+        if (winMove !== null) return { move: winMove, skills: [] }; // 勝てるなら、手札の引き直しより勝ちの着手
         return { move: null, skills: [], reroll: {} };
     },
 

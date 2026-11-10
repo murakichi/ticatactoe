@@ -184,4 +184,14 @@ describe('鍵師AI: 敵コマの奪取で完成する勝ちを、封鎖の断よ
         expect(r.skills).not.toContain('onClickSeal');
         expect(r.move).toBe(10);
     });
+    it('魔法使いも、奪取で完成する勝ちがあれば審判の日を撃たずにそのマスを奪う（#600）', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        for (const i of [0, 4, 12]) b[i] = { player: '💙', bind: 0, effects: [] };
+        b[8] = { player: '⭕', bind: 0, effects: [] };
+        for (const i of [1, 2, 6, 9, 10, 13]) b[i] = { player: '⭕', bind: 3, effects: [] };
+        const ai = new AIPlayer('💙', 'magician', ['⭕'], ['magician', 'you'], undefined, false, false);
+        const r = ai.makeMove(b, 40, skillCosts, 2, 5, [], false);
+        expect(r.skills).not.toContain('onClickJudgeDay');
+        expect(r.move).toBe(8);
+    });
 });
