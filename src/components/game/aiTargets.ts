@@ -12,7 +12,7 @@ import { miasmaPlan as miasmaPlanOf, pandemicTargets } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf, judgeDayVictims } from './blast';
 import { SHIKIGAMI_BLAST_DAMAGE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { chargeStacks, orthoNeighbors, connectedPieces, isGuarded } from './charge';
-import { BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
+import { ANTI_LOCK_REFRESH, BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
 
 export const targetMethods = {
 
@@ -625,7 +625,10 @@ export const targetMethods = {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
             // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる。魔法使いだけ）
+            const lockStack = sq.effects.reduce((n, e) => n + (e.effect === '🔑' ? (e.stack ?? 0) : 0), 0);
+            const hasLock = sq.effects.some((e) => e.effect === '🔑');
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || (hasLock && lockStack > (this.character === 'magician' ? ANTI_LOCK_REFRESH : 0))) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;
