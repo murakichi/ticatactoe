@@ -1,46 +1,43 @@
 import { calculateWinner } from '../../util';
-import { setWinLengths, defaultBoardSizeFor, minBoardSizeFor } from './winRule';
+import { setWinNeeds, hasTwoDistinctLines } from './winRule';
 import { Player } from '../../types/Player';
 
 // 5x5 の盤面を文字列で作る（. 空き / A=💙 / B=⭕）
 const board5 = (rows: string[]): (Player | undefined)[] =>
     rows.join('').split('').map((c) => (c === 'A' ? '💙' : c === 'B' ? '⭕' : undefined));
 
-describe('勝ちの並びの長さ（巫女は5）', () => {
-    afterEach(() => setWinLengths(['you', 'you']));
+describe('二列勝利 (#526)', () => {
+    afterEach(() => setWinNeeds(['you', 'you']));
 
-    it('全員4なら従来どおり4つで勝つ', () => {
-        setWinLengths(['you', 'you']);
+    it('全員1本なら従来どおり1本で勝つ', () => {
+        setWinNeeds(['you', 'you']);
         expect(calculateWinner(board5(['AAAA.', '.....', '.....', '.....', '.....']))).toBe('💙');
     });
 
-    it('巫女は4つ並べても勝たず、5つ並べて勝つ', () => {
-        setWinLengths(['dragonMiko', 'you']);
+    it('必要本数2の席は1本では勝たず、別々の2本で勝つ', () => {
+        setWinNeeds(['dragonMiko', 'you']);
         expect(calculateWinner(board5(['AAAA.', '.....', '.....', '.....', '.....']))).toBeUndefined();
-        expect(calculateWinner(board5(['AAAAA', '.....', '.....', '.....', '.....']))).toBe('💙');
+        expect(calculateWinner(board5(['AAAA.', 'AAAA.', '.....', '.....', '.....']))).toBe('💙');
     });
 
-    it('巫女は列でも斜めでも5つで勝つ', () => {
-        setWinLengths(['dragonMiko', 'you']);
-        expect(calculateWinner(board5(['A....', 'A....', 'A....', 'A....', 'A....']))).toBe('💙');
-        expect(calculateWinner(board5(['A....', '.A...', '..A..', '...A.', '....A']))).toBe('💙');
-        expect(calculateWinner(board5(['A....', '.A...', '..A..', '...A.', '.....']))).toBeUndefined();
-    });
-
-    it('相手（長さ4）は4つで勝てる', () => {
-        setWinLengths(['dragonMiko', 'you']);
+    it('相手（本数1）は1本で勝てる', () => {
+        setWinNeeds(['dragonMiko', 'you']);
         expect(calculateWinner(board5(['AAAA.', '.....', 'BBBB.', '.....', '.....']))).toBe('⭕');
     });
 
-    it('離れた4つずつ（別の行）は5つ並びに数えない', () => {
-        setWinLengths(['dragonMiko', 'you']);
-        expect(calculateWinner(board5(['AAAA.', 'AAAA.', '.....', '.....', '.....']))).toBeUndefined();
+    it('同じ行の重なった窓（共有3マス）は2本に数えない', () => {
+        setWinNeeds(['dragonMiko', 'you']);
+        expect(calculateWinner(board5(['AAAAA', '.....', '.....', '.....', '.....']))).toBeUndefined();
     });
 
-    it('巫女がいれば既定の盤面は5x5以上、いなければ従来どおり', () => {
-        expect(minBoardSizeFor(['dragonMiko', 'you'])).toBe(5);
-        expect(defaultBoardSizeFor(['dragonMiko', 'you'])).toBe(5);
-        expect(defaultBoardSizeFor(['you', 'giant'])).toBe(4);
-        expect(defaultBoardSizeFor(['dragonMiko', 'you', 'giant', 'witch', 'poisoner'])).toBe(6); // 人数の既定が大きいときはそちら
+    it('交差して共有1マスなら2本に数える', () => {
+        setWinNeeds(['dragonMiko', 'you']);
+        // 行0の0..3 と 列0の0..3 が(0,0)で交差
+        expect(calculateWinner(board5(['AAAA.', 'A....', 'A....', 'A....', '.....']))).toBe('💙');
+    });
+
+    it('共有2マスは不可', () => {
+        expect(hasTwoDistinctLines([[0, 1, 2, 3], [2, 3, 4, 5]])).toBe(false);
+        expect(hasTwoDistinctLines([[0, 1, 2, 3], [3, 7, 11, 15]])).toBe(true);
     });
 });

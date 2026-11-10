@@ -60,13 +60,13 @@ const calculateWinner = (squares) => {
             }
         if (!all)
             continue;
-        // 長さ4の席（ほぼ全員）は、4マス窓が1つ揃った時点で勝ち。長さ5の席（龍神の巫女）は、1マスずれて隣り合う窓が2つ揃うまで勝たない
+        // 必要本数が1の席（ほぼ全員）は、揃った時点で勝ち。2本の席は、別々の2本（共有は1マスまで）が揃うまで勝たない（#526）
         if (!own)
             own = new Map();
         const mine = (_a = own.get(first)) !== null && _a !== void 0 ? _a : [];
         mine.push(line);
         own.set(first, mine);
-        if ((0, winRule_1.meetsWinRule)(first, mine))
+        if ((0, winRule_1.meetsWinNeed)(first, mine))
             return first;
     }
     return undefined;
