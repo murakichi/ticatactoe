@@ -33,3 +33,16 @@ describe('guardPass: チャージだけで手番を終える計画でも、相�
         expect(r.skills).toEqual(['onClickCharge', 'onClickOpium']);
     });
 });
+
+describe('immediateWinMove: 着手の前の減衰（🔥で消えるコマ）を見る', () => {
+    it('列の1コマが🔥で燃え尽きるなら、4つ目を置いても勝ちと数えない', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        b[0] = { player: '💙', bind: 0, effects: [] };
+        b[8] = { player: '💙', bind: 0, effects: [] };
+        b[12] = { player: '💙', bind: 2, effects: [{ effect: '🔥' }] };
+        const ai = new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', 'pyromancer'], undefined, false, false);
+        expect(ai.immediateWinMove(b, 8)).toBeNull();
+        b[12] = { player: '💙', bind: 2, effects: [] };
+        expect(ai.immediateWinMove(b, 8)).toBe(4);
+    });
+});

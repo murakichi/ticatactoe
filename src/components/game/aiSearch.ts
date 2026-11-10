@@ -462,7 +462,7 @@ export const searchMethods = {
         const empty = findEmptyIndexes(board);
         const allMoves = Array.from(new Set([...empty, ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
         for (const i of allMoves) {
-            const sim = this.simulatePlace(board, i, this.playerSymbol, life);
+            const sim = this.simulatePlace(board, i, this.playerSymbol, life, 0); // ply=0: 着手の前に減衰する。🔥・毒で消えるコマを数えて『勝ち』と誤認しない
             if (calculateWinner(lineSymbols(sim)) === this.playerSymbol) return i;
         }
         return null;
@@ -477,7 +477,7 @@ export const searchMethods = {
 
         // 1. 即勝ち
         for (const i of allMoves) {
-            const sim = this.simulatePlace(board, i, this.playerSymbol, life);
+            const sim = this.simulatePlace(board, i, this.playerSymbol, life, 0); // ply=0: 着手の前に減衰する。🔥・毒で消えるコマを数えて『勝ち』と誤認しない
             if (calculateWinner(lineSymbols(sim)) === this.playerSymbol) return i;
         }
 
