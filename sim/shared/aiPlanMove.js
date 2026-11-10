@@ -1182,6 +1182,12 @@ exports.planMoveMethods = {
      */
     makeMove(...argsIn) {
         var _a, _b, _c, _d, _e;
+        // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
+        if (this.character === 'dragonMiko') {
+            const dragonPlan = this.planDragon(argsIn);
+            if (dragonPlan)
+                return dragonPlan;
+        }
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;

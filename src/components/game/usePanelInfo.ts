@@ -32,9 +32,12 @@ export interface PanelInfoScope {
     infernoCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
     mogaribueCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
     sealCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
+    prayerCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
+    roarCost: (player?: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
+    dragon: { form: 'miko' | 'dragon'; n: number }[];
 }
 export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
-    const { useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
+    const { dragon, prayerCost, roarCost, useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
 
 
     // 継続中スキルの残りターン数を返す
@@ -92,6 +95,10 @@ export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
                 return [{ name: '虎落笛', cost: mogaribueCost(symbols[seat]) }];
             case 'keysmith':
                 return [{ name: '封鎖の断', cost: sealCost(symbols[seat]) }];
+            case 'dragonMiko':
+                return dragon[seat]?.form === 'dragon'
+                    ? [{ name: '八百万の祈り', cost: prayerCost(symbols[seat]) }, { name: '龍の咆哮', cost: roarCost(symbols[seat]) }]
+                    : [{ name: '八百万の祈り', cost: prayerCost(symbols[seat]) }];
             default:
                 return [];
         }

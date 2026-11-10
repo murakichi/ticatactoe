@@ -38,4 +38,5 @@ export const CHARACTER_NAMES: Record<CharacterId, string> = {
     pyromancer: '煉獄の鍛冶師',
     witch: '凩の魔女',
     keysmith: '鍵師',
+    dragonMiko: '龍神の巫女',
 };

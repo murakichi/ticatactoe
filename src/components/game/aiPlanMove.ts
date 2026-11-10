@@ -1209,6 +1209,11 @@ export const planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
+        // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
+        if (this.character === 'dragonMiko') {
+            const dragonPlan = this.planDragon(argsIn);
+            if (dragonPlan) return dragonPlan;
+        }
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;

@@ -1,5 +1,6 @@
 // Game.tsx から切り出したハンドラ群: ログのコピー・保存、設定画面に戻る、再スタート
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { DragonState, newDragonState } from './dragon';
 import { DamageEffect } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
@@ -39,6 +40,7 @@ export interface GameControlsScope {
     setUseTokenCountAll: React.Dispatch<React.SetStateAction<number[]>>;
     setUseToken: React.Dispatch<React.SetStateAction<boolean>>;
     setUseAssaultAll: React.Dispatch<React.SetStateAction<number[]>>;
+    setDragonAll: React.Dispatch<React.SetStateAction<DragonState[]>>;
     setProliferateAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setSilencedAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setLifeBanAll: React.Dispatch<React.SetStateAction<boolean[]>>;
@@ -77,7 +79,7 @@ export interface GameControlsScope {
     rollPriceTables: () => (SkillCosts | null)[];
 }
 export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
-    const { geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
+    const { setDragonAll, geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
 
 
     const buildLogText = (): string => {
@@ -134,6 +136,7 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
         setUseTokenCountAll(zeros());
         setUseToken(false);
         setUseAssaultAll(zeros());
+        setDragonAll(Array.from({ length: seatCount }, newDragonState));
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
         setSkillBanAll(Array(seatCount).fill(null));

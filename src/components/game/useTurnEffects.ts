@@ -1,12 +1,13 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
+import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragonMagicBonus, newDragonState } from './dragon';
 import { BurstType } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
 import { lifeZeroVictims } from './gearTurn';
 import { rampAfterRoll, rampBonus } from './gear';
 import React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { CharacterId, YingYangMode } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -18,7 +19,7 @@ import { activeObjectCount, effectSnapshot, EffectSnapshot, enforceEffectRules, 
 import { SkillEffectType } from './BoardEffects';
 import { placeWardPiece } from './graveSkills';
 import { detonate } from './thermal';
-import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain } from './gear';
+import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain, applyRubble, objectBuildLife } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PlayEffectExtra } from './usePresentation';
@@ -31,6 +32,9 @@ export interface TurnEffectsScope {
     rampRef: React.MutableRefObject<{ states: RampState[]; turn: number; counted: boolean; bonus: number; first: number | null }>;
     currentBoard: SquareInfo[];
     lastStandHolderFor: (w: Player) => number;
+    /** 龍神の巫女（#527）: 席ごとの形態と、更新関数 */
+    dragon: DragonState[];
+    setDragonAt: (seat: number, value: DragonState | ((prev: DragonState) => DragonState)) => void;
     lastStandUsed: React.MutableRefObject<boolean[]>;
     geo: BoardGeometry;
     symbols: ("💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷")[];
@@ -80,7 +84,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
+    const { dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -88,6 +92,17 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
     useEffect(() => {
         const w = calculateWinner(lineSymbols(currentBoard));
         if (!w) return;
+        // 龍の防壁（龍神の巫女・#527）: 龍のあいだに相手が列を揃えたら、かわりにその列と自陣のコマが消滅して巫女に戻る
+        const dragonHolder = dragonBulwarkHolder(characters, dragon, symbols, w);
+        if (dragonHolder >= 0) {
+            const board = currentBoard.slice();
+            applyBulwark(board, w, symbols[dragonHolder]);
+            setDragonAt(dragonHolder, newDragonState());
+            addLog(`${symbols[dragonHolder]}の龍の防壁: ${w}の揃った列と自陣のコマが消滅。巫女に戻る`);
+            setCurrentBoard(board);
+            playEffect('bulwark');
+            return;
+        }
         const holder = lastStandHolderFor(w);
         if (holder < 0) return;
         lastStandUsed.current[holder] = true;
@@ -103,6 +118,27 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         // 防壁の発動は大事件なので、盤面の演出(土壇場の防壁)とギアのチップの両方で知らせる
         playEffect('bulwark');
         gearTrigger('lastStand', '列が消滅');
+    }, [currentBoard]);
+
+    // 瓦礫の礎: 自陣の大岩以外のオブジェクトが（自分以外の手番に）壊されたら、その位置に大岩を置いて魔力を得る。
+    // 自分の手番に消える建造物（龍神の巫女の覚醒で自分から消すもの）は壊されたことに数えない。盤面が変わるたびに直前の盤面と比べる
+    const rubbleBoard = useRef<SquareInfo[] | null>(null);
+    useEffect(() => {
+        const prev = rubbleBoard.current;
+        rubbleBoard.current = currentBoard;
+        if (!prev || prev.length !== currentBoard.length) return;
+        for (let seat = 0; seat < symbols.length; seat++) {
+            if (seat === turnSeat || !hasGear(gearsBySeat[seat], 'rubbleBase')) continue;
+            const r = applyRubble(prev, currentBoard, symbols[seat], objectBuildLife(gearsBySeat[seat]));
+            if (r.cells.length === 0) continue;
+            const magicGain = r.cells.length * GEAR_PARAMS.rubbleMagic;
+            rubbleBoard.current = r.board;
+            setCurrentBoard(r.board);
+            setMagicAt(seat, (m) => m + magicGain);
+            addLog(`${symbols[seat]}の瓦礫の礎: 壊されたオブジェクト${r.cells.length}つの位置に大岩を設置（魔力+${magicGain}）`);
+            gearTrigger('rubbleBase', `大岩${r.cells.length}つ・魔力+${magicGain}`);
+            return;
+        }
     }, [currentBoard]);
 
     useEffect(() => {
@@ -266,6 +302,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             root,
             objects: objectMagicForNext,
             rent,
+            dragon: dragonMagicBonus(dragon[nextSeat]),
         });
 
         // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
@@ -297,6 +334,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
                 gearLifeBonus(nextGears) +
                 (rampOn ? ramp.bonus : 0) +
                 objectLifeForNext + // 生命の泉
+                dragonLifeBonus(dragon[nextSeat]) + // 龍神の巫女（龍）: ベース+N+4
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),
             gearLifeStd(nextGears, LIFE_STD)
         );

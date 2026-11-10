@@ -69,7 +69,7 @@ export const TOKEN_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
     'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
 ]);
-export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal'];
+export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal', 'onClickRoar'];
 
 export type AIResult = {
     move: number | null;

@@ -445,6 +445,8 @@ exports.skillChoiceMethods = {
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)。大岩(136)も固定して、相手の即勝ちマスを塞ぐ機会を逃さない
             // （対強豪 seed230/200: 58.0→60.4、seed240/200: 58.4→61.2。対giant 32〜35→54〜62、対cryomancer 27〜30→19〜23）
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99 || idx === 136)) ||
+            // 龍神の巫女（#527）: 大岩(136)を手札に固定して、相手のリーチを塞ぎながら覚醒の建造物を増やす
+            (this.character === 'dragonMiko' && idx === 136) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
             (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'magician' || c === 'witch')));
