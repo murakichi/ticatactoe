@@ -443,3 +443,12 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(recommendedGearsAgainst('tactician', ['giant'])).toEqual(recommendedGears('tactician'));
     });
 });
+
+describe('龍神の巫女の専用ギア', () => {
+    it('相手が氷室の番人だけのときは、普請道楽＋春雷を使う。ほかの相手は通常の推奨', () => {
+        expect(counterGearsFor('dragonMiko', ['cryomancer'])).toEqual(['buildMania', 'springThunder']);
+        expect(counterGearsFor('dragonMiko', ['giant'])).toBeUndefined();
+        expect(recommendedGearsAgainst('dragonMiko', ['cryomancer'])).toEqual(['buildMania', 'springThunder']);
+        expect(recommendedGearsAgainst('dragonMiko', ['giant'])).toEqual(['buildMania', 'rubbleBase']);
+    });
+});
