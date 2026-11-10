@@ -16,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -606,6 +606,22 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
             magic -= cost;
         }
     }
+    // 閻魔の舌（毒使い×氷室の番人）: 相手が自分のコマにエフェクトを付けると、そのコマのライフが手番終わりに0になる。氷室の番人は自陣のコマに❄を付け続けるので、
+    // ❄で毒を止めていたコマがライフ0になって奪える（毒使いの最悪対面。上限実験 対氷室 9→24%: docs/tune/poisoner.md）。1つあれば働くので1つだけ立てる。
+    // 置き場所の条件と選び方は大木と同じ（相手にリーチも自分に勝ち筋も無いとき、自分の列を潰さず敵の列を潰せるマス）
+    if (this.character === 'poisoner' && availableSkills.includes(OBJECT_DEFS.tongueKing.idx) && this.ownTongues === 0
+        && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && findEmptyIndexes(board).length >= BIG_TREE_MIN_EMPTY) {
+        const cost = this.calculateAICost(costs.onClickTongueKing, false, false, 'onClickTongueKing');
+        const cell = this.bestTreeCell(board);
+        if (cell !== null && magic >= cost) {
+            chargeClicks.push({ skill: 'onClickTongueKing', target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+        }
+    }
     c.board = board;
     c.magic = magic;
     return null;
@@ -1167,13 +1183,30 @@ export const planMoveMethods = {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => isBuilding(sq) && sq.player === this.playerSymbol && !isDormant(sq)).length;
+        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !isDormant(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(NECRO_CORPSE_CUT_CAP, Math.max(0, NECROMANCY.baseCost - (argsIn[8] ?? NECROMANCY.baseCost))) : 0;
         const args: PlanMoveArgs = argsIn[0].some((sq) => isBuilding(sq))
             ? [argsIn[0].map((sq) => (isBuilding(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
-        const result = this.planMove(...args);
+        let result = this.planMove(...args);
         const magic = args[1];
+        let saving = false;
+        // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
+        if (KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
+            && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
+            const released = sealReleaseCells(args[0], this.playerSymbol).length;
+            const sealCost = this.calculateAICost(sealBaseCost(args[2].onClickSeal, released), false, false, 'onClickSeal');
+            if (magic < sealCost) {
+                const isLock = (sk: string) => sk === 'onClickUseLock';
+                const kept = { ...result, skills: result.skills.filter(isLock), chargeClicks: result.chargeClicks?.filter((c) => isLock(c.skill)) };
+                if (kept.skills.length === 0 && (kept.chargeClicks?.length ?? 0) === 0 && !kept.lockTargets) {
+                    const move = result.move ?? this.getBestMove(args[0], args[4]);
+                    result = { move, skills: [] };
+                } else result = kept;
+                saving = true; // 貯める間は、残りの魔力で手札のスキルを足す処理（extendPlan）も止める
+            }
+        }
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
         // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
@@ -1182,7 +1215,7 @@ export const planMoveMethods = {
             // 無料の1回（手番の最初のロック系）は、安いロックではなく封鎖の断（通常9〜10）に使いたい。魔力が足りて封鎖の断を撃つ判断なら、そちらを返す。
             // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
             if (this.sealWanted(args)) return { move: null, skills: ['onClickSeal'] };
-            return this.extendPlan(result, args);
+            return saving ? result : this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック

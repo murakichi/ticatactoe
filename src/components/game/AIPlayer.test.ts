@@ -453,3 +453,31 @@ describe('「あなた」の相手別の手札固定', () => {
         expect(ai.chooseLocks(emptyBoard(), 0, 5, [92, 2, 8])).not.toContain(92);
     });
 });
+
+describe('毒使い×氷室の番人: 閻魔の舌(125)', () => {
+    const { skillCosts } = require('./skillCosts');
+    const quiet = () => {
+        const b = emptyBoard();
+        b[5] = { player: '💙', bind: 6, effects: [] };
+        b[10] = { player: '⭕', bind: 4, effects: [] };
+        return b;
+    };
+    const poisoner = (foe: 'cryomancer' | 'you') => new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', foe]);
+
+    it('相手が氷室の番人なら、閻魔の舌を置く。氷室でなければ置かない', () => {
+        const vs = poisoner('cryomancer').makeMove(quiet(), 20, skillCosts, 2, 5, [125], false);
+        expect((vs.chargeClicks ?? []).map((c) => c.skill)).toContain('onClickTongueKing');
+        const other = poisoner('you').makeMove(quiet(), 20, skillCosts, 2, 5, [125], false);
+        expect((other.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickTongueKing');
+    });
+
+    it('自陣に舌が立っていれば、もう置かない。手札に固定するのは舌が無いときだけ', () => {
+        const b = quiet();
+        b[0] = { player: '💙', bind: 5, object: 'tongueKing', effects: [] };
+        const r = poisoner('cryomancer').makeMove(b, 20, skillCosts, 2, 5, [125], false);
+        expect((r.chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickTongueKing');
+        expect(poisoner('cryomancer').chooseLocks(quiet(), 0, 5, [125])).toEqual([125]);
+        expect(poisoner('cryomancer').chooseLocks(b, 0, 5, [125])).not.toEqual([125]);
+        expect(poisoner('you').chooseLocks(quiet(), 0, 5, [125])).not.toEqual([125]);
+    });
+});

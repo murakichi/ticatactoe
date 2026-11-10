@@ -582,6 +582,22 @@ function planChargeAndObjects(c) {
             magic -= cost;
         }
     }
+    // 閻魔の舌（毒使い×氷室の番人）: 相手が自分のコマにエフェクトを付けると、そのコマのライフが手番終わりに0になる。氷室の番人は自陣のコマに❄を付け続けるので、
+    // ❄で毒を止めていたコマがライフ0になって奪える（毒使いの最悪対面。上限実験 対氷室 9→24%: docs/tune/poisoner.md）。1つあれば働くので1つだけ立てる。
+    // 置き場所の条件と選び方は大木と同じ（相手にリーチも自分に勝ち筋も無いとき、自分の列を潰さず敵の列を潰せるマス）
+    if (this.character === 'poisoner' && availableSkills.includes(objects_1.OBJECT_DEFS.tongueKing.idx) && this.ownTongues === 0
+        && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
+        && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        const cost = this.calculateAICost(costs.onClickTongueKing, false, false, 'onClickTongueKing');
+        const cell = this.bestTreeCell(board);
+        if (cell !== null && magic >= cost) {
+            chargeClicks.push({ skill: 'onClickTongueKing', target: cell });
+            board = board.slice();
+            board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
+            magic -= cost;
+        }
+    }
     c.board = board;
     c.magic = magic;
     return null;
@@ -1127,7 +1143,7 @@ exports.planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
-        var _a;
+        var _a, _b, _c, _d, _e;
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
             const dragonPlan = this.planDragon(argsIn);
@@ -1138,13 +1154,32 @@ exports.planMoveMethods = {
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownObjectCount = argsIn[0].filter((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const args = argsIn[0].some((sq) => (0, ObjectKind_1.isBuilding)(sq))
             ? [argsIn[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
             : argsIn;
-        const result = this.planMove(...args);
+        let result = this.planMove(...args);
         const magic = args[1];
+        let saving = false;
+        // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
+        if (aiConstants_1.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
+            && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
+            const released = (0, keysmith_1.sealReleaseCells)(args[0], this.playerSymbol).length;
+            const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(args[2].onClickSeal, released), false, false, 'onClickSeal');
+            if (magic < sealCost) {
+                const isLock = (sk) => sk === 'onClickUseLock';
+                const kept = { ...result, skills: result.skills.filter(isLock), chargeClicks: (_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.filter((c) => isLock(c.skill)) };
+                if (kept.skills.length === 0 && ((_d = (_c = kept.chargeClicks) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0) === 0 && !kept.lockTargets) {
+                    const move = (_e = result.move) !== null && _e !== void 0 ? _e : this.getBestMove(args[0], args[4]);
+                    result = { move, skills: [] };
+                }
+                else
+                    result = kept;
+                saving = true; // 貯める間は、残りの魔力で手札のスキルを足す処理（extendPlan）も止める
+            }
+        }
         // 鍵師: ロックなど固有スキルの計画は、手札の他の札を見ずに返る。ロックを撃ったあとに魔力が残るなら、手札のトークン・バッズなどを足す。
         // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
@@ -1154,7 +1189,7 @@ exports.planMoveMethods = {
             // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
             if (this.sealWanted(args))
                 return { move: null, skills: ['onClickSeal'] };
-            return this.extendPlan(result, args);
+            return saving ? result : this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_1.MAGICIAN_REROLL_MAGIC : aiConstants_1.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
             return result;

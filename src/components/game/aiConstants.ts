@@ -113,7 +113,7 @@ export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
 
 export const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
-export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];
+export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52, 98];
 /** 陰陽師が相手のときは追い剥ぎ(52)も固定対象に加える。対陰陽師 +4.7pt（seed1161〜1165 各400, 5seed全て正: +2.8/+6.5/+2.0/+5.7/+6.4）*/
 export const MAGICIAN_HOLD_VS_YINYANG = [53, 60, 92, 52];
 /** パーフェクトゲームの即勝ちに魔力が届かないとき、あと何魔力以内なら他のスキルの支払いを控えてためるか（チャージ+3を2回で届く範囲） */
@@ -147,6 +147,10 @@ export const KEYSMITH_LOCK_MIN_VALUE = 40;
 /** 鍵師が自陣のコマをロックして守る条件: ライフがこの値以下（奪われる直前）で、列づくりの価値がこの値以上 */
 export const KEYSMITH_OWN_LOCK_MAX_BIND = 1; // 3や無制限に広げると対 you 58%→43〜48%（各60試合, seed2000）。ロックの撃ち過ぎで魔力を食う
 export const KEYSMITH_OWN_LOCK_MIN_VALUE = 10;
+/** 鍵師の『封鎖の断のために魔力を貯める』（人間の勝ちログ game-log_4/5/6）: 守りが要らない間（双方リーチ無し）は、封鎖の断のコストに届くまで他のスキルを見送って魔力を貯める。
+ *  魔力が足りると封鎖の断は最初のロック系として無料なので、貯めれば毎手番ほぼ無料で撃てる。対強豪平均（今の強豪集合）seed5/100: 30.5→45.7, seed9/150: 30.7→43.4。
+ *  『自分のロックが残る間は封鎖の断を撃たず埋める』は 45.7→39.4 で悪化したので採用しない（docs/tune/keysmith.md 試行20）。1=有効 */
+export const KEYSMITH_SEAL_SAVE: number = 1;
 /** 鍵師のコンボ（二列並び→片方ロック→もう片方に置く）の条件: 自陣の2つのコマのライフがこの値以上 */
 export const KEYSMITH_COMBO_MIN_BIND = 2; // 各60試合, seed2000: 1→76.7/8.3/8.3, 2→75/8.3/6.7, 3→75/6.7/5, 4→66.7/6.7/3.3（対 you/magician/witch）。緩めても悪化せず差はノイズ。中間の2
 /** コンボを撃つときの、ロック中の空きマスの上限（空きマスのロック判断の上限2より1つ多い） */
