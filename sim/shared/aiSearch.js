@@ -138,8 +138,15 @@ exports.searchMethods = {
     },
     /** 盤面評価関数: 各勝利ラインのスコアを合算 */
     evaluateBoard(board) {
+        var _a;
         let score = 0;
         const lineScores = [0, 1, 10, 50, 1000];
+        // 龍神の巫女（二列勝利）: 1本目が完成していたら、それと重なる窓（共有2マス以上）は2本目にならないので評価を下げ、離れた窓を上げる。
+        // 重なる窓も同じ点で数えると、1本目の周りに積むほうが得に見えて、2本目を作る動きが選ばれない
+        let primary = null;
+        if (this.character === 'dragonMiko') {
+            primary = (_a = (0, boardGeometry_1.geometryForCells)(board.length).winLines.find((line) => line.every((idx) => board[idx].player === this.playerSymbol && !(0, util_1.isObject)(board[idx])))) !== null && _a !== void 0 ? _a : null;
+        }
         for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
             if (line.some((idx) => (0, thermal_1.emptyBlocked)(board[idx]) || (0, util_1.isShikigami)(board[idx]) || (0, util_1.isObject)(board[idx])))
@@ -160,7 +167,10 @@ exports.searchMethods = {
                 }
             }
             if (myCount > 0 && oppCount === 0) {
-                score += lineScores[myCount];
+                let weight = 1;
+                if (primary && line !== primary)
+                    weight = line.filter((idx) => primary.includes(idx)).length >= 2 ? aiConstants_1.TWO_LINE_OVERLAP_WEIGHT : aiConstants_1.TWO_LINE_DISJOINT_WEIGHT;
+                score += lineScores[myCount] * weight;
             }
             else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
                 score -= lineScores[oppCount];

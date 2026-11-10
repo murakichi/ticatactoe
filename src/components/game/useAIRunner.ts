@@ -16,6 +16,7 @@ import { Discount } from './discount';
 import { GameLate } from './gameLate';
 
 export interface AIRunnerScope {
+    dragon: { form: 'miko' | 'dragon'; n: number }[];
     reaperSweeps: number;
     currentAI: AIPlayer | null;
     currentBoard: SquareInfo[];
@@ -37,7 +38,7 @@ export interface AIRunnerScope {
     lastStandSaves: number;
 }
 export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
-    const { currentAI, currentBoard, characters, turnSeat, currentTurnPlayer, seatCosts, gearCost, placements, seatCount, gearsBySeat, lastStandUsed, gearTurn, otherSeats, currentTurn, isAllAI, currentCharacter, restartCount, lastStandSaves, reaperSweeps } = g;
+    const { dragon, currentAI, currentBoard, characters, turnSeat, currentTurnPlayer, seatCosts, gearCost, placements, seatCount, gearsBySeat, lastStandUsed, gearTurn, otherSeats, currentTurn, isAllAI, currentCharacter, restartCount, lastStandSaves, reaperSweeps } = g;
 
     // AIの実行キュー。number=そのマスをクリック / string=そのスキルを実行（帯電系は「スキル→クリック」を順に並べる）
     const [pendingAIMove, setPendingAIMove] = useState<(number | string)[] | null>(null);
@@ -104,6 +105,7 @@ export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
                 oppGearCount: otherSeats(turnSeat).reduce((n, seat) => n + gearsBySeat[seat].length, 0),
                 oppLastStand: otherSeats(turnSeat).some((seat) => hasGear(gearsBySeat[seat], 'lastStand') && !lastStandUsed.current[seat]),
                 yinYangMode: late().currentYinYangMode === 'yang' ? 'yang' : 'ying',
+                dragonForm: dragon[turnSeat]?.form ?? 'miko',
                 silenced: late().silenced[turnSeat],
                 glacierPending: late().glacierPending[turnSeat],
                 glacierCharge: late().glacierCharge[turnSeat],

@@ -32,6 +32,8 @@ const SKILL_META: Record<string, Meta> = {
     業火: { icon: '💥', category: 'fire' },
     虎落笛: { icon: '🍂', category: 'buds' },
     封鎖の断: { icon: '🗝️', category: 'control' },
+    八百万の祈り: { icon: '🙏', category: 'object' },
+    龍の咆哮: { icon: '🐉', category: 'attack' },
 };
 
 /** カタログか、基本操作・固有スキルの表に載っているスキル名か(載っていなければカードは既定の「✨・基本」表示になる) */

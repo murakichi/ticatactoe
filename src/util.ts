@@ -3,6 +3,7 @@ import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 import { geometryForCells } from './components/game/boardGeometry';
 import { isObject, isShikigami } from './types/ObjectKind';
+import { meetsWinNeed } from './components/game/winRule';
 
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
@@ -18,6 +19,7 @@ export const LIFE_MEANS = {
     cryomancer: 4, // 魔力+1(Game.tsx)とセット。鍛冶師と互角（対鍛冶師 53%）にするため、魔法使い並みに紙
     pyromancer: 6,
     witch: 4, // 魔力+1(Game.tsx)とセット（ユーザー指示）
+    dragonMiko: 3, // 通常(5)から-2（#527。覚醒すると ベース+N+4）
     keysmith: 4, // 通常(5)から-1（#439）。空きマスのロック無視・ロック系スキル無料/-1とセット
     default: 5,
 } as const;
@@ -42,13 +44,20 @@ const lineSymbols = (board: SquareInfo[]): (Player | undefined)[] => board.map((
 
 const calculateWinner = (squares: (Player | undefined)[]): Player | undefined => {
     const lines = geometryForCells(squares.length).winLines;
+    let own: Map<Player, number[][]> | undefined;
     for (let l = 0; l < lines.length; l++) {
         const line = lines[l];
         const first = squares[line[0]];
         if (!first) continue;
         let all = true;
         for (let k = 1; k < line.length; k++) if (squares[line[k]] !== first) { all = false; break; }
-        if (all) return first;
+        if (!all) continue;
+        // 必要本数が1の席（ほぼ全員）は、揃った時点で勝ち。2本の席は、別々の2本（共有は1マスまで）が揃うまで勝たない（#526）
+        if (!own) own = new Map();
+        const mine = own.get(first) ?? [];
+        mine.push(line);
+        own.set(first, mine);
+        if (meetsWinNeed(first, mine)) return first;
     }
     return undefined;
 };

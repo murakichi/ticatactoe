@@ -76,9 +76,11 @@ function planOpening(c) {
     // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
     // （旧sim AI の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
     const facesWitch = c.facesWitch = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
-    // 魔女・陰陽師が巨人と当たるとき、最初の手番は置かずにチャージする。最初の1駒は巨人のストンプで必ず消されるため、魔力+3を先に取る
-    // （対巨人。魔女 seed901〜904 各400: 26.8/27.5/26.8/30.3 → 36.5/33.3/32.8/32.3 %、陰陽師 seed921〜923 各300: 34.7/35.7/33.0 → 45.3/46.7/46.7 %。他のキャラは対ネクロ -21・対氷室 -14 などで悪化するのでこの2キャラだけ）
-    if (magic < 5 && (this.character === 'witch' || this.character === 'yinYangMaster') && this.characters.some((ch, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && ch === 'giant')
+    // 魔女・陰陽師が巨人と当たるとき、最初は置かずにチャージする。最初の1駒は巨人のストンプで必ず消される。巨人は2手番に1回しか動かないので、その間に魔力を貯める。
+    // 貯める上限（手番開始の魔力がこれ未満の間チャージ）は、魔女 14・陰陽師 5。対巨人 魔女（seed961〜964 各300）: 上限5 28.7/29.3/31.3/35.3 → 上限14 57.0/61.0/52.7/52.7（平均 +24.7）。
+    // 上限8/11/17は 33/45/46〜56 で14が最良。陰陽師（seed961/300）: 上限5 50.0 / 8 28.0 / 11 36.7 で5が最良（seed921〜923: 34.7/35.7/33.0 → 45.3/46.7/46.7）。他のキャラは対ネクロ -21・対氷室 -14 などで悪化するのでこの2キャラだけ
+    const openChargeCap = this.character === 'witch' ? aiConstants_1.WITCH_GIANT_OPEN_CHARGE_CAP : this.character === 'yinYangMaster' ? aiConstants_1.YINYANG_GIANT_OPEN_CHARGE_CAP : 0;
+    if (magic < openChargeCap && this.characters.some((ch, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && ch === 'giant')
         && !board.some((sq) => sq.player === this.playerSymbol) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         return { move: null, skills: ['onClickCharge'] };
     }
@@ -1182,6 +1184,12 @@ exports.planMoveMethods = {
      */
     makeMove(...argsIn) {
         var _a, _b, _c, _d, _e;
+        // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
+        if (this.character === 'dragonMiko') {
+            const dragonPlan = this.planDragon(argsIn);
+            if (dragonPlan)
+                return dragonPlan;
+        }
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
         this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
         this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;

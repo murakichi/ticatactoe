@@ -69,7 +69,7 @@ export const TOKEN_SKILL_KEYS: ReadonlySet<string> = new Set([
     'onClickFrostToken', 'onClickDoubleFrostToken', 'onClickChargeToken', 'onClickDoubleChargeToken', 'onClickLeafToken', 'onClickTwinLeafToken',
     'onClickDoubleLeafToken', 'onClickShikigamiRandom', 'onClickFirstFrost', 'onClickGather', 'onClickBurnOff',
 ]);
-export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal'];
+export const TURN_ENDING_SKILLS = ['onClickCharge', 'onClickOpium', 'onClickTsunami', 'onClickSeal', 'onClickRoar'];
 
 export type AIResult = {
     move: number | null;
@@ -112,6 +112,11 @@ export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
     electrician: [92],
     tactician: [92, 74],
 };
+
+/** 巨人が相手のとき、自コマが盤に無い間、手番開始の魔力がこれ未満なら置かずにチャージする（魔女。対巨人 平均 +24.7pt） */
+export const WITCH_GIANT_OPEN_CHARGE_CAP = 14;
+/** 同上（陰陽師。5が最良で、8・11は悪化） */
+export const YINYANG_GIANT_OPEN_CHARGE_CAP = 5;
 
 export const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
@@ -194,3 +199,7 @@ export const FORCED_WIN_PLIES = 4;
  *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化。
  *  全キャラ共通 環境順位 seed111/60: ネクロ 63.5→56.5、火術師 47.3→51.7、鍵師 49.3→52.0、魔法使い 27.8→29.5（他は不変） */
 export const ANTI_LOCK_REFRESH = 2;
+
+/** 龍神の巫女（二列勝利）の評価: 1本目が完成しているとき、1本目と重なる窓（共有2マス以上）の加点の倍率と、離れた窓の倍率（evaluateBoard） */
+export const TWO_LINE_OVERLAP_WEIGHT = 0.2;
+export const TWO_LINE_DISJOINT_WEIGHT = 1.5;

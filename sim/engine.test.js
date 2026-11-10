@@ -17,6 +17,7 @@ require('./engine-tests/aiDriver');
 require('./engine-tests/night');
 require('./engine-tests/keysmith');
 require('./engine-tests/youCounter');
+require('./engine-tests/dragon');
 
 const { pass, fail } = summary();
 console.log(`\n${pass} passed, ${fail} failed`);
