@@ -17,7 +17,7 @@ function aiLoadout(chars, rng, opts) {
     // 「あなた」は相手が1キャラに決まるとき相手別の専用デッキ・ギア（本番 App.tsx と同じ。rng は消費しない）
     const foesOf = (seat) => chars.filter((_, i) => i !== seat);
     if (opts.deck) out.decks = chars.map((c, seat) => (c === 'you' ? deckMod.recommendedDeckAgainst(c, foesOf(seat)) : deckMod.pickRecommendedDeck(c, rng)));
-    if (opts.gears) out.gears = chars.map((c, seat) => (c === 'you' ? gearMod.recommendedGearsAgainst(c, foesOf(seat)) : gearMod.pickRecommendedGears(c, rng)));
+    if (opts.gears) out.gears = chars.map((c, seat) => (gearMod.counterGearsFor(c, foesOf(seat)) ?? (c === 'you' ? gearMod.recommendedGearsAgainst(c, foesOf(seat)) : gearMod.pickRecommendedGears(c, rng))));
     return out;
 }
 

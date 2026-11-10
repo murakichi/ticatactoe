@@ -30,6 +30,34 @@ describe('canPlaceAt / resolveMoveCell', () => {
         expect(canPlaceAt(b, 2, '💙', 'giant', chars)).toBe(true); // 巨人は奪える
     });
 
+    it('盤面が埋まり自陣が⚡無敵で打てるマスが無いとき、計画も打ち直しも打てないマスを返さずチャージでパスする', () => {
+        const el: CharacterId[] = ['electrician', 'tactician'];
+        const b = emptyBoard();
+        for (let i = 0; i < 16; i++) b[i] = { player: '⭕', bind: 6, effects: [{ effect: '❄' }] }; // 敵はライフあり・氷結
+        b[7] = { player: '💙', bind: 0, effects: [{ effect: '⚡' }] }; // 自陣の⚡コマは無敵で本人も触れない
+        b[9] = { player: '💙', bind: 1, effects: [{ effect: '⚡' }] };
+        const ai = new AIPlayer('💙', 'electrician', ['⭕'], el);
+        expect(resolveMoveCell(ai, b, el, 5, 9)).toBeNull();
+        const plan = planAITurn(ai, input(b, { characters: el, magic: [3, 3] }), () => 'x');
+        if (plan.kind === 'direct') {
+            const moves = plan.clicks.filter((c) => canPlaceAt(b, c, '💙', 'electrician', el));
+            expect(moves.length).toBe(plan.clicks.length); // 打てないクリックは含まれない
+            if (plan.clicks.length === 0) expect(plan.chargeWhenEmpty).toBe(true);
+        }
+    });
+
+    it('一寸の虫の縛り（ライフ3以下を置けない）でライフ3のとき、手札にライフ+3があればそれを撃って置く', () => {
+        const b = emptyBoard();
+        const base = { lifeBan: true, life: 3, magic: [12, 3], hand: [0, 1, 2] };
+        const ai = () => new AIPlayer('💙', 'you', ['⭕'], chars);
+        const plan = planAITurn(ai(), input(b, { ...base, life: 3 }), () => "x");
+        expect(plan.kind === 'direct' && plan.skills[0]).toBe('onClickAddLife');
+        expect(plan.kind === 'direct' && plan.clicks.length).toBe(1);
+        // 手札に無い・魔力が足りないときは従来どおり（置けずチャージでパス）
+        const none = planAITurn(ai(), input(b, { ...base, hand: [1, 2, 4] }), () => 'x');
+        expect(none.kind === 'direct' && none.skills).not.toContain('onClickAddLife');
+    });
+
     it('スキルでロック付きトークンが着手マスに置かれたら、今の盤面で打ち直す（打てる手が無ければ null）', () => {
         const ai = new AIPlayer('💙', 'witch', ['⭕'], ['witch', 'you']);
         const b = emptyBoard();
@@ -65,10 +93,27 @@ describe('ロックとランダム帯電トークンを同じ手番で撃つ計�
     });
 });
 
+describe('AIは自分のギアを見て戦略を変える', () => {
+    it('芽吹きを装備していて、ライフ+3で7に届く（ライフ4〜6）なら、ライフ+3を撃ってから置く。装備が無ければ撃たない', () => {
+        const board = emptyBoard();
+        const withGear = new AIPlayer('💙', 'you', ['⭕'], chars, undefined, false, false, undefined, false, false, ['budSeed']);
+        const without = new AIPlayer('💙', 'you', ['⭕'], chars);
+        expect(withGear.ownsGear('budSeed')).toBe(true);
+        expect(without.ownsGear('budSeed')).toBe(false);
+        const a = planAITurn(withGear, input(board, { life: 5, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        const b = planAITurn(without, input(board, { life: 5, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        expect(a.kind === 'direct' && a.skills).toContain('onClickAddLife');
+        expect(b.kind === 'direct' && b.skills).not.toContain('onClickAddLife');
+        // すでに7以上、または+3しても届かない（ライフ3以下）ときは撃たない
+        const c = planAITurn(withGear, input(board, { life: 8, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        expect(c.kind === 'direct' && c.skills).not.toContain('onClickAddLife');
+    });
+});
+
 describe('一寸の虫に魂なし（ライフ3以下のコマを置けない）', () => {
     it('置けないときは着手せず、置くスキルも撃たず、チャージでパスする', () => {
         const ai = new AIPlayer('💙', 'you', ['⭕'], chars);
-        const p = planAITurn(ai, input(emptyBoard(), { lifeBan: true, life: 3, hand: [0, 1, 2] }), () => 'ストンプ');
+        const p = planAITurn(ai, input(emptyBoard(), { lifeBan: true, life: 3, hand: [1, 2, 4] }), () => 'ストンプ');
         expect(p.kind).toBe('direct');
         if (p.kind === 'direct') {
             expect(p.clicks).toEqual([]);

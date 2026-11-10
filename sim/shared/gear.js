@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.applyRubble = exports.rubbleCells = exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.applyRubble = exports.rubbleCells = exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.counterGearsFor = exports.COUNTER_GEARS = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
@@ -82,41 +82,41 @@ exports.GEAR_PARAMS = {
 };
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
-    { id: 'lockBloom', name: '芽吹きの錠', icon: '🌸', desc: `ロックをかけた低ライフの自陣のコマにバッズが付く` },
+    { id: 'lockBloom', name: '芽吹きの錠', icon: '🌸', desc: `ロックをかけたライフ${P.lockBloomMaxLife}以下の自陣のコマにバッズを付与` },
     { id: 'emptyLock', name: '空蔵', icon: '🕳️', desc: `空きマスにかけたロックが切れると、そのマスが自陣のコマになる` },
     { id: 'ironLock', name: '堅牢の鍵', icon: '🔒', desc: `ロックの期間が${P.ironLockStack}ターンに延長` },
     { id: 'bindingLock', name: '道連れの鍵', icon: '🗝️', desc: `トークンで置いたコマに${P.bindingLockChance * 100}%でロックが付く` },
-    { id: 'quadMastery', name: '四連の極意', icon: '🎴', desc: `1ターンにスキルを何度も使うと、次のスキルが無料` },
-    { id: 'afterglow', name: '余韻', icon: '🔔', desc: `スキルを使った次のターン、最初のスキルのコストが軽減` },
+    { id: 'quadMastery', name: '四連の極意', icon: '🎴', desc: `1ターンにスキルを${P.quadCount}回使うと、次のスキルが無料` },
+    { id: 'afterglow', name: '余韻', icon: '🔔', desc: `スキルを使った次のターン、最初のスキルのコスト${P.afterglowDelta}` },
     { id: 'luckyPurse', name: '幸運の財布', icon: '👛', desc: `スキル使用時に${P.luckyPurseChance * 100}%でコスト0` },
-    { id: 'sturdy', name: '頑健', icon: '🛡️', desc: `コマのライフが上昇` },
-    { id: 'titanCost', name: '剛腕の代償', icon: '🏋️', desc: `コマのライフが大きく上昇するが、全スキルのコストが増加` },
-    { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンで置くコマのライフが上昇` },
-    { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクトを付与するスキルを使うと、付与した数だけマジックを獲得（最大${P.harvestCap}）` },
+    { id: 'sturdy', name: '頑健', icon: '🛡️', desc: `コマのライフ平均+${P.sturdyLife}` },
+    { id: 'titanCost', name: '剛腕の代償', icon: '🏋️', desc: `コマのライフ平均+${P.titanLife}、全スキルのコスト+${P.titanCost}` },
+    { id: 'reinforce', name: '増援', icon: '🪖', desc: `トークンで置くコマのライフ+${P.reinforceTokenLife}` },
+    { id: 'harvest', name: '収穫', icon: '🌾', desc: `エフェクトを付与するスキルを使うと、付与した数だけマジック+1（1回につき最大+${P.harvestCap}）` },
     { id: 'toxicBloom', name: '毒花', icon: '🌺', desc: `自陣のコマに毒が付くと、バッズも付与` },
-    { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルのコストがランダムに変動` },
-    { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: `スキルを使うたび、そのターンの全スキルのコストが軽減` },
+    { id: 'priceWreck', name: '価格破壊', icon: '🏷️', desc: `試合開始時に、全スキルの基礎コストがランダムに-${P.priceRange}〜+${P.priceRange}（下限${P.priceFloor}）` },
+    { id: 'chainDiscount', name: '連鎖割引', icon: '🔗', desc: `スキルを使うたび、そのターンの全スキルのコスト-1` },
     { id: 'propagate', name: '伝播', icon: '🌊', desc: `エフェクト付きのトークンを置くと、周囲のコマにも同じエフェクトが拡散` },
-    { id: 'lightToken', name: '軽量トークン', icon: '🪶', desc: `トークン系スキルが安いが、置くコマのライフが低い` },
+    { id: 'lightToken', name: '軽量トークン', icon: '🪶', desc: `トークン系スキルのコスト${P.lightTokenCost}、置くコマのライフ${P.lightTokenLife}` },
     { id: 'gambler', name: '賭博師の骰子', icon: '🎲', desc: `コマのライフのばらつきが拡大（標準偏差${P.gamblerStd}）` },
-    { id: 'vengeance', name: '復讐の刃', icon: '🗡️', desc: `コマを奪われるとマジックを獲得、敵のコマを奪うとマジックを喪失` },
-    { id: 'colorGarden', name: '彩りの庭', icon: '🎨', desc: `1つのマスに多種類のエフェクトがあると、手番開始時にマジックを獲得` },
-    { id: 'ailmentPact', name: '病炎の契り', icon: '🩸', desc: `自陣に毒・火炎があると、固有以外のスキルが安い` },
-    { id: 'ruinSurge', name: '廃墟の底力', icon: '🏚️', desc: `自陣のコマが破壊されると、次の手番の終わりまでスキルが安い` },
-    { id: 'scorchedEarth', name: '焦土', icon: '🌋', desc: `敵の🌱・🍂が🔥で消えるたびにマジックを獲得` },
-    { id: 'ashOffering', name: '灰の供物', icon: '⚱️', desc: `敵のマスに🔥を付与すると、次の手番の終わりまでスキルが安い` },
-    { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠中の🌱の数だけマジックを獲得` },
+    { id: 'vengeance', name: '復讐の刃', icon: '🗡️', desc: `コマを奪われるとマジック+${P.vengeanceGain}（1手で最大+${P.vengeanceCap}）、敵のコマを奪うとマジック-${P.vengeancePenalty}` },
+    { id: 'colorGarden', name: '彩りの庭', icon: '🎨', desc: `1つのマスに${P.varietyKinds}種類以上のエフェクトがある自陣のマス1つにつき、手番開始時のマジック+${P.varietyMagic}` },
+    { id: 'ailmentPact', name: '病炎の契り', icon: '🩸', desc: `自陣に毒・火炎があると、1種類につき固有以外のスキルのコスト-${P.ailmentDiscount}` },
+    { id: 'ruinSurge', name: '廃墟の底力', icon: '🏚️', desc: `自陣のコマが破壊されると、次の手番の終わりまでスキルのコスト-${P.ruinDiscount}` },
+    { id: 'scorchedEarth', name: '焦土', icon: '🌋', desc: `敵の🌱・🍂が🔥で消えるたびにマジック+${P.scorchMagic}（1手番で最大+${P.scorchCap}）` },
+    { id: 'ashOffering', name: '灰の供物', icon: '⚱️', desc: `敵のマスに🔥を付与すると、付与したマス1つにつき次の手番の終わりまでスキルのコスト-${P.ashDiscount}` },
+    { id: 'frostRoot', name: '凍てつく根', icon: '🧊', desc: `手番開始時、氷結で休眠中の🌱1つにつきマジック+${P.rootMagic}` },
     { id: 'conduction', name: '伝導', icon: '🔌', desc: `帯電したコマの毒・火炎を、ダメージを受けた敵のマスに伝播` },
     { id: 'spellWard', name: '術中の加護', icon: '🕊️', desc: `誰かがスキルを使ったターンの間、自陣のコマはエフェクトのダメージを受けない` },
     { id: 'springThunder', name: '春雷', icon: '🌩️', desc: `手番開始時、自陣のリーチを塞ぐ氷結を1つ解除` },
-    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
-    { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
-    { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
-    { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジックを獲得` },
-    { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクトの数だけマジックを獲得` },
-    { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフが上昇` },
-    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
-    { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅` },
+    { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフ期待値+${P.rampStep}。ライフ${P.rampHighLife}以上を${P.rampResetHits}回引くとリセット` },
+    { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフ平均+${P.reaperLife}。ライフ0の駒は、誰のものでも手番の終わりに破壊` },
+    { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
+    { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
+    { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
+    { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
+    { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
+    { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅。以降、相手の手番開始時のマジック+${P.lastStandMagic}・ライフ平均+${P.lastStandLife}` },
 ];
 exports.GEAR_IDS = exports.GEARS.map((g) => g.id);
 const gearDefOf = (id) => exports.GEARS.find((g) => g.id === id);
@@ -291,7 +291,7 @@ exports.RECOMMENDED_GEARS = {
     electrician: ['budSeed', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'vengeance'],
+    pyromancer: ['afterglow', 'budSeed'],
     keysmith: ['lastStand', 'lockBloom'],
     witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
@@ -320,15 +320,50 @@ exports.COUNTER_GEARS_FOR_YOU = {
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
     yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
 };
-/** character の推奨ギア。「あなた」は相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
+/**
+ * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。
+ * 春雷（自陣のリーチを塞ぐ氷結を1つ解く）は氷室の番人の氷結の壁に効く:
+ * 軍師 36→60%（seed2/3, 各150試合）、毒使い 10→67%（同）。氷室以外の相手には通常の推奨のまま（#465）
+ */
+exports.COUNTER_GEARS = {
+    tactician: {
+        cryomancer: ['springThunder', 'priceWreck'],
+    },
+    // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
+    // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
+    pyromancer: {
+        yinYangMaster: ['afterglow', 'snowball'],
+        necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
+    },
+    witch: { pyromancer: ['buildMania', 'spellWard'] },
+    poisoner: {
+        cryomancer: ['springThunder', 'spellWard'],
+        witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
+    },
+    cryomancer: {
+        electrician: ['lightToken', 'reaper'],
+        // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
+        // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
+        // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
+        pyromancer: ['spellWard', 'reaper'],
+        poisoner: ['spellWard', 'reaper'],
+        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+    },
+};
+/** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
+const counterGearsFor = (character, opponents) => {
+    var _a;
+    const kinds = Array.from(new Set(opponents));
+    if (kinds.length !== 1)
+        return undefined;
+    const counter = character === 'you' ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : (_a = exports.COUNTER_GEARS[character]) === null || _a === void 0 ? void 0 : _a[kinds[0]];
+    return counter ? counter.slice(0, (0, exports.gearSlotsFor)(character)) : undefined;
+};
+exports.counterGearsFor = counterGearsFor;
+/** character の推奨ギア。相手キャラが1種類で専用ギアがあればそれ（なければ通常の推奨） */
 const recommendedGearsAgainst = (character, opponents) => {
-    if (character === 'you') {
-        const kinds = Array.from(new Set(opponents));
-        const counter = kinds.length === 1 ? exports.COUNTER_GEARS_FOR_YOU[kinds[0]] : undefined;
-        if (counter)
-            return counter.slice(0, (0, exports.gearSlotsFor)(character));
-    }
-    return (0, exports.recommendedGears)(character);
+    var _a;
+    return (_a = (0, exports.counterGearsFor)(character, opponents)) !== null && _a !== void 0 ? _a : (0, exports.recommendedGears)(character);
 };
 exports.recommendedGearsAgainst = recommendedGearsAgainst;
 /** AI席が使うギア。主案と別案を同じ確率で選ぶ（別案が無ければ主案） */

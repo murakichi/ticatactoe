@@ -13,6 +13,7 @@ import {
     randomGears,
     recommendedGears,
     recommendedGearsAgainst,
+    counterGearsFor,
     COUNTER_GEARS_FOR_YOU,
     RECOMMENDED_GEARS,
     ALT_RECOMMENDED_GEARS,
@@ -413,5 +414,32 @@ describe('瓦礫の礎', () => {
         expect(r.board[3].player).toBe('💙');
         expect(r.board[3].effects.some((e) => e.effect === '🔑')).toBe(true);
         expect(GEAR_PARAMS.rubbleMagic).toBe(1);
+    });
+});
+
+describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
+    it('相手が1種類で専用ギアがあるときだけそれを使う。他の相手・複数種類・専用が無い組み合わせは通常の推奨', () => {
+        expect(counterGearsFor('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(counterGearsFor('poisoner', ['cryomancer', 'cryomancer'])).toEqual(['springThunder', 'spellWard']);
+        expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('tactician', ['giant'])).toBeUndefined();
+        expect(counterGearsFor('tactician', ['cryomancer', 'magician'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['cryomancer'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('giant', ['tactician'])).toBeUndefined();
+        expect(counterGearsFor('pyromancer', ['yinYangMaster'])).toEqual(['afterglow', 'snowball']);
+        expect(counterGearsFor('necromancer', ['cryomancer'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['magician'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['electrician'])).toEqual(['lightToken', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['giant'])).toBeUndefined();
+        // 氷室の番人: 鍛冶師・毒使いには術中の加護+死神の鎌（対鍛冶師 9〜12→72〜74%）。複数種類の相手・他のキャラには通常の推奨
+        expect(counterGearsFor('cryomancer', ['pyromancer'])).toEqual(['spellWard', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['poisoner'])).toEqual(['spellWard', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['pyromancer', 'poisoner'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['tactician'])).toBeUndefined();
+        expect(recommendedGearsAgainst('cryomancer', ['pyromancer'])).toEqual(['spellWard', 'reaper']);
+        expect(recommendedGearsAgainst('cryomancer', ['tactician'])).toEqual(recommendedGears('cryomancer'));
+        expect(recommendedGearsAgainst('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
+        expect(recommendedGearsAgainst('tactician', ['giant'])).toEqual(recommendedGears('tactician'));
     });
 });

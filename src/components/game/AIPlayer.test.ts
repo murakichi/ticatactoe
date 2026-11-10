@@ -322,6 +322,18 @@ describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', ()
         b[6] = { player: '💙', bind: 3, effects: [{ effect: '❄' }] };
         expect(ai.findAntiNecroLockTarget(b)).toBeNull();
     });
+    it('対策ロックは、残りスタックが2以下のロック済みコマを延長の対象にする（3以上は対象にしない）', () => {
+        const mk = (stack: number) => {
+            const b = emptyBoard();
+            b[5] = { player: '💙', bind: 2, effects: [{ effect: '🔑', stack }] };
+            return b;
+        };
+        const mage = new AIPlayer('💙', 'magician', ['⭕']);
+        expect(mage.findAntiNecroLockTarget(mk(2))).toBe(5);
+        expect(mage.findAntiNecroLockTarget(mk(3))).toBeNull();
+        expect(ai.findAntiNecroLockTarget(mk(1))).toBe(5);
+        expect(ai.findAntiNecroLockTarget(mk(4))).toBeNull();
+    });
     it('絶対零度は🔑ロック中の敵コマを数えない', () => {
         const b = emptyBoard();
         [0, 1, 2].forEach((i) => { b[i] = { player: '⭕', bind: 4, effects: [{ effect: '🔑' }] }; });
@@ -479,5 +491,30 @@ describe('毒使い×氷室の番人: 閻魔の舌(125)', () => {
         expect(poisoner('cryomancer').chooseLocks(quiet(), 0, 5, [125])).toEqual([125]);
         expect(poisoner('cryomancer').chooseLocks(b, 0, 5, [125])).not.toEqual([125]);
         expect(poisoner('you').chooseLocks(quiet(), 0, 5, [125])).not.toEqual([125]);
+    });
+});
+
+describe('魔女・陰陽師は巨人相手の最初の手番で置かずにチャージする', () => {
+    const costs = { onClickCharge: 0 } as any;
+    const mk = (ch: any, opp: any) => new AIPlayer('💙', ch, ['⭕'], ['witch' === ch ? 'witch' : ch, opp] as any);
+    it('魔女 vs 巨人: 自コマが無く魔力が少ないときはチャージ', () => {
+        const ai = mk('witch', 'giant');
+        const r = ai.makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
+        expect(r.move).toBeNull();
+        expect(r.skills).toContain('onClickCharge');
+    });
+    it('陰陽師 vs 巨人でも同じ。電気技師 vs 巨人では置く', () => {
+        const yy = mk('yinYangMaster', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
+        expect(yy.move).toBeNull();
+        expect(yy.skills).toContain('onClickCharge');
+        expect(mk('electrician', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
+    });
+    it('魔力が貯まったあと・自コマがあるとき・巨人以外が相手のときは通常どおり着手', () => {
+        const ai = mk('witch', 'giant');
+        expect(ai.makeMove(emptyBoard(), 5, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
+        const b = emptyBoard();
+        put(b, 5, '💙');
+        expect(ai.makeMove(b, 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
+        expect(mk('witch', 'electrician').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
     });
 });

@@ -12,7 +12,7 @@ import { miasmaPlan as miasmaPlanOf, pandemicTargets } from './poison';
 import { stomp as stompOf, judgeDay as judgeDayOf, judgeDayVictims } from './blast';
 import { SHIKIGAMI_BLAST_DAMAGE, blast as shikigamiBlast, shikigamiLandable } from './shikigami';
 import { chargeStacks, orthoNeighbors, connectedPieces, isGuarded } from './charge';
-import { BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
+import { ANTI_LOCK_REFRESH, BLOOM_MAX_OWN_POISON, BLOOM_MIN_BIND, CHARGE_AREA_MIN_SCORE, CHARGE_ONE_MIN_SCORE, CLOUD_MIN_FOES, EMPTY_LOCK_DENY, EMPTY_LOCK_MIN_VALUE, IGNITE_BUD_WEIGHT, JAMMER_MIN_DMG, KEYSMITH_COMBO_MIN_BIND, KEYSMITH_LOCK_MIN_VALUE, KEYSMITH_OWN_LOCK_MAX_BIND, KEYSMITH_OWN_LOCK_MIN_VALUE, MIASMA_FROZEN_WEIGHT, PANDEMIC_MIN_SCORE, SHATTER_MAX_FREEZES } from './aiConstants';
 
 export const targetMethods = {
 
@@ -483,6 +483,31 @@ export const targetMethods = {
         return best;
     },
 
+    /**
+     * 陰陽師以外の砕氷(47)の狙い: 氷結で守られた敵コマを❄×3ダメージで壊し切れるとき、壊すと自分の列が伸びる（自コマ2〜3つで他の敵が居ない列）／
+     * 敵の並びが崩れる（自コマの無い列で敵が並ぶ）コマのうち最も価値の高いもの。無ければ null
+     */
+    shatterTarget(this: AIPlayer, board: SquareInfo[]): number | null {
+        const geo = geometryForCells(board.length);
+        let best: number | null = null;
+        let bestVal = 0;
+        board.forEach((sq, i) => {
+            if (!this.isEnemy(sq.player) || isShikigami(sq) || sq.bind <= 0 || this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')) return;
+            const stacks = frozenStacks(sq);
+            if (stacks === 0 || stacks * SHATTER_DAMAGE_PER_STACK < sq.bind) return; // 壊し切れない
+            let val = 0;
+            for (const line of geo.winLines) {
+                if (!line.includes(i)) continue;
+                const mine = line.filter((j) => board[j].player === this.playerSymbol).length;
+                const foes = line.filter((j) => j !== i && this.isEnemy(board[j].player)).length;
+                if (foes === 0 && mine >= 2) val += mine === 3 ? 50 : 10; // 自分の列の邪魔な1コマ
+                if (mine === 0) val += foes + 1; // 自コマの無い列で敵が並ぶ
+            }
+            if (val > bestVal) { bestVal = val; best = i; }
+        });
+        return bestVal >= 3 ? best : null;
+    },
+
     /** 陰陽師: 火遁で燃やすと、隣の氷結が溶けて百鬼夜行→式神一括の列が完成する盤面になるコマ（敵を優先）。すでに組める盤面や、燃やしても組めない盤面は null */
     comboThawTarget(this: AIPlayer, board: SquareInfo[]): number | null {
         if (this.floodComboWins(board)) return null; // すでに組める
@@ -600,7 +625,10 @@ export const targetMethods = {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
             // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
+            // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる）
+            const lockStack = sq.effects.reduce((n, e) => n + (e.effect === '🔑' ? (e.stack ?? 0) : 0), 0);
+            const hasLock = sq.effects.some((e) => e.effect === '🔑');
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || (hasLock && lockStack > ANTI_LOCK_REFRESH)) continue;
             let val = 1;
             for (const line of geo.winLines) {
                 if (!line.includes(i)) continue;

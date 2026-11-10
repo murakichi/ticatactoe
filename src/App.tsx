@@ -4,8 +4,8 @@ import { Game, PlayerConfig } from './components/game/Game';
 import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
-import { range } from './util';
-import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst } from './components/game/gear';
+import { LIFE_MEANS, range } from './util';
+import { GEARS, GearId, gearSlotsFor, gearDefOf, randomGears, pickRecommendedGears, recommendedGearsAgainst, counterGearsFor } from './components/game/gear';
 import {
     DECK_SIZE,
     CUSTOM_SKILL_IDX,
@@ -36,49 +36,50 @@ type CharacterDef = {
     passive: string;
 };
 
-// 説明文の書き方は docs/description-guidelines.md。数値などの細かい仕様は docs/characters.md に書く
+// 説明文の書き方は docs/description-guidelines.md。ライフ平均は util.ts の LIFE_MEANS を参照して埋め込む（数値のズレを防ぐ / issue #13）
+const L = LIFE_MEANS;
 const CHARACTERS: CharacterDef[] = [
-    { id: 'you', name: 'あなた', icon: '🧑', passive: '補正も固有スキルもない基準のキャラ' },
-    { id: 'tactician', name: '軍師', icon: '🎖️', passive: 'トークン系スキルが安く、置くコマのライフが高い。固有: 全軍突撃' },
-    { id: 'magician', name: '魔法使い', icon: '🧙', passive: '毎ターンのマジックが増え、自陣のバッズが多いほどさらに増加。固有: 審判の日' },
-    { id: 'giant', name: '巨人', icon: '👹', passive: 'ライフの高いコマを置けるが、数ターンに1回休み。固有: ストンプ' },
+    { id: 'you', name: 'あなた', icon: '🧑', passive: `補正も固有スキルもない基準のキャラ。ライフ平均${L.default}` },
+    { id: 'tactician', name: '軍師', icon: '🎖️', passive: `トークン系スキルのコスト-1、他のスキルのコスト+2。置くトークンのライフ6。固有: 全軍突撃` },
+    { id: 'magician', name: '魔法使い', icon: '🧙', passive: `毎ターンのマジック+1、自陣のバッズ1つにつきさらに+2。ライフ平均${L.magician}。固有: 審判の日` },
+    { id: 'giant', name: '巨人', icon: '👹', passive: `ライフ平均${L.giant}。5ターンに1回休み。固有: ストンプ` },
     {
         id: 'yinYangMaster',
         name: '陰陽師',
         icon: '☯️',
-        passive: '陰と陽を切り替えて戦う。固有: 式神設置・式神爆破',
+        passive: `陰と陽を切り替えて戦う。陽=ライフ平均${L.yinYangMaster_yang}・全スキルのコスト+1、陰=ライフ平均${L.yinYangMaster_ying}・毎ターンのマジック+1。固有: 式神設置・式神爆破`,
     },
-    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: 'コマが消えるたびに墓地が貯まり、蘇生が強化。死体の数だけ他のスキルも安い。固有: 蘇生' },
-    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: '毒スキルが安く、毒の付いた自陣のコマが強化。固有: ミアズマ' },
+    { id: 'necromancer', name: 'ネクロマンサー', icon: '💀', passive: `コマが消えるたびに墓地+1、蘇生が強化。墓地1つにつき蘇生以外のスキルのコスト-1（最大-3）。ライフ平均${L.default}。固有: 蘇生` },
+    { id: 'poisoner', name: '毒使い', icon: '🧪', passive: `毒スキルのコスト-1、他のスキルのコスト+1。自陣の毒1つにつきライフ+1、毒の付いた自分のコマのライフ1.5倍。毒で尽きたコマ1つにつきマジック+1。固有: ミアズマ` },
     {
         id: 'electrician',
         name: '雷霆の巫',
         icon: '⛩️',
-        passive: '⚡の付いた自陣のコマは敵から触れられず、⚡のダメージも受けない。固有: 帯電拡散',
+        passive: `⚡の付いた自陣のコマは敵から触れられず、⚡のダメージも受けない。ライフ平均${L.electrician}。固有: 帯電拡散`,
     },
     {
         id: 'cryomancer',
         name: '氷室の番人',
         icon: '🧊',
-        passive: 'ロックの代わりに氷結を使い、毎ターンのマジックが増加。固有: 絶対零度',
+        passive: `ロックの代わりに氷結を使う。毎ターンのマジック+2。ライフ平均${L.cryomancer}。固有: 絶対零度`,
     },
     {
         id: 'pyromancer',
         name: '煉獄の鍛冶師',
         icon: '🔥',
-        passive: '🔥スキルが安く、🔥を受けた敵に追加ダメージ。固有: 業火・火遁',
+        passive: `🔥を付与するスキルのコスト-1。🔥を受けた敵に毎ターン追加で1ダメージ。ライフ平均${L.pyromancer}。固有: 業火・火遁`,
     },
     {
         id: 'witch',
         name: '凩の魔女',
         icon: '🍂',
-        passive: '毎ターンのマジックが増え、盤面の🍂が多いほどスキルが安い。固有: 虎落笛',
+        passive: `毎ターンのマジック+2。盤面の🍂1枚につきスキルのコスト-1。ライフ平均${L.witch}。固有: 虎落笛`,
     },
     {
         id: 'keysmith',
         name: '鍵師',
         icon: '🗝️',
-        passive: 'ロックスキルが安く、空きマスのロックを無視して設置可能。固有: 封鎖の断',
+        passive: `ロック系スキルのコスト-1、手番の最初のロック系スキルは無料。空きマスのロックを無視して設置可能。ライフ平均${L.keysmith}。固有: 封鎖の断`,
     },
     {
         id: 'dragonMiko',
@@ -139,7 +140,7 @@ export const App = () => {
     const buildGamePlayers = (): PlayerConfig[] =>
         players.slice(0, playerCount).map((p, seat, all) => {
             const others = all.filter((_, i) => i !== seat).map((q) => q.character);
-            const aiGears = () => (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
+            const aiGears = () => counterGearsFor(p.character, others) ?? (p.character === 'you' ? recommendedGearsAgainst(p.character, others) : pickRecommendedGears(p.character));
             const withGears = p.isAI && (p.gears ?? []).length === 0 ? { ...p, gears: aiGears() } : p;
             // オリジナルスキルは人間席だけ。AI席のデッキに入っていたら推奨デッキに戻す
             const hasCustom = !!p.deck?.includes(CUSTOM_SKILL_IDX);

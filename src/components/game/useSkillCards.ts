@@ -22,7 +22,7 @@ import { placeBlocked } from './lifeBan';
 import { SECOND_CATCH_MAX_BASE } from './bigSkills';
 import { graveOfferingTarget, POISON_WARD_TURNS } from './graveSkills';
 import { SHIKIGAMI_DISCOUNT_BASE, Discount } from './discount';
-import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, budStacks, sowCandidates, infernoTargets, canFreeze, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE } from './thermal';
+import { BURNOUT_FREE_FLAMES, burnoutTargets, totalFlames, isFrozen, emptyBlocked, randomFreezeCandidates, frostfallTargets, budStacks, sowCandidates, infernoTargets, canFreeze, bonfireTargets, mulchCandidates, autumnTargets, leafFrostTargets, thawTargets, fireWheelTargets, mogaribueDamage, canMogaribue, MOGARIBUE_LIFE, GLACIER_DAMAGE_PER_STACK } from './thermal';
 import { GearId, gearLockStack, gearTokenBindDelta } from './gear';
 import { SkillCardDef } from './SkillPanel';
 import { BoardGeometry } from './boardGeometry';
@@ -234,7 +234,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickCharge,
             buttonText: `チャージ+${charge}`,
-            paragraph: 'ターンを終了し、マジックを獲得',
+            paragraph: `ターンを終了し、マジック+${charge}`,
         },
         {
             onClick: onClickShuffle,
@@ -259,7 +259,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickTotalAssault,
             buttonText: `全軍突撃-${totalAssaultCost}`,
-            paragraph: '数ターンの間、ターン終了時にランダムにトークンを設置',
+            paragraph: '3ターンの間、ターン終了時にランダムにトークンを設置',
             hidden: currentCharacter !== 'tactician',
             exclusive: true,
             disabled: magic[turnSeat] < totalAssaultCost,
@@ -267,7 +267,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickStomp,
             buttonText: `ストンプ-${gearCost(seatCosts.onClickStomp, turnSeat, false, 'onClickStomp')}`,
-            paragraph: 'マスを選び、周囲のコマを破壊',
+            paragraph: 'マスを選び、周囲1マスのコマを破壊',
             hidden: currentCharacter !== 'giant',
             exclusive: true,
             disabled: checkSkillDisable(seatCosts.onClickStomp),
@@ -275,7 +275,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickJudgeDay,
             buttonText: `審判の日-${judgeDayCost}`,
-            paragraph: 'マスを選び、敵のコマにダメージ',
+            paragraph: 'マスを選び、周囲のコマを消滅',
             hidden: currentCharacter !== 'magician',
             exclusive: true,
             disabled: magic[turnSeat] < judgeDayCost,
@@ -291,7 +291,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickNecromancy,
             buttonText: `蘇生-${gearCost(currentNecroCost, turnSeat, false, 'onClickNecromancy')}${currentNecroRemain > 0 ? `(発動中:残${currentNecroRemain})` : ''}`,
-            paragraph: '墓地の死体の数だけコマを召喚',
+            paragraph: `墓地の死体の数だけ（最大${necromancySummonCap}）ライフ${necromancyReviveLife}のコマを召喚し、${necromancyDuration}ターンの間ライフ0の敵コマを吸収`,
             hidden: currentCharacter !== 'necromancer',
             exclusive: true,
             disabled: checkSkillDisable(currentNecroCost) || placeBlocked(lifeBan[turnSeat], 'onClickNecromancy', calculateTokenBind()),
@@ -299,7 +299,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickMiasma,
             buttonText: `ミアズマ-${miasmaCost()}`,
-            paragraph: '自陣の毒を周囲の敵コマに拡散',
+            paragraph: '自陣の毒の周囲1マスの敵コマに毒を付与し、自陣の毒を全て消費',
             hidden: currentCharacter !== 'poisoner',
             exclusive: true,
             disabled: magic[turnSeat] < miasmaCost() || miasmaPlan(currentBoard, currentTurnPlayer).size === 0,
@@ -307,7 +307,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickChargeSpread,
             buttonText: `帯電拡散-${chargeSpreadCost()}`,
-            paragraph: 'コマを選び、繋がる全てのコマに⚡を付与',
+            paragraph: 'コマを選び、繋がる全てのコマに⚡を1つずつ付与',
             hidden: currentCharacter !== 'electrician',
             exclusive: true,
             disabled: magic[turnSeat] < chargeSpreadCost(),
@@ -315,7 +315,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickGlacier,
             buttonText: `絶対零度-${glacierCost()}`,
-            paragraph: '全てのマスに❄を付与し、次の手番に敵の❄でダメージ',
+            paragraph: `全てのマスに❄を1つ付与し、次の手番に敵の❄1つにつき${GLACIER_DAMAGE_PER_STACK}ダメージ`,
             hidden: currentCharacter !== 'cryomancer',
             exclusive: true,
             disabled: magic[turnSeat] < glacierCost() || glacierPending[turnSeat],
@@ -323,7 +323,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickInferno,
             buttonText: `業火-${infernoCost()}`,
-            paragraph: '敵のコマ全てに🔥を付与',
+            paragraph: '敵のコマ全てに🔥を2つずつ付与',
             hidden: currentCharacter !== 'pyromancer',
             exclusive: true,
             disabled: magic[turnSeat] < infernoCost() || infernoTargets(currentBoard, currentTurnPlayer, characters).length === 0,
@@ -331,7 +331,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickMogaribue,
             buttonText: `虎落笛-${mogaribueCost()}`,
-            paragraph: '自陣の🍂の数だけ敵のコマ全てにダメージ',
+            paragraph: `自陣の🍂1枚につき敵のコマ全てに1ダメージ、自陣のコマ全てのライフ+${MOGARIBUE_LIFE}`,
             hidden: currentCharacter !== 'witch',
             exclusive: true,
             disabled: magic[turnSeat] < mogaribueCost() || !canMogaribue(currentBoard, currentTurnPlayer),
@@ -355,7 +355,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickSeal,
             buttonText: `封鎖の断-${sealCost()}`,
-            paragraph: '自陣のコマと空きマスをロックし、敵のロックを解除してダメージ',
+            paragraph: `自陣のコマ全てを${SEAL_OWN_STACK}ターン・空きマス全てを${SEAL_EMPTY_STACK}ターンロックし、解除した敵のロック1つにつき敵のコマ全てに1ダメージ`,
             hidden: currentCharacter !== 'keysmith',
             exclusive: true,
             disabled: magic[turnSeat] < sealCost(),
@@ -363,7 +363,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickIgnite,
             buttonText: `火遁-${calculateCost(seatCosts.onClickIgnite, false, false, currentTurnPlayer, 'onClickIgnite')}`,
-            paragraph: 'マスを選んで🔥を付与',
+            paragraph: 'マスを選んで🔥を1つ付与',
             hidden: currentCharacter !== 'pyromancer',
             exclusive: true,
             disabled: checkSkillDisable(seatCosts.onClickIgnite),
@@ -371,7 +371,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickShikigamiPlace,
             buttonText: `式神設置-${gearCost(seatCosts.onClickShikigamiPlace, turnSeat, false, 'onClickShikigamiPlace')}`,
-            paragraph: '空きマスに式神を設置',
+            paragraph: `空きマスにライフ${SHIKIGAMI_LIFE}の式神を設置`,
             hidden: currentCharacter !== 'yinYangMaster' || currentYinYangMode === 'yang',
             exclusive: true,
             disabled: checkSkillDisable(seatCosts.onClickShikigamiPlace) || findEmptyIndexes(currentBoard).length === 0 || placeBlocked(lifeBan[turnSeat], 'onClickShikigamiPlace', calculateTokenBind()),
@@ -379,7 +379,7 @@ export const useSkillCards = (g: SkillCardsScope, late: () => GameLate) => {
         {
             onClick: onClickShikigamiBlast,
             buttonText: `式神爆破-${gearCost(seatCosts.onClickShikigamiBlast, turnSeat, false, 'onClickShikigamiBlast')}`,
-            paragraph: '式神を1つ選んで爆破し、周囲の敵のコマにダメージ',
+            paragraph: `式神を1つ選んで爆破し、周囲8マスの敵のコマに${SHIKIGAMI_BLAST_DAMAGE}ダメージ`,
             hidden: currentCharacter !== 'yinYangMaster' || currentYinYangMode !== 'yang',
             exclusive: true,
             disabled: checkSkillDisable(seatCosts.onClickShikigamiBlast) || ownShikigami().length === 0,

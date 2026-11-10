@@ -6,17 +6,17 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { OBJECT_DEFS, objectLandable } from './objects';
-import { findEmptyIndexes } from '../../util';
+import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { ailmentStacks, cleanse, canFreeze, budStacks, budReceivers, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, freeze, shatter, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, fireWheelTargets, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
-import { addLock, lockEffect } from './lock';
+import { addLock, lockEffect, lockStack } from './lock';
 import { pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -104,6 +104,12 @@ function planOpening(this: AIPlayer, c: PlanContext): AIResult | null {
     // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
     // （旧sim AI の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
     const facesWitch = c.facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
+    // 魔女・陰陽師が巨人と当たるとき、最初の手番は置かずにチャージする。最初の1駒は巨人のストンプで必ず消されるため、魔力+3を先に取る
+    // （対巨人。魔女 seed901〜904 各400: 26.8/27.5/26.8/30.3 → 36.5/33.3/32.8/32.3 %、陰陽師 seed921〜923 各300: 34.7/35.7/33.0 → 45.3/46.7/46.7 %。他のキャラは対ネクロ -21・対氷室 -14 などで悪化するのでこの2キャラだけ）
+    if (magic < 5 && (this.character === 'witch' || this.character === 'yinYangMaster') && this.characters.some((ch, seat) => seat !== seatOf(this.playerSymbol) && ch === 'giant')
+        && !board.some((sq) => sq.player === this.playerSymbol) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+        return { move: null, skills: ['onClickCharge'] };
+    }
     // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
     const cheapWin = this.character === 'yinYangMaster' && magic >= RICH_REROLL_MAGIC && this.planShikigami(board, magic, costs, availableSkills)?.win === true;
     if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
@@ -161,6 +167,19 @@ function planThawAndYinYang(this: AIPlayer, c: PlanContext): AIResult | null {
     // 陰陽師: 砕氷(47)で、氷室・軍師の氷結で守られたコマを壊す（❄の数×3ダメージ。壊すとコンボが組める／敵の並びが崩れるコマを優先）
     if (this.character === 'yinYangMaster' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
         const tg = this.yinShatterTarget(board);
+        if (tg !== null) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            shatter(post, tg);
+            this.updateShield(post);
+            const followup = this.getBestMove(post, life);
+            this.updateShield(board);
+            return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickShatter', target: tg }] };
+        }
+    }
+
+    // 陰陽師・氷室以外: 砕氷(47)が手札にあれば、氷結で守られた敵コマを壊して自分の列を伸ばす／敵の並びを崩す
+    if (this.character !== 'yinYangMaster' && this.character !== 'cryomancer' && availableSkills.includes(47) && magic >= this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter')) {
+        const tg = this.shatterTarget(board);
         if (tg !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             shatter(post, tg);
@@ -995,6 +1014,22 @@ export function planMove(
                 // 審判の日はそのターゲット着手で手番終了する
                 return { move: target, skills: ['onClickJudgeDay'] };
             }
+        }
+        // 対ネクロ: 蘇生はライフ0のコマを吸収する（ロック中のコマは奪われない）。吸収されそうな自陣のコマ（ライフ1以下で未ロック）を先にロックし、
+        // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。効いたキャラだけ（NECRO_LOCK_CHARACTERS）
+        if (NECRO_LOCK_CHARACTERS.includes(this.character) && this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer')) {
+            const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : NECRO_LOCK_MAX;
+            const guardCells: number[] = [];
+            for (let i = 0; i < board.length && guardCells.length < Math.min(NECRO_LOCK_MAX, afford); i++) {
+                const sq = board[i];
+                if (sq.player !== this.playerSymbol || isObject(sq) || !lockable(sq) || sq.bind > 1) continue;
+                const locked = sq.effects.some((e) => e.effect === '🔑');
+                const stack = lockStack(sq);
+                if (!locked || (stack > 0 && stack <= NECRO_LOCK_REFRESH)) guardCells.push(i);
+            }
+            if (guardCells.length === 1) return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: guardCells };
+            if (guardCells.length > 1) return { move: this.getBestMove(board, life), skills: [], chargeClicks: guardCells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
         // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 MAGICIAN_MAX_LOCKS 個。旧sim AI の magLockN。
