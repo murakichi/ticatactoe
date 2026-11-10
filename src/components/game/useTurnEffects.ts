@@ -127,18 +127,21 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         const prev = rubbleBoard.current;
         rubbleBoard.current = currentBoard;
         if (!prev || prev.length !== currentBoard.length) return;
-        for (let seat = 0; seat < symbols.length; seat++) {
-            if (seat === turnSeat || !hasGear(gearsBySeat[seat], 'rubbleBase')) continue;
+        // 席ごとの処理は関数に切り出す（ループ内に continue・return・クロージャを混ぜると、本番ビルドの Babel 変換でループ変数が未定義になった）
+        const applyFor = (seat: number): boolean => {
+            if (seat === turnSeat || !hasGear(gearsBySeat[seat], 'rubbleBase')) return false;
             const r = applyRubble(prev, currentBoard, symbols[seat], objectBuildLife(gearsBySeat[seat]));
-            if (r.cells.length === 0) continue;
+            if (r.cells.length === 0) return false;
             const magicGain = r.cells.length * GEAR_PARAMS.rubbleMagic;
             rubbleBoard.current = r.board;
             setCurrentBoard(r.board);
             setMagicAt(seat, (m) => m + magicGain);
             addLog(`${symbols[seat]}の瓦礫の礎: 壊されたオブジェクト${r.cells.length}つの位置に大岩を設置（魔力+${magicGain}）`);
             gearTrigger('rubbleBase', `大岩${r.cells.length}つ・魔力+${magicGain}`);
-            return;
-        }
+            return true;
+        };
+        // 1回の盤面の変化で処理するのは1席まで（置いた大岩でまた盤面が変わり、次の実行で残りの席を処理する）
+        symbols.some((_, seat) => applyFor(seat));
     }, [currentBoard]);
 
     useEffect(() => {

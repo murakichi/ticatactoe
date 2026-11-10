@@ -199,3 +199,7 @@ export const FORCED_WIN_PLIES = 4;
  *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化。
  *  全キャラ共通 環境順位 seed111/60: ネクロ 63.5→56.5、火術師 47.3→51.7、鍵師 49.3→52.0、魔法使い 27.8→29.5（他は不変） */
 export const ANTI_LOCK_REFRESH = 2;
+
+/** 龍神の巫女（二列勝利）の評価: 1本目が完成しているとき、1本目と重なる窓（共有2マス以上）の加点の倍率と、離れた窓の倍率（evaluateBoard） */
+export const TWO_LINE_OVERLAP_WEIGHT = 0.2;
+export const TWO_LINE_DISJOINT_WEIGHT = 1.5;

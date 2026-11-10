@@ -12,7 +12,7 @@ import { addLock, isLocked, tickLock } from './lock';
 import { lockBlocksPlacement } from './keysmith';
 import { shouldDecay, canHitBound, isTakeProtected } from './decay';
 import { chargeStacks, orthoNeighbors } from './charge';
-import { EXCLUSIVE_MIN_MAGIC, FORCED_WIN_PLIES, GLACIER_COST, NO_CAP_NECRO_WEIGHT, YY_COVER_WEIGHT } from './aiConstants';
+import { EXCLUSIVE_MIN_MAGIC, FORCED_WIN_PLIES, GLACIER_COST, NO_CAP_NECRO_WEIGHT, TWO_LINE_DISJOINT_WEIGHT, TWO_LINE_OVERLAP_WEIGHT, YY_COVER_WEIGHT } from './aiConstants';
 import { toPiece } from './shikigami';
 
 export const searchMethods = {
@@ -136,6 +136,12 @@ export const searchMethods = {
     evaluateBoard(this: AIPlayer, board: SquareInfo[]): number {
         let score = 0;
         const lineScores = [0, 1, 10, 50, 1000];
+        // 龍神の巫女（二列勝利）: 1本目が完成していたら、それと重なる窓（共有2マス以上）は2本目にならないので評価を下げ、離れた窓を上げる。
+        // 重なる窓も同じ点で数えると、1本目の周りに積むほうが得に見えて、2本目を作る動きが選ばれない
+        let primary: number[] | null = null;
+        if (this.character === 'dragonMiko') {
+            primary = geometryForCells(board.length).winLines.find((line) => line.every((idx) => board[idx].player === this.playerSymbol && !isObject(board[idx]))) ?? null;
+        }
 
         for (const line of geometryForCells(board.length).winLines) {
             // 氷結中の空きマスを含むライン（着手不能な4つ目）は完成させられないので評価しない。式神を含むラインも同様
@@ -155,7 +161,9 @@ export const searchMethods = {
                 }
             }
             if (myCount > 0 && oppCount === 0) {
-                score += lineScores[myCount];
+                let weight = 1;
+                if (primary && line !== primary) weight = line.filter((idx) => primary!.includes(idx)).length >= 2 ? TWO_LINE_OVERLAP_WEIGHT : TWO_LINE_DISJOINT_WEIGHT;
+                score += lineScores[myCount] * weight;
             } else if (oppCount > 0 && myCount === 0 && enemiesInLine.size === 1) {
                 score -= lineScores[oppCount];
                 // 相手2つ+空き2つ: トークンで即リーチ→即勝ちの脅威
