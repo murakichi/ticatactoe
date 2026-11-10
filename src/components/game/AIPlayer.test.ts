@@ -518,3 +518,12 @@ describe('魔女・陰陽師は巨人相手の最初の手番で置かずにチ�
         expect(mk('witch', 'electrician').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
     });
 });
+
+describe('鍵師は巨人相手にサイレンス(28)を手札に固定する', () => {
+    const locksVs = (foe: 'giant' | 'electrician', avail: number[]) =>
+        new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', foe]).chooseLocks(emptyBoard(), 0, 5, avail);
+    it('巨人が相手なら28を固定し、他の相手では固定しない', () => {
+        expect(locksVs('giant', [28, 2, 8])).toContain(28);
+        expect(locksVs('electrician', [28, 2, 8])).not.toContain(28);
+    });
+});
