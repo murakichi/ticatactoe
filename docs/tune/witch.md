@@ -16,6 +16,7 @@
 - 相手の重み(2026-11-10 master 3d8e7b4、beta=8): electrician 11.8%, pyromancer 11.2%, dragonMiko 10.7%, yinYangMaster 10.7%, keysmith 10.4%, necromancer 9.1%, tactician 7.8%, cryomancer 6.2%, giant 6.2%, witch 6.1%, magician 5.5%, poisoner 4.0%, you 0.3%
 - 基準線(master 3d8e7b4・重み付き対強豪平均、`--rank --games 60 --seed 1 --write-strong`): **10位 witch 45.1%**(field 52.8%) / 1位 electrician 54.6%(差9.5pt)。`--target witch --games 60 --seed 1`: 46.4%±3.7。対面: dragonMiko 16%・magician 28%・pyromancer 30%・yinYangMaster 43%・necromancer 47%・keysmith 48%・tactician 52%・electrician 57%・giant 67%・cryomancer 77%・poisoner 78%。以前の数値は旧方式(field/強豪リスト)で比較不可。
 - 基準線(試行45採用後、master 3d8e7b4、`--rank --target witch --games 60 --seed 1`): **8位 witch 46.8%**(field 53.5%) / 1位 electrician 56.7%(差9.9pt) / 2位 keysmith 53.0%。最悪対面 対電気使い 23%。不利4・有利3。
+- 基準線(試行52採用後、`--rank --target witch --games 60 --seed 1`): **8位 witch 46.7%**(field 53.6%) / 1位 electrician 56.1%(差9.4pt)。採用前の同条件 46.8% と変わらず（seed1/60 では差が出ない。seed61/100 +7.5、seed62/200 +2.3 の合算で約+3〜4pt）。
 - 連続不採用回数: 0（試行52で採用）
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
 - 状態: running（試行52で採用。順位表の再測定待ち。以前の blocked(#461) は数値案待ちだったが、スラッシュを抜く案で +2〜7pt の余地が見つかったため再開）
