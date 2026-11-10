@@ -348,7 +348,10 @@ exports.COUNTER_GEARS = {
         // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
-        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        witch: ['lightToken', 'reaper'],
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'],
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
     // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
     keysmith: {

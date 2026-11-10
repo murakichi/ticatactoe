@@ -411,6 +411,9 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
         witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'], // 10.0→77.3%（budSeed,lastStand は 34.3%）
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
     // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
     keysmith: {
