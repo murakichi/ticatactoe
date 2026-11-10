@@ -695,6 +695,18 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 瓦礫の礎: 自分以外の手番に壊された自陣の大岩以外のオブジェクトの位置に、大岩を置いて魔力+1 [FAITHFUL] useTurnEffects.ts
+    // （前の手番の頭の盤面 s.rubbleSnap と比べる。自分の手番に消える建造物＝龍神の巫女の覚醒は対象外）
+    if (s.rubbleSnap) {
+        for (let seat = 0; seat < s.chars.length; seat++) {
+            if (seat === s.turn || !hasGear(s.gears[seat], 'rubbleBase')) continue;
+            const r = gear.applyRubble(s.rubbleSnap, s.board, SYMBOLS[seat], gear.objectBuildLife(s.gears[seat]));
+            if (r.cells.length === 0) continue;
+            for (const k of r.cells) s.board[k] = r.board[k];
+            s.magic[seat] += r.cells.length * GP.rubbleMagic;
+            bumpStat(s, 'rubbleBase', r.cells.length);
+        }
+    }
     // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
     if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
         const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
@@ -804,6 +816,7 @@ function advanceTurn(s) {
     s.effectSnap = objectsMod.effectSnapshot(s.board); // 次の手番の頭のエフェクト
     // 次の手番プレイヤーのロックを残してスキルを再シャッフル (Game.tsx [history] effect と同じ)
     s.skills = reshuffleSkillsFor(s, next, POOL_SIZE);
+    s.rubbleSnap = s.board.map((q) => ({ ...q, effects: q.effects.map((e) => ({ ...e })) })); // 瓦礫の礎: 次の手番の頭の盤面
 }
 
 /**

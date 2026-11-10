@@ -98,3 +98,31 @@ test('八百万の祈り: デッキ内の建造物から1つ引いて設置待�
     assert.strictEqual(s.board[at(2, 2)].object, s.objectPlacing === null ? s.board[at(2, 2)].object : undefined);
     assert.ok(s.board[at(2, 2)].object, '建造物が置かれる');
 });
+
+test('瓦礫の礎: 自分以外の手番に壊された自陣の建造物の位置に、大岩が置かれて魔力+1', () => {
+    const s = e.newGame({ chars: ['dragonMiko', 'you'], rng: e.makeRng(7), size: 5, gears: [['rubbleBase'], []] });
+    build(s, at(2, 2));
+    s.turn = 1; // 相手の手番
+    e.advanceTurn(s); // 頭の盤面を記録（建造物がある状態）
+    // 相手の手番中に建造物が壊される → 次の advanceTurn で大岩になる
+    const m = s.magic[0];
+    s.board[at(2, 2)] = { player: undefined, bind: 0, effects: [] };
+    s.turn = 1;
+    e.advanceTurn(s);
+    assert.strictEqual(s.board[at(2, 2)].object, 'boulder');
+    assert.strictEqual(s.board[at(2, 2)].player, '💙');
+    assert.ok(s.magic[0] >= m + 1, '魔力+1（手番開始の分も加わる）');
+});
+
+test('瓦礫の礎: 自分の手番に消えた建造物（覚醒）は対象外', () => {
+    const s = e.newGame({ chars: ['dragonMiko', 'you'], rng: e.makeRng(7), size: 5, gears: [['rubbleBase'], []] });
+    s.turn = 0;
+    CORNER.slice(0, 3).forEach((i) => build(s, i));
+    e.advanceTurn(s); // 記録
+    s.turn = 0;
+    s.objectPlacing = 'fort';
+    e.placeMove(s, CORNER[3]); // 覚醒で建造物が消える（自分の手番）
+    assert.strictEqual(s.dragon[0].form, 'dragon');
+    e.advanceTurn(s);
+    assert.ok(s.board.every((q) => q.object !== 'boulder'), '大岩は置かれない');
+});
