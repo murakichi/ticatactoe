@@ -400,6 +400,9 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
         witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'], // 10.0→77.3%（budSeed,lastStand は 34.3%）
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
 };
 

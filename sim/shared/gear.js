@@ -338,7 +338,10 @@ exports.COUNTER_GEARS = {
         // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
-        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        witch: ['lightToken', 'reaper'],
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'],
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
