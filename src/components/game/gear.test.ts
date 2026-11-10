@@ -377,11 +377,11 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
         expect(counterGearsFor('tactician', ['giant'])).toBeUndefined();
         expect(counterGearsFor('tactician', ['cryomancer', 'magician'])).toBeUndefined();
-        expect(counterGearsFor('giant', ['cryomancer'])).toEqual(['lastStand', 'budSeed']);
+        expect(counterGearsFor('giant', ['cryomancer'])).toBeUndefined();
         expect(counterGearsFor('giant', ['magician'])).toBeUndefined();
         expect(counterGearsFor('giant', ['tactician'])).toBeUndefined();
         expect(counterGearsFor('pyromancer', ['yinYangMaster'])).toEqual(['afterglow', 'snowball']);
-        expect(counterGearsFor('necromancer', ['cryomancer'])).toEqual(['springThunder', 'lastStand']);
+        expect(counterGearsFor('necromancer', ['cryomancer'])).toBeUndefined();
         expect(counterGearsFor('cryomancer', ['magician'])).toBeUndefined();
         expect(counterGearsFor('cryomancer', ['electrician'])).toEqual(['lightToken', 'reaper']);
         expect(counterGearsFor('cryomancer', ['giant'])).toBeUndefined();
