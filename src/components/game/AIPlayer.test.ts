@@ -322,7 +322,7 @@ describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', ()
         b[6] = { player: '💙', bind: 3, effects: [{ effect: '❄' }] };
         expect(ai.findAntiNecroLockTarget(b)).toBeNull();
     });
-    it('魔法使いの対策ロックは、残りスタックが2以下のロック済みコマを延長の対象にする（それ以外のキャラはロック済みを対象にしない）', () => {
+    it('対策ロックは、残りスタックが2以下のロック済みコマを延長の対象にする（3以上は対象にしない）', () => {
         const mk = (stack: number) => {
             const b = emptyBoard();
             b[5] = { player: '💙', bind: 2, effects: [{ effect: '🔑', stack }] };
@@ -331,7 +331,8 @@ describe('AIPlayer 対策ロックと絶対零度（膠着の修正 #300）', ()
         const mage = new AIPlayer('💙', 'magician', ['⭕']);
         expect(mage.findAntiNecroLockTarget(mk(2))).toBe(5);
         expect(mage.findAntiNecroLockTarget(mk(3))).toBeNull();
-        expect(ai.findAntiNecroLockTarget(mk(1))).toBeNull();
+        expect(ai.findAntiNecroLockTarget(mk(1))).toBe(5);
+        expect(ai.findAntiNecroLockTarget(mk(4))).toBeNull();
     });
     it('絶対零度は🔑ロック中の敵コマを数えない', () => {
         const b = emptyBoard();
