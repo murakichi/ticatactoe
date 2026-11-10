@@ -1122,7 +1122,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木・市場などを自陣の近くに1つずつ設置する。
     // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
-    if (this.character === 'necromancer' && !skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+    if ((this.character === 'necromancer' || (this.character === 'magician' && this.opponents.some((o) => this.characterOf(o) === 'necromancer'))) && !skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const pick = planObject.call(this, board, magic - this.lastSpent, costs, availableSkills, availableSkills.includes(92) || (necroRemain === 0 && turn_1.NECROMANCY.baseCost - necroCost >= 2));
         if (pick) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
@@ -1263,7 +1263,8 @@ function planObject(board, left, costs, availableSkills, heavyReady) {
     const order = this.hasGroundRent
         ? ['boulder', 'market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign']
         : ['market', 'sanctuary', 'fort', 'spring', 'bigTree', 'workshop', 'luckyCat', 'oneWord', 'soloSign'];
-    for (const kind of order) {
+    // 魔法使いは対ネクロのとき、お一人様限りの札(降霊を使えなくする)だけを置く
+    for (const kind of this.character === 'magician' ? ['soloSign'] : order) {
         const idx = objects_1.OBJECT_DEFS[kind].idx;
         if (!availableSkills.includes(idx))
             continue;
