@@ -12,6 +12,7 @@ import { GEARS, GearId } from './gear';
 // 常に効いているだけのパッシブは 'passive'。新しいギアを足したら、どちらかを登録しないとテストが落ちる(演出の付け忘れ防止)。
 const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     emptyLock: 'trigger', // ロック切れで空きマスにコマが生まれる
+    rubbleBase: 'trigger', // 壊されたオブジェクトの位置に大岩が置かれ、魔力を得る
     ironLock: 'passive',
     bindingLock: 'trigger', // トークンにロックが付く
     quadMastery: 'trigger', // 4回目のスキルで次が無料

@@ -3,7 +3,8 @@ import { SkillCosts, skillCosts } from './skillCosts';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
-import { OBJECT_PLACE_KEYS } from './objects';
+import { OBJECT_PLACE_KEYS, newObject } from './objects';
+import { isBuilding } from '../../types/ObjectKind';
 
 /**
  * ギア: キャラ選択時に装備する追加パッシブ。長所と短所がセットのものが多い。
@@ -44,7 +45,8 @@ export type GearId =
     | 'budSeed'
     | 'groundRent'
     | 'sturdyBuild'
-    | 'lockBloom';
+    | 'lockBloom'
+    | 'rubbleBase';
 
 export const GEAR_PARAMS = {
     /** 芽吹きの錠: ロックを掛けた自陣のコマのうち、ライフがこの値以下でバッズの無いものにバッズが付く */
@@ -117,6 +119,8 @@ export const GEAR_PARAMS = {
     rentMagic: 1,
     /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
     buildLife: 3,
+    /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
+    rubbleMagic: 1,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -154,6 +158,7 @@ export const GEARS: GearDef[] = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフの期待値が積み上がり、高いライフを何度か引くとリセットされる` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフが上昇。ライフ0の駒は、誰のものでも手番の終わりに壊れる` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフの高いコマを設置するとき、バッズを付けて設置される` },
+    { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジックを獲得` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクトの数だけマジックを獲得` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフが上昇` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `オブジェクト設置スキルが安く、設置中は全スキルも安い` },
@@ -412,4 +417,20 @@ export const springThunderThaw = (board: SquareInfo[], player: Player): number[]
         thawed.push(k);
     }
     return thawed;
+};
+
+/**
+ * 瓦礫の礎: 自陣の大岩以外のオブジェクト（建造物）が壊されて空きマスになったマス。prev（壊される前）と next（壊された後）を比べる。
+ * 乗っ取られたマス（持ち主が変わった）や、まだオブジェクトが残るマスは含まない。
+ * 比べる区間に自分の手番を含めない（龍神の巫女の覚醒で自分から消す建造物は、壊されたことに数えない）。
+ */
+export const rubbleCells = (prev: readonly SquareInfo[], next: readonly SquareInfo[], player: Player): number[] =>
+    prev.map((sq, i) => (isBuilding(sq) && sq.object !== 'boulder' && sq.player === player && next[i].player === undefined && !next[i].object ? i : -1)).filter((i) => i !== -1);
+
+/** 壊されたマスに大岩（2ターンのロック付き）を置いた新しい盤面と、置いたマス。魔力は cells.length × GEAR_PARAMS.rubbleMagic */
+export const applyRubble = (prev: readonly SquareInfo[], next: readonly SquareInfo[], player: Player, lifeBonus: number = 0): { board: SquareInfo[]; cells: number[] } => {
+    const cells = rubbleCells(prev, next, player);
+    const board = next.slice();
+    for (const i of cells) board[i] = newObject(player, 'boulder', lifeBonus, next[i].effects.filter((e) => e.effect === '🔥'));
+    return { board, cells };
 };
