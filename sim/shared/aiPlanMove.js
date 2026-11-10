@@ -981,7 +981,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
             }
         }
         // 対ネクロ: 蘇生はライフ0のコマを吸収する（ロック中のコマは奪われない）。吸収されそうな自陣のコマ（ライフ1以下で未ロック）を先にロックし、
-        // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。効いたキャラだけ（NECRO_LOCK_CHARACTERS）。雷霆・毒使いは悪化、魔法使いは別系統のロック規則、氷室は氷結を使う
+        // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。効いたキャラだけ（NECRO_LOCK_CHARACTERS）
         if (aiConstants_1.NECRO_LOCK_CHARACTERS.includes(this.character) && this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer')) {
             const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
             const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_1.NECRO_LOCK_MAX;
