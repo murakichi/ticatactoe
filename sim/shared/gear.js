@@ -312,13 +312,17 @@ exports.ALT_RECOMMENDED_GEARS = {
  * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
  */
 exports.COUNTER_GEARS_FOR_YOU = {
-    poisoner: ['lastStand', 'spellWard', 'sturdy'],
-    magician: ['lastStand', 'sturdy', 'luckyPurse'],
-    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    // 2026-11-10 の master（新ギア・ロック仕様の変更）で測り直した値。各行は 現行→採用 の勝率（seed21/300）。docs/tune/you.md
+    poisoner: ['lastStand', 'spellWard', 'emptyLock'],
+    magician: ['lastStand', 'sturdy', 'budSeed'],
+    pyromancer: ['spellWard', 'emptyLock', 'harvest'],
     giant: ['lastStand', 'emptyLock', 'luckyPurse'],
-    necromancer: ['ironLock', 'titanCost', 'sturdy'],
+    necromancer: ['ironLock', 'snowball', 'sturdy'],
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
-    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'],
+    electrician: ['budSeed', 'titanCost', 'sturdy'],
+    cryomancer: ['springThunder', 'titanCost', 'sturdy'],
+    witch: ['budSeed', 'titanCost', 'sturdy'], // 8.3→23.7%（専用デッキと組む）
 };
 /**
  * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。
@@ -328,6 +332,7 @@ exports.COUNTER_GEARS_FOR_YOU = {
 exports.COUNTER_GEARS = {
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
+        pyromancer: ['spellWard', 'priceWreck'], // 36→63%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
     },
     // 龍神の巫女（#527）: 氷室の氷結で建造物・列を凍らされる。春雷（自陣のリーチを塞ぐ氷結を1つ解く）が効く。
     // 普請道楽は祈りをコスト1にする柱なので残し、瓦礫の礎と入れ替える。--target dragonMiko --opp cryomancer（4x4）:
@@ -353,7 +358,18 @@ exports.COUNTER_GEARS = {
         // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
-        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        witch: ['lightToken', 'reaper'],
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'],
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
+    },
+    // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
+    keysmith: {
+        pyromancer: ['spellWard', 'lockBloom'],
+        // 死神の鎌: ライフが上がり、ライフ0の駒を奪える。陰陽師29→48%、雷霆28→54%（seed9/100。seed5/60 でも 41.7 / 55.0 で再現）
+        yinYangMaster: ['reaper', 'lockBloom'],
+        electrician: ['reaper', 'lockBloom'],
+        necromancer: ['harvest', 'lockBloom'], // 81→88%（seed9/100）。seed5/60 でも最良帯
     },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */

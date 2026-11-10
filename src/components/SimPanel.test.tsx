@@ -108,6 +108,26 @@ describe('SimPanel', () => {
         expect(FakeWorker.all[0].posted[0]).toMatchObject({ skills: false, gears: false });
     });
 
+    test('対面専用ギアは初期状態で外れていて（通常の推奨）、そのままWorkerへ伝わる', async () => {
+        renderPanel();
+        expect((screen.getByLabelText('対面専用ギアを使う') as HTMLInputElement).checked).toBe(false);
+        await clickStart();
+        expect(FakeWorker.all[0].posted[0]).toMatchObject({ gears: true, counter: false });
+    });
+
+    test('対面専用ギアを入れるとWorkerへ伝わる', async () => {
+        renderPanel();
+        fireEvent.click(screen.getByLabelText('対面専用ギアを使う'));
+        await clickStart();
+        expect(FakeWorker.all[0].posted[0]).toMatchObject({ gears: true, counter: true });
+    });
+
+    test('ギアを装備しない設定では、対面専用ギアは選べない', () => {
+        renderPanel();
+        fireEvent.click(screen.getByLabelText('ギアを装備する'));
+        expect((screen.getByLabelText('対面専用ギアを使う') as HTMLInputElement).disabled).toBe(true);
+    });
+
     test('live.js の読み込みに失敗したらエラーを表示する', async () => {
         render(<SimPanel names={names} initialPlayers={2} initialBoardSize='auto' onBack={() => {}} load={() => Promise.reject(new Error('x'))} />);
         await clickStart();

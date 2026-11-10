@@ -18,6 +18,8 @@ import { isDormant } from './thermal';
 export const ROAR_MIN_VICTIMS = 3;
 /** 自陣の建造物の上限。建造物は列に数えないので、増やしすぎると自分の列を作るマスが無くなり、盤面が埋まって膠着する（sim で魔力1000超・盤面が建造物だらけの試合を確認） */
 export const BUILDING_CAP = 5;
+/** 龍が祈りで建造物を増やすのをやめる空きマスの数。建造物は列に数えないので、盤が建造物で埋まると2本目の窓が潰れて膠着する（4x4 の対強豪 +9.4pt: seed21/31/41 で +7.4/+11.8/+8.9、対ネクロが主） */
+export const DRAGON_EMPTY_RESERVE = 4;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
 export const PRAYER_MAX_PER_TURN = AWAKEN_BUILDINGS;
 
@@ -208,6 +210,7 @@ export const dragonMethods: DragonMethods = {
         const clicks: { skill: string; target: number }[] = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= DRAGON_EMPTY_RESERVE) return null;
         const maxPrayers = Math.min(isDragon ? 1 : PRAYER_MAX_PER_TURN - ownBuildingCells(real, me).length, BUILDING_CAP - ownBuildingCells(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && prayerUsable(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);

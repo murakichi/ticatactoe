@@ -46,4 +46,27 @@ describe('龍神の巫女のAI（#527）', () => {
         const cell = ai().mikoBuildCell(b, '💙');
         expect([at(1, 2), at(2, 1), at(3, 0)]).toContain(cell);
     });
+
+    it('龍は空きマスが少ないと、祈りで建造物を増やさない（盤が建造物で埋まって決着しない膠着の対策）', () => {
+        const { skillCosts } = require('./skillCosts');
+        const run = (emptyCells: number[]) => {
+            const b = mk(4);
+            for (let i = 0; i < 16; i++) b[i] = { player: ((i >> 1) + (i >> 3)) % 2 ? '💙' : '⭕', bind: 3, effects: [{ effect: '🔑' as const }] };
+            emptyCells.forEach((i) => { b[i] = E(); });
+            const a = ai();
+            a.dragonForm = 'dragon';
+            return a.makeMove(b, 5, skillCosts, 2, 5, [3, 11, 12, 28, 52, 92, 5, 8, 108, 127, 128, 136], false);
+        };
+        const prayed = (r: any) => (r.chargeClicks ?? []).some((c: any) => c.skill === 'onClickPrayer');
+        expect(prayed(run([1, 6, 11, 12]))).toBe(false); // 空き4以下: 祈らない
+        expect(prayed(run([1, 6, 11, 12, 2, 7]))).toBe(true); // 空きが多ければ祈る
+    });
+
+    it('氷室の番人が相手のときだけ、サイレンスを手札に固定する', () => {
+        const mkAi = (opp: string) => new AIPlayer('💙', 'dragonMiko', ['⭕'], ['dragonMiko', opp as never], undefined, false, false, [3, 11, 12, 28, 52, 92, 5, 8, 108, 127, 128, 136]);
+        const b = mk(4);
+        expect(mkAi('cryomancer').chooseLocks(b, 5, 3, [28, 3, 5])).toEqual([28]);
+        expect(mkAi('necromancer').chooseLocks(b, 5, 3, [28, 3, 5])).not.toEqual([28]);
+        expect(mkAi('cryomancer').chooseLocks(b, 5, 3, [3, 5, 8])).not.toEqual([28]);
+    });
 });

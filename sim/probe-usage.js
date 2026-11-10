@@ -3,7 +3,7 @@
 /*
  * AI が各スキルを何回撃つか（1試合あたり）と、撃った試合の勝率を数える。
  * 使い方: node sim/probe-usage.js --chars cryomancer,you --games 200 --seed 1 [--skills glacier,inferno,...] [--deck 0,3,..] [--gears a,b] [--size N]
- * --deck / --gears はテスト席（chars[0]）の設定。省略時は従来どおり（デッキなし=0..POOL_SIZE から引く・ギアなし）。相手は推奨デッキ・推奨ギア（--deck を使うときだけ）。
+ * --deck / --gears はテスト席（chars[0]）の設定。省略時は両席とも推奨デッキ・推奨ギア（#523）。従来の『デッキなし・ギアなし』は --legacy 1。
  * 席0/席1を交互に先手にし、キャラ構成 chars[0]=テスト席。skill 名は engine.SKILLS のキー。
  */
 const engine = require('./engine');
@@ -37,8 +37,9 @@ for (let g = 0; g < games; g++) {
     const chars = first ? [c1, c2] : [c2, c1];
     const test = first ? 0 : 1;
     const opts = { chars, rng: engine.makeRng(seed0 * 100003 + g), size: args.size ? parseInt(args.size, 10) : undefined };
-    if (args.deck || args.gears) {
-        // テスト席にだけ指定のデッキ/ギア、相手は推奨（デッキを使う試合ではデッキ方式の手札になる）
+    if (args.legacy !== '1') {
+        // 既定は両席とも推奨デッキ・推奨ギア（#523。以前は --deck/--gears 無指定だとデッキもギアも無しで動き、診断を誤った）。
+        // テスト席の --deck/--gears だけ上書きできる。従来の挙動（デッキなし・ギアなし）が必要なときは --legacy 1
         const deckMod = require('./shared/deck'), gearMod = require('./shared/gear');
         opts.decks = chars.map((c, seat) => (seat === test && args.deck ? args.deck.split(',').map(Number) : deckMod.recommendedDeck(c)));
         opts.gears = chars.map((c, seat) => (seat === test && args.gears ? (args.gears === 'none' ? [] : args.gears.split(',')) : gearMod.recommendedGears(c)));
