@@ -1,3 +1,4 @@
+import type { GearId } from './gear';
 import { CharacterId } from '../../types/Character';
 import { Player } from '../../types/Player';
 import { FLOOD_COVER_WEIGHT } from './aiConstants';
@@ -78,6 +79,8 @@ class AIPlayer {
     hasLockBloom: boolean = false;
     /** 地代を装備しているか（手番開始時に自陣のオブジェクトの数だけマジック。ネクロマンサーは安い大岩を重ねて置く） */
     hasGroundRent: boolean = false;
+    /** 自分の装備ギア。ギアに合わせて戦略を変える判断に使う（`ownsGear('budSeed')`）。個別のフラグ（hasGroundRent など）は従来どおり */
+    gears: readonly GearId[] = [];
     /** 自分のデッキ(スキル番号12枚)。未指定なら全て引けるものとして動く（旧sim AI の s.decks と同じ） */
     deck?: number[];
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
@@ -101,7 +104,8 @@ class AIPlayer {
         hasEmptyLock: boolean = false,
         deck?: number[],
         hasLockBloom: boolean = false,
-        hasGroundRent: boolean = false
+        hasGroundRent: boolean = false,
+        gears: readonly GearId[] = []
     ) {
         this.playerSymbol = playerSymbol;
         this.character = character;
@@ -113,6 +117,7 @@ class AIPlayer {
         this.hasLockBloom = hasLockBloom;
         this.deck = deck;
         this.hasGroundRent = hasGroundRent;
+        this.gears = gears;
     }
 
     /** 直近の findRescueCenter が選んだ中心で残る敵の脅威マス数（巨人ストンプの防御判定用） */

@@ -97,6 +97,8 @@ export const REROLL_REDUCERS: { idx: number; key: 'onClickCounterMarkdown' | 'on
 export const NIGHT_VEIL_OPP_MAGIC = 7;
 /** 氷室の番人の絶対零度の基礎コスト / 夜の帳が相手のスキルに足すコスト */
 export const GLACIER_COST = 10;
+/** 芽吹きでバッズが付くコマのライフ（gear.ts の GEAR_PARAMS.budSeedLife と同じ値） */
+export const BUD_SEED_LIFE = 7;
 export const NIGHT_VEIL_RAISE = 3;
 /** 魔法使いが手札に固定する札: 特売・返し特売・一寸の虫に魂なし（縮地(50)は削除） */
 /**

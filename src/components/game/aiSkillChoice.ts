@@ -1,6 +1,6 @@
 // AIPlayer のメソッド群: スキルの選択（コストの見積もり・引き直し・ロックの選び方・手札から使う札の決定）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
-import { MAGICIAN_HOLD_VS_NECRO, MAGICIAN_HOLD_VS_YINYANG, YOU_HOLD_VS } from './aiConstants';
+import { BUD_SEED_LIFE, MAGICIAN_HOLD_VS_NECRO, MAGICIAN_HOLD_VS_YINYANG, YOU_HOLD_VS } from './aiConstants';
 import type AIPlayer from './AIPlayer';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -189,6 +189,10 @@ function choosePrepSkills(this: AIPlayer, c: SkillChoiceContext): string[] | nul
 
     // ライフが低い時: AddLife で +3
     if (life <= 2 && availableSkills.includes(0)) {
+        spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
+    }
+    // 芽吹き: ライフ7以上のコマに🌱が付く。+3で7に届くとき（ライフ4〜6）は、ライフ+3を撃ってから置いて🌱を付ける
+    else if (this.ownsGear('budSeed') && life >= BUD_SEED_LIFE - 3 && life < BUD_SEED_LIFE && availableSkills.includes(0)) {
         spend(this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), 'onClickAddLife');
     }
 

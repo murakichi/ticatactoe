@@ -93,6 +93,23 @@ describe('ロックとランダム帯電トークンを同じ手番で撃つ計�
     });
 });
 
+describe('AIは自分のギアを見て戦略を変える', () => {
+    it('芽吹きを装備していて、ライフ+3で7に届く（ライフ4〜6）なら、ライフ+3を撃ってから置く。装備が無ければ撃たない', () => {
+        const board = emptyBoard();
+        const withGear = new AIPlayer('💙', 'you', ['⭕'], chars, undefined, false, false, undefined, false, false, ['budSeed']);
+        const without = new AIPlayer('💙', 'you', ['⭕'], chars);
+        expect(withGear.ownsGear('budSeed')).toBe(true);
+        expect(without.ownsGear('budSeed')).toBe(false);
+        const a = planAITurn(withGear, input(board, { life: 5, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        const b = planAITurn(without, input(board, { life: 5, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        expect(a.kind === 'direct' && a.skills).toContain('onClickAddLife');
+        expect(b.kind === 'direct' && b.skills).not.toContain('onClickAddLife');
+        // すでに7以上、または+3しても届かない（ライフ3以下）ときは撃たない
+        const c = planAITurn(withGear, input(board, { life: 8, magic: [12, 3], hand: [0, 1, 2] }), () => 'x');
+        expect(c.kind === 'direct' && c.skills).not.toContain('onClickAddLife');
+    });
+});
+
 describe('一寸の虫に魂なし（ライフ3以下のコマを置けない）', () => {
     it('置けないときは着手せず、置くスキルも撃たず、チャージでパスする', () => {
         const ai = new AIPlayer('💙', 'you', ['⭕'], chars);
