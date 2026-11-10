@@ -146,3 +146,11 @@ test('龍神の巫女: 設置以外の経路（敵のオブジェクトの乗っ
     e.advanceTurn(s);
     assert.strictEqual(s.dragon[0].form, 'dragon');
 });
+
+test('一言居士・お一人様限りの札でスキルが無視されても、AIの計画し直しが際限なく入れ子にならない（電気使い対龍神の巫女 seed100033）', () => {
+    const d = require('../aiDriver');
+    const s = e.newGame({ chars: ['electrician', 'dragonMiko'], rng: e.makeRng(100033), size: 4, decks: [null, [3, 11, 12, 28, 52, 92, 5, 8, 108, 127, 128, 136]], gears: [['budSeed', 'harvest'], ['buildMania', 'rubbleBase']] });
+    let n = 0;
+    while (!s.winner && n++ < 600) d.playTurn(s); // 以前は Maximum call stack size exceeded
+    assert.ok(n > 10, '最後まで進む');
+});
