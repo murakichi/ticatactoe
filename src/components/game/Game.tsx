@@ -1,4 +1,4 @@
-import { setWinNeeds } from './winRule';
+import { setWinLengths, defaultBoardSizeFor } from './winRule';
 import { newDragonState, DragonState, dragonBulwarkHolder } from './dragon';
 import { useDragonSkills } from './useDragonSkills';
 import React, { useState, useEffect, useRef } from 'react';
@@ -68,10 +68,10 @@ const SHAKE_EFFECTS: SkillEffectType[] = ['stomp', 'judge', 'assault', 'tsunami'
 
 export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
-    const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : boardSizeFor(seatCount));
+    const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : defaultBoardSizeFor(props.players.map((p) => p.character)));
     const symbols: Player[] = PLAYER_SYMBOLS.slice(0, seatCount);
     const characters: CharacterId[] = props.players.map((p) => p.character);
-    setWinNeeds(characters); // 席ごとの勝利に必要な4連の本数（#526）。描画のたびに同じ値を登録するだけなので副作用は無い
+    setWinLengths(characters); // 席ごとの勝利に必要な並びの長さ（巫女は5）。描画のたびに同じ値を登録するだけなので副作用は無い
     // 龍神の巫女（#527）: 席ごとの形態と、覚醒時に消したマスの数 N
     const [dragon, setDragonAt, setDragonAll] = useSeatArray<DragonState>(() => Array.from({ length: seatCount }, newDragonState));
     const makeBoard = (): SquareInfo[] => Array.from({ length: geo.cells }, () => ({ player: undefined, bind: 0, effects: [] }));

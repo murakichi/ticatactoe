@@ -1,7 +1,8 @@
 import './App.css';
 import React, { useEffect, useState } from 'react';
 import { Game, PlayerConfig } from './components/game/Game';
-import { boardSizeFor, MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
+import { MIN_BOARD_SIZE, MAX_BOARD_SIZE } from './components/game/boardGeometry';
+import { defaultBoardSizeFor } from './components/game/winRule';
 import { CharacterId } from './types/Character';
 import { PLAYER_SYMBOLS, MAX_PLAYERS } from './types/Player';
 import { range } from './util';
@@ -84,7 +85,7 @@ const CHARACTERS: CharacterDef[] = [
         id: 'dragonMiko',
         name: '龍神の巫女',
         icon: '🐉',
-        passive: '勝利に4連が2本必要。巫女はライフ-2で、八百万の祈りで建造物を置く。建造物4つで龍に覚醒し、囲んだ範囲を消して強化。固有: 八百万の祈り / 龍の咆哮',
+        passive: '勝利は5マス並べ(盤面は5x5以上)。巫女はライフ-2で、八百万の祈りで建造物を置く。建造物4つで龍に覚醒し、囲んだ範囲を消して強化。固有: 八百万の祈り / 龍の咆哮',
     },
 ];
 
@@ -124,7 +125,7 @@ export const App = () => {
     const randomizeGears = (seat: number) => updatePlayer(seat, { gears: randomGears(gearSlotsFor(players[seat].character)) });
     const randomizeAllGears = () =>
         setPlayers((prev) => prev.map((p, seat) => (seat < playerCount ? { ...p, gears: randomGears(gearSlotsFor(p.character)) } : p)));
-    const boardSize = boardSizeChoice === 'auto' ? boardSizeFor(playerCount) : boardSizeChoice;
+    const boardSize = boardSizeChoice === 'auto' ? defaultBoardSizeFor(players.slice(0, playerCount).map((p) => p.character)) : boardSizeChoice;
     // AI席のキャラを「あなた」以外からランダムに決め直す（人間の席は触らない。重複あり）
     const randomizeAICharacters = () =>
         setPlayers((prev) =>
@@ -190,7 +191,7 @@ export const App = () => {
                                 ))}
                             </div>
                             <span className={styles.boardSizeNote}>
-                                盤面 {boardSize}x{boardSize}・4マス並べで勝ち
+                                盤面 {boardSize}x{boardSize}・{players.slice(0, playerCount).some((p) => p.character === 'dragonMiko') ? '4マス並べで勝ち（龍神の巫女は5マス並べ）' : '4マス並べで勝ち'}
                             </span>
                         </div>
                         <div className={styles.countRow}>

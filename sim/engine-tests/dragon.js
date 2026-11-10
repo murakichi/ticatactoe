@@ -61,14 +61,23 @@ test('龍神の巫女: 巫女のあいだは防壁が無く、相手の1本で�
     assert.strictEqual(s.winner, '⭕');
 });
 
-test('龍神の巫女: 二列勝利。1本では勝たず、別々の2本で勝つ', () => {
+test('龍神の巫女: 五目勝利。4つ並べても勝たず、5つ並べて勝つ。相手は4つで勝てる', () => {
     const s = five('dragonMiko', 'you');
     [0, 1, 2, 3].forEach((c) => { s.board[at(0, c)] = { player: '💙', bind: 3, effects: [] }; });
     e.settleWinner(s);
-    assert.strictEqual(s.winner, undefined);
-    [0, 1, 2, 3].forEach((c) => { s.board[at(2, c)] = { player: '💙', bind: 3, effects: [] }; });
+    assert.strictEqual(s.winner, undefined, '4つでは勝たない');
+    s.board[at(0, 4)] = { player: '💙', bind: 3, effects: [] };
     e.settleWinner(s);
-    assert.strictEqual(s.winner, '💙');
+    assert.strictEqual(s.winner, '💙', '5つで勝つ');
+    const t = five('dragonMiko', 'you');
+    [0, 1, 2, 3].forEach((c) => { t.board[at(4, c)] = { player: '⭕', bind: 3, effects: [] }; });
+    e.settleWinner(t);
+    assert.strictEqual(t.winner, '⭕', '相手は4つで勝つ');
+});
+
+test('龍神の巫女が参加する対局は、盤面の既定が5x5以上（4x4では五目が作れない）', () => {
+    assert.strictEqual(e.newGame({ chars: ['dragonMiko', 'you'], rng: e.makeRng(1) }).size, 5);
+    assert.strictEqual(e.newGame({ chars: ['you', 'giant'], rng: e.makeRng(1) }).size, 4);
 });
 
 test('龍の咆哮: 周囲の敵コマを破壊し、自陣のオブジェクトに⚡（着地ダメージも例外なく入る）。ターンが終わる', () => {

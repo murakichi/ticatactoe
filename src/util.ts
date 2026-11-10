@@ -3,7 +3,7 @@ import { Player } from './types/Player';
 import { SquareInfo } from './types/SquareInfo';
 import { geometryForCells } from './components/game/boardGeometry';
 import { isObject, isShikigami } from './types/ObjectKind';
-import { meetsWinNeed } from './components/game/winRule';
+import { meetsWinRule } from './components/game/winRule';
 
 /**
  * ライフ値の平均。毎ターン σ=LIFE_STD の正規分布で抽選される。
@@ -52,12 +52,12 @@ const calculateWinner = (squares: (Player | undefined)[]): Player | undefined =>
         let all = true;
         for (let k = 1; k < line.length; k++) if (squares[line[k]] !== first) { all = false; break; }
         if (!all) continue;
-        // 必要本数が1の席（ほぼ全員）は、揃った時点で勝ち。2本の席は、別々の2本（共有は1マスまで）が揃うまで勝たない（#526）
+        // 長さ4の席（ほぼ全員）は、4マス窓が1つ揃った時点で勝ち。長さ5の席（龍神の巫女）は、1マスずれて隣り合う窓が2つ揃うまで勝たない
         if (!own) own = new Map();
         const mine = own.get(first) ?? [];
         mine.push(line);
         own.set(first, mine);
-        if (meetsWinNeed(first, mine)) return first;
+        if (meetsWinRule(first, mine)) return first;
     }
     return undefined;
 };
