@@ -385,12 +385,10 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
     },
-    giant: {
-        cryomancer: ['lastStand', 'budSeed'], // 35→60%（同）
-    },
+    // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
+    // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
     poisoner: { cryomancer: ['springThunder', 'spellWard'] },
-    necromancer: { cryomancer: ['springThunder', 'lastStand'] }, // 31→84%（seed2/3, 各150試合）。環境で突出するが、強いのは許容（ユーザー方針）
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
     },

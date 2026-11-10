@@ -31,14 +31,6 @@ function chooseFinisherSkills(c) {
             spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
         }
     }
-    // 夜の帳×対ネクロ（魔法使い）: ネクロの降霊（基礎10。墓地の死体で最大-3、実コストは7〜10）を、撃てる魔力に届く手番だけ先回りで遅らせる。
-    // 次の手番の魔力が実コスト下限(7)以上で、+3 しても届かなくなる(13)未満のときに、他のスキルより先に撃つ（魔力を使い切ると撃てない）
-    if (this.character === 'magician' && availableSkills.includes(98)) {
-        const nextNecroMagic = this.opponents.filter((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer').map((o) => { var _a; return ((_a = seatMagic[(0, Player_1.seatOf)(o)]) !== null && _a !== void 0 ? _a : 0) + 1; });
-        if (nextNecroMagic.some((m) => m >= turn_1.NECROMANCY.baseCost - 3 && m < turn_1.NECROMANCY.baseCost + aiConstants_2.NIGHT_VEIL_RAISE)) {
-            spend(this.calculateAICost(costs.onClickNightVeil, false, false, 'onClickNightVeil'), 'onClickNightVeil');
-        }
-    }
     // --- 固有スキル (相手リーチがなければ積極的に使う) ---
     if (oppReaches === 0) {
         // ネクロマンサー蘇生: 墓地が貯まり召喚が見込める or 吸収対象が複数いるなら発動
