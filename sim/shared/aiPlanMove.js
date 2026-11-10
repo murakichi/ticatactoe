@@ -109,6 +109,14 @@ function planOpening(c) {
         && magic >= costs.onClickShuffle + aiConstants_1.WITCH_DIG_MARGIN) {
         return { move: null, skills: [], reroll: {} };
     }
+    // 毒使い: ポイズントークン(16)が手札に無く、デッキにあって、シャッフルのあとにも撃てる魔力があり、相手にリーチが無いなら、1コストで引き直して探す
+    // （見つけた16は chooseLocks のトークン固定が持ち続ける。毒トークンを使った試合の勝率は 82%、使えた試合は 28% しかない）
+    if (this.character === 'poisoner' && this.rerollsLeft > 0 && !availableSkills.includes(16) && this.inDeck(16, availableSkills)
+        && !this.opponents.some((o) => this.characterOf(o) === 'cryomancer') // 対氷室は閻魔の舌の専用戦略があり、探すと対氷室が 32→15〜21% に悪化した
+        && this.opponents.every((o) => this.countReaches(board, o) === 0)
+        && magic >= costs.onClickShuffle + this.calculateAICost(costs.onClickPoisonToken, true, true, 'onClickPoisonToken')) {
+        return { move: null, skills: [], reroll: {} };
+    }
     if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= aiConstants_1.SURPLUS_MAGIC) {
         const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
         if (plan.length === 0)
