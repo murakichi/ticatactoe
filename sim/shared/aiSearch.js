@@ -409,6 +409,19 @@ exports.searchMethods = {
         }
         return moves;
     },
+    /** 相手の即勝ちの判定用の着手候補: getMovesFor に、巨人（と満杯の盤面）が殴れるライフのあるコマを足したもの。探索（minimax）には使わない（過剰に守って弱くなる） */
+    threatMovesFor(board, player, life) {
+        const moves = this.getMovesFor(board, player, life);
+        if (!(0, decay_1.canHitBound)(this.characterOf(player), board, this.opponents.length + 1))
+            return moves;
+        for (let i = 0; i < board.length; i++) {
+            const sq = board[i];
+            if (!sq.player || sq.player === player || this.shield.has(i) || (0, keysmith_1.lockBlocksPlacement)(sq, this.character) || moves.includes(i))
+                continue;
+            moves.push(i);
+        }
+        return moves;
+    },
     /** Minimax + Alpha-Beta 枝刈り (深さ2) */
     minimax(board, depth, isMax, alpha, beta, life, ply = 1) {
         const winner = (0, util_1.calculateWinner)((0, util_1.lineSymbols)(board));
@@ -539,7 +552,7 @@ exports.searchMethods = {
         // 2. 相手の即勝ちをブロック (空きマス + 乗っ取り可能な自マス)。土壇場の防壁が未発動なら止めに行かない
         let candidates = allMoves;
         for (const opp of this.lastStandReady ? [] : this.opponents) {
-            const oppMoves = this.getMovesFor(board, opp, life);
+            const oppMoves = this.threatMovesFor(board, opp, life);
             for (const i of oppMoves) {
                 const sim = this.simulatePlace(board, i, opp, life);
                 if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(sim)) === opp) {
@@ -549,7 +562,7 @@ exports.searchMethods = {
                     // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ。sim/ai.js の safeBlock）
                     const safe = allMoves.filter((m) => {
                         const after = this.simulatePlace(board, m, this.playerSymbol, life, 0);
-                        return this.opponents.every((q) => !this.getMovesFor(after, q, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(after, j, q, life))) === q));
+                        return this.opponents.every((q) => !this.threatMovesFor(after, q, life).some((j) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(after, j, q, life))) === q));
                     });
                     if (safe.length === 0)
                         return i;
