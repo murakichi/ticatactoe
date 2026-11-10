@@ -7,7 +7,7 @@ import { GearTurnState } from './gearTurn';
 import { lifeZeroVictims } from './gearTurn';
 import { rampAfterRoll, rampBonus } from './gear';
 import React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { CharacterId, YingYangMode } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -19,7 +19,7 @@ import { activeObjectCount, effectSnapshot, EffectSnapshot, enforceEffectRules, 
 import { SkillEffectType } from './BoardEffects';
 import { placeWardPiece } from './graveSkills';
 import { detonate } from './thermal';
-import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain } from './gear';
+import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain, applyRubble, objectBuildLife } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PlayEffectExtra } from './usePresentation';
@@ -118,6 +118,27 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         // 防壁の発動は大事件なので、盤面の演出(土壇場の防壁)とギアのチップの両方で知らせる
         playEffect('bulwark');
         gearTrigger('lastStand', '列が消滅');
+    }, [currentBoard]);
+
+    // 瓦礫の礎: 自陣の大岩以外のオブジェクトが（自分以外の手番に）壊されたら、その位置に大岩を置いて魔力を得る。
+    // 自分の手番に消える建造物（龍神の巫女の覚醒で自分から消すもの）は壊されたことに数えない。盤面が変わるたびに直前の盤面と比べる
+    const rubbleBoard = useRef<SquareInfo[] | null>(null);
+    useEffect(() => {
+        const prev = rubbleBoard.current;
+        rubbleBoard.current = currentBoard;
+        if (!prev || prev.length !== currentBoard.length) return;
+        for (let seat = 0; seat < symbols.length; seat++) {
+            if (seat === turnSeat || !hasGear(gearsBySeat[seat], 'rubbleBase')) continue;
+            const r = applyRubble(prev, currentBoard, symbols[seat], objectBuildLife(gearsBySeat[seat]));
+            if (r.cells.length === 0) continue;
+            const magicGain = r.cells.length * GEAR_PARAMS.rubbleMagic;
+            rubbleBoard.current = r.board;
+            setCurrentBoard(r.board);
+            setMagicAt(seat, (m) => m + magicGain);
+            addLog(`${symbols[seat]}の瓦礫の礎: 壊されたオブジェクト${r.cells.length}つの位置に大岩を設置（魔力+${magicGain}）`);
+            gearTrigger('rubbleBase', `大岩${r.cells.length}つ・魔力+${magicGain}`);
+            return;
+        }
     }, [currentBoard]);
 
     useEffect(() => {

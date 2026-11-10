@@ -35,6 +35,7 @@ import {
     rampAfterRoll,
 } from './gear';
 import { skillCosts } from './skillCosts';
+import { rubbleCells, applyRubble } from './gear';
 import { lifeZeroVictims } from './gearTurn';
 
 const ctx = (skillsThisTurn = 0, echoReady = false, ailments = 0, ruin = false) => ({ skillsThisTurn, echoReady, ailments, ruin });
@@ -369,5 +370,48 @@ describe('死神の鎌（ライフ0の駒を壊す）', () => {
         expect(lifeZeroVictims(board, chars, [[], ['reaper']])).toEqual([0, 1]);
         expect(lifeZeroVictims(board, chars, [[], []])).toEqual([]);
         expect(gearLifeBonus(['reaper'])).toBe(2);
+    });
+});
+
+describe('瓦礫の礎', () => {
+    type Sq = import('../../types/SquareInfo').SquareInfo;
+    const E = (): Sq => ({ player: undefined, bind: 0, effects: [] });
+    const fort = (p: '💙' | '⭕'): Sq => ({ player: p, bind: 5, effects: [], object: 'fort' });
+    const boulder = (p: '💙' | '⭕'): Sq => ({ player: p, bind: 5, effects: [], object: 'boulder' });
+    const mk = (n: number): Sq[] => Array.from({ length: n }, E);
+
+    it('自陣の大岩以外のオブジェクトが壊されて空きマスになると、そのマスが対象になる', () => {
+        const prev = mk(16);
+        prev[3] = fort('💙');
+        prev[5] = fort('💙');
+        prev[9] = boulder('💙');
+        prev[12] = fort('⭕');
+        const next = prev.map((sq) => ({ ...sq }));
+        next[3] = E(); // 壊された
+        next[9] = E(); // 大岩は対象外
+        next[12] = E(); // 敵のオブジェクトは対象外
+        expect(rubbleCells(prev, next, '💙')).toEqual([3]);
+    });
+
+    it('乗っ取られたマスや、まだオブジェクトが残るマスは対象外', () => {
+        const prev = mk(16);
+        prev[3] = fort('💙');
+        prev[5] = fort('💙');
+        const next = prev.map((sq) => ({ ...sq }));
+        next[3] = { player: '⭕', bind: 2, effects: [] };
+        next[5] = { ...fort('💙'), bind: 1 };
+        expect(rubbleCells(prev, next, '💙')).toEqual([]);
+    });
+
+    it('壊された位置に2ターンのロック付きの大岩が置かれる', () => {
+        const prev = mk(16);
+        prev[3] = fort('💙');
+        const next = mk(16);
+        const r = applyRubble(prev, next, '💙');
+        expect(r.cells).toEqual([3]);
+        expect(r.board[3].object).toBe('boulder');
+        expect(r.board[3].player).toBe('💙');
+        expect(r.board[3].effects.some((e) => e.effect === '🔑')).toBe(true);
+        expect(GEAR_PARAMS.rubbleMagic).toBe(1);
     });
 });
