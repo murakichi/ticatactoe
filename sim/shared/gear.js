@@ -340,6 +340,9 @@ exports.COUNTER_GEARS = {
         cryomancer: ['springThunder', 'spellWard'],
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
     },
+    dragonMiko: {
+        keysmith: ['buildMania', 'lastStand'], // 9→40%（4x4・対鍵師のみ・seed2/400。土壇場の防壁で負ける列を消して延命。docs/tune/dragonMiko.md）
+    },
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
         // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
