@@ -1190,17 +1190,33 @@ exports.planMoveMethods = {
      * 陰陽師のコンボ待ちの温存・巨人戦の最初のチャージなど、パスする分岐は countReaches（空きマスで完成するリーチ）しか見ず、奪取で完成する相手の勝ちを見落としていた
      */
     guardPass(result, argsIn) {
-        var _a;
-        if (result.reroll || result.hailMary || result.win || ((_a = result.chargeClicks) === null || _a === void 0 ? void 0 : _a.length) || result.skills.length !== 1 || result.skills[0] !== 'onClickCharge')
-            return result;
-        if (this.lastStandReady)
+        var _a, _b;
+        if (result.reroll || result.hailMary || result.win || ((_a = result.chargeClicks) === null || _a === void 0 ? void 0 : _a.length) || this.lastStandReady)
             return result; // 土壇場の防壁が未発動なら、守りは意図的に捨てる
         const [board, , , , life] = argsIn;
-        const oppWins = this.opponents.some((opp) => this.getMovesFor(board, opp, life).some((i) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, i, opp, life))) === opp));
-        if (!oppWins)
+        const oppWinsOn = (b) => this.opponents.some((opp) => this.getMovesFor(b, opp, life).some((i) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(b, i, opp, life, 0))) === opp));
+        const passOnly = result.skills.length === 1 && result.skills[0] === 'onClickCharge';
+        // ロックだけの計画（鍵師・ネクロ）も同じ。ロックしたマスと着手のあとでも相手に1手で勝たれるなら、止められる通常の着手に差し替える
+        const lockOnly = result.skills.length > 0 && result.skills.every((sk) => sk === 'onClickUseLock');
+        if (!passOnly && !lockOnly)
             return result;
+        if (!oppWinsOn(board))
+            return result;
+        if (lockOnly) {
+            let post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            for (const c of (_b = result.lockTargets) !== null && _b !== void 0 ? _b : [])
+                post[c] = (0, lock_1.addLock)(post[c], 3); // 着手の減衰（−1）で消えない長さ。実際のロックも相手の次の手番まで残る
+            if (result.move !== null && result.move !== undefined)
+                post = this.simulatePlace(post, result.move, this.playerSymbol, life, 0);
+            if (!oppWinsOn(post))
+                return result; // この計画で止まっている
+        }
         const block = this.getBestMove(board, life);
-        return block === null ? result : { move: block, skills: [] };
+        if (block === null)
+            return result;
+        if (lockOnly && oppWinsOn(this.simulatePlace(board, block, this.playerSymbol, life, 0)))
+            return result; // 通常の着手でも止まらないなら、元の計画のまま
+        return { move: block, skills: [] };
     },
     makeMoveCore(...argsIn) {
         var _a, _b, _c, _d, _e;

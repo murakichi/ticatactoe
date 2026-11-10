@@ -46,3 +46,28 @@ describe('immediateWinMove: 着手の前の減衰（🔥で消えるコマ）を
         expect(ai.immediateWinMove(b, 8)).toBe(4);
     });
 });
+
+describe('guardPass: ロックだけの計画でも、相手に1手で勝たれるなら塞ぐ着手に差し替える', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 行0: 0,1,2 が相手(⭕)で 3 が自分(💙)のライフ0のコマ。相手は 3 を奪って勝てる
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        for (const i of [0, 1, 2]) b[i] = { player: '⭕', bind: 0, effects: [] };
+        b[3] = { player: '💙', bind: 0, effects: [] };
+        return b;
+    };
+    const args = (b: SquareInfo[]) => [b, 6, skillCosts, 5, 3, [], false] as Parameters<AIPlayer['makeMove']>;
+    const ai = () => new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', 'magician'], undefined, false, false);
+
+    it('無関係なマス(6)をロックして7に置く計画は、塞ぐ着手に差し替える', () => {
+        const r = ai().guardPass({ move: 7, skills: ['onClickUseLock'], lockTargets: [6] }, args(board()));
+        expect(r.skills).toEqual([]);
+        expect(r.move).not.toBe(7);
+        expect(r.move).not.toBeNull();
+    });
+    it('脅威のマス(3)をロックする計画は、止まっているのでそのまま', () => {
+        const plan = { move: 7, skills: ['onClickUseLock'], lockTargets: [3] };
+        expect(ai().guardPass(plan, args(board()))).toEqual(plan);
+    });
+});
