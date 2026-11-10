@@ -184,3 +184,6 @@ export const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ
 
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
 export const FORCED_WIN_PLIES = 4;
+
+/** 対策ロック: ロック済みの自コマも、残りスタックがこの値以下なら延長の対象にする（0=ロック済みは対象にしない=従来）。実験中は環境変数 ANTI_LOCK_REFRESH で上書き */
+export const ANTI_LOCK_REFRESH: number = Number((typeof process !== 'undefined' && process.env && process.env.ANTI_LOCK_REFRESH) || 0);
