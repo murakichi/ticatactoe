@@ -3,7 +3,7 @@
 // 龍: 敵コマが3つ以上入る位置に建造物を置き直し、咆哮で焼き払う
 import type AIPlayer from './AIPlayer';
 import { SquareInfo } from '../../types/SquareInfo';
-import { Player, seatOf } from '../../types/Player';
+import { Player } from '../../types/Player';
 import { geometryForCells } from './boardGeometry';
 import { AWAKEN_BUILDINGS, awakenPlan, ownBuildingCells, prayerUsable, roarUsable, roarVictims } from './dragon';
 import { OBJECT_DEFS, objectLandable } from './objects';
@@ -211,10 +211,6 @@ export const dragonMethods: DragonMethods = {
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
         if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= DRAGON_EMPTY_RESERVE) return null;
-        // 巫女が火炎使いと戦うとき: 建造物は毎手番焼かれて4つ揃う前に落ちる。残りを1手番で置き切れる魔力が貯まるまで祈らない
-        if (!isDragon && (globalThis as any).process?.env?.DRAGON_BURST === '1'
-            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'pyromancer')
-            && magic < (AWAKEN_BUILDINGS - ownBuildingCells(real, me).length) * prayCost) return null;
         const maxPrayers = Math.min(isDragon ? 1 : PRAYER_MAX_PER_TURN - ownBuildingCells(real, me).length, BUILDING_CAP - ownBuildingCells(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && prayerUsable(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);

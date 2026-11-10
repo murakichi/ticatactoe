@@ -2,7 +2,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.DRAGON_EMPTY_RESERVE = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
-const Player_1 = require("./Player");
 const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
@@ -172,7 +171,6 @@ exports.dragonMethods = {
         return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
     },
     planDragonCore(args) {
-        var _a, _b;
         const real = args[0];
         const magic = args[1];
         const costs = args[2];
@@ -211,11 +209,6 @@ exports.dragonMethods = {
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
         if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= exports.DRAGON_EMPTY_RESERVE)
-            return null;
-        // 巫女が火炎使いと戦うとき: 建造物は毎手番焼かれて4つ揃う前に落ちる。残りを1手番で置き切れる魔力が貯まるまで祈らない
-        if (!isDragon && ((_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_BURST) === '1'
-            && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'pyromancer')
-            && magic < (dragon_1.AWAKEN_BUILDINGS - (0, dragon_1.ownBuildingCells)(real, me).length) * prayCost)
             return null;
         const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && (0, dragon_1.prayerUsable)(cur, deck)) {
