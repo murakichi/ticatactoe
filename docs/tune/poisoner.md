@@ -110,3 +110,5 @@
 - strategy: usage監査(毒札は使用が少ない: 毒トークン0.29回・パンデミック0.08回/試合)
 - 弱い相手: cryomancer 33%, magician 35%
 - probe-usage で毒札(15-19,29)の使用回数監査
+
+- **試行51: ギア死神の鎌(reaper)の再測定**（2026-11-10、seed41・各100試合、対強豪重み付き）: 現行 snowball,spellWard **46.9%** / snowball,reaper 34.4%（-12.5） / spellWard,reaper 44.4%（-2.5、SE±3.0）。reaper を載せたギアは現行を上回らない。毒使い専用の『reaper 装備時に奪取対策を省く』AI分岐は、最良の組(spellWard,reaper)でも +2.5pt 以上の上積みが要り、見込みが薄い。→ **ギアは据え置き。reaper 戦略は作らない（再検討しない）**。試行50の保留はこれで閉じる。
