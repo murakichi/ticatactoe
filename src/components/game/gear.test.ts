@@ -422,8 +422,9 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(counterGearsFor('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
         expect(counterGearsFor('poisoner', ['cryomancer', 'cryomancer'])).toEqual(['springThunder', 'spellWard']);
         expect(counterGearsFor('keysmith', ['pyromancer'])).toEqual(['spellWard', 'lockBloom']); // 鍛冶師の🔥・火遁を呪詛除けで止める
-        expect(counterGearsFor('keysmith', ['yinYangMaster'])).toEqual(['reaper', 'lockBloom']);
-        expect(counterGearsFor('keysmith', ['electrician'])).toEqual(['reaper', 'lockBloom']);
+        // 陰陽師・雷霆は標準の推奨（死神の鎌+芽吹きの錠）と同じなので専用ギアなし
+        expect(counterGearsFor('keysmith', ['yinYangMaster'])).toBeUndefined();
+        expect(counterGearsFor('keysmith', ['electrician'])).toBeUndefined();
         expect(counterGearsFor('keysmith', ['necromancer'])).toEqual(['harvest', 'lockBloom']);
         expect(counterGearsFor('keysmith', ['magician'])).toBeUndefined();
         expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
