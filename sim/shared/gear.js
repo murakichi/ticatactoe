@@ -278,17 +278,17 @@ exports.randomGears = randomGears;
 exports.RECOMMENDED_GEARS = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['snowball', 'luckyPurse'],
+    magician: ['snowball', 'ironLock'],
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'],
     necromancer: ['reaper', 'lastStand'],
-    poisoner: ['lastStand', 'spellWard'],
-    electrician: ['lightToken', 'harvest'],
+    poisoner: ['snowball', 'spellWard'],
+    electrician: ['budSeed', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'budSeed'],
     keysmith: ['lastStand', 'lockBloom'],
-    witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
+    witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => { var _a; return ((_a = exports.RECOMMENDED_GEARS[character]) !== null && _a !== void 0 ? _a : ['sturdy']).slice(0, (0, exports.gearSlotsFor)(character)); };
 exports.recommendedGears = recommendedGears;
@@ -299,7 +299,7 @@ exports.recommendedGears = recommendedGears;
 exports.ALT_RECOMMENDED_GEARS = {
     yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']],
     necromancer: [['reaper', 'snowball']],
-    electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
+    electrician: [['lightToken', 'budSeed']], // 主案との差 -1.5pt（61.3 vs 62.8, seed2/200）。旧別案(afterglow/springThunder 系)は主案が変わったので外した（docs/tune/electrician.md）
 };
 /**
  * 「あなた」の相手キャラ別の専用ギア。「あなた」は固有スキルが無く全キャラ共通の1設定では最下位なので、相手を見て組み替える

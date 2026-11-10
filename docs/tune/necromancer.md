@@ -16,6 +16,8 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 60 | AI(大岩を手札に固定) | 大岩(136)をchooseLocksの固定対象に追加(ネクロ)。対強豪(自身を含めない) seed230/200: 58.0→60.4、seed240/200: 58.4→61.2(2シード+2.4/+2.8, 合算でz≈2.1)。対giant 32/35→54/62(大きく改善)、対cryomancer 30/27→23/19(悪化)、他は同水準。※master再取込後は基準が下がっている(yinYangMaster戦が82〜85→44〜50%: masterの変更) | **採用**(giantでの改善が大きい。cryomancer戦の悪化は要追跡) |
+| 59 | 順位再測定(大岩デッキ採用後) | seed8/100。強豪=electrician,necromancer,magician,yinYangMaster,keysmith,giant | **1位** 対強豪60.6%(field 66.0%)。2位 giant 59.6%、3位 electrician 52.0%(fieldでは electrician 66.2% と僅差)。PR#511マージ |
 | 58 | AI+deck(大岩で塞ぐ) | ユーザー指摘「大岩は敵の邪魔にも使える」。大岩=ロック2ターン付き・ライフ5・減衰しない・コスト1。相手に即勝ちのマス（リーチの要の空きマス）があるとき、そこに大岩を置いて塞ぐ（1手番に複数可。`aiPlanMove.ts`）。デッキの帯電付与(22)を大岩(136)に替え。対強豪(自身を含めない) seed210/150: 58.6→61.8、seed220/200: 58.3→64.1(+5.8, 基準+3.3を超える)。対giant 24〜30→36〜38、対cryomancer 27〜28→34〜42。夜の帳追加 62.7 | **採用** `[2,3,6,8,11,136,40,52,58,89,92,95]`。旧主案はALTへ。発動後に自コマの壁が減衰で消える弱点の一部を、消えない壁で埋めた |
 | 57 | 新ギア地代/頑丈な建材 + 大岩(136) | master追加の地代(手番開始に自陣オブジェクト数だけマジック)・大岩(コスト1・2ターンロック付き・効果なし)を検討。AIは地代装備時に大岩を最大4個まで重ねて設置(`hasGroundRent`)。seed210/150(強豪=electrician,magician,giant,cryomancer,keysmith,yinYangMaster, 自身を含めない): 現行[reaper,lastStand] 58.6 / [reaper,groundRent] 49.6 / +大岩デッキ[reaper,groundRent] 51.8 / +大岩+市場 49.9 / 大岩デッキ[reaper,lastStand] 61.0 | 地代は土壇場の防壁(lastStand)を外す損(−7〜−9)を埋められず却下。大岩入りデッキ自体は+2.4(ノイズ圏)。頑丈な建材は未測定(オブジェクトの数が少なく効く場面が無い) |
 | 56 | 順位追試(master分割取込後, PR#501マージ時点) | seed7/100。強豪=electrician,necromancer,magician,keysmith,giant,cryomancer | **2位** 対強豪53.2%(field 68.1%)。1位 electrician 57.0%(field 68.9%)。seed5/6 は1位、seed7 は2位 = electrician との僅差(fieldでは0.8pt差)。最悪対面 giant 29% |

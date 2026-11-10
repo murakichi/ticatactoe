@@ -48,6 +48,7 @@ class AIPlayer {
     ownClouds: number = 0;
     /** 自陣の働いている毒沼の数 */
     ownSwamps: number = 0;
+    ownTongues: number = 0;
     /** パーフェクトゲームの即勝ちが見えているが魔力が足りないとき、そのコストを残すために他のスキルの支払いを控える(0=控えない) */
     holdPG: number = 0;
     skillKinds: Set<string> = new Set();

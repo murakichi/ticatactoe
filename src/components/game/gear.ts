@@ -335,17 +335,17 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['snowball', 'luckyPurse'], // 2026-11-09: spellWard→snowball。対ネクロ 約3→16%（seed1〜3、80〜150試合）、対その他6キャラ 63.0→65.9%、対鍛冶師 85→66%・対毒使い/鍵師は上がり3体平均はほぼ同じ。旧: ['spellWard', 'luckyPurse']（旧主案に戻した: lastStand,luckyPurse は鍛冶師に弱い（全相手 seed241/100: 対鍛冶師 12〜17% vs 83〜87%、全相手 64.6〜65.1 vs 70.4。docs/tune/magician.md 試行56・57）)
+    magician: ['snowball', 'ironLock'], // luckyPurse から差し替え（堅牢の鍵。強豪5体 seed71/100: 48.5→56.7、対ネクロ 7→19・対陰陽師 30→42。走査 seed62/40: 54.5→65.1。docs/tune/magician.md 試行91）
     giant: ['lastStand', 'sturdy'],
     yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
     necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
-    poisoner: ['lastStand', 'spellWard'],
-    electrician: ['lightToken', 'harvest'],
+    poisoner: ['snowball', 'spellWard'], // 対強豪平均 33.5→43.0%（seed2/200, z≈5.3。旧 lastStand,spellWard）。死神の鎌,spellWard は 37.5%
+    electrician: ['budSeed', 'harvest'], // 芽吹き+収穫: 旧主案 lightToken,harvest より対強豪平均 +5.7pt（57.0→62.8, seed2/200）。docs/tune/electrician.md
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'budSeed'], // 2026-11-10: vengeance→budSeed。対6強豪 約41→58%（seed3/4, 各100試合。主に対魔法使い 33→83%）。強くて突出してもよい（ユーザー方針）。旧: 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
-    witch: ['lightToken', 'bindingLock'], // 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
+    witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>
@@ -358,7 +358,7 @@ export const recommendedGears = (character: CharacterId): GearId[] =>
 export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
     yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']], // 別案: 死神の鎌+土壇場の防壁 60.5%（seed8、主案 71.0%）／旧主案 44.0%
     necromancer: [['reaper', 'snowball']], // 主案 reaper,lastStand 61.2 に対し 60.3（seed200/200, 対強豪）で同程度。対giant 30→41%、対poisoner 59→69%
-    electrician: [['lightToken', 'afterglow'], ['lightToken', 'springThunder']], // 春雷: 主案と同水準（対強豪平均 52.4 vs 52.5, seed108/300）で、対氷室だけ 51→71%（氷結の壁の4つ目を解く。docs/tune/electrician.md 試行57）。 主案 lightToken,harvest と同等以上（対強豪平均 +0.8〜+2.1, seed181-183。docs/tune/electrician.md 試行41）。旧別案 afterglow,harvest は環境の変化で主案より約4pt弱くなったので外した
+    electrician: [['lightToken', 'budSeed']], // 主案との差 -1.5pt（61.3 vs 62.8, seed2/200）。旧別案(afterglow/springThunder 系)は主案が変わったので外した（docs/tune/electrician.md）
 };
 
 /**
