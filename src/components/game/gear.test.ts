@@ -323,10 +323,10 @@ describe('春雷（springThunderThaw）', () => {
 
 describe('「あなた」の相手別ギア', () => {
     it('相手が1キャラで専用ギアがあればそれ、複数キャラ・専用なしなら通常の推奨', () => {
-        expect(recommendedGearsAgainst('you', ['poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
-        expect(recommendedGearsAgainst('you', ['poisoner', 'poisoner'])).toEqual(['lastStand', 'spellWard', 'sturdy']);
+        expect(recommendedGearsAgainst('you', ['poisoner'])).toEqual(['lastStand', 'spellWard', 'emptyLock']);
+        expect(recommendedGearsAgainst('you', ['poisoner', 'poisoner'])).toEqual(['lastStand', 'spellWard', 'emptyLock']);
         expect(recommendedGearsAgainst('you', ['poisoner', 'giant'])).toEqual(recommendedGears('you'));
-        expect(recommendedGearsAgainst('you', ['magician'])).toEqual(['lastStand', 'sturdy', 'luckyPurse']);
+        expect(recommendedGearsAgainst('you', ['magician'])).toEqual(['lastStand', 'sturdy', 'budSeed']);
         expect(recommendedGearsAgainst('you', ['giant'])).toEqual(['lastStand', 'emptyLock', 'luckyPurse']);
         expect(recommendedGearsAgainst('you', ['tactician'])).toEqual(recommendedGears('you'));
         expect(recommendedGearsAgainst('magician', ['poisoner'])).toEqual(recommendedGears('magician'));

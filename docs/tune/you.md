@@ -1,6 +1,6 @@
 # tune-top: you (あなた)
 - 目標(ユーザー指示 2026-11-06): 最下位でトップ不可は前提。**勝率を少しでも上げる**。全キャラ共通の1設定は不可能なので、**相手を1キャラずつ選んで専用デッキ・ギアを組む**。ある程度勝てるようになった対策は `docs/tune/LEARNINGS.md` に「対X」で書き、他キャラの対策の参考にする。
-- 最後に検証したmaster: 55043be
+- 最後に検証したmaster: c5018a9（2026-11-10 に取り込み、全相手を測り直した）
 - 現在の推奨設定(共通): gears=[luckyPurse,titanCost,sturdy] deck=[0,2,3,5,6,8,10,11,12,28,32,52]
 - 相手別の専用ギア(`gear.ts` `COUNTER_GEARS_FOR_YOU`。相手が1キャラのときだけ AI 席の「あなた」が使う): poisoner=[lastStand,spellWard,sturdy] / magician・keysmith・yinYangMaster=[lastStand,sturdy,luckyPurse] / pyromancer=[spellWard,emptyLock,luckyPurse] / giant=[lastStand,emptyLock,luckyPurse] / necromancer=[ironLock,titanCost,sturdy]
 - 相手別の専用デッキ(`deck.ts` `COUNTER_DECKS_FOR_YOU` + `AIPlayer.ts` `YOU_HOLD_VS` で一寸の虫(92)/火口(87)を引いたら手札に固定): magician・witch=[0,2,3,5,8,10,11,28,32,52,87,92] / cryomancer・electrician=[0,2,3,5,8,10,11,12,28,32,52,92] / tactician=[0,2,3,5,8,10,11,28,32,52,74,92]（74,92を固定）
@@ -53,3 +53,23 @@
 - 対pyromancer(全て0%)。対necromancer/tactician のデッキ側。専用デッキにしたキャラ(witch/氷室/雷霆)のギア再スキャン。固定する札の追加(87/92以外)。
 - 対poisoner のデッキ近傍(実行した swap1 30近傍の結果は未回収。再実行)、対yinYang のデッキ。
 - 人間が「あなた」を選ぶセットアップ画面に、相手別の推奨ギアを出す(未実装。AI席の「あなた」のみ反映)。
+
+## 再検証(2026-11-10, master c5018a9。新ギア7種とロック仕様の変更を受けて)
+現行の専用ギアは master の変更で大きく落ちていた（yinYang 0.7%、necro 8.6%、magician 3.3%）。相手ごとにギア1枠差し替えの全走査（seed12/60）で候補を出し、seed21/300 で現行と比べた。
+
+| 相手 | 現行 | 採用 | 勝率(seed21/300) |
+|---|---|---|---|
+| magician | lastStand,sturdy,luckyPurse | lastStand,sturdy,budSeed | 3.3→25.0%（reaper 案 11.7） |
+| yinYangMaster | lastStand,sturdy,luckyPurse | emptyLock,sturdy,luckyPurse | 0.7→15.3% |
+| necromancer | ironLock,titanCost,sturdy | ironLock,snowball,sturdy | 8.6→31.0% |
+| poisoner | lastStand,spellWard,sturdy | lastStand,spellWard,emptyLock | 26.7→38.3%（emptyLock,spellWard,sturdy 38.7 も同等） |
+| electrician | luckyPurse,titanCost,sturdy | budSeed,titanCost,sturdy | 8.0→20.0%（専用デッキ 92固定と併用） |
+| cryomancer | luckyPurse,titanCost,sturdy | springThunder,titanCost,sturdy | 19.3→58.3%（luckyPurse,titanCost,springThunder 55.7 も同等） |
+| pyromancer | spellWard,emptyLock,luckyPurse | spellWard,emptyLock,harvest | 25.3→37.0% |
+| witch | luckyPurse,titanCost,sturdy | budSeed,titanCost,sturdy | 8.3→23.7%（専用デッキ 87/92固定と併用） |
+| tactician | luckyPurse,titanCost,sturdy | 変更なし | 30.0%。emptyLock 案 31.0、priceWreck 案 24.3 は差なし/悪化 |
+| giant | lastStand,emptyLock,luckyPurse | 変更なし | 走査で上回る1枠差し替えなし（21.3%） |
+| keysmith | lastStand,sturdy,luckyPurse | 変更なし | 走査の誤差が ±14〜18 と大きく判断不能（要追試） |
+
+- 新ギア budSeed は対 magician・electrician・witch（🌱/🍂/⚡の相手）で効いた。春雷は対 cryomancer の氷結の壁に決定的（+39pt）。emptyLock は対 yinYang・poisoner・tactician で上位に出る。
+- 走査（60試合）の上位は「選ばれた最良」なので上振れする。追試（300試合・別seed）でも伸びたものだけ採用した。

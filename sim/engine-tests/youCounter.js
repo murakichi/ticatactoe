@@ -8,7 +8,7 @@ test('web/CLI の対戦シミュレーションでも「あなた」は相手別
     const { aiLoadout } = require('../run');
     const rng = e.makeRng(1);
     const vsPoisoner = aiLoadout(['you', 'poisoner'], rng, { deck: true, gears: true });
-    assert.deepStrictEqual(vsPoisoner.gears[0], ['lastStand', 'spellWard', 'sturdy']);
+    assert.deepStrictEqual(vsPoisoner.gears[0], ['lastStand', 'spellWard', 'emptyLock']);
     const vsWitch = aiLoadout(['witch', 'you'], rng, { deck: true, gears: true });
     assert.ok(vsWitch.decks[1].includes(92) && vsWitch.decks[1].includes(87), '対witch の専用デッキ');
     // 相手が複数キャラなら通常の設定
