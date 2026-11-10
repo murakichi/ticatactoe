@@ -62,10 +62,11 @@ describe('龍神の巫女のAI（#527）', () => {
         expect(prayed(run([1, 6, 11, 12, 2, 7]))).toBe(true); // 空きが多ければ祈る
     });
 
-    it('氷室の番人が相手のときだけ、サイレンスを手札に固定する', () => {
+    it('氷室の番人・鍵師が相手のときだけ、サイレンスを手札に固定する', () => {
         const mkAi = (opp: string) => new AIPlayer('💙', 'dragonMiko', ['⭕'], ['dragonMiko', opp as never], undefined, false, false, [3, 11, 12, 28, 52, 92, 5, 8, 108, 127, 128, 136]);
         const b = mk(4);
         expect(mkAi('cryomancer').chooseLocks(b, 5, 3, [28, 3, 5])).toEqual([28]);
+        expect(mkAi('keysmith').chooseLocks(b, 5, 3, [28, 3, 5])).toEqual([28]);
         expect(mkAi('necromancer').chooseLocks(b, 5, 3, [28, 3, 5])).not.toEqual([28]);
         expect(mkAi('cryomancer').chooseLocks(b, 5, 3, [3, 5, 8])).not.toEqual([28]);
     });
