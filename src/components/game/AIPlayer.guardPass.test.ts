@@ -101,3 +101,24 @@ describe('limitToOneSkill: 相手の一言居士が働いていると、計画�
         expect(ai().limitToOneSkill(plan, args(b))).toEqual(plan);
     });
 });
+
+describe('毒使い: ポイズントークン(16)を引き直して探す', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const empty = (): SquareInfo[] => Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+    const mk = (opp: 'necromancer' | 'cryomancer') => new AIPlayer('💙', 'poisoner', ['⭕'], ['poisoner', opp], undefined, false, false, [0, 1, 16, 20, 21]);
+    const run = (ai: AIPlayer, hand: number[]) => {
+        ai.rerollsLeft = 2;
+        return ai.makeMove(empty(), 12, skillCosts, 3, 4, hand, false);
+    };
+
+    it('手札に16が無く、デッキにあり、魔力があれば引き直す', () => {
+        expect(run(mk('necromancer'), [0, 20, 21]).reroll).toBeDefined();
+    });
+    it('手札に16があれば引き直さない', () => {
+        expect(run(mk('necromancer'), [16, 20, 21]).reroll).toBeUndefined();
+    });
+    it('相手が氷室の番人なら探さない（専用戦略があり、探すと悪化した）', () => {
+        expect(run(mk('cryomancer'), [0, 20, 21]).reroll).toBeUndefined();
+    });
+});
