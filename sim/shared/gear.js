@@ -323,6 +323,7 @@ exports.COUNTER_GEARS_FOR_YOU = {
 exports.COUNTER_GEARS = {
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
+        pyromancer: ['spellWard', 'priceWreck'], // 36→63%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
     },
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
