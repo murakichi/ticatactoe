@@ -1183,6 +1183,26 @@ exports.planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
+        return this.guardPass(this.makeMoveCore(...argsIn), argsIn);
+    },
+    /**
+     * 計画が『チャージで手番を終えるだけ』なのに、相手に1手で勝たれる（空きマスだけでなく敵コマの奪取で完成する勝ちも）なら、塞ぐ手に差し替える。
+     * 陰陽師のコンボ待ちの温存・巨人戦の最初のチャージなど、パスする分岐は countReaches（空きマスで完成するリーチ）しか見ず、奪取で完成する相手の勝ちを見落としていた
+     */
+    guardPass(result, argsIn) {
+        var _a;
+        if (result.reroll || result.hailMary || result.win || ((_a = result.chargeClicks) === null || _a === void 0 ? void 0 : _a.length) || result.skills.length !== 1 || result.skills[0] !== 'onClickCharge')
+            return result;
+        if (this.lastStandReady)
+            return result; // 土壇場の防壁が未発動なら、守りは意図的に捨てる
+        const [board, , , , life] = argsIn;
+        const oppWins = this.opponents.some((opp) => this.getMovesFor(board, opp, life).some((i) => (0, util_1.calculateWinner)((0, util_1.lineSymbols)(this.simulatePlace(board, i, opp, life))) === opp));
+        if (!oppWins)
+            return result;
+        const block = this.getBestMove(board, life);
+        return block === null ? result : { move: block, skills: [] };
+    },
+    makeMoveCore(...argsIn) {
         var _a, _b, _c, _d, _e;
         // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
         // 敵コマの奪取で完成する勝ちがあるのにロック・封鎖の断・審判の日・引き直しなどを先に選んでいた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた・#600）

@@ -6,7 +6,7 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { OBJECT_DEFS, objectLandable } from './objects';
-import { findEmptyIndexes, isObject } from '../../util';
+import { calculateWinner, findEmptyIndexes, isObject, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { ailmentStacks, cleanse, canFreeze, budStacks, budReceivers, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, freeze, shatter, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, fireWheelTargets, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
@@ -1211,6 +1211,24 @@ export const planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
+        return this.guardPass(this.makeMoveCore(...argsIn), argsIn);
+    },
+
+    /**
+     * 計画が『チャージで手番を終えるだけ』なのに、相手に1手で勝たれる（空きマスだけでなく敵コマの奪取で完成する勝ちも）なら、塞ぐ手に差し替える。
+     * 陰陽師のコンボ待ちの温存・巨人戦の最初のチャージなど、パスする分岐は countReaches（空きマスで完成するリーチ）しか見ず、奪取で完成する相手の勝ちを見落としていた
+     */
+    guardPass(this: AIPlayer, result: AIResult, argsIn: PlanMoveArgs): AIResult {
+        if (result.reroll || result.hailMary || result.win || result.chargeClicks?.length || result.skills.length !== 1 || result.skills[0] !== 'onClickCharge') return result;
+        if (this.lastStandReady) return result; // 土壇場の防壁が未発動なら、守りは意図的に捨てる
+        const [board, , , , life] = argsIn;
+        const oppWins = this.opponents.some((opp) => this.getMovesFor(board, opp, life).some((i) => calculateWinner(lineSymbols(this.simulatePlace(board, i, opp, life))) === opp));
+        if (!oppWins) return result;
+        const block = this.getBestMove(board, life);
+        return block === null ? result : { move: block, skills: [] };
+    },
+
+    makeMoveCore(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
         // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
         // 敵コマの奪取で完成する勝ちがあるのにロック・封鎖の断・審判の日・引き直しなどを先に選んでいた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた・#600）
         // 相手の土壇場の防壁が使えるときは、1回目の勝ちが防壁に吸われるので、ギアを壊すスキルなど普通の計画に任せる

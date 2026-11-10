@@ -1,0 +1,35 @@
+import AIPlayer from './AIPlayer';
+import { SquareInfo } from '../../types/SquareInfo';
+
+describe('guardPass: チャージだけで手番を終える計画でも、相手に1手で勝たれるなら塞ぐ', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    // 列1(1,5,9,13): 5,9,13 が相手(💙)で、1 が自分(⭕)のライフ0のコマ。相手は 1 を奪って勝てる（空きマスで完成するリーチではない）
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        for (const i of [5, 9, 13]) b[i] = { player: '💙', bind: 0, effects: [] };
+        b[1] = { player: '⭕', bind: 0, effects: [] };
+        return b;
+    };
+    const ai = () => new AIPlayer('⭕', 'yinYangMaster', ['💙'], ['tactician', 'yinYangMaster'], undefined, false, false);
+    const args = (b: SquareInfo[]) => [b, 20, skillCosts, 5, 8, [], false] as Parameters<AIPlayer['makeMove']>;
+
+    it('チャージのみの計画は、塞ぐ着手に差し替える', () => {
+        const a = ai();
+        const r = a.guardPass({ move: null, skills: ['onClickCharge'] }, args(board()));
+        expect(r.skills).toEqual([]);
+        expect(r.move).not.toBeNull();
+    });
+    it('相手に勝ち手が無ければチャージのまま', () => {
+        const a = ai();
+        const b = board();
+        b[13] = { player: undefined, bind: 0, effects: [] };
+        const r = a.guardPass({ move: null, skills: ['onClickCharge'] }, args(b));
+        expect(r.skills).toEqual(['onClickCharge']);
+    });
+    it('チャージ以外のスキルを含む計画はそのまま', () => {
+        const a = ai();
+        const r = a.guardPass({ move: null, skills: ['onClickCharge', 'onClickOpium'] }, args(board()));
+        expect(r.skills).toEqual(['onClickCharge', 'onClickOpium']);
+    });
+});
