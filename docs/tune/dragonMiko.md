@@ -6,7 +6,9 @@
 - 基準線（ec29e2f・4x4・seed1・60試合・重み付き方式）: 対強豪平均 52.8% / 順位 4位（1位 electrician 54.1%、差1.3pt。2位 pyromancer 53.9%、3位 yinYangMaster 53.2%）/ field 53.8%・最悪対面 5%(cryomancer)・不利3/有利3・均衡10.5%。対キャラ: pyromancer 100 / magician 90 / witch 84 / yinYangMaster 74 / giant 62 / poisoner 58 / you 59 / electrician 46 / necromancer 39 / tactician 23 / keysmith 8 / cryomancer 5。（旧『強豪リスト方式』の 41.3%・11位は注記: 方式が違うので比べない）
 - 連続不採用回数: 0
 - 関連 issue: #526（二列勝利の基盤）, #527（本体）, #531（勝率の調整）, #532（AIの列判定が二列勝利を知らない）, #533（演出と本番の通し） / 検索日 2026-11-10
-- 状態: running（トップ未達。1位まで1.3pt）
+- 状態: refining（seed1/60 で1位到達。完了判定 2条件×200試合は測定中）
+
+- 採用後の基準線（春雷・seed1/60・4x4）: 対強豪平均 55.1% / **1位**（2位 electrician 54.1%、差1.0pt）/ field 59.1%・最悪対面 8%(keysmith)・不利2/有利5・均衡15.1%
 
 ## 診断
 - 対キャラ別（採用後・4x4・seed1・60試合）: pyromancer 98 / magician 90 / witch 83 / yinYangMaster 76 / giant 57 / you 53 / poisoner 46 / electrician 43 / tactician 24 / necromancer 11 / keysmith 8 / cryomancer 5。強豪の中で勝てていないのは necromancer・keysmith。
