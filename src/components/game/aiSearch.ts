@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { CharacterId } from '../../types/Character';
 import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
+import { LIFE_MEANS, calculateWinner, findEmptyIndexes, isObject, isShikigami, lineSymbols } from '../../util';
 import { geometryForCells } from './boardGeometry';
 import { isFrozen, emptyBlocked, absorbDestroy, frozenStacks, isDormant, activeBuds, leafSurcharge, decayTick, overwriteBlocked, boardLeaves } from './thermal';
 import { addLock, isLocked, tickLock } from './lock';
@@ -387,6 +387,11 @@ export const searchMethods = {
         return moves;
     },
 
+    /** 相手の着手を予測するときのライフ。ライフは手番の頭に乱数で決まり相手の値は分からないので、巨人は平均（LIFE_MEANS.giant）を使う（ライフのあるコマを殴れる巨人は、自分のライフで見積もると殴りを過小評価する） */
+    oppLifeFor(this: AIPlayer, opp: Player, life: number): number {
+        return this.characterOf(opp) === 'giant' ? Math.max(life, LIFE_MEANS.giant) : life;
+    },
+
     /** Minimax + Alpha-Beta 枝刈り (深さ2) */
     minimax(this: AIPlayer, board: SquareInfo[], depth: number, isMax: boolean, alpha: number, beta: number, life: number, ply: number = 1): number {
         const winner = calculateWinner(lineSymbols(board));
@@ -439,11 +444,13 @@ export const searchMethods = {
         // me の視点の値 (+1 強制勝ち / -1 強制負け / 0 未決)。mover が手番、ply は着手の通し番号（減衰の文脈）、depth は残りの手数
         const search = (b: SquareInfo[], mover: Player, ply: number, depth: number, alpha: number, beta: number): number => {
             if (depth === 0) return 0;
-            const next = this.getMovesFor(b, mover, life);
+            // 相手が巨人なら、ライフのあるコマも殴れる（ライフは平均で見積もる）。殴りを見ないと負ける手を『強制勝ち』と数える
+            const next = mover === me ? this.getMovesFor(b, mover, life) : this.threatMovesFor(b, mover, life);
             if (next.length === 0) return 0;
             let best = mover === me ? -2 : 2;
+            const moverLife = mover === me ? life : this.oppLifeFor(mover, life);
             for (const j of next) {
-                const nb = this.simulatePlace(b, j, mover, life, ply);
+                const nb = this.simulatePlace(b, j, mover, moverLife, ply);
                 const w = calculateWinner(lineSymbols(nb));
                 const v = w ? (w === me ? 1 : -1) : search(nb, mover === me ? opp : me, ply + 1, depth - 1, alpha, beta);
                 if (mover === me) { if (v > best) best = v; if (best > alpha) alpha = best; } else { if (v < best) best = v; if (best < beta) beta = best; }
@@ -504,14 +511,14 @@ export const searchMethods = {
         for (const opp of this.lastStandReady ? [] : this.opponents) {
             const oppMoves = this.threatMovesFor(board, opp, life);
             for (const i of oppMoves) {
-                const sim = this.simulatePlace(board, i, opp, life);
+                const sim = this.simulatePlace(board, i, opp, this.oppLifeFor(opp, life));
                 if (calculateWinner(lineSymbols(sim)) === opp) {
                     if (!allMoves.includes(i)) continue;
                     // 塞いだ後の減衰で別のコマが 0 になって奪われ、相手に別の勝ち手ができることがある。
                     // 減衰後も相手に勝ち手が残らない着手だけを候補に絞って、通常の評価で選ぶ（無ければ従来どおりこのマスを塞ぐ。sim/ai.js の safeBlock）
                     const safe = allMoves.filter((m) => {
                         const after = this.simulatePlace(board, m, this.playerSymbol, life, 0);
-                        return this.opponents.every((q) => !this.threatMovesFor(after, q, life).some((j) => calculateWinner(lineSymbols(this.simulatePlace(after, j, q, life))) === q));
+                        return this.opponents.every((q) => !this.threatMovesFor(after, q, life).some((j) => calculateWinner(lineSymbols(this.simulatePlace(after, j, q, this.oppLifeFor(q, life)))) === q));
                     });
                     if (safe.length === 0) return i;
                     candidates = safe;
