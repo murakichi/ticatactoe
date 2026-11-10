@@ -62,6 +62,7 @@ function inputOf(s, reroll) {
         life: s.life,
         tokenUsed: s.usedTokenThisTurn,
         necroRemain: s.remainNecro[seat],
+        necroRemains: s.remainNecro,
         necroCosts: s.necroCost,
         necroPay: E.gearCost(s, s.necroCost[seat]),
         judgeDayCost: E.judgeDayCost(s),

@@ -16,6 +16,8 @@ class AIPlayer {
     /** 自分以外の全プレイヤー(2人戦なら1人)。先頭を探索木の「相手役」に使う */
     opponents: Player[];
     necroActive: boolean = false;
+    /** 席ごとの蘇生の残りターン数（相手のネクロの吸収が発動中かの判定用） */
+    necroRemains: number[] = [];
     /** 席ごとのキャラ（添字 = 席番号）。無敵マスの判定に使う。省略時は自分のキャラだけ分かる */
     characters: readonly CharacterId[];
     /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */

@@ -189,3 +189,6 @@ export const FORCED_WIN_PLIES = 4;
  *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化。
  *  全キャラ共通 環境順位 seed111/60: ネクロ 63.5→56.5、火術師 47.3→51.7、鍵師 49.3→52.0、魔法使い 27.8→29.5（他は不変） */
 export const ANTI_LOCK_REFRESH = 2;
+
+/** 対策ロック: 相手のネクロの蘇生（吸収）が発動中、ダブル/トリプルロックで一度に守るマス数の上限（1=単ロックだけ=従来）。実験中は環境変数 ANTI_MULTI_LOCK で上書き */
+export const ANTI_MULTI_LOCK: number = Number((typeof process !== 'undefined' && process.env && process.env.ANTI_MULTI_LOCK) || 1);

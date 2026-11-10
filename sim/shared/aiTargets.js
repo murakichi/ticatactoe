@@ -747,16 +747,20 @@ exports.targetMethods = {
      * なければ null (旧sim AI bestAntiNecroLockTarget と同一)
      */
     findAntiNecroLockTarget(board) {
+        var _a;
+        return (_a = this.findAntiNecroLockTargets(board, 1)[0]) !== null && _a !== void 0 ? _a : null;
+    },
+    /** 対策ロックの対象を価値の高い順に最大 n 個返す（1個のときは従来の findAntiNecroLockTarget と同じ選び方） */
+    findAntiNecroLockTargets(board, n) {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = (0, boardGeometry_1.geometryForCells)(board.length);
-        let best = null;
-        let bestVal = 0;
+        const ranked = [];
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
             // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
             // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる）
-            const lockStack = sq.effects.reduce((n, e) => { var _a; return n + (e.effect === '🔑' ? ((_a = e.stack) !== null && _a !== void 0 ? _a : 0) : 0); }, 0);
+            const lockStack = sq.effects.reduce((sum, e) => { var _a; return sum + (e.effect === '🔑' ? ((_a = e.stack) !== null && _a !== void 0 ? _a : 0) : 0); }, 0);
             const hasLock = sq.effects.some((e) => e.effect === '🔑');
             if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || (hasLock && lockStack > aiConstants_1.ANTI_LOCK_REFRESH))
                 continue;
@@ -774,12 +778,10 @@ exports.targetMethods = {
                 if (foreign === 0)
                     val += lineScores[Math.min(mc, 4)];
             }
-            if (val > bestVal) {
-                bestVal = val;
-                best = i;
-            }
+            ranked.push({ i, val });
         }
-        return best;
+        // 同点は盤の若い番号を優先（従来の『最初に見つけた最大』と同じ）
+        return ranked.sort((a, b) => b.val - a.val || a.i - b.i).slice(0, n).map((r) => r.i);
     },
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵1体以上で価値あり。コスト2なので積極的に撃つ)。なければ null */
     findStompTarget(board) {

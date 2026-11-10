@@ -393,6 +393,23 @@ function planCounterLocks(c) {
             ['necromancer', 'poisoner', 'yinYangMaster'].includes(c) &&
             !(c === 'necromancer' && this.character === 'necromancer')) &&
         magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
+        // 相手のネクロの蘇生（吸収）が発動中は、ダブル/トリプルロックで複数マスを一度に守る（払えるときだけ）
+        const foeAbsorbing = this.characters.some((ch, seat) => { var _a; return ch === 'necromancer' && seat !== (0, Player_1.seatOf)(this.playerSymbol) && ((_a = this.necroRemains[seat]) !== null && _a !== void 0 ? _a : 0) > 0; });
+        if (foeAbsorbing && aiConstants_1.ANTI_MULTI_LOCK > 1) {
+            const multi = [];
+            if (availableSkills.includes(13))
+                multi.push({ skill: 'onClickUseTripleLock', count: 3, cost: this.calculateAICost(costs.onClickTripleLock, false, false, 'onClickTripleLock') });
+            if (availableSkills.includes(12))
+                multi.push({ skill: 'onClickUseDoubleLock', count: 2, cost: this.calculateAICost(costs.onClickDoubleLock, false, false, 'onClickDoubleLock') });
+            for (const o of multi) {
+                if (o.count > aiConstants_1.ANTI_MULTI_LOCK || magic < o.cost)
+                    continue;
+                const cells = this.findAntiNecroLockTargets(board, o.count);
+                if (cells.length === o.count) {
+                    return { move: this.getBestMove(board, life), skills: [o.skill], lockTargets: cells };
+                }
+            }
+        }
         const lockCell = this.findAntiNecroLockTarget(board);
         if (lockCell !== null) {
             return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [lockCell] };

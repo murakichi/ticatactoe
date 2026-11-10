@@ -33,6 +33,8 @@ class AIPlayer {
     }
     constructor(playerSymbol, character, opponents = [playerSymbol === '💙' ? '⭕' : '💙'], characters = [], gearCostFn, hasToxicBloom = false, hasEmptyLock = false, deck, hasLockBloom = false, hasGroundRent = false, gears = []) {
         this.necroActive = false;
+        /** 席ごとの蘇生の残りターン数（相手のネクロの吸収が発動中かの判定用） */
+        this.necroRemains = [];
         /** 無敵(⚡付き雷霆の巫自陣)マス。手番開始時に更新し、候補列挙・範囲スキルの中心から除外する */
         this.shield = new Set();
         /** 絶対零度が発動待ち（Game が手番ごとに設定する）。待ち中は撃たない */

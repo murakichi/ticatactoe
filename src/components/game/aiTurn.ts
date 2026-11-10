@@ -39,6 +39,8 @@ export type AITurnInput = {
     /** この手番にトークン系スキルを使ったか */
     tokenUsed: boolean;
     necroRemain: number;
+    /** 席ごとの蘇生の残りターン数（相手のネクロの吸収が発動中かをAIが知る用。省略時は発動中なし扱い） */
+    necroRemains?: number[];
     /** 蘇生の現在のコスト（席ごと）と、この席が実際に払う額（ギア補正後） */
     necroCosts: number[];
     necroPay: number;
@@ -99,6 +101,7 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
     const { board, seat, life } = input;
     const oppMagic = maxOppMagic(input.magic, seat);
     ai.placements = input.placements;
+    ai.necroRemains = input.necroRemains ?? [];
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
