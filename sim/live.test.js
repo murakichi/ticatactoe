@@ -259,3 +259,46 @@ describe('有利・不利の有向グラフ', () => {
         expect(lp.truncated).toBe(true);
     });
 });
+
+describe('重み付きの対強豪平均 (metaWeights / metaAvg)', () => {
+    const matrix = (ids, rate) => ids.map((x) => ids.map((y) => (x === y ? 0 : rate(x, y) - 0.5)));
+
+    test('β=0 は全員同じ重み、三すくみも均等', () => {
+        const ids = ['a', 'b', 'c', 'd'];
+        const A = matrix(ids, (x, y) => (x < y ? 0.7 : 0.3));
+        live.metaWeights(A, 0).forEach((w) => expect(w).toBeCloseTo(0.25, 8));
+        const R = [[0, 0.3, -0.3], [-0.3, 0, 0.3], [0.3, -0.3, 0]]; // 三すくみ
+        live.metaWeights(R, 8).forEach((w) => expect(w).toBeCloseTo(1 / 3, 6));
+    });
+
+    test('階層なら強い順に重みが減り、合計は1。βを上げるほど最強に集中する', () => {
+        const ids = ['w', 'a', 'b', 'c'];
+        const order = { w: 0, a: 1, b: 2, c: 3 };
+        const A = matrix(ids, (x, y) => (order[x] < order[y] ? 0.75 : 0.25));
+        const w4 = live.metaWeights(A, 4), w8 = live.metaWeights(A, 8);
+        expect(w8.reduce((s, v) => s + v, 0)).toBeCloseTo(1, 8);
+        for (let i = 0; i < 3; i++) expect(w8[i]).toBeGreaterThan(w8[i + 1]);
+        expect(w8[0]).toBeGreaterThan(w4[0]);
+        expect(w4[3]).toBeGreaterThan(0); // 最下位も0にならない（全順位に重みが残る）
+    });
+
+    test('一強に勝てるキャラは、下位を大勝するだけのキャラより高く評価される（field では逆）', () => {
+        // D は一強。Y だけが D に勝つ(60%)。X は D に大負け(20%)だが下位(w1,w2)を大勝する
+        const ids = ['D', 'Y', 'X', 'w1', 'w2'];
+        const r = { D: { Y: 0.4, X: 0.8, w1: 0.85, w2: 0.9 }, Y: { X: 0.45, w1: 0.55, w2: 0.55 }, X: { w1: 0.85, w2: 0.9 }, w1: { w2: 0.6 } };
+        const pairs = [];
+        for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+            const a = ids[i], b = ids[j], p = r[a][b];
+            pairs.push({ a, b, w: Math.round(p * 200), l: 200 - Math.round(p * 200) });
+        }
+        const an = live.analyze(live.statsFromPairs(ids, pairs));
+        const row = (id) => an.rows.find((x) => x.id === id);
+        expect(row('X').fieldAvg).toBeGreaterThan(row('Y').fieldAvg);   // 単純平均では X が上
+        expect(row('Y').metaAvg).toBeGreaterThan(row('X').metaAvg);     // 重み付きでは Y が上（一強に勝てる）
+        expect(an.weights.D).toBeGreaterThan(an.weights.Y);             // 一強の重みが最大
+        expect(Object.values(an.weights).reduce((s, v) => s + v, 0)).toBeCloseTo(1, 6);
+        expect(Object.values(an.weights).every((v) => v > 0)).toBe(true);
+        const flat = live.analyze(live.statsFromPairs(ids, pairs), { beta: 0 });
+        flat.rows.forEach((x) => expect(x.metaAvg).toBeCloseTo(x.fieldAvg, 6)); // β=0 は単純平均と一致
+    });
+});
