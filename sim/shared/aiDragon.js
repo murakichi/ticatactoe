@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/aiDragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
+exports.dragonMethods = exports.unblocksWindow = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
@@ -27,6 +27,16 @@ const cornerCuts = (size) => {
     ];
 };
 exports.cornerCuts = cornerCuts;
+/**
+ * 咆哮で壊せる敵コマ victims が、自分の二本目の窓を塞いでいるか（破壊したいコマ）。
+ * 窓 = 自陣のコマが2つ以上・建造物なし・敵のコマがいて、その敵コマが全て victims に入る。壊せば、その窓は自陣のコマと空きだけになる。
+ * 『巻き込む数』だけで撃つと膠着を破れない（二本目の窓を塞ぐのは1〜2個の敵コマ）一方、数を問わず撃つと咆哮（ターン終了）の連発で悪化した。
+ */
+const unblocksWindow = (board, victims, me) => (0, boardGeometry_1.geometryForCells)(board.length).winLines.some((line) => line.every((i) => !board[i].object)
+    && line.filter((i) => board[i].player === me).length >= 2
+    && line.some((i) => board[i].player && board[i].player !== me)
+    && line.every((i) => board[i].player === me || !board[i].player || victims.includes(i)));
+exports.unblocksWindow = unblocksWindow;
 const lockedEmpty = () => ({ player: undefined, bind: 0, effects: [{ effect: '🔑' }] });
 exports.dragonMethods = {
     mikoBuildCell(real, me) {
@@ -164,7 +174,8 @@ exports.dragonMethods = {
         const roarCost = this.calculateAICost(costs.onClickRoar, false, false, 'onClickRoar');
         const isDragon = this.dragonForm === 'dragon';
         // 龍: 敵が固まっていれば咆哮で焼き払う
-        if (isDragon && (0, dragon_1.roarUsable)(real, me) && magic >= roarCost && (0, dragon_1.roarVictims)(real, me).length >= exports.ROAR_MIN_VICTIMS) {
+        const victimsNow = (0, dragon_1.roarVictims)(real, me);
+        if (isDragon && (0, dragon_1.roarUsable)(real, me) && magic >= roarCost && (victimsNow.length >= exports.ROAR_MIN_VICTIMS || (0, exports.unblocksWindow)(real, victimsNow, me))) {
             return { move: null, skills: ['onClickRoar'] };
         }
         // 龍: 覚醒の直後は自陣の建造物が無い（消滅した）。祈りで敵の固まりの隣に建造物を置き、同じ手番にそのまま咆哮を撃つ
@@ -175,8 +186,9 @@ exports.dragonMethods = {
                 if (!(0, objects_1.objectLandable)(real[i]))
                     continue;
                 const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' } : sq));
-                const v = (0, dragon_1.roarVictims)(hyp, me).length;
-                if (v >= exports.ROAR_MIN_VICTIMS && (!best || v > best.victims))
+                const vs = (0, dragon_1.roarVictims)(hyp, me);
+                const v = vs.length;
+                if ((v >= exports.ROAR_MIN_VICTIMS || (0, exports.unblocksWindow)(hyp, vs, me)) && (!best || v > best.victims))
                     best = { cell: i, victims: v };
             }
             if (best)
