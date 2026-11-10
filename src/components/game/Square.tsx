@@ -46,14 +46,15 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
     else if (props.dimmed) classes.push(styles.dimmed);
     if (props.shielded) classes.push(styles.shielded);
     else if (!dormant && info.effects.some((e) => e.effect === '⚡')) classes.push(styles.charged);
-    if (info.effects.some((e) => e.effect === '📜')) classes.push(styles.shikigami);
-    if (info.object) classes.push(styles.object);
+    if (info.object === 'shikigami') classes.push(styles.shikigami); // 式神は紙の分身の見た目（点線の縁・絵文字なし）
+    else if (info.object) classes.push(styles.object);
     if (frozen) classes.push(styles.frozen);
     if (burning) classes.push(styles.burning);
 
     // 効果を記号ごとに集計してバッジ表示 (🌱×3 など)
     const counts: Record<string, number> = {};
-    for (const e of info.effects) counts[e.effect] = (counts[e.effect] ?? 0) + 1;
+    if (info.object === 'shikigami') counts['📜'] = 1; // 式神は📜のバッジで示す
+    for (const e of info.effects) counts[e.effect] = (counts[e.effect] ?? 0) + (e.effect === '🔑' ? e.stack ?? 1 : 1); // 🔑は残りターン数（スタック）を出す (#438)
 
     const showLife = info.player !== undefined || info.bind > 0;
 
@@ -65,7 +66,7 @@ export const Square: React.FC<SquareProps> = (props: SquareProps) => {
             onMouseLeave={props.onHoverEnd}
         >
             {props.showMark && info.player && <span className={styles.mark}>{info.player}</span>}
-            {info.object && (
+            {info.object && info.object !== 'shikigami' && (
                 <span className={styles.objectIcon} title={`${OBJECT_DEFS[info.object].name}: ${OBJECT_DEFS[info.object].desc}`}>
                     {OBJECT_DEFS[info.object].icon}
                 </span>

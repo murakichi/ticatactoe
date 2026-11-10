@@ -1,4 +1,4 @@
-// 式神(📜)の純粋ロジック。Game.tsx・sim/engine.js・AIPlayer.ts(読み筋の盤面) が同じ関数を呼ぶ (#289)。
+// 式神(📜)の純粋ロジック。式神はオブジェクトの一種（SquareInfo.object = 'shikigami'）。Game.tsx・sim/engine.js・AIPlayer.ts(読み筋の盤面) が同じ関数を呼ぶ (#289)。
 // 式神: 紙の分身。ライフ2で列には数えない。自分で補強すると🌱付きの自陣コマ、相手に乗っ取られると空きマスになる。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -21,7 +21,14 @@ export const SHIKIGAMI_CURSE_STACKS = 2;
 export const shikigamiLandable = (sq: SquareInfo): boolean =>
     !sq.player && !emptyBlocked(sq) && !(sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0);
 
-export const newShikigami = (player: Player, bind: number = SHIKIGAMI_LIFE): SquareInfo => ({ player, bind, effects: [{ effect: '📜' }] });
+/** 式神。オブジェクトの一種（SquareInfo.object = 'shikigami'）で、列に数えない */
+export const newShikigami = (player: Player, bind: number = SHIKIGAMI_LIFE): SquareInfo => ({ player, bind, effects: [], object: 'shikigami' });
+
+/** 式神の印を外して通常のコマにする（ライフとエフェクトはそのまま） */
+export const toPiece = (sq: SquareInfo): SquareInfo => {
+    const { object, ...rest } = sq;
+    return object === 'shikigami' ? rest : sq;
+};
 
 const empty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [] });
 

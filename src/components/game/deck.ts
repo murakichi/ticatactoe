@@ -6,6 +6,12 @@ import { skillCosts, SkillCosts } from './skillCosts';
 /** デッキの枚数（同じスキルは1枚まで） */
 export const DECK_SIZE = 12;
 
+/**
+ * オリジナルスキル（customSkill.ts）がデッキに入るときの idx。汎用スキルの idx とは重ならない。
+ * デッキの1枠を使うので、入るのは最大1枚（重複不可）。使えるのは人間席だけで、AI席・仕様が無い席では Game が外す。
+ */
+export const CUSTOM_SKILL_IDX = 200;
+
 export type SkillCategory = 'basic' | 'token' | 'attack' | 'support' | 'control' | 'poison' | 'buds' | 'charge' | 'ice' | 'fire' | 'shikigami' | 'object';
 
 export type CatalogEntry = {
@@ -21,133 +27,153 @@ export type CatalogEntry = {
 
 /** 汎用スキルの一覧（添字 = 手札の idx。Game.tsx の shuffleSkillDefs / AIPlayer.ts の SKILL_POOL_SIZE と同じ並び） */
 export const SKILL_CATALOG: CatalogEntry[] = [
-    { idx: 0, name: 'ライフ3', icon: '💚', category: 'support', costKey: 'onClickAddLife', desc: 'ライフを3追加します' },
-    { idx: 1, name: 'バイバイン', icon: '✖️', category: 'support', costKey: 'onClickBibine', desc: 'ライフが倍になります' },
-    { idx: 2, name: 'バッズ', icon: '🌱', category: 'buds', costKey: 'onClickBuds', desc: '次の一手でバッズを植えます' },
-    { idx: 3, name: 'トークン', icon: '🪙', category: 'token', costKey: 'onClickToken', desc: '空きマスにランダムでコマを置きます（ターン1回）' },
-    { idx: 4, name: '両トークン', icon: '🪙', category: 'token', costKey: 'onClickBothToken', desc: '空きマスに全プレイヤーのコマを1つずつ置きます（ターン1回）' },
-    { idx: 5, name: 'スラッシュ', icon: '⚔️', category: 'attack', costKey: 'onClickSlash', desc: '右上から左下の斜めのマスのライフを0にします' },
-    { idx: 6, name: 'バックスラッシュ', icon: '🗡️', category: 'attack', costKey: 'onClickBackSlash', desc: '左上から右下の斜めのマスのライフを0にします' },
-    { idx: 7, name: 'チューチュートレイン', icon: '🚂', category: 'attack', costKey: 'onClickTsunami', desc: '相手全員のマジックを0にします' },
-    { idx: 8, name: 'オピウム', icon: '💨', category: 'attack', costKey: 'onClickOpium', desc: '相手の駒全てのライフを-2し、ターンを終了します' },
-    { idx: 9, name: 'バッズトークン', icon: '🪙', category: 'token', costKey: 'onClickBudsToken', desc: 'バッズ付き・ライフ3のコマをランダムに設置します（ターン1回）' },
-    { idx: 10, name: 'ダブルバッズ', icon: '🌱', category: 'buds', costKey: 'onClickDoubleBuds', desc: '次の一手でバッズを2つ植えます' },
-    { idx: 11, name: 'ダブルトークン', icon: '🪙', category: 'token', costKey: 'onClickDoubleToken', desc: '空きマスにランダムでコマを2つ置きます（ターン1回）' },
-    { idx: 12, name: 'ダブルロック', icon: '🔑', category: 'control', costKey: 'onClickDoubleLock', desc: 'マスを2つ選んでロックします' },
-    { idx: 13, name: 'トリプルロック', icon: '🔑', category: 'control', costKey: 'onClickTripleLock', desc: 'マスを3つ選んでロックします' },
-    { idx: 14, name: 'ワルプルギスの夜', icon: '🌸', category: 'buds', costKey: 'onClickWalpurgisNight', desc: '全コマにバッズを植えます' },
-    { idx: 15, name: 'インジェクション', icon: '💉', category: 'poison', costKey: 'onClickInjection', desc: 'マスを選び、毒を1付与します' },
-    { idx: 16, name: 'ポイズントークン', icon: '🪙', category: 'poison', costKey: 'onClickPoisonToken', desc: '毒付きの自陣コマをランダムに設置します（ターン1回）' },
-    { idx: 17, name: '血清', icon: '🧪', category: 'poison', costKey: 'onClickSerum', desc: '自陣のコマの毒をすべて除去します' },
-    { idx: 18, name: '猛毒化', icon: '☠', category: 'poison', costKey: 'onClickIntensify', desc: '毒が付いている全マスの毒の数を倍にします' },
-    { idx: 19, name: 'パンデミック', icon: '🦠', category: 'poison', costKey: 'onClickPandemic', desc: 'マスと周囲8マスのコマに毒を1付与します' },
-    { idx: 20, name: '増殖', icon: '♾️', category: 'support', costKey: 'onClickProliferate', desc: '着手のたびにコマとアイテムを交互に追加し続けます（維持コストが増える）' },
-    { idx: 21, name: '帯電トークン', icon: '🪙', category: 'charge', costKey: 'onClickChargeToken', desc: '⚡付きの自陣コマをランダムに設置します（ターン1回）。雷霆の巫以外は乗った時点で2ダメージ' },
-    { idx: 22, name: '帯電付与', icon: '⚡', category: 'charge', costKey: 'onClickChargeOne', desc: 'マスを選んで⚡を1つ付与します（⚡の数だけ安くなる）。雷霆の巫以外のコマは2ダメージ' },
-    { idx: 23, name: '帯電ダブルトークン', icon: '🪙', category: 'charge', costKey: 'onClickDoubleChargeToken', desc: '⚡付きの自陣コマをランダムに2つ設置します（ターン1回）' },
-    { idx: 24, name: '範囲帯電', icon: '⚡', category: 'charge', costKey: 'onClickChargeArea', desc: 'マスと周囲8マスに⚡を付与します。雷霆の巫以外のコマは2ダメージ' },
-    { idx: 25, name: 'ランダム帯電', icon: '⚡', category: 'charge', costKey: 'onClickChargeRandom', desc: 'ランダムな1〜4マスに⚡を付与します。雷霆の巫以外のコマは2ダメージ' },
-    { idx: 26, name: 'ジャマー', icon: '⚡', category: 'charge', costKey: 'onClickJammer', desc: '⚡のマスを選び、縦横隣の敵コマに⚡の数だけダメージを与えて⚡を取り除きます' },
-    { idx: 27, name: 'ヘイルメアリー', icon: '🎲', category: 'support', costKey: 'onClickHailMary', desc: '固有スキル（陰陽転化を除く）をランダムに1つ、追加コストなしで発動します' },
-    { idx: 28, name: 'サイレンス', icon: '🤫', category: 'control', costKey: 'onClickSilence', desc: '相手全員が次の手番、スキルを使えなくなります' },
-    { idx: 29, name: '毒霧', icon: '🌫️', category: 'poison', costKey: 'onClickPoisonMist', desc: '盤上の全コマ（敵味方問わず）に毒を1付与します' },
-    { idx: 30, name: '氷結', icon: '❄', category: 'ice', costKey: 'onClickFreeze', desc: 'コマや空きマスを選んで❄を1つ付与します' },
-    { idx: 31, name: '火遁', icon: '🔥', category: 'fire', costKey: 'onClickIgnite', desc: 'コマを選んで🔥を1つ付与します（氷結中なら氷結が全解除）' },
-    { idx: 32, name: '浄化', icon: '✨', category: 'support', costKey: 'onClickCleanse', desc: '自陣のコマの状態異常（毒・火炎・氷結・帯電）をすべて回復します' },
-    { idx: 33, name: '刈り入れ前夜', icon: '🌾', category: 'buds', costKey: 'onClickHarvestEve', desc: '自陣の🌱をすべて刈り取り、刈った数だけ魔力を得ます' },
-    { idx: 34, name: '冬至の種子', icon: '🌰', category: 'buds', costKey: 'onClickSolstice', desc: '次の自分の手番まで、自陣の🌱が氷結・火炎中のマスでも働きます' },
-    { idx: 35, name: 'ひこばえ', icon: '🌿', category: 'buds', costKey: 'onClickSucker', desc: '🌱を持つ自陣のコマの縦横隣の自陣コマに🌱を付けます（隣が3つ以上ならランダムに2つ）' },
-    { idx: 36, name: '風の落とし子', icon: '🍃', category: 'buds', costKey: 'onClickWindborne', desc: '自陣のコマにランダムで🌱を2つ配ります（1マスに1つまで）' },
-    { idx: 37, name: '火炎トークン', icon: '🪙', category: 'fire', costKey: 'onClickFlameToken', desc: '🔥付きの自陣コマをランダムに設置します（ターン1回）' },
-    { idx: 38, name: '火炎ダブルトークン', icon: '🪙', category: 'fire', costKey: 'onClickDoubleFlameToken', desc: '🔥付きの自陣コマをランダムに2つ設置します（ターン1回）' },
-    { idx: 39, name: '焼畑', icon: '🌾', category: 'fire', costKey: 'onClickSwidden', desc: '🌱のあるマスを選び、🌱を全て同じ数の🔥に変えます' },
-    { idx: 40, name: '殉火', icon: '🕯️', category: 'fire', costKey: 'onClickSacrifice', desc: '自陣のコマを犠牲にし、そのライフ以下の敵コマ全てに🔥を付与します' },
-    { idx: 41, name: '範囲氷結', icon: '❄', category: 'ice', costKey: 'onClickFrostArea', desc: 'マスと周囲8マスに❄を付与します' },
-    { idx: 42, name: '氷柱', icon: '🧊', category: 'ice', costKey: 'onClickIcicle', desc: 'マスと方向（横・縦・斜め）を選び、その線上のマスに❄を付与します' },
-    { idx: 43, name: 'ランダム氷結', icon: '🌨️', category: 'ice', costKey: 'onClickRandomFreeze', desc: 'ランダムな1〜4マスに❄を付与します' },
-    { idx: 44, name: '氷結拡散', icon: '❄', category: 'ice', costKey: 'onClickFreezeSpread', desc: 'コマを選び、そこから繋がる全コマに❄を付与します' },
-    { idx: 45, name: '氷結トークン', icon: '🪙', category: 'ice', costKey: 'onClickFrostToken', desc: '❄付きの自陣コマをランダムに設置します（ターン1回）' },
-    { idx: 46, name: '氷結ダブルトークン', icon: '🪙', category: 'ice', costKey: 'onClickDoubleFrostToken', desc: '❄付きの自陣コマをランダムに2つ設置します（ターン1回）' },
-    { idx: 47, name: '砕氷', icon: '🔨', category: 'ice', costKey: 'onClickShatter', desc: '氷結中のコマの❄を砕き、❄1つにつき3ダメージを与えます' },
-    { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice', costKey: 'onClickFrostfall', desc: '自陣のライフ2以下のコマすべてに❄を付与します' },
-    { idx: 49, name: '慈雨', icon: '⬆️', category: 'support', costKey: 'onClickBoost', desc: '自陣の全コマのライフを+1します' },
-    { idx: 50, name: '縮地', icon: '👣', category: 'support', costKey: 'onClickRelocate', desc: '自陣のコマを空きマスへ移動します（エフェクトごと）' },
-    { idx: 51, name: '写し身', icon: '🪞', category: 'support', costKey: 'onClickClone', desc: '自陣のコマの隣の空きマスに、ライフ半分の写しを置きます' },
-    { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack', costKey: 'onClickPlunder', desc: 'ライフ0の敵コマを1つ、自陣のコマ（ライフ1）にします' },
-    { idx: 53, name: '特売', icon: '🏷️', category: 'support', costKey: 'onClickMarkdown', desc: '次に打つスキルのコストを3軽減します（軽減後は最低1。この手番の間だけ有効）' },
-    { idx: 54, name: '付与割引', icon: '🎫', category: 'support', costKey: 'onClickEffectDiscount', desc: 'このターン、エフェクト（🌱⚡☠❄🔥）を付与するスキルのコストを、打つたびに1軽減します' },
-    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support', costKey: 'onClickTokenDiscount', desc: 'このターン、トークンを付与するスキルのコストを、打つたびに1軽減します' },
-    { idx: 56, name: '活力特売', icon: '💖', category: 'support', costKey: 'onClickVitalMarkdown', desc: '次に打つスキルのコストを4軽減し、次の一手のライフを+1します' },
-    { idx: 57, name: '固有割引', icon: '👑', category: 'support', costKey: 'onClickUniqueDiscount', desc: 'このターン、固有スキルのコストを6軽減します。1ターンに一度のみ・ライフ-1（ライフ2以上で使用可）' },
-    { idx: 58, name: '大特価', icon: '💸', category: 'support', costKey: 'onClickClearance', desc: '次に打つスキルのコストを7軽減します（軽減後は最低1。この手番の間だけ有効）' },
-    { idx: 59, name: '福引き', icon: '🎰', category: 'support', costKey: 'onClickRandomCast', desc: '自分のデッキ（12枚）の中から、基礎コスト3以下のスキルをランダムに1つ、コストを払わずに発動します（手札に出ていないスキルも対象）' },
-    { idx: 60, name: '返し特売', icon: '↩️', category: 'support', costKey: 'onClickCounterMarkdown', desc: '次に打つスキルのコストを3軽減し、次の一手のライフを+1します。直前の相手の手番に相手がスキルを使っていれば、コスト0で使えます' },
-    { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire', costKey: 'onClickBurnout', desc: '🔥が乗っているマスを全て破壊します（敵味方問わず。雷霆の巫の⚡無敵コマを除く）。盤面に🔥が4つ以上あればコスト0で使えます' },
-    { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds', costKey: 'onClickLeafToken', desc: '🍂付きの自陣コマをランダムに設置します（ターン1回）。自陣の🍂は相手全員のスキルコストを🍂の数だけ増やします' },
-    { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds', costKey: 'onClickTwinLeafToken', desc: '🍂が2枚付いた自陣コマをランダムに設置します（ターン1回）' },
-    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds', costKey: 'onClickDoubleLeafToken', desc: '🍂付きの自陣コマをランダムに2つ設置します（ターン1回）。このターン自陣の🍂が増えていれば、コスト-2' },
-    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds', costKey: 'onClickLeafAll', desc: '盤面の全てのコマ（敵味方）に🍂を1つずつ付与します（🔑ロックと⚡無敵のコマは除く）' },
-    { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds', costKey: 'onClickBonfire', desc: '敵陣の🍂をすべて取り除きます（🔑ロックと❄氷結のマスは対象外）' },
-    { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds', costKey: 'onClickMulch', desc: '自陣のランダムな🍂を1枚、🌱に変えます' },
-    { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds', costKey: 'onClickAutumn', desc: '盤面のすべての🌱を🍂に変えます（敵味方問わず。🔥が付いたマスは変わりません）' },
-    { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice', costKey: 'onClickLeafFrost', desc: '自陣の🍂を持つコマすべてに❄を付けます（氷結中は🍂が休眠します）' },
-    { idx: 70, name: '春一番', icon: '🌬️', category: 'ice', costKey: 'onClickSpringWind', desc: '自陣の❄をすべて解除し、解除した数だけこのターンに打つスキルのコストを軽減します（軽減後は最低1）' },
-    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにします（列に数えられるようになります）。コストは式神1体につき3です' },
-    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに置きます（トークン扱い・ターン1回）' },
-    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに、ライフ0の式神を置きます' },
-    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊します（氷結中は❄が1つ減るだけ）。破壊して空きマスになったら3ターンロックします' },
-    { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付け、その後手札をシャッフルします。このターン敵か自陣に🔥を付与していればコスト0（使うとリセット）' },    { idx: 76, name: '裸の王様', icon: '👑', category: 'control', costKey: 'onClickStrip', desc: '相手全員のギアを、その相手の次の手番の終わりまで無効にします' },    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge', costKey: 'onClickChargeSeason', desc: '今の手番を含む3ターンの間、自分が設置する駒（着手・トークン）に⚡を付けます' },
-    { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge', costKey: 'onClickBristle', desc: '自陣のすべてのコマ（🔑ロック中を除く）に⚡を1つずつ付けます' },    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge', costKey: 'onClickRelease', desc: '自陣の⚡をすべて取り除き、取り除いた数だけ敵の全コマにダメージを与えます（ロック・無敵・氷結中・ライフ0のコマには効きません）' },    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge', costKey: 'onClickStash', desc: '⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコストを-1します（軽減後は最低1）' },    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge', costKey: 'onClickThunderFire', desc: '⚡のあるコマを1つ選んで破壊し、周囲8マスの敵コマのうち2つ〜全部をランダムに選んで🔥を付けます（氷結中のコマは❄が1つ減るだけ）' },    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control', costKey: 'onClickDarkPot', desc: '敵味方を問わず全コマに🔥❄⚡☠🌱🍂をランダムに付けます（各エフェクトは最大1。🔑ロック・無敵のコマは除く）。盤面のエフェクトの数だけコストが下がります（最低1）。1ターンに1度だけ使えます' },    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge', costKey: 'onClickChargeHeal', desc: '⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2します。この手番に付与した⚡の数だけコストが下がります（最低1）' },
-    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を1つ付与します（敵の🍂は自分を含む🍂の持ち主以外のコストを上げます）' },
-    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂と🌱を全て🔥に変換します（1つにつき🔥1つ。🔑ロックと⚡無敵のコマは対象外）。盤面の🍂1枚につき3・🌱1つにつき2だけコストが下がります（最低1）' },
-    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を1つ付与します（🔑ロック中も含む。自陣の🍂は相手のコストを上げます）' },
-    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱バッズ・🍂・❄氷結のいずれかを持つ敵のコマを1つ選んで🔥を1つ付与します（氷結中は氷結が解けます）（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは選べません）。直前の手番に🌱か🍂が植えられていれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
-    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '自分の式神を1体選んで消費し、自陣のコマ全て（式神を除く）のライフを+3します' },
-    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '自分の式神を1体選んで消費し、エフェクトが乗っている敵のコマ全てに☠を2つ付与します（🔑ロック・⚡無敵は除く。対象が無いと使えません）' },
-    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋盤面にある式神の数だけ軽減します（軽減後は最低1）' },
-    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '自陣の式神をランダムに1体壊し、敵のコマを1つ選んでライフを0にします（式神・🔑ロック・⚡無敵は除く）。自陣の式神が3体以上ならコスト0' },
-    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し（氷結中は❄が1つ減るだけ・🔑ロックと無敵は除く）、相手全員は次の手番の終わりまでライフ3以下のコマを置けなくなります（トークン等のスキル、ネクロマンサーの蘇生も含む）。盤面のコマの数だけコストが下がります（最低1）' },
-    { idx: 93, name: '初霜', icon: '🧊', category: 'ice', costKey: 'onClickFirstFrost', desc: 'トークン扱い（ターン1回）。敵の🍂があるコマを全て凍結し（🔑ロック・⚡無敵は除く）、自陣にバッズトークンを1つ置きます。盤面の🍂が3枚以上ならコスト0（対象が無いと使えません）' },
-    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: 'トークン扱い（ターン1回）。自陣にトークンを1つ置き、盤面のエフェクトを全てそのマスに集めます（氷結のあるマスと⚡無敵のマスは動かさず、🔑ロックと式神の印📜はその場に残ります。🔥は集め終えてから処理）。エフェクト1つにつき2軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
-    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: 'トークン扱い（ターン1回）。敵のエフェクトがあるマス（氷結・⚡無敵のマスは除く）全てに🔥を1つ付け、自陣にロック付きのトークンを1つ置きます。エフェクト1つにつき3軽減（氷結のマスは❄の数だけ・🔑自体は数えない。最低1）' },
-    { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークン系スキルのコストを0にします（手番が終わると切れます）' },
-    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を1つずつ付与します（付与した瞬間に1ダメージ。🔑ロックと⚡無敵のコマは対象外）。直前の手番に相手がコマを2つ以上設置していれば、各ターン1回まで無料。鍛冶師は🔥付与が-1' },
-    { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3します（自分は影響を受けません）' },
-    { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減します（軽減後は最低1。この手番の間だけ有効）。死体は、ネクロマンサーなら自陣・敵陣を問わずコマが消えるたびに貯まります' },
-    { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、相手の手番ごとに1度まで、自陣のコマが破壊または乗っ取られたら、ライフ4・☠付きの自陣コマをランダムな空きマスに置きます' },
-    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消して、自分の墓地に死体+1・魔力+1を得ます（コマが消えるので、ネクロマンサーはさらに自動で墓地が貯まる仕組みと二重には数えません）' },
-    { idx: 102, name: 'パーフェクトゲーム', icon: '🎳', category: 'attack', costKey: 'onClickPerfectGame', desc: '盤面のコマを敵味方とも全て破壊します（🔑ロック・⚡無敵のコマは除き、氷結中のコマは❄が1つ減るだけ）' },
-    { idx: 103, name: '超助っ人', icon: '🦸', category: 'token', costKey: 'onClickHelper', desc: '🔥❄⚡☠🌱🍂のうちランダムな1つを付けたコマを、自陣のランダムな空きマスに置きます（ターン1回）' },
-    { idx: 104, name: '柳の下に二匹目がいた', icon: '🐟', category: 'support', costKey: 'onClickSecondCatch', desc: '自分のデッキから基礎コスト5以下のスキルを1つランダムに、コストを払わず発動します。この手番に基礎コスト7以上のスキルを使っていれば0コストで使えます' },
-    { idx: 105, name: '大木', icon: '🌳', category: 'object', costKey: 'onClickBigTree', desc: '空きマスを選んで大木を設置します。手番開始時にマジック+3（🔥を付けられると即座に壊れます）。オブジェクトは列に数えず、ライフは時間で減りません' },
-    { idx: 106, name: '枯れた大木', icon: '🪵', category: 'object', costKey: 'onClickDeadTree', desc: '空きマスを選んで枯れた大木を設置します。手番開始時、周囲八マスのコマのランダムな1つに🍂を付けます（🔥を付けられると即座に壊れます）' },
-    { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスを選んで生命の泉を設置します。手番開始時のライフ期待値+2' },
-    { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスを選んで砦を設置します。手番開始時、周囲八マスの自陣のコマのライフ+1' },
-    { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスを選んで雷雲を設置します。手番開始時、周囲八マスのコマのランダムな1つに⚡を付けます' },
-    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスを選んで市場を設置します。手番ごとに、市場の数だけシャッフル（手札の引き直し）が無料になります' },
-    { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスを選んで聖域を設置します。周囲八マスの自陣のコマは、時間経過のライフ減衰を受けません' },
-    { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスを選んで毒沼を設置します。手番開始時、周囲八マスの敵のコマのランダムな1つに☠を付けます' },
-    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を2つ選んで取り除き（同じコマから2個でも可）、相手全員が次の手番、スキルを使えなくなります（自陣の⚡が合計2個ないと使えません）' },
-    { idx: 114, name: '解体', icon: '🧨', category: 'object', costKey: 'onClickDemolish', desc: '敵のオブジェクトを1つ選んで壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
-    { idx: 115, name: '風化', icon: '🌫️', category: 'object', costKey: 'onClickWeather', desc: '敵のオブジェクトを1つ選んで、ライフを0にします（壊れず、次の着手で乗っ取れるようになります。氷結中は❄が1つ減るだけ）。対象が無いと使えません' },
-    { idx: 116, name: '地ならし', icon: '🚜', category: 'object', costKey: 'onClickLevelAll', desc: '敵のオブジェクトを全て壊します（氷結中は❄が1つ減るだけ。🔑ロック・⚡無敵は除く）。対象が無いと使えません' },
-    { idx: 117, name: '補強工事', icon: '🏗️', category: 'object', costKey: 'onClickReinforce', desc: '自陣のオブジェクトを1つ選んで、ライフを+3します。対象が無いと使えません' },
-    { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2します。対象が無いと使えません' },
-    { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じ種類のオブジェクトをランダムな空きマスにもう1つ置きます（ライフは設置時の5）' },
-    { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスを選んで大工房を設置します。働いている間、ベースコスト7以上のスキルのコストを3軽減します（重ならない）。直前の相手の手番にベースコスト7以上のスキルが使われたか、スキルに合計7以上のマジックが払われていたら、0コストで設置できます' },
-    { idx: 121, name: '結界石', icon: '🪨', category: 'object', costKey: 'onClickBarrierStone', desc: '空きマスを選んで結界石を設置します。周囲八マスの自陣の式神は、時間経過のライフ減衰を受けません' },
-    { idx: 122, name: '護符の社', icon: '⛩️', category: 'object', costKey: 'onClickAmuletShrine', desc: '空きマスを選んで護符の社を設置します。手番開始時、周囲八マスの自陣の式神1体につきマジック+1を得ます（最大+3）' },
-    { idx: 123, name: '招き猫', icon: '🐈', category: 'object', costKey: 'onClickLuckyCat', desc: '空きマスを選んで招き猫を設置します。働いている間、自分のスキルのコストが1下がります（下限1・重ならない）' },
-    { idx: 124, name: '泥田坊', icon: '🌾', category: 'object', costKey: 'onClickMudField', desc: '空きマスを選んで泥田坊を設置します。働いている間、相手がトークンで置くコマのライフが0になります' },
-    { idx: 125, name: '閻魔の舌', icon: '👅', category: 'object', costKey: 'onClickTongueKing', desc: '空きマスを選んで閻魔の舌を設置します。働いている間、相手が自分のコマにエフェクトを付けると、そのコマのライフが手番の終わりに0になります' },
-    { idx: 126, name: '八卦の陣', icon: '🔯', category: 'object', costKey: 'onClickEightTrigrams', desc: '空きマスを選んで八卦の陣を設置します。周囲八マスの全てが自陣のコマ（式神とオブジェクトを除く）で埋まるとゲームに勝利します。盤の端では成立しません' },
-    { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスを選んでお一人様限りの札を設置します。働いている間、相手は1ターンに新しいコマを1つしか置けません（トークンや式神のあとは空きマスに置けず、コマを2つ以上置くスキルも使えません）' },
-    { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスを選んで一言居士を設置します。働いている間、相手は1ターンにスキルを1つしか使えません（チャージ・シャッフル・ロックは数えません）' },
-    { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスを選んで見ざる地蔵を設置します。周囲八マスには新しくエフェクトを付けられません（手番の終わりに、その手番で付いたエフェクトが消えます）' },
+    { idx: 0, name: 'ライフ3', icon: '💚', category: 'support', costKey: 'onClickAddLife', desc: '自陣のコマのライフを+3' },
+    { idx: 1, name: 'バイバイン', icon: '✖️', category: 'support', costKey: 'onClickBibine', desc: '自陣のコマのライフを倍にする' },
+    { idx: 2, name: 'バッズ', icon: '🌱', category: 'buds', costKey: 'onClickBuds', desc: '次の一手でバッズを植える' },
+    { idx: 3, name: 'トークン', icon: '🪙', category: 'token', costKey: 'onClickToken', desc: '空きマスにランダムでコマを設置（ターン1回）' },
+    { idx: 4, name: '両トークン', icon: '🪙', category: 'token', costKey: 'onClickBothToken', desc: '空きマスに全プレイヤーのコマを1つずつ設置（ターン1回）' },
+    { idx: 5, name: 'スラッシュ', icon: '⚔️', category: 'attack', costKey: 'onClickSlash', desc: '右上から左下の斜めのマスのライフを0にする' },
+    { idx: 6, name: 'バックスラッシュ', icon: '🗡️', category: 'attack', costKey: 'onClickBackSlash', desc: '左上から右下の斜めのマスのライフを0にする' },
+    { idx: 7, name: 'チューチュートレイン', icon: '🚂', category: 'attack', costKey: 'onClickTsunami', desc: '相手全員のマジックを0にする' },
+    { idx: 8, name: 'オピウム', icon: '💨', category: 'attack', costKey: 'onClickOpium', desc: '相手のコマ全てのライフを-2し、ターン終了' },
+    { idx: 9, name: 'バッズトークン', icon: '🪙', category: 'token', costKey: 'onClickBudsToken', desc: 'バッズ付き・ライフ3のコマをランダムに設置（ターン1回）' },
+    { idx: 10, name: 'ダブルバッズ', icon: '🌱', category: 'buds', costKey: 'onClickDoubleBuds', desc: '次の一手でバッズを2つ植える' },
+    { idx: 11, name: 'ダブルトークン', icon: '🪙', category: 'token', costKey: 'onClickDoubleToken', desc: '空きマスにランダムでコマを2つ設置（ターン1回）' },
+    { idx: 12, name: 'ダブルロック', icon: '🔑', category: 'control', costKey: 'onClickDoubleLock', desc: 'マスを2つ選んでロック' },
+    { idx: 13, name: 'トリプルロック', icon: '🔑', category: 'control', costKey: 'onClickTripleLock', desc: 'マスを3つ選んでロック' },
+    { idx: 14, name: 'ワルプルギスの夜', icon: '🌸', category: 'buds', costKey: 'onClickWalpurgisNight', desc: '全てのコマにバッズを植える' },
+    { idx: 15, name: 'インジェクション', icon: '💉', category: 'poison', costKey: 'onClickInjection', desc: 'マスを選んで毒を付与' },
+    { idx: 16, name: 'ポイズントークン', icon: '🪙', category: 'poison', costKey: 'onClickPoisonToken', desc: '毒付きの自陣コマをランダムに設置（ターン1回）' },
+    { idx: 17, name: '血清', icon: '🧪', category: 'poison', costKey: 'onClickSerum', desc: '自陣のコマの毒を全て除去' },
+    { idx: 18, name: '猛毒化', icon: '☠', category: 'poison', costKey: 'onClickIntensify', desc: '毒が付いている全てのマスの毒を倍にする' },
+    { idx: 19, name: 'パンデミック', icon: '🦠', category: 'poison', costKey: 'onClickPandemic', desc: 'マスと周囲8マスのコマに毒を付与' },
+    { idx: 20, name: '増殖', icon: '♾️', category: 'support', costKey: 'onClickProliferate', desc: '着手のたびにコマとアイテムを追加し続ける' },
+    { idx: 21, name: '帯電トークン', icon: '🪙', category: 'charge', costKey: 'onClickChargeToken', desc: '⚡付きの自陣コマをランダムに設置（ターン1回）' },
+    { idx: 22, name: '帯電付与', icon: '⚡', category: 'charge', costKey: 'onClickChargeOne', desc: 'マスを選んで⚡を付与' },
+    { idx: 23, name: '帯電ダブルトークン', icon: '🪙', category: 'charge', costKey: 'onClickDoubleChargeToken', desc: '⚡付きの自陣コマをランダムに2つ設置（ターン1回）' },
+    { idx: 24, name: '範囲帯電', icon: '⚡', category: 'charge', costKey: 'onClickChargeArea', desc: 'マスと周囲8マスに⚡を付与' },
+    { idx: 25, name: 'ランダム帯電', icon: '⚡', category: 'charge', costKey: 'onClickChargeRandom', desc: 'ランダムな1〜4マスに⚡を付与' },
+    { idx: 26, name: 'ジャマー', icon: '⚡', category: 'charge', costKey: 'onClickJammer', desc: '⚡のマスを選び、隣の敵コマにダメージを与えて⚡を除去' },
+    { idx: 27, name: 'ヘイルメアリー', icon: '🎲', category: 'support', costKey: 'onClickHailMary', desc: '固有スキルをランダムに1つ、コストなしで発動' },
+    { idx: 28, name: 'サイレンス', icon: '🤫', category: 'control', costKey: 'onClickSilence', desc: '相手全員の次の手番のスキルを封じる' },
+    { idx: 29, name: '毒霧', icon: '🌫️', category: 'poison', costKey: 'onClickPoisonMist', desc: '盤上の全てのコマに毒を付与' },
+    { idx: 30, name: '氷結', icon: '❄', category: 'ice', costKey: 'onClickFreeze', desc: 'マスを選んで❄を付与' },
+    { idx: 31, name: '火遁', icon: '🔥', category: 'fire', costKey: 'onClickIgnite', desc: 'コマを選んで🔥を付与' },
+    { idx: 32, name: '浄化', icon: '✨', category: 'support', costKey: 'onClickCleanse', desc: '自陣のコマの状態異常を全て回復' },
+    { idx: 33, name: '刈り入れ前夜', icon: '🌾', category: 'buds', costKey: 'onClickHarvestEve', desc: '自陣の🌱を全て刈り取り、刈った🌱1つにつきマジック+1' },
+    { idx: 34, name: '冬至の種子', icon: '🌰', category: 'buds', costKey: 'onClickSolstice', desc: '次の自分の手番まで、自陣の🌱が氷結・火炎中でも働く' },
+    { idx: 35, name: 'ひこばえ', icon: '🌿', category: 'buds', costKey: 'onClickSucker', desc: '🌱を持つ自陣のコマの隣の自陣コマに🌱を付与' },
+    { idx: 36, name: '風の落とし子', icon: '🍃', category: 'buds', costKey: 'onClickWindborne', desc: '自陣のコマにランダムで🌱を2つ配る' },
+    { idx: 37, name: '火炎トークン', icon: '🪙', category: 'fire', costKey: 'onClickFlameToken', desc: '🔥付きの自陣コマをランダムに設置（ターン1回）' },
+    { idx: 38, name: '火炎ダブルトークン', icon: '🪙', category: 'fire', costKey: 'onClickDoubleFlameToken', desc: '🔥付きの自陣コマをランダムに2つ設置（ターン1回）' },
+    { idx: 39, name: '焼畑', icon: '🌾', category: 'fire', costKey: 'onClickSwidden', desc: '🌱のあるマスを選び、🌱を全て🔥に変換' },
+    { idx: 40, name: '殉火', icon: '🕯️', category: 'fire', costKey: 'onClickSacrifice', desc: '自陣のコマを犠牲に、そのライフ以下の敵コマ全てに🔥を付与' },
+    { idx: 41, name: '範囲氷結', icon: '❄', category: 'ice', costKey: 'onClickFrostArea', desc: 'マスと周囲8マスに❄を付与' },
+    { idx: 42, name: '氷柱', icon: '🧊', category: 'ice', costKey: 'onClickIcicle', desc: 'マスと方向を選び、その線上のマスに❄を付与' },
+    { idx: 43, name: 'ランダム氷結', icon: '🌨️', category: 'ice', costKey: 'onClickRandomFreeze', desc: 'ランダムな1〜4マスに❄を付与' },
+    { idx: 44, name: '氷結拡散', icon: '❄', category: 'ice', costKey: 'onClickFreezeSpread', desc: 'コマを選び、そこから繋がる全てのコマに❄を付与' },
+    { idx: 45, name: '氷結トークン', icon: '🪙', category: 'ice', costKey: 'onClickFrostToken', desc: '❄付きの自陣コマをランダムに設置（ターン1回）' },
+    { idx: 46, name: '氷結ダブルトークン', icon: '🪙', category: 'ice', costKey: 'onClickDoubleFrostToken', desc: '❄付きの自陣コマをランダムに2つ設置（ターン1回）' },
+    { idx: 47, name: '砕氷', icon: '🔨', category: 'ice', costKey: 'onClickShatter', desc: '氷結中のコマの❄を砕き、❄1つにつき3ダメージ' },
+    { idx: 48, name: '霜降り', icon: '🌫️', category: 'ice', costKey: 'onClickFrostfall', desc: '自陣のライフ2以下のコマ全てに❄を付与' },
+    { idx: 49, name: '慈雨', icon: '⬆️', category: 'support', costKey: 'onClickBoost', desc: '自陣の全てのコマのライフを+1' },
+    { idx: 51, name: '写し身', icon: '🪞', category: 'support', costKey: 'onClickClone', desc: '自陣のコマの隣の空きマスに、ライフ半分の写しを設置' },
+    { idx: 52, name: '追い剥ぎ', icon: '🏴‍☠️', category: 'attack', costKey: 'onClickPlunder', desc: 'ライフ0の敵コマを1つ、自陣のコマ（ライフ1）にする' },
+    { idx: 53, name: '特売', icon: '🏷️', category: 'support', costKey: 'onClickMarkdown', desc: '次に打つスキルのコストを3軽減' },
+    { idx: 54, name: '付与割引', icon: '🎫', category: 'support', costKey: 'onClickEffectDiscount', desc: 'このターン、エフェクトを付与するスキルのコストを打つたびに1ずつ軽減' },
+    { idx: 55, name: 'トークン割引', icon: '🎟️', category: 'support', costKey: 'onClickTokenDiscount', desc: 'このターン、トークンのスキルのコストを打つたびに1ずつ軽減' },
+    { idx: 56, name: '活力特売', icon: '💖', category: 'support', costKey: 'onClickVitalMarkdown', desc: '次に打つスキルのコストを4軽減し、次の一手のライフを+1' },
+    { idx: 57, name: '固有割引', icon: '👑', category: 'support', costKey: 'onClickUniqueDiscount', desc: 'このターン、固有スキルのコストを6軽減し、自分のライフ-1（ターン1回）' },
+    { idx: 58, name: '大特価', icon: '💸', category: 'support', costKey: 'onClickClearance', desc: '次に打つスキルのコストを7軽減' },
+    { idx: 59, name: '福引き', icon: '🎰', category: 'support', costKey: 'onClickRandomCast', desc: '自分のデッキから基礎コストの低いスキルをランダムに1つ、コストなしで発動' },
+    { idx: 60, name: '返し特売', icon: '↩️', category: 'support', costKey: 'onClickCounterMarkdown', desc: '次に打つスキルのコストを3軽減し、次の一手のライフを+1' },
+    { idx: 61, name: 'バーンアウト', icon: '💥', category: 'fire', costKey: 'onClickBurnout', desc: '🔥が乗っているマスを全て破壊' },
+    { idx: 62, name: '木枯らしの使い', icon: '🍂', category: 'buds', costKey: 'onClickLeafToken', desc: '🍂付きの自陣コマをランダムに設置（ターン1回）' },
+    { idx: 63, name: '落葉松の双子', icon: '🍂', category: 'buds', costKey: 'onClickTwinLeafToken', desc: '🍂が2枚付いた自陣コマをランダムに設置（ターン1回）' },
+    { idx: 64, name: '紅葉狩り', icon: '🍂', category: 'buds', costKey: 'onClickDoubleLeafToken', desc: '🍂付きの自陣コマをランダムに2つ設置（ターン1回）' },
+    { idx: 65, name: '枯野の相席', icon: '🍂', category: 'buds', costKey: 'onClickLeafAll', desc: '盤面の全てのコマに🍂を付与' },
+    { idx: 66, name: '焚き火の唄', icon: '🔥', category: 'buds', costKey: 'onClickBonfire', desc: '敵陣の🍂を全て除去' },
+    { idx: 67, name: '腐葉土の目覚め', icon: '🌱', category: 'buds', costKey: 'onClickMulch', desc: '自陣のランダムな🍂を1枚、🌱に変換' },
+    { idx: 68, name: '一葉知秋', icon: '🍂', category: 'buds', costKey: 'onClickAutumn', desc: '盤面の全ての🌱を🍂に変換' },
+    { idx: 69, name: '霜枯れ', icon: '🥶', category: 'ice', costKey: 'onClickLeafFrost', desc: '自陣の🍂を持つコマ全てに❄を付与' },
+    { idx: 70, name: '春一番', icon: '🌬️', category: 'ice', costKey: 'onClickSpringWind', desc: '自陣の❄を全て解除し、解除した❄1つにつきこのターンのスキルのコストを1軽減' },
+    { idx: 71, name: '式神一括', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiAll', desc: '自分の式神を全て通常の自陣のコマにする' },
+    { idx: 72, name: '式神ランダム設置', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiRandom', desc: '式神をランダムな空きマスに設置（ターン1回）' },
+    { idx: 73, name: '百鬼夜行', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiFlood', desc: '着手できる全ての空きマスに式神を設置' },
+    { idx: 74, name: '鬼門封じ', icon: '⛩️', category: 'control', costKey: 'onClickKimon', desc: '敵のコマを1つ選んで破壊し、空きマスをロック' },
+    { idx: 75, name: '火の車', icon: '🛞', category: 'fire', costKey: 'onClickFireWheel', desc: 'ランダムな敵のコマ2つに🔥を付与し、手札をシャッフル' },    { idx: 76, name: '裸の王様', icon: '👑', category: 'control', costKey: 'onClickStrip', desc: '相手全員のギアを次の手番の終わりまで無効化' },    { idx: 77, name: '静電気の季節', icon: '🌩️', category: 'charge', costKey: 'onClickChargeSeason', desc: '3ターンの間、自分が置くコマに⚡を付与' },
+    { idx: 78, name: '総毛立つ', icon: '⚡', category: 'charge', costKey: 'onClickBristle', desc: '自陣の全てのコマに⚡を付与' },    { idx: 79, name: '落雷は忘れた頃に', icon: '💥', category: 'charge', costKey: 'onClickRelease', desc: '自陣の⚡を全て除去し、除去した⚡1つにつき敵の全てのコマに1ダメージ' },    { idx: 80, name: '雷神のへそくり', icon: '💰', category: 'charge', costKey: 'onClickStash', desc: '⚡のある自陣のコマを選んで⚡を除去し、除去した⚡1つにつき次に打つスキルのコストを1軽減' },    { idx: 81, name: '雷のない所に火は立たぬ', icon: '🌋', category: 'charge', costKey: 'onClickThunderFire', desc: '⚡のあるコマを1つ選んで破壊し、周囲の敵コマに🔥を付与' },    { idx: 82, name: '一寸先は闇鍋', icon: '🍲', category: 'control', costKey: 'onClickDarkPot', desc: '盤面の全てのコマにランダムなエフェクトを付与し、エフェクト1つにつきコストを1軽減（ターン1回）' },    { idx: 83, name: '雷を食らわば皿まで', icon: '🍽️', category: 'charge', costKey: 'onClickChargeHeal', desc: '⚡の付いた自陣のコマのライフを、⚡1つにつき+2' },
+    { idx: 84, name: '落ち葉の置き土産', icon: '🍂', category: 'buds', costKey: 'onClickLeafDrop', desc: 'ランダムな敵のコマ1つに🍂を付与' },
+    { idx: 85, name: '焚きつけ', icon: '🔥', category: 'buds', costKey: 'onClickKindling', desc: '敵の🍂と🌱を全て🔥に変換し、🍂1枚につき3・🌱1つにつき2コストを軽減' },
+    { idx: 86, name: '落葉の衣', icon: '🍂', category: 'buds', costKey: 'onClickLeafCloak', desc: 'ランダムな自陣のコマ1つに🍂を付与' },
+    { idx: 87, name: '火口', icon: '🔥', category: 'fire', costKey: 'onClickTinder', desc: '🌱・🍂・❄のいずれかを持つ敵のコマを1つ選んで🔥を付与' },
+    { idx: 88, name: '式神の加護', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiBless', desc: '式神を1体消費し、自陣のコマ全てのライフを+3' },
+    { idx: 89, name: '式神の呪詛', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiCurse', desc: '式神を1体消費し、エフェクトが乗っている敵のコマ全てに毒を付与' },
+    { idx: 90, name: '式神割引', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiDiscount', desc: '次に打つスキルのコストを、2＋式神の数だけ軽減' },
+    { idx: 91, name: '式神の供犠', icon: '📜', category: 'shikigami', costKey: 'onClickShikigamiPurge', desc: '式神を1体壊し、敵のコマを1つ選んでライフを0にする' },
+    { idx: 92, name: '一寸の虫に魂なし', icon: '🌶️', category: 'attack', costKey: 'onClickSmallFry', desc: '敵のライフ3以下のコマを全て破壊し、相手のライフ3以下のコマの設置を次の手番の終わりまで制限' },
+    { idx: 93, name: '初霜', icon: '🧊', category: 'ice', costKey: 'onClickFirstFrost', desc: '敵の🍂があるコマを全て凍結し、自陣にバッズ付きのコマを設置（ターン1回）' },
+    { idx: 94, name: '吹き寄せ', icon: '🍃', category: 'control', costKey: 'onClickGather', desc: '自陣にコマを設置し、盤面のエフェクトを全てそのマスに集める（ターン1回）' },
+    { idx: 95, name: '山焼き', icon: '🔥', category: 'fire', costKey: 'onClickBurnOff', desc: '敵のエフェクトがあるマス全てに🔥を付与し、自陣にロック付きのコマを設置（ターン1回）' },
+    { idx: 96, name: '無礼講', icon: '🎉', category: 'support', costKey: 'onClickFreeToken', desc: 'このターン、トークンのスキルのコストを0にする' },
+    { idx: 97, name: '飛び火', icon: '🔥', category: 'fire', costKey: 'onClickSpark', desc: 'ランダムな敵のコマ2つに🔥を付与' },
+    { idx: 98, name: '夜の帳', icon: '🌙', category: 'control', costKey: 'onClickNightVeil', desc: '次の相手全員の手番の間、相手のスキルのコストを+3' },
+    { idx: 99, name: '弔い割引', icon: '🪦', category: 'support', costKey: 'onClickGraveDiscount', desc: '墓地の死体1つにつき、次に打つスキルのコストを1軽減（最大3）' },
+    { idx: 100, name: '毒返しの構え', icon: '🐍', category: 'poison', costKey: 'onClickPoisonWard', desc: '3手番の間、自陣のコマが破壊されたら、ライフ4・毒付きの自陣コマを設置して反撃' },
+    { idx: 101, name: '墓守の供物', icon: '⚰️', category: 'support', costKey: 'onClickGraveOffering', desc: '自陣のライフが最も低いコマを1つ消し、墓地+1・マジック+1' },
+    { idx: 102, name: 'パーフェクトゲーム', icon: '🎳', category: 'attack', costKey: 'onClickPerfectGame', desc: '盤面のコマを敵味方とも全て破壊' },
+    { idx: 103, name: '超助っ人', icon: '🦸', category: 'token', costKey: 'onClickHelper', desc: 'ランダムなエフェクトを付けたコマを、自陣の空きマスに設置（ターン1回）' },
+    { idx: 104, name: '柳の下に二匹目がいた', icon: '🐟', category: 'support', costKey: 'onClickSecondCatch', desc: '自分のデッキから基礎コストの低いスキルをランダムに1つ、コストなしで発動' },
+    { idx: 105, name: '大木', icon: '🌳', category: 'object', costKey: 'onClickBigTree', desc: '空きマスに大木を設置。手番開始時にマジック+3' },
+    { idx: 106, name: '枯れた大木', icon: '🪵', category: 'object', costKey: 'onClickDeadTree', desc: '空きマスに枯れた大木を設置。手番開始時、周囲のコマに🍂を付与' },
+    { idx: 107, name: '生命の泉', icon: '⛲', category: 'object', costKey: 'onClickSpring', desc: '空きマスに生命の泉を設置。手番開始時に置くコマのライフ期待値+2' },
+    { idx: 108, name: '砦', icon: '🏰', category: 'object', costKey: 'onClickFort', desc: '空きマスに砦を設置。手番開始時、周囲の自陣のコマのライフ+1' },
+    { idx: 109, name: '雷雲', icon: '🌩️', category: 'object', costKey: 'onClickThundercloud', desc: '空きマスに雷雲を設置。手番開始時、周囲のコマに⚡を付与' },
+    { idx: 110, name: '市場', icon: '🏪', category: 'object', costKey: 'onClickMarket', desc: '空きマスに市場を設置。シャッフルが無料' },
+    { idx: 111, name: '聖域', icon: '⛩️', category: 'object', costKey: 'onClickSanctuary', desc: '空きマスに聖域を設置。周囲の自陣のコマのライフが減らない' },
+    { idx: 112, name: '毒沼', icon: '🐸', category: 'object', costKey: 'onClickPoisonSwamp', desc: '空きマスに毒沼を設置。手番開始時、周囲の敵のコマに毒を付与' },
+    { idx: 113, name: '沈黙は雷なり', icon: '🤐', category: 'control', costKey: 'onClickBoltSilence', desc: '自陣の⚡を2つ除去し、相手全員の次の手番のスキルを封じる' },
+    { idx: 114, name: '解体', icon: '🧨', category: 'object', costKey: 'onClickDemolish', desc: '敵のオブジェクトを1つ選んで破壊' },
+    { idx: 115, name: '風化', icon: '🌫️', category: 'object', costKey: 'onClickWeather', desc: '敵のオブジェクトを1つ選んで、ライフを0にする' },
+    { idx: 116, name: '地ならし', icon: '🚜', category: 'object', costKey: 'onClickLevelAll', desc: '敵のオブジェクトを全て破壊' },
+    { idx: 117, name: '補強工事', icon: '🏗️', category: 'object', costKey: 'onClickReinforce', desc: '自陣のオブジェクトを1つ選んで、ライフを+3' },
+    { idx: 118, name: '増築', icon: '🧱', category: 'object', costKey: 'onClickExpandAll', desc: '自陣のオブジェクトの全てのライフを+2' },
+    { idx: 119, name: '分譲', icon: '🏘️', category: 'object', costKey: 'onClickDuplicate', desc: '自陣のオブジェクトを1つ選んで、同じものをもう1つ設置' },
+    { idx: 120, name: '大工房', icon: '🏭', category: 'object', costKey: 'onClickWorkshop', desc: '空きマスに大工房を設置。ベースコスト7以上のスキルのコストを3軽減' },
+    { idx: 121, name: '結界石', icon: '🪨', category: 'object', costKey: 'onClickBarrierStone', desc: '空きマスに結界石を設置。周囲の自陣の式神のライフが減らない' },
+    { idx: 122, name: '護符の社', icon: '⛩️', category: 'object', costKey: 'onClickAmuletShrine', desc: '空きマスに護符の社を設置。手番開始時、周囲の自陣の式神1体につきマジック+1（最大+3）' },
+    { idx: 123, name: '招き猫', icon: '🐈', category: 'object', costKey: 'onClickLuckyCat', desc: '空きマスに招き猫を設置。自分のスキルのコストを1軽減' },
+    { idx: 124, name: '泥田坊', icon: '🌾', category: 'object', costKey: 'onClickMudField', desc: '空きマスに泥田坊を設置。相手がトークンで置くコマのライフが0' },
+    { idx: 125, name: '閻魔の舌', icon: '👅', category: 'object', costKey: 'onClickTongueKing', desc: '空きマスに閻魔の舌を設置。相手が自陣のコマにエフェクトを付けると、そのコマのライフが0' },
+    { idx: 126, name: '八卦の陣', icon: '🔯', category: 'object', costKey: 'onClickEightTrigrams', desc: '空きマスに八卦の陣を設置。周囲が全て自陣のコマで埋まると勝利' },
+    { idx: 127, name: 'お一人様限りの札', icon: '🪧', category: 'object', costKey: 'onClickSoloSign', desc: '空きマスにお一人様限りの札を設置。相手は1ターンにコマを1つしか置けない' },
+    { idx: 128, name: '一言居士', icon: '🗿', category: 'object', costKey: 'onClickOneWord', desc: '空きマスに一言居士を設置。相手は1ターンにスキルを1つしか使えない' },
+    { idx: 129, name: '見ざる地蔵', icon: '🙈', category: 'object', costKey: 'onClickBlindMonkey', desc: '空きマスに見ざる地蔵を設置。周囲にはエフェクトを付与できない' },
+    { idx: 130, name: '錠前荒らし', icon: '🔓', category: 'control', costKey: 'onClickLockRaid', desc: '敵陣のロックを1つ解除し、そのコマにランダムなエフェクトを付与' },
+    { idx: 131, name: 'ロックの増築', icon: '🔐', category: 'control', costKey: 'onClickLockExtend', desc: '自陣のコマのロックのスタックを+2' },
+    { idx: 132, name: '施錠の加護', icon: '🛡️', category: 'control', costKey: 'onClickLockBlessing', desc: '3手番の間、設置したコマにロックを2スタック付与' },
+    { idx: 133, name: '空き家封じ', icon: '🏚️', category: 'control', costKey: 'onClickVacantSeal', desc: '空きマス全てをロック' },
+    { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除した分のライフを自分に加算' },
+    { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面のロックのマス1つにつき、打つスキルのコストを1軽減' },
+    { idx: 136, name: '大岩', icon: '⛰️', category: 'object', costKey: 'onClickBoulder', desc: '空きマスに大岩を設置。2ターンのロック付きで、効果は無い' },
 ];
 
-/** 汎用スキルの総数（手札の idx は 0..CATALOG_SIZE-1）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
+/** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
+export const REMOVED_SKILL_IDX: readonly number[] = [50];
+
+/** 汎用スキルの idx の上限（手札の idx は 0..SKILL_IDX_END-1 のうち欠番を除く）。AIPlayer.ts の SKILL_POOL_SIZE と同値 */
+export const SKILL_IDX_END = SKILL_CATALOG.length + REMOVED_SKILL_IDX.length;
+
+/** 汎用スキルの総数（欠番を除く） */
 export const CATALOG_SIZE = SKILL_CATALOG.length;
+
+/** 手札・デッキに入りうる idx（昇順。欠番を除く） */
+export const AVAILABLE_SKILL_IDX: readonly number[] = SKILL_CATALOG.map((c) => c.idx);
+
+const SKILL_BY_IDX = new Map(SKILL_CATALOG.map((c) => [c.idx, c]));
+
+/** idx の札（欠番・範囲外なら undefined）。欠番があるので SKILL_CATALOG[idx] ではこれを使う */
+export const skillOf = (idx: number) => SKILL_BY_IDX.get(idx);
 
 /**
  * キャラ別の推奨デッキ（12枚）。AIが何も指定しないときに使う（人間も未指定なら同じ）。
@@ -156,23 +182,47 @@ export const CATALOG_SIZE = SKILL_CATALOG.length;
  * 初版は手組み。強制使用A/Bの結果（docs/diary/2026-10-20.md）に合わせて見直していく。
  */
 export const RECOMMENDED_DECKS: Record<CharacterId, number[]> = {
-    you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 50],
-    tactician: [3, 9, 11, 45, 46, 50, 64, 92, 93, 94, 95, 96],
-    magician: [2, 9, 10, 11, 13, 35, 47, 50, 53, 56, 60, 92],
+    you: [0, 2, 3, 5, 6, 8, 10, 11, 12, 28, 32, 52],
+    tactician: [3, 9, 47, 45, 46, 52, 64, 92, 93, 94, 95, 96], // 11→砕氷(47)。AIが氷結中の敵コマを壊して列を伸ばす・敵の並びを崩す（対氷室 約30→34〜39%、対強豪5人 +1.1pt 3seed×100）
+    magician: [2, 9, 10, 13, 26, 47, 52, 53, 56, 60, 64, 92],
     giant: [0, 1, 2, 3, 5, 6, 8, 11, 12, 13, 27, 28],
     yinYangMaster: [0, 2, 3, 5, 6, 8, 10, 53, 61, 71, 72, 92], // 百鬼夜行(73)→バーンアウト(61): コンボ待ちをやめる。対強豪平均 3シードで +4.6/+4.9/+2.3（氷室 37→57、ネクロ 36→59、軍師 24→33。巨人 84→31 は悪化）
-    necromancer: [2, 3, 6, 8, 11, 22, 40, 50, 58, 89, 92, 95],
-    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 45, 46, 48, 50],
+    necromancer: [2, 3, 6, 8, 11, 136, 40, 52, 58, 89, 92, 95], // 帯電付与(22)→大岩(136): 相手の即勝ちマスに置いて塞ぐ（ロック付き・減衰しない・コスト1）。対強豪 seed210/150: 58.6→61.8、seed220/200: 58.3→64.1
+    poisoner: [0, 12, 15, 16, 17, 18, 19, 29, 46, 48, 52, 125], // 氷結トークン(45)→閻魔の舌(125): 氷室の番人が自陣に付ける❄のコマをライフ0にして奪う（対氷室 12〜14→29〜33%、対強豪平均 +1.3〜2.1。AIは氷室が相手のときだけ置いて手札に固定）
     electrician: [21, 22, 23, 24, 26, 28, 52, 53, 58, 60, 92, 94],
-    cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 50, 73, 92],
-    pyromancer: [0, 3, 5, 8, 11, 28, 50, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
-    witch: [5, 8, 28, 44, 50, 53, 56, 62, 63, 64, 85, 92], // 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
+    cryomancer: [12, 28, 41, 43, 44, 45, 46, 47, 48, 52, 73, 92],
+    pyromancer: [0, 3, 5, 8, 11, 28, 52, 53, 56, 58, 87, 92], // バーンアウト(61)→火口(87)(#35)。火遁(31)は固有スキルと重複する死に札なので、一寸の虫に魂なし(92: 盤面のコマの数だけ軽減)に入れ替え(#49。対witch 26.5→35.0%)
+    witch: [5, 28, 44, 52, 53, 56, 62, 63, 64, 92, 108, 110], // 焚きつけ(85)・オピウム(8)→砦(108)・市場(110)。普請道楽+死神の鎌ギアとセット(試行44)。旧デッキ: 風の落とし子(36)→一寸の虫に魂なし(92)(56.2→62.0%, 対強豪, seed2/200)。 🍂付きトークン3種で自陣に🍂を撒く。氷結拡散(44)・風の落とし子(36)。ライフ3(0)・トークン(3)は入れておくだけで悪化(AIが魔力を使う)。死に札の落葉の衣(86)を活力特売(56)に(79.3→82.7%, seed2/200)
+    keysmith: [0, 2, 5, 8, 10, 11, 12, 13, 28, 92, 52, 95], // 浄化(32)→一寸の虫に魂なし(92)。強豪6体中5体が採用する札で、魔力が余る鍵師はコスト10を払える。今の強豪集合での対強豪平均 seed5/100: 30.5→34.3, seed9/150: 30.7→35.0（docs/tune/keysmith.md 試行18）
     fighter: [0, 2, 3, 5, 6, 8, 11, 12, 14, 28, 32, 49],
     healer: [0, 2, 3, 8, 10, 12, 14, 28, 32, 34, 35, 49],
 };
 
 /** キャラの推奨デッキ（コピー） */
 export const recommendedDeck = (character: CharacterId): number[] => [...(RECOMMENDED_DECKS[character] ?? RECOMMENDED_DECKS.you)];
+
+/**
+ * 「あなた」の相手キャラ別の専用デッキ（相手が1キャラのときだけ使う。AIPlayer.ts YOU_HOLD_VS と対）。
+ * 一寸の虫に魂なし(92)・火口(87)を入れて、引いたら手札に固定して毎手番使う。docs/tune/you.md
+ * （seed2/300: 対witch 2.7→30.3%、対氷室 8.0→24.0%、対雷霆 0→23.7%）。
+ */
+export const COUNTER_DECKS_FOR_YOU: Partial<Record<CharacterId, number[]>> = {
+    magician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    witch: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 87, 92],
+    cryomancer: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    electrician: [0, 2, 3, 5, 8, 10, 11, 12, 28, 32, 52, 92],
+    tactician: [0, 2, 3, 5, 8, 10, 11, 28, 32, 52, 74, 92], // 一寸の虫(92)+鬼門封じ(74)を固定。対軍師 17.0→29.0%（seed2/300）
+};
+
+/** character の推奨デッキ。「あなた」は相手が1キャラで専用デッキがあればそれ */
+export const recommendedDeckAgainst = (character: CharacterId, opponents: CharacterId[]): number[] => {
+    if (character === 'you') {
+        const kinds = Array.from(new Set(opponents));
+        const counter = kinds.length === 1 ? COUNTER_DECKS_FOR_YOU[kinds[0]] : undefined;
+        if (counter) return [...counter];
+    }
+    return recommendedDeck(character);
+};
 
 /**
  * 主案(RECOMMENDED_DECKS)と同等に強い別案のデッキ。あるキャラだけ書く。AI席は主案と別案からランダムに選ぶ（pickRecommendedDeck）。
@@ -183,8 +233,12 @@ export const ALT_RECOMMENDED_DECKS: Partial<Record<CharacterId, number[][]>> = {
     yinYangMaster: [[0, 2, 3, 5, 6, 105, 10, 53, 61, 71, 72, 92]],
     // ネクロマンサー: 特売・固有割引を残す山焼き入りの旧主案と、落葉の衣・火口・無礼講の別案。統計的な基準は満たさないが同等と見て併用する(ユーザー許可)
     necromancer: [
-        [0, 2, 3, 6, 8, 11, 50, 53, 57, 58, 92, 95],
-        [0, 2, 6, 8, 11, 50, 58, 86, 87, 92, 95, 96],
+        [2, 3, 6, 8, 11, 22, 40, 52, 58, 89, 92, 95], // 大岩を入れる前の主案
+        [0, 2, 3, 6, 8, 11, 52, 53, 57, 58, 92, 95],
+        [0, 2, 6, 8, 11, 52, 58, 86, 87, 92, 95, 96],
+        // オブジェクト入り(聖域・大木)。主案と同等(seed60/100: 主案44.0に対し45.2/45.8)。AIはネクロマンサーに限り設置する(AIPlayer.planObject)。縮地の削除に合わせて50→52
+        [2, 3, 6, 8, 11, 111, 40, 52, 58, 89, 92, 95],
+        [2, 3, 6, 8, 11, 22, 105, 52, 58, 89, 92, 95],
     ],
 };
 
@@ -196,9 +250,12 @@ export const pickRecommendedDeck = (character: CharacterId, rng: () => number = 
     return patterns[Math.floor(rng() * patterns.length)];
 };
 
-/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx */
+/** デッキとして有効か: 枚数がちょうど DECK_SIZE で、重複がなく、全て汎用スキルの idx（オリジナルスキルの idx は1枚まで） */
 export const isValidDeck = (deck: readonly number[] | undefined): boolean =>
-    !!deck && deck.length === DECK_SIZE && new Set(deck).size === DECK_SIZE && deck.every((i) => Number.isInteger(i) && i >= 0 && i < CATALOG_SIZE);
+    !!deck &&
+    deck.length === DECK_SIZE &&
+    new Set(deck).size === DECK_SIZE &&
+    deck.every((i) => Number.isInteger(i) && (AVAILABLE_SKILL_IDX.includes(i) || i === CUSTOM_SKILL_IDX));
 
 /** 席のデッキを決める: 有効な指定があればそれ（昇順に整える）、なければ推奨デッキ */
 export const resolveDeck = (deck: readonly number[] | undefined, character: CharacterId): number[] =>
@@ -206,7 +263,7 @@ export const resolveDeck = (deck: readonly number[] | undefined, character: Char
 
 /** ランダムなデッキ（rng は [0,1) を返す関数） */
 export const randomDeck = (rng: () => number = Math.random): number[] => {
-    const pool = Array.from({ length: CATALOG_SIZE }, (_, i) => i);
+    const pool = [...AVAILABLE_SKILL_IDX];
     const out: number[] = [];
     for (let k = 0; k < DECK_SIZE; k++) out.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     return out.sort((a, b) => a - b);
@@ -231,7 +288,7 @@ export const CORE_CARDS: Partial<Record<CharacterId, number[]>> = {
  */
 export const variedAIDeck = (character: CharacterId, rng: () => number = Math.random, swaps: number = AI_DECK_SWAPS): number[] => {
     const deck = pickRecommendedDeck(character, rng);
-    const outside = Array.from({ length: CATALOG_SIZE }, (_, i) => i).filter((i) => !deck.includes(i));
+    const outside = AVAILABLE_SKILL_IDX.filter((i) => !deck.includes(i));
     const core = CORE_CARDS[character] ?? [];
     const swappable = deck.map((_, i) => i).filter((i) => !core.includes(deck[i]));
     for (let k = 0; k < swaps && outside.length > 0 && swappable.length > 0; k++) {
@@ -259,11 +316,33 @@ export const CATEGORY_ORDER: { id: SkillCategory; label: string }[] = [
     { id: 'basic', label: '基本' },
 ];
 
+/**
+ * ジャンルごとの説明(ツールチップ用)。エフェクトの意味はここにだけ書き、個々のスキル・キャラの説明には書かない。
+ * 書式: 「<エフェクト名>: <意味>」を1〜2文で。数値などの細かい仕様は書かない。
+ */
+export const CATEGORY_HELP: Record<SkillCategory, string> = {
+    basic: '基本の操作',
+    token: 'トークン: 空きマスにコマを設置。1ターンに1回まで',
+    attack: '攻撃: 敵のコマのライフを減らす・壊すスキル',
+    support: '強化・補助: 自陣のコマの強化やコスト軽減などのスキル',
+    control: '場の操作: ロックなどで盤面や相手の行動を縛るスキル。🔑ロック中のマスは、ライフ0でも奪えない',
+    buds: 'バッズ🌱: 付いたコマのライフが時間とともに増加。🍂: 持ち主以外のスキルコストが増加',
+    poison: '毒☠: 付いたコマのライフが時間とともに減少。尽きると消えて周囲に拡散',
+    charge: '帯電⚡: 付いたコマは敵から触れられない。乗った時点で2ダメージ（雷霆の巫のコマを除く）',
+    ice: '氷結❄: 付いたコマはライフが減らず、ダメージを肩代わり。空きマスに付くとコマを置けない',
+    fire: '火炎🔥: 付与時に1ダメージ、以後毎ターン1つにつき2ダメージ',
+    shikigami: '式神📜: 陰陽師の分身。列には数えず、爆破などで使用',
+    object: 'オブジェクト: 空きマスに置く建造物。列には数えず、手番開始時などに効果を発揮',
+};
+
 /** スキルの基礎コスト（キャラ補正・ギア補正の前の値） */
-export const baseCostOf = (idx: number): number => skillCosts[SKILL_CATALOG[idx].costKey];
+export const baseCostOf = (idx: number): number => skillCosts[(skillOf(idx) as NonNullable<ReturnType<typeof skillOf>>).costKey];
 
 /** ツールチップ用の1行説明: 「名前（基礎コストN）: 効果」 */
-export const describeSkill = (idx: number): string => `${SKILL_CATALOG[idx].name}（基礎コスト${baseCostOf(idx)}）: ${SKILL_CATALOG[idx].desc}`;
+export const describeSkill = (idx: number): string => {
+    const s = skillOf(idx) as NonNullable<ReturnType<typeof skillOf>>;
+    return `${s.name}（基礎コスト${baseCostOf(idx)}）: ${s.desc}`;
+};
 
 // ---- 保存したデッキ（ブラウザの localStorage） ----
 

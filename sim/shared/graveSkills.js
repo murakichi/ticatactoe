@@ -1,13 +1,15 @@
 // 自動生成: src/components/game/graveSkills.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.graveOfferingTarget = exports.placeWardPiece = exports.wardPiece = exports.wardTriggered = exports.graveDiscountAmount = exports.corpseCount = exports.POISON_WARD_LIFE = exports.POISON_WARD_TURNS = exports.GRAVE_DISCOUNT_CAP = exports.NIGHT_VEIL_SURCHARGE = void 0;
+exports.graveOfferingTarget = exports.placeWardPiece = exports.wardPiece = exports.wardTriggered = exports.graveDiscountAmount = exports.corpseCount = exports.POISON_WARD_LIFE = exports.POISON_WARD_TURNS = exports.NECRO_CORPSE_CUT_CAP = exports.GRAVE_DISCOUNT_CAP = exports.NIGHT_VEIL_SURCHARGE = void 0;
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 /** 夜の帳: 次の相手全員の手番の間、相手のスキルコストに足す量 */
 exports.NIGHT_VEIL_SURCHARGE = 3;
 /** 弔い割引: 軽減する死体の数の上限 */
 exports.GRAVE_DISCOUNT_CAP = 3;
+/** ネクロマンサーのパッシブ: 墓地の死体の数（上限）だけ、蘇生以外の全スキルのコストを軽減する（下限1）。cost.ts の characterCostOf */
+exports.NECRO_CORPSE_CUT_CAP = 3;
 /** 毒返しの構え: 続く手番数（使った手番の次の自分の手番から数えて、この回数目の手番の終わりまで）と、置くコマのライフ */
 exports.POISON_WARD_TURNS = 3;
 exports.POISON_WARD_LIFE = 4;

@@ -38,11 +38,16 @@ function aiFor(s, seat) {
         (cost, isToken, skillKey) => E.gearCost(s, cost, isToken, seat, skillKey, false),
         hasGear(s.gears[seat], 'toxicBloom'),
         hasGear(s.gears[seat], 'emptyLock'),
-        s.decks ? s.decks[seat] : undefined
+        s.decks ? s.decks[seat] : undefined,
+        hasGear(s.gears[seat], 'lockBloom'),
+        hasGear(s.gears[seat], 'groundRent'),
+        s.gears[seat] || []
     );
     ai.placements = s.placements; // 着手後の減衰の先読み(simulatePlace)に使う。Game.tsx は計画時に設定済みの同じAIを打ち直しに渡す
     return ai;
 }
+
+const banned = (s, seat) => (s.aiFlags && s.aiFlags[seat] ? s.aiFlags[seat].ban : undefined);
 
 function inputOf(s, reroll) {
     const seat = s.turn;
@@ -53,7 +58,7 @@ function inputOf(s, reroll) {
         seat,
         magic: s.magic,
         costs: E.costsOf(s, seat),
-        hand: s.skills,
+        hand: banned(s, seat) === undefined ? s.skills : s.skills.filter((i) => i !== banned(s, seat)), // probe-top --scan audit: flags.ban の札はAIに見せない(使用禁止)
         life: s.life,
         tokenUsed: s.usedTokenThisTurn,
         necroRemain: s.remainNecro[seat],

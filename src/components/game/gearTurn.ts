@@ -4,12 +4,16 @@ import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Discount, afterSkill, emptyDiscount } from './discount';
 import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
-import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, leafStacks } from './thermal';
+import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, isFrozen, leafStacks } from './thermal';
+import { isShielded } from './charge';
+import { CharacterId } from '../../types/Character';
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
 import { BIG_CAST_BASE } from './bigSkills';
 import { WORKSHOP_PARAMS, ownPieceCount } from './objects';
 import { skillCosts } from './skillCosts';
+import { LOCK_SKILL_KEYS, LOCK_USED_KEYS } from './keysmith';
+import { isBuilding } from '../../types/ObjectKind';
 
 /** 手番内のスキル使用状況（席ごとの配列） */
 export type GearTurnState = {
@@ -48,6 +52,14 @@ export type GearTurnState = {
     /** 毒返しの構え: ward=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ wardFresh=使った手番（この手番の終わりでは減らさない） */
     ward: number[];
     wardFresh: boolean[];
+    /** 錠前荒らしの0コスト条件: lockSeen=相手がこの間にロックを使ったか（席ごと）/ lockPrev=今の手番の頭の時点での lockSeen（直前の相手ターンにロックが使われたか） */
+    lockSeen: boolean[];
+    lockPrev: boolean[];
+    /** 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか（手番が変わるとリセット） */
+    lockFreeUsed: boolean[];
+    /** 施錠の加護: blessing=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ blessingFresh=使った手番（この手番の終わりでは減らさない） */
+    blessing: number[];
+    blessingFresh: boolean[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -133,6 +145,8 @@ export const advanceGearState = (
     });
     if (g.wardFresh[endSeat]) g.wardFresh[endSeat] = false;
     else if (g.ward[endSeat] > 0) g.ward[endSeat] -= 1;
+    if (g.blessingFresh[endSeat]) g.blessingFresh[endSeat] = false;
+    else if (g.blessing[endSeat] > 0) g.blessing[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -148,6 +162,10 @@ export const advanceGearState = (
     g.discount[nextSeat] = emptyDiscount();
     g.oppSkillPrev[nextSeat] = g.oppSkilled[nextSeat];
     g.oppSkilled[nextSeat] = false;
+    g.lockPrev[nextSeat] = g.lockSeen[nextSeat]; // 錠前荒らし: 直前の相手ターンにロックが使われたか
+    g.lockSeen[nextSeat] = false;
+    g.lockFreeUsed[endSeat] = false; // 鍵師の無料ロックは手番ごと
+    g.lockFreeUsed[nextSeat] = false;
     g.fireBase[nextSeat] = fireStacksTotal(board);
     // 火口: 終わる手番の間に🌱🍂の総数が増えていれば、次の席の火口は無料（植えたのが誰でもよい。無料は1手番に1回まで）
     const plantedNow = plantedStacksTotal(board);
@@ -186,11 +204,12 @@ export const advanceGearState = (
 /**
  * ギア補正（adjustCostByGear）の入力。手番の席は今の手番内の状態、手番でない席（パネルで非手番側のコストを出すとき）は『その席の次の手番の頭』の状態で出す。
  * @param ailments 病炎の契りの入力（自陣にある毒・火炎の種類数。ギア未装備なら 0）
+ * @param ownObjects 普請道楽の入力（自陣にオブジェクトがあるか。ギア未装備なら false）
  */
-export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, turnSeat: number, ailments: number): CostContext =>
+export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, turnSeat: number, ailments: number, ownObjects: boolean = false): CostContext =>
     seat === turnSeat
-        ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat] }
-        : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat] };
+        ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects }
+        : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects };
 
 /**
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
@@ -202,6 +221,8 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
         g.oppSkilled = g.oppSkilled.map((v, i) => (i === seat ? v : true));
+        if (LOCK_SKILL_KEYS.has(skillId)) g.lockFreeUsed[seat] = true; // 鍵師のパッシブ: 手番の最初のロック系スキルが無料。使ったので以降は通常
+        if (LOCK_USED_KEYS.has(skillId)) g.lockSeen = g.lockSeen.map((v, i) => (i === seat ? v : true)); // 他の席に『ロックが使われた』を伝える
         // 柳の下に二匹目がいた: 基礎コスト7以上のスキルを使った手番は0コストで使える
         if (((skillCosts as Record<string, number>)[skillId] ?? 0) >= BIG_CAST_BASE) g.bigCast[seat] = true;
         // 業火の無料権: 異なる種類のスキルを INFERNO_FREE_SKILLS 種類使うと付く（同じスキルの連打は1種類。業火自身は数えない）
@@ -212,4 +233,15 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     }
     g.echoNext[seat] = true;
     g.echoReady[seat] = false;
+};
+
+/**
+ * 死神の鎌: 誰かが装備していれば、ライフ0になった駒（プレイヤーを問わず）を手番の終わりに壊す。
+ * 氷結中・🔑ロック中・雷霆の巫の⚡無敵の駒、オブジェクトは壊れない。壊すマスの添字を返す（盤は書き換えない）。
+ */
+export const lifeZeroVictims = (board: readonly SquareInfo[], chars: readonly CharacterId[], gears: readonly Gears[]): number[] => {
+    if (!gears.some((g) => hasGear(g, 'reaper'))) return [];
+    return board
+        .map((sq, i) => (sq.player && !isBuilding(sq) && sq.bind <= 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isShielded(sq, chars) ? i : -1))
+        .filter((i) => i >= 0);
 };

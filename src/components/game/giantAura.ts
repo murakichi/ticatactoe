@@ -4,7 +4,8 @@
 // sim/engine.js の giantAura と同じ規則。
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
-import { PlayerCharacters, isGuarded } from './charge';
+import { PlayerCharacters, isGuarded, isShielded } from './charge';
+import { addLock } from './lock';
 import { absorbDestroy, lockable } from './thermal';
 
 export interface GiantAuraResult {
@@ -35,8 +36,8 @@ export const giantAura = (board: SquareInfo[], range: number[], me: Player, char
     }
     for (const j of range) {
         const sq = board[j];
-        if (!lockable(sq) || sq.effects.some((e) => e.effect === '🔑')) continue;
-        board[j] = { ...sq, bind: sq.player ? sq.bind : Math.max(sq.bind, 1), effects: [...sq.effects, { effect: '🔑' }] };
+        if (!lockable(sq) || sq.effects.some((e) => e.effect === '🔑') || isShielded(sq, chars)) continue; // 帯電中の雷霆の巫のコマにはロックも付かない
+        board[j] = addLock(sq, Math.max(sq.bind, 1)); // 旧仕様（ライフが尽きるまで）と同じ長さのロック
         locked.push(j);
     }
     return { destroyed, blocked, locked };

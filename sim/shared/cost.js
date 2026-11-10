@@ -14,6 +14,7 @@ const gear_1 = require("./gear");
 const objects_1 = require("./objects");
 const skillCosts_1 = require("./skillCosts");
 const tokenSkills_1 = require("./tokenSkills");
+const keysmith_1 = require("./keysmith");
 const thermal_1 = require("./thermal");
 /** 式神を置くスキル（陰陽師のパッシブ: 置いた手番の全スキル-1。置くスキル自身も安い） */
 exports.SHIKIGAMI_PLACING_KEYS = new Set(['onClickShikigamiPlace', 'onClickShikigamiRandom', 'onClickShikigamiFlood']);
@@ -22,17 +23,26 @@ exports.SHIKIGAMI_PURGE_FREE = 3;
 /** 夜の帳: 手番の席のスキルコストに足す量（コストが0のスキルは変えない） */
 const veilSurcharge = (env) => (env.veil && env.seat === env.turnSeat ? graveSkills_1.NIGHT_VEIL_SURCHARGE : 0);
 /** 自陣の式神の数 */
-const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.effects.some((e) => e.effect === '📜')).length;
+const ownShikigami = (board, player) => board.filter((sq) => sq.player === player && sq.object === 'shikigami').length;
 const characterCostOf = (env, baseCost, isToken, isPoison, skillKey) => {
+    var _a;
     const characterId = env.characters[env.seat];
     // 敵の🍂と夜の帳による増加分を先に足す（キャラの減少分・割引はそのあと）
     const cost = baseCost + (0, thermal_1.leafSurcharge)(env.board, env.player) + veilSurcharge(env);
+    // ネクロマンサー: 墓地の死体の数（上限 NECRO_CORPSE_CUT_CAP）だけ、蘇生以外の全スキルのコストを軽減（下限1）
+    if (characterId === 'necromancer') {
+        const cut = Math.min((_a = env.corpses) !== null && _a !== void 0 ? _a : 0, graveSkills_1.NECRO_CORPSE_CUT_CAP);
+        return skillKey !== 'onClickNecromancy' && cut > 0 && cost > 1 ? Math.max(1, cost - cut) : cost;
+    }
     // 煉獄の鍛冶師: 🔥を付与するスキルは常に-1（下限1）
     if (characterId === 'pyromancer')
         return skillKey && thermal_1.FLAME_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 凩の魔女: 盤面にある🍂（敵味方問わず・効力のあるもの）の枚数ぶん、スキルコスト-1（下限1）
     if (characterId === 'witch')
         return (0, thermal_1.witchCostOf)(cost, env.board);
+    // 鍵師: ロック系スキルは-1（下限1）
+    if (characterId === 'keysmith')
+        return skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && cost > 1 ? cost - 1 : cost;
     // 毒使い: 毒系スキルは-1、それ以外は+1
     if (characterId === 'poisoner')
         return isPoison ? cost - 1 : cost + 1;
@@ -77,6 +87,10 @@ const gearCostOf = (env, cost, isToken, skillKey, withLeaf = true) => {
         return 0; // 火口: 直前の手番に🌱か🍂が植えられていれば0（1手番に1回まで）
     if (skillKey === 'onClickCounterMarkdown' && env.oppSkillPrev)
         return 0; // 返し特売: 直前に相手がスキルを使っていれば0
+    if (skillKey === 'onClickLockRaid' && mine && env.lockPrev)
+        return 0; // 錠前荒らし: 直前の相手ターンにロックが使われていれば0
+    if (skillKey && keysmith_1.LOCK_SKILL_KEYS.has(skillKey) && mine && env.characters[env.seat] === 'keysmith' && !env.lockFreeUsed && adjusted <= env.magic)
+        return 0; // 鍵師のパッシブ: 自身の魔力以下のロック系スキルの最初の1回は無料（払える額でないと無料にならない）
     if (skillKey === 'onClickFireWheel' && mine && (0, thermal_1.fireStacksTotal)(env.board) > env.fireBase)
         return 0; // 火の車: このターン敵か自陣に🔥を付与していれば0
     // コスト軽減スキル（手番内だけ有効なので、手番でない席には掛けない）

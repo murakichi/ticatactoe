@@ -7,7 +7,10 @@ const lifeBan_1 = require("./lifeBan");
 const decay_1 = require("./decay");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
+const keysmith_1 = require("./keysmith");
 const util_1 = require("./util");
+/** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
+const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
 /** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
 /** 自分の式神を対象に撃つスキル（置いた式神がなければ撃てない） */
 const SHIKIGAMI_TARGET_SKILLS = new Set(['onClickShikigamiBlast', 'onClickShikigamiBless', 'onClickShikigamiCurse']);
@@ -26,7 +29,7 @@ exports.maxOppMagic = maxOppMagic;
  * @param pickHailMary 詰みのヘイルメアリーで当選させるスキル名を選ぶ（本番は Game の抽選、sim は rng）
  */
 const planAITurn = (ai, input, pickHailMary) => {
-    var _a;
+    var _a, _b;
     const { board, seat, life } = input;
     const oppMagic = (0, exports.maxOppMagic)(input.magic, seat);
     ai.placements = input.placements;
@@ -87,6 +90,20 @@ const planAITurn = (ai, input, pickHailMary) => {
             result.chargeClicks = kept;
         }
     }
+    // 一寸の虫に魂なし対策: ライフが3以下で着手できないときは、ライフ+3（idx 0）で4以上に上げてから置く。手札にあり、すでに選んだスキルと合わせて魔力が足りるときだけ
+    if (input.lifeBan && (0, lifeBan_1.moveBlocked)(true, life) && result.move === null && !((_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.length) && !result.lockTargets && result.stompTarget === undefined
+        && !result.skills.some((sk) => AIPlayer_1.TURN_ENDING_SKILLS.includes(sk)) && input.hand.includes(ADD_LIFE_IDX)) {
+        const costOfKey = (key) => { var _a; return ai.calculateAICost((_a = input.costs[key]) !== null && _a !== void 0 ? _a : 0, false, false, key); };
+        const total = result.skills.reduce((sum, sk) => sum + costOfKey(sk), costOfKey('onClickAddLife'));
+        const raised = life + ADD_LIFE_AMOUNT;
+        if (input.magic[seat] >= total && !(0, lifeBan_1.moveBlocked)(true, raised)) {
+            const m = ai.getBestMove(board, raised);
+            if (m !== null) {
+                result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')];
+                result.move = m;
+            }
+        }
+    }
     // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）
     const locks = ai.chooseLocks(board, oppMagic, life, input.hand);
     // 魔法使い: 撃てるスキルが無いので、軽減札を撃ってから1コストで手札を引き直し、新しい手札で計画し直す
@@ -127,6 +144,24 @@ const planAITurn = (ai, input, pickHailMary) => {
             steps.push(result.move);
         return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
     }
+    // 雷霆の巫のランダム帯電トークン(21/23)は着地位置が撃つまで分からない。撃ってから、着地後の盤で着手を選び直す (#429)
+    if (!result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        return { kind: 'queue', steps: [...result.skills, 'aiReplan'], locks };
+    }
+    // ロックとランダム帯電トークンを同じ手番で撃つ計画は、ロックの対象クリックを先に済ませる。
+    // 『スキルを全部撃ってから対象クリック』の順だと、トークンの着地で対象の自コマが⚡無敵になり、ロックが拒否されて『ロック待ち』が残り、
+    // 次の着手がロックの対象として消費されて手番が進まなくなる。sim/engine.js の skillCosts にキーを足すと価格破壊の乱数表が変わって露呈した (#439)
+    if (result.lockTargets && result.stompTarget === undefined && result.skills.some((sk) => RANDOM_CHARGE_TOKENS.includes(sk))) {
+        const isLockSkill = (sk) => sk.startsWith('onClickUse') && sk.endsWith('Lock');
+        const steps = [...result.skills.filter(isLockSkill), ...result.lockTargets, ...result.skills.filter((sk) => !isLockSkill(sk))];
+        if (result.move !== null)
+            steps.push(result.move);
+        return { kind: 'queue', steps: endsTurn(steps, result.move !== null), locks };
+    }
+    // スキルも対象クリックも無い手番の着手は、実行時に打ち直されない（最初のクリックはそのまま打つ）。打てないマス（⚡無敵の自陣マスなど）なら、ここで打ち直すかチャージでパスにする
+    if (result.skills.length === 0 && !result.lockTargets && result.stompTarget === undefined && result.move !== null) {
+        result.move = (0, exports.resolveMoveCell)(ai, board, input.characters, life, result.move, input.lifeBan);
+    }
     const clicks = [];
     if (result.lockTargets)
         clicks.push(...result.lockTargets);
@@ -139,6 +174,8 @@ const planAITurn = (ai, input, pickHailMary) => {
     return { kind: 'direct', skills: result.skills, clicks, locks, chargeWhenEmpty: !ends, moveLast: result.move !== null };
 };
 exports.planAITurn = planAITurn;
+const ADD_LIFE_IDX = 0; // ライフ+3 のスキル idx
+const ADD_LIFE_AMOUNT = 3; // 増えるライフ（onClickAddLife と同じ）
 /** player が今の盤面で cell に通常の着手をできるか（Game.onCellClick / sim の placeMove が弾く条件。人数・ライフ縛りは含めない） */
 const canPlaceAt = (board, cell, player, character, characters) => {
     const sq = board[cell];
@@ -146,8 +183,8 @@ const canPlaceAt = (board, cell, player, character, characters) => {
         return false; // ⚡付き雷霆の巫の自陣マスは誰も触れない
     if (sq.player && sq.player !== player && (sq.bind > 0 || (0, decay_1.isTakeProtected)(sq, characters)) && character !== 'giant')
         return false; // ライフの残った敵コマ・雷霆の巫のコマは巨人しか奪えない
-    if (sq.effects.some((e) => e.effect === '🔑') && sq.bind > 0)
-        return false; // ロック中
+    if ((0, keysmith_1.lockBlocksPlacement)(sq, character))
+        return false; // ロック中（鍵師は空きマスのロックを無視できる）
     if ((0, thermal_1.emptyBlocked)(sq))
         return false; // 氷結中の空きマス
     if (sq.player === player && (0, thermal_1.overwriteBlocked)(sq))
@@ -169,6 +206,8 @@ const resolveMoveCell = (ai, board, characters, life, cell, lifeBan = false, sol
         return cell;
     ai.updateShield(board);
     const alt = ai.getBestMove(board, life);
+    if (alt !== null && !(0, exports.canPlaceAt)(board, alt, ai.playerSymbol, ai.character, characters))
+        return null; // 打てるマスが無いときの代替も打てない手を返すことがある（盤面が埋まり自陣が⚡で無敵など）。チャージでパスする
     return soloBlock && alt !== null && !board[alt].player ? null : alt;
 };
 exports.resolveMoveCell = resolveMoveCell;

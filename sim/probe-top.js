@@ -19,9 +19,11 @@
  * 共通: --envDeck pick / --oppGears pick（相手が本番どおり主案と別案から選ぶ。完了判定の2条件目）, --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（頑健性確認: 相手のデッキを推奨から3枚ランダムに入れ替える。本番のAIデッキはこう入れ替えないので、環境の基準ではなくストレステスト）, --workers N（既定=コア数）,
  *       --opp a,b,c（相手を絞る）, --json（人が読む要約を出さず JSON のみ）
  * 出力の `field` が環境勝率（対象の対キャラ別勝率の単純平均）。`se` は標準誤差の概算。
- * 判定に使う主指標は `strong`（対強豪平均）: 弱いキャラを大勝するだけで `field` が上がるのを避けるため、強豪(環境の平均勝率の上位半分、対象自身は除く)だけとの勝率の平均。
- *   強豪の集合は `--rank --write-strong` が .tune-cache/strong.json に書き、`--target`/`--scan` はそれを固定して使う（候補の設定で集合が動いて指標をごまかせないように）。
- *   `--strong a,b,c` で明示指定もできる。集合が無いときは全相手（= field）になり、警告を出す。
+ * 判定に使う主指標は `strong`（対強豪平均）: 弱いキャラを大勝するだけで `field` が上がるのを避けるため、相手ごとに重みを付けて平均した勝率（対象自身は除く）。
+ *   重み = 相手の選ばれやすさ（強いほど大きい。sim/live.js の metaWeights＝ロジット量子応答均衡。--beta で調整、既定 META_BETA）。
+ *   一強の環境では一強に勝つことが重く評価され、下位の相手も小さい重みで残る（上位N体で線を引かない）。
+ *   重みは `--rank --write-strong` が .tune-cache/strong.json に書き、`--target`/`--scan` はそれを固定して使う（候補の設定で重みが動いて指標をごまかせないように）。
+ *   `--weights a:0.4,b:0.3` で明示指定、`--strong a,b,c` は旧方式（その集合を同じ重みで平均）。重みが無いときは全相手（= field）になり、警告を出す。
  *   `--rank` は対強豪平均で並べ、最悪対面・有意な不利/有利対面数・均衡の選択確率（sim/live.js の analyze）も出す。
  */
 const os = require('os');
@@ -128,12 +130,15 @@ if (args.worker) {
 /**
  * --cache <dir> 指定時はタスクを小分け(--chunk、既定12)にして結果をファイルに保存する。
  * コンテナ再起動などで途切れても、同じコマンドを打ち直せば済んだ分は読み込んで再開する。
- * キーは (タスク・変種・games・seed・size・オプション・sim/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
+ * キーは (タスク・変種・games・seed・size・オプション・sim/*.js と sim/shared/*.js の中身) のハッシュなので、コードが変われば自動で無効になる。
  */
 function simHash() {
     const h = require('crypto').createHash('sha1');
     const dir = __dirname;
     for (const f of require('fs').readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) h.update(f + require('fs').readFileSync(require('path').join(dir, f)));
+    // 本番AI・ルールの生成物(sim/shared/*.js)も含める。含めないと AIPlayer.ts を変えても古い結果がキャッシュから返る
+    const shared = require('path').join(dir, 'shared');
+    if (require('fs').existsSync(shared)) for (const f of require('fs').readdirSync(shared).filter((x) => x.endsWith('.js')).sort()) h.update('shared/' + f + require('fs').readFileSync(require('path').join(shared, f)));
     if (args.modA) h.update(require('fs').readFileSync(args.modA));
     return h.digest('hex');
 }
@@ -184,22 +189,26 @@ function runWorkersRaw(tasks, variants, workers) {
 const rate = (t) => { const n = t.w + t.l; return n ? t.w / n : 0.5; };
 
 /** 変種 v の対象キャラ target の環境勝率（対キャラ別と平均） */
-function summarize(results, variant, target, opps, strongSet) {
+function summarize(results, variant, target, opps, weights) {
     const per = {};
-    let sum = 0, varSum = 0, sSum = 0, sVar = 0, sN = 0;
+    let sum = 0, varSum = 0, wSum = 0, wp = 0, wVar = 0, wSq = 0;
     for (const o of opps) {
         const r = results.find((x) => x.variant === variant && x.a === target && x.b === o);
         const n = r.w + r.l, p = rate(r);
         per[o] = +p.toFixed(3);
         sum += p;
-        varSum += n ? (p * (1 - p)) / n : 0;
-        if (!strongSet || strongSet.includes(o)) { sSum += p; sVar += n ? (p * (1 - p)) / n : 0; sN++; }
+        const v = n ? (p * (1 - p)) / n : 0;
+        varSum += v;
+        const w = weights ? (weights[o] ?? 0) : 0;
+        wSum += w; wp += w * p; wVar += w * w * v; wSq += w * w;
     }
     const tally = results.filter((x) => x.variant === variant && x.a === target).map((x) => `${x.b}:${x.w}-${x.l}-${x.d}`).sort().join(' ');
     return {
         per, field: +(sum / opps.length).toFixed(4), se: +(Math.sqrt(varSum) / opps.length).toFixed(4), tally,
-        // 対強豪平均（主指標）。集合が無ければ全相手と同じ
-        strong: strongSet && sN ? +(sSum / sN).toFixed(4) : null, strongSe: strongSet && sN ? +(Math.sqrt(sVar) / sN).toFixed(4) : null, strongN: strongSet ? sN : 0,
+        // 対強豪平均（主指標）= Σ w_j p_j / Σ w_j。重みが無ければ null（呼び出し側は field を使う）。strongN = 実効の相手数 (Σw)²/Σw²
+        strong: weights && wSum > 0 ? +(wp / wSum).toFixed(4) : null,
+        strongSe: weights && wSum > 0 ? +(Math.sqrt(wVar) / wSum).toFixed(4) : null,
+        strongN: weights && wSq > 0 ? +((wSum * wSum) / wSq).toFixed(2) : 0,
     };
 }
 
@@ -210,7 +219,7 @@ async function main() {
     const cand = {};
     if (args.deck) {
         const d = ints(args.deck);
-        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.CATALOG_SIZE - 1) + ' の重複なし12個');
+        if (!deckMod.isValidDeck(d)) throw new Error('--deck は 0〜' + (deckMod.SKILL_IDX_END - 1) + '（欠番を除く）の重複なし12個');
         cand.deck = d;
     }
     if (args.gears) cand.gears = args.gears === 'none' ? [] : args.gears.split(',');
@@ -218,10 +227,16 @@ async function main() {
 
     const STRONG_FILE = path.resolve(__dirname, '..', '.tune-cache', 'strong.json');
     const fs = require('fs');
-    let strongSet = null;
-    if (args.strong) strongSet = args.strong.split(',');
-    else if (!args.rank && fs.existsSync(STRONG_FILE)) strongSet = JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8')).strong;
-    if (!args.rank && !strongSet) console.error('警告: 強豪リストが無いので strong は全相手の平均(field)と同じです。先に `--rank --write-strong` で集合を決めてください（--strong a,b,c でも指定可）。');
+    // 相手の重み。--weights a:0.4,b:0.3 > --strong a,b,c（旧方式: 同じ重み）> 保存済み(.tune-cache/strong.json の weights。旧形式は strong の集合)
+    let weights = null;
+    if (args.weights) weights = Object.fromEntries(args.weights.split(',').map((kv) => { const [k, v] = kv.split(':'); return [k, parseFloat(v)]; }));
+    else if (args.strong) weights = Object.fromEntries(args.strong.split(',').map((k) => [k, 1]));
+    else if (!args.rank && fs.existsSync(STRONG_FILE)) {
+        const saved = JSON.parse(fs.readFileSync(STRONG_FILE, 'utf8'));
+        weights = saved.weights || Object.fromEntries((saved.strong || []).map((k) => [k, 1]));
+    }
+    if (!args.rank && !weights) console.error('警告: 重みが無いので strong は全相手の平均(field)と同じです。先に `--rank --write-strong` で重みを決めてください（--weights a:0.4,b:0.3 でも指定可）。');
+    const beta = args.beta !== undefined ? parseFloat(args.beta) : live.META_BETA;
 
     if (args.rank) {
         if (!target && ((args.oppGears && args.oppGears !== 'recommended') || args.envDeck)) {
@@ -253,26 +268,27 @@ async function main() {
             const direct = res.find((x) => x.a === CHARS[i] && x.b === CHARS[j]);
             pairs.push({ a: CHARS[i], b: CHARS[j], w: direct ? direct.w : 0, l: direct ? direct.l : 0 });
         }
-        const an = live.analyze(live.statsFromPairs(CHARS, pairs));
+        const an = live.analyze(live.statsFromPairs(CHARS, pairs), { beta });
         const byId = Object.fromEntries(an.rows.map((r) => [r.id, r]));
         for (const r of table) {
             const a = byId[r.char];
-            r.strong = a.strongAvg == null ? null : +a.strongAvg.toFixed(4);
+            r.strong = a.metaAvg == null ? null : +a.metaAvg.toFixed(4);
+            r.weight = +a.weight.toFixed(4);
             r.worst = a.worst ? { char: a.worst.id, rate: +a.worst.rate.toFixed(3) } : null;
             r.unfavorable = a.unfavorable; r.favorable = a.favorable; r.eq = +a.eq.toFixed(4);
         }
         table.sort((x, y) => (y.strong ?? 0) - (x.strong ?? 0));
         if (args['write-strong']) {
             fs.mkdirSync(path.dirname(STRONG_FILE), { recursive: true });
-            fs.writeFileSync(STRONG_FILE, JSON.stringify({ strong: an.strong, games, seed: seed0, size: size || 4, at: new Date().toISOString() }, null, 2));
-            console.error(`強豪リストを保存: ${an.strong.join(',')} -> ${path.relative(process.cwd(), STRONG_FILE)}`);
+            fs.writeFileSync(STRONG_FILE, JSON.stringify({ weights: Object.fromEntries(Object.entries(an.weights).map(([k, v]) => [k, +v.toFixed(5)])), beta, games, seed: seed0, size: size || 4, at: new Date().toISOString() }, null, 2));
+            console.error(`相手の重みを保存(beta=${beta}): ${Object.entries(an.weights).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}%`).join(', ')} -> ${path.relative(process.cwd(), STRONG_FILE)}`);
         }
-        const out = { mode: 'rank', games, seed: seed0, size: size || 4, target: target || null, candidate: target ? cand : null, strongSet: an.strong, exploit: +an.exploit.toFixed(4), table: table.map((r, i) => ({ rank: i + 1, ...r })) };
+        const out = { mode: 'rank', games, seed: seed0, size: size || 4, target: target || null, candidate: target ? cand : null, beta, weights: Object.fromEntries(Object.entries(an.weights).map(([k, v]) => [k, +v.toFixed(5)])), exploit: +an.exploit.toFixed(4), table: table.map((r, i) => ({ rank: i + 1, ...r })) };
         if (args.json) { console.log(JSON.stringify(out)); return; }
         console.log(`環境順位（各ペア${games}試合・席交互・引分除く${target ? `・${target} に候補設定を反映` : ''}）`);
-        console.log(`順位は対強豪平均（強豪=${an.strong.join(',')}）。field=対全キャラ平均（参考）。不利/有利=有意に負け越す/勝ち越す対面の数。均衡=相手が最適に選ぶ場合の選択確率`);
-        console.log(`    ${'キャラ'.padEnd(14)} ${'対強豪'.padEnd(7)} ${'field'.padEnd(7)} ${'最悪対面'.padEnd(18)} ${'不利/有利'.padEnd(8)} 均衡`);
-        table.forEach((r, i) => console.log(`${String(i + 1).padStart(2)}. ${r.char.padEnd(14)} ${((r.strong ?? 0) * 100).toFixed(1).padStart(5)}% ${((r.field) * 100).toFixed(1).padStart(5)}% ${(r.worst ? `${(r.worst.rate * 100).toFixed(0)}%(${r.worst.char.slice(0, 9)})` : 'n/a').padEnd(18)} ${`${r.unfavorable}/${r.favorable}`.padEnd(8)} ${(r.eq * 100).toFixed(1)}%${r.char === target ? '  ← target' : ''}`));
+        console.log(`順位は対強豪平均（相手を強さで重み付け。beta=${beta}。重み=相手としての選ばれやすさ）。field=対全キャラ平均（参考）。不利/有利=有意に負け越す/勝ち越す対面の数。均衡=相手が最適に選ぶ場合の選択確率`);
+        console.log(`    ${'キャラ'.padEnd(14)} ${'対強豪'.padEnd(7)} ${'重み'.padEnd(6)} ${'field'.padEnd(7)} ${'最悪対面'.padEnd(18)} ${'不利/有利'.padEnd(8)} 均衡`);
+        table.forEach((r, i) => console.log(`${String(i + 1).padStart(2)}. ${r.char.padEnd(14)} ${((r.strong ?? 0) * 100).toFixed(1).padStart(5)}% ${((r.weight ?? 0) * 100).toFixed(1).padStart(4)}% ${((r.field) * 100).toFixed(1).padStart(5)}% ${(r.worst ? `${(r.worst.rate * 100).toFixed(0)}%(${r.worst.char.slice(0, 9)})` : 'n/a').padEnd(18)} ${`${r.unfavorable}/${r.favorable}`.padEnd(8)} ${(r.eq * 100).toFixed(1)}%${r.char === target ? '  ← target' : ''}`));
         console.log('GAP(1位 - 2位, 対強豪) ' + (((table[0].strong ?? 0) - (table[1].strong ?? 0)) * 100).toFixed(1) + 'pt   (field の GAP ' + (([...table].sort((x, y) => y.field - x.field).map((r) => r.field)).slice(0, 2).reduce((a, b) => a - b) * 100).toFixed(1) + 'pt)');
         console.log('RESULT ' + JSON.stringify(out));
         return;
@@ -307,7 +323,7 @@ async function main() {
             const keep = base.slice();
             const outs = [], ins = [];
             for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = Array.from({ length: deckMod.CATALOG_SIZE }, (_, i) => i).filter((i) => !base.includes(i) && (!cat || deckMod.SKILL_CATALOG[i].category === cat));
+            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || (deckMod.SKILL_CATALOG.find((c) => c.idx === i) || {}).category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
@@ -315,7 +331,7 @@ async function main() {
             seen.add(key);
             const d = keep.concat(ins).sort((a, b) => a - b);
             variants.push({ ...cand, deck: d });
-            const nm = (i) => `${i}(${deckMod.SKILL_CATALOG[i].name})`;
+            const nm = (i) => `${i}(${deckMod.skillOf(i).name})`;
             labels.push(`-${outs.map(nm).join(',')} +${ins.map(nm).join(',')}  [${d.join(',')}]`);
         }
     }
@@ -327,7 +343,7 @@ async function main() {
         variants = [{ ...cand, deck, gears }]; labels = ['base'];
         for (const idx of deck) {
             variants.push({ ...cand, deck, gears, flags: { ...(cand.flags || {}), ban: idx } });
-            labels.push(`card ${idx}(${deckMod.SKILL_CATALOG[idx].name}) を禁止`);
+            labels.push(`card ${idx}(${deckMod.skillOf(idx).name}) を禁止`);
         }
         for (const g of gears) {
             variants.push({ ...cand, deck, gears: gears.filter((x) => x !== g) });
@@ -338,13 +354,13 @@ async function main() {
     const tasks = [];
     variants.forEach((_, v) => { for (const o of opps) tasks.push({ a: target, b: o, variant: v, aCand: true, bCand: false }); });
     const res = await runWorkers(tasks, variants, workers);
-    const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps, strongSet) }));
-    const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, strongSet, rows };
+    const rows = variants.map((_, v) => ({ label: labels[v], cand: variants[v], ...summarize(res, v, target, opps, weights) }));
+    const out = { mode: args.scan ? 'scan-' + args.scan : 'single', target, games, seed: seed0, size: size || 4, opponents: opps, weights, rows };
     if (args.json) { console.log(JSON.stringify(out)); return; }
     // 主指標: 対強豪平均（強豪の集合が無い・--opp で強豪が残らないときは field）
     const M = (r) => (r.strong != null ? r.strong : r.field);
     const SE = (r) => (r.strong != null ? r.strongSe : r.se);
-    const metricName = rows[0].strong != null ? `対強豪(${rows[0].strongN}体)` : 'field';
+    const metricName = rows[0].strong != null ? `対強豪(重み付き。実効${rows[0].strongN}体)` : 'field';
     if (args.scan === 'audit') {
         const base = rows[0];
         console.log(`base ${(M(base) * 100).toFixed(1)}% [${metricName}]（寄与 = base − 禁止/除去後。同一シードなので差は札/ギアの寄与。「差なし」= 全試合の結果が基準と完全一致。AIが使っていないか、banが効かない経路で使っているかのどちらかなので、probe-usage.js で使用回数を確認すること）`);

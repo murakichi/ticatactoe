@@ -64,6 +64,8 @@ export const skillCosts = {
     onClickInferno: 7,
     // 凩の魔女の固有スキル 虎落笛: 自陣の🍂の枚数ぶん敵全てにダメージ、自陣のライフ+2。sim/engine.js の onClickMogaribue と一致させること
     onClickMogaribue: 7,
+    // 鍵師の固有スキル 封鎖の断（#439）: 自陣7・空きマス2のロック、敵陣のロックを解除して解除数ぶんダメージ。ターン終了。敵陣のロックの数だけ軽減（下限5, keysmith.ts の sealBaseCost）
+    onClickSeal: 10,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
@@ -86,7 +88,6 @@ export const skillCosts = {
     onClickFrostfall: 3,
     // 汎用スキル(idx 49-52)。慈雨・縮地・写し身・追い剥ぎ
     onClickBoost: 4,
-    onClickRelocate: 3,
     onClickClone: 4,
     onClickPlunder: 5,
     // コスト軽減スキル(idx 53-58)。discount.ts
@@ -164,6 +165,15 @@ export const skillCosts = {
     onClickSoloSign: 5, //      お一人様限りの札(idx 127): 働いている間、相手は1ターンに新しいコマを1つしか置けない。基準: トークン連打の抑止（ダブルトークン等を封じる）
     onClickOneWord: 6, //       一言居士(idx 128): 働いている間、相手は1ターンにスキルを1つしか使えない。基準: 相手の連続スキル(コンボ)を丸ごと封じるので、サイレンス(5)に近い6
     onClickBlindMonkey: 5, //   見ざる地蔵(idx 129): 周囲八マスには新しくエフェクトを付けられない。基準: 自陣を守る側にも自分が使う側にも効く範囲型。聖域(5)と同じ
+    // 鍵師向けの汎用スキル（#439, idx 130〜133）。コストは docs/skill-cost-rules.md の基準から（日記 2026-11-06）
+    onClickLockRaid: 4, //        錠前荒らし(idx 130): 敵陣のロックを1つ解除し🔥☠⚡のどれかをランダムに付与（エフェクト1個の単価約2〜3＋解除）。直前の相手ターンにロックが使われていたら0
+    onClickLockExtend: 5, //      ロックの増築(idx 131): 自陣のロックのスタックを全て+2（R4: 自陣全体。ロックの乗ったコマだけが対象）
+    onClickLockBlessing: 4, //    施錠の加護(idx 132): 3手番の間、設置したコマにロック2（🔑単価2×設置1〜2回）
+    onClickVacantSeal: 10, //     空き家封じ(idx 133): 空きマス全てを2スタックでロック。相手のリーチ1つにつき-3（下限1）。盤面全体は重く基本10（R7）
+    onClickLockConvert: 4, //     錠の転換(idx 134): ロックを1つ解除し、そのスタックを自分のライフに足す。ライフ3(3)＋ロック解除。スタックは普通6なので『ライフ+6』が4で買える代わりに、自陣のロックを崩す／敵のロックを崩す対象が要る
+    onClickLockDiscount: 1, //    錠前割引(idx 135・ユーザー提案): 盤面のロックのマスの数だけ、このターンの全スキルを軽減。使った時点の数で固定。春一番(turn軽減)と同型。軽減札は基準で1〜3（特売3・大特価7は次の1スキルのみ）、このターン全体に効くが条件（ロックが場に要る）があるので1
+    // 大岩(idx 136・ユーザー指定): 効果は無く2ターンのロック付きで設置するだけ。基準(docs/skill-cost-rules.md)の下限より安いが、ユーザー指定で1
+    onClickBoulder: 1,
 };
 
 export type SkillCosts = typeof skillCosts;

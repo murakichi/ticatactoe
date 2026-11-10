@@ -3,8 +3,9 @@ import { Player, seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isObject } from '../../types/ObjectKind';
 import { GEAR_PARAMS } from './gear';
+import { isLocked, lockStack, tickLock } from './lock';
 import { sanctuaryProtected } from './objects';
-import { burnDamageOf, decayTick, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
+import { burnDamageOf, decayParts, emptyBlocked, isEffectWarded, isFrozen } from './thermal';
 
 // ライフの減衰(各コマ -1・毒スタック分の追加減衰・ロックの解除)を進めるタイミング。
 // 2人戦は従来どおり「着手のたび」。3人以上は人数が増えるほど1周あたりの減衰が増えてコマがすぐ0になる
@@ -32,9 +33,11 @@ export const CROWDED_DECAY_MIN_PLAYERS = 3;
 export const isCrowded = (board: SquareInfo[], seatCount: number): boolean =>
     seatCount >= CROWDED_DECAY_MIN_PLAYERS && board.filter((sq) => !sq.player && !emptyBlocked(sq)).length <= Math.floor(board.length / CROWDED_EMPTY_DIVISOR);
 
-/** 満杯の追加減衰: コマ（と🔑ロック）のライフを1減らす。氷結中・ライフ0は対象外 */
-export const crowdedDecay = (sq: SquareInfo): SquareInfo =>
-    (sq.player || sq.effects.some((e) => e.effect === '🔑')) && sq.bind > 0 && !isFrozen(sq) && !isObject(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+/** 満杯の追加減衰: コマのライフを1減らし、🔑ロックのスタックも1減らす（切れるのは通常の減衰のとき）。氷結中・ライフ0・オブジェクトはライフが対象外 */
+export const crowdedDecay = (sq: SquareInfo): SquareInfo => {
+    const aged = sq.player && sq.bind > 0 && !isFrozen(sq) && !isObject(sq) ? { ...sq, bind: sq.bind - 1 } : sq;
+    return lockStack(aged) > 1 ? tickLock(aged).sq : aged;
+};
 export type DecayResult = {
     /** 🔥の継続ダメージを受けたマス（演出用） */
     burnCells: number[];
@@ -44,6 +47,8 @@ export type DecayResult = {
     spreadOrigins: number[];
     /** 空蔵のロックが切れて、持ち主のコマが生えたマス */
     emptyLockSpawns: number[];
+    /** コマが受けたダメージの内訳(実際に減ったライフ)。natural=自然減衰(満杯の追加分を含む)、burn=🔥、poison=☠。ダメージの表示用 */
+    damage: { cell: number; natural: number; burn: number; poison: number }[];
 };
 
 /**
@@ -54,28 +59,36 @@ export type DecayResult = {
  * @param moveCell この着手のマス（毒で消える扱いから外す。着手でないなら -1）
  */
 export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false): DecayResult => {
-    const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [] };
+    const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [], damage: [] };
     const sanctuary = sanctuaryProtected(board); // 聖域に守られたマスは自然減衰（満杯の追加分も）を受けない
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if (burnDamageOf(before, chars) > 0) res.burnCells.push(k);
-        const sq = decayTick(crowded && !sanctuary[k] ? crowdedDecay(before) : before, chars, !sanctuary[k]); // 満杯の盤面は自然減衰がもう1回
+        const crowdedBefore = crowded && !sanctuary[k] ? crowdedDecay(before) : before; // 満杯の盤面は自然減衰がもう1回
+        const parts = decayParts(crowdedBefore, chars, !sanctuary[k]);
+        const sq = parts.sq;
         board[k] = sq;
+        // コマが受けたダメージ(自然減衰は満杯の追加分も含む)。ロックだけのマスは対象外
+        if (before.player) {
+            const natural = parts.natural + (before.bind - crowdedBefore.bind);
+            if (natural + parts.burn + parts.poison > 0) res.damage.push({ cell: k, natural, burn: parts.burn, poison: parts.poison });
+        }
         if (before.player && !sq.player) {
             res.flameKills++;
             continue;
         }
         const poison = isEffectWarded(sq) ? 0 : sq.effects.filter((e) => e.effect === '☠').length; // 術中の加護
         // 期限切れのロック。空蔵の持ち主が空きマスにかけたロックなら、そのマスが持ち主のコマになる
-        const expiredLock = sq.bind === 0 ? sq.effects.find((e) => e.effect === '🔑') : undefined;
-        if (sq.bind === 0) sq.effects = sq.effects.filter((e) => e.effect !== '🔑');
-        if (expiredLock?.value != null && !sq.player) {
-            board[k] = { player: symbols[expiredLock.value - 1], bind: GEAR_PARAMS.emptyLockLife, effects: [] };
+        const ticked = tickLock(sq);
+        sq.effects = ticked.sq.effects;
+        const expiredLock = ticked.expired;
+        if (expiredLock?.owner != null && !sq.player) {
+            board[k] = { player: symbols[expiredLock.owner - 1], bind: GEAR_PARAMS.emptyLockLife, effects: [] };
             res.emptyLockSpawns.push(k);
             continue;
         }
         // 毒持ちのコマでライフが0のマスは消えて拡散の起点になる。「このターンに0へ落ちた」とは限らない: ライフ0のコマに後から毒を撒いた場合も消す
-        if (poison > 0 && sq.bind === 0 && sq.player && k !== moveCell) {
+        if (poison > 0 && sq.bind === 0 && sq.player && k !== moveCell && !isLocked(sq)) { // ロック中のコマは毒で消えない
             res.spreadOrigins.push(k);
             board[k] = { player: undefined, bind: 0, effects: [] };
         }

@@ -31,7 +31,7 @@ const CIRCLE = SYMBOLS[1];
 const seatOf = (player) => SYMBOLS.indexOf(player);
 
 /** Selectable characters (match App.tsx radio options). */
-const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch'];
+const CHARACTERS = ['you', 'tactician', 'magician', 'giant', 'yinYangMaster', 'necromancer', 'poisoner', 'electrician', 'cryomancer', 'pyromancer', 'witch', 'keysmith'];
 
 // ---- RNG (seedable) -------------------------------------------------------
 /** mulberry32 PRNG -> function returning [0,1). */
@@ -66,7 +66,9 @@ const graveMod = require('./shared/graveSkills');
 const placementMod = require('./shared/placement');
 const proliferateMod = require('./shared/proliferate');
 const tokenAfterMod = require('./shared/tokenAfter');
+const tokenPlaceMod = require('./shared/tokenPlace');
 const deadlockMod = require('./shared/deadlock');
+const keysmithMod = require('./shared/keysmith');
 const chargeMod = require('./shared/charge');
 const tokenSkillsMod = require('./shared/tokenSkills');
 const genericMod = require('./shared/generic');
@@ -166,7 +168,7 @@ function surroundRange(s, i) {
 }
 // 周囲1マスのコマ(敵味方問わず)1つにランダムで毒を1付与（毒拡散パッシブ）
 function spreadPoisonAround(board, idx, rng, s) {
-    const targets = surroundRange(s, idx).filter((j) => board[j].player);
+    const targets = surroundRange(s, idx).filter((j) => board[j].player && !isShielded(s, board[j]));
     if (!targets.length) return;
     const t = randomPick(targets, rng);
     board[t].effects.push({ effect: '☠' });
@@ -255,23 +257,33 @@ function toxicBloom(s, cells) {
 }
 // トークン系スキルでコマを置いた後の処理: 道連れの鍵(確率でロック) と 伝播(周囲のコマに同じエフェクト)。
 // effect はトークンが持つエフェクト(🌱/☠/⚡)、無ければ undefined。収穫に渡す「付与したエフェクト数」を返す
+function afterOptions(s) {
+    return { player: curPlayer(s), turnSeat: s.turn, gears: s.gears[s.turn], chars: s.chars, chargeBuff: s.chargeBuff[s.turn], rng: s.rng };
+}
+// 置いたあとのギア処理の結果を統計に記録する
+function noteAfter(s, r) {
+    if (!r) return;
+    if (r.locked) bumpStat(s, 'bindingLock');
+    if (r.spreadTo !== null) bumpStat(s, 'propagate');
+    if (r.seeded) bumpStat(s, 'budSeed');
+}
 function afterTokenPlaced(s, idx, effect) {
-    // 静電気の季節: 設置したトークンに⚡（収穫・伝播には数えない）
-    if (s.chargeBuff[s.turn] > 0 && s.board[idx].player === curPlayer(s)) addCharge(s, idx);
-    const g = s.gears[s.turn];
-    let granted = effect ? 1 : 0;
-    if (hasGear(g, 'bindingLock') && s.rng() < GP.bindingLockChance) {
-        applyLock(s, idx);
-        granted += 1;
-        bumpStat(s, 'bindingLock');
-    }
-    if (effect && hasGear(g, 'propagate')) {
-        if (tokenAfterMod.propagate(s.board, idx, effect, curPlayer(s), s.chars, s.rng) !== null) {
-            granted += 1;
-            bumpStat(s, 'propagate');
-        }
-    }
-    return granted;
+    const r = tokenAfterMod.afterTokenPlaced(s.board, idx, effect, afterOptions(s));
+    noteAfter(s, r);
+    return r.granted;
+}
+// トークン系スキルの置き方（共有: tokenPlace.ts）。空きマスから n 個選び、kind のコマを置いて afterTokenPlaced を通し、収穫まで済ませる。
+// 1個のときは randomPick、2個以上は randomAnyPick で選ぶ。置いたコマ（idx / thawed / frost）を返す
+function putTokens(s, kind, n, extra, afterPut) {
+    const pick = n === 1 ? (cells) => [randomPick(cells, s.rng)] : (cells, k) => randomAnyPick(cells, k, s.rng);
+    return putTokensAt(s, kind, tokenPlaceMod.pickEmptyCells(s.board, n, pick), extra, afterPut);
+}
+function putTokensAt(s, kind, cells, extra, afterPut) {
+    const ctx = { player: curPlayer(s), bind: calculateTokenBind(s), chars: s.chars, size: s.size, ...extra };
+    const r = tokenPlaceMod.placeTokens(s.board, kind, cells, ctx, afterOptions(s), afterPut);
+    r.placed.forEach((p) => noteAfter(s, p.after));
+    harvestMagic(s, r.granted);
+    return r.placed;
 }
 // 復讐の刃: 魔力の増減を席ごとに記録するための上限つき加算
 function vengeanceGain(s, seat, gained) {
@@ -396,6 +408,8 @@ function newGame(opts = {}) {
         lastMoveCell: null,
         // 土壇場の防壁: 使用済みの席（初めて相手が勝つときに1度だけ。発動後は相手の魔力+2・ライフ+1）
         lastStandUsed: fill(false),
+        // 雪だるま: 席ごとのライフ期待値の積み上げとリセットまでの回数
+        ramp: gears.map(() => gear.rampStart()),
         // 価格破壊: 席ごとのコスト表（試合開始時に1回だけ抽選）。装備していない席は null
         priceTables: gears.map((g) => (hasGear(g, 'priceWreck') ? gear.applyPriceOffsets(skillCosts, gear.rollPriceOffsets(rng)) : null)),
         useChargeArea: false,
@@ -418,9 +432,8 @@ function newGame(opts = {}) {
         useShatter: false,
         useSacrifice: false,
         useKimon: false,
+        useLockConvert: false, // 錠の転換（汎用 idx 134）: ロックのかかったマスを選んで解除し、スタックを自分のライフに足す
         usePlunder: false,
-        useRelocate: false,
-        relocateFrom: null,
         useStash: false,
         useBoltSilence: 0, // あと何個の⚡を選んで払うか
         useThunderFire: false,
@@ -437,6 +450,11 @@ function newGame(opts = {}) {
         veilNext: fill(false), // 夜の帳: この席の次の手番から効く
         ward: fill(0), // 毒返しの構え: 残りの手番数（その席の手番が終わるたびに1減る）
         wardFresh: fill(false), // 毒返しの構えを使った手番（その手番の終わりでは減らさない）
+        lockSeen: fill(false), // 自分の前の手番以降に、他の席がロックを使った（錠前荒らしの0コスト条件）
+        lockFreeUsed: fill(false), // 鍵師のパッシブ: この手番に常設のロックの無料の1回を使ったか
+        lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
+        blessing: fill(0), // 施錠の加護: 残りの手番数
+        blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -451,7 +469,10 @@ function newGame(opts = {}) {
         log: [],
     };
     defineLegacyAliases(state);
-    state.life = Math.max(1, calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]), gear.gearLifeStd(gears[0], LIFE_STD)));
+    // 雪だるま: 最初は+0から。先手の最初に引いたライフも数える
+    const firstRoll = calculateLife(chars[0], state.yy[0], rng, gear.gearLifeBonus(gears[0]) + (hasGear(gears[0], 'snowball') ? gear.rampBonus(state.ramp[0]) : 0), gear.gearLifeStd(gears[0], LIFE_STD));
+    if (hasGear(gears[0], 'snowball')) state.ramp[0] = gear.rampAfterRoll(state.ramp[0], firstRoll);
+    state.life = Math.max(1, firstRoll);
     state.skills = reshuffleSkillsFor(state, 0, POOL_SIZE); // 先手(席0)の初期スキル
     armWard(state);
     return state;
@@ -464,14 +485,14 @@ function reshuffleSkillsFor(s, seat, poolEnd) {
     const keep = s.lockedSkills[seat].slice(0, 3);
     const pool = [];
     if (s.decks) { for (const i of s.decks[seat]) if (!keep.includes(i)) pool.push(i); }
-    else for (let i = 0; i < poolEnd; i++) if (!keep.includes(i)) pool.push(i);
+    else for (let i = 0; i < poolEnd; i++) if (!keep.includes(i) && !deckMod.REMOVED_SKILL_IDX.includes(i)) pool.push(i); // 欠番(削除したスキル)は引かない
     const fill = randomAnyPick(pool, Math.max(0, 3 - keep.length), s.rng);
     return [...keep, ...fill];
 }
 
-// 式神(📜)は列の並びに数えない
-const isShikigami = (sq) => sq.effects.some((e) => e.effect === '📜');
-const symbolsOf = (board) => board.map((x) => (isShikigami(x) || x.object ? undefined : x.player)); // 式神・オブジェクトは列に数えない
+// 式神はオブジェクトの一種（SquareInfo.object = 'shikigami'）。オブジェクトは列の並びに数えない
+const isShikigami = (sq) => sq.object === 'shikigami';
+const symbolsOf = (board) => board.map((x) => (x.object ? undefined : x.player));
 const seatCount = (s) => s.chars.length;
 const symbolOfSeat = (seat) => SYMBOLS[seat];
 const curPlayer = (s) => SYMBOLS[s.turn];
@@ -489,7 +510,7 @@ function costsOf(s, seat = s.turn) {
 function gearCtx(s, seat) {
     const ailments = hasGear(s.gears[seat], 'ailmentPact') ? gear.countAilmentKinds(s.board, SYMBOLS[seat]) : 0;
     const [g, r] = gearTurnView(s);
-    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments);
+    return gearTurnMod.gearCostContext(g, r, seat, s.turn, ailments, hasGear(s.gears[seat], 'buildMania') && objectsMod.hasOwnObject(s.board, SYMBOLS[seat]));
 }
 // 実コスト(キャラ補正 → ギア補正 → 導線 → 軽減スキル)の計算は本番(cost.ts)の生成物。ここは席の状況を詰めるだけ
 const costMod = require('./shared/cost');
@@ -511,7 +532,11 @@ function costEnv(s, seat) {
         bigCast: s.bigCast[seat],
         oppBigPrev: s.oppBigPrev[seat],
         veil: s.veil[seat],
+        corpses: turnMod.NECROMANCY.baseCost - s.necroCost[seat],
         oppSkillPrev: s.oppSkillPrev[seat],
+        lockPrev: s.lockPrev[seat],
+        lockFreeUsed: s.lockFreeUsed[seat],
+        magic: s.magic[seat],
         fireBase: s.fireBase[seat],
         plantPrev: s.plantPrev[seat],
         placedPrev: s.placedPrev[seat],
@@ -533,6 +558,7 @@ function noteSkillUsed(s, skillId, paid = 0) {
     g.infernoReady = s.infernoReady;
     gearTurnMod.noteSkillUsed(g, s.turn, skillId, paid);
     s.oppSkilled = g.oppSkilled; // 作り直された配列を戻す
+    s.lockSeen = g.lockSeen; // 錠前荒らしの0コスト条件（同じく作り直される）
 }
 /** 収穫: エフェクトをn個付与したぶん魔力を得る（上限あり） */
 function harvestMagic(s, n) {
@@ -605,7 +631,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -644,16 +670,24 @@ function settleWinner(s) {
 // Port of the useEffect[currentTurn]: advance to next player, grant magic & life.
 // 手番をまたいで残ってはいけない「次のクリックで対象を選ぶ」待ち状態。ターン終了スキル(チャージなど)で手番が終わったときに、
 // 次の席の最初のクリックが前の席のスキルの対象として使われてしまうのを防ぐ（Game.tsx の手番切り替えでも同じ一覧を解除する）
-const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'usePlunder', 'useRelocate', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
+const PENDING_TARGET_FLAGS = ['useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze', 'useSucker', 'useIgnite', 'useSwidden', 'useSacrifice', 'useKimon', 'useLockConvert', 'usePlunder', 'useStash', 'useBoltSilence', 'useThunderFire', 'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter'];
 function clearPendingTargets(s) {
     for (const k of PENDING_TARGET_FLAGS) s[k] = false;
-    s.relocateFrom = null;
     s.useLock = 0;
     s.objectPlacing = null;
     s.objectTool = null;
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
+    if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
+        const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
+        if (victims.length > 0) {
+            for (const k of victims) s.board[k] = newSquare();
+            addCorpses(s, victims.length);
+            bumpStat(s, 'reaperKill', victims.length);
+        }
+    }
     // 膠着の打開(本番 deadlock.ts): 着手が何周も無いと氷結とロックが一段解ける
     if (!s.deadlock || s.deadlock.placements !== s.placements) s.deadlock = { placements: s.placements, turn: s.currentTurn };
     else if (deadlockMod.isDeadlocked(s.currentTurn, s.deadlock.turn, seatCount(s))) {
@@ -696,6 +730,11 @@ function advanceTurn(s) {
     change.wardPlace.forEach((seat) => {
         if (graveMod.placeWardPiece(s.board, SYMBOLS[seat], (cells) => cells[Math.floor(s.rng() * cells.length)]) >= 0) bumpStat(s, 'poisonWardPlaced');
     });
+    // 春雷(本番 gear.ts の springThunderThaw): 次の手番の席の自陣のリーチの4つ目が氷結した空きマスなら、その❄を1つ解く
+    if (hasGear(s.gears[next], 'springThunder')) {
+        const thawed = gear.springThunderThaw(s.board, sym);
+        if (thawed.length > 0) bumpStat(s, 'springThunder', thawed.length);
+    }
     // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
     const burntTrees = objectsMod.sweepBurntTrees(s.board);
     const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
@@ -717,6 +756,7 @@ function advanceTurn(s) {
         scorch: scorchForNext, // 焦土(上で計算)
         root, // 凍てつく根: 氷結で休眠した🌱(敵味方問わず)1つにつき+1
         objects: objRes.magic, // 大木
+        rent: hasGear(s.gears[next], 'groundRent') ? gear.rentGain(objectsMod.activeObjectCount(s.board, sym)) : 0, // 地代: 働いている自陣のオブジェクト1つにつき+1
     });
     // 増殖: 手番開始時に維持コストを支払う。払えなければループが途切れる
     if (s.proliferate[next]) {
@@ -734,7 +774,13 @@ function advanceTurn(s) {
         addCorpses(s, det.destroyed.length);
         bumpStat(s, 'glacierDestroyed', det.destroyed.length);
     }
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    // 雪だるま: 引いたライフを数えて、手番ごとに期待値が1段積み上がる。10以上が3回出たらリセット
+    const rampOn = hasGear(s.gears[next], 'snowball');
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    if (rampOn) {
+        s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
+        if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
+    }
     if (s.life <= 0) s.life = 1;
     s.usedTokenThisTurn = false;
     s.turn = next;
@@ -824,15 +870,6 @@ function placeMove(s, i) {
         s.useSwidden = false;
         return true;
     }
-    if (s.useRelocate) {
-        // 縮地: 動かす自陣のコマを選び、空きマスを選ぶ。選べないマスは選び直せる
-        if (genericMod.canRelocate(s.board[i], curPlayer(s))) { s.relocateFrom = i; return false; }
-        if (s.relocateFrom === null) return false;
-        if (!genericMod.relocate(s.board, s.relocateFrom, i, curPlayer(s))) return false;
-        s.useRelocate = false;
-        s.relocateFrom = null;
-        return true;
-    }
     if (s.usePlunder) {
         if (!genericMod.plunderTargets(s.board, curPlayer(s), s.chars).includes(i)) return false; // 対象外は選び直せる
         genericMod.plunder(s.board, i, curPlayer(s));
@@ -843,6 +880,11 @@ function placeMove(s, i) {
     if (s.useKimon) {
         if (!exeKimon(s, i)) return false; // 選べないマスは選び直せる
         s.useKimon = false;
+        return true;
+    }
+    if (s.useLockConvert) {
+        if (!exeLockConvert(s, i)) return false; // ロックの無いマスは選び直せる
+        s.useLockConvert = false;
         return true;
     }
     if (s.useSacrifice) {
@@ -880,6 +922,7 @@ function placeMove(s, i) {
         return true;
     }
     if (s.useInjection > 0) {
+        if (isShielded(s, board[i])) return false;
         board[i].effects.push({ effect: '☠' });
         poisonStrike(s, board[i]);
         harvestMagic(s, 1);
@@ -893,7 +936,7 @@ function placeMove(s, i) {
     }
     if (s.objectTool) {
         // オブジェクトのスキル（解体・風化・補強工事・分譲）: 対象のマスを選ぶ。対象でないマスは選び直せる [FAITHFUL] Game.tsx exeObjectTool
-        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng);
+        const r = objectsMod.runObjectSkill(s.objectTool, board, curPlayer(s), s.chars, i, s.rng, gear.objectBuildLife(s.gears[s.turn]));
         if (!r) return false;
         bumpStat(s, 'objectSkill_' + s.objectTool);
         s.objectTool = null;
@@ -902,7 +945,7 @@ function placeMove(s, i) {
     if (s.objectPlacing) {
         // オブジェクト: 空きマスに設置する。埋まっている/氷結中/ロック中のマスは選び直せる [FAITHFUL] Game.tsx exeObjectPlace
         if (!objectsMod.objectLandable(board[i])) return false;
-        board[i] = { ...objectsMod.newObject(curPlayer(s), s.objectPlacing), effects: board[i].effects.filter((e) => e.effect === '🔥') };
+        board[i] = objectsMod.newObject(curPlayer(s), s.objectPlacing, gear.objectBuildLife(s.gears[s.turn]), board[i].effects.filter((e) => e.effect === '🔥'));
         objectsMod.sweepBurntTrees(board);
         bumpStat(s, 'objectPlaced');
         s.objectPlacing = null;
@@ -951,7 +994,7 @@ function placeMove(s, i) {
     if (board[i].player && board[i].player !== curPlayer(s)) {
         if ((board[i].bind > 0 || decayMod.isTakeProtected(board[i], s.chars)) && !decayMod.canHitBound(curChar(s), board, seatCount(s))) return false; // can't attack a bound enemy unless giant (or a crowded board)
     }
-    if (board[i].effects.find((e) => e.effect === '🔑') && board[i].bind > 0) return false;
+    if (keysmithMod.lockBlocksPlacement(board[i], curChar(s))) return false; // 鍵師は空きマスのロックを無視して置ける
     // 氷結中の空きマスには誰も着手できない
     if (thermal.emptyBlocked(board[i])) return false;
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
@@ -991,6 +1034,13 @@ function placeMove(s, i) {
     }
 
     board[i] = { player: newPlayer, bind: placed.square.bind, effects: newEffects, ...(placed.square.object ? { object: placed.square.object } : {}) };
+    // 芽吹き: ライフの高いコマを設置する（補強は設置ではない）とき🌱を付ける
+    if (!placed.reinforced) {
+        const seeded = tokenAfterMod.seedBud(board[i], cur, s.gears[s.turn]);
+        if (seeded) { board[i] = seeded; bumpStat(s, 'budSeed'); }
+    }
+    // 施錠の加護: 効いている間、設置した（着手で自陣になった）コマにロックが付く [FAITHFUL] Game.tsx onCellClick
+    if (keysmithMod.blessingActive(s.blessing[s.turn]) && newPlayer === cur && !board[i].object) board[i] = keysmithMod.blessPlacedPiece(board[i]);
 
     // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
     const vengeanceGained = {};
@@ -1118,7 +1168,8 @@ function onClickUseLock(s) {
         return;
     }
     s.useLock += 1;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock'), 'onClickUseLock');
+    const lockCost = calculateCost(s, costsOf(s).onClickUseLock, false, false, 'onClickUseLock');
+    spendMagic(s, lockCost, 'onClickUseLock');
     bumpMagicCount(s);
 }
 function onClickDoubleLock(s) {
@@ -1132,40 +1183,21 @@ function onClickTripleLock(s) {
     bumpMagicCount(s);
 }
 function onClickToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickToken, true, false, 'onClickToken'), 'onClickToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickDoubleToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    const [a, b] = randomAnyPick(empties, 2, s.rng);
-    let granted = 0;
-    if (a != null) { s.board[a] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, a, undefined); }
-    if (b != null) { s.board[b] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] }; granted += afterTokenPlaced(s, b, undefined); }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleToken, true, false, 'onClickDoubleToken'), 'onClickDoubleToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
 function onClickBudsToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
-        granted = afterTokenPlaced(s, idx, '🌱');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'buds', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickBudsToken, true, false, 'onClickBudsToken'), 'onClickBudsToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1173,14 +1205,10 @@ function onClickBudsToken(s) {
 }
 function onClickBothToken(s) {
     // 参加者全員に1つずつ（席順に空きマスからランダムに）。空きが足りなければ先着の席だけ
-    const empties = findEmptyIndexes(s.board);
-    const picks = randomAnyPick(empties, Math.min(seatCount(s), empties.length), s.rng);
-    let granted = 0;
-    picks.forEach((idx, seat) => {
-        s.board[idx] = { player: SYMBOLS[seat], bind: seat === s.turn ? calculateTokenBind(s) : 4, effects: [] };
-        if (seat === s.turn) granted += afterTokenPlaced(s, idx, undefined);
-    });
-    harvestMagic(s, granted);
+    const picks = tokenPlaceMod.pickEmptyCells(s.board, seatCount(s), (cells, n) => randomAnyPick(cells, n, s.rng));
+    const r = tokenPlaceMod.placeBothTokens(s.board, picks, SYMBOLS, s.turn, calculateTokenBind(s), 4, afterOptions(s));
+    r.placed.forEach((p) => noteAfter(s, p.after));
+    harvestMagic(s, r.granted);
     spendMagic(s, calculateCost(s, costsOf(s).onClickBothToken, true, false, 'onClickBothToken'), 'onClickBothToken');
     s.useMagicCount[s.turn]++;
     s.usedTokenThisTurn = true;
@@ -1316,7 +1344,7 @@ function onClickShikigamiAll(s) {
     const cur = curPlayer(s);
     const base = shikigamiAllBase(s);
     if (base === 0) return;
-    for (const sq of s.board) if (sq.player === cur && isShikigami(sq)) sq.effects = sq.effects.filter((e) => e.effect !== '📜');
+    s.board.forEach((sq, k) => { if (sq.player === cur && isShikigami(sq)) s.board[k] = shikiMod.toPiece(sq); });
     spendMagic(s, calculateCost(s, base, false, false, 'onClickShikigamiAll'), 'onClickShikigamiAll');
     bumpMagicCount(s);
 }
@@ -1334,18 +1362,11 @@ function onClickShikigamiFlood(s) {
 }
 // 汎用(コスト2・トークン扱い): 式神をランダムな空きマスに置く
 function onClickShikigamiRandom(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        // トークン系ギア(補強・軽量)のライフ補正を受ける
-        s.board[idx] = newShikigami(curPlayer(s), Math.max(1, SHIKIGAMI_LIFE + gear.gearTokenBindDelta(s.gears[s.turn])));
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    // トークン系ギア(補強・軽量)のライフ補正を受ける
+    const placed = putTokens(s, 'shikigami', 1, { shikigamiBind: Math.max(1, SHIKIGAMI_LIFE + gear.gearTokenBindDelta(s.gears[s.turn])) });
     spendMagic(s, calculateCost(s, costsOf(s).onClickShikigamiRandom, true, false, 'onClickShikigamiRandom'), 'onClickShikigamiRandom');
     bumpMagicCount(s);
-    if (empties.length) s.shikiPlaced[s.turn] = true;
+    if (placed.length) s.shikiPlaced[s.turn] = true;
     s.usedTokenThisTurn = true;
     s.useTokenCount[s.turn]++;
 }
@@ -1371,7 +1392,7 @@ function onClickJudgeDay(s) {
     s.useJudgeDay = true;
 }
 function exeJudgeDay(s, i) {
-    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s));
+    const { destroyed } = blastMod.judgeDay(s.board, i, curPlayer(s), { gears: s.gears[s.turn], seat: s.turn });
     addCorpses(s, destroyed);
     s.useMagicCount[s.turn] = 0;
     s.useJudgeDay = false;
@@ -1417,9 +1438,8 @@ function necromancyPay(s) {
 }
 function summonCorpses(s, corpses) {
     const cur = curPlayer(s);
-    const empties = findEmptyIndexes(s.board);
-    const summonCount = Math.min(corpses, necromancySummonCap, empties.length);
-    const targets = randomAnyPick(empties, summonCount, s.rng);
+    const summonCount = Math.min(corpses, necromancySummonCap, findEmptyIndexes(s.board).length);
+    const targets = randomAnyPick(findEmptyIndexes(s.board), summonCount, s.rng);
     for (const idx of targets) s.board[idx] = { player: cur, bind: necromancyReviveLife, effects: [] };
 }
 function onClickNecromancy(s) {
@@ -1458,15 +1478,8 @@ function onClickInjection(s) {
     bumpMagicCount(s);
 }
 function onClickPoisonToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = poisonMod.poisonStrike({ player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '☠' }] }, s.chars);
-        granted = afterTokenPlaced(s, idx, '☠');
-        toxicBloom(s, [idx]);
-    }
-    harvestMagic(s, granted);
+    const placed = putTokens(s, 'poison', 1);
+    if (placed.length) toxicBloom(s, [placed[0].idx]);
     spendMagic(s, calculateCost(s, costsOf(s).onClickPoisonToken, true, true, 'onClickPoisonToken'), 'onClickPoisonToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1548,7 +1561,7 @@ function onClickDarkPot(s) {
 // 雷を食らわば皿まで (idx 83): ⚡が効いている（休眠中でない）自陣のコマのライフを、⚡のスタック1つにつき+2する。⚡のコマが無ければ使えない。
 // この手番に付与した⚡の数だけコスト軽減（撃つとリセット） [FAITHFUL] Game.tsx onClickChargeHeal
 const CHARGE_HEAL = 2;
-function chargeHealCells(s) { return s.board.map((sq, k) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 && !thermal.isDormant(sq) ? k : -1)).filter((k) => k !== -1); }
+function chargeHealCells(s) { return chargeMod.chargeHealTargets(s.board, curPlayer(s)); }
 function chargeHealLegal(s) { return chargeHealCells(s).length > 0; }
 function onClickChargeHeal(s) {
     const cells = chargeHealCells(s);
@@ -1611,14 +1624,7 @@ function onClickFirstFrost(s) {
     const pay = calculateCost(s, costsOf(s).onClickFirstFrost, true, false, 'onClickFirstFrost'); // 凍結で🍂が休眠する前のコストで払う
     const frozen = thermal.freeze(s.board, firstFrostTargets(s));
     chargeGlacier(s, frozen.length);
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '🌱' }] };
-        granted = afterTokenPlaced(s, idx, '🌱');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'buds', 1);
     spendMagic(s, pay, 'onClickFirstFrost');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1696,15 +1702,7 @@ function onClickBurnOff(s) {
     const { cells, flames: lit, destroyed: destroyedCells } = tokenSkillsMod.burnOff(s.board, curPlayer(s), s.chars, s.size, keepBudsOf(s));
     const destroyed = destroyedCells.length;
     if (destroyed > 0) addCorpses(s, destroyed);
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [] };
-        applyLock(s, idx);
-        granted = afterTokenPlaced(s, idx, undefined);
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'plain', 1, undefined, (board, idx) => applyLock(s, idx)); // ロック付きで置く
     spendMagic(s, pay, 'onClickBurnOff');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1714,7 +1712,7 @@ function onClickBurnOff(s) {
     bumpStat(s, 'burnOffFlames', lit);
 }
 
-// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（式神の印📜は除く。氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
+// 吹き寄せ (idx 94): 自陣にトークンを1つ置き、盤面のすべてのエフェクト（氷結(❄)のあるマス・🔑ロックのマス・⚡無敵のマスは無視して動かさない）をそのマスに移す。
 // 🔥が含まれる場合は、全て乗せ終わったあとに🔥の処理をする。トークン扱い（1手番に1度）。エフェクト1つにつき2軽減（最低1。氷結のマスは❄の数だけ・🔑ロック自体は数えない） [FAITHFUL] Game.tsx onClickGather
 function gatherLegal(s) { return !s.usedTokenThisTurn && findEmptyIndexes(s.board).length > 0; }
 function onClickGather(s) {
@@ -1786,16 +1784,9 @@ function onClickObjectSkill(s, skill) {
 }
 // 超助っ人 (idx 103): 🔥❄⚡☠🌱🍂のうちランダムな1つを付けたトークンを自陣のランダムな空きマスに置く（トークン扱い・ターン1回） [FAITHFUL] Game.tsx onClickHelper
 function onClickHelper(s) {
-    const empties = findEmptyIndexes(s.board);
     const effect = bigMod.pickHelperEffect(s.rng);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        bigMod.placeHelperToken(s.board, idx, curPlayer(s), calculateTokenBind(s), effect, s.chars, s.size);
-        granted = afterTokenPlaced(s, idx, effect === '🌱' || effect === '☠' || effect === '⚡' ? effect : undefined);
-        if (effect === '☠') toxicBloom(s, [idx]);
-    }
-    harvestMagic(s, granted);
+    const placed = putTokens(s, 'helper', 1, { helperEffect: effect });
+    if (placed.length && effect === '☠') toxicBloom(s, [placed[0].idx]);
     spendMagic(s, calculateCost(s, costsOf(s).onClickHelper, true, false, 'onClickHelper'), 'onClickHelper');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1806,15 +1797,7 @@ function onClickHelper(s) {
 
 // ---- 雷霆の巫 スキル ----
 function onClickChargeToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    let granted = 0;
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] };
-        landCharge(s, idx);
-        granted = afterTokenPlaced(s, idx, '⚡');
-    }
-    harvestMagic(s, granted);
+    putTokens(s, 'charge', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickChargeToken, true, false, 'onClickChargeToken'), 'onClickChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1846,10 +1829,7 @@ function exeChargeSpread(s, i) {
 // ---- 雷霆の巫 スキル2 (#40) ----
 // 帯電ダブルトークン: ⚡付きのコマを2つ設置（ターン1回）
 function onClickDoubleChargeToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, 2, s.rng)) {
-        if (idx != null) { s.board[idx] = { player: curPlayer(s), bind: calculateTokenBind(s), effects: [{ effect: '⚡' }] }; landCharge(s, idx); }
-    }
+    putTokens(s, 'charge', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleChargeToken, true, false, 'onClickDoubleChargeToken'), 'onClickDoubleChargeToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -1960,7 +1940,7 @@ function onClickGlacier(s) {
     if (s.glacierPending[s.turn]) return; // 発動待ちの間は再使用不可
     const cost = glacierCost(s);
     s.glacierCharge[s.turn] = 0; // 自身の freezeAll で付く❄は数えない
-    const done = thermal.freezeAll(s.board);
+    const done = thermal.freezeAll(s.board, (sq) => isShielded(s, sq)); // 帯電中の雷霆の巫のコマは凍らない
     s.glacierPending[s.turn] = true;
     spendMagic(s, cost, 'onClickGlacier');
     bumpStat(s, 'glacier');
@@ -2015,9 +1995,7 @@ function bestSuckerTarget(s) {
 function exeSucker(s, i) {
     if (!suckerTargets(s).includes(i)) return false;
     // 受け手は最大2つ: 3つ以上あるときはその中からランダムに2つ（重複なし）
-    const recv = thermal.budReceivers(s.board, i, curPlayer(s), s.size);
-    const picked = recv.length > thermal.GRAFT_MAX ? randomAnyPick(recv, thermal.GRAFT_MAX, s.rng) : undefined;
-    const got = thermal.graft(s.board, i, curPlayer(s), s.size, picked);
+    const got = thermal.suckerGraft(s.board, i, curPlayer(s), s.size, (recv, n) => randomAnyPick(recv, n, s.rng));
     bumpStat(s, 'suckerCells', got.length);
     return true;
 }
@@ -2045,7 +2023,7 @@ function chargeGlacier(s, made) {
     for (let seat = 0; seat < s.glacierCharge.length; seat++) s.glacierCharge[seat] += made;
 }
 function freezeCells(s, cells) {
-    const made = thermal.freeze(s.board, cells).length;
+    const made = thermal.freeze(s.board, cells, (sq) => isShielded(s, sq)).length;
     chargeGlacier(s, made);
     return made;
 }
@@ -2092,13 +2070,7 @@ function exeFreezeSpread(s, i) {
 }
 // 氷結トークン (idx45) / 氷結ダブルトークン (idx46): 空きマスにランダムで❄付きの自陣のコマを置く。トークン扱い（ターン1回）
 function placeFrostTokens(s, n, costKey) {
-    const empties = findEmptyIndexes(s.board);
-    const picks = n === 1 ? (empties.length ? [randomPick(empties, s.rng)] : []) : randomAnyPick(empties, n, s.rng);
-    for (const idx of picks) {
-        if (idx == null) continue;
-        chargeGlacier(s, thermal.placeFrostToken(s.board, idx, curPlayer(s), calculateTokenBind(s)));
-        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない扱い
-    }
+    for (const p of putTokens(s, 'frost', n)) chargeGlacier(s, p.frost);
     spendMagic(s, calculateCost(s, costsOf(s)[costKey], true, false, costKey), costKey);
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2139,12 +2111,8 @@ function onClickFrostfall(s) {
 // ---- 🍂落ち葉系の汎用スキル (idx 62〜68) ----
 // 🍂付きのトークンはトークンのエフェクトを持たない扱い（収穫/伝播ギアとは連動しない。火炎トークンと同じ）
 function placeLeafTokens(s, count, leaves) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, Math.min(count, empties.length), s.rng)) {
-        if (idx == null) continue;
-        thermal.placeLeafToken(s.board, idx, curPlayer(s), calculateTokenBind(s), leaves);
-        harvestMagic(s, afterTokenPlaced(s, idx));
-    }
+    // 1個でも randomAnyPick で選ぶ（従来どおり）
+    putTokensAt(s, 'leaf', tokenPlaceMod.pickEmptyCells(s.board, count, (cells, n) => randomAnyPick(cells, n, s.rng)), { leaves });
 }
 // 払うコストは置く前の盤面で決める（紅葉狩りの導線が、自分で置いた🍂で成立してしまわないように）
 const leafTokenCost = (s, key) => calculateCost(s, costsOf(s)[key], true, false, key);
@@ -2227,12 +2195,7 @@ function onClickSpringWind(s) {
 // ---- 火炎系の汎用スキル (idx 37〜40) ----
 // 火炎トークン (idx37): 空きマスにランダムで自陣のコマを置き、直後に🔥を1つ付ける（縦横隣の氷結は全解除）。トークン扱い
 function onClickFlameToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    if (empties.length) {
-        const idx = randomPick(empties, s.rng);
-        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
-        harvestMagic(s, afterTokenPlaced(s, idx)); // トークンのエフェクトは持たない（収穫/伝播ギアとは連動しない）
-    }
+    putTokens(s, 'flame', 1);
     spendMagic(s, calculateCost(s, costsOf(s).onClickFlameToken, true, false, 'onClickFlameToken'), 'onClickFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2241,12 +2204,7 @@ function onClickFlameToken(s) {
 }
 // 火炎ダブルトークン (idx38): 空きマス2つに同様
 function onClickDoubleFlameToken(s) {
-    const empties = findEmptyIndexes(s.board);
-    for (const idx of randomAnyPick(empties, 2, s.rng)) {
-        if (idx == null) continue;
-        thermal.placeFlameToken(s.board, idx, curPlayer(s), calculateTokenBind(s), s.size);
-        harvestMagic(s, afterTokenPlaced(s, idx));
-    }
+    putTokens(s, 'flame', 2);
     spendMagic(s, calculateCost(s, costsOf(s).onClickDoubleFlameToken, true, false, 'onClickDoubleFlameToken'), 'onClickDoubleFlameToken');
     bumpMagicCount(s);
     s.usedTokenThisTurn = true;
@@ -2273,14 +2231,7 @@ function onClickSwidden(s) {
     bumpStat(s, 'swidden');
 }
 // 殉火 (idx40・仮名): 自コマ（ライフ>0・🔑なし）を選ぶと、そのライフをゼロにして、ライフがそれ以下の敵コマ全てに🔥を1つ。対象の敵が0なら使えない
-function sacrificeCandidates(s) {
-    const me = curPlayer(s);
-    const out = [];
-    s.board.forEach((sq, i) => {
-        if (sq.player === me && sq.bind > 0 && !sq.effects.some((e) => e.effect === '🔑') && thermal.sacrificeTargets(s.board, sq.bind, me, s.chars).length > 0) out.push(i);
-    });
-    return out;
-}
+function sacrificeCandidates(s) { return thermal.sacrificeCandidates(s.board, curPlayer(s), s.chars); }
 function exeSacrifice(s, i) {
     if (!sacrificeCandidates(s).includes(i)) return false;
     const r = thermal.sacrificeFlame(s.board, i, curPlayer(s), s.chars, s.size, keepBudsOf(s));
@@ -2295,14 +2246,6 @@ function onClickSacrifice(s) {
     bumpStat(s, 'sacrifice');
 }
 
-// 縮地 (idx50): 自陣のコマを1つ選び、空きマスへ動かす（ライフ・エフェクトごと）。手番は続く
-function onClickRelocate(s) {
-    s.useRelocate = true;
-    s.relocateFrom = null;
-    spendMagic(s, calculateCost(s, costsOf(s).onClickRelocate, false, false, 'onClickRelocate'), 'onClickRelocate');
-    bumpMagicCount(s);
-    bumpStat(s, 'relocate');
-}
 // 追い剥ぎ (idx52): ライフ0の敵コマを1つ選んで自陣のコマ（ライフ1）にする。手番は続く。対象が無ければ使えない
 function onClickPlunder(s) {
     if (genericMod.plunderTargets(s.board, curPlayer(s), s.chars).length === 0) return;
@@ -2313,6 +2256,29 @@ function onClickPlunder(s) {
 }
 // 鬼門封じ (idx74): 敵マスを1つ選んで破壊（氷結中なら❄-1だけ）。破壊して空きマスになったら3ターンロック。対象が無ければ使えない
 function kimonCandidates(s) { return thermal.kimonTargets(s.board, curPlayer(s), (sq) => isGuarded(s, sq)); }
+// 錠の転換 (idx 134): ロックのかかっているマスを1つ選んで解除し、解除したスタックを自分のライフ（手番のライフ値）に足す [FAITHFUL] Game.tsx onClickLockConvert
+// 錠前割引 (idx 135): 盤面のロックのマスの数だけ、このターンに打つ全スキルを軽減する（使った時点の数で固定。春一番と同じ turn 軽減）[FAITHFUL] Game.tsx onClickLockDiscount
+function onClickLockDiscount(s) {
+    const n = keysmithMod.lockedSquareCount(s.board);
+    if (n === 0) return;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockDiscount, false, false, 'onClickLockDiscount'), 'onClickLockDiscount');
+    s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { turn: s.discount[s.turn].turn + n });
+    bumpMagicCount(s);
+    bumpStat(s, 'lockDiscount');
+}
+function lockConvertCandidates(s) { return keysmithMod.lockConvertCells(s.board); }
+function onClickLockConvert(s) {
+    if (lockConvertCandidates(s).length === 0) return;
+    s.useLockConvert = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockConvert, false, false, 'onClickLockConvert'), 'onClickLockConvert');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockConvert');
+}
+function exeLockConvert(s, i) {
+    if (!lockConvertCandidates(s).includes(i)) return false;
+    s.life += keysmithMod.lockConvert(s.board, i);
+    return true;
+}
 function onClickKimon(s) {
     if (kimonCandidates(s).length === 0) return;
     s.useKimon = true;
@@ -2336,7 +2302,7 @@ function onClickChargeSeason(s) {
     bumpStat(s, 'chargeSeason');
 }
 // 総毛立つ (idx78): 自陣の全コマ（🔑ロック中を除く）に⚡を1つずつ。対象が無ければ使えない
-function bristleTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && !sq.effects.some((e) => e.effect === '🔑') ? i : -1)).filter((i) => i !== -1); }
+function bristleTargets(s) { return chargeMod.bristleTargets(s.board, curPlayer(s)); }
 function bristleLegal(s) { return bristleTargets(s).length > 0; }
 function onClickBristle(s) {
     const cells = bristleTargets(s);
@@ -2366,10 +2332,7 @@ function onClickRelease(s) {
 
 // 雷のない所に火は立たぬ (idx81): ⚡のあるコマ（自分の無敵マスは可。🔑ロック中と他人の無敵マスは不可）を1つ選んで破壊（氷結中なら❄-1だけで火は燃え移らない）し、
 // 周囲8マスの敵コマ（守られていないもの）のうち2〜全部をランダムに選んで🔥+1。⚡のあるコマが無ければ使えない
-function thunderFireTargets(s) {
-    const me = curPlayer(s);
-    return s.board.map((sq, i) => (sq.player && chargeStacks(sq) > 0 && !sq.effects.some((e) => e.effect === '🔑') && (sq.player === me || !isShielded(s, sq)) ? i : -1)).filter((i) => i !== -1);
-}
+function thunderFireTargets(s) { return chargeMod.thunderFireTargets(s.board, curPlayer(s), s.chars); }
 function thunderFireLegal(s) { return thunderFireTargets(s).length > 0; }
 function onClickThunderFire(s) {
     if (!thunderFireLegal(s)) return;
@@ -2380,22 +2343,15 @@ function onClickThunderFire(s) {
 }
 function exeThunderFire(s, i) {
     if (!thunderFireTargets(s).includes(i)) return false;
-    if (thermal.isFrozen(s.board[i])) {
-        s.board[i] = thermal.thawOne(s.board[i]);
-        return true;
-    }
-    const me = curPlayer(s);
-    s.board[i] = { player: undefined, bind: 0, effects: [] };
+    const r = chargeMod.thunderFire(s.board, i, curPlayer(s), s.chars, s.size, s.rng, keepBudsOf(s));
+    if (r.frozen) return true;
     addCorpses(s, 1);
-    const cands = surroundRange(s, i).filter((j) => s.board[j].player && s.board[j].player !== me && !isGuarded(s, s.board[j]));
-    const picks = thermal.thunderFireVictims(cands, s.rng);
-    thermal.ignite(s.board, picks, s.size, 1, keepBudsOf(s));
-    bumpStat(s, 'thunderFireVictims', picks.length);
+    bumpStat(s, 'thunderFireVictims', r.picks.length);
     return true;
 }
 
 // 雷神のへそくり (idx80): ⚡のある自陣のコマを1つ選んで⚡を全て取り除き、取り除いたスタック1つにつき次に打つスキルのコスト-1（軽減札）。⚡のある自陣のコマが無ければ使えない
-function stashTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function stashTargets(s) { return chargeMod.stashTargets(s.board, curPlayer(s)); }
 function stashLegal(s) { return stashTargets(s).length > 0; }
 function onClickStash(s) {
     if (!stashLegal(s)) return;
@@ -2405,7 +2361,7 @@ function onClickStash(s) {
     bumpStat(s, 'stash');
 }
 // 沈黙は雷なり (idx 113): 自陣の⚡を2つ(合計2スタック。同じコマからでも可)払って、相手全員が次の手番スキルを使えなくなる。⚡のある自陣のコマが無ければ使えない [FAITHFUL] Game.tsx onClickBoltSilence
-function boltSilenceTargets(s) { return s.board.map((sq, i) => (sq.player === curPlayer(s) && chargeStacks(sq) > 0 ? i : -1)).filter((i) => i !== -1); }
+function boltSilenceTargets(s) { return chargeMod.boltSilenceTargets(s.board, curPlayer(s)); }
 function boltSilenceLegal(s) { return boltSilenceTargets(s).reduce((n, i) => n + chargeStacks(s.board[i]), 0) >= chargeMod.BOLT_SILENCE_BOLTS; }
 function onClickBoltSilence(s) {
     if (!boltSilenceLegal(s)) return;
@@ -2416,8 +2372,7 @@ function onClickBoltSilence(s) {
 }
 function exeBoltSilence(s, i) {
     if (!boltSilenceTargets(s).includes(i)) return false;
-    const at = s.board[i].effects.findIndex((e) => e.effect === '⚡');
-    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((_, k) => k !== at) };
+    chargeMod.payBolt(s.board, i);
     s.useBoltSilence -= 1;
     if (s.useBoltSilence === 0) otherSeats(s).forEach((seat) => { s.silenced[seat] = true; }); // 払い切ったとき
     return true;
@@ -2425,8 +2380,7 @@ function exeBoltSilence(s, i) {
 
 function exeStash(s, i) {
     if (!stashTargets(s).includes(i)) return false;
-    const n = chargeStacks(s.board[i]);
-    s.board[i] = { ...s.board[i], effects: s.board[i].effects.filter((e) => e.effect !== '⚡') };
+    const n = chargeMod.stashBolts(s.board, i);
     s.discount[s.turn] = Object.assign({}, s.discount[s.turn], { next: s.discount[s.turn].next + n }); // 軽減札なので「次に打つスキル」を消費せず、足す
     bumpStat(s, 'stashBolts', n);
     return true;
@@ -2535,6 +2489,63 @@ function onClickMogaribue(s) {
     bumpStat(s, 'mogaribueDamage', r.damage * r.hit.length);
 }
 
+// 封鎖の断（鍵師・#439）: 自陣7・空きマス2のロック、敵のロックを解除して解除数ぶんダメージ。ターン終了 [FAITHFUL] Game.tsx onClickSeal
+function sealCost(s) {
+    const n = keysmithMod.sealReleaseCells(s.board, curPlayer(s)).length;
+    return calculateCost(s, keysmithMod.sealBaseCost(costsOf(s).onClickSeal, n), false, false, 'onClickSeal');
+}
+function onClickSeal(s) {
+    const cost = sealCost(s);
+    const r = keysmithMod.seal(s.board, curPlayer(s), s.chars);
+    spendMagic(s, cost, 'onClickSeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'seal');
+    bumpStat(s, 'sealRelease', r.released.length);
+    bumpStat(s, 'sealDamage', r.damage * r.hit.length);
+    endTurn(s);
+}
+
+// ---- 鍵師向けの汎用スキル（#439, idx 130〜133）[FAITHFUL] Game.tsx onClickLockRaid / onClickLockExtend / onClickLockBlessing / onClickVacantSeal ----
+function lockRaidCost(s) {
+    return calculateCost(s, costsOf(s).onClickLockRaid, false, false, 'onClickLockRaid'); // lockPrev なら 0（cost.ts）
+}
+function onClickLockRaid(s) {
+    const pay = lockRaidCost(s);
+    const r = keysmithMod.lockRaid(s.board, curPlayer(s), s.chars, s.rng);
+    if (!r) return; // 対象が無ければ不発
+    s.lockPrev[s.turn] = false; // 無料で撃てるのは1手番に1回まで
+    spendMagic(s, pay, 'onClickLockRaid');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockRaid');
+}
+function onClickLockExtend(s) {
+    const pay = calculateCost(s, costsOf(s).onClickLockExtend, false, false, 'onClickLockExtend');
+    const cells = keysmithMod.lockExtend(s.board, curPlayer(s));
+    if (cells.length === 0) return;
+    spendMagic(s, pay, 'onClickLockExtend');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockExtend');
+}
+function onClickLockBlessing(s) {
+    s.blessing[s.turn] = keysmithMod.BLESSING_TURNS - 1; // 使った手番は減らさない（blessingFresh）ので、使った手番 + 残り2手番の計3手番
+    s.blessingFresh[s.turn] = true;
+    spendMagic(s, calculateCost(s, costsOf(s).onClickLockBlessing, false, false, 'onClickLockBlessing'), 'onClickLockBlessing');
+    bumpMagicCount(s);
+    bumpStat(s, 'lockBlessing');
+}
+function vacantSealCost(s) {
+    const n = keysmithMod.opponentReaches(s.board, curPlayer(s), s.chars);
+    return calculateCost(s, keysmithMod.vacantSealBaseCost(costsOf(s).onClickVacantSeal, n), false, false, 'onClickVacantSeal');
+}
+function onClickVacantSeal(s) {
+    const pay = vacantSealCost(s);
+    const cells = keysmithMod.vacantSeal(s.board);
+    if (cells.length === 0) return;
+    spendMagic(s, pay, 'onClickVacantSeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'vacantSeal');
+}
+
 const SKILLS = {
     charge: onClickCharge,
     miasma: onClickMiasma,
@@ -2602,7 +2613,6 @@ const SKILLS = {
     springWind: onClickSpringWind,
     kimon: onClickKimon,
     plunder: onClickPlunder,
-    relocate: onClickRelocate,
     fireWheel: onClickFireWheel,
     spark: onClickSpark,
     strip: onClickStrip,
@@ -2634,6 +2644,13 @@ const SKILLS = {
     windborne: onClickWindborne,
     inferno: onClickInferno,
     mogaribue: onClickMogaribue,
+    seal: onClickSeal,
+    lockConvert: onClickLockConvert,
+    lockDiscount: onClickLockDiscount,
+    lockRaid: onClickLockRaid,
+    lockExtend: onClickLockExtend,
+    lockBlessing: onClickLockBlessing,
+    vacantSeal: onClickVacantSeal,
     burnout: onClickBurnout,
     markdown: (s) => useDiscountSkill(s, 'onClickMarkdown'),
     effectDiscount: (s) => useDiscountSkill(s, 'onClickEffectDiscount'),
@@ -2660,6 +2677,7 @@ const SKILLS = {
     soloSign: (s) => onClickObject(s, 'soloSign'),
     oneWord: (s) => onClickObject(s, 'oneWord'),
     blindMonkey: (s) => onClickObject(s, 'blindMonkey'),
+    boulder: (s) => onClickObject(s, 'boulder'),
     demolish: (s) => onClickObjectSkill(s, 'demolish'),
     weather: (s) => onClickObjectSkill(s, 'weather'),
     levelAll: (s) => onClickObjectSkill(s, 'levelAll'),
@@ -2716,5 +2734,5 @@ module.exports = {
     curPlayer, curChar, curMagic, symbolOfSeat, seatCount, otherSeats, symbolsOf, calculateCost, judgeDayCost, totalAssaultCost, necromancyCost, reshuffleSkillsFor,
     miasmaCost, miasmaPlan, poisonCountFor, boardPoisonCount, surroundRange, costsOf, gearCost, necromancyPay,
     PROLIFERATE, proliferateUpkeep,
-    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
+    POOL_SIZE, shatterTargets, exeIcicle, swiddenTargets, sacrificeCandidates, suckerTargets, bestSuckerTarget, ownBuds, infernoTargets, hasAilment, glacierCost, infernoCost, mogaribueCost, sealCost, lockRaidCost, vacantSealCost, burnoutCost, burnoutTargets, INFERNO_FREE_SKILLS, FIRE_DAMAGE, CHARGE_LANDING_DAMAGE, landedCharge, CHARGE_MIN_COST, boardChargeCount, chargeOneCost, chargeSpreadCost, chargeStacks, orthoNeighbors, isShielded, isGuarded, connectedPieces, charOfPlayer,
 };
