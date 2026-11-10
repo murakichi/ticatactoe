@@ -7,6 +7,7 @@
  */
 const engine = require('./engine');
 const thermal = require('./shared/thermal');
+const keysmith = require('./shared/keysmith');
 const ai = require('./aiDriver'); // 本番AI(AIPlayer.ts の生成物)
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
@@ -25,7 +26,7 @@ function winCells(s, player) {
     const giant = s.chars[engine.seatOf(player)] === 'giant';
     for (let i = 0; i < s.board.length; i++) {
         const q = s.board[i];
-        if (q.effects.some((e) => e.effect === '🔑') && q.bind > 0) continue;
+        if (keysmith.lockBlocksPlacement(q, s.chars[engine.seatOf(player)])) continue; // ロック中のマスには着手できない(鍵師は空きマスのロックだけ無視。engine.placeMove と同じ)
         if (thermal.emptyBlocked(q)) continue;
         if (q.player && engine.isShikigami(q) && q.player !== player) continue; // 式神は奪うと空きマスになるだけ(自コマにならない)
         // 奪えるのは bind0 の敵コマ。巨人は自分のライフが bind+1 を超えれば bind>0 の敵コマも奪える(simulatePlace の calc<0)

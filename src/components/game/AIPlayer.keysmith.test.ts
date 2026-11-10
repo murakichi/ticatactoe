@@ -171,3 +171,17 @@ describe('鍵師AI: 封鎖の断のために魔力を貯める', () => {
         expect(run('you', 8).skills.length).toBeGreaterThan(0);
     });
 });
+
+describe('鍵師AI: 敵コマの奪取で完成する勝ちを、封鎖の断より優先する', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    it('対角線 0,5,15 が自分で、10 がライフ0の敵コマ。魔力が余っていても封鎖の断を撃たず、10 を奪って勝つ', () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        for (const i of [0, 5, 15]) b[i] = { player: '💙', bind: 0, effects: [] };
+        b[10] = { player: '⭕', bind: 0, effects: [] };
+        const ai = new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', 'you'], undefined, false, false);
+        const r = ai.makeMove(b, 136, skillCosts, 2, 5, [], false);
+        expect(r.skills).not.toContain('onClickSeal');
+        expect(r.move).toBe(10);
+    });
+});

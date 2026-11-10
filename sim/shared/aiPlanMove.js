@@ -1202,6 +1202,13 @@ exports.planMoveMethods = {
             : argsIn;
         let result = this.planMove(...args);
         const magic = args[1];
+        // 1手で勝てるのに、手番を終えるスキル（封鎖の断など）を選んでいたら、勝ちを優先する。
+        // スキルの発動条件は『自分のリーチ（空きマスで完成）』しか見ず、敵コマの奪取で完成する勝ちを取りこぼしていた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた）
+        if (!result.win && !result.reroll && !result.hailMary && result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+            const winMove = this.immediateWinMove(args[0], args[4]);
+            if (winMove !== null)
+                return { move: winMove, skills: [] };
+        }
         let saving = false;
         // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
         if (aiConstants_1.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
@@ -1249,8 +1256,8 @@ exports.planMoveMethods = {
     /** 鍵師: 封鎖の断を撃つ判断か（スキル選択の結果に封鎖の断が含まれる）。魔力が足りないときは false */
     sealWanted(args) {
         const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
-        if (this.countReaches(board, this.playerSymbol) !== 0)
-            return false;
+        if (this.countReaches(board, this.playerSymbol) !== 0 || this.immediateWinMove(board, life) !== null)
+            return false; // 奪取で完成する勝ちも『自分のリーチ』として着手を優先する
         const released = (0, keysmith_1.sealReleaseCells)(board, this.playerSymbol).length;
         const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(costs.onClickSeal, released), false, false, 'onClickSeal');
         if (magic < sealCost)

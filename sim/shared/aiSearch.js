@@ -507,6 +507,17 @@ exports.searchMethods = {
         }
         return null;
     },
+    /** スキルを使わず、この1手で自分が勝てるマス（空きマス・補強・奪取）。無ければ null。ターン終了系のスキルを撃つ前に確かめる */
+    immediateWinMove(board, life) {
+        const empty = (0, util_1.findEmptyIndexes)(board);
+        const allMoves = Array.from(new Set([...empty, ...this.getValidMoves(board, life), ...this.reinforceMoves(board, life)]));
+        for (const i of allMoves) {
+            const sim = this.simulatePlace(board, i, this.playerSymbol, life);
+            if ((0, util_1.calculateWinner)((0, util_1.lineSymbols)(sim)) === this.playerSymbol)
+                return i;
+        }
+        return null;
+    },
     getBestMove(board, life) {
         const empty = (0, util_1.findEmptyIndexes)(board);
         const validMoves = this.getValidMoves(board, life);
