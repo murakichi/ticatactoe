@@ -327,9 +327,18 @@ exports.COUNTER_GEARS = {
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] },
-    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    poisoner: {
+        cryomancer: ['springThunder', 'spellWard'],
+        witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
+    },
     cryomancer: {
-        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        electrician: ['lightToken', 'reaper'],
+        // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
+        // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
+        // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
+        pyromancer: ['spellWard', 'reaper'],
+        poisoner: ['spellWard', 'reaper'],
+        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
     },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
