@@ -126,3 +126,23 @@ test('瓦礫の礎: 自分の手番に消えた建造物（覚醒）は対象外
     e.advanceTurn(s);
     assert.ok(s.board.every((q) => q.object !== 'boulder'), '大岩は置かれない');
 });
+
+test('龍神の巫女: 建造物の置き方に形は問わない（バラバラに4つでも覚醒。囲みが無ければ N=4）', () => {
+    const s = five('dragonMiko', 'you');
+    s.turn = 0;
+    [at(0, 0), at(2, 4), at(4, 1), at(3, 3)].slice(0, 3).forEach((i) => build(s, i));
+    s.objectPlacing = 'fort';
+    assert.strictEqual(e.placeMove(s, at(3, 3)), true);
+    assert.strictEqual(s.dragon[0].form, 'dragon');
+    assert.strictEqual(s.dragon[0].n, 4, '囲みが無いので建造物4つぶんだけ');
+});
+
+test('龍神の巫女: 設置以外の経路（敵のオブジェクトの乗っ取り）で4つになっても、手番の終わりに覚醒する', () => {
+    const s = five('dragonMiko', 'you');
+    s.turn = 0;
+    [at(0, 0), at(2, 4), at(4, 1)].forEach((i) => build(s, i));
+    build(s, at(3, 3), '⭕'); // 敵の建造物が、乗っ取りで自分のものになった想定
+    s.board[at(3, 3)].player = '💙';
+    e.advanceTurn(s);
+    assert.strictEqual(s.dragon[0].form, 'dragon');
+});

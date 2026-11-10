@@ -695,6 +695,7 @@ function clearPendingTargets(s) {
 }
 function advanceTurn(s) {
     clearPendingTargets(s);
+    dragonCheck(s); // 龍神の巫女: 手番の終わりまでに建造物が4つに届いていれば覚醒（敵のオブジェクトの乗っ取りなど、設置以外の経路。本番は盤面の変化で判定する）
     // 瓦礫の礎: 自分以外の手番に壊された自陣の大岩以外のオブジェクトの位置に、大岩を置いて魔力+1 [FAITHFUL] useTurnEffects.ts
     // （前の手番の頭の盤面 s.rubbleSnap と比べる。自分の手番に消える建造物＝龍神の巫女の覚醒は対象外）
     if (s.rubbleSnap) {
