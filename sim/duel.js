@@ -51,7 +51,7 @@ const IDX_SKILL = {
 const UNIQUE = {
     you: [], tactician: ['totalAssault'], magician: ['judgeDay'], giant: ['stomp'],
     yinYangMaster: ['toggleYY', 'shikigamiPlace', 'shikigamiBlast'], necromancer: ['necromancy'], poisoner: ['miasma'],
-    electrician: ['chargeSpread'], cryomancer: ['glacier'], pyromancer: ['ignite', 'inferno'],
+    electrician: ['chargeSpread'], cryomancer: ['glacier'], pyromancer: ['ignite', 'inferno'], dragonMiko: ['prayer', 'roar'],
 };
 const ALWAYS = ['lock', 'doubleLock', 'tripleLock'];
 
@@ -111,7 +111,7 @@ function build(cfg) {
 
 const PENDING = ['useLock', 'useStomp', 'useJudgeDay', 'useInjection', 'usePandemic', 'useBuds', 'useChargeOne', 'useChargeSpread', 'useChargeArea',
     'useFrostArea', 'useIcicle', 'useFrostSpread', 'useShatter', 'useSwidden', 'useKimon', 'useShikigamiPlace', 'useShikigamiBlast', 'useShikigamiBless', 'useShikigamiCurse', 'useShikigamiPurge', 'useFreeze',
-    'useSucker', 'useIgnite', 'useSacrifice', 'useStash', 'useBoltSilence', 'useThunderFire', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno'];
+    'useSucker', 'useIgnite', 'useSacrifice', 'useStash', 'useBoltSilence', 'useThunderFire', 'useJammer', 'useMiasma', 'useGlacier', 'useInferno', 'objectPlacing'];
 const pendingOf = (s) => PENDING.filter((k) => { const v = s[k]; return Array.isArray(v) ? v[0] : !!v; });
 
 function wrapSkills(log) {
