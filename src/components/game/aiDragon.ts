@@ -208,6 +208,8 @@ export const dragonMethods: DragonMethods = {
         const clicks: { skill: string; target: number }[] = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        const reserve = Number((globalThis as any).process?.env?.DRAGON_EMPTY_RESERVE ?? 0);
+        if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= reserve) return null;
         const maxPrayers = Math.min(isDragon ? 1 : PRAYER_MAX_PER_TURN - ownBuildingCells(real, me).length, BUILDING_CAP - ownBuildingCells(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && prayerUsable(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);

@@ -169,6 +169,7 @@ exports.dragonMethods = {
         return { move: followup, skills: followup === null ? ['onClickCharge'] : [], chargeClicks: clicks };
     },
     planDragonCore(args) {
+        var _a, _b, _c;
         const real = args[0];
         const magic = args[1];
         const costs = args[2];
@@ -206,6 +207,9 @@ exports.dragonMethods = {
         const clicks = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+        const reserve = Number((_c = (_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_EMPTY_RESERVE) !== null && _c !== void 0 ? _c : 0);
+        if (isDragon && real.filter((sq) => !sq.player && !sq.object).length <= reserve)
+            return null;
         const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && (0, dragon_1.prayerUsable)(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);
