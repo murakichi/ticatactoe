@@ -29,11 +29,10 @@ exports.maxOppMagic = maxOppMagic;
  * @param pickHailMary 詰みのヘイルメアリーで当選させるスキル名を選ぶ（本番は Game の抽選、sim は rng）
  */
 const planAITurn = (ai, input, pickHailMary) => {
-    var _a, _b, _c;
+    var _a, _b;
     const { board, seat, life } = input;
     const oppMagic = (0, exports.maxOppMagic)(input.magic, seat);
     ai.placements = input.placements;
-    ai.necroRemains = (_a = input.necroRemains) !== null && _a !== void 0 ? _a : [];
     ai.seatCount = input.seatCount;
     ai.lastStandReady = input.lastStandReady;
     ai.tokenFree = input.tokenFree;
@@ -63,7 +62,7 @@ const planAITurn = (ai, input, pickHailMary) => {
     // 氷結中のマスにはロックできない。ロック対象に混じっていたら、待ち状態で止まらないようロック自体をやめる
     // （氷室の番人はロックの代わりに氷結を撃つので、氷結が付けられるかで見る）
     const canMark = (t) => (input.characters[seat] === 'cryomancer' ? (0, thermal_1.canFreeze)(board[t]) : (0, thermal_1.lockable)(board[t]));
-    if ((_b = result.lockTargets) === null || _b === void 0 ? void 0 : _b.some((t) => !canMark(t))) {
+    if ((_a = result.lockTargets) === null || _a === void 0 ? void 0 : _a.some((t) => !canMark(t))) {
         result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
         result.lockTargets = undefined;
     }
@@ -92,7 +91,7 @@ const planAITurn = (ai, input, pickHailMary) => {
         }
     }
     // 一寸の虫に魂なし対策: ライフが3以下で着手できないときは、ライフ+3（idx 0）で4以上に上げてから置く。手札にあり、すでに選んだスキルと合わせて魔力が足りるときだけ
-    if (input.lifeBan && (0, lifeBan_1.moveBlocked)(true, life) && result.move === null && !((_c = result.chargeClicks) === null || _c === void 0 ? void 0 : _c.length) && !result.lockTargets && result.stompTarget === undefined
+    if (input.lifeBan && (0, lifeBan_1.moveBlocked)(true, life) && result.move === null && !((_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.length) && !result.lockTargets && result.stompTarget === undefined
         && !result.skills.some((sk) => AIPlayer_1.TURN_ENDING_SKILLS.includes(sk)) && input.hand.includes(ADD_LIFE_IDX)) {
         const costOfKey = (key) => { var _a; return ai.calculateAICost((_a = input.costs[key]) !== null && _a !== void 0 ? _a : 0, false, false, key); };
         const total = result.skills.reduce((sum, sk) => sum + costOfKey(sk), costOfKey('onClickAddLife'));

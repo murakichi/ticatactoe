@@ -6,17 +6,17 @@ import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
 import { OBJECT_DEFS, objectLandable } from './objects';
-import { findEmptyIndexes } from '../../util';
+import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
 import { ailmentStacks, cleanse, canFreeze, budStacks, budReceivers, harvestBuds, graft, GRAFT_MAX, sow, sowCandidates, SOW_COUNT, infernoTargets, INFERNO_STACKS, freezeAll, reducedGlacierCost, burnoutTargets, burnoutCostOf, totalFlames, burnout, INFERNO_FREE_SKILLS, ignite, isFrozen, freeze, shatter, isDormant, activeBuds, lockable, leafSurcharge, bonfireTargets, bonfire, mulchCandidates, mulch, autumn, fireWheelTargets, mogaribue, mogaribueDamage, mogaribueTargets } from './thermal';
-import { addLock, lockEffect } from './lock';
+import { addLock, lockEffect, lockStack } from './lock';
 import { pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, ANTI_MULTI_LOCK, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
+import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -411,20 +411,6 @@ function planCounterLocks(this: AIPlayer, c: PlanContext): AIResult | null {
         ) &&
         magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')
     ) {
-        // 相手のネクロの蘇生（吸収）が発動中は、ダブル/トリプルロックで複数マスを一度に守る（払えるときだけ）
-        const foeAbsorbing = this.characters.some((ch, seat) => ch === 'necromancer' && seat !== seatOf(this.playerSymbol) && (this.necroRemains[seat] ?? 0) > 0);
-        if (foeAbsorbing && ANTI_MULTI_LOCK > 1) {
-            const multi: { skill: string; count: number; cost: number }[] = [];
-            if (availableSkills.includes(13)) multi.push({ skill: 'onClickUseTripleLock', count: 3, cost: this.calculateAICost(costs.onClickTripleLock, false, false, 'onClickTripleLock') });
-            if (availableSkills.includes(12)) multi.push({ skill: 'onClickUseDoubleLock', count: 2, cost: this.calculateAICost(costs.onClickDoubleLock, false, false, 'onClickDoubleLock') });
-            for (const o of multi) {
-                if (o.count > ANTI_MULTI_LOCK || magic < o.cost) continue;
-                const cells = this.findAntiNecroLockTargets(board, o.count);
-                if (cells.length === o.count) {
-                    return { move: this.getBestMove(board, life), skills: [o.skill], lockTargets: cells };
-                }
-            }
-        }
         const lockCell = this.findAntiNecroLockTarget(board);
         if (lockCell !== null) {
             return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: [lockCell] };
@@ -1022,6 +1008,22 @@ export function planMove(
                 // 審判の日はそのターゲット着手で手番終了する
                 return { move: target, skills: ['onClickJudgeDay'] };
             }
+        }
+        // 対ネクロ: 蘇生はライフ0のコマを吸収する（ロック中のコマは奪われない）。吸収されそうな自陣のコマ（ライフ1以下で未ロック）を先にロックし、
+        // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。効いたキャラだけ（NECRO_LOCK_CHARACTERS）
+        if (NECRO_LOCK_CHARACTERS.includes(this.character) && this.opponents.some((o) => this.characters[seatOf(o)] === 'necromancer')) {
+            const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : NECRO_LOCK_MAX;
+            const guardCells: number[] = [];
+            for (let i = 0; i < board.length && guardCells.length < Math.min(NECRO_LOCK_MAX, afford); i++) {
+                const sq = board[i];
+                if (sq.player !== this.playerSymbol || isObject(sq) || !lockable(sq) || sq.bind > 1) continue;
+                const locked = sq.effects.some((e) => e.effect === '🔑');
+                const stack = lockStack(sq);
+                if (!locked || (stack > 0 && stack <= NECRO_LOCK_REFRESH)) guardCells.push(i);
+            }
+            if (guardCells.length === 1) return { move: this.getBestMove(board, life), skills: ['onClickUseLock'], lockTargets: guardCells };
+            if (guardCells.length > 1) return { move: this.getBestMove(board, life), skills: [], chargeClicks: guardCells.map((c) => ({ skill: 'onClickUseLock', target: c })) };
         }
         // 魔法使い: 審判を撃たないなら、未ロックのバッズ駒を🔑ロックして魔力エンジンを守る
         // 1手番に複数のバッズ駒をロックしてよい（魔力が許す限り最大 MAGICIAN_MAX_LOCKS 個。旧sim AI の magLockN。

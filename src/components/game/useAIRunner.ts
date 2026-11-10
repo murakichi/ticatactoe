@@ -90,7 +90,6 @@ export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
                 life: late().life,
                 tokenUsed: late().useToken,
                 necroRemain: late().remainNecro[turnSeat],
-                necroRemains: late().remainNecro,
                 necroCosts: late().necroCost,
                 necroPay: gearCost(late().necroCost[turnSeat]),
                 judgeDayCost: late().judgeDayCost,

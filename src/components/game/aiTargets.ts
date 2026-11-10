@@ -617,20 +617,16 @@ export const targetMethods = {
      * なければ null (旧sim AI bestAntiNecroLockTarget と同一)
      */
     findAntiNecroLockTarget(this: AIPlayer, board: SquareInfo[]): number | null {
-        return this.findAntiNecroLockTargets(board, 1)[0] ?? null;
-    },
-
-    /** 対策ロックの対象を価値の高い順に最大 n 個返す（1個のときは従来の findAntiNecroLockTarget と同じ選び方） */
-    findAntiNecroLockTargets(this: AIPlayer, board: SquareInfo[], n: number): number[] {
         const lineScores = [0, 1, 10, 50, 1000];
         const geo = geometryForCells(board.length);
-        const ranked: { i: number; val: number }[] = [];
+        let best: number | null = null;
+        let bestVal = 0;
         for (let i = 0; i < board.length; i++) {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
             // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
             // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる）
-            const lockStack = sq.effects.reduce((sum, e) => sum + (e.effect === '🔑' ? (e.stack ?? 0) : 0), 0);
+            const lockStack = sq.effects.reduce((n, e) => n + (e.effect === '🔑' ? (e.stack ?? 0) : 0), 0);
             const hasLock = sq.effects.some((e) => e.effect === '🔑');
             if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || isFrozen(sq) || (hasLock && lockStack > ANTI_LOCK_REFRESH)) continue;
             let val = 1;
@@ -643,10 +639,9 @@ export const targetMethods = {
                 }
                 if (foreign === 0) val += lineScores[Math.min(mc, 4)];
             }
-            ranked.push({ i, val });
+            if (val > bestVal) { bestVal = val; best = i; }
         }
-        // 同点は盤の若い番号を優先（従来の『最初に見つけた最大』と同じ）
-        return ranked.sort((a, b) => b.val - a.val || a.i - b.i).slice(0, n).map((r) => r.i);
+        return best;
     },
 
     /** 巨人ストンプ: 破壊範囲に敵が最多の中心 (敵1体以上で価値あり。コスト2なので積極的に撃つ)。なければ null */
