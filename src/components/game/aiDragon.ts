@@ -33,20 +33,6 @@ export const cornerCuts = (size: number): number[][] => {
     ];
 };
 
-/**
- * 咆哮で壊せる敵コマ victims が、自分の二本目の窓を塞いでいるか（破壊したいコマ）。
- * 窓 = 自陣のコマが2つ以上・建造物なし・敵のコマがいて、その敵コマが全て victims に入る。壊せば、その窓は自陣のコマと空きだけになる。
- * 『巻き込む数』だけで撃つと膠着を破れない（二本目の窓を塞ぐのは1〜2個の敵コマ）一方、数を問わず撃つと咆哮（ターン終了）の連発で悪化した。
- */
-export const unblocksWindow = (board: SquareInfo[], victims: number[], me: Player): boolean =>
-    geometryForCells(board.length).winLines.some(
-        (line) =>
-            line.every((i) => !board[i].object)
-            && line.filter((i) => board[i].player === me).length >= 2
-            && line.some((i) => board[i].player && board[i].player !== me)
-            && line.every((i) => board[i].player === me || !board[i].player || victims.includes(i))
-    );
-
 const lockedEmpty = (): SquareInfo => ({ player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] });
 
 export interface DragonMethods {
@@ -186,8 +172,7 @@ export const dragonMethods: DragonMethods = {
         const isDragon = this.dragonForm === 'dragon';
 
         // 龍: 敵が固まっていれば咆哮で焼き払う
-        const victimsNow = roarVictims(real, me);
-        if (isDragon && roarUsable(real, me) && magic >= roarCost && (victimsNow.length >= ROAR_MIN_VICTIMS || unblocksWindow(real, victimsNow, me))) {
+        if (isDragon && roarUsable(real, me) && magic >= roarCost && roarVictims(real, me).length >= ROAR_MIN_VICTIMS) {
             return { move: null, skills: ['onClickRoar'] };
         }
         // 龍: 覚醒の直後は自陣の建造物が無い（消滅した）。祈りで敵の固まりの隣に建造物を置き、同じ手番にそのまま咆哮を撃つ
@@ -197,9 +182,8 @@ export const dragonMethods: DragonMethods = {
             for (let i = 0; i < real.length; i++) {
                 if (!objectLandable(real[i])) continue;
                 const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' as const } : sq));
-                const vs = roarVictims(hyp, me);
-                const v = vs.length;
-                if ((v >= ROAR_MIN_VICTIMS || unblocksWindow(hyp, vs, me)) && (!best || v > best.victims)) best = { cell: i, victims: v };
+                const v = roarVictims(hyp, me).length;
+                if (v >= ROAR_MIN_VICTIMS && (!best || v > best.victims)) best = { cell: i, victims: v };
             }
             if (best) return { move: null, skills: ['onClickRoar'], chargeClicks: [{ skill: 'onClickPrayer', target: best.cell }] };
         }
