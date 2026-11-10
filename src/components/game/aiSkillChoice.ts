@@ -442,6 +442,11 @@ export const skillChoiceMethods = {
             && !board.some((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol)) {
             return [125];
         }
+        // 龍神の巫女×氷室の番人: サイレンス(28)を手札に固定して、氷河（コスト10−盤上の❄）に届く手番に封じる
+        if (this.character === 'dragonMiko' && (globalThis as any).process?.env?.DRAGON_SIL === '1' && availableSkills.includes(28)
+            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'cryomancer')) {
+            return [28];
+        }
         if (this.character === 'giant') {
             return [];
         }
