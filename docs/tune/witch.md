@@ -1,7 +1,7 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3d8e7b4（2026-11-10 基準線を重み付き方式で取り直し）（対強豪平均 1位 60.0% / 2位 cryomancer 58.0%、seed1/60）
-- 現在の推奨設定: gears=[buildMania, bindingLock] deck=[5,28,44,52,53,56,62,63,64,92,108,110] （試行45。旧: gears=[buildMania, reaper](試行43)、旧: gears=[buildMania, bindingLock](試行40)、gears=[lightToken, bindingLock] deck=[5,8,28,44,52,53,56,62,63,64,85,92]） AIフラグ=witchNoAnti=1・witchReserve=1（既定）
+- 現在の推奨設定: gears=[buildMania, bindingLock] deck=[28,44,52,53,56,62,63,64,92,108,110,117] （試行52でスラッシュ5→補強工事117。旧 deck=[5,28,44,52,53,56,62,63,64,92,108,110]。試行45。旧: gears=[buildMania, reaper](試行43)、旧: gears=[buildMania, bindingLock](試行40)、gears=[lightToken, bindingLock] deck=[5,8,28,44,52,53,56,62,63,64,85,92]） AIフラグ=witchNoAnti=1・witchReserve=1（既定）
 - 完了判定の再確認（活力特売の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 81.2%** / 2位 poisoner 61.7%（差19.5pt）、条件2（`--envDeck varied`）**1位 witch 74.7%** / 2位 poisoner 60.5%（差14.2pt）。
 - 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
 - 完了判定の再確認（道連れの鍵ギアの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 76.0%** / 2位 poisoner 63.0%（差13.1pt）、条件2（`--envDeck varied`）**1位 witch 69.6%** / 2位 cryomancer 61.2%（差8.4pt）。
@@ -16,9 +16,9 @@
 - 相手の重み(2026-11-10 master 3d8e7b4、beta=8): electrician 11.8%, pyromancer 11.2%, dragonMiko 10.7%, yinYangMaster 10.7%, keysmith 10.4%, necromancer 9.1%, tactician 7.8%, cryomancer 6.2%, giant 6.2%, witch 6.1%, magician 5.5%, poisoner 4.0%, you 0.3%
 - 基準線(master 3d8e7b4・重み付き対強豪平均、`--rank --games 60 --seed 1 --write-strong`): **10位 witch 45.1%**(field 52.8%) / 1位 electrician 54.6%(差9.5pt)。`--target witch --games 60 --seed 1`: 46.4%±3.7。対面: dragonMiko 16%・magician 28%・pyromancer 30%・yinYangMaster 43%・necromancer 47%・keysmith 48%・tactician 52%・electrician 57%・giant 67%・cryomancer 77%・poisoner 78%。以前の数値は旧方式(field/強豪リスト)で比較不可。
 - 基準線(試行45採用後、master 3d8e7b4、`--rank --target witch --games 60 --seed 1`): **8位 witch 46.8%**(field 53.5%) / 1位 electrician 56.7%(差9.9pt) / 2位 keysmith 53.0%。最悪対面 対電気使い 23%。不利4・有利3。
-- 連続不採用回数: 3（専用ギアは環境順位に効かない採用なので数えない）
+- 連続不採用回数: 0（試行52で採用）
 - 関連 issue: #224 凩の魔女が下位（トップ到達で解決）/ #233 洗練の積み残し / #225 毒・電気・帯電の全体指標が未計測（2026-10-28 に検索）
-- 状態: blocked(issue #461。2026-11-10 追記。ギア採用(試行45)で8位 46.8%、1位 electrician 56.7%と約10pt差。デッキ・シナジー・メタ・対電気の立ち回りは測って不採用。数値案待ち)
+- 状態: running（試行52で採用。順位表の再測定待ち。以前の blocked(#461) は数値案待ちだったが、スラッシュを抜く案で +2〜7pt の余地が見つかったため再開）
 
 ## 診断
 ### 勝ち筋
@@ -52,6 +52,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 52 | deck(メタ: 対dragonMiko走査 → 全相手で検証) | 対dragonMiko 1枚差し替え60近傍（seed51/80、基準 26.9%）で スラッシュ(5)→増築(118)/補強工事(117) が 41.1%。全相手で検証（seed61/100）: 現行 46.7 / **5→117 54.2 / 5→118 54.2（完全一致=どちらも撃たれない札）** / 5→風の落とし子(36) 47.2。追試 seed62/200: 46.6→**48.9%**(+2.3) | 効いているのは『スラッシュを抜くこと』（撃つと損な札: 対龍戦のスラッシュ使用は勝率0〜4%）。追試は縮小（+7.5→+2.3、合算で約+4pt） | **採用**（deck.ts 反映。+1.5pt と +1.96×SE をぎりぎり満たす。順位表での確認は次回） |
 | 51 | deck(追試) | 試行46の最良 落葉松の双子(63)→結界石(121)（seed11/60で 49.5 vs 45.7）を seed41/200 で再測定 | 現行 48.3%±2.0 → 候補 45.7%±2.0（-2.6pt）。上振れ（勝者の呪い）で、再現せず | 不採用 |
 | 50 | deck(メタ: 対 dragonMiko/pyromancer/electrician に絞った1枚差し替え40近傍) | seed31/80、基準 38.2%±6.0。最良 紅葉狩り→裸の王様 40.8%(+2.6) | 全て基準±3pt内 | 不採用 |
 | 49 | gear(メタ: 対電気使い専用) | 対電気使いだけでギア1枠走査（seed21/100、基準 bindingLock 26.0%）→ 最良 reaper 33.0%。seed22/300で直接比較 | buildMania+bindingLock 26.3%±5.0 → **buildMania+reaper 41.3%±5.6**（+15.0pt。seed2/200 の全相手測定でも対電気 42→27 と逆向きに一致） | **採用**（相手が電気使い1体に決まるときだけ使う専用ギア=COUNTER_GEARS.witch.electrician。通常の推奨・環境順位は変わらない。--counter 1 で測る） |
