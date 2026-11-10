@@ -1211,6 +1211,11 @@ export const planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
+        // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
+        // 敵コマの奪取で完成する勝ちがあるのにロック・封鎖の断・審判の日・引き直しなどを先に選んでいた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた・#600）
+        // 相手の土壇場の防壁が使えるときは、1回目の勝ちが防壁に吸われるので、ギアを壊すスキルなど普通の計画に任せる
+        const winNow = this.oppLastStand ? null : this.immediateWinMove(argsIn[0], argsIn[4]);
+        if (winNow !== null) return { move: winNow, skills: [] };
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
             const dragonPlan = this.planDragon(argsIn);
@@ -1228,12 +1233,6 @@ export const planMoveMethods = {
             : argsIn;
         let result = this.planMove(...args);
         const magic = args[1];
-        // 1手で勝てるのに、手番を終えるスキル（封鎖の断・審判の日など）を選んでいたら、勝ちを優先する。
-        // スキルの発動条件は『自分のリーチ（空きマスで完成）』しか見ず、敵コマの奪取で完成する勝ちを取りこぼしていた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた）
-        if (!result.win && !result.reroll && !result.hailMary && result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) {
-            const winMove = this.immediateWinMove(args[0], args[4]);
-            if (winMove !== null) return { move: winMove, skills: [] };
-        }
         let saving = false;
         // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
         if (KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
