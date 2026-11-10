@@ -107,7 +107,9 @@ function chooseFinisherSkills(this: AIPlayer, c: SkillChoiceContext): string[] |
         this.countReaches(board, this.playerSymbol) === 0 &&
         this.opponents.some((o) => {
             const seat = seatOf(o);
-            return (seatMagic[seat] ?? 0) + 1 >= (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity);
+            // 龍神の巫女×鍵師: 鍵師は空きマスのロックで塞げない3連を作る。固有スキルの魔力目安が無いので、相手の次の魔力が2以上なら毎手番サイレンスで封じる（対鍵師 seed71/100: 8.2→48.6%、seed72/80: 16.7→60.8%）
+            const silk = this.character === 'dragonMiko' && this.characters[seat] === 'keysmith';
+            return (seatMagic[seat] ?? 0) + 1 >= (silk ? 2 : (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity));
         })
     ) {
         spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
@@ -442,9 +444,9 @@ export const skillChoiceMethods = {
             && !board.some((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol)) {
             return [125];
         }
-        // 龍神の巫女×氷室の番人: サイレンス(28)を手札に固定して、氷河（コスト10−盤上の❄）に届く手番に封じる（対氷室 seed61/80: 5.3→71.6%、seed62/60: 6.9→75.6%）
+        // 龍神の巫女×氷室の番人・鍵師・巨人: サイレンス(28)を手札に固定して、相手の固有スキルが撃てる手番に封じる（巨人 seed91/100: 57.5→94.0%、seed92/100: 57.3→94.1%。氷室は氷河のコスト10−盤上の❄）（対氷室 seed61/80: 5.3→71.6%、seed62/60: 6.9→75.6%）
         if (this.character === 'dragonMiko' && availableSkills.includes(28)
-            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'cryomancer')) {
+            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || c === 'keysmith' || c === 'giant'))) {
             return [28];
         }
         if (this.character === 'giant') {
