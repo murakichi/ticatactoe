@@ -384,9 +384,9 @@ function watch(args) {
             out.push('\n## 結論: 何が強いか');
             out.push(v.headline);
             v.points.forEach((x) => out.push(`  - ${x}`));
-            out.push(`${pad('キャラ', 14)} ${pad('対全平均', 9)} ${pad('対強豪', 8)} ${pad('最悪対面', 20)} ${pad('不利/有利', 10)} 均衡で選ばれる確率`);
+            out.push(`${pad('キャラ', 14)} ${pad('対全平均', 9)} ${pad('対強豪', 8)} ${pad('重み', 7)} ${pad('最悪対面', 20)} ${pad('不利/有利', 10)} 均衡で選ばれる確率`);
             for (const r of an.rows) {
-                out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.strongAvg == null ? 'n/a' : (r.strongAvg * 100).toFixed(1) + '%', 8)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
+                out.push(`${pad(r.id, 14)} ${pad(r.fieldAvg == null ? 'n/a' : (r.fieldAvg * 100).toFixed(1) + '%', 9)} ${pad(r.metaAvg == null ? 'n/a' : (r.metaAvg * 100).toFixed(1) + '%', 8)} ${pad((r.weight * 100).toFixed(1) + '%', 7)} ${pad(r.worst ? `${(r.worst.rate * 100).toFixed(1)}% (${r.worst.id.slice(0, 9)})` : 'n/a', 20)} ${pad(`${r.unfavorable}/${r.favorable}`, 10)} ${(r.eq * 100).toFixed(1)}%`);
             }
             const beats = (id) => an.edges.filter((e) => e.from === id && e.significant).sort((x, y) => y.rate - x.rate).map((e) => `${e.to}(${(e.rate * 100).toFixed(0)}%)`);
             out.push('\n## 有利関係（有意に勝ち越す相手。左が勝つ側）');
@@ -399,7 +399,7 @@ function watch(args) {
                 lp.cycles.slice(0, 10).forEach((c) => out.push(`  ${c.length === 3 ? '三すくみ' : c.length + 'すくみ'}: ${c.join(' → ')} → ${c[0]}`));
                 if (lp.cycles.length > 10 || lp.truncated) out.push(`  ...ほか${lp.truncated ? '多数' : lp.cycles.length - 10 + '件'}`);
             }
-            out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(平均の上位半分の相手だけ)で見る。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合。${an.minDecided}試合未満の対面は数えない)`);
+            out.push(`(対全平均は弱いキャラを大勝するだけで上がるので、判断は対強豪(相手を強さで重み付けした平均。強い相手ほど重く、下位は軽い)で見る。重み=相手としての選ばれやすさ(合計100%)。不利/有利 = 勝率の95%区間が50%を有意に下回る/上回る対面の数。均衡=相手が最適に選ぶ場合の選択確率。${an.minDecided}試合未満の対面は数えない)`);
         }
         if (final || args.matrix) {
             const mu = live.matchups(stats);
