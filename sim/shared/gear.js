@@ -312,13 +312,17 @@ exports.ALT_RECOMMENDED_GEARS = {
  * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
  */
 exports.COUNTER_GEARS_FOR_YOU = {
-    poisoner: ['lastStand', 'spellWard', 'sturdy'],
-    magician: ['lastStand', 'sturdy', 'luckyPurse'],
-    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'],
+    // 2026-11-10 の master（新ギア・ロック仕様の変更）で測り直した値。各行は 現行→採用 の勝率（seed21/300）。docs/tune/you.md
+    poisoner: ['lastStand', 'spellWard', 'emptyLock'],
+    magician: ['lastStand', 'sturdy', 'budSeed'],
+    pyromancer: ['spellWard', 'emptyLock', 'harvest'],
     giant: ['lastStand', 'emptyLock', 'luckyPurse'],
-    necromancer: ['ironLock', 'titanCost', 'sturdy'],
+    necromancer: ['ironLock', 'snowball', 'sturdy'],
     keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
-    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'],
+    electrician: ['budSeed', 'titanCost', 'sturdy'],
+    cryomancer: ['springThunder', 'titanCost', 'sturdy'],
+    witch: ['budSeed', 'titanCost', 'sturdy'], // 8.3→23.7%（専用デッキと組む）
 };
 /**
  * 相手キャラ別の専用ギア（「あなた」以外）。相手が1種類のキャラに決まるときだけ使う。

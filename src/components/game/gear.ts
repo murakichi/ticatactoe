@@ -373,13 +373,17 @@ export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
  * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
  */
 export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
-    poisoner: ['lastStand', 'spellWard', 'sturdy'],
-    magician: ['lastStand', 'sturdy', 'luckyPurse'],
-    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'], // 呪詛除けが🔥を止める。0.3→27.3%（seed2/300）
-    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 6.3→26.7%
-    necromancer: ['ironLock', 'titanCost', 'sturdy'], // 26.0→41.0%
-    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
-    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+    // 2026-11-10 の master（新ギア・ロック仕様の変更）で測り直した値。各行は 現行→採用 の勝率（seed21/300）。docs/tune/you.md
+    poisoner: ['lastStand', 'spellWard', 'emptyLock'], // 26.7→38.3%
+    magician: ['lastStand', 'sturdy', 'budSeed'], // 3.3→25.0%
+    pyromancer: ['spellWard', 'emptyLock', 'harvest'], // 25.3→37.0%
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 走査で上回る1枠差し替えなし（21.3%）
+    necromancer: ['ironLock', 'snowball', 'sturdy'], // 8.6→31.0%
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'], // 走査はノイズ大（±14〜18）で据え置き
+    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'], // 0.7→15.3%
+    electrician: ['budSeed', 'titanCost', 'sturdy'], // 8.0→20.0%（専用デッキと組む）
+    cryomancer: ['springThunder', 'titanCost', 'sturdy'], // 19.3→58.3%（春雷が氷結の壁を解く）
+    witch: ['budSeed', 'titanCost', 'sturdy'], // 8.3→23.7%（専用デッキと組む）
 };
 
 /**
