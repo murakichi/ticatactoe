@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Player } from '../../types/Player';
 import { geometryForCells } from './boardGeometry';
-import { AWAKEN_BUILDINGS, ownBuildingCells, prayerUsable, roarUsable, roarVictims } from './dragon';
+import { AWAKEN_BUILDINGS, awakenPlan, ownBuildingCells, prayerUsable, roarUsable, roarVictims } from './dragon';
 import { OBJECT_DEFS, objectLandable } from './objects';
 import { isBuilding } from '../../types/ObjectKind';
 import { AIResult } from './aiConstants';
@@ -51,6 +51,22 @@ export interface DragonMethods {
 
 export const dragonMethods: DragonMethods = {
     mikoBuildCell(this: AIPlayer, real: SquareInfo[], me: Player): number | null {
+        // 4つ目（覚醒する手）: 置き先の全候補を試し、囲みの中で消える敵のコマが多く、消える自分のコマが少ないマスを選ぶ。
+        // 囲みの中のコマは敵味方を問わず消滅する（仕様）ので、自分のコマを巻き込まないようにする
+        if (ownBuildingCells(real, me).length === AWAKEN_BUILDINGS - 1) {
+            let best: { cell: number; score: number } | null = null;
+            for (let i = 0; i < real.length; i++) {
+                if (!objectLandable(real[i])) continue;
+                const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' as const } : sq));
+                const plan = awakenPlan(hyp, me);
+                if (!plan) continue;
+                const ownLost = plan.enclosed.filter((j) => real[j].player === me && !isBuilding(real[j])).length;
+                const enemyGone = plan.enclosed.filter((j) => real[j].player && real[j].player !== me).length;
+                const score = plan.n + 2 * enemyGone - 4 * ownLost;
+                if (!best || score > best.score) best = { cell: i, score };
+            }
+            if (best) return best.cell;
+        }
         const size = Math.round(Math.sqrt(real.length));
         const mine = (i: number): boolean => isBuilding(real[i]) && real[i].player === me;
         let best: { cell: number; score: number } | null = null;

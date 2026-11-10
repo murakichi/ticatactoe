@@ -30,6 +30,26 @@ exports.cornerCuts = cornerCuts;
 const lockedEmpty = () => ({ player: undefined, bind: 0, effects: [{ effect: '🔑' }] });
 exports.dragonMethods = {
     mikoBuildCell(real, me) {
+        // 4つ目（覚醒する手）: 置き先の全候補を試し、囲みの中で消える敵のコマが多く、消える自分のコマが少ないマスを選ぶ。
+        // 囲みの中のコマは敵味方を問わず消滅する（仕様）ので、自分のコマを巻き込まないようにする
+        if ((0, dragon_1.ownBuildingCells)(real, me).length === dragon_1.AWAKEN_BUILDINGS - 1) {
+            let best = null;
+            for (let i = 0; i < real.length; i++) {
+                if (!(0, objects_1.objectLandable)(real[i]))
+                    continue;
+                const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' } : sq));
+                const plan = (0, dragon_1.awakenPlan)(hyp, me);
+                if (!plan)
+                    continue;
+                const ownLost = plan.enclosed.filter((j) => real[j].player === me && !(0, ObjectKind_1.isBuilding)(real[j])).length;
+                const enemyGone = plan.enclosed.filter((j) => real[j].player && real[j].player !== me).length;
+                const score = plan.n + 2 * enemyGone - 4 * ownLost;
+                if (!best || score > best.score)
+                    best = { cell: i, score };
+            }
+            if (best)
+                return best.cell;
+        }
         const size = Math.round(Math.sqrt(real.length));
         const mine = (i) => (0, ObjectKind_1.isBuilding)(real[i]) && real[i].player === me;
         let best = null;
