@@ -449,6 +449,6 @@ describe('龍神の巫女の専用ギア', () => {
         expect(counterGearsFor('dragonMiko', ['cryomancer'])).toEqual(['buildMania', 'springThunder']);
         expect(counterGearsFor('dragonMiko', ['giant'])).toBeUndefined();
         expect(recommendedGearsAgainst('dragonMiko', ['cryomancer'])).toEqual(['buildMania', 'springThunder']);
-        expect(recommendedGearsAgainst('dragonMiko', ['giant'])).toEqual(['buildMania', 'rubbleBase']);
+        expect(recommendedGearsAgainst('dragonMiko', ['giant'])).toEqual(['buildMania', 'lastStand']);
     });
 });

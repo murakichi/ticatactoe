@@ -280,7 +280,7 @@ exports.randomGears = randomGears;
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 exports.RECOMMENDED_GEARS = {
-    dragonMiko: ['buildMania', 'rubbleBase'],
+    dragonMiko: ['buildMania', 'lastStand'],
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['snowball', 'ironLock'],
