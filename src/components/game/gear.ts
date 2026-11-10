@@ -388,9 +388,14 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
     pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
-    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    poisoner: {
+        cryomancer: ['springThunder', 'spellWard'],
+        witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
+    },
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        pyromancer: ['spellWard', 'lastStand'], // 10→55%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
+        witch: ['lightToken', 'reaper'], // 23→40%（同）
     },
 };
 
