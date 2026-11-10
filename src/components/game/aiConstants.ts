@@ -178,7 +178,9 @@ export const WITCH_DIG_MARGIN = 3;
 /** 雷霆の巫が陰陽師の一撃(百鬼夜行→式神一括)に備えて、自コマの無い線1本ごとに引く点（旧sim AI AI_DEFAULTS.floodCover） */
 export const FLOOD_COVER_WEIGHT = 150;
 
-export const rerollBudget = (character: CharacterId): number => (character === 'yinYangMaster' ? 8 : MAX_REROLLS);
+/** 毒使いのポイズントークン(16)を探す引き直しの上限 */
+export const POISONER_REROLLS = 4;
+export const rerollBudget = (character: CharacterId): number => (character === 'yinYangMaster' ? 8 : character === 'poisoner' ? POISONER_REROLLS : MAX_REROLLS);
 
 // 固有スキルを撃てる魔力の目安(次の手番の魔力がこれ以上なら撃ってくるとみなす)。旧sim AI の EXCLUSIVE_MIN_MAGIC と同値
 export const EXCLUSIVE_MIN_MAGIC: Partial<Record<CharacterId, number>> = {
