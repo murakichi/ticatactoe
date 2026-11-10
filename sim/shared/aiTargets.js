@@ -755,10 +755,10 @@ exports.targetMethods = {
             const sq = board[i];
             // ⚡で無敵の自コマは誰も触れず、ロックの対象にもできない(クリックが空振りしてロックの選択待ちで止まる)
             // 氷結中のコマは上書きされない（氷室の番人ではロック=氷結。ライフが上がらないので、凍らせた同じコマを毎手番選び続けて氷結を重ね、盤面が止まっていた）
-            // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる）
+            // ロック済みのコマは、残りスタックが ANTI_LOCK_REFRESH 以下になったら延長の対象にする（加算式なので重ねて掛けられる。魔法使いだけ）
             const lockStack = sq.effects.reduce((n, e) => { var _a; return n + (e.effect === '🔑' ? ((_a = e.stack) !== null && _a !== void 0 ? _a : 0) : 0); }, 0);
             const hasLock = sq.effects.some((e) => e.effect === '🔑');
-            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || (hasLock && lockStack > aiConstants_1.ANTI_LOCK_REFRESH))
+            if (sq.player !== this.playerSymbol || sq.bind > 3 || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || (hasLock && lockStack > (this.character === 'magician' ? aiConstants_1.ANTI_LOCK_REFRESH : 0)))
                 continue;
             let val = 1;
             for (const line of geo.winLines) {
