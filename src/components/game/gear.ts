@@ -347,8 +347,9 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
     poisoner: ['snowball', 'spellWard'], // 対強豪平均 33.5→43.0%（seed2/200, z≈5.3。旧 lastStand,spellWard）。死神の鎌,spellWard は 37.5%
     electrician: ['budSeed', 'harvest'], // 芽吹き+収穫: 旧主案 lightToken,harvest より対強豪平均 +5.7pt（57.0→62.8, seed2/200）。docs/tune/electrician.md
-    // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
-    cryomancer: ['lightToken', 'lastStand'],
+    // 氷室の番人: 死神の鎌（氷結や🔥で作ったライフ0の駒の掃除）＋雪だるま。lightToken,lastStand から差し替え。
+    // --scan gears（seed91/60）→ 対全キャラ seed92/100: 48.3→62.0%。環境順位（--rank seed3/200）は 10位→1位 対強豪58.5%（2位との差 4.2pt）。reaper,lastStand は 54.9%（電気技師と同率1位）
+    cryomancer: ['reaper', 'snowball'],
     pyromancer: ['afterglow', 'budSeed'], // 2026-11-10: vengeance→budSeed。対6強豪 約41→58%（seed3/4, 各100試合。主に対魔法使い 33→83%）。強くて突出してもよい（ユーザー方針）。旧: 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
     witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
