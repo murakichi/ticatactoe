@@ -494,7 +494,7 @@ describe('毒使い×氷室の番人: 閻魔の舌(125)', () => {
     });
 });
 
-describe('魔女は巨人相手の最初の手番で置かずにチャージする', () => {
+describe('魔女・陰陽師は巨人相手の最初の手番で置かずにチャージする', () => {
     const costs = { onClickCharge: 0 } as any;
     const mk = (ch: any, opp: any) => new AIPlayer('💙', ch, ['⭕'], ['witch' === ch ? 'witch' : ch, opp] as any);
     it('魔女 vs 巨人: 自コマが無く魔力が少ないときはチャージ', () => {
@@ -502,6 +502,12 @@ describe('魔女は巨人相手の最初の手番で置かずにチャージす�
         const r = ai.makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
         expect(r.move).toBeNull();
         expect(r.skills).toContain('onClickCharge');
+    });
+    it('陰陽師 vs 巨人でも同じ。電気技師 vs 巨人では置く', () => {
+        const yy = mk('yinYangMaster', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
+        expect(yy.move).toBeNull();
+        expect(yy.skills).toContain('onClickCharge');
+        expect(mk('electrician', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
     });
     it('魔力が貯まったあと・自コマがあるとき・巨人以外が相手のときは通常どおり着手', () => {
         const ai = mk('witch', 'giant');
