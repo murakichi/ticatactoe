@@ -385,6 +385,13 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(counterGearsFor('cryomancer', ['magician'])).toBeUndefined();
         expect(counterGearsFor('cryomancer', ['electrician'])).toEqual(['lightToken', 'reaper']);
         expect(counterGearsFor('cryomancer', ['giant'])).toBeUndefined();
+        // 氷室の番人: 鍛冶師・毒使いには術中の加護+死神の鎌（対鍛冶師 9〜12→72〜74%）。複数種類の相手・他のキャラには通常の推奨
+        expect(counterGearsFor('cryomancer', ['pyromancer'])).toEqual(['spellWard', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['poisoner'])).toEqual(['spellWard', 'reaper']);
+        expect(counterGearsFor('cryomancer', ['pyromancer', 'poisoner'])).toBeUndefined();
+        expect(counterGearsFor('cryomancer', ['witch'])).toBeUndefined();
+        expect(recommendedGearsAgainst('cryomancer', ['pyromancer'])).toEqual(['spellWard', 'reaper']);
+        expect(recommendedGearsAgainst('cryomancer', ['witch'])).toEqual(recommendedGears('cryomancer'));
         expect(recommendedGearsAgainst('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
         expect(recommendedGearsAgainst('tactician', ['giant'])).toEqual(recommendedGears('tactician'));
     });
