@@ -337,8 +337,12 @@ exports.COUNTER_GEARS = {
     },
     cryomancer: {
         electrician: ['lightToken', 'reaper'],
-        pyromancer: ['spellWard', 'lastStand'],
-        witch: ['lightToken', 'reaper'], // 23→40%（同）
+        // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
+        // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
+        // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
+        pyromancer: ['spellWard', 'reaper'],
+        poisoner: ['spellWard', 'reaper'],
+        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
     },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
