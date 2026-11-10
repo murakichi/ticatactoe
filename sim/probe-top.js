@@ -10,6 +10,7 @@
  *   node sim/probe-top.js --target pyromancer --gears sturdy,harvest --deck 0,3,5,...     # 候補の設定
  *   node sim/probe-top.js --target pyromancer --flags pyroChain=0,burnoutAfter=1 --modA ai.new.js
  *   node sim/probe-top.js --rank --games 60 --seed 1 [--target X --gears ..]              # 全キャラ総当たり→環境順位表（--target があればその設定を環境に反映）
+ *   --counter: 1対1の相手別の専用ギア（COUNTER_GEARS / COUNTER_GEARS_FOR_YOU）を両側に使う。省略（既定）は全員が通常の推奨ギア。環境順位の基準は通常の推奨で取り、専用ギアは別に測って比べる
  *   node sim/probe-top.js --target X --scan gears --games 60                              # ギア1枠ずつ差し替えた近傍を全部測る
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
  *   node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant              # デッキの各札を1枚ずつ使用禁止(ban)・各ギアを1つずつ外した寄与。結果が基準と完全一致=「差なし」（未使用の疑い。probe-usage.js で確認）
@@ -109,9 +110,11 @@ if (args.worker) {
     for (const t of job.tasks) {
         // t = { a, b, aCand (a に候補設定を与えるか), bCand, variant, cand: {...} }
         const cand = job.variants[t.variant];
-        const mk = (c, isCand) => (rng) => {
+        const mk = (c, isCand, foe) => (rng) => {
             // 対象（候補側）は相手設定の揺らぎ（ギアなし/ランダム）を受けず、推奨ギア（候補が指定すればそれ）を使う
             const e = envCfg(c, mods, rng, isCand && job.envDeck === 'pick' ? undefined : job.envDeck, isCand ? 'recommended' : job.oppGears);
+            // --counter: 1対1の相手別の専用ギア（COUNTER_GEARS）を両側に使う。候補が --gears で明示したときはそちらを優先
+            if (job.counter && !(isCand && cand.gears)) e.gears = gearMod.counterGearsFor(c, [foe]) ?? e.gears;
             if (!isCand) return e;
             if (cand.deck) e.deck = cand.deck;
             if (cand.gears) e.gears = cand.gears;
@@ -119,7 +122,7 @@ if (args.worker) {
             e.mod = mods.A;
             return e;
         };
-        const tally = pairTally(t.a, t.b, mk(t.a, t.aCand), mk(t.b, t.bCand), mods, job.from, job.to, job.seed);
+        const tally = pairTally(t.a, t.b, mk(t.a, t.aCand, t.b), mk(t.b, t.bCand, t.a), mods, job.from, job.to, job.seed);
         out.push({ variant: t.variant, a: t.a, b: t.b, ...tally });
     }
     process.stdout.write('OUT ' + JSON.stringify(out) + '\n');
@@ -151,7 +154,7 @@ async function runWorkers(tasks, variants, workers) {
     const all = [];
     for (let i = 0; i < tasks.length; i += chunk) {
         const part = tasks.slice(i, i + chunk);
-        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears })).digest('hex');
+        const key = crypto.createHash('sha1').update(JSON.stringify({ base, part, variants, games, seed: seed0, size, envDeck: args.envDeck, oppGears: args.oppGears, counter: !!args.counter })).digest('hex');
         const file = path.join(args.cache, key + '.json');
         let res;
         if (fs.existsSync(file)) { res = JSON.parse(fs.readFileSync(file, 'utf8')); console.error(`[cache] hit ${i / chunk + 1}/${Math.ceil(tasks.length / chunk)}`); }
@@ -166,7 +169,7 @@ function runWorkersRaw(tasks, variants, workers) {
     const jobs = [];
     for (let from = 0; from < games; from += per) jobs.push({ from, to: Math.min(games, from + per) });
     return Promise.all(jobs.map((j) => new Promise((resolve, reject) => {
-        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears };
+        const job = { ...j, seed: seed0, tasks, variants, modA: args.modA, envDeck: args.envDeck, oppGears: args.oppGears, counter: !!args.counter };
         const p = spawn(process.execPath, [__filename, '--worker', ...(size ? ['--size', String(size)] : [])], { env: { ...process.env, TOP_JOB: JSON.stringify(job) }, stdio: ['ignore', 'pipe', 'inherit'] });
         let buf = '';
         p.stdout.on('data', (d) => { buf += d; });

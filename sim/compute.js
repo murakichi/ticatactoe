@@ -16,7 +16,7 @@ function createJob(o) {
     const stats = live.createStats(ids, o.players);
     const stride = o.stride || 1;
     const max = o.maxGames == null ? Infinity : o.maxGames;
-    const runOpts = { deck: o.skills !== false, gears: o.gears !== false, skills: o.skills !== false };
+    const runOpts = { deck: o.skills !== false, gears: o.gears !== false, skills: o.skills !== false, counter: !!o.counter };
     let g = o.offset || 0;
     const charsFor = (i) => pairs ? pairs[i % pairs.length] : pickChars(o.players, o.fixedChars, engine.makeRng(o.seed * 2654435 + o.players + i * 104729));
     return {

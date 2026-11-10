@@ -16,14 +16,17 @@ function aiLoadout(chars, rng, opts) {
     const out = {};
     // 「あなた」は相手が1キャラに決まるとき相手別の専用デッキ・ギア（本番 App.tsx と同じ。rng は消費しない）
     const foesOf = (seat) => chars.filter((_, i) => i !== seat);
-    if (opts.deck) out.decks = chars.map((c, seat) => (c === 'you' ? deckMod.recommendedDeckAgainst(c, foesOf(seat)) : deckMod.pickRecommendedDeck(c, rng)));
-    if (opts.gears) out.gears = chars.map((c, seat) => (gearMod.counterGearsFor(c, foesOf(seat)) ?? (c === 'you' ? gearMod.recommendedGearsAgainst(c, foesOf(seat)) : gearMod.pickRecommendedGears(c, rng))));
+    if (opts.deck) out.decks = chars.map((c, seat) => (opts.counter && c === 'you' ? deckMod.recommendedDeckAgainst(c, foesOf(seat)) : deckMod.pickRecommendedDeck(c, rng)));
+    // opts.counter: 相手が1キャラに決まる1対1で、相手別の専用ギア（COUNTER_GEARS / COUNTER_GEARS_FOR_YOU）を使う（本番のAI席と同じ）。
+    // 省略（false）なら全員が通常の推奨ギアで戦う。『通常の推奨』と『対面専用の推奨』は別々に測る（専用ギアは相手キャラごとに変わるので、混ぜると環境順位の基準が動く）
+    if (opts.gears) out.gears = chars.map((c, seat) => ((opts.counter ? gearMod.counterGearsFor(c, foesOf(seat)) : undefined) ?? (opts.counter && c === 'you' ? gearMod.recommendedGearsAgainst(c, foesOf(seat)) : gearMod.pickRecommendedGears(c, rng))));
     return out;
 }
 
 /**
  * opts（省略すると従来どおり装備なし・スキルあり）:
  *   deck/gears: 本番AIと同じデッキ・ギアを持たせる
+ *   counter: 1対1で相手別の専用ギアを使う（省略=通常の推奨ギアのみ）
  *   skills=false: AIが魔法スキルを一切使わず、置くだけ（キャラのパッシブとギアは有効）
  */
 function runGame(chars, rng, modes, size, tracker, opts = {}) {
