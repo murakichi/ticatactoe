@@ -26,8 +26,8 @@ const summary = {
 };
 const analysis = {
     rows: [
-        { id: 'giant', fieldAvg: 0.7, strongAvg: 0.6, worst: { id: 'you', rate: 0.6, decided: 30 }, unfavorable: 0, favorable: 1, solidOpponents: 1, opponents: 1, eq: 0.97 },
-        { id: 'you', fieldAvg: 0.3, strongAvg: 0.4, worst: { id: 'giant', rate: 0.2, decided: 30 }, unfavorable: 1, favorable: 0, solidOpponents: 1, opponents: 1, eq: 0.03 },
+        { id: 'giant', fieldAvg: 0.7, strongAvg: 0.6, metaAvg: 0.62, weight: 0.7, worst: { id: 'you', rate: 0.6, decided: 30 }, unfavorable: 0, favorable: 1, solidOpponents: 1, opponents: 1, eq: 0.97 },
+        { id: 'you', fieldAvg: 0.3, strongAvg: 0.4, metaAvg: 0.38, weight: 0.3, worst: { id: 'giant', rate: 0.2, decided: 30 }, unfavorable: 1, favorable: 0, solidOpponents: 1, opponents: 1, eq: 0.03 },
     ],
     edges: [{ from: 'giant', to: 'you', rate: 0.8, decided: 30, lo: 0.6, significant: true }], ids: ['giant', 'you'],
     exploit: 0.004, minPairDecided: 30, solidPairs: 1, totalPairs: 1, ready: true, minDecided: 20, players: 2,

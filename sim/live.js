@@ -98,7 +98,9 @@ function converged(st, { window, eps, minGames }) {
 // 平均勝率だけでは、相手を見てキャラを選べる場合の強さ（苦手な相手がいると選ばれない）が分からない。
 // そこで、同じ対面表から次の4つを出す。
 //   fieldAvg   : 対全キャラ平均。相手が全キャラ均等に出る場合の勝率（probe-top の「環境勝率」と同じ）
-//   strongAvg  : 対強豪平均。fieldAvg は弱いキャラを大勝するだけで上がるので、平均勝率の上位半分の相手(自分除く)だけで平均した勝率
+//   metaAvg    : 対強豪平均（重み付き。判断に使う主指標）。fieldAvg は弱いキャラを大勝するだけで上がるので、相手ごとに重みを付けて平均する。
+//                重み = 相手が選ばれやすさ（強いほど大きい。ロジット量子応答均衡 metaWeights）。一強なら一強に勝つことが重く評価され、下位は小さい重みで残る
+//   strongAvg  : 旧・対強豪平均（平均勝率の上位半分の相手(自分除く)を同じ重みで平均。重みが0/1の二択で、線の内外で不連続）。比較用に残す
 //   worst      : 最悪対面。出会う確率が低くても、カウンターが1体いるだけで選ばれにくくなる
 //   unfavorable: 有意に負け越す対面の数（勝率の95%区間の上限が50%未満）。favorable は逆（下限が50%超）
 //   eq         : 相手が最適に選ぶときの均衡の選択確率（対称ゼロ和ゲームのナッシュ均衡）。
@@ -133,10 +135,33 @@ function solveSymmetric(A, iters = 4000) {
     return { eq, exploit };
 }
 
+// 相手の重み: 「相手が選ぶキャラの分布 p」を、強いキャラほど選ばれやすい(ロジット応答)として自己無撞着に決める。
+//   p_i ∝ exp(β · U_i),  U_i = Σ_j A[i][j] · p_j   （U_i = 分布 p に対するキャラ i の勝率 − 50%）
+// ロジット量子応答均衡。β=0 で全員同じ重み(= 単純平均)、β→∞ でナッシュ均衡(最強にだけ重みが集まる)に近づく。
+// 一強なら、一強の重みが自動で大きくなる（一強に勝つことが重く評価される）。順位で線を引かず、全員に連続の重みが付く。
+// A は対称ゼロ和の利得行列(solveSymmetric と同じ)。収束しないときは打ち切り時点の平均を返す
+const META_BETA = 8; // 勝率の差0.1につき重みが約 e^0.8≒2.2 倍。0で単純平均、大きいほど強い相手に集中
+function metaWeights(A, beta = META_BETA, maxIter = 5000) {
+    const n = A.length;
+    let p = Array(n).fill(1 / n);
+    for (let t = 0; t < maxIter; t++) {
+        const u = A.map((row) => row.reduce((a, v, j) => a + v * p[j], 0));
+        const m = Math.max(...u);
+        const e = u.map((x) => Math.exp(beta * (x - m)));
+        const sum = e.reduce((a, v) => a + v, 0);
+        const q = e.map((v) => v / sum);
+        const next = p.map((v, i) => 0.7 * v + 0.3 * q[i]); // 減衰（対称ゼロ和は素朴な反復だと振動しやすい）
+        const diff = Math.max(...next.map((v, i) => Math.abs(v - p[i])));
+        p = next;
+        if (diff < 1e-10) break;
+    }
+    return p;
+}
+
 const READY_SHARE = 0.9; // 結論を出すのに必要な、minDecided に届いた対面(組)の割合
 const MIN_DECIDED = 20; // 最悪対面・有利/不利に数える最低試合数（これ未満の対面は誤差が大きすぎる）
 
-function analyze(st, { minDecided = MIN_DECIDED } = {}) {
+function analyze(st, { minDecided = MIN_DECIDED, beta = META_BETA } = {}) {
     const ids = Object.entries(st.perChar).filter(([, a]) => a.appearances > 0).map(([id]) => id);
     if (ids.length < 2) return null;
     const mu = matchups(st);
@@ -171,7 +196,23 @@ function analyze(st, { minDecided = MIN_DECIDED } = {}) {
     const A = ids.map((x) => ids.map((y) => { if (x === y) return 0; const c = cell(x, y); return (c.w + 1) / (c.d + 2) - 0.5; }));
     const { eq, exploit } = solveSymmetric(A);
     rows.forEach((r, i) => { r.eq = eq[i]; });
-    rows.sort((a, b) => b.eq - a.eq || (b.strongAvg || 0) - (a.strongAvg || 0));
+    // 重み付きの対強豪平均(metaAvg): 相手 j の重み p_j（強い相手ほど大きい）で、自分以外の相手との勝率を平均する。
+    // 自分自身(ミラー)は除いて残りの重みで正規化する。実測の勝率を使う（重みの計算だけ、少数試合の対面は50%寄りに補正した行列を使う）
+    const weights = metaWeights(A, beta);
+    const idxOf = Object.fromEntries(ids.map((id, i) => [id, i]));
+    rows.forEach((r) => {
+        let num = 0, den = 0;
+        for (const y of ids) {
+            if (y === r.id) continue;
+            const c = cell(r.id, y);
+            if (c.rate == null) continue;
+            num += weights[idxOf[y]] * c.rate;
+            den += weights[idxOf[y]];
+        }
+        r.metaAvg = den > 0 ? num / den : null;
+        r.weight = weights[idxOf[r.id]];
+    });
+    rows.sort((a, b) => b.eq - a.eq || (b.metaAvg || 0) - (a.metaAvg || 0));
     const pairs = [];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push(cell(ids[i], ids[j]).d);
     // 引き分け（打ち切り）が多い組があると、全組が minDecided に届くのを待つといつまでも結論が出ない。
@@ -179,7 +220,7 @@ function analyze(st, { minDecided = MIN_DECIDED } = {}) {
     const solidPairs = pairs.filter((d) => d >= minDecided).length;
     const ready = solidPairs >= Math.ceil(pairs.length * READY_SHARE);
     const edges = advantageEdges(ids, cell, minDecided);
-    return { rows, edges, ids, loops: findLoops(ids, edges.filter((e) => e.significant)), strong: [...strong], exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
+    return { rows, edges, ids, loops: findLoops(ids, edges.filter((e) => e.significant)), strong: [...strong], beta, weights: Object.fromEntries(ids.map((id, i) => [id, weights[i]])), exploit, minPairDecided: Math.min(...pairs), solidPairs, totalPairs: pairs.length, ready, minDecided, players: st.players, games: st.games };
 }
 
 // 有利・不利の有向グラフ。勝つ側 from → 負ける側 to。minDecided 試合以上ある組だけで、勝率がちょうど50%の組は辺を作らない。
@@ -254,7 +295,7 @@ function findLoops(ids, edges, { maxLen = 5, maxCount = 40 } = {}) {
 function verdict(an, label = (id) => id) {
     if (!an) return { headline: 'データが足りません', points: [] };
     const top = (key, dir = 1) => an.rows.filter((r) => r[key] != null).reduce((a, r) => (a == null || dir * r[key] > dir * a[key] ? r : a), null);
-    const topEq = top('eq'), topAvg = top('strongAvg');
+    const topEq = top('eq'), topAvg = top('metaAvg');
     const topWorst = an.rows.filter((r) => r.worst).reduce((a, r) => (a == null || r.worst.rate > a.worst.rate ? r : a), null);
     const pts = [];
     const f = (x) => `${(x * 100).toFixed(1)}%`;
@@ -271,7 +312,7 @@ function verdict(an, label = (id) => id) {
     } else {
         headline = `突出したキャラはいません（均衡の選択確率が分散）。最有力は${label(topEq.id)}`;
     }
-    pts.push(`対強豪平均(平均勝率の上位半分の相手だけ)の1位: ${label(topAvg.id)} ${f(topAvg.strongAvg)}`);
+    pts.push(`対強豪平均(強い相手ほど重く見る)の1位: ${label(topAvg.id)} ${f(topAvg.metaAvg)}`);
     if (topWorst) pts.push(`最悪対面が最も良い: ${label(topWorst.id)}（最悪でも ${f(topWorst.worst.rate)}・対${label(topWorst.worst.id)}）`);
     pts.push(`均衡の選択確率の1位: ${label(topEq.id)} ${f(topEq.eq)}（最良応答の利得 ${(an.exploit * 100).toFixed(2)}pt。0に近いほど収束）`);
     const dead = an.rows.filter((r) => r.eq < 0.01).length;
@@ -332,4 +373,4 @@ function aggregate(agg, parts) {
     return st;
 }
 
-module.exports = { findLoops, roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };
+module.exports = { metaWeights, META_BETA, findLoops, roundRobinPairs, mergeStats, createAggregator, aggregate, statsFromPairs, createStats, record, matchups, summarize, checkpoint, maxDrift, converged, wilson, solveSymmetric, analyze, verdict };

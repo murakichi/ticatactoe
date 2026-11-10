@@ -8,6 +8,10 @@ export type Analysis = {
         id: string;
         fieldAvg: number | null;
         strongAvg: number | null;
+        /** 重み付きの対強豪平均（主指標）。相手の重み(weight)で平均した勝率 */
+        metaAvg: number | null;
+        /** このキャラが相手として選ばれる重み（強いほど大きい。合計1） */
+        weight: number;
         worst: { id: string; rate: number; decided: number } | null;
         unfavorable: number;
         favorable: number;
@@ -22,6 +26,7 @@ export type Analysis = {
     ready: boolean;
     minDecided: number;
     players: number;
+    beta?: number;
     edges?: Edge[];
     ids?: string[];
     loops?: Loops;
