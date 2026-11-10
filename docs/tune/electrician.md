@@ -1,6 +1,6 @@
 # tune-top: electrician (雷霆の巫)
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
-- 最後に検証したmaster: be4fe88
+- 最後に検証したmaster: 5e42dfe
 - 現在の推奨設定: gears=[budSeed,harvest](別案 [lightToken,budSeed]; 2026-11-09 採用)(別案 [lightToken,afterglow]) deck=[21,22,23,24,26,28,52,53,58,60,92,94] AIフラグ=なし
 - 基準線: 環境勝率 63.9% / 1位 / 2位 tactician 62.1%   (seed 3, games 200, size 4)。旧: 60.2%/2位(tactician 67.8%, seed1/60試合)
 - トップ到達(seed3/200試合): 基本 63.9 vs tactician 62.1 / envDeck varied 64.6 vs giant 58.7 / oppGears none 61.4 vs magician 58.6 / oppGears random 59.9 vs tactician 58.4 — 4条件すべて1位
@@ -9,7 +9,8 @@
 - 基準線(2026-11-09 master be4fe88, 主指標=対強豪平均): seed1/60 --write-strong は 1位 55.7%(2位 necromancer 54.7%・3位 giant 53.3%)、seed3/200 --target(条件1)は **2位 58.8%** / 1位 necromancer 64.1%(差5.3pt)・3位 giant 58.1%。最悪対面は対necromancer 36.5%。強豪(seed1/60)=necromancer,electrician,magician,keysmith,giant,cryomancer。状態は running 継続(条件2は未測定)。
 - 基準線(2026-11-09 master a48fffc, 新ギア budSeed,harvest, seed1/100 --write-strong): 雷霆 3位 対強豪 52.2%(field 63.1%) / 1位 necromancer 70.4%(2位 yinYangMaster 57.2%)。差18.2pt。最悪対面は対necromancer 33%。強豪=necromancer,electrician,yinYangMaster,magician,giant,pyromancer。1位は雷霆だけでなく全キャラから13pt以上離れた一強で、ギア・デッキの調整では覆せない見込み(降霊が雷霆に対して約50pt効く=診断参照)。ルール側の案は #513。残る未測定の軸: synergy / strategy / joint。
 - 基準線(2026-11-10 master 5e42dfe = 龍神の巫女追加後, seed1/100 --write-strong): **雷霆 1位 対強豪 54.9%**(field 60.5%, 最悪対面 対pyromancer 31%) / 2位 yinYangMaster 54.6%・3位 pyromancer 52.6%・4位 keysmith 52.1%・5位 necromancer 52.0%・6位 dragonMiko 52.0%。necromancer は 70.4%→52.0% に下がった(master の調整)。差は0.3ptと僅差なので完了判定(2条件×200試合)を実施中。対necromancer 33%・対dragonMiko 46%・対giant 46%。
-- 状態: blocked(issue #513。ギア・デッキ・synergy・strategy・メタ・joint の6種類を測っても対強豪平均の差が詰まらない: 一強 necromancer 70.4% / 雷霆 3位 52.2%)。以前の記述: running(2026-10-28 に返し特売(60)を採用して再開。魔力が律速=#44。まだ試していないのは『撃たれていない約55種の札に撃ち方を足す』『ギア2枠同時の組』『対 witch の負け筋』)
+- トップ到達(2026-11-10, master 5e42dfe, seed3/200 --target): 条件1(基本) **1位 56.4%** vs 2位 yinYangMaster 56.2%(差0.2pt) / 条件2(--envDeck pick --oppGears pick) **1位 56.9%** vs 2位 pyromancer 52.8%。最悪対面は対necromancer 30%・対pyromancer 33%。necromancer は master の調整で 70.4→51.6% に下がり、一強が解消。#513(降霊の吸収)は引き続き有効だが、トップ維持の要件ではなくなった。
+- 状態: refining(トップ到達。洗練を続ける: 条件1は2位と僅差のため、対強豪平均をさらに上げる余地を探す。ギア budSeed,harvest 採用済み・デッキ/synergy/strategy は不採用)
 - 基準線(最新 master edb9fff, seed3/200): 3位 60.1% / 1位 witch 68.7%(新キャラ)・2位 poisoner 64.2%・4位 cryomancer 59.9%。1位との差 8.6pt
 - 基準線(返し特売採用後, seed3/200): 基本 3位 62.6% / 1位 witch 68.3%・2位 poisoner 63.3%(差5.7pt)。envDeck varied 5位 56.4% / 1位 witch 62.6%・2位 poisoner 61.9%・3位 cryomancer 61.7%
 - 基準線(主指標=対強豪平均, 吹き寄せ採用後, master e2c8264, seed1/100 --write-strong): 5位 対強豪 45.3% / field 56.2% / 最悪対面 対毒使い30%・不利対面2。1位 witch 65.2%(field 69.6%)・2位 tactician 54.1%・3位 pyromancer 48.6%・4位 cryomancer 46.7%。差(1位) 19.9pt。強豪=witch,cryomancer,tactician,poisoner,electrician,pyromancer。
