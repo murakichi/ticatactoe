@@ -153,9 +153,7 @@ export const dragonMethods: DragonMethods = {
         // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
         // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
         let prayers = 0;
-        // 巫女（未覚醒）は、建造物が AWAKEN_BUILDINGS 個になると覚醒して自陣の建造物が全部消える（塞ぎも消えて脅威が残る・#607）。覚醒に届く手前までしか置かない
-        const own = ownBuildingCells(real, this.playerSymbol).length;
-        let room = Math.min(BUILDING_CAP - own, this.dragonForm === 'dragon' ? Infinity : AWAKEN_BUILDINGS - 1 - own);
+        let room = BUILDING_CAP - ownBuildingCells(real, this.playerSymbol).length;
         for (const c of threats) {
             if (room <= 0) break;
             room--;
