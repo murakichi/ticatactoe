@@ -8,7 +8,7 @@ test('web/CLI の対戦シミュレーションは、counter を付けたとき�
     const { aiLoadout } = require('../run');
     const rng = e.makeRng(1);
     const vsPoisoner = aiLoadout(['you', 'poisoner'], rng, { deck: true, gears: true, counter: true });
-    assert.deepStrictEqual(vsPoisoner.gears[0], ['lastStand', 'spellWard', 'sturdy']);
+    assert.deepStrictEqual(vsPoisoner.gears[0], ['lastStand', 'spellWard', 'emptyLock']);
     // counter なしは通常の推奨ギア（専用ギアではない）
     const plain = aiLoadout(['you', 'poisoner'], e.makeRng(1), { deck: true, gears: true });
     assert.deepStrictEqual(plain.gears[0], require('../shared/gear').recommendedGears('you'));

@@ -373,13 +373,17 @@ export const ALT_RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[][]>> = {
  * 測定（--target you --opp X, seed2）: poisoner 10.3→37.3%(300試合)、keysmith 31.8→40.8%(400)、yinYangMaster 9.3→21.0%(400)、magician 3.3→11.0%(300)。
  */
 export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
-    poisoner: ['lastStand', 'spellWard', 'sturdy'],
-    magician: ['lastStand', 'sturdy', 'luckyPurse'],
-    pyromancer: ['spellWard', 'emptyLock', 'luckyPurse'], // 呪詛除けが🔥を止める。0.3→27.3%（seed2/300）
-    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 6.3→26.7%
-    necromancer: ['ironLock', 'titanCost', 'sturdy'], // 26.0→41.0%
-    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
-    yinYangMaster: ['lastStand', 'sturdy', 'luckyPurse'],
+    // 2026-11-10 の master（新ギア・ロック仕様の変更）で測り直した値。各行は 現行→採用 の勝率（seed21/300）。docs/tune/you.md
+    poisoner: ['lastStand', 'spellWard', 'emptyLock'], // 26.7→38.3%
+    magician: ['lastStand', 'sturdy', 'budSeed'], // 3.3→25.0%
+    pyromancer: ['spellWard', 'emptyLock', 'harvest'], // 25.3→37.0%
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 走査で上回る1枠差し替えなし（21.3%）
+    necromancer: ['ironLock', 'snowball', 'sturdy'], // 8.6→31.0%
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'], // 走査はノイズ大（±14〜18）で据え置き
+    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'], // 0.7→15.3%
+    electrician: ['budSeed', 'titanCost', 'sturdy'], // 8.0→20.0%（専用デッキと組む）
+    cryomancer: ['springThunder', 'titanCost', 'sturdy'], // 19.3→58.3%（春雷が氷結の壁を解く）
+    witch: ['budSeed', 'titanCost', 'sturdy'], // 8.3→23.7%（専用デッキと組む）
 };
 
 /**
@@ -411,6 +415,9 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
         witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
+        magician: ['budSeed', 'reaper'], // 10.0→77.3%（budSeed,lastStand は 34.3%）
+        keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
     // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
     keysmith: {
