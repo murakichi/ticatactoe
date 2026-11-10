@@ -113,6 +113,11 @@ export const YOU_HOLD_VS: Partial<Record<CharacterId, number[]>> = {
     tactician: [92, 74],
 };
 
+/** 巨人が相手のとき、自コマが盤に無い間、手番開始の魔力がこれ未満なら置かずにチャージする（魔女。対巨人 平均 +24.7pt） */
+export const WITCH_GIANT_OPEN_CHARGE_CAP = 14;
+/** 同上（陰陽師。5が最良で、8・11は悪化） */
+export const YINYANG_GIANT_OPEN_CHARGE_CAP = 5;
+
 export const MAGICIAN_HOLD = [53, 60, 92];
 /** ネクロマンサーが相手のときの固定: 特売(53)を外して追い剥ぎ(52)を固定する。対ネクロ 36→47%（seed1142〜1144 各400で +8.5〜+12） */
 export const MAGICIAN_HOLD_VS_NECRO = [60, 92, 52];

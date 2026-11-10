@@ -494,28 +494,32 @@ describe('毒使い×氷室の番人: 閻魔の舌(125)', () => {
     });
 });
 
-describe('魔女・陰陽師は巨人相手の最初の手番で置かずにチャージする', () => {
+describe('魔女・陰陽師は巨人相手の最初は置かずにチャージする', () => {
     const costs = { onClickCharge: 0 } as any;
-    const mk = (ch: any, opp: any) => new AIPlayer('💙', ch, ['⭕'], ['witch' === ch ? 'witch' : ch, opp] as any);
-    it('魔女 vs 巨人: 自コマが無く魔力が少ないときはチャージ', () => {
+    const mk = (ch: any, opp: any) => new AIPlayer('💙', ch, ['⭕'], [ch, opp] as any);
+    const move = (ai: AIPlayer, board: any, magic: number) => ai.makeMove(board, magic, costs, 2, 7, [0, 1, 2], false);
+    it('魔女 vs 巨人: 自コマが無く魔力が14未満の間はチャージ。14になったら着手', () => {
         const ai = mk('witch', 'giant');
-        const r = ai.makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
+        for (const m of [2, 8, 13]) {
+            const r = move(ai, emptyBoard(), m);
+            expect(r.move).toBeNull();
+            expect(r.skills).toContain('onClickCharge');
+        }
+        expect(move(ai, emptyBoard(), 14).move).not.toBeNull();
+    });
+    it('陰陽師 vs 巨人: 魔力5未満の間だけチャージ（5以上は通常どおり）', () => {
+        const ai = mk('yinYangMaster', 'giant');
+        const r = move(ai, emptyBoard(), 2);
         expect(r.move).toBeNull();
         expect(r.skills).toContain('onClickCharge');
+        expect(move(ai, emptyBoard(), 6).skills).not.toContain('onClickCharge');
     });
-    it('陰陽師 vs 巨人でも同じ。電気技師 vs 巨人では置く', () => {
-        const yy = mk('yinYangMaster', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false);
-        expect(yy.move).toBeNull();
-        expect(yy.skills).toContain('onClickCharge');
-        expect(mk('electrician', 'giant').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
-    });
-    it('魔力が貯まったあと・自コマがあるとき・巨人以外が相手のときは通常どおり着手', () => {
-        const ai = mk('witch', 'giant');
-        expect(ai.makeMove(emptyBoard(), 5, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
+    it('自コマがあるとき・巨人以外が相手・他のキャラでは通常どおり着手', () => {
         const b = emptyBoard();
         put(b, 5, '💙');
-        expect(ai.makeMove(b, 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
-        expect(mk('witch', 'electrician').makeMove(emptyBoard(), 2, costs, 2, 7, [0, 1, 2], false).move).not.toBeNull();
+        expect(move(mk('witch', 'giant'), b, 2).move).not.toBeNull();
+        expect(move(mk('witch', 'electrician'), emptyBoard(), 2).move).not.toBeNull();
+        expect(move(mk('electrician', 'giant'), emptyBoard(), 2).move).not.toBeNull();
     });
 });
 
