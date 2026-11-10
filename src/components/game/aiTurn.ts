@@ -162,7 +162,10 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         const raised = life + ADD_LIFE_AMOUNT;
         if (input.magic[seat] >= total && !moveBlocked(true, raised)) {
             const m = ai.getBestMove(board, raised);
-            if (m !== null) result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')], result.move = m;
+            if (m !== null) {
+                result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')];
+                result.move = m;
+            }
         }
     }
 

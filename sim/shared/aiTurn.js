@@ -98,8 +98,10 @@ const planAITurn = (ai, input, pickHailMary) => {
         const raised = life + ADD_LIFE_AMOUNT;
         if (input.magic[seat] >= total && !(0, lifeBan_1.moveBlocked)(true, raised)) {
             const m = ai.getBestMove(board, raised);
-            if (m !== null)
-                result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')], result.move = m;
+            if (m !== null) {
+                result.skills = ['onClickAddLife', ...result.skills.filter((sk) => sk !== 'onClickAddLife')];
+                result.move = m;
+            }
         }
     }
     // AIが盤面・キャラに応じてスキルをロック（次のシャッフルで固定する）
