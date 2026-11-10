@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, objectLandable } from './objects';
+import { OBJECT_DEFS, objectLandable, enemyObjectActive } from './objects';
 import { calculateWinner, findEmptyIndexes, isObject, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -1211,7 +1211,23 @@ export const planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
-        return this.guardPass(this.makeMoveCore(...argsIn), argsIn);
+        return this.guardPass(this.limitToOneSkill(this.makeMoveCore(...argsIn), argsIn), argsIn);
+    },
+
+    /**
+     * 相手の一言居士（スキルは1ターンに1つ）が働いているとき、計画のスキルを最初の1つ（チャージ・シャッフル・ロックは数えない）に絞る。
+     * 2つ目以降は実行時に無視されるので、スキルが効いた前提で決めた着手が崩れ、相手のリーチを塞がずに手番が終わっていた（#623）。着手は今の盤面で決め直す
+     */
+    limitToOneSkill(this: AIPlayer, result: AIResult, argsIn: PlanMoveArgs): AIResult {
+        if (!enemyObjectActive(argsIn[0], this.playerSymbol, 'oneWord')) return result;
+        const basic = (sk: string): boolean => sk === 'onClickCharge' || sk === 'onClickShuffle' || sk === 'onClickUseLock';
+        const planned = [...result.skills.filter((sk) => !basic(sk)), ...(result.chargeClicks ?? []).map((c) => c.skill).filter((sk) => !basic(sk))];
+        if (planned.length <= 1 || result.reroll || result.hailMary) return result;
+        const keep = planned[0];
+        const keptClick = (result.chargeClicks ?? []).filter((c) => c.skill === keep || basic(c.skill));
+        const skills = result.skills.filter((sk) => basic(sk) || sk === keep);
+        const move = this.getBestMove(argsIn[0], argsIn[4]);
+        return { ...result, move, skills: move === null && skills.length === 0 ? ['onClickCharge'] : skills, chargeClicks: keptClick, win: false };
     },
 
     /**

@@ -71,3 +71,33 @@ describe('guardPass: ロックだけの計画でも、相手に1手で勝たれ�
         expect(ai().guardPass(plan, args(board()))).toEqual(plan);
     });
 });
+
+describe('limitToOneSkill: 相手の一言居士が働いていると、計画のスキルは1つ（#623）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { skillCosts } = require('./skillCosts');
+    const board = () => {
+        const b: SquareInfo[] = Array.from({ length: 16 }, () => ({ player: undefined, bind: 0, effects: [] }));
+        for (const i of [2, 6, 10]) b[i] = { player: '💙', bind: 3, effects: [] };
+        b[3] = { player: '💙', bind: 5, effects: [], object: 'oneWord' };
+        return b;
+    };
+    const ai = () => new AIPlayer('⭕', 'yinYangMaster', ['💙'], ['dragonMiko', 'yinYangMaster'], undefined, false, false);
+    const args = (b: SquareInfo[]) => [b, 30, skillCosts, 5, 3, [], false] as Parameters<AIPlayer['makeMove']>;
+    const plan = { move: 8, skills: ['onClickToggleYingYang', 'onClickShikigamiBlast'] };
+
+    it('相手の一言居士が働いていれば、2つ目のスキルを外し、着手は今の盤面で決め直す（相手のリーチ14を塞ぐ）', () => {
+        const r = ai().limitToOneSkill(plan, args(board()));
+        expect(r.skills).toEqual(['onClickToggleYingYang']);
+        expect(r.move).toBe(14);
+    });
+    it('一言居士が無ければそのまま', () => {
+        const b = board();
+        b[3] = { player: undefined, bind: 0, effects: [] };
+        expect(ai().limitToOneSkill(plan, args(b))).toEqual(plan);
+    });
+    it('自分の一言居士は制限しない', () => {
+        const b = board();
+        b[3] = { player: '⭕', bind: 5, effects: [], object: 'oneWord' };
+        expect(ai().limitToOneSkill(plan, args(b))).toEqual(plan);
+    });
+});

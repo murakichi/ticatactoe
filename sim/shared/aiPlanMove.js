@@ -1183,7 +1183,25 @@ exports.planMoveMethods = {
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
     makeMove(...argsIn) {
-        return this.guardPass(this.makeMoveCore(...argsIn), argsIn);
+        return this.guardPass(this.limitToOneSkill(this.makeMoveCore(...argsIn), argsIn), argsIn);
+    },
+    /**
+     * 相手の一言居士（スキルは1ターンに1つ）が働いているとき、計画のスキルを最初の1つ（チャージ・シャッフル・ロックは数えない）に絞る。
+     * 2つ目以降は実行時に無視されるので、スキルが効いた前提で決めた着手が崩れ、相手のリーチを塞がずに手番が終わっていた（#623）。着手は今の盤面で決め直す
+     */
+    limitToOneSkill(result, argsIn) {
+        var _a, _b;
+        if (!(0, objects_1.enemyObjectActive)(argsIn[0], this.playerSymbol, 'oneWord'))
+            return result;
+        const basic = (sk) => sk === 'onClickCharge' || sk === 'onClickShuffle' || sk === 'onClickUseLock';
+        const planned = [...result.skills.filter((sk) => !basic(sk)), ...((_a = result.chargeClicks) !== null && _a !== void 0 ? _a : []).map((c) => c.skill).filter((sk) => !basic(sk))];
+        if (planned.length <= 1 || result.reroll || result.hailMary)
+            return result;
+        const keep = planned[0];
+        const keptClick = ((_b = result.chargeClicks) !== null && _b !== void 0 ? _b : []).filter((c) => c.skill === keep || basic(c.skill));
+        const skills = result.skills.filter((sk) => basic(sk) || sk === keep);
+        const move = this.getBestMove(argsIn[0], argsIn[4]);
+        return { ...result, move, skills: move === null && skills.length === 0 ? ['onClickCharge'] : skills, chargeClicks: keptClick, win: false };
     },
     /**
      * 計画が『チャージで手番を終えるだけ』なのに、相手に1手で勝たれる（空きマスだけでなく敵コマの奪取で完成する勝ちも）なら、塞ぐ手に差し替える。
