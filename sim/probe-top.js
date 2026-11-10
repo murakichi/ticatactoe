@@ -10,6 +10,7 @@
  *   node sim/probe-top.js --target pyromancer --gears sturdy,harvest --deck 0,3,5,...     # 候補の設定
  *   node sim/probe-top.js --target pyromancer --flags pyroChain=0,burnoutAfter=1 --modA ai.new.js
  *   node sim/probe-top.js --rank --games 60 --seed 1 [--target X --gears ..]              # 全キャラ総当たり→環境順位表（--target があればその設定を環境に反映）
+ *   --counter: 1対1の相手別の専用ギア（COUNTER_GEARS / COUNTER_GEARS_FOR_YOU）を両側に使う。省略（既定）は全員が通常の推奨ギア。環境順位の基準は通常の推奨で取り、専用ギアは別に測って比べる
  *   node sim/probe-top.js --target X --scan gears --games 60                              # ギア1枠ずつ差し替えた近傍を全部測る
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
  *   node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant              # デッキの各札を1枚ずつ使用禁止(ban)・各ギアを1つずつ外した寄与。結果が基準と完全一致=「差なし」（未使用の疑い。probe-usage.js で確認）
