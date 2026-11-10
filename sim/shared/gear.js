@@ -280,20 +280,20 @@ exports.randomGears = randomGears;
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 exports.RECOMMENDED_GEARS = {
-    dragonMiko: ['buildMania', 'rubbleBase'], // 普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）、無いときも祈りは-2。瓦礫の礎: 壊された建造物の位置に大岩＋魔力+1。堅牢のみ 2.8% → 37.8%/36.7%（4x4・対強豪平均・seed1/60, seed2/100。docs/tune/dragonMiko.md）
+    dragonMiko: ['buildMania', 'rubbleBase'],
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
-    magician: ['snowball', 'ironLock'], // luckyPurse から差し替え（堅牢の鍵。強豪5体 seed71/100: 48.5→56.7、対ネクロ 7→19・対陰陽師 30→42。走査 seed62/40: 54.5→65.1。docs/tune/magician.md 試行91）
+    magician: ['snowball', 'ironLock'],
     giant: ['lastStand', 'sturdy'],
-    yinYangMaster: ['reaper', 'snowball'], // 対強豪平均 44→71%（seed8、7体各200試合。seed5 でも 46.5→死神の鎌+土壇場 60.0 / 雪だるま+土壇場 54.7）。氷室・魔女・毒使い・電気・軍師の全てで上がる。旧: lastStand,chainDiscount
-    necromancer: ['reaper', 'lastStand'], // 復讐の刃から差し替え（死神の鎌: ライフ0の駒が壊れて墓地が貯まり、全スキル軽減が効く）。対強豪6体 seed190/150: 40.8→63.8、seed200/200: 38.3→61.2。docs/tune/necromancer.md 試行53
-    poisoner: ['snowball', 'spellWard'], // 対強豪平均 33.5→43.0%（seed2/200, z≈5.3。旧 lastStand,spellWard）。死神の鎌,spellWard は 37.5%
-    electrician: ['budSeed', 'harvest'], // 芽吹き+収穫: 旧主案 lightToken,harvest より対強豪平均 +5.7pt（57.0→62.8, seed2/200）。docs/tune/electrician.md
+    yinYangMaster: ['reaper', 'snowball'],
+    necromancer: ['reaper', 'lastStand'],
+    poisoner: ['snowball', 'spellWard'],
+    electrician: ['budSeed', 'harvest'],
     // 氷室の番人・煉獄の鍛冶師は未計測。全キャラで一貫して効いた頑健＋収穫を暫定で選ぶ
     cryomancer: ['lightToken', 'lastStand'],
-    pyromancer: ['afterglow', 'budSeed'], // 2026-11-10: vengeance→budSeed。対6強豪 約41→58%（seed3/4, 各100試合。主に対魔法使い 33→83%）。強くて突出してもよい（ユーザー方針）。旧: 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
-    keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
-    witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
+    pyromancer: ['afterglow', 'budSeed'],
+    keysmith: ['lastStand', 'lockBloom'],
+    witch: ['buildMania', 'bindingLock'], // 2026-11-10 tune-top: reaper→bindingLock。対強豪平均 43.2→47.6%(seed2/200、seed1/60 でも 46.4→52.5%)。対巨人57→87・対陰陽師53→74・対鍛冶師18→56 だが対電気使い42→27。旧: 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 const recommendedGears = (character) => { var _a; return ((_a = exports.RECOMMENDED_GEARS[character]) !== null && _a !== void 0 ? _a : ['sturdy']).slice(0, (0, exports.gearSlotsFor)(character)); };
 exports.recommendedGears = recommendedGears;
@@ -302,8 +302,8 @@ exports.recommendedGears = recommendedGears;
  * sim の環境測定は主案だけで行う（再現性のため）。別案は主案と同程度の環境勝率であることを確かめたものだけ入れる（docs/tune/<char>.md）。
  */
 exports.ALT_RECOMMENDED_GEARS = {
-    yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']], // 別案: 死神の鎌+土壇場の防壁 60.5%（seed8、主案 71.0%）／旧主案 44.0%
-    necromancer: [['reaper', 'snowball']], // 主案 reaper,lastStand 61.2 に対し 60.3（seed200/200, 対強豪）で同程度。対giant 30→41%、対poisoner 59→69%
+    yinYangMaster: [['lastStand', 'reaper'], ['lastStand', 'chainDiscount']],
+    necromancer: [['reaper', 'snowball']],
     electrician: [['lightToken', 'budSeed']], // 主案との差 -1.5pt（61.3 vs 62.8, seed2/200）。旧別案(afterglow/springThunder 系)は主案が変わったので外した（docs/tune/electrician.md）
 };
 /**
@@ -313,15 +313,15 @@ exports.ALT_RECOMMENDED_GEARS = {
  */
 exports.COUNTER_GEARS_FOR_YOU = {
     // 2026-11-10 の master（新ギア・ロック仕様の変更）で測り直した値。各行は 現行→採用 の勝率（seed21/300）。docs/tune/you.md
-    poisoner: ['lastStand', 'spellWard', 'emptyLock'], // 26.7→38.3%
-    magician: ['lastStand', 'sturdy', 'budSeed'], // 3.3→25.0%
-    pyromancer: ['spellWard', 'emptyLock', 'harvest'], // 25.3→37.0%
-    giant: ['lastStand', 'emptyLock', 'luckyPurse'], // 走査で上回る1枠差し替えなし（21.3%）
-    necromancer: ['ironLock', 'snowball', 'sturdy'], // 8.6→31.0%
-    keysmith: ['lastStand', 'sturdy', 'luckyPurse'], // 走査はノイズ大（±14〜18）で据え置き
-    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'], // 0.7→15.3%
-    electrician: ['budSeed', 'titanCost', 'sturdy'], // 8.0→20.0%（専用デッキと組む）
-    cryomancer: ['springThunder', 'titanCost', 'sturdy'], // 19.3→58.3%（春雷が氷結の壁を解く）
+    poisoner: ['lastStand', 'spellWard', 'emptyLock'],
+    magician: ['lastStand', 'sturdy', 'budSeed'],
+    pyromancer: ['spellWard', 'emptyLock', 'harvest'],
+    giant: ['lastStand', 'emptyLock', 'luckyPurse'],
+    necromancer: ['ironLock', 'snowball', 'sturdy'],
+    keysmith: ['lastStand', 'sturdy', 'luckyPurse'],
+    yinYangMaster: ['emptyLock', 'sturdy', 'luckyPurse'],
+    electrician: ['budSeed', 'titanCost', 'sturdy'],
+    cryomancer: ['springThunder', 'titanCost', 'sturdy'],
     witch: ['budSeed', 'titanCost', 'sturdy'], // 8.3→23.7%（専用デッキと組む）
 };
 /**
@@ -337,24 +337,24 @@ exports.COUNTER_GEARS = {
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
     pyromancer: {
-        yinYangMaster: ['afterglow', 'snowball'], // 20→41%（同）
+        yinYangMaster: ['afterglow', 'snowball'],
         necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
     },
-    witch: { pyromancer: ['buildMania', 'spellWard'] }, // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
+    witch: { pyromancer: ['buildMania', 'spellWard'] },
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
     },
     cryomancer: {
-        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        electrician: ['lightToken', 'reaper'],
         // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
         // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
         // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
         pyromancer: ['spellWard', 'reaper'],
         poisoner: ['spellWard', 'reaper'],
-        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+        witch: ['lightToken', 'reaper'],
         // 以下は --scan gears --opp X（seed83/100）で見つけ、seed84/300 で独立に再測定。専用デッキは作らない
-        magician: ['budSeed', 'reaper'], // 10.0→77.3%（budSeed,lastStand は 34.3%）
+        magician: ['budSeed', 'reaper'],
         keysmith: ['lightToken', 'reaper'], // 22.7→39.3%
     },
     // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）

@@ -351,7 +351,7 @@ export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
     cryomancer: ['lightToken', 'lastStand'],
     pyromancer: ['afterglow', 'budSeed'], // 2026-11-10: vengeance→budSeed。対6強豪 約41→58%（seed3/4, 各100試合。主に対魔法使い 33→83%）。強くて突出してもよい（ユーザー方針）。旧: 余韻+復讐の刃(tune-top #50。呪詛除けは対witch等で劣る)
     keysmith: ['lastStand', 'lockBloom'], // 芽吹きの錠: 低ライフの自陣のコマをロックで守りバッズも付ける。封鎖の断を優先する立ち回りとセットで 対強豪平均 53〜54.5%（docs/tune/keysmith.md 試行16・17）
-    witch: ['buildMania', 'reaper'], // 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
+    witch: ['buildMania', 'bindingLock'], // 2026-11-10 tune-top: reaper→bindingLock。対強豪平均 43.2→47.6%(seed2/200、seed1/60 でも 46.4→52.5%)。対巨人57→87・対陰陽師53→74・対鍛冶師18→56 だが対電気使い42→27。旧: 普請道楽+死神の鎌(砦/市場を立てるAIと砦/市場入りデッキとセット。tune-top 試行44: 最新masterで対強豪平均 seed3/200 29.9→52.7%、seed2/100 41.3→52.3%。ギアだけ・札だけだと16〜23%に悪化)。旧: lightToken+bindingLock。以下は旧: 🍂トークンのコスト軽減＋道連れの鍵(トークンで置いたコマに70%でロック。ロック中は奪われず削られないので🍂が長生きする)。tune-top: 環境勝率 69.0→77.7%(seed2/200)。旧: priceWreck(21.9→33.8%)。🍂付きトークンは収穫/伝播に乗らない
 };
 
 export const recommendedGears = (character: CharacterId): GearId[] =>

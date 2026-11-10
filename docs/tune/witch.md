@@ -1,7 +1,7 @@
 # tune-top: witch
 - 目標: 環境1位に到達し、その後も環境勝率が上がらなくなるまで洗練する
 - 最後に検証したmaster: 3d8e7b4（2026-11-10 基準線を重み付き方式で取り直し）（対強豪平均 1位 60.0% / 2位 cryomancer 58.0%、seed1/60）
-- 現在の推奨設定: gears=[buildMania, reaper] deck=[5,28,44,52,53,56,62,63,64,92,108,110] （試行43。旧: gears=[buildMania, bindingLock](試行40)、gears=[lightToken, bindingLock] deck=[5,8,28,44,52,53,56,62,63,64,85,92]） AIフラグ=witchNoAnti=1・witchReserve=1（既定）
+- 現在の推奨設定: gears=[buildMania, bindingLock] deck=[5,28,44,52,53,56,62,63,64,92,108,110] （試行45。旧: gears=[buildMania, reaper](試行43)、旧: gears=[buildMania, bindingLock](試行40)、gears=[lightToken, bindingLock] deck=[5,8,28,44,52,53,56,62,63,64,85,92]） AIフラグ=witchNoAnti=1・witchReserve=1（既定）
 - 完了判定の再確認（活力特売の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 81.2%** / 2位 poisoner 61.7%（差19.5pt）、条件2（`--envDeck varied`）**1位 witch 74.7%** / 2位 poisoner 60.5%（差14.2pt）。
 - 完了判定の再確認（witchReserve の採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 78.3%** / 2位 poisoner 62.6%（差15.7pt）、条件2（`--envDeck varied`）**1位 witch 72.0%** / 2位 poisoner 60.9%（差11.1pt）。
 - 完了判定の再確認（道連れの鍵ギアの採用後、`--rank --games 200 --seed 3 --target witch`）: 条件1 **1位 witch 76.0%** / 2位 poisoner 63.0%（差13.1pt）、条件2（`--envDeck varied`）**1位 witch 69.6%** / 2位 cryomancer 61.2%（差8.4pt）。
@@ -51,6 +51,7 @@
 ## 試行ログ(新しい順。却下も必ず残す。同じ案を再試行しない)
 | # | 軸 | 仮説 | 結果(field Δ±95%CI) | 採否 |
 |---|---|---|---|---|
+| 45 | gear(新masterで1枠差し替え全67通りを再走査) | master 3d8e7b4、seed1/60（基準 buildMania+reaper 46.4%±3.7）。最良 slot1→bindingLock 52.5%(+6.1)、次点 snowball 46.3、reinforce 44.7。slot0 を替える案は全て 25%以下に悪化 | seed2/200 対強豪平均: 43.2→**47.6%**(+4.4pt、SE 2.0)。対巨人 57→87・対陰陽師 53→74・対ネクロ 35→32・対毒使い 72→77・対鍛冶師 18→56・対魔法使い 21→30・対龍 19→33、悪化: 対電気 42→27(-15)・対氷室 85→58・対軍師 62→46・対鍵師 46→33。多重比較の閾値(n>40: z≥3.3)は探索時に未達だが、追試が +1.5pt・+1.96×SE を満たした | **採用**（gear.ts 反映。順位表での確認は未実施: 次回。電気使いに負け越しが増えたため、対電気のメタを次の軸にする） |
 | 44 | gear+deck+strategy(最新master a1b1b09で測り直し) | 試行40〜43(古いmaster上)の普請道楽+死神の鎌+砦/市場+立てるAIを最新masterで再測定。seed2/100 対強豪平均: 現行41.3 / ギアのみ16.3 / 札+AIのみ22.8 / **ギア+札+AI 52.3** / 普請道楽+道連れの鍵 42.8 / 軽い札+死神の鎌 19.0 | seed3/200: 現行 29.9→**52.7%**(+22.8pt)。順位表(seed3/200、`--rank --target witch`): **4位 45.0%**(1位 necromancer 62.4%、差17.4pt)。基準線(seed1/60): 9位 33.9%(1位 necromancer 54.7%) | **採用**（3つ揃いで初めて効く。1つ欠けると悪化。aiPlanMove.ts の砦/市場を立てるAIに魔女を追加） |
 | 43 | gear(joint: 普請道楽の上で2枠目) | デッキ[5,28,44,52,53,56,62,63,64,92,108,110]固定で、2枠目を替える(seed2/100、対強豪平均、基準 buildMania+bindingLock 47.0)。buildMania+snowball 46.7 / **+reaper 58.0(+11.0)** / +budSeed 40.5 / +priceWreck 36.8 / +lastStand 42.0。1枠目に置いても同じ(snowball,buildMania 46.7 / reaper,buildMania 58.0) | 環境順位表(seed3/200、`--rank --target witch --gears buildMania,reaper`): 試行40の9位 39.3% → **3位 53.1%**(1位 giant 61.1%、2位 magician 53.5%、差8.0pt)。field 60.0%、最悪対面 巨人22%。有意な不利4・有利6 | **採用**（死神の鎌=ライフ+2・ライフ0の駒を手番終了時に壊す。虎落笛・🍂でライフ0にした敵コマがその場で消え、場を空ける。ライフ+2は🍂の長生きにも効く。戦略(AI)は追加なし=ギアだけでセットの効果が出た） |
 | 42 | deck+strategy(普請道楽×大木) | 魔女にも大木(105)を立てるAIを許可(魔力+3/手番。普請道楽で設置コスト-2)。gears=[buildMania,bindingLock]、seed2/100、対強豪平均。砦・市場(現行) / 大木・市場 / 大木・砦 / 大木・枯れた大木(106) | 47.0 / 45.8(-1.2) / 35.8(-11.2) / 34.0(-13.0) | 不採用（AI変更は戻した。大木は設置が遅く、魔女の短期決戦に間に合わない。砦/市場は安く立って全スキル-3が即効く） |

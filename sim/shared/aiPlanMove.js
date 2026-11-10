@@ -1,8 +1,7 @@
 // 自動生成: src/components/game/aiPlanMove.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.planMoveMethods = void 0;
-exports.planMove = planMove;
+exports.planMoveMethods = exports.planMove = void 0;
 // AIPlayer のメソッド群: 1手番の計画のエントリ（makeMove → planMove）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
 const keysmith_1 = require("./keysmith");
@@ -1176,6 +1175,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     return { move, skills, chargeClicks: chargeResult };
 }
+exports.planMove = planMove;
 exports.planMoveMethods = {
     /** メインエントリポイント: スキル選択 + 最善手を返す */
     /**
