@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/aiDragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dragonMethods = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
+exports.dragonMethods = exports.ownLineLoss = exports.cornerCuts = exports.PRAYER_MAX_PER_TURN = exports.DRAGON_BUILDING_CAP = exports.BUILDING_CAP = exports.ROAR_MIN_VICTIMS = void 0;
 const boardGeometry_1 = require("./boardGeometry");
 const dragon_1 = require("./dragon");
 const objects_1 = require("./objects");
@@ -13,6 +13,8 @@ const thermal_1 = require("./thermal");
 exports.ROAR_MIN_VICTIMS = 3;
 /** 自陣の建造物の上限。建造物は列に数えないので、増やしすぎると自分の列を作るマスが無くなり、盤面が埋まって膠着する（sim で魔力1000超・盤面が建造物だらけの試合を確認） */
 exports.BUILDING_CAP = 5;
+/** 龍になってからの上限。咆哮に要るのは敵の隣の1〜2個だけで、増やすほど自分の二列を作るマスが減る（盤面が埋まって300手番で決着しない試合を確認） */
+exports.DRAGON_BUILDING_CAP = 2;
 /** 1手番に祈りを重ねる上限（覚醒に必要な建造物の数） */
 exports.PRAYER_MAX_PER_TURN = dragon_1.AWAKEN_BUILDINGS;
 /** 盤の4つの角を斜めに切る4マスの組（囲める範囲が最大6マス） */
@@ -27,6 +29,11 @@ const cornerCuts = (size) => {
     ];
 };
 exports.cornerCuts = cornerCuts;
+/** マス cell に建造物を置いたとき、塞がれる自分の列（敵のコマ・建造物が無く、自陣のコマが1つ以上ある4マスの窓）の数。置かれた建造物は列に数えない */
+const ownLineLoss = (board, cell, me) => (0, boardGeometry_1.geometryForCells)(board.length).winLines.filter((line) => line.includes(cell)
+    && line.every((i) => !board[i].object && (!board[i].player || board[i].player === me))
+    && line.some((i) => board[i].player === me)).length;
+exports.ownLineLoss = ownLineLoss;
 const lockedEmpty = () => ({ player: undefined, bind: 0, effects: [{ effect: '🔑' }] });
 exports.dragonMethods = {
     mikoBuildCell(real, me) {
@@ -54,8 +61,12 @@ exports.dragonMethods = {
             if (!(0, objects_1.objectLandable)(real[i]))
                 continue;
             const hit = geo.surroundRange(i).filter((j) => real[j].player && real[j].player !== me).length;
-            if (hit > 0 && (!best || hit > best.hit))
-                best = { cell: i, hit };
+            if (hit === 0)
+                continue;
+            const cost = (0, exports.ownLineLoss)(real, i, me);
+            // 自分の列を塞がないマスを優先し、同じなら巻き込みが多いマス
+            if (!best || cost < best.cost || (cost === best.cost && hit > best.hit))
+                best = { cell: i, hit, cost };
         }
         return best ? best.cell : null;
     },
@@ -125,7 +136,7 @@ exports.dragonMethods = {
         // 祈りを優先する: 引いた建造物はどれも空きマスをふさげる（置いた建造物は減衰せず、ライフ0でない敵には奪えない）。種類は選べないが、置き先は選べる。
         // 祈りで足りない分の脅威マスに、手札の大岩（コスト1・2ターンのロック付き）を置く
         let prayers = 0;
-        let room = exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, this.playerSymbol).length;
+        let room = (this.dragonForm === 'dragon' ? exports.DRAGON_BUILDING_CAP : exports.BUILDING_CAP) - (0, dragon_1.ownBuildingCells)(real, this.playerSymbol).length;
         for (const c of threats) {
             if (room <= 0)
                 break;
@@ -164,19 +175,20 @@ exports.dragonMethods = {
         const roarCost = this.calculateAICost(costs.onClickRoar, false, false, 'onClickRoar');
         const isDragon = this.dragonForm === 'dragon';
         // 龍: 敵が固まっていれば咆哮で焼き払う
-        if (isDragon && (0, dragon_1.roarUsable)(real, me) && magic >= roarCost && (0, dragon_1.roarVictims)(real, me).length >= exports.ROAR_MIN_VICTIMS) {
+        const roarMin = exports.ROAR_MIN_VICTIMS;
+        if (isDragon && (0, dragon_1.roarUsable)(real, me) && magic >= roarCost && (0, dragon_1.roarVictims)(real, me).length >= roarMin) {
             return { move: null, skills: ['onClickRoar'] };
         }
         // 龍: 覚醒の直後は自陣の建造物が無い（消滅した）。祈りで敵の固まりの隣に建造物を置き、同じ手番にそのまま咆哮を撃つ
         // （祈りは手番を終えず、咆哮は終える）。ふつうに2手番かけると、そのあいだに相手に列を揃えられて防壁が発動し、巫女に戻ってしまう
-        if (isDragon && magic >= prayCost + roarCost && (0, dragon_1.prayerUsable)(real, deck) && (0, dragon_1.ownBuildingCells)(real, me).length < exports.BUILDING_CAP) {
+        if (isDragon && magic >= prayCost + roarCost && (0, dragon_1.prayerUsable)(real, deck) && (0, dragon_1.ownBuildingCells)(real, me).length < exports.DRAGON_BUILDING_CAP) {
             let best = null;
             for (let i = 0; i < real.length; i++) {
                 if (!(0, objects_1.objectLandable)(real[i]))
                     continue;
                 const hyp = real.map((sq, j) => (j === i ? { player: me, bind: 5, effects: [], object: 'fort' } : sq));
                 const v = (0, dragon_1.roarVictims)(hyp, me).length;
-                if (v >= exports.ROAR_MIN_VICTIMS && (!best || v > best.victims))
+                if (v >= roarMin && (!best || v > best.victims))
                     best = { cell: i, victims: v };
             }
             if (best)
@@ -186,7 +198,7 @@ exports.dragonMethods = {
         const clicks = [];
         let left = magic;
         let cur = real.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-        const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, exports.BUILDING_CAP - (0, dragon_1.ownBuildingCells)(real, me).length);
+        const maxPrayers = Math.min(isDragon ? 1 : exports.PRAYER_MAX_PER_TURN - (0, dragon_1.ownBuildingCells)(real, me).length, (isDragon ? exports.DRAGON_BUILDING_CAP : exports.BUILDING_CAP) - (0, dragon_1.ownBuildingCells)(real, me).length);
         while (clicks.length < maxPrayers && left >= prayCost && (0, dragon_1.prayerUsable)(cur, deck)) {
             const cell = isDragon ? this.dragonBuildCell(cur, me) : this.mikoBuildCell(cur, me);
             if (cell === null)
