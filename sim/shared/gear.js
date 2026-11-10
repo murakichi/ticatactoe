@@ -340,7 +340,11 @@ exports.COUNTER_GEARS = {
         yinYangMaster: ['afterglow', 'snowball'],
         necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
     },
-    witch: { pyromancer: ['buildMania', 'spellWard'] },
+    witch: {
+        pyromancer: ['buildMania', 'spellWard'],
+        // 死神の鎌: 雷霆の帯電したライフ0のコマを手番終了時に壊す。通常の推奨(道連れの鍵)より 26.3→41.3%（seed22/300、--target witch --opp electrician）。docs/tune/witch.md 試行49
+        electrician: ['buildMania', 'reaper'],
+    },
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
