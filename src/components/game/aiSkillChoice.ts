@@ -107,7 +107,8 @@ function chooseFinisherSkills(this: AIPlayer, c: SkillChoiceContext): string[] |
         this.countReaches(board, this.playerSymbol) === 0 &&
         this.opponents.some((o) => {
             const seat = seatOf(o);
-            return (seatMagic[seat] ?? 0) + 1 >= (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity);
+            const silk = this.character === 'dragonMiko' && this.characters[seat] === 'keysmith' && (globalThis as any).process?.env?.DRAGON_SILK === '1';
+            return (seatMagic[seat] ?? 0) + 1 >= (silk ? 2 : (EXCLUSIVE_MIN_MAGIC[this.characters[seat]] ?? Infinity));
         })
     ) {
         spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
@@ -444,7 +445,7 @@ export const skillChoiceMethods = {
         }
         // 龍神の巫女×氷室の番人: サイレンス(28)を手札に固定して、氷河（コスト10−盤上の❄）に届く手番に封じる（対氷室 seed61/80: 5.3→71.6%、seed62/60: 6.9→75.6%）
         if (this.character === 'dragonMiko' && availableSkills.includes(28)
-            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'cryomancer')) {
+            && this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && (c === 'cryomancer' || (c === 'keysmith' && (globalThis as any).process?.env?.DRAGON_SILK === '1')))) {
             return [28];
         }
         if (this.character === 'giant') {

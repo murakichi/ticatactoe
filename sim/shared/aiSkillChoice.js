@@ -82,9 +82,10 @@ function chooseFinisherSkills(c) {
         availableSkills.includes(28) &&
         this.countReaches(board, this.playerSymbol) === 0 &&
         this.opponents.some((o) => {
-            var _a, _b;
+            var _a, _b, _c, _d;
             const seat = (0, Player_1.seatOf)(o);
-            return ((_a = seatMagic[seat]) !== null && _a !== void 0 ? _a : 0) + 1 >= ((_b = aiConstants_2.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _b !== void 0 ? _b : Infinity);
+            const silk = this.character === 'dragonMiko' && this.characters[seat] === 'keysmith' && ((_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_SILK) === '1';
+            return ((_c = seatMagic[seat]) !== null && _c !== void 0 ? _c : 0) + 1 >= (silk ? 2 : ((_d = aiConstants_2.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _d !== void 0 ? _d : Infinity));
         })) {
         spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
     }
@@ -409,7 +410,7 @@ exports.skillChoiceMethods = {
         }
         // 龍神の巫女×氷室の番人: サイレンス(28)を手札に固定して、氷河（コスト10−盤上の❄）に届く手番に封じる（対氷室 seed61/80: 5.3→71.6%、seed62/60: 6.9→75.6%）
         if (this.character === 'dragonMiko' && availableSkills.includes(28)
-            && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'cryomancer')) {
+            && this.characters.some((c, seat) => { var _a, _b; return seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'cryomancer' || (c === 'keysmith' && ((_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_SILK) === '1')); })) {
             return [28];
         }
         if (this.character === 'giant') {
