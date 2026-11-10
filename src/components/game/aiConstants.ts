@@ -139,6 +139,11 @@ export const GRAVE_OFFERING_MIN_PIECES = 3;
 export const GRAVE_OFFERING_MAX_CORPSES = 3;
 /** 魔法使いが1手番にロックするバッズ駒の最大数。旧sim AI の AI_DEFAULTS.magLockN と同じ */
 export const MAGICIAN_MAX_LOCKS = 3;
+/** 対ネクロの先回りロック: 1手番に掛ける最大数と、ロックの残りがこの値以下なら延長する */
+export const NECRO_LOCK_MAX = 3;
+export const NECRO_LOCK_REFRESH = 2;
+/** 先回りロックを入れるキャラ。対ネクロ4シードで改善したもの（鍵師 +6〜+11pt・陰陽師 +1〜+3pt）。雷霆 −8pt・毒使い −6pt は悪化、軍師は +0.3pt で外した */
+export const NECRO_LOCK_CHARACTERS: readonly CharacterId[] = ['keysmith', 'yinYangMaster'];
 /** 氷室が相手のとき、1手番にロックする自陣コマの最大数 (旧sim AI lockFirstCryo のループ上限) */
 export const CRYO_LOCK_MAX = 12;
 /** 空蔵を装備した席が同時にかけておく空きマスロックの上限 / ロックする空きマスの価値の下限 / 敵の列を止める価値の重み (旧sim AI の EL_MAX / EL_MIN_VALUE / EL_DENY) */
@@ -185,6 +190,7 @@ export const MIASMA_MIN_SCORE = 2; // 敵2マス、または敵1マス+リーチ
 /** 強制勝ちの探索の深さ（相手→自分→相手→自分。自分が最大3回打つ勝ちまで見る） */
 export const FORCED_WIN_PLIES = 4;
 
-/** 対策ロック: ロック済みの自コマも、残りスタックがこの値以下なら延長の対象にする（魔法使いのみ。0=ロック済みは対象にしない=従来）。
- *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化 */
+/** 対策ロック: ロック済みの自コマも、残りスタックがこの値以下なら延長の対象にする（0=ロック済みは対象にしない=従来）。
+ *  魔法使い 全相手 seed102/100 の対強豪平均 47.3(0)→54.0(2)・53.8(3)。対ネクロ 13→40・対陰陽師 47→54。5以上は対陰陽師が悪化。
+ *  全キャラ共通 環境順位 seed111/60: ネクロ 63.5→56.5、火術師 47.3→51.7、鍵師 49.3→52.0、魔法使い 27.8→29.5（他は不変） */
 export const ANTI_LOCK_REFRESH = 2;
