@@ -16,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN, WITCH_GIANT_OPEN_CHARGE_CAP, YINYANG_GIANT_OPEN_CHARGE_CAP } from './aiConstants';
+import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN, WITCH_GIANT_OPEN_CHARGE_CAP, YINYANG_GIANT_OPEN_CHARGE_CAP, MAGICIAN_GIANT_OPEN_CHARGE_CAP } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -104,10 +104,10 @@ function planOpening(this: AIPlayer, c: PlanContext): AIResult | null {
     // 陰陽師: 勝てる盤面（敵コマの入っていない列がある）で相手のリーチも無く、探索に足りない魔力のうちは、駒を置かずチャージで魔力を貯める
     // （旧sim AI の chargeWait=1。コンボ発動率 75→80%、環境勝率 +6pt）
     const facesWitch = c.facesWitch = this.characters.some((c, seat) => seat !== seatOf(this.playerSymbol) && c === 'witch'); // 魔女は短期決戦なので、コンボ待ちでチャージに回らない (#276。対魔女 約3→約25%)
-    // 魔女・陰陽師が巨人と当たるとき、最初は置かずにチャージする。最初の1駒は巨人のストンプで必ず消される。巨人は2手番に1回しか動かないので、その間に魔力を貯める。
+    // 魔女・陰陽師・魔法使いが巨人と当たるとき、最初は置かずにチャージする。最初の1駒は巨人のストンプで必ず消される。巨人は2手番に1回しか動かないので、その間に魔力を貯める。
     // 貯める上限（手番開始の魔力がこれ未満の間チャージ）は、魔女 14・陰陽師 5。対巨人 魔女（seed961〜964 各300）: 上限5 28.7/29.3/31.3/35.3 → 上限14 57.0/61.0/52.7/52.7（平均 +24.7）。
-    // 上限8/11/17は 33/45/46〜56 で14が最良。陰陽師（seed961/300）: 上限5 50.0 / 8 28.0 / 11 36.7 で5が最良（seed921〜923: 34.7/35.7/33.0 → 45.3/46.7/46.7）。他のキャラは対ネクロ -21・対氷室 -14 などで悪化するのでこの2キャラだけ
-    const openChargeCap = this.character === 'witch' ? WITCH_GIANT_OPEN_CHARGE_CAP : this.character === 'yinYangMaster' ? YINYANG_GIANT_OPEN_CHARGE_CAP : 0;
+    // 上限8/11/17は 33/45/46〜56 で14が最良。陰陽師（seed961/300）: 上限5 50.0 / 8 28.0 / 11 36.7 で5が最良（seed921〜923: 34.7/35.7/33.0 → 45.3/46.7/46.7）。魔法使い（seed991〜993: 85.0/79.7/84.3 → 94.5/93.7/93.0、上限14）も有効。他のキャラは対ネクロ -21・対氷室 -14・軍師は符号が割れるなどで入れない
+    const openChargeCap = this.character === 'witch' ? WITCH_GIANT_OPEN_CHARGE_CAP : this.character === 'yinYangMaster' ? YINYANG_GIANT_OPEN_CHARGE_CAP : this.character === 'magician' ? MAGICIAN_GIANT_OPEN_CHARGE_CAP : 0;
     if (magic < openChargeCap && this.characters.some((ch, seat) => seat !== seatOf(this.playerSymbol) && ch === 'giant')
         && !board.some((sq) => sq.player === this.playerSymbol) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         return { move: null, skills: ['onClickCharge'] };

@@ -514,12 +514,21 @@ describe('魔女・陰陽師は巨人相手の最初は置かずにチャージ�
         expect(r.skills).toContain('onClickCharge');
         expect(move(ai, emptyBoard(), 6).skills).not.toContain('onClickCharge');
     });
+    it('魔法使い vs 巨人: 魔力14未満の間はチャージ。14で着手', () => {
+        const ai = mk('magician', 'giant');
+        const r = move(ai, emptyBoard(), 8);
+        expect(r.move).toBeNull();
+        expect(r.skills).toContain('onClickCharge');
+        // 魔力14に達したら、最初のチャージはしない（魔法使いは手札の引き直しなど別の計画に移る）
+        expect(move(ai, emptyBoard(), 14).skills).not.toContain('onClickCharge');
+    });
     it('自コマがあるとき・巨人以外が相手・他のキャラでは通常どおり着手', () => {
         const b = emptyBoard();
         put(b, 5, '💙');
         expect(move(mk('witch', 'giant'), b, 2).move).not.toBeNull();
         expect(move(mk('witch', 'electrician'), emptyBoard(), 2).move).not.toBeNull();
         expect(move(mk('electrician', 'giant'), emptyBoard(), 2).move).not.toBeNull();
+        expect(move(mk('tactician', 'giant'), emptyBoard(), 2).move).not.toBeNull();
     });
 });
 
