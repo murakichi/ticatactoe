@@ -6,8 +6,9 @@ import { lateMagicBonus } from './lateMagic';
 /** 手番開始時の魔力が標準の+1に加えて+1されるキャラ。
  *  巨人はタンク特性(高ライフ)を持つ代わりに毎ターンの魔力ボーナスは無し(life8復元時のストンプ過多をオフェンス側で抑制。検証: giantGap -0.174→+0.002)。
  *  氷室の番人は、魔力が律速（tune-top 上限実験: 毎ターン+1で環境勝率 42.7→61.7%）だったので魔法使いと同じ+1（issue #94）。
- *  凩の魔女も+1（魔力が律速。ユーザー指示。ライフ平均-1とセット） */
-export const MAGIC_BONUS_CHARACTERS: readonly CharacterId[] = ['magician', 'cryomancer', 'witch'];
+ *  凩の魔女も+1（魔力が律速。ユーザー指示。ライフ平均-1とセット）。
+ *  龍神の巫女も+1（ユーザー指示。巫女は祈りで魔力を使うため。龍の +N はこれに加わる） */
+export const MAGIC_BONUS_CHARACTERS: readonly CharacterId[] = ['magician', 'cryomancer', 'witch', 'dragonMiko'];
 
 export type TurnStartMagicInput = {
     /** 次に動く席の今の魔力 */
@@ -31,6 +32,8 @@ export type TurnStartMagicInput = {
     objects?: number;
     /** 地代で得る魔力（自陣の働いているオブジェクトの数 × 倍率。ギア未装備なら 0）。省略は 0 */
     rent?: number;
+    /** 龍神の巫女（龍）の手番開始魔力 +N（dragon.ts の dragonMagicBonus） */
+    dragon?: number;
 };
 
 /** 手番開始時の魔力（増殖の維持コストを払う前）。標準は+1に、長期戦ボーナス・自陣の🌱・キャラ補正・ギアを足す */
@@ -42,7 +45,7 @@ export const turnStartMagic = (i: TurnStartMagicInput): number => {
     if (i.character === 'magician') next += i.buds * 2;
     next += i.garden;
     if (i.standBonus) next += GEAR_PARAMS.lastStandMagic;
-    return next + i.scorch + i.root + (i.objects ?? 0) + (i.rent ?? 0);
+    return next + i.scorch + i.root + (i.objects ?? 0) + (i.rent ?? 0) + (i.dragon ?? 0);
 };
 
 /** 増殖(ループ召喚)の調整値。sim は A/B 検証用に config.proliferate で上書きできる */
