@@ -280,7 +280,7 @@ exports.randomGears = randomGears;
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 exports.RECOMMENDED_GEARS = {
-    dragonMiko: ['buildMania', 'rubbleBase'], // 普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）、無いときも祈りは-2。瓦礫の礎: 壊された建造物の位置に大岩＋魔力+1。堅牢のみ 2.8% → 37.8%/36.7%（4x4・対強豪平均・seed1/60, seed2/100。docs/tune/dragonMiko.md）
+    dragonMiko: ['buildMania', 'springThunder'], // 春雷: 自陣のリーチを塞ぐ氷結を解除（対氷室 4→76%、対強豪平均 45.7→52.9%・4x4・seed2/100）。旧: 瓦礫の礎。普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）、無いときも祈りは-2。瓦礫の礎: 壊された建造物の位置に大岩＋魔力+1。堅牢のみ 2.8% → 37.8%/36.7%（4x4・対強豪平均・seed1/60, seed2/100。docs/tune/dragonMiko.md）
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['snowball', 'ironLock'], // luckyPurse から差し替え（堅牢の鍵。強豪5体 seed71/100: 48.5→56.7、対ネクロ 7→19・対陰陽師 30→42。走査 seed62/40: 54.5→65.1。docs/tune/magician.md 試行91）
