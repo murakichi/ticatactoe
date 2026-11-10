@@ -21,6 +21,7 @@ const aiTargets_1 = require("./aiTargets");
 const aiPlans_1 = require("./aiPlans");
 const aiSkillChoice_1 = require("./aiSkillChoice");
 const aiPlanMove_1 = require("./aiPlanMove");
+const aiDragon_1 = require("./aiDragon");
 __exportStar(require("./aiConstants"), exports);
 class AIPlayer {
     /** 自分のデッキに idx があるか（手札にあるものは必ずデッキにある）。旧sim AI の inDeck */
@@ -59,6 +60,8 @@ class AIPlayer {
         this.ownTrees = 0;
         /** 自陣のオブジェクトの数（鍵師の砦の設置判断に使う） */
         this.ownObjectCount = 0;
+        /** 龍神の巫女の形態（planAITurn が毎手番セットする。#527） */
+        this.dragonForm = 'miko';
         /** 自陣の働いている雷雲の数 */
         this.ownClouds = 0;
         /** 自陣の働いている毒沼の数 */
@@ -110,5 +113,5 @@ class AIPlayer {
         this.gears = gears;
     }
 }
-Object.assign(AIPlayer.prototype, aiSearch_1.searchMethods, aiTargets_1.targetMethods, aiPlans_1.planMethods, aiSkillChoice_1.skillChoiceMethods, aiPlanMove_1.planMoveMethods);
+Object.assign(AIPlayer.prototype, aiSearch_1.searchMethods, aiTargets_1.targetMethods, aiPlans_1.planMethods, aiSkillChoice_1.skillChoiceMethods, aiPlanMove_1.planMoveMethods, aiDragon_1.dragonMethods);
 exports.default = AIPlayer;

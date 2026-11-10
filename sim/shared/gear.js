@@ -1,10 +1,11 @@
 // 自動生成: src/components/game/gear.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.counterGearsFor = exports.COUNTER_GEARS = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
+exports.applyRubble = exports.rubbleCells = exports.springThunderThaw = exports.pickRecommendedGears = exports.recommendedGearsAgainst = exports.counterGearsFor = exports.COUNTER_GEARS = exports.COUNTER_GEARS_FOR_YOU = exports.ALT_RECOMMENDED_GEARS = exports.recommendedGears = exports.RECOMMENDED_GEARS = exports.randomGears = exports.applyPriceOffsets = exports.priceShift = exports.rollPriceOffsets = exports.PRICEABLE_KEYS = exports.adjustCostByGear = exports.rampAfterRoll = exports.rampBonus = exports.rampStart = exports.objectBuildLife = exports.rentGain = exports.budCounts = exports.rootGain = exports.frozenBudCount = exports.flameCounts = exports.ignitedCount = exports.scorchGain = exports.burnedBudCount = exports.lostCells = exports.countAilmentKinds = exports.countVarietySquares = exports.EXCLUSIVE_SKILL_KEYS = exports.gearTokenBindDelta = exports.gearLockStack = exports.gearLifeStd = exports.gearLifeBonus = exports.hasGear = exports.gearSlotsFor = exports.gearDefOf = exports.GEAR_IDS = exports.GEARS = exports.GEAR_PARAMS = void 0;
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
 const objects_1 = require("./objects");
+const ObjectKind_1 = require("./ObjectKind");
 exports.GEAR_PARAMS = {
     /** 芽吹きの錠: ロックを掛けた自陣のコマのうち、ライフがこの値以下でバッズの無いものにバッズが付く */
     lockBloomMaxLife: 2,
@@ -76,6 +77,8 @@ exports.GEAR_PARAMS = {
     rentMagic: 1,
     /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
     buildLife: 3,
+    /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
+    rubbleMagic: 1,
 };
 const P = exports.GEAR_PARAMS;
 exports.GEARS = [
@@ -109,6 +112,7 @@ exports.GEARS = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフ期待値+${P.rampStep}。ライフ${P.rampHighLife}以上を${P.rampResetHits}回引くとリセット` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフ平均+${P.reaperLife}。ライフ0の駒は、誰のものでも手番の終わりに破壊` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
+    { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
@@ -276,6 +280,7 @@ exports.randomGears = randomGears;
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 exports.RECOMMENDED_GEARS = {
+    dragonMiko: ['buildMania', 'rubbleBase'],
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['snowball', 'ironLock'],
@@ -327,13 +332,35 @@ exports.COUNTER_GEARS_FOR_YOU = {
 exports.COUNTER_GEARS = {
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
+        pyromancer: ['spellWard', 'priceWreck'], // 36→63%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
     },
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
-    pyromancer: { yinYangMaster: ['afterglow', 'snowball'] },
-    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    pyromancer: {
+        yinYangMaster: ['afterglow', 'snowball'],
+        necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
+    },
+    witch: { pyromancer: ['buildMania', 'spellWard'] },
+    poisoner: {
+        cryomancer: ['springThunder', 'spellWard'],
+        witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
+    },
     cryomancer: {
-        electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        electrician: ['lightToken', 'reaper'],
+        // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
+        // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
+        // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
+        pyromancer: ['spellWard', 'reaper'],
+        poisoner: ['spellWard', 'reaper'],
+        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+    },
+    // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
+    keysmith: {
+        pyromancer: ['spellWard', 'lockBloom'],
+        // 死神の鎌: ライフが上がり、ライフ0の駒を奪える。陰陽師29→48%、雷霆28→54%（seed9/100。seed5/60 でも 41.7 / 55.0 で再現）
+        yinYangMaster: ['reaper', 'lockBloom'],
+        electrician: ['reaper', 'lockBloom'],
+        necromancer: ['harvest', 'lockBloom'], // 81→88%（seed9/100）。seed5/60 でも最良帯
     },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
@@ -379,3 +406,19 @@ const springThunderThaw = (board, player) => {
     return thawed;
 };
 exports.springThunderThaw = springThunderThaw;
+/**
+ * 瓦礫の礎: 自陣の大岩以外のオブジェクト（建造物）が壊されて空きマスになったマス。prev（壊される前）と next（壊された後）を比べる。
+ * 乗っ取られたマス（持ち主が変わった）や、まだオブジェクトが残るマスは含まない。
+ * 比べる区間に自分の手番を含めない（龍神の巫女の覚醒で自分から消す建造物は、壊されたことに数えない）。
+ */
+const rubbleCells = (prev, next, player) => prev.map((sq, i) => ((0, ObjectKind_1.isBuilding)(sq) && sq.object !== 'boulder' && sq.player === player && next[i].player === undefined && !next[i].object ? i : -1)).filter((i) => i !== -1);
+exports.rubbleCells = rubbleCells;
+/** 壊されたマスに大岩（2ターンのロック付き）を置いた新しい盤面と、置いたマス。魔力は cells.length × GEAR_PARAMS.rubbleMagic */
+const applyRubble = (prev, next, player, lifeBonus = 0) => {
+    const cells = (0, exports.rubbleCells)(prev, next, player);
+    const board = next.slice();
+    for (const i of cells)
+        board[i] = (0, objects_1.newObject)(player, 'boulder', lifeBonus, next[i].effects.filter((e) => e.effect === '🔥'));
+    return { board, cells };
+};
+exports.applyRubble = applyRubble;

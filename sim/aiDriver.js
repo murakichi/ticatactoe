@@ -76,6 +76,7 @@ function inputOf(s, reroll) {
         oppGearCount: others.reduce((n, o) => n + s.gears[o].length, 0),
         oppLastStand: others.some((o) => hasGear(s.gears[o], 'lastStand') && !s.lastStandUsed[o]),
         yinYangMode: s.yy[seat] === 'yang' ? 'yang' : 'ying',
+        dragonForm: s.dragon[seat].form,
         silenced: s.silenced[seat],
         glacierPending: s.glacierPending[seat],
         glacierCharge: s.glacierCharge[seat],
@@ -106,6 +107,18 @@ function runSkill(s, name) {
     fn(s);
 }
 
+/** 計画し直しの上限。相手の一言居士・お一人様限りの札でスキルが無視されると、AIは同じ計画を立て直し続けて入れ子が際限なく深くなる（本番は Game の監視がチャージでパスする） */
+const MAX_REPLANS = 12;
+function replan(s, reroll) {
+    reroll.replans = (reroll.replans || 0) + 1;
+    if (reroll.replans > MAX_REPLANS) {
+        E.bumpStat(s, 'aiReplanLimit');
+        E.SKILLS.charge(s); // 手番を進める（行き詰まりとして数える）
+        return;
+    }
+    return takeTurn(s, reroll);
+}
+
 /**
  * 席 s.turn の1手番を、AIの計画どおり最後まで進める（手番が変わる／勝負がつく／行き詰まるまで）。
  * reroll は魔法使いの引き直しの残り回数（手番の頭で作る。再計画では引き継ぐ）。
@@ -133,7 +146,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
         reroll.left -= 1;
         reroll.started = true;
         for (const step of plan.steps) {
-            if (step === 'aiReplan') return takeTurn(s, reroll);
+            if (step === 'aiReplan') return replan(s, reroll);
             runSkill(s, step);
         }
         return;
@@ -141,7 +154,7 @@ function takeTurn(s, reroll = { left: AIPlayerMod.rerollBudget(s.chars[s.turn]),
     if (plan.kind === 'queue') {
         for (let i = 0; i < plan.steps.length && !over(); i++) {
             const step = plan.steps[i];
-            if (step === 'aiReplan') return takeTurn(s, reroll);
+            if (step === 'aiReplan') return replan(s, reroll);
             if (typeof step === 'string') { runSkill(s, step); continue; }
             if (i === plan.steps.length - 1) {
                 // 着手マスはスキル実行前の盤面で決めてある。埋まっていたら今の盤面で打ち直し、無ければチャージでパスする

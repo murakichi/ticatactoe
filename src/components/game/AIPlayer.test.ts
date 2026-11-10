@@ -493,3 +493,41 @@ describe('毒使い×氷室の番人: 閻魔の舌(125)', () => {
         expect(poisoner('you').chooseLocks(quiet(), 0, 5, [125])).not.toEqual([125]);
     });
 });
+
+describe('魔女・陰陽師は巨人相手の最初は置かずにチャージする', () => {
+    const costs = { onClickCharge: 0 } as any;
+    const mk = (ch: any, opp: any) => new AIPlayer('💙', ch, ['⭕'], [ch, opp] as any);
+    const move = (ai: AIPlayer, board: any, magic: number) => ai.makeMove(board, magic, costs, 2, 7, [0, 1, 2], false);
+    it('魔女 vs 巨人: 自コマが無く魔力が14未満の間はチャージ。14になったら着手', () => {
+        const ai = mk('witch', 'giant');
+        for (const m of [2, 8, 13]) {
+            const r = move(ai, emptyBoard(), m);
+            expect(r.move).toBeNull();
+            expect(r.skills).toContain('onClickCharge');
+        }
+        expect(move(ai, emptyBoard(), 14).move).not.toBeNull();
+    });
+    it('陰陽師 vs 巨人: 魔力5未満の間だけチャージ（5以上は通常どおり）', () => {
+        const ai = mk('yinYangMaster', 'giant');
+        const r = move(ai, emptyBoard(), 2);
+        expect(r.move).toBeNull();
+        expect(r.skills).toContain('onClickCharge');
+        expect(move(ai, emptyBoard(), 6).skills).not.toContain('onClickCharge');
+    });
+    it('自コマがあるとき・巨人以外が相手・他のキャラでは通常どおり着手', () => {
+        const b = emptyBoard();
+        put(b, 5, '💙');
+        expect(move(mk('witch', 'giant'), b, 2).move).not.toBeNull();
+        expect(move(mk('witch', 'electrician'), emptyBoard(), 2).move).not.toBeNull();
+        expect(move(mk('electrician', 'giant'), emptyBoard(), 2).move).not.toBeNull();
+    });
+});
+
+describe('鍵師は巨人相手にサイレンス(28)を手札に固定する', () => {
+    const locksVs = (foe: 'giant' | 'electrician', avail: number[]) =>
+        new AIPlayer('💙', 'keysmith', ['⭕'], ['keysmith', foe]).chooseLocks(emptyBoard(), 0, 5, avail);
+    it('巨人が相手なら28を固定し、他の相手では固定しない', () => {
+        expect(locksVs('giant', [28, 2, 8])).toContain(28);
+        expect(locksVs('electrician', [28, 2, 8])).not.toContain(28);
+    });
+});

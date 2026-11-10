@@ -3,7 +3,8 @@ import { SkillCosts, skillCosts } from './skillCosts';
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { geometryForCells } from './boardGeometry';
-import { OBJECT_PLACE_KEYS } from './objects';
+import { OBJECT_PLACE_KEYS, newObject } from './objects';
+import { isBuilding } from '../../types/ObjectKind';
 
 /**
  * ギア: キャラ選択時に装備する追加パッシブ。長所と短所がセットのものが多い。
@@ -44,7 +45,8 @@ export type GearId =
     | 'budSeed'
     | 'groundRent'
     | 'sturdyBuild'
-    | 'lockBloom';
+    | 'lockBloom'
+    | 'rubbleBase';
 
 export const GEAR_PARAMS = {
     /** 芽吹きの錠: ロックを掛けた自陣のコマのうち、ライフがこの値以下でバッズの無いものにバッズが付く */
@@ -117,6 +119,8 @@ export const GEAR_PARAMS = {
     rentMagic: 1,
     /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
     buildLife: 3,
+    /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
+    rubbleMagic: 1,
 } as const;
 
 export type GearDef = { id: GearId; name: string; icon: string; desc: string };
@@ -154,6 +158,7 @@ export const GEARS: GearDef[] = [
     { id: 'snowball', name: '雪だるま', icon: '⛄', desc: `自分の手番ごとにライフ期待値+${P.rampStep}。ライフ${P.rampHighLife}以上を${P.rampResetHits}回引くとリセット` },
     { id: 'reaper', name: '死神の鎌', icon: '💀', desc: `コマのライフ平均+${P.reaperLife}。ライフ0の駒は、誰のものでも手番の終わりに破壊` },
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
+    { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
@@ -333,6 +338,7 @@ export const randomGears = (slots: number, rng: () => number = Math.random): Gea
  * 測っていないキャラは、全キャラで一貫して効いた頑健にする。
  */
 export const RECOMMENDED_GEARS: Partial<Record<CharacterId, GearId[]>> = {
+    dragonMiko: ['buildMania', 'rubbleBase'], // 普請道楽: 建造物がある間は全スキル-3（祈りがコスト1）、無いときも祈りは-2。瓦礫の礎: 壊された建造物の位置に大岩＋魔力+1。堅牢のみ 2.8% → 37.8%/36.7%（4x4・対強豪平均・seed1/60, seed2/100。docs/tune/dragonMiko.md）
     you: ['luckyPurse', 'titanCost', 'sturdy'],
     tactician: ['lastStand', 'priceWreck'],
     magician: ['snowball', 'ironLock'], // luckyPurse から差し替え（堅牢の鍵。強豪5体 seed71/100: 48.5→56.7、対ネクロ 7→19・対陰陽師 30→42。走査 seed62/40: 54.5→65.1。docs/tune/magician.md 試行91）
@@ -388,13 +394,35 @@ export const COUNTER_GEARS_FOR_YOU: Partial<Record<CharacterId, GearId[]>> = {
 export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<CharacterId, GearId[]>>>> = {
     tactician: {
         cryomancer: ['springThunder', 'priceWreck'],
+        pyromancer: ['spellWard', 'priceWreck'], // 36→63%（seed2/3, 各150試合。呪詛除けが鍛冶師の🔥を止める）
     },
     // 巨人・ネクロの対氷室(芽吹き/春雷)は個別には効くが、軍師・毒使い・巨人・ネクロの4者に狙われて氷室が環境最下位(27.0%)になるので外した。
     // 軍師・毒使いだけに絞ると 氷室 35.5%・環境の幅 26.3pt（専用ギアなし 26.0）
-    pyromancer: { yinYangMaster: ['afterglow', 'snowball'] }, // 20→41%（同）
-    poisoner: { cryomancer: ['springThunder', 'spellWard'] },
+    pyromancer: {
+        yinYangMaster: ['afterglow', 'snowball'], // 20→41%（同）
+        necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
+    },
+    witch: { pyromancer: ['buildMania', 'spellWard'] }, // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
+    poisoner: {
+        cryomancer: ['springThunder', 'spellWard'],
+        witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
+    },
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
+        // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
+        // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
+        pyromancer: ['spellWard', 'reaper'],
+        poisoner: ['spellWard', 'reaper'],
+        witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
+    },
+    // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
+    keysmith: {
+        pyromancer: ['spellWard', 'lockBloom'],
+        // 死神の鎌: ライフが上がり、ライフ0の駒を奪える。陰陽師29→48%、雷霆28→54%（seed9/100。seed5/60 でも 41.7 / 55.0 で再現）
+        yinYangMaster: ['reaper', 'lockBloom'],
+        electrician: ['reaper', 'lockBloom'],
+        necromancer: ['harvest', 'lockBloom'], // 81→88%（seed9/100）。seed5/60 でも最良帯
     },
 };
 
@@ -437,4 +465,20 @@ export const springThunderThaw = (board: SquareInfo[], player: Player): number[]
         thawed.push(k);
     }
     return thawed;
+};
+
+/**
+ * 瓦礫の礎: 自陣の大岩以外のオブジェクト（建造物）が壊されて空きマスになったマス。prev（壊される前）と next（壊された後）を比べる。
+ * 乗っ取られたマス（持ち主が変わった）や、まだオブジェクトが残るマスは含まない。
+ * 比べる区間に自分の手番を含めない（龍神の巫女の覚醒で自分から消す建造物は、壊されたことに数えない）。
+ */
+export const rubbleCells = (prev: readonly SquareInfo[], next: readonly SquareInfo[], player: Player): number[] =>
+    prev.map((sq, i) => (isBuilding(sq) && sq.object !== 'boulder' && sq.player === player && next[i].player === undefined && !next[i].object ? i : -1)).filter((i) => i !== -1);
+
+/** 壊されたマスに大岩（2ターンのロック付き）を置いた新しい盤面と、置いたマス。魔力は cells.length × GEAR_PARAMS.rubbleMagic */
+export const applyRubble = (prev: readonly SquareInfo[], next: readonly SquareInfo[], player: Player, lifeBonus: number = 0): { board: SquareInfo[]; cells: number[] } => {
+    const cells = rubbleCells(prev, next, player);
+    const board = next.slice();
+    for (const i of cells) board[i] = newObject(player, 'boulder', lifeBonus, next[i].effects.filter((e) => e.effect === '🔥'));
+    return { board, cells };
 };

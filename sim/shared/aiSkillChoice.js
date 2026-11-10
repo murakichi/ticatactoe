@@ -441,10 +441,15 @@ exports.skillChoiceMethods = {
             // 魔法使い: 特売(53)・返し特売(60)・一寸の虫に魂なし(92)を手札に固定して毎手番使えるようにする（縮地(50)は削除済み）。バッズ系の固定は裏目（42.4 vs 固定なし50.1、強豪5体 seed121/150）。
             // 旧『魔法使いはロック無効』（古いA/B）を撤回: 固定あり 51.7→57.6%（seed131/200）、50.1→60.5%（seed121/150）。全相手で改善（対氷室 22→45）
             (this.character === 'magician' && (this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer') ? aiConstants_1.MAGICIAN_HOLD_VS_NECRO : this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'yinYangMaster') ? aiConstants_1.MAGICIAN_HOLD_VS_YINYANG : aiConstants_2.MAGICIAN_HOLD).includes(idx)) ||
+            // 鍵師: 巨人が相手のとき、サイレンス(28)を手札に固定して、ストンプ連打（魔力9前後で1手番に列を揃える）の前に封じる。
+            // 巨人の土壇場の防壁で1回目の勝ちを吸われたあと、封鎖の断を撃つだけでは巨人のストンプ連打に先に揃えられていた。対巨人 seed951〜953: 0% → 12.5/13.3/15.0%（200〜300試合）
+            (this.character === 'keysmith' && idx === 28 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'giant')) ||
             (this.character === 'poisoner' && poisonerTokenIdx.includes(idx)) ||
             // ネクロマンサー: 割引札(特売/固有割引/大特価)を固定して、降霊のコストを圧縮する (旧sim AI necroLock=1)。大岩(136)も固定して、相手の即勝ちマスを塞ぐ機会を逃さない
             // （対強豪 seed230/200: 58.0→60.4、seed240/200: 58.4→61.2。対giant 32〜35→54〜62、対cryomancer 27〜30→19〜23）
             (this.character === 'necromancer' && (idx === 53 || idx === 57 || idx === 58 || idx === 99 || idx === 136)) ||
+            // 龍神の巫女（#527）: 大岩(136)を手札に固定して、相手のリーチを塞ぎながら覚醒の建造物を増やす
+            (this.character === 'dragonMiko' && idx === 136) ||
             // 鍛冶師: 相手に魔法使いか魔女がいるとき、火口(87)を手札に固定して毎手番🌱🍂のコマを燃やす (魔法使い 37→58%、魔女 6〜7→14〜15%: seed3/5/6 の400〜600試合)
             (this.character === 'you' && this.holdsVsOpponent(idx)) ||
             (this.character === 'pyromancer' && idx === 87 && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'magician' || c === 'witch')));
