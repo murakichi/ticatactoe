@@ -82,12 +82,11 @@ function chooseFinisherSkills(c) {
         availableSkills.includes(28) &&
         this.countReaches(board, this.playerSymbol) === 0 &&
         this.opponents.some((o) => {
-            var _a, _b, _c, _d, _e;
+            var _a, _b;
             const seat = (0, Player_1.seatOf)(o);
             // 龍神の巫女×鍵師: 鍵師は空きマスのロックで塞げない3連を作る。固有スキルの魔力目安が無いので、相手の次の魔力が2以上なら毎手番サイレンスで封じる（対鍵師 seed71/100: 8.2→48.6%、seed72/80: 16.7→60.8%）
             const silk = this.character === 'dragonMiko' && this.characters[seat] === 'keysmith';
-            const sile = this.character === 'dragonMiko' && this.characters[seat] === 'electrician' ? Number((_c = (_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_SILE) !== null && _c !== void 0 ? _c : 0) : 0;
-            return ((_d = seatMagic[seat]) !== null && _d !== void 0 ? _d : 0) + 1 >= (silk ? 2 : sile > 0 ? sile : ((_e = aiConstants_2.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _e !== void 0 ? _e : Infinity));
+            return ((_a = seatMagic[seat]) !== null && _a !== void 0 ? _a : 0) + 1 >= (silk ? 2 : ((_b = aiConstants_2.EXCLUSIVE_MIN_MAGIC[this.characters[seat]]) !== null && _b !== void 0 ? _b : Infinity));
         })) {
         spend(this.calculateAICost(costs.onClickSilence, false, false, 'onClickSilence'), 'onClickSilence');
     }
@@ -412,7 +411,7 @@ exports.skillChoiceMethods = {
         }
         // 龍神の巫女×氷室の番人: サイレンス(28)を手札に固定して、氷河（コスト10−盤上の❄）に届く手番に封じる（対氷室 seed61/80: 5.3→71.6%、seed62/60: 6.9→75.6%）
         if (this.character === 'dragonMiko' && availableSkills.includes(28)
-            && this.characters.some((c, seat) => { var _a, _b, _c; return seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'cryomancer' || c === 'keysmith' || (c === 'electrician' && Number((_c = (_b = (_a = globalThis.process) === null || _a === void 0 ? void 0 : _a.env) === null || _b === void 0 ? void 0 : _b.DRAGON_SILE) !== null && _c !== void 0 ? _c : 0) > 0)); })) {
+            && this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'cryomancer' || c === 'keysmith'))) {
             return [28];
         }
         if (this.character === 'giant') {
