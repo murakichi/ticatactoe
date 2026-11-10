@@ -6,12 +6,13 @@
 - 基準線（ec29e2f・4x4・seed1・60試合・重み付き方式）: 対強豪平均 52.8% / 順位 4位（1位 electrician 54.1%、差1.3pt。2位 pyromancer 53.9%、3位 yinYangMaster 53.2%）/ field 53.8%・最悪対面 5%(cryomancer)・不利3/有利3・均衡10.5%。対キャラ: pyromancer 100 / magician 90 / witch 84 / yinYangMaster 74 / giant 62 / poisoner 58 / you 59 / electrician 46 / necromancer 39 / tactician 23 / keysmith 8 / cryomancer 5。（旧『強豪リスト方式』の 41.3%・11位は注記: 方式が違うので比べない）
 - 連続不採用回数: 0
 - 関連 issue: #526（二列勝利の基盤）, #527（本体）, #531（勝率の調整）, #532（AIの列判定が二列勝利を知らない）, #533（演出と本番の通し） / 検索日 2026-11-10
-- 状態: refining（条件1で1位。条件2を測定中）
+- 状態: refining（トップ到達: 完了判定の2条件とも1位。PR→CI→マージへ）
 
 - 採用後の基準線（春雷・seed1/60・4x4）: 対強豪平均 55.1% / **1位**（2位 electrician 54.1%、差1.0pt）/ field 59.1%・最悪対面 8%(keysmith)・不利2/有利5・均衡15.1%
 - 完了判定 条件1（seed3/200・春雷）: **3位** 対強豪平均 52.3%（1位 electrician 56.1%、2位 yinYangMaster 56.0%、差3.8pt）/ field 56.9%・最悪対面 7%(keysmith)。対キャラ: pyromancer 98 / witch 85 / magician 81 / cryomancer 72 / giant 62 / you 57 / yinYangMaster 55 / poisoner 54 / tactician 42 / electrician 42 / necromancer 27 / keysmith 7。seed1/60 の1位は上振れだった。
 - 伸ばせる余地×重み: keysmith 9.7 > electrician 7.8 > necromancer 7.4 > yinYangMaster 6.0
 - 完了判定 条件1（春雷＋デッキ4入り・seed3/200）: **1位** 対強豪平均 57.5%（2位 electrician 54.8%、差2.7pt）/ field 61.3%・最悪対面 9%(keysmith)・不利2/有利5・均衡27.7%。対キャラ: pyromancer 100 / witch 90 / magician 77 / yinYangMaster 76 / cryomancer 72 / necromancer 61 / poisoner 55 / electrician 54 / you 54 / tactician 48 / giant 41 / keysmith 9
+- 完了判定 条件2（`--envDeck pick --oppGears pick`・seed3/200）: **1位** 対強豪平均 57.6%（2位 electrician 54.2%、差3.5pt）/ field 61.3%・最悪対面 9%(keysmith)・不利2/有利6・均衡27.8%
 
 ## 診断
 - 対キャラ別（採用後・4x4・seed1・60試合）: pyromancer 98 / magician 90 / witch 83 / yinYangMaster 76 / giant 57 / you 53 / poisoner 46 / electrician 43 / tactician 24 / necromancer 11 / keysmith 8 / cryomancer 5。強豪の中で勝てていないのは necromancer・keysmith。
