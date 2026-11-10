@@ -350,6 +350,14 @@ exports.COUNTER_GEARS = {
         poisoner: ['spellWard', 'reaper'],
         witch: ['lightToken', 'reaper'], // 23→40%（seed2/3, 各150試合）
     },
+    // 鍛冶師の火遁・🔥は呪詛除け（誰かがスキルを使ったターンの間、効果ダメージが通らない）が止める。「あなた」の対鍛冶師と同じ。鍵師 31.7→83.3%（seed5/60, 1枠入れ替え走査の最良。docs/tune/keysmith.md 試行26）
+    keysmith: {
+        pyromancer: ['spellWard', 'lockBloom'],
+        // 死神の鎌: ライフが上がり、ライフ0の駒を奪える。陰陽師29→48%、雷霆28→54%（seed9/100。seed5/60 でも 41.7 / 55.0 で再現）
+        yinYangMaster: ['reaper', 'lockBloom'],
+        electrician: ['reaper', 'lockBloom'],
+        necromancer: ['harvest', 'lockBloom'], // 81→88%（seed9/100）。seed5/60 でも最良帯
+    },
 };
 /** character が、相手が1種類のキャラのときに使う専用ギア（無ければ undefined。「あなた」は COUNTER_GEARS_FOR_YOU） */
 const counterGearsFor = (character, opponents) => {
