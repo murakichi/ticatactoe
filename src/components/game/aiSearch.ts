@@ -15,6 +15,12 @@ import { chargeStacks, orthoNeighbors } from './charge';
 import { EXCLUSIVE_MIN_MAGIC, FORCED_WIN_PLIES, GLACIER_COST, NO_CAP_NECRO_WEIGHT, TWO_LINE_DISJOINT_WEIGHT, TWO_LINE_OVERLAP_WEIGHT, YY_COVER_WEIGHT } from './aiConstants';
 import { toPiece } from './shikigami';
 
+/**
+ * 4x4 で探索を浅く（深さ2）するキャラ。深さ3との比較で（強豪6相手×60試合）、seed31/32/33 の2シード平均が上、さらに別の相手6組・seed34 でも上だった:
+ * 陰陽師 +7.0→+4.3 / ネクロ +5.2→+7.4 / 焔術師 +4.2→+1.2 / 鍵師 +3.8→+7.1。巨人・電気技師・氷室は深さ3のほうが良かったので外す
+ */
+const SHALLOW_SEARCH_CHARACTERS: readonly string[] = ['yinYangMaster', 'necromancer', 'pyromancer', 'keysmith'];
+
 export const searchMethods = {
 
     /** 相手に陰陽師がいるか */
@@ -127,7 +133,7 @@ export const searchMethods = {
     /** 探索の深さ。盤が大きいほど候補手が増えるので浅くする（4x4=3 / 5x5=2 / それ以上=1） */
     searchDepth(this: AIPlayer, board: SquareInfo[]): number {
         const cells = board.length;
-        if (cells <= 16) return 3;
+        if (cells <= 16) return SHALLOW_SEARCH_CHARACTERS.includes(this.character) ? 2 : 3;
         if (cells <= 25) return 2;
         return 1;
     },

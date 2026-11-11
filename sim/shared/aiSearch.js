@@ -12,6 +12,11 @@ const decay_1 = require("./decay");
 const charge_1 = require("./charge");
 const aiConstants_1 = require("./aiConstants");
 const shikigami_1 = require("./shikigami");
+/**
+ * 4x4 で探索を浅く（深さ2）するキャラ。深さ3との比較で（強豪6相手×60試合）、seed31/32/33 の2シード平均が上、さらに別の相手6組・seed34 でも上だった:
+ * 陰陽師 +7.0→+4.3 / ネクロ +5.2→+7.4 / 焔術師 +4.2→+1.2 / 鍵師 +3.8→+7.1。巨人・電気技師・氷室は深さ3のほうが良かったので外す
+ */
+const SHALLOW_SEARCH_CHARACTERS = ['yinYangMaster', 'necromancer', 'pyromancer', 'keysmith'];
 exports.searchMethods = {
     /** 相手に陰陽師がいるか */
     facingYinYang() {
@@ -131,7 +136,7 @@ exports.searchMethods = {
     searchDepth(board) {
         const cells = board.length;
         if (cells <= 16)
-            return 3;
+            return SHALLOW_SEARCH_CHARACTERS.includes(this.character) ? 2 : 3;
         if (cells <= 25)
             return 2;
         return 1;
