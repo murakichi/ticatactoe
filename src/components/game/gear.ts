@@ -402,6 +402,8 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
         yinYangMaster: ['afterglow', 'snowball'], // 20→41%（同）
         necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
     },
+    // 陰陽師の対巫女: 死神の鎌より空き蔵ロックが効く（巫女の建造物の再建を止める）。38→64% / 30→55%（seed2/3, 各60試合。--scan gears --opp dragonMiko の上位を新シードで再測定）
+    yinYangMaster: { dragonMiko: ['emptyLock', 'snowball'] },
     witch: { pyromancer: ['buildMania', 'spellWard'] }, // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
