@@ -659,6 +659,66 @@ export const scheduleSfx = (ctx: BaseAudioContext, d: AudioNode, sfx: Sfx, t0: n
             tone(ctx, d, { f0: 70, f1: 180, t: T(0.22), dur: 0.2, gain: 0.5 });
             return 0.5;
         }
+        case 'gearLockBloom': {
+            // 芽吹きの錠: かちっと鍵が掛かり、ぽんと芽が開く
+            tone(ctx, d, { f0: 110, f1: 280, t: T(0), dur: 0.1, gain: 0.5 });
+            tone(ctx, d, { f0: 520, f1: 1040, t: T(0.1), dur: 0.1, gain: 0.45 });
+            tone(ctx, d, { f0: 780, f1: 1560, t: T(0.17), dur: 0.14, gain: 0.35 });
+            return 0.4;
+        }
+        case 'gearRubble': {
+            // 瓦礫の礎: 崩れた跡にごろんと大岩が据わる
+            noise(ctx, d, { t: T(0), dur: 0.25, gain: 0.5, filter: 'lowpass', f0: 200, f1: 1500 });
+            tone(ctx, d, { f0: 50, f1: 160, t: T(0.05), dur: 0.3, gain: 0.6 });
+            return 0.5;
+        }
+        case 'gearRent': {
+            // 地代: 小銭がちゃりちゃりと音程を上げて入る
+            for (let i = 0; i < 4; i++) {
+                tone(ctx, d, { type: 'square', f0: 1760 + i * 90, t: T(i * 0.07), dur: 0.05, gain: 0.14, lowpass: 5000 });
+                tone(ctx, d, { type: 'square', f0: 2349 + i * 90, t: T(i * 0.07 + 0.04), dur: 0.1, gain: 0.14, lowpass: 5000 });
+            }
+            return 0.5;
+        }
+        case 'dragonAwaken': {
+            // 結界の柱が立つ低い唸り(上昇) → 光の爆発 → 龍の咆哮と、天へ昇る澄んだ和音
+            tone(ctx, d, { type: 'sawtooth', f0: 50, f1: 330, t: T(0), dur: 1.0, gain: 0.25, lowpass: 800 });
+            noise(ctx, d, { t: T(0.3), dur: 0.8, gain: 0.3, filter: 'bandpass', f0: 300, f1: 3000, q: 0.7 });
+            boom(ctx, d, T(1.0), 1);
+            tone(ctx, d, { type: 'sawtooth', f0: 80, f1: 420, t: T(1.05), dur: 0.5, gain: 0.35, lowpass: 1400 });
+            sparkle(ctx, d, T(1.2), [C5, E5, G5, C6, E6, G5 * 2], 0.1, 0.24);
+            for (const f of [C5, G5, C6, E6]) tone(ctx, d, { type: 'triangle', f0: f, t: T(1.8), dur: 0.7, gain: 0.16 });
+            return 2.0;
+        }
+        case 'dragonRoar': {
+            // 龍の咆哮: 低い唸りが一気に駆け上がり、衝撃波が3度走って、雷が落ちる
+            tone(ctx, d, { type: 'sawtooth', f0: 55, f1: 480, t: T(0), dur: 0.7, gain: 0.35, lowpass: 1600 });
+            noise(ctx, d, { t: T(0), dur: 0.9, gain: 0.5, filter: 'bandpass', f0: 200, f1: 3500, q: 0.6 });
+            for (let i = 0; i < 3; i++) boom(ctx, d, T(0.2 + i * 0.2), 0.8);
+            for (let i = 0; i < 6; i++) noise(ctx, d, { t: T(0.5 + i * 0.07), dur: 0.05, gain: 0.3, filter: 'highpass', f0: 2500 + i * 300 });
+            tone(ctx, d, { type: 'sawtooth', f0: 100, f1: 2200, t: T(0.9), dur: 0.25, gain: 0.35, lowpass: 6000 });
+            noise(ctx, d, { t: T(1.0), dur: 0.5, gain: 0.7, filter: 'lowpass', f0: 250, f1: 3000 });
+            return 1.6;
+        }
+        case 'prayer': {
+            // 柏手(上昇する2つの打音) → 神々しい和音が重なって上がる
+            for (let i = 0; i < 2; i++) {
+                noise(ctx, d, { t: T(i * 0.2), dur: 0.08, gain: 0.6, filter: 'bandpass', f0: 1500 + i * 700, f1: 4500, q: 1 });
+                tone(ctx, d, { f0: 200 + i * 80, f1: 360 + i * 120, t: T(i * 0.2), dur: 0.08, gain: 0.4 });
+            }
+            [C5, E5, G5, C6].forEach((f, i) => tone(ctx, d, { type: 'triangle', f0: f, t: T(0.5 + i * 0.12), dur: 0.9, gain: 0.18 }));
+            sparkle(ctx, d, T(0.8), [E6, G5 * 2, C6 * 2, E6 * 2], 0.1, 0.18);
+            return 1.7;
+        }
+        case 'dragonBulwark': {
+            // 龍が吼えて結界を張り(上昇) → 揃った列が消える → 静かな鐘で巫女に戻る
+            tone(ctx, d, { type: 'sawtooth', f0: 60, f1: 360, t: T(0), dur: 0.6, gain: 0.3, lowpass: 1000 });
+            boom(ctx, d, T(0.3), 0.9);
+            noise(ctx, d, { t: T(0.35), dur: 0.6, gain: 0.4, filter: 'bandpass', f0: 400, f1: 4000, q: 0.8 });
+            sparkle(ctx, d, T(0.7), [C6, E6, G5 * 2], 0.12, 0.2);
+            tone(ctx, d, { type: 'triangle', f0: 523.25, t: T(1.1), dur: 0.7, gain: 0.22 });
+            return 1.7;
+        }
         case 'cleanse': {
             // 浄化: 澄んだ鐘の上昇アルペジオ
             tone(ctx, d, { f0: C5, t: T(0), dur: 0.6, gain: 0.25 });

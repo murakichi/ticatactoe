@@ -116,6 +116,7 @@ export const useBasicSkills = (g: BasicSkillsScope, late: () => GameLate) => {
         if (board[idx].effects.filter((e) => e.effect === '🌱').length > budsBefore) {
             addLog(`芽吹きの錠: ${posName(idx)}にバッズ`);
             gearTrigger('lockBloom', 'バッズ付与');
+            playBurst('gearLockBloom', [idx]);
         }
     };
     // 毒花: 毒が付いたコマ(cells)のうち、持ち主が毒花を装備しているものに、1つずつバッズも付く。

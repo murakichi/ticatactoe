@@ -169,6 +169,10 @@ const OTHER_SKILL_EFFECTS: Record<string, Entry> = {
     帯電拡散: 'chainZap',
     業火: 'inferno',
     絶対零度: 'glacier',
+    龍神降臨: 'dragonAwaken',
+    八百万の祈り: 'prayer',
+    龍の咆哮: 'dragonRoar',
+    龍の防壁: 'dragonBulwark',
 };
 
 const gameSource = readGameSource();
@@ -277,7 +281,7 @@ describe('全スキルに演出がある', () => {
     });
 
     // 専用の演出を持つ新作スキルは、バナーの名前がそのままスキル名で、演出も多段(要素が十分ある)であること
-    const DEDICATED: Record<string, string> = {strip: '裸の王様', staticSeason: '静電気の季節', bristle: '総毛立つ', thunderFall: '落雷は忘れた頃に', stash: '雷神のへそくり', thunderFire: '雷のない所に火は立たぬ', darkPot: '一寸先は闇鍋', thunderHeal: '雷を食らわば皿まで', tinder: '火口', scrollBless: '式神の加護', scrollCurse: '式神の呪詛', scrollDiscount: '式神割引', scrollPurge: '式神の供犠', smallFry: '一寸の虫に魂なし', firstFrost: '初霜', gather: '吹き寄せ', burnOff: '山焼き', freeToken: '無礼講', leafDrop: '落ち葉の置き土産', leafCloak: '落葉の衣', kindling: '焚きつけ', demolish: '解体', weather: '風化', levelAll: '地ならし', reinforce: '補強工事', expandAll: '増築', duplicate: '分譲', lockRaid: '錠前荒らし', lockExtend: 'ロックの増築', vacantSeal: '空き家封じ', lockConvert: '錠の転換', lockBlessing: '施錠の加護', lockDiscount: '錠前割引', sealBreak: '封鎖の断', boltSilence: '沈黙は雷なり', sparkJump: '飛び火', perfectGame: 'パーフェクトゲーム', helper: '超助っ人', nightVeil: '夜の帳', graveDiscount: '弔い割引', poisonWard: '毒返しの構え', graveOffering: '墓守の供物', buildObject: '建設'};
+    const DEDICATED: Record<string, string> = {strip: '裸の王様', staticSeason: '静電気の季節', bristle: '総毛立つ', thunderFall: '落雷は忘れた頃に', stash: '雷神のへそくり', thunderFire: '雷のない所に火は立たぬ', darkPot: '一寸先は闇鍋', thunderHeal: '雷を食らわば皿まで', tinder: '火口', scrollBless: '式神の加護', scrollCurse: '式神の呪詛', scrollDiscount: '式神割引', scrollPurge: '式神の供犠', smallFry: '一寸の虫に魂なし', firstFrost: '初霜', gather: '吹き寄せ', burnOff: '山焼き', freeToken: '無礼講', leafDrop: '落ち葉の置き土産', leafCloak: '落葉の衣', kindling: '焚きつけ', demolish: '解体', weather: '風化', levelAll: '地ならし', reinforce: '補強工事', expandAll: '増築', duplicate: '分譲', lockRaid: '錠前荒らし', lockExtend: 'ロックの増築', vacantSeal: '空き家封じ', lockConvert: '錠の転換', lockBlessing: '施錠の加護', lockDiscount: '錠前割引', sealBreak: '封鎖の断', boltSilence: '沈黙は雷なり', sparkJump: '飛び火', perfectGame: 'パーフェクトゲーム', helper: '超助っ人', nightVeil: '夜の帳', graveDiscount: '弔い割引', poisonWard: '毒返しの構え', graveOffering: '墓守の供物', buildObject: '建設', dragonAwaken: '龍神降臨', dragonRoar: '龍の咆哮', prayer: '八百万の祈り', dragonBulwark: '龍の防壁'};
     it.each(Object.entries(DEDICATED))('専用演出 %s のバナーは「%s」', (type, label) => {
         const { container } = render(<BoardEffects effect={{ type: type as SkillEffectType, index: 5, indexes: [5, 6, 9, 10], nonce: 1 }} size={4} />);
         expect(container.querySelector('[class*="banner"]')?.textContent).toBe(label);

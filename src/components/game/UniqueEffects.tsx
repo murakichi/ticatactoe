@@ -69,6 +69,11 @@ export const UNIQUE_EFFECT_TYPES = [
     'graveDiscount',
     'poisonWard',
     'graveOffering',
+    // 龍神の巫女
+    'dragonAwaken',
+    'dragonRoar',
+    'prayer',
+    'dragonBulwark',
 ] as const;
 
 export const isUniqueEffect = (type: string): boolean => (UNIQUE_EFFECT_TYPES as readonly string[]).includes(type);
@@ -1171,6 +1176,89 @@ export const renderUniqueEffect = (effect: SkillEffect, size: number): React.Rea
                     {ring('ring-0', target, 500, '#8a4fd6', 3.6)}
                     {pop('magic', { x: target.x, y: target.y - 22 }, '✨', 1100)}
                     {rise('🕯️', 'candle')}
+                </>
+            );
+        }
+        case 'dragonAwaken': {
+            // 龍神降臨: 4つの建造物が光の柱を立てて結界でつながり、囲んだ範囲が光になって消え、龍が昇る
+            const bs = (effect.sources ?? []).slice(0, 6).map((k) => center(k, size));
+            const inside = cells.filter((k) => !(effect.sources ?? []).includes(k)).slice(0, 30).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '2000ms' }} />
+                    {bs.map((p, k) => beam(`pillar-${k}`, { x: p.x, y: 112 }, p, k * 90, '#ffd966', 12, 450))}
+                    {bs.map((p, k) => beam(`seal-${k}`, p, bs[(k + 1) % bs.length], 450 + k * 120, '#ffd966', 6, 350))}
+                    {bs.map((p, k) => pop(`bld-${k}`, p, '⛩️', 400 + k * 80))}
+                    {inside.map((p, k) => (
+                        <React.Fragment key={`in-${k}`}>
+                            {pop(`vanish-${k}`, p, '✨', 1000 + (k % 10) * 40)}
+                            {ring(`ring-${k}`, p, 1000 + (k % 10) * 40, '#ffd966', 2.4)}
+                        </React.Fragment>
+                    ))}
+                    {fly('dragon', { x: 50, y: 100 }, { x: 50, y: 40 }, '🐉', 1100, 800)}
+                    {pop('dragon-big', { x: 50, y: 40 }, '🐉', 1850, styles.bigPop)}
+                    {ring('ring-0', MID, 1100, '#ffd966', 6)}
+                    {ring('ring-1', MID, 1300, '#ffffff', 8)}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'dragonRoar': {
+            // 龍の咆哮: 龍が吼えて衝撃波が走り、オブジェクトの周りの敵が吹き飛び、オブジェクトに雷が宿る
+            const range = cells.slice(0, 40).map((k) => center(k, size));
+            const objs = (effect.sources ?? []).slice(0, 10).map((k) => center(k, size));
+            return (
+                <>
+                    <div className={styles.heat} />
+                    {pop('dragon', MID, '🐉', 0, styles.bigPop)}
+                    {ring('roar-0', MID, 200, '#ff7a2f', 7)}
+                    {ring('roar-1', MID, 400, '#ffd966', 9)}
+                    {ring('roar-2', MID, 600, '#ffffff', 11)}
+                    <div className={styles.flashAt} style={{ background: '#fff', animationDelay: '300ms' }} />
+                    {range.map((p, k) => (
+                        <React.Fragment key={`r-${k}`}>
+                            {pop(`boom-${k}`, p, '💥', 450 + (k % 10) * 40)}
+                            {pop(`fire-${k}`, p, '🔥', 700 + (k % 10) * 40)}
+                        </React.Fragment>
+                    ))}
+                    {objs.map((p, k) => (
+                        <React.Fragment key={`o-${k}`}>
+                            {beam(`bolt-${k}`, { x: p.x, y: -4 }, p, 900 + k * 80, '#fde047', 8, 250)}
+                            {pop(`zap-${k}`, p, '⚡', 1100 + k * 80, styles.bigPop)}
+                        </React.Fragment>
+                    ))}
+                    {rise('🔥', 'ember')}
+                </>
+            );
+        }
+        case 'prayer': {
+            // 八百万の祈り: 鳥居の前で手を合わせ、八百万の神々が札を授ける。引いた建造物の札が舞い降りる
+            return (
+                <>
+                    <div className={`${base.aura} ${base.auraGold}`} />
+                    {pop('torii', { x: 50, y: 28 }, '⛩️', 0, styles.bigPop)}
+                    {pop('pray', { x: 50, y: 64 }, '🙏', 250, styles.bigPop)}
+                    {ring('ring-0', { x: 50, y: 64 }, 300, '#ffd966', 5)}
+                    {ring('ring-1', { x: 50, y: 64 }, 500, '#ffffff', 7)}
+                    {DIRS_8.map((d, i) => fly(`card-${i}`, { x: 50, y: 28 }, radial({ x: 50, y: 52 }, d, 30), '🎴', 600 + i * 70, 600))}
+                    {fall('✨', 'blessing')}
+                    {rise('✨', 'spark')}
+                </>
+            );
+        }
+        case 'dragonBulwark': {
+            // 龍の防壁: 龍がとぐろを巻いて盤面を守り、揃った列を消し去って、巫女の姿に戻る
+            return (
+                <>
+                    <div className={styles.veil} style={{ animationDuration: '1600ms' }} />
+                    {pop('dragon', MID, '🐉', 0, styles.bigPop)}
+                    {pop('shield', { x: 50, y: 68 }, '🛡️', 250, styles.bigPop)}
+                    {ring('ring-0', MID, 200, '#ffd966', 6)}
+                    {ring('ring-1', MID, 400, '#ffd966', 8)}
+                    {ring('ring-2', MID, 600, '#ffffff', 10)}
+                    {DIRS_8.map((d, i) => beam(`ray-${i}`, MID, radial(MID, d, 40), 500 + i * 40, '#ffd966', 6, 400))}
+                    {pop('miko', MID, '⛩️', 1100, styles.bigPop)}
+                    {fall('✨', 'blessing')}
                 </>
             );
         }

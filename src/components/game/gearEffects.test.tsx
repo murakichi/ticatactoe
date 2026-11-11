@@ -93,6 +93,9 @@ describe('ギア発動のマス演出', () => {
         ['gearSeed', '🌷'],
         ['gearThunder', '🌩️'],
         ['gearReap', '💀'],
+        ['gearLockBloom', '🌼'],
+        ['gearRubble', '⛰️'],
+        ['gearRent', '🪙'],
     ])('%s は指定マスの数だけ「%s」を出す', (type, emoji) => {
         const { container } = render(<BoardEffects effect={null} burst={{ type, cells: [1, 2], nonce: 1 }} size={4} />);
         expect(container.textContent?.split(emoji).length).toBe(3);
@@ -103,6 +106,9 @@ describe('ギア発動のマス演出', () => {
         ['budSeed', 'gearSeed'],
         ['springThunder', 'gearThunder'],
         ['reaper', 'gearReap'],
+        ['lockBloom', 'gearLockBloom'],
+        ['rubbleBase', 'gearRubble'],
+        ['groundRent', 'gearRent'],
     ])('ギア %s の発動では、盤面に playBurst(%s) を出す', (_gear, burst) => {
         expect(gameSource).toContain(`playBurst('${burst}'`);
     });

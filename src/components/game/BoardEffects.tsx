@@ -95,10 +95,14 @@ export type SkillEffectType =
     | 'nightVeil'
     | 'graveDiscount'
     | 'poisonWard'
-    | 'graveOffering';
+    | 'graveOffering'
+    | 'dragonAwaken'
+    | 'dragonRoar'
+    | 'prayer'
+    | 'dragonBulwark';
 
 /** 盤面の特定マスに重ねて出す小さな演出（メインの演出とは別枠で同時に出せる） */
-export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty' | 'gearSeed' | 'gearThunder' | 'gearReap';
+export type BurstType = 'iceBreak' | 'thaw' | 'burn' | 'gearKey' | 'gearBloom' | 'gearSpread' | 'gearEmpty' | 'gearSeed' | 'gearThunder' | 'gearReap' | 'gearLockBloom' | 'gearRubble' | 'gearRent';
 
 export type BurstEffect = {
     type: BurstType;
@@ -242,6 +246,10 @@ const BANNERS: Partial<Record<SkillEffectType, { label: string; bg: string; fg: 
     graveDiscount: { label: '弔い割引', bg: '#5a2896', fg: '#fff' },
     poisonWard: { label: '毒返しの構え', bg: '#8a4fd6', fg: '#fff' },
     graveOffering: { label: '墓守の供物', bg: '#5a2896', fg: '#fff' },
+    dragonAwaken: { label: '龍神降臨', bg: '#ffd966', fg: '#3a2a00' },
+    dragonRoar: { label: '龍の咆哮', bg: '#ff5a1f', fg: '#fff' },
+    prayer: { label: '八百万の祈り', bg: '#ffd966', fg: '#3a2a00' },
+    dragonBulwark: { label: '龍の防壁', bg: '#ffffff', fg: '#10131c' },
 };
 
 /** 盤面中央から少しずつずれて広がる輪のずれ(ms) */
@@ -259,6 +267,9 @@ const BURST_EMOJI: Record<BurstType, string> = {
     gearSeed: '🌷',
     gearThunder: '🌩️',
     gearReap: '💀',
+    gearLockBloom: '🌼',
+    gearRubble: '⛰️',
+    gearRent: '🪙',
 };
 
 export const BoardEffects: React.FC<Props> = ({ effect, burst, damage, size }) => {

@@ -18,7 +18,7 @@ import { turnStartMagic, proliferateUpkeep } from './turn';
 import { activeObjectCount, effectSnapshot, EffectSnapshot, enforceEffectRules, objectLifeBonus, objectTurnStart, sweepBurntTrees } from './objects';
 import { SkillEffectType } from './BoardEffects';
 import { placeWardPiece } from './graveSkills';
-import { detonate } from './thermal';
+import { detonate, isDormant } from './thermal';
 import { GearId, GEAR_PARAMS, hasGear, springThunderThaw, gearLifeBonus, gearLifeStd, countVarietySquares, frozenBudCount, rootGain, rentGain, applyRubble, objectBuildLife } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
@@ -100,7 +100,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             setDragonAt(dragonHolder, newDragonState());
             addLog(`${symbols[dragonHolder]}の龍の防壁: ${w}の揃った列と自陣のコマが消滅。巫女に戻る`);
             setCurrentBoard(board);
-            playEffect('bulwark');
+            playEffect('dragonBulwark');
             return;
         }
         const holder = lastStandHolderFor(w);
@@ -138,6 +138,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             setMagicAt(seat, (m) => m + magicGain);
             addLog(`${symbols[seat]}の瓦礫の礎: 壊されたオブジェクト${r.cells.length}つの位置に大岩を設置（魔力+${magicGain}）`);
             gearTrigger('rubbleBase', `大岩${r.cells.length}つ・魔力+${magicGain}`);
+            playBurst('gearRubble', r.cells);
             return true;
         };
         // 1回の盤面の変化で処理するのは1席まで（置いた大岩でまた盤面が変わり、次の実行で残りの席を処理する）
@@ -291,7 +292,11 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         if (root > 0) gearTrigger('frostRoot', `魔力+${root}`);
         // 地代: 働いている自陣のオブジェクト1つにつき+1（上限なし）
         const rent = hasGear(gearsBySeat[nextSeat], 'groundRent') ? rentGain(activeObjectCount(currentBoard, nextSymbol)) : 0;
-        if (rent > 0) gearTrigger('groundRent', `魔力+${rent}`);
+        if (rent > 0) {
+            gearTrigger('groundRent', `魔力+${rent}`);
+            // 魔力を生んでいる自陣のオブジェクトに小銭を出す
+            playBurst('gearRent', currentBoard.map((sq, k) => (sq.object !== undefined && sq.player === nextSymbol && !isDormant(sq) ? k : -1)).filter((k) => k >= 0));
+        }
         let nextMagic: number = turnStartMagic({
             magic: magic[nextSeat],
             turn: currentTurn,

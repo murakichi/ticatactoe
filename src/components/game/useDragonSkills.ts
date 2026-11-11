@@ -42,7 +42,7 @@ export const useDragonSkills = (g: DragonScope, late: () => GameLate) => {
             const n = applyAwaken(board, plan);
             addLog(`${symbols[seat]}の龍神降臨: 建造物${plan.buildings.length}つが結界を張り、${plan.enclosed.length}マスを囲んで消滅（N=${n}）。龍に覚醒`);
             flashCells([...plan.enclosed, ...plan.buildings]);
-            playEffect('judge', undefined, [...plan.enclosed, ...plan.buildings], '龍神降臨');
+            playEffect('dragonAwaken', undefined, [...plan.enclosed, ...plan.buildings], undefined, { sources: plan.buildings });
             setDragonAt(seat, { form: 'dragon', n });
             setCurrentBoard(board);
         });
@@ -60,6 +60,7 @@ export const useDragonSkills = (g: DragonScope, late: () => GameLate) => {
         const kind = pickPrayerKind(deckBySeat[turnSeat], Math.random);
         if (!kind) return;
         addLog(`「八百万の祈り」を使用（${kind}を引いた。空きマスを選択）`);
+        playEffect('prayer');
         late().setObjectPlacing(kind);
         spendMagic(prayerCost(), true, true, 'onClickPrayer');
     };
@@ -72,7 +73,7 @@ export const useDragonSkills = (g: DragonScope, late: () => GameLate) => {
         addLog(`「龍の咆哮」を使用（敵${r.destroyed}コマを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}、自陣のオブジェクト${r.charged.length}個に⚡・ターン終了）`);
         late().addCorpses(r.destroyed);
         flashCells([...r.range, ...r.charged]);
-        playEffect('inferno', undefined, [...r.range, ...r.charged], '龍の咆哮');
+        playEffect('dragonRoar', undefined, r.range, undefined, { sources: r.charged });
         setCurrentBoard(board);
         spendMagic(cost, true, true, 'onClickRoar');
         setCurrentTurn(currentTurn + 1);

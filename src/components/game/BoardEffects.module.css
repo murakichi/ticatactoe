@@ -900,7 +900,10 @@
 .burst_gearEmpty,
 .burst_gearSeed,
 .burst_gearThunder,
-.burst_gearReap {
+.burst_gearReap,
+.burst_gearLockBloom,
+.burst_gearRubble,
+.burst_gearRent {
     font-size: 40px;
     animation: gearPop 900ms var(--ease) forwards;
 }
@@ -932,7 +935,10 @@
     .burst_gearEmpty,
     .burst_gearSeed,
     .burst_gearThunder,
-    .burst_gearReap {
+    .burst_gearReap,
+    .burst_gearLockBloom,
+    .burst_gearRubble,
+    .burst_gearRent {
         animation-duration: 1ms;
     }
 }
