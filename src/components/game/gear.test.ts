@@ -422,6 +422,9 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(counterGearsFor('tactician', ['cryomancer'])).toEqual(['springThunder', 'priceWreck']);
         expect(counterGearsFor('poisoner', ['cryomancer', 'cryomancer'])).toEqual(['springThunder', 'spellWard']);
         expect(counterGearsFor('keysmith', ['pyromancer'])).toEqual(['spellWard', 'lockBloom']); // 鍛冶師の🔥・火遁を呪詛除けで止める
+        expect(counterGearsFor('witch', ['dragonMiko'])).toEqual(['buildMania', 'priceWreck']); // 対 dragonMiko 9〜19→28〜31%
+        expect(counterGearsFor('witch', ['electrician'])).toBeUndefined(); // 他の相手は通常の推奨のまま
+        expect(counterGearsFor('cryomancer', ['dragonMiko'])).toEqual(['priceWreck', 'snowball']); // 対 dragonMiko 勝ち 5〜18→18〜36（100試合あたり）
         expect(counterGearsFor('keysmith', ['yinYangMaster'])).toEqual(['reaper', 'lockBloom']);
         expect(counterGearsFor('keysmith', ['electrician'])).toEqual(['reaper', 'lockBloom']);
         expect(counterGearsFor('keysmith', ['necromancer'])).toEqual(['harvest', 'lockBloom']);
