@@ -345,6 +345,7 @@ exports.COUNTER_GEARS = {
     witch: { pyromancer: ['buildMania', 'spellWard'] },
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
+        dragonMiko: ['snowball', 'emptyLock'],
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
     },
     cryomancer: {

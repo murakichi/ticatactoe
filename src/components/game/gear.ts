@@ -407,6 +407,7 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
     witch: { pyromancer: ['buildMania', 'spellWard'] }, // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
+        dragonMiko: ['snowball', 'emptyLock'], // 52.8→69.0% / 37.1→51.9%（seed2/3, 各60試合。--scan gears --opp dragonMiko の上位を新シードで再測定）
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
     },
     cryomancer: {
