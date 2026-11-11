@@ -1244,6 +1244,31 @@ exports.planMoveMethods = {
             return result; // 通常の着手でも止まらないなら、元の計画のまま
         return { move: block, skills: [] };
     },
+    /**
+     * 対龍神の巫女: 相手の建造物を 地ならし(116, 全て壊す)・解体(114, 1つ壊す) で壊す。巫女は建造物が4つで覚醒し、建造物が二列勝利の足場にもなる。
+     * 手札に札があり、魔力が足りて、相手にリーチが無いときだけ。撃ったあとは通常の着手（スキルは手番を終えない）
+     */
+    planCounterBuildings(argsIn) {
+        const [board, magic, costs, , life, available] = argsIn;
+        if (!this.opponents.some((o) => this.characterOf(o) === 'dragonMiko'))
+            return null;
+        if (this.opponents.some((o) => this.countReaches(board, o) > 0))
+            return null; // 相手のリーチを塞ぐのが先
+        const chars = this.seatCharacters(); // 席にキャラがいない場合（undefined）は敵のオブジェクト判定に影響しない
+        const targets = (0, objects_1.objectSkillTargets)('demolish', board, this.playerSymbol, chars).filter((i) => !this.shield.has(i));
+        if (targets.length < aiConstants_1.COUNTER_BUILD_DEMOLISH_MIN)
+            return null;
+        const move = this.getBestMove(board, life);
+        if (targets.length >= aiConstants_1.COUNTER_BUILD_LEVELALL_MIN && available.includes(116) && (0, objects_1.objectSkillUsable)('levelAll', board, this.playerSymbol, chars)
+            && magic >= this.calculateAICost(costs.onClickLevelAll, false, false, 'onClickLevelAll')) {
+            return { move, skills: [], chargeClicks: [{ skill: 'onClickLevelAll' }] };
+        }
+        if (available.includes(114) && magic >= this.calculateAICost(costs.onClickDemolish, false, false, 'onClickDemolish')) {
+            const target = targets.map((i) => ({ i, v: board[i].bind })).sort((x, y) => y.v - x.v || x.i - y.i)[0].i; // ライフの高い建造物から（投資が大きい）
+            return { move, skills: [], chargeClicks: [{ skill: 'onClickDemolish', target }] };
+        }
+        return null;
+    },
     makeMoveCore(...argsIn) {
         var _a, _b, _c, _d, _e;
         // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
@@ -1252,6 +1277,12 @@ exports.planMoveMethods = {
         const winNow = this.oppLastStand ? null : this.immediateWinMove(argsIn[0], argsIn[4]);
         if (winNow !== null)
             return { move: winNow, skills: [] };
+        // 相手が龍神の巫女のとき: 建造物（4つで覚醒する）を解体・地ならしで壊してから通常の着手をする
+        if (this.character !== 'dragonMiko') {
+            const counter = this.planCounterBuildings(argsIn);
+            if (counter)
+                return counter;
+        }
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
             const dragonPlan = this.planDragon(argsIn);

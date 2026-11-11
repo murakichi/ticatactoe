@@ -203,3 +203,7 @@ export const ANTI_LOCK_REFRESH = 2;
 /** 龍神の巫女（二列勝利）の評価: 1本目が完成しているとき、1本目と重なる窓（共有2マス以上）の加点の倍率と、離れた窓の倍率（evaluateBoard） */
 export const TWO_LINE_OVERLAP_WEIGHT = 0.2;
 export const TWO_LINE_DISJOINT_WEIGHT = 1.5;
+
+/** 対龍神の巫女: 解体(114)を撃つ敵の建造物の数の下限 / 地ならし(116, 全て壊す)を撃つ下限（巫女は4つで覚醒する） */
+export const COUNTER_BUILD_DEMOLISH_MIN = 2;
+export const COUNTER_BUILD_LEVELALL_MIN = 3;

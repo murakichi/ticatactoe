@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, objectLandable, enemyObjectActive } from './objects';
+import { OBJECT_DEFS, objectLandable, enemyObjectActive, objectSkillTargets, objectSkillUsable } from './objects';
 import { calculateWinner, findEmptyIndexes, isObject, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -16,7 +16,7 @@ import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
 import { smallFry, smallFryTargets } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
-import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN, WITCH_GIANT_OPEN_CHARGE_CAP, YINYANG_GIANT_OPEN_CHARGE_CAP } from './aiConstants';
+import { AIResult, COUNTER_BUILD_DEMOLISH_MIN, COUNTER_BUILD_LEVELALL_MIN, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN, WITCH_GIANT_OPEN_CHARGE_CAP, YINYANG_GIANT_OPEN_CHARGE_CAP } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
 
 /** planMove の引数（makeMove が受け取る型）。型の循環を避けるため、クラスのメソッドではなく関数として定義する */
@@ -1263,12 +1263,40 @@ export const planMoveMethods = {
         return { move: block, skills: [] };
     },
 
+    /**
+     * 対龍神の巫女: 相手の建造物を 地ならし(116, 全て壊す)・解体(114, 1つ壊す) で壊す。巫女は建造物が4つで覚醒し、建造物が二列勝利の足場にもなる。
+     * 手札に札があり、魔力が足りて、相手にリーチが無いときだけ。撃ったあとは通常の着手（スキルは手番を終えない）
+     */
+    planCounterBuildings(this: AIPlayer, argsIn: PlanMoveArgs): AIResult | null {
+        const [board, magic, costs, , life, available] = argsIn;
+        if (!this.opponents.some((o) => this.characterOf(o) === 'dragonMiko')) return null;
+        if (this.opponents.some((o) => this.countReaches(board, o) > 0)) return null; // 相手のリーチを塞ぐのが先
+        const chars = this.seatCharacters() as Parameters<typeof objectSkillTargets>[3]; // 席にキャラがいない場合（undefined）は敵のオブジェクト判定に影響しない
+        const targets = objectSkillTargets('demolish', board, this.playerSymbol, chars).filter((i) => !this.shield.has(i));
+        if (targets.length < COUNTER_BUILD_DEMOLISH_MIN) return null;
+        const move = this.getBestMove(board, life);
+        if (targets.length >= COUNTER_BUILD_LEVELALL_MIN && available.includes(116) && objectSkillUsable('levelAll', board, this.playerSymbol, chars)
+            && magic >= this.calculateAICost(costs.onClickLevelAll, false, false, 'onClickLevelAll')) {
+            return { move, skills: [], chargeClicks: [{ skill: 'onClickLevelAll' }] };
+        }
+        if (available.includes(114) && magic >= this.calculateAICost(costs.onClickDemolish, false, false, 'onClickDemolish')) {
+            const target = targets.map((i) => ({ i, v: board[i].bind })).sort((x, y) => y.v - x.v || x.i - y.i)[0].i; // ライフの高い建造物から（投資が大きい）
+            return { move, skills: [], chargeClicks: [{ skill: 'onClickDemolish', target }] };
+        }
+        return null;
+    },
+
     makeMoveCore(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
         // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
         // 敵コマの奪取で完成する勝ちがあるのにロック・封鎖の断・審判の日・引き直しなどを先に選んでいた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた・#600）
         // 相手の土壇場の防壁が使えるときは、1回目の勝ちが防壁に吸われるので、ギアを壊すスキルなど普通の計画に任せる
         const winNow = this.oppLastStand ? null : this.immediateWinMove(argsIn[0], argsIn[4]);
         if (winNow !== null) return { move: winNow, skills: [] };
+        // 相手が龍神の巫女のとき: 建造物（4つで覚醒する）を解体・地ならしで壊してから通常の着手をする
+        if (this.character !== 'dragonMiko') {
+            const counter = this.planCounterBuildings(argsIn);
+            if (counter) return counter;
+        }
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
             const dragonPlan = this.planDragon(argsIn);
