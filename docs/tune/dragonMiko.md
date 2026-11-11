@@ -95,3 +95,6 @@ keysmith 8.9pt（8%）/ cryomancer 6.4pt（5%）/ electrician 6.2pt（46%）/ ta
 - 条件1（基本）: dragonMiko 1位 対強豪81.2%（2位 electrician 43.2%・GAP 38.1pt）
 - 条件2（`--envDeck pick --oppGears pick`）: dragonMiko 1位 対強豪82.3%（2位 electrician 40.8%）
 - 判定後に master が 15b8ea7 まで進んだためマージ済み（gear.ts の差分のみ。再測定は PR マージ後の refining で行う）。
+
+### マージ（2026-11-11）
+PR #637 を master にマージ（fc67de0）。完了判定は 2 条件とも 1 位。以後は refining（master 更新のたびに再測定して維持）。
