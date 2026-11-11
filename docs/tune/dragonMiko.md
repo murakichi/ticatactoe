@@ -90,3 +90,8 @@ keysmith 8.9pt（8%）/ cryomancer 6.4pt（5%）/ electrician 6.2pt（46%）/ ta
 
 ## 試行（2026-11-10・別セッションの統合後 master dddc449）
 - デッキの砦(108)→両トークン(4): 全12相手 seed2/100 で 77.2% ±3.0 → 81.2% ±2.6（+4.0pt）。対軍師 59→73%・対鍵師 76→83%・対あなた 92→97%、対魔法使い 94→91%。+1.5pt 以上かつ +1.96×SE(≈2.6) 以上で採用。順位表での2条件確認は未実施。
+
+### 完了判定（2026-11-11・master dddc449 + 砦→両トークン・seed3/200）
+- 条件1（基本）: dragonMiko 1位 対強豪81.2%（2位 electrician 43.2%・GAP 38.1pt）
+- 条件2（`--envDeck pick --oppGears pick`）: dragonMiko 1位 対強豪82.3%（2位 electrician 40.8%）
+- 判定後に master が 15b8ea7 まで進んだためマージ済み（gear.ts の差分のみ。再測定は PR マージ後の refining で行う）。
