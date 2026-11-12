@@ -657,10 +657,10 @@ function settleWinner(s) {
     const byLines = !!w;
     if (w) {
         // 龍の防壁（龍神の巫女・#527）: 龍のあいだに相手が列を揃えたら、かわりにその列と自陣のコマが消滅して巫女に戻る
-        const dragonHolder = s.chars.findIndex((c, seat) => c === 'dragonMiko' && s.dragon[seat].form === 'dragon' && SYMBOLS[seat] !== w);
+        const dragonHolder = s.chars.findIndex((c, seat) => c === 'dragonMiko' && s.dragon[seat].form === 'dragon' && !s.dragon[seat].bulwarkUsed && SYMBOLS[seat] !== w);
         if (dragonHolder >= 0) {
             dragonMod.applyBulwark(s.board, w, SYMBOLS[dragonHolder]);
-            s.dragon[dragonHolder] = dragonMod.newDragonState();
+            s.dragon[dragonHolder] = dragonMod.bulwarkSpentState();
             bumpStat(s, 'dragonBulwark');
             w = calculateWinner(symbolsOf(s.board));
             if (!w) { s.winner = undefined; return; }
@@ -2530,7 +2530,7 @@ function dragonCheck(s) {
     const plan = dragonMod.awakenPlan(s.board, curPlayer(s));
     if (!plan) return;
     const n = dragonMod.applyAwaken(s.board, plan);
-    s.dragon[seat] = { form: 'dragon', n };
+    s.dragon[seat] = dragonMod.awakenedState(s.dragon[seat], n);
     bumpStat(s, 'dragonAwaken');
     bumpStat(s, 'dragonAwakenN', n);
 }

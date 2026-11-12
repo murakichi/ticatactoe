@@ -7,7 +7,7 @@ import { SquareInfo } from '../../types/SquareInfo';
 import { SkillCosts } from './skillCosts';
 import { SkillEffectType } from './BoardEffects';
 import { PlayEffectExtra } from './usePresentation';
-import { DragonState, applyAwaken, awakenPlan, pickPrayerKind, prayerUsable, roar, roarUsable } from './dragon';
+import { DragonState, applyAwaken, awakenedState, awakenPlan, pickPrayerKind, prayerUsable, roar, roarUsable } from './dragon';
 import { GameLate } from './gameLate';
 
 export interface DragonScope {
@@ -43,7 +43,7 @@ export const useDragonSkills = (g: DragonScope, late: () => GameLate) => {
             addLog(`${symbols[seat]}の龍神降臨: 建造物${plan.buildings.length}つが結界を張り、${plan.enclosed.length}マスを囲んで消滅（N=${n}）。龍に覚醒`);
             flashCells([...plan.enclosed, ...plan.buildings]);
             playEffect('judge', undefined, [...plan.enclosed, ...plan.buildings], '龍神降臨');
-            setDragonAt(seat, { form: 'dragon', n });
+            setDragonAt(seat, awakenedState(dragon[seat], n));
             setCurrentBoard(board);
         });
     }, [currentBoard]);

@@ -1,7 +1,7 @@
 // 自動生成: src/components/game/dragon.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dragonBulwarkHolder = exports.applyBulwark = exports.pickPrayerKind = exports.prayerUsable = exports.prayerKinds = exports.roarUsable = exports.roar = exports.roarVictims = exports.dragonMagicBonus = exports.dragonLifeBonus = exports.applyAwaken = exports.awakenPlan = exports.enclosedCells = exports.ownBuildingCells = exports.isDragonMiko = exports.newDragonState = exports.DRAGON_N_CAP = exports.DRAGON_LIFE_PLUS = exports.DRAGON_LIFE_BASE = exports.MIKO_LIFE_MEAN = exports.AWAKEN_BUILDINGS = void 0;
+exports.dragonBulwarkHolder = exports.applyBulwark = exports.pickPrayerKind = exports.prayerUsable = exports.prayerKinds = exports.roarUsable = exports.roar = exports.roarVictims = exports.dragonMagicBonus = exports.dragonLifeBonus = exports.applyAwaken = exports.awakenPlan = exports.enclosedCells = exports.ownBuildingCells = exports.isDragonMiko = exports.bulwarkSpentState = exports.awakenedState = exports.newDragonState = exports.DRAGON_N_CAP = exports.DRAGON_LIFE_PLUS = exports.DRAGON_LIFE_BASE = exports.MIKO_LIFE_MEAN = exports.AWAKEN_BUILDINGS = void 0;
 const ObjectKind_1 = require("./ObjectKind");
 const boardGeometry_1 = require("./boardGeometry");
 const charge_1 = require("./charge");
@@ -18,6 +18,12 @@ exports.DRAGON_LIFE_PLUS = 4;
 exports.DRAGON_N_CAP = Infinity;
 const newDragonState = () => ({ form: 'miko', n: 0 });
 exports.newDragonState = newDragonState;
+/** 覚醒した状態（防壁を使い済みかは引き継ぐ） */
+const awakenedState = (prev, n) => ({ form: 'dragon', n, bulwarkUsed: prev === null || prev === void 0 ? void 0 : prev.bulwarkUsed });
+exports.awakenedState = awakenedState;
+/** 防壁が発動して巫女に戻った状態（以後は再覚醒しても防壁が無い） */
+const bulwarkSpentState = () => ({ form: 'miko', n: 0, bulwarkUsed: true });
+exports.bulwarkSpentState = bulwarkSpentState;
 const isDragonMiko = (c) => c === 'dragonMiko';
 exports.isDragonMiko = isDragonMiko;
 const empty = () => ({ player: undefined, bind: 0, effects: [] });
@@ -169,6 +175,6 @@ const applyBulwark = (board, winner, holder) => {
             board[idx] = empty();
 };
 exports.applyBulwark = applyBulwark;
-/** 龍の防壁を持つ席（龍の形態の龍神の巫女で、勝者 winner 以外）。いなければ -1 */
-const dragonBulwarkHolder = (characters, dragon, symbols, winner) => characters.findIndex((c, seat) => { var _a; return c === 'dragonMiko' && ((_a = dragon[seat]) === null || _a === void 0 ? void 0 : _a.form) === 'dragon' && symbols[seat] !== winner; });
+/** 龍の防壁を持つ席（龍の形態の龍神の巫女で、防壁を使い済みでなく、勝者 winner 以外）。いなければ -1 */
+const dragonBulwarkHolder = (characters, dragon, symbols, winner) => characters.findIndex((c, seat) => { var _a; return c === 'dragonMiko' && ((_a = dragon[seat]) === null || _a === void 0 ? void 0 : _a.form) === 'dragon' && !dragon[seat].bulwarkUsed && symbols[seat] !== winner; });
 exports.dragonBulwarkHolder = dragonBulwarkHolder;

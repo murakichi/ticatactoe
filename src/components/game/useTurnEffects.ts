@@ -1,6 +1,6 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
-import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragonMagicBonus, newDragonState } from './dragon';
+import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragonMagicBonus, bulwarkSpentState } from './dragon';
 import { BurstType } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
@@ -97,8 +97,8 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         if (dragonHolder >= 0) {
             const board = currentBoard.slice();
             applyBulwark(board, w, symbols[dragonHolder]);
-            setDragonAt(dragonHolder, newDragonState());
-            addLog(`${symbols[dragonHolder]}の龍の防壁: ${w}の揃った列と自陣のコマが消滅。巫女に戻る`);
+            setDragonAt(dragonHolder, bulwarkSpentState());
+            addLog(`${symbols[dragonHolder]}の龍の防壁: ${w}の揃った列と自陣のコマが消滅。巫女に戻る（防壁は1試合に1回だけ）`);
             setCurrentBoard(board);
             playEffect('bulwark');
             return;

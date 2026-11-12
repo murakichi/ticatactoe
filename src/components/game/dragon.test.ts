@@ -1,6 +1,6 @@
 import { SquareInfo } from '../../types/SquareInfo';
 import { CharacterId } from '../../types/Character';
-import { awakenPlan, applyAwaken, enclosedCells, roar, roarVictims, dragonLifeBonus, dragonMagicBonus, MIKO_LIFE_MEAN } from './dragon';
+import { awakenPlan, applyAwaken, enclosedCells, roar, roarVictims, dragonLifeBonus, dragonMagicBonus, MIKO_LIFE_MEAN, DragonState, newDragonState, awakenedState, bulwarkSpentState, dragonBulwarkHolder } from './dragon';
 import { OBJECT_LIFE } from './objects';
 
 const E = (): SquareInfo => ({ player: undefined, bind: 0, effects: [] });
@@ -91,5 +91,20 @@ describe('龍神の巫女（#527）', () => {
         expect(r.blocked).toEqual([at(5, 2, 3)]);
         expect(r.destroyed).toBe(0);
         expect(b[at(5, 2, 3)].player).toBe('⭕');
+    });
+});
+
+describe('龍の防壁は1試合に1回だけ', () => {
+    const symbols = ['⭕', '💙'] as const;
+    const chars = ['dragonMiko', 'you'] as const;
+    it('使い済みの龍には防壁が無い', () => {
+        const fresh: DragonState[] = [{ form: 'dragon', n: 4 }, newDragonState()];
+        expect(dragonBulwarkHolder(chars, fresh, symbols, '💙')).toBe(0);
+        const spent: DragonState[] = [awakenedState(bulwarkSpentState(), 4), newDragonState()];
+        expect(spent[0]).toEqual({ form: 'dragon', n: 4, bulwarkUsed: true });
+        expect(dragonBulwarkHolder(chars, spent, symbols, '💙')).toBe(-1);
+    });
+    it('防壁で巫女に戻っても使い済みを覚えている', () => {
+        expect(bulwarkSpentState()).toEqual({ form: 'miko', n: 0, bulwarkUsed: true });
     });
 });

@@ -1,7 +1,7 @@
 // 龍神の巫女（#527）の純粋ロジック。Game.tsx・sim/engine.js・AIPlayer.ts が同じ関数を呼ぶ (#289)。
 //  - 巫女: 自陣の建造物（isBuilding。式神を除く）が AWAKEN_BUILDINGS 個になると龍に覚醒する
 //  - 覚醒: 建造物が囲んだ範囲と自陣の建造物をすべて消滅させ、消したマスの数 N を記録する
-//  - 龍: ライフ平均 5+N+4、手番開始魔力 +N。防壁（相手が列を揃える勝ちを止める）を内蔵し、発動すると巫女に戻る
+//  - 龍: ライフ平均 5+N+4、手番開始魔力 +N。防壁（相手が列を揃える勝ちを止める）を内蔵し、発動すると巫女に戻る。防壁は1試合に1回だけ
 //  - 龍の咆哮: 自陣のオブジェクト全ての周囲8マスの敵コマを破壊し、そのあと自陣のオブジェクト全てに⚡を設置する
 import { CharacterId } from '../../types/Character';
 import { isBuilding } from '../../types/ObjectKind';
@@ -24,9 +24,13 @@ export const DRAGON_N_CAP = Infinity;
 
 export type DragonForm = 'miko' | 'dragon';
 
-/** 席ごとの形態。n は覚醒時に消したマスの数（巫女のときは 0） */
-export type DragonState = { form: DragonForm; n: number };
+/** 席ごとの形態。n は覚醒時に消したマスの数（巫女のときは 0）。bulwarkUsed は龍の防壁を発動済みか（1試合に1回だけ。再覚醒しても戻らない） */
+export type DragonState = { form: DragonForm; n: number; bulwarkUsed?: boolean };
 export const newDragonState = (): DragonState => ({ form: 'miko', n: 0 });
+/** 覚醒した状態（防壁を使い済みかは引き継ぐ） */
+export const awakenedState = (prev: DragonState | undefined, n: number): DragonState => ({ form: 'dragon', n, bulwarkUsed: prev?.bulwarkUsed });
+/** 防壁が発動して巫女に戻った状態（以後は再覚醒しても防壁が無い） */
+export const bulwarkSpentState = (): DragonState => ({ form: 'miko', n: 0, bulwarkUsed: true });
 
 export const isDragonMiko = (c: CharacterId | undefined): boolean => c === 'dragonMiko';
 
@@ -190,6 +194,6 @@ export const applyBulwark = (board: SquareInfo[], winner: Player, holder: Player
     for (let idx = 0; idx < board.length; idx++) if (board[idx].player === holder) board[idx] = empty();
 };
 
-/** 龍の防壁を持つ席（龍の形態の龍神の巫女で、勝者 winner 以外）。いなければ -1 */
+/** 龍の防壁を持つ席（龍の形態の龍神の巫女で、防壁を使い済みでなく、勝者 winner 以外）。いなければ -1 */
 export const dragonBulwarkHolder = (characters: readonly CharacterId[], dragon: readonly DragonState[], symbols: readonly Player[], winner: Player): number =>
-    characters.findIndex((c, seat) => c === 'dragonMiko' && dragon[seat]?.form === 'dragon' && symbols[seat] !== winner);
+    characters.findIndex((c, seat) => c === 'dragonMiko' && dragon[seat]?.form === 'dragon' && !dragon[seat].bulwarkUsed && symbols[seat] !== winner);

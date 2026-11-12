@@ -3,6 +3,7 @@
 // 龍神の巫女（#527）と二列勝利（#526）。共有の道具は ../testkit.js
 const { assert, e, test } = require('../testkit');
 const objectsMod = require('../shared/objects');
+const dragonMod = require('../shared/dragon');
 
 const five = (...chars) => e.newGame({ chars, rng: e.makeRng(7), size: 5 });
 const at = (r, c) => r * 5 + c;
@@ -52,6 +53,21 @@ test('龍神の巫女: 龍の防壁。相手が列を揃えたら、その列と
     assert.strictEqual(s.dragon[0].form, 'miko');
     assert.strictEqual(s.board[at(4, 0)].player, undefined, '揃った列は消える');
     assert.strictEqual(s.board[at(0, 0)].player, undefined, '自陣のコマも消える');
+});
+
+test('龍神の巫女: 防壁は1試合に1回だけ。使ったあとに再覚醒した龍には防壁が無く、相手の1本で負ける', () => {
+    const s = five('dragonMiko', 'you');
+    s.dragon[0] = { form: 'dragon', n: 6 };
+    [0, 1, 2, 3].forEach((c) => { s.board[at(4, c)] = { player: '⭕', bind: 3, effects: [] }; });
+    e.settleWinner(s);
+    assert.strictEqual(s.dragon[0].form, 'miko');
+    assert.strictEqual(s.dragon[0].bulwarkUsed, true, '使い済みを覚えている');
+    // 再覚醒（覚醒は使い済みを引き継ぐ）
+    s.dragon[0] = dragonMod.awakenedState(s.dragon[0], 5);
+    assert.strictEqual(s.dragon[0].form, 'dragon');
+    [0, 1, 2, 3].forEach((c) => { s.board[at(4, c)] = { player: '⭕', bind: 3, effects: [] }; });
+    e.settleWinner(s);
+    assert.strictEqual(s.winner, '⭕', '防壁なしで相手の勝ち');
 });
 
 test('龍神の巫女: 巫女のあいだは防壁が無く、相手の1本で負ける', () => {
