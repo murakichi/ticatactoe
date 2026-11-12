@@ -425,8 +425,9 @@ describe('相手キャラ別の専用ギア（counterGearsFor）', () => {
         expect(counterGearsFor('witch', ['dragonMiko'])).toEqual(['buildMania', 'priceWreck']); // 対 dragonMiko 9〜19→28〜31%
         expect(counterGearsFor('witch', ['electrician'])).toBeUndefined(); // 他の相手は通常の推奨のまま
         expect(counterGearsFor('cryomancer', ['dragonMiko'])).toEqual(['priceWreck', 'snowball']); // 対 dragonMiko 勝ち 5〜18→18〜36（100試合あたり）
-        expect(counterGearsFor('keysmith', ['yinYangMaster'])).toEqual(['reaper', 'lockBloom']);
-        expect(counterGearsFor('keysmith', ['electrician'])).toEqual(['reaper', 'lockBloom']);
+        // 陰陽師・雷霆は標準の推奨（死神の鎌+芽吹きの錠）と同じなので専用ギアなし
+        expect(counterGearsFor('keysmith', ['yinYangMaster'])).toBeUndefined();
+        expect(counterGearsFor('keysmith', ['electrician'])).toBeUndefined();
         expect(counterGearsFor('keysmith', ['necromancer'])).toEqual(['harvest', 'lockBloom']);
         expect(counterGearsFor('keysmith', ['magician'])).toBeUndefined();
         expect(counterGearsFor('tactician', ['magician'])).toBeUndefined();
