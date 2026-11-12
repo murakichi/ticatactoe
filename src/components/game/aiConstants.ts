@@ -211,7 +211,7 @@ export const TWO_LINE_DISJOINT_WEIGHT = 1.5;
  * docs/skill-cost-rules.md『オブジェクトの算出』）。AI は『値 ≥ 実コスト × OBJECT_PT_PER_MAGIC』の相手がいるときだけ置く。表に無い相手は0
  */
 export const OBJECT_VS: Partial<Record<string, Partial<Record<CharacterId, number>>>> = {
-    soloSign: { electrician: 59, necromancer: 38, tactician: 36, witch: 35, poisoner: 20, yinYangMaster: 16, cryomancer: 5 },
+    soloSign: { tactician: 39, witch: 37, necromancer: 36, electrician: 32, poisoner: 16, yinYangMaster: 16, cryomancer: 8 },
     oneWord: { electrician: 19, yinYangMaster: 17, witch: 15, necromancer: 5 },
     tongueKing: { witch: 63, electrician: 25, tactician: 19, cryomancer: 19, poisoner: 17, keysmith: 14, yinYangMaster: 7 },
     mudField: { witch: 53, tactician: 17, cryomancer: 10, electrician: 9, poisoner: 6 },
