@@ -10,6 +10,7 @@
  *   body:<where>    効果もロックも無いオブジェクト（大岩からロックを外したもの）
  *   magic<N>        魔力を N だけ足す（勝率→魔力の換算表）
  *   buy<C>:<kind>:<where>  k 回目以降の手番の頭で、魔力が C 以上ある最初の手番に C を払って置く（価格 C の検算。適正な価格なら対照と同じ勝率になる）
+ *   pay<C>:<kind>:<where>  k 回目の手番の頭に必ず置き、魔力から C を引く（足りなければ負債＝負の魔力になり、以降の収入で返す）。価格 C の検算の本命: buy は高い価格だと買えない試合が多く薄まる
  *   ctr<C>:<kind>:<where>  無料で置き、相手が次の自分の手番の頭から、魔力が C 以上ある最初の手番に C を払って解体する（相手が解体を握っているときの価値＝下限）
  * 基準は大岩（効果なし）: 「種類 X の効果の価値」= X:<where> と boulder:<where> の差。同じ seed・同じマス選びなので、介入までの試合は一致する。
  *
@@ -69,6 +70,8 @@ function intervene(s, me, arm) {
     if (m) { s.magic[me] = Math.max(0, s.magic[me] + parseInt(m[1], 10)); return null; }
     const ct = /^ctr(\d+):(.+)$/.exec(arm);
     if (ct) { const r = intervene(s, me, ct[2]); if (r && r !== 'wait') r.counter = parseInt(ct[1], 10); return r; }
+    const py = /^pay(\d+):(.+)$/.exec(arm);
+    if (py) { const r = intervene(s, me, py[2]); if (r) s.magic[me] -= parseInt(py[1], 10); return r; }
     const b = /^buy(\d+):(.+)$/.exec(arm);
     const price = b ? parseInt(b[1], 10) : 0;
     if (s.magic[me] < price) return 'wait';
