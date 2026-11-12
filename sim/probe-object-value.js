@@ -10,6 +10,7 @@
  *   body:<where>    効果もロックも無いオブジェクト（大岩からロックを外したもの）
  *   magic<N>        魔力を N だけ足す（勝率→魔力の換算表）
  *   buy<C>:<kind>:<where>  k 回目以降の手番の頭で、魔力が C 以上ある最初の手番に C を払って置く（価格 C の検算。適正な価格なら対照と同じ勝率になる）
+ *   ctr<C>:<kind>:<where>  無料で置き、相手が次の自分の手番の頭から、魔力が C 以上ある最初の手番に C を払って解体する（相手が解体を握っているときの価値＝下限）
  * 基準は大岩（効果なし）: 「種類 X の効果の価値」= X:<where> と boulder:<where> の差。同じ seed・同じマス選びなので、介入までの試合は一致する。
  *
  *   node sim/probe-object-value.js --arms none,boulder:quiet,bigTree:quiet,magic4 --chars you,giant --opps you,giant --games 100 --k 2 --seed 1 [--players 2] [--out file.jsonl]
@@ -66,6 +67,8 @@ function intervene(s, me, arm) {
     if (arm === 'none') return null;
     const m = /^magic(-?\d+)$/.exec(arm);
     if (m) { s.magic[me] = Math.max(0, s.magic[me] + parseInt(m[1], 10)); return null; }
+    const ct = /^ctr(\d+):(.+)$/.exec(arm);
+    if (ct) { const r = intervene(s, me, ct[2]); if (r && r !== 'wait') r.counter = parseInt(ct[1], 10); return r; }
     const b = /^buy(\d+):(.+)$/.exec(arm);
     const price = b ? parseInt(b[1], 10) : 0;
     if (s.magic[me] < price) return 'wait';
@@ -82,7 +85,7 @@ function intervene(s, me, arm) {
 
 function runPair(arm, c1, c2) {
     const outcomes = [];
-    let placed = 0, work = 0, myTurnsAfter = 0, myTurnsTotal = 0, objMagic = 0, objEffect = 0;
+    let placed = 0, work = 0, myTurnsAfter = 0, myTurnsTotal = 0, objMagic = 0, objEffect = 0, countered = 0;
     const ends = {};
     for (let g = 0; g < games; g++) {
         const me = g % players;
@@ -92,6 +95,11 @@ function runPair(arm, c1, c2) {
         const sym = engine.SYMBOLS[me];
         let n = 0, mine = 0, tag = null, done = false;
         while (!s.winner && n++ < 400) {
+            if (tag && tag.alive && tag.counter !== undefined && s.turn !== me && s.magic[s.turn] >= tag.counter && objs.runObjectSkill('demolish', s.board, engine.SYMBOLS[s.turn], s.chars, tag.cell)) {
+                s.magic[s.turn] -= tag.counter;
+                countered++;
+                if (s.board[tag.cell].object !== tag.kind) { tag.alive = false; tag.end = 'countered'; }
+            }
             if (s.turn === me) {
                 mine++;
                 if (tag && tag.alive) {
@@ -113,7 +121,7 @@ function runPair(arm, c1, c2) {
         objEffect += s.stats.objectEffect || 0;
         outcomes.push(s.winner ? (engine.seatOf(s.winner) === me ? 1 : 0) : 0.5);
     }
-    return { arm, char: c1, opp: c2, k: K, players, size: size || null, seed: seed0, games, placed, work, myTurnsAfter, myTurnsTotal, objMagic, objEffect, ends, outcomes: outcomes.join(',') };
+    return { arm, char: c1, opp: c2, k: K, players, size: size || null, seed: seed0, games, placed, work, myTurnsAfter, myTurnsTotal, objMagic, objEffect, countered, ends, outcomes: outcomes.join(',') };
 }
 
 for (const arm of arms) for (const c of chars) for (const o of opps) {
