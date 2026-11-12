@@ -8,7 +8,7 @@ import { isDiscountSkill } from './discount';
 import { OBJECT_DEFS, objectLandable, enemyObjectActive, ONE_PIECE_MULTI_KEYS } from './objects';
 import { isDormant as objDormant } from './thermal';
 import { isGuarded } from './charge';
-import { OBJECT_VS, OBJECT_PT_PER_MAGIC, GENERIC_OBJECT_ORDER, DEMOLISH_MIN_VALUE, LEVEL_ALL_MIN_VALUE, CLOUD_MIN_FOES } from './aiConstants';
+import { SOLO_KEEP_PLACING, OBJECT_VS, OBJECT_PT_PER_MAGIC, GENERIC_OBJECT_ORDER, DEMOLISH_MIN_VALUE, LEVEL_ALL_MIN_VALUE, CLOUD_MIN_FOES } from './aiConstants';
 import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -1222,7 +1222,7 @@ export const planMoveMethods = {
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
         const real = argsIn[0];
         const me = this.playerSymbol;
-        const solo = enemyObjectActive(real, me, 'soloSign');
+        const solo = enemyObjectActive(real, me, 'soloSign') && !SOLO_KEEP_PLACING.includes(this.character);
         let args = argsIn;
         if (solo && !args[6]) { args = [...args] as PlanMoveArgs; args[6] = true; }
         const baseArgs = args;

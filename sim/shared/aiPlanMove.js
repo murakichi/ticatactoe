@@ -1195,7 +1195,7 @@ exports.planMoveMethods = {
         var _a, _b, _c, _d, _e;
         const real = argsIn[0];
         const me = this.playerSymbol;
-        const solo = (0, objects_1.enemyObjectActive)(real, me, 'soloSign');
+        const solo = (0, objects_1.enemyObjectActive)(real, me, 'soloSign') && !aiConstants_1.SOLO_KEEP_PLACING.includes(this.character);
         let args = argsIn;
         if (solo && !args[6]) {
             args = [...args];

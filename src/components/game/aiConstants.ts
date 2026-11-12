@@ -224,3 +224,8 @@ export const GENERIC_OBJECT_ORDER = ['soloSign', 'tongueKing', 'bigTree', 'mudFi
 export const DEMOLISH_MIN_VALUE = 5;
 /** 地ならしを撃つ敵のオブジェクトの価値の合計の下限 */
 export const LEVEL_ALL_MIN_VALUE = 10;
+/**
+ * お一人様限りの札の下でも、コマを置くスキルを撃ち続けるキャラ（着手よりトークンのほうが強い）。それ以外は置くスキルをやめて着手だけにする。
+ * 札を置いた側の勝率の上がり幅（1相手150試合）: 着手だけにすると 雷霆 59→32 と縮むが、凩の魔女 35→65・鍵師 −3→10・陰陽師 16→23 と広がった
+ */
+export const SOLO_KEEP_PLACING: readonly CharacterId[] = ['witch', 'keysmith', 'yinYangMaster'];

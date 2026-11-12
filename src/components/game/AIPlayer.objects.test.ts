@@ -1,6 +1,6 @@
 import AIPlayer from './AIPlayer';
 import { SquareInfo } from '../../types/SquareInfo';
-import { CharacterId } from '../../types/CharacterId';
+import { CharacterId } from '../../types/Character';
 import { skillCosts } from './skillCosts';
 import { newObject, ONE_PIECE_MULTI_KEYS } from './objects';
 import { LIFE_BAN_PLACING_KEYS } from './lifeBan';
