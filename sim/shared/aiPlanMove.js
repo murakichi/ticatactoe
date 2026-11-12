@@ -1263,9 +1263,9 @@ exports.planMoveMethods = {
                 }
             }
         }
-        // 設置: 相手にリーチも自分に勝ち筋も無い手番に、1手番1つ
+        // 設置: 相手にリーチが無い手番に、1手番1つ（自分のリーチは待たない: 置くのが遅れるほど働く手番が減る）
         const masked = board.map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq));
-        const quiet = this.opponents.every((o) => this.countReaches(masked, o) === 0) && this.countReaches(masked, me) === 0 && (0, util_1.findEmptyIndexes)(masked).length >= aiConstants_2.BIG_TREE_MIN_EMPTY;
+        const quiet = this.opponents.every((o) => this.countReaches(masked, o) === 0) && (0, util_1.findEmptyIndexes)(masked).length >= aiConstants_2.BIG_TREE_MIN_EMPTY;
         const bespoke = { keysmith: ['fort', 'market'], witch: ['fort', 'market'], electrician: ['thundercloud', 'poisonSwamp'], poisoner: ['tongueKing'] };
         if (quiet) {
             const geo = (0, boardGeometry_1.geometryForCells)(board.length);
