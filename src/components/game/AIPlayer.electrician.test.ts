@@ -268,7 +268,7 @@ describe('雷霆AI: オブジェクト（雷雲）を設置する', () => {
         expect((run(b, 6, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
         const b2 = empty();
         [5, 6].forEach((i) => (b2[i] = { player: '⭕', bind: 5, effects: [] }));
-        expect((run(b2, 3, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
+        expect((run(b2, 1, [109, 21, 23]).chargeClicks ?? []).map((c) => c.skill)).not.toContain('onClickThundercloud');
     });
     it('大木（idx 105）は撃たない（対強豪で悪化: 魔力8を貯める間の損が回収できない。docs/tune/electrician.md 試行52）', () => {
         const b = empty();

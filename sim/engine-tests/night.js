@@ -112,10 +112,10 @@ test('沈黙は雷なり: ⚡が合計1つでは撃てない。1つのコマに2
 test('オブジェクト: スキルで空きマスを選んで設置（コスト基準どおり）。埋まったマスは選び直せる。列には数えない', () => {
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(21) });
     s.magic[0] = 30;
-    assert.deepStrictEqual([e.skillCosts.onClickBigTree, e.skillCosts.onClickDeadTree, e.skillCosts.onClickSpring, e.skillCosts.onClickFort, e.skillCosts.onClickThundercloud], [8, 5, 5, 6, 5]);
+    assert.deepStrictEqual([e.skillCosts.onClickBigTree, e.skillCosts.onClickDeadTree, e.skillCosts.onClickSpring, e.skillCosts.onClickFort, e.skillCosts.onClickThundercloud], [8, 2, 2, 3, 2]);
     assert.strictEqual(e.objectLegal(s), true);
     e.SKILLS.fort(s);
-    assert.strictEqual(s.magic[0], 30 - 6);
+    assert.strictEqual(s.magic[0], 30 - e.skillCosts.onClickFort);
     s.board[3] = { player: '⭕', bind: 1, effects: [] };
     assert.strictEqual(e.placeMove(s, 3), false, '埋まったマスは選び直せる');
     assert.strictEqual(s.objectPlacing, 'fort');
@@ -313,18 +313,18 @@ test('大工房: 設置は直前に相手がベースコスト7以上のスキ�
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(71) });
     s.magic[0] = 99; s.magic[1] = 99;
     const price = (seat) => e.calculateCost(s, e.skillCosts.onClickWorkshop, false, false, 'onClickWorkshop');
-    assert.strictEqual(price(), 6);
+    assert.strictEqual(price(), 2);
     // 💙: ベース3のスキルを2回(合計6)ではまだ足りない
     e.spendMagic(s, 3, 'onClickStomp'); e.spendMagic(s, 3, 'onClickStomp');
     s.currentTurn += 1; e.advanceTurn(s); // ⭕の手番
-    assert.strictEqual(price(), 6, '合計6では無料にならない');
+    assert.strictEqual(price(), 2, '合計6では無料にならない');
     // ⭕: 合計7のマジックを払う
     e.spendMagic(s, 3, 'onClickStomp'); e.spendMagic(s, 4, 'onClickBibine');
     s.currentTurn += 1; e.advanceTurn(s); // 💙の手番
     assert.strictEqual(price(), 0, '直前に相手が合計7を払った');
     s.currentTurn += 1; e.advanceTurn(s); // ⭕（何も払わず）
     s.currentTurn += 1; e.advanceTurn(s); // 💙
-    assert.strictEqual(price(), 6, '次の手番では戻る');
+    assert.strictEqual(price(), 2, '次の手番では戻る');
     // ベースコスト7以上のスキルを1回でも使えば無料
     e.spendMagic(s, 1, 'onClickPerfectGame');
     s.currentTurn += 1; e.advanceTurn(s); // ⭕の手番
@@ -359,7 +359,7 @@ test('結界石・護符の社: 式神は自然減衰しない／式神の数だ
 });
 
 test('縛りのオブジェクト（sim）: 泥田坊でトークンのライフ0／お一人様限りの札でトークンのあとは置けない／一言居士で2つ目のスキルが使えない', () => {
-    assert.deepStrictEqual(['onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey'].map((k) => e.skillCosts[k]), [5, 5, 5, 8, 5, 6, 5]);
+    assert.deepStrictEqual(['onClickLuckyCat', 'onClickMudField', 'onClickTongueKing', 'onClickEightTrigrams', 'onClickSoloSign', 'onClickOneWord', 'onClickBlindMonkey'].map((k) => e.skillCosts[k]), [3, 5, 8, 8, 10, 4, 5]);
     const s = e.newGame({ chars: ['you', 'you'], rng: e.makeRng(91) });
     s.life = 4; s.magic[0] = 99;
     s.board[15] = { player: '⭕', bind: 5, effects: [], object: 'mudField' };
