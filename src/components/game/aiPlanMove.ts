@@ -1,6 +1,6 @@
 // AIPlayer のメソッド群: 1手番の計画のエントリ（makeMove → planMove）
 // メソッド本体は AIPlayer.ts から移しただけ（this は AIPlayer）。AIPlayer.ts がインターフェース統合とプロトタイプへの合成で戻す
-import { lockedSquareCount, sealBaseCost, sealReleaseCells } from './keysmith';
+import { lockConvert, lockConvertCells, lockedSquareCount, sealBaseCost, sealReleaseCells } from './keysmith';
 import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
@@ -54,6 +54,17 @@ const PLAN_PHASES = [planOpening, planThawAndYinYang, planDefense, planCounterLo
 /** 巨人のストンプ・パーフェクトゲーム・追い剥ぎの即勝ちと、手札の引き直し。当てはまる手があればその結果を返し、なければ null（次の段階へ） */
 function planOpening(this: AIPlayer, c: PlanContext): AIResult | null {
     const { board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay } = c;
+    // 凩の魔女: 鍵師の空き家封じなどで空きマスが全てロックされ、着手できないとき、錠の転換(134)でロックされた空きマスを1つ解除して打つ
+    // （放っておくと魔力が90近くまで溜まるのにチャージでパスし続け、鍵師戦の負けの大半がこの膠着。docs/tune/witch.md 試行56）
+    if (this.character === 'witch' && availableSkills.includes(134) && magic >= this.calculateAICost(costs.onClickLockConvert, false, false, 'onClickLockConvert') && this.getBestMove(board, life) === null) {
+        for (const tg of lockConvertCells(board).filter((i) => !board[i].player)) {
+            const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
+            lockConvert(post, tg);
+            const followup = this.getBestMove(post, life);
+            if (followup !== null) return { move: followup, skills: [], chargeClicks: [{ skill: 'onClickLockConvert', target: tg }] };
+        }
+    }
+
     // 巨人: ストンプは手番を終えず、中心のマスに自分のコマを置く（中心の敵コマは壊れてから置く）。連打すれば1手番で4つ並べられる
     // （自陣のコマが範囲に入ってもライフ-5だけ）。最少回数で1列を自陣にできるなら、魔力が許す限り連打して勝つ
     if (this.character === 'giant') {
@@ -1255,6 +1266,7 @@ export const planMoveMethods = {
             return saving ? result : this.extendPlan(result, args);
         }
         if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? MAGICIAN_REROLL_MAGIC : RICH_REROLL_MAGIC) || this.rerollsLeft <= -RICH_EXTRA_REROLLS) return result;
+        if (result.chargeClicks?.some((cc) => cc.skill === 'onClickLockConvert')) return result; // 魔女の膠着打開（錠の転換）は引き直さず撃つ
         if (this.character === 'yinYangMaster') return result; // コンボ待ちの温存があるため別ロジック
         if (result.skills.some((sk) => TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay')) return result;
         const goal = Math.max(RICH_SPEND_GOAL, Math.min(RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
