@@ -409,13 +409,20 @@ export const COUNTER_GEARS: Partial<Record<CharacterId, Partial<Record<Character
         yinYangMaster: ['afterglow', 'snowball'], // 20→41%（同）
         necromancer: ['afterglow', 'snowball'], // 12→34%（seed2/3, 各150試合）
     },
-    witch: { pyromancer: ['buildMania', 'spellWard'] }, // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
+    witch: {
+        pyromancer: ['buildMania', 'spellWard'], // 19→63%（同。呪詛除けが鍛冶師の🔥を止める）
+        // 龍神の巫女（dragonMiko）に対して、通常の推奨 [buildMania, reaper] の死神の鎌を価格破壊に替える。
+        // --target witch --opp dragonMiko --games 100〜150: seed2021 10.5→27.6、seed2022 18.8→31.3、seed2023 9.3→28.0（走査 seed2011/30 でも 14.8→36.7）。play-learn 2026-11-11
+        dragonMiko: ['buildMania', 'priceWreck'],
+    },
     poisoner: {
         cryomancer: ['springThunder', 'spellWard'],
         witch: ['snowball', 'propagate'], // 31→57%（seed2/3, 各150試合）
     },
     cryomancer: {
         electrician: ['lightToken', 'reaper'], // 24→64%（同）
+        // 龍神の巫女（dragonMiko）に対して、通常の推奨 [reaper, snowball] の死神の鎌を価格破壊に替える（勝ち 5→18 / 9→31 / 18→36、seed2031〜2033。決着した試合の勝率は 16→39% / 18→46% / 33→53%）。play-learn 2026-11-11
+        dragonMiko: ['priceWreck', 'snowball'],
         // 術中の加護が🔥・☠のエフェクトダメージを止め、死神の鎌でライフ0の駒（鍛冶師・毒使いが削ったコマ）を掃除する。
         // 「あなた」の対鍛冶師の戦略（spellWard 入りの専用ギア。docs/tune/you.md）を番人に取り入れた。--target cryomancer --opp X --gears …（seed83/300・seed84/400）:
         // 対鍛冶師 9.0〜12.0→72.3〜74.3%、対毒使い 71.4〜74.3→79.9〜83.8%。専用デッキは作らない（デッキの専用化は「あなた」だけ）
