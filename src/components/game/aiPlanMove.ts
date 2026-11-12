@@ -5,7 +5,10 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, objectLandable } from './objects';
+import { OBJECT_DEFS, objectLandable, enemyObjectActive, ONE_PIECE_MULTI_KEYS } from './objects';
+import { isDormant as objDormant } from './thermal';
+import { isGuarded } from './charge';
+import { OBJECT_VS, OBJECT_PT_PER_MAGIC, GENERIC_OBJECT_ORDER, DEMOLISH_MIN_VALUE, LEVEL_ALL_MIN_VALUE, CLOUD_MIN_FOES } from './aiConstants';
 import { findEmptyIndexes, isObject } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -14,7 +17,7 @@ import { addLock, lockEffect, lockStack } from './lock';
 import { pandemicTargets, poisonMistTargets, intensify as intensifyPoison, activePoison, poisonCountFor, addPoison } from './poison';
 import { NECROMANCY } from './turn';
 import { corpseCount, graveDiscountAmount, NECRO_CORPSE_CUT_CAP } from './graveSkills';
-import { smallFry, smallFryTargets } from './lifeBan';
+import { smallFry, smallFryTargets, LIFE_BAN_PLACING_KEYS } from './lifeBan';
 import { BOLT_SILENCE_BOLTS, chargeStacks, connectedPieces, withCharge, reducedChargeCost, applyJammer } from './charge';
 import { AIResult, NECRO_LOCK_CHARACTERS, NECRO_LOCK_MAX, NECRO_LOCK_REFRESH, KEYSMITH_SEAL_SAVE, MAGICIAN_REROLL_MAGIC, BIG_TREE_HOLD_GAP, BIG_TREE_MAX, BIG_TREE_MIN_EMPTY, BOLT_SILENCE_IDX, CLOUD_MAX, CLOUD_MIN_EMPTY, CRYO_LOCK_MAX, EMPTY_LOCK_MAX, INTENSIFY_MAX_CELL_POISON, INTENSIFY_MIN_FOE_POISON, KEYSMITH_COMBO_EMPTY_LOCK_MAX, MAGICIAN_MAX_LOCKS, MIASMA_MIN_SCORE, MIST_MIASMA_MIN_SCORE, NO_DIG_53_MIN, PLUNDER_CHAIN_MAX, POISON_RICH_RESERVE, RICH_EXTRA_REROLLS, RICH_REROLL_MAGIC, RICH_SPEND_GOAL, RICH_SPEND_GOAL_MAX, SHATTER_MAX_PER_TURN, SHATTER_RESERVE, SH_SMALL_FRY_MIN, STOMP_CHAIN_MAX, SURPLUS_MAGIC, TOKEN_SKILL_KEYS, TURN_ENDING_SKILLS, WITCH_DIG_MARGIN, WITCH_GIANT_OPEN_CHARGE_CAP, YINYANG_GIANT_OPEN_CHARGE_CAP, MAGICIAN_GIANT_OPEN_CHARGE_CAP } from './aiConstants';
 import { isBuilding } from '../../types/ObjectKind';
@@ -1210,7 +1213,112 @@ export const planMoveMethods = {
      * 1手番の計画。魔力が大きく余っているのに使う額が少ない計画なら、手札を引き直す（引き直し回数を超えて RICH_EXTRA_REROLLS 回まで。
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
+    /**
+     * 1手番の計画に、オブジェクトへの対応を足す:
+     *  - お一人様限りの札に縛られているとき: コマを置くスキルを計画しない（トークンを撃つと、選んだ着手が打てなくなる）
+     *  - 手札の解体・地ならしで、価値の高い敵のオブジェクトを壊す
+     *  - 手札のオブジェクトを、静かな手番に先に置く（早く置くほど働く手番が増える）。置いた分の魔力を引いて残りを計画する
+     */
     makeMove(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
+        const real = argsIn[0];
+        const me = this.playerSymbol;
+        const solo = enemyObjectActive(real, me, 'soloSign');
+        let args = argsIn;
+        if (solo && !args[6]) { args = [...args] as PlanMoveArgs; args[6] = true; }
+        const baseArgs = args;
+        const pre = this.planObjectPlays(args);
+        if (pre.clicks.length > 0) { args = [...args] as PlanMoveArgs; args[0] = pre.board; args[1] = args[1] - pre.spent; }
+        let result = this.makeMoveCore(...args);
+        if (solo) {
+            const placing = (sk: string) => ONE_PIECE_MULTI_KEYS.has(sk) || (result.move !== null && !real[result.move].player && LIFE_BAN_PLACING_KEYS.has(sk));
+            if (result.skills.some(placing) || result.chargeClicks?.some((c) => placing(c.skill))) {
+                result = { ...result, skills: result.skills.filter((sk) => !placing(sk)), chargeClicks: result.chargeClicks?.filter((c) => !placing(c.skill)) };
+            }
+        }
+        if (pre.clicks.length === 0) return result;
+        // 引き直し・ヘイルメアリー・着地を見て打ち直す計画は、対象クリックの列に載せられない。オブジェクトは次の機会に回す
+        if (result.reroll || result.hailMary || result.skills.some((sk) => sk === 'onClickChargeToken' || sk === 'onClickDoubleChargeToken')) return this.makeMoveCore(...baseArgs);
+        const used = new Set<number>([...(result.lockTargets ?? []), ...(result.stompTarget !== undefined ? [result.stompTarget] : []), ...(result.move !== null ? [result.move] : []),
+            ...(result.chargeClicks ?? []).flatMap((c) => [c.target, c.target2].filter((t): t is number => t !== undefined))]);
+        const clicks = pre.clicks.filter((c) => c.target === undefined || c.skill === 'onClickDemolish' || !used.has(c.target));
+        if (clicks.length === 0) return result;
+        return { ...result, chargeClicks: [...clicks, ...(result.chargeClicks ?? [])] };
+    },
+
+    /** 解体・地ならし・手札のオブジェクト設置の対象クリックと、設置後の盤面・払う魔力。該当しなければ clicks は空 */
+    planObjectPlays(this: AIPlayer, args: PlanMoveArgs): { clicks: { skill: string; target?: number }[]; board: SquareInfo[]; spent: number } {
+        const [real, magic, costs, , , hand] = args;
+        const me = this.playerSymbol;
+        const none = { clicks: [], board: real, spent: 0 };
+        if (this.character === 'dragonMiko' || this.character === 'necromancer') return none; // 専用の計画がある
+        const clicks: { skill: string; target?: number }[] = [];
+        let board = real;
+        let left = magic;
+        const costOf = (key: keyof SkillCosts): number => this.calculateAICost(costs[key], false, false, key);
+        // 敵の建造物（氷結・ロック中は壊せない）と、その価値（設置の基礎コスト。自分を縛る種類は相手表の値を魔力に直す）
+        const foes = real.map((sq, i) => ({ sq, i })).filter(({ sq }) => isBuilding(sq) && !!sq.player && sq.player !== me && !objDormant(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isGuarded(sq, this.characters));
+        const worth = (sq: SquareInfo): number => {
+            const kind = sq.object as keyof typeof OBJECT_DEFS;
+            const bind = (OBJECT_VS[kind]?.[this.character] ?? 0) / OBJECT_PT_PER_MAGIC;
+            return Math.max(costs[OBJECT_DEFS[kind].costKey], bind);
+        };
+        if (foes.length > 0) {
+            const total = foes.reduce((p, f) => p + worth(f.sq), 0);
+            if (hand.includes(116) && foes.length >= 2 && total >= LEVEL_ALL_MIN_VALUE && left >= costOf('onClickLevelAll')) {
+                clicks.push({ skill: 'onClickLevelAll' });
+                left -= costOf('onClickLevelAll');
+                board = board.map((sq, i) => (foes.some((f) => f.i === i) ? { player: undefined, bind: 0, effects: [] } : sq));
+            } else if (hand.includes(114) && left >= costOf('onClickDemolish')) {
+                const best = foes.reduce((p, f) => (worth(f.sq) > worth(p.sq) ? f : p));
+                if (worth(best.sq) >= DEMOLISH_MIN_VALUE) {
+                    clicks.push({ skill: 'onClickDemolish', target: best.i });
+                    left -= costOf('onClickDemolish');
+                    board = board.map((sq, i) => (i === best.i ? { player: undefined, bind: 0, effects: [] } : sq));
+                }
+            }
+        }
+        // 設置: 相手にリーチも自分に勝ち筋も無い手番に、1手番1つ
+        const masked = board.map((sq) => (isBuilding(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq));
+        const quiet = this.opponents.every((o) => this.countReaches(masked, o) === 0) && this.countReaches(masked, me) === 0 && findEmptyIndexes(masked).length >= BIG_TREE_MIN_EMPTY;
+        const bespoke: Partial<Record<string, readonly string[]>> = { keysmith: ['fort', 'market'], witch: ['fort', 'market'], electrician: ['thundercloud', 'poisonSwamp'], poisoner: ['tongueKing'] };
+        if (quiet) {
+            const geo = geometryForCells(board.length);
+            for (const kind of GENERIC_OBJECT_ORDER) {
+                const def = OBJECT_DEFS[kind];
+                if (!hand.includes(def.idx) || bespoke[this.character]?.includes(kind)) continue;
+                if (board.some((sq) => sq.object === kind && sq.player === me)) continue;
+                const cost = costOf(def.costKey);
+                if (left < cost) continue;
+                const table = OBJECT_VS[kind];
+                if (table && !this.opponents.some((o) => (table[this.characterOf(o) ?? 'you'] ?? 0) >= cost * OBJECT_PT_PER_MAGIC)) continue;
+                let cell: number | null = null;
+                if (kind === 'fort' || kind === 'sanctuary') {
+                    let bestN = 1;
+                    board.forEach((sq, i) => {
+                        if (!objectLandable(sq)) return;
+                        const n = geo.surroundRange(i).filter((j) => board[j].player === me && !isObject(board[j])).length;
+                        if (n > bestN) { bestN = n; cell = i; }
+                    });
+                } else if (kind === 'poisonSwamp' || kind === 'thundercloud') {
+                    let bestN = CLOUD_MIN_FOES - 1;
+                    board.forEach((sq, i) => {
+                        if (!objectLandable(sq)) return;
+                        const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player) && !isObject(board[j])).length;
+                        if (n > bestN) { bestN = n; cell = i; }
+                    });
+                } else cell = this.bestTreeCell(masked);
+                if (cell === null || !objectLandable(board[cell])) continue;
+                const at = cell;
+                clicks.push({ skill: def.costKey, target: at });
+                left -= cost;
+                board = board.map((sq, i) => (i === at ? { player: me, bind: def.life, effects: sq.effects.filter((e) => e.effect === '🔥'), object: kind } : sq));
+                break;
+            }
+        }
+        return { clicks, board, spent: magic - left };
+    },
+
+    makeMoveCore(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
             const dragonPlan = this.planDragon(argsIn);

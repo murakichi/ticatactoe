@@ -8,17 +8,20 @@ const keysmith_1 = require("./keysmith");
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const objects_1 = require("./objects");
+const thermal_1 = require("./thermal");
+const charge_1 = require("./charge");
+const aiConstants_1 = require("./aiConstants");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
-const thermal_1 = require("./thermal");
+const thermal_2 = require("./thermal");
 const lock_1 = require("./lock");
 const poison_1 = require("./poison");
 const turn_1 = require("./turn");
 const graveSkills_1 = require("./graveSkills");
 const lifeBan_1 = require("./lifeBan");
-const charge_1 = require("./charge");
-const aiConstants_1 = require("./aiConstants");
+const charge_2 = require("./charge");
+const aiConstants_2 = require("./aiConstants");
 const ObjectKind_1 = require("./ObjectKind");
 /** planMove の段階。上から順に試し、最初に結果を返した段階で手番の計画が決まる */
 const PLAN_PHASES = [planOpening, planThawAndYinYang, planDefense, planCounterLocks, planChargeAndObjects, planOverflowCasts, planBudsAndFire];
@@ -35,7 +38,7 @@ function planOpening(c) {
         if (direct !== null)
             return { move: direct, skills: [] };
         const stompCost = this.calculateAICost(costs.onClickStomp, false, false, 'onClickStomp');
-        const win = this.planStompWin(board, stompCost > 0 ? Math.floor(magic / stompCost) : aiConstants_1.STOMP_CHAIN_MAX, life);
+        const win = this.planStompWin(board, stompCost > 0 ? Math.floor(magic / stompCost) : aiConstants_2.STOMP_CHAIN_MAX, life);
         if (win !== null) {
             return { move: this.getBestMove(win.board, life), skills: [], chargeClicks: win.centers.map((c) => ({ skill: 'onClickStomp', target: c })), win: true };
         }
@@ -54,7 +57,7 @@ function planOpening(c) {
     // 追い剥ぎ(52): ライフ0の敵コマを自陣にする。手番は続くので、列の足りないマスがライフ0の敵コマ（と、最後の1マスの空き）だけなら、連打して着手で揃えて勝つ
     if (availableSkills.includes(52)) {
         const plunderCost = this.calculateAICost(costs.onClickPlunder, false, false, 'onClickPlunder');
-        const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : aiConstants_1.PLUNDER_CHAIN_MAX);
+        const win = this.planPlunderWin(board, plunderCost > 0 ? Math.floor(magic / plunderCost) : aiConstants_2.PLUNDER_CHAIN_MAX);
         if (win !== null) {
             return { move: win.move, skills: [], chargeClicks: win.cells.map((c) => ({ skill: 'onClickPlunder', target: c })), win: true };
         }
@@ -63,7 +66,7 @@ function planOpening(c) {
     // A/B: 環境勝率 +1.7pt(seed2/200, seed3/400, seed4/400 で一致)）。手札が変わってから計画し直すので、Game 側が再度 makeMove を呼ぶ
     // 71と73が揃っていて特売(53)だけ無いときは、53を探して引き直す（1枠で約10%/回）より、チャージで特売なしの実コスト(13)を目指す（旧sim AI の noDig53=8）
     const waitFor13 = this.comboReachable(availableSkills) && availableSkills.includes(71) && availableSkills.includes(73) && !availableSkills.includes(53)
-        && magic >= aiConstants_1.NO_DIG_53_MIN && magic < this.comboPlan(board, costs, availableSkills).total;
+        && magic >= aiConstants_2.NO_DIG_53_MIN && magic < this.comboPlan(board, costs, availableSkills).total;
     // 陰陽師: 勝てる盤面で、魔力がコンボ分（特売が引ける前提）+引き直し分あるなら、1コストで手札を引き直してコンボ札(71/73/53)を探す
     // （旧sim AI の shuffleDig。コンボの発動率 53→75%、環境勝率 +8pt）
     if (this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !waitFor13 && this.comboReachable(availableSkills)) {
@@ -79,13 +82,13 @@ function planOpening(c) {
     // 魔女・陰陽師・魔法使いが巨人と当たるとき、最初は置かずにチャージする。最初の1駒は巨人のストンプで必ず消される。巨人は2手番に1回しか動かないので、その間に魔力を貯める。
     // 貯める上限（手番開始の魔力がこれ未満の間チャージ）は、魔女 14・陰陽師 5。対巨人 魔女（seed961〜964 各300）: 上限5 28.7/29.3/31.3/35.3 → 上限14 57.0/61.0/52.7/52.7（平均 +24.7）。
     // 上限8/11/17は 33/45/46〜56 で14が最良。陰陽師（seed961/300）: 上限5 50.0 / 8 28.0 / 11 36.7 で5が最良（seed921〜923: 34.7/35.7/33.0 → 45.3/46.7/46.7）。魔法使い（seed991〜993: 85.0/79.7/84.3 → 94.5/93.7/93.0、上限14）も有効。他のキャラは対ネクロ -21・対氷室 -14・軍師は符号が割れるなどで入れない
-    const openChargeCap = this.character === 'witch' ? aiConstants_1.WITCH_GIANT_OPEN_CHARGE_CAP : this.character === 'yinYangMaster' ? aiConstants_1.YINYANG_GIANT_OPEN_CHARGE_CAP : this.character === 'magician' ? aiConstants_1.MAGICIAN_GIANT_OPEN_CHARGE_CAP : 0;
+    const openChargeCap = this.character === 'witch' ? aiConstants_2.WITCH_GIANT_OPEN_CHARGE_CAP : this.character === 'yinYangMaster' ? aiConstants_2.YINYANG_GIANT_OPEN_CHARGE_CAP : this.character === 'magician' ? aiConstants_2.MAGICIAN_GIANT_OPEN_CHARGE_CAP : 0;
     if (magic < openChargeCap && this.characters.some((ch, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && ch === 'giant')
         && !board.some((sq) => sq.player === this.playerSymbol) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         return { move: null, skills: ['onClickCharge'] };
     }
     // 百鬼夜行コンボを待つ前に、式神を置いて一括で通常コマにする安い勝ち方（planShikigami）がいま撃てるなら、待たずに撃つ
-    const cheapWin = this.character === 'yinYangMaster' && magic >= aiConstants_1.RICH_REROLL_MAGIC && ((_a = this.planShikigami(board, magic, costs, availableSkills)) === null || _a === void 0 ? void 0 : _a.win) === true;
+    const cheapWin = this.character === 'yinYangMaster' && magic >= aiConstants_2.RICH_REROLL_MAGIC && ((_a = this.planShikigami(board, magic, costs, availableSkills)) === null || _a === void 0 ? void 0 : _a.win) === true;
     if (!cheapWin && !facesWitch && this.character === 'yinYangMaster' && this.comboReachable(availableSkills) && this.opponents.every((o) => this.countReaches(board, o) === 0)
         && this.floodComboWins(board) && (magic < this.comboPlan(board, costs, availableSkills, true).total + costs.onClickShuffle || waitFor13)) {
         return { move: null, skills: ['onClickCharge'] };
@@ -93,7 +96,7 @@ function planOpening(c) {
     // 対魔女: 初霜・吹き寄せ・山焼きが手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで手札を引き直して探す
     // （見つけた札は引き直しのたびに chooseLocks が固定し直す。旧sim AI の witchDig=2, digMargin=3）
     if (facesWitch && this.character !== 'witch' && this.rerollsLeft > 0 && ![93, 94, 95].some((i) => availableSkills.includes(i)) && [93, 94, 95].some((i) => this.inDeck(i, availableSkills))
-        && magic >= costs.onClickShuffle + aiConstants_1.WITCH_DIG_MARGIN) {
+        && magic >= costs.onClickShuffle + aiConstants_2.WITCH_DIG_MARGIN) {
         return { move: null, skills: [], reroll: {} };
     }
     // 氷室の番人 対魔女: デッキに一寸の虫に魂なし(92)があり手札に無く、壊せる敵コマが2個以上あって、シャッフルと92の分の魔力があれば、1コストで引き直して探す
@@ -106,10 +109,10 @@ function planOpening(c) {
     // 陰陽師×対魔女: 一寸の虫に魂なし(92)が手札に無く、デッキにあって、シャッフルのあとも魔力が3残るなら、1コストで引き直して探す
     // （見つけた92は chooseLocks が魔女戦で固定する。旧sim AI の yinDig。本番AI 対魔女 55%(124/227) → 66%(109/166)）
     if (facesWitch && this.character === 'yinYangMaster' && this.rerollsLeft > 0 && !availableSkills.includes(92) && this.inDeck(92, availableSkills)
-        && magic >= costs.onClickShuffle + aiConstants_1.WITCH_DIG_MARGIN) {
+        && magic >= costs.onClickShuffle + aiConstants_2.WITCH_DIG_MARGIN) {
         return { move: null, skills: [], reroll: {} };
     }
-    if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= aiConstants_1.SURPLUS_MAGIC) {
+    if (this.rerollsLeft > 0 && this.character !== 'magician' && this.character !== 'yinYangMaster' && magic >= aiConstants_2.SURPLUS_MAGIC) {
         const plan = this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay);
         if (plan.length === 0)
             return { move: null, skills: [], reroll: {} };
@@ -131,7 +134,7 @@ function planThawAndYinYang(c) {
         const t = k === null ? null : this.thawIgniteTarget(board, k);
         if (t !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.ignite)(post, [t], this.sizeOf(board), 1);
+            (0, thermal_2.ignite)(post, [t], this.sizeOf(board), 1);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             if (followup !== null)
@@ -144,7 +147,7 @@ function planThawAndYinYang(c) {
         const tg = this.yinShatterTarget(board);
         if (tg !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.shatter)(post, tg);
+            (0, thermal_2.shatter)(post, tg);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             this.updateShield(board);
@@ -156,7 +159,7 @@ function planThawAndYinYang(c) {
         const tg = this.shatterTarget(board);
         if (tg !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.shatter)(post, tg);
+            (0, thermal_2.shatter)(post, tg);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             this.updateShield(board);
@@ -169,7 +172,7 @@ function planThawAndYinYang(c) {
         const tg = this.comboThawTarget(board);
         if (tg !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.ignite)(post, [tg], this.sizeOf(board), 1);
+            (0, thermal_2.ignite)(post, [tg], this.sizeOf(board), 1);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             if (followup !== null)
@@ -185,7 +188,7 @@ function planThawAndYinYang(c) {
     if (this.character === 'yinYangMaster' && availableSkills.includes(92)) {
         const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
         const r = (0, lifeBan_1.smallFry)(post, this.playerSymbol, this.characters);
-        if (r.destroyed.length >= aiConstants_1.SH_SMALL_FRY_MIN && magic >= this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
+        if (r.destroyed.length >= aiConstants_2.SH_SMALL_FRY_MIN && magic >= this.calculateAICost(costs.onClickSmallFry, false, false, 'onClickSmallFry')) {
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             this.updateShield(board);
@@ -230,14 +233,14 @@ function planDefense(c) {
     // （旧sim AI F.antiPoison=1, antiPoisonMargin=2 と同一。A/B: 対毒使い 勝ち86→112/200試合、環境勝率 seed2/200 で +1.5pt）
     if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
         const poisoned = board.findIndex((sq, i) => {
-            if (sq.player !== this.playerSymbol || this.shield.has(i) || (0, thermal_1.isFrozen)(sq) || !(0, thermal_1.canFreeze)(sq))
+            if (sq.player !== this.playerSymbol || this.shield.has(i) || (0, thermal_2.isFrozen)(sq) || !(0, thermal_2.canFreeze)(sq))
                 return false;
             const p = sq.effects.filter((e) => e.effect === '☠').length;
             return p > 0 && p >= sq.bind - 2;
         });
         if (poisoned !== -1) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.freeze)(post, [poisoned]);
+            (0, thermal_2.freeze)(post, [poisoned]);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             if (followup !== null)
@@ -252,10 +255,10 @@ function planDefense(c) {
         if (yy) {
             const score = new Map();
             for (const line of (0, boardGeometry_1.geometryForCells)(board.length).winLines) {
-                if (line.some((i) => board[i].player === this.playerSymbol || (!board[i].player && (0, thermal_1.isFrozen)(board[i]))))
+                if (line.some((i) => board[i].player === this.playerSymbol || (!board[i].player && (0, thermal_2.isFrozen)(board[i]))))
                     continue;
                 for (const i of line)
-                    if (!board[i].player && (0, thermal_1.canFreeze)(board[i]))
+                    if (!board[i].player && (0, thermal_2.canFreeze)(board[i]))
                         score.set(i, (score.get(i) || 0) + 1);
             }
             let cell = -1;
@@ -266,7 +269,7 @@ function planDefense(c) {
             } });
             if (cell !== -1) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                (0, thermal_1.freeze)(post, [cell]);
+                (0, thermal_2.freeze)(post, [cell]);
                 this.updateShield(post);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
@@ -287,8 +290,8 @@ function planDefense(c) {
                 const n = line.filter((i) => board[i].player === necro).length;
                 if (n === 0)
                     continue;
-                const empt = line.filter((i) => !board[i].player && !(0, thermal_1.isFrozen)(board[i]) && (0, thermal_1.canFreeze)(board[i]));
-                if (empt.length === 0 || line.some((i) => !board[i].player && (0, thermal_1.isFrozen)(board[i])))
+                const empt = line.filter((i) => !board[i].player && !(0, thermal_2.isFrozen)(board[i]) && (0, thermal_2.canFreeze)(board[i]));
+                if (empt.length === 0 || line.some((i) => !board[i].player && (0, thermal_2.isFrozen)(board[i])))
                     continue;
                 for (const i of empt)
                     score.set(i, (score.get(i) || 0) + n);
@@ -301,7 +304,7 @@ function planDefense(c) {
             } });
             if (cell !== -1) {
                 const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-                (0, thermal_1.freeze)(post, [cell]);
+                (0, thermal_2.freeze)(post, [cell]);
                 this.updateShield(post);
                 const followup = this.getBestMove(post, life);
                 if (followup !== null)
@@ -312,10 +315,10 @@ function planDefense(c) {
     }
     if (this.character === 'cryomancer' && threatSquares.length === 0 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
         const cell = board.findIndex((sq, i) => !!sq.player && this.isEnemy(sq.player) && this.characterOf(sq.player) === 'magician'
-            && !this.shield.has(i) && (0, thermal_1.budStacks)(sq) > 0 && !(0, thermal_1.isFrozen)(sq) && (0, thermal_1.canFreeze)(sq));
+            && !this.shield.has(i) && (0, thermal_2.budStacks)(sq) > 0 && !(0, thermal_2.isFrozen)(sq) && (0, thermal_2.canFreeze)(sq));
         if (cell !== -1) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            (0, thermal_1.freeze)(post, [cell]);
+            (0, thermal_2.freeze)(post, [cell]);
             this.updateShield(post);
             const followup = this.getBestMove(post, life);
             if (followup !== null)
@@ -325,7 +328,7 @@ function planDefense(c) {
     }
     if (this.character === 'cryomancer' && threatSquares.length === 1 && magic >= this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze')) {
         const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-        (0, thermal_1.freeze)(post, [threatSquares[0]]);
+        (0, thermal_2.freeze)(post, [threatSquares[0]]);
         this.updateShield(post);
         const followup = this.getBestMove(post, life);
         if (followup !== null)
@@ -436,16 +439,16 @@ function planCounterLocks(c) {
         // 自陣の毒は残らず、毒が付いた自陣のコマの数だけ、隣の敵コマに毒が積み上がる
         if (availableSkills.includes(29) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
             const mistCost = this.calculateAICost(costs.onClickPoisonMist, false, true, 'onClickPoisonMist');
-            if (magic >= mistCost + skillCosts_1.MIASMA_MIN_COST + aiConstants_1.POISON_RICH_RESERVE) {
+            if (magic >= mistCost + skillCosts_1.MIASMA_MIN_COST + aiConstants_2.POISON_RICH_RESERVE) {
                 const after = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                 (0, poison_1.addPoison)(after, (0, poison_1.poisonMistTargets)(after, this.characters), this.characters);
                 const mistMiasmaCost = Math.max(skillCosts_1.MIASMA_MIN_COST, this.calculateAICost(costs.onClickMiasma - (0, poison_1.poisonCountFor)(after, this.playerSymbol), false, true));
-                if (magic >= mistCost + mistMiasmaCost + aiConstants_1.POISON_RICH_RESERVE && this.miasmaScore(after) >= aiConstants_1.MIST_MIASMA_MIN_SCORE) {
+                if (magic >= mistCost + mistMiasmaCost + aiConstants_2.POISON_RICH_RESERVE && this.miasmaScore(after) >= aiConstants_2.MIST_MIASMA_MIN_SCORE) {
                     return { move: this.getBestMove(board, life), skills: ['onClickPoisonMist', 'onClickMiasma'] };
                 }
             }
         }
-        if (magic >= miasmaCost && this.miasmaScore(board) >= aiConstants_1.MIASMA_MIN_SCORE) {
+        if (magic >= miasmaCost && this.miasmaScore(board) >= aiConstants_2.MIASMA_MIN_SCORE) {
             return { move: this.getBestMove(board, life), skills: ['onClickMiasma'] };
         }
     }
@@ -469,14 +472,14 @@ function planChargeAndObjects(c) {
     // 雷霆の巫: 帯電拡散→範囲帯電→帯電付与は対象マスをクリックする2段階スキル。手番は進まないので、
     // 撃った後の盤面・魔力で通常のスキル選択と着手へ続ける（相手にリーチがあるときは撃たない）。
     // ジャマーは相手にリーチがあっても撃つ（要の駒をライフ0にして、同じ手番で奪って崩す）
-    const chargeCost = (base) => (0, charge_1.reducedChargeCost)(base, board, (c) => this.calculateAICost(c));
+    const chargeCost = (base) => (0, charge_2.reducedChargeCost)(base, board, (c) => this.calculateAICost(c));
     if (this.character === 'electrician' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const spreadCost = chargeCost(costs.onClickChargeSpread);
         if (magic >= spreadCost) {
             const start = this.bestChargeSpreadTarget(board);
             if (start !== null) {
                 chargeClicks.push({ skill: 'onClickChargeSpread', target: start });
-                board = (0, charge_1.withCharge)(board, (0, charge_1.connectedPieces)(board, start, this.sizeOf(board)), this.seatCharacters());
+                board = (0, charge_2.withCharge)(board, (0, charge_2.connectedPieces)(board, start, this.sizeOf(board)), this.seatCharacters());
                 magic -= spreadCost;
                 this.updateShield(board);
             }
@@ -485,7 +488,7 @@ function planChargeAndObjects(c) {
             const center = this.bestChargeAreaTarget(board);
             if (center !== null) {
                 chargeClicks.push({ skill: 'onClickChargeArea', target: center });
-                board = (0, charge_1.withCharge)(board, (0, boardGeometry_1.geometryForCells)(board.length).stompRange(center), this.seatCharacters());
+                board = (0, charge_2.withCharge)(board, (0, boardGeometry_1.geometryForCells)(board.length).stompRange(center), this.seatCharacters());
                 magic -= this.calculateAICost(costs.onClickChargeArea, false, false, 'onClickChargeArea');
                 this.updateShield(board);
             }
@@ -495,7 +498,7 @@ function planChargeAndObjects(c) {
             const target = this.bestChargeOneTarget(board);
             if (target !== null) {
                 chargeClicks.push({ skill: 'onClickChargeOne', target });
-                board = (0, charge_1.withCharge)(board, [target], this.seatCharacters());
+                board = (0, charge_2.withCharge)(board, [target], this.seatCharacters());
                 magic -= oneCost;
                 this.updateShield(board);
             }
@@ -506,21 +509,21 @@ function planChargeAndObjects(c) {
         if (target !== null) {
             chargeClicks.push({ skill: 'onClickJammer', target });
             board = board.slice();
-            (0, charge_1.applyJammer)(board, target, this.sizeOf(board), this.playerSymbol);
+            (0, charge_2.applyJammer)(board, target, this.sizeOf(board), this.playerSymbol);
             magic -= this.calculateAICost(costs.onClickJammer, false, false, 'onClickJammer');
             this.updateShield(board);
         }
     }
     // 沈黙は雷なり（雷霆の巫）: 自陣の⚡を1スタック払って、相手の次の手番のスキルを封じる。相手が次の手番に固有スキルを撃てる魔力に届いていて、
     // 相手にリーチが無いときだけ撃つ（汎用サイレンスと同じ考え方。氷室の番人の絶対零度は実コスト = 10 − 氷結の数 で見積もる）
-    if (this.character === 'electrician' && availableSkills.includes(aiConstants_1.BOLT_SILENCE_IDX) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+    if (this.character === 'electrician' && availableSkills.includes(aiConstants_2.BOLT_SILENCE_IDX) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const cost = this.calculateAICost(costs.onClickBoltSilence, false, false, 'onClickBoltSilence');
-        const total = board.reduce((n, sq) => (sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq) ? n + (0, charge_1.chargeStacks)(sq) : n), 0);
-        if (total >= charge_1.BOLT_SILENCE_BOLTS && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
+        const total = board.reduce((n, sq) => (sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq) ? n + (0, charge_2.chargeStacks)(sq) : n), 0);
+        if (total >= charge_2.BOLT_SILENCE_BOLTS && magic >= cost && this.opponentsCanCastBig(board, seatMagic)) {
             // ⚡を払うコマを1つずつ選ぶ（払うたびに盤面を更新して、同じコマから2個になってもよい）
             const targets = [];
             let b = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
-            for (let k = 0; k < charge_1.BOLT_SILENCE_BOLTS; k++) {
+            for (let k = 0; k < charge_2.BOLT_SILENCE_BOLTS; k++) {
                 const t = this.boltSilenceTarget(b);
                 if (t === null)
                     break;
@@ -528,7 +531,7 @@ function planChargeAndObjects(c) {
                 const at = b[t].effects.findIndex((e) => e.effect === '⚡');
                 b[t] = { ...b[t], effects: b[t].effects.filter((_, j) => j !== at) };
             }
-            if (targets.length === charge_1.BOLT_SILENCE_BOLTS) {
+            if (targets.length === charge_2.BOLT_SILENCE_BOLTS) {
                 chargeClicks.push({ skill: 'onClickBoltSilence', target: targets[0], target2: targets[1] }); // スキル→1個目のマス→2個目のマスの順にクリックする
                 board = b;
                 magic -= cost;
@@ -539,14 +542,14 @@ function planChargeAndObjects(c) {
     // 大木（雷霆の巫）: 手番開始時のマジック+3。魔力が律速の雷霆の巫は、早めに立てるほど回収できる（コスト8 ÷ 3 ≒ 3手番で元が取れる）。
     // 相手にリーチも自分に勝ち筋も無く、盤面に空きが十分あり、🔥で壊される相手（煉獄の鍛冶師）がいないときだけ立てる。
     // 置くマスは、自分の列を潰さず、敵の列を潰せるマス（オブジェクトは列に数えず、置けないマスとして残る）
-    if (this.character === 'yinYangMaster' && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < aiConstants_1.BIG_TREE_MAX
+    if (this.character === 'yinYangMaster' && availableSkills.includes(objects_1.OBJECT_DEFS.bigTree.idx) && this.ownTrees < aiConstants_2.BIG_TREE_MAX
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
         && !this.opponents.some((o) => this.characterOf(o) === 'pyromancer')
-        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_2.BIG_TREE_MIN_EMPTY) {
         const cost = this.calculateAICost(costs.onClickBigTree, false, false, 'onClickBigTree');
         const cell = this.bestTreeCell(board);
         // コストに届かないがあと少しなら、他のスキルへの支払いを控えてためる（届いた手番に立てる）
-        if (cell !== null && magic < cost && magic >= cost - aiConstants_1.BIG_TREE_HOLD_GAP)
+        if (cell !== null && magic < cost && magic >= cost - aiConstants_2.BIG_TREE_HOLD_GAP)
             this.holdPG = cost;
         if (cell !== null && magic >= cost) {
             chargeClicks.push({ skill: 'onClickBigTree', target: cell });
@@ -559,7 +562,7 @@ function planChargeAndObjects(c) {
     // 相手にリーチも自分に勝ち筋も無いときに、自分の列を潰さず敵の列を潰せるマスへ（大木と同じ置き場所の選び方）
     if ((this.character === 'keysmith' || this.character === 'witch') && this.ownObjectCount === 0
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_2.BIG_TREE_MIN_EMPTY) {
         for (const [def, key] of [[objects_1.OBJECT_DEFS.fort, 'onClickFort'], [objects_1.OBJECT_DEFS.market, 'onClickMarket']]) {
             if (!availableSkills.includes(def.idx))
                 continue;
@@ -576,9 +579,9 @@ function planChargeAndObjects(c) {
     }
     // 雷雲（雷霆の巫）: 手番開始のたび、周囲八マスのコマのランダムな1つに⚡（雷霆以外のコマは着地ダメージ2）。敵のコマが2つ以上隣り合うマスに立てると、
     // 毎手番、帯電付与を無料で撃つのと同じ（ライフの低い敵コマが0になり奪える）。相手にリーチが無く、自分に勝ち筋が無いときだけ
-    if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.thundercloud.idx) && this.ownClouds < aiConstants_1.CLOUD_MAX
+    if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.thundercloud.idx) && this.ownClouds < aiConstants_2.CLOUD_MAX
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.CLOUD_MIN_EMPTY) {
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_2.CLOUD_MIN_EMPTY) {
         const cost = this.calculateAICost(costs.onClickThundercloud, false, false, 'onClickThundercloud');
         const cell = this.bestCloudCell(board);
         if (cell !== null && magic >= cost) {
@@ -590,9 +593,9 @@ function planChargeAndObjects(c) {
     }
     // 毒沼（雷霆の巫）: 手番開始のたび、周囲八マスの敵のコマのランダムな1つに☠。ライフ0で奪われない雷霆は、削れて0になった敵コマを一方的に奪える。
     // 敵のコマが2つ以上隣り合うマスに立てる。相手にリーチが無く、自分に勝ち筋が無いときだけ（雷雲と同じ考え方。測定は差なし: docs/tune/electrician.md 試行53）
-    if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.poisonSwamp.idx) && this.ownSwamps < aiConstants_1.CLOUD_MAX
+    if (this.character === 'electrician' && availableSkills.includes(objects_1.OBJECT_DEFS.poisonSwamp.idx) && this.ownSwamps < aiConstants_2.CLOUD_MAX
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.CLOUD_MIN_EMPTY) {
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_2.CLOUD_MIN_EMPTY) {
         const cost = this.calculateAICost(costs.onClickPoisonSwamp, false, false, 'onClickPoisonSwamp');
         const cell = this.bestCloudCell(board);
         if (cell !== null && magic >= cost) {
@@ -608,7 +611,7 @@ function planChargeAndObjects(c) {
     if (this.character === 'poisoner' && availableSkills.includes(objects_1.OBJECT_DEFS.tongueKing.idx) && this.ownTongues === 0
         && this.opponents.some((o) => this.characterOf(o) === 'cryomancer')
         && this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0
-        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_1.BIG_TREE_MIN_EMPTY) {
+        && (0, util_1.findEmptyIndexes)(board).length >= aiConstants_2.BIG_TREE_MIN_EMPTY) {
         const cost = this.calculateAICost(costs.onClickTongueKing, false, false, 'onClickTongueKing');
         const cell = this.bestTreeCell(board);
         if (cell !== null && magic >= cost) {
@@ -628,11 +631,11 @@ function planOverflowCasts(c) {
     let { board, magic } = c;
     // 氷室の番人の絶対零度（クリック不要・手番は続く）/ 煉獄の鍛冶師の業火（どちらもクリック不要・手番は続く）
     if (this.character === 'cryomancer') {
-        const cost = (0, thermal_1.reducedGlacierCost)(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
+        const cost = (0, thermal_2.reducedGlacierCost)(costs.onClickGlacier, this.glacierCharge, (c) => this.calculateAICost(c));
         if (!this.glacierPending && magic >= cost && this.shouldGlacier(board)) {
             chargeClicks.push({ skill: 'onClickGlacier' });
             board = board.slice();
-            (0, thermal_1.freezeAll)(board);
+            (0, thermal_2.freezeAll)(board);
             magic -= cost;
         }
     }
@@ -640,17 +643,17 @@ function planOverflowCasts(c) {
     if (this.character === 'cryomancer' && availableSkills.includes(47) && !this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && c === 'necromancer')) {
         const freezeCost = this.calculateAICost(costs.onClickCryoFreeze, false, false, 'onClickCryoFreeze');
         const shatterCost = this.calculateAICost(costs.onClickShatter, false, false, 'onClickShatter');
-        for (let n = 0; n < aiConstants_1.SHATTER_MAX_PER_TURN; n++) {
+        for (let n = 0; n < aiConstants_2.SHATTER_MAX_PER_TURN; n++) {
             const plan = this.bestShatterTarget(board, freezeCost);
-            if (plan === null || magic - plan.freezes * freezeCost - shatterCost < aiConstants_1.SHATTER_RESERVE)
+            if (plan === null || magic - plan.freezes * freezeCost - shatterCost < aiConstants_2.SHATTER_RESERVE)
                 break;
             for (let k = 0; k < plan.freezes; k++)
                 chargeClicks.push({ skill: 'onClickUseLock', target: plan.cell });
             chargeClicks.push({ skill: 'onClickShatter', target: plan.cell });
             board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
             for (let k = 0; k < plan.freezes; k++)
-                (0, thermal_1.freeze)(board, [plan.cell]);
-            (0, thermal_1.shatter)(board, plan.cell);
+                (0, thermal_2.freeze)(board, [plan.cell]);
+            (0, thermal_2.shatter)(board, plan.cell);
             this.updateShield(board);
             magic -= plan.freezes * freezeCost + shatterCost;
         }
@@ -658,10 +661,10 @@ function planOverflowCasts(c) {
     // 凩の魔女の虎落笛（クリック不要・手番は続く）: 自陣の🍂が2枚以上あり、ライフの残った敵コマ2つ以上に当たるときに撃つ
     if (this.character === 'witch') {
         const cost = this.calculateAICost(costs.onClickMogaribue, false, false, 'onClickMogaribue');
-        if (magic >= cost && (0, thermal_1.mogaribueDamage)(board, this.playerSymbol) >= 2 && (0, thermal_1.mogaribueTargets)(board, this.playerSymbol, this.seatCharacters()).filter((i) => !this.shield.has(i)).length >= 2) {
+        if (magic >= cost && (0, thermal_2.mogaribueDamage)(board, this.playerSymbol) >= 2 && (0, thermal_2.mogaribueTargets)(board, this.playerSymbol, this.seatCharacters()).filter((i) => !this.shield.has(i)).length >= 2) {
             chargeClicks.push({ skill: 'onClickMogaribue' });
             board = board.slice();
-            (0, thermal_1.mogaribue)(board, this.playerSymbol, this.seatCharacters());
+            (0, thermal_2.mogaribue)(board, this.playerSymbol, this.seatCharacters());
             magic -= cost;
             this.updateShield(board);
         }
@@ -670,7 +673,7 @@ function planOverflowCasts(c) {
     // 毒は着手のたびに減衰するので、撃った手番のうちに倍にするのが効く。どちらも対象に自陣を巻き込みすぎないときだけ
     if (this.character === 'poisoner' && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const pandemicCost = this.calculateAICost(costs.onClickPandemic, false, true, 'onClickPandemic');
-        if (availableSkills.includes(19) && magic - pandemicCost >= aiConstants_1.POISON_RICH_RESERVE) {
+        if (availableSkills.includes(19) && magic - pandemicCost >= aiConstants_2.POISON_RICH_RESERVE) {
             const center = this.bestPandemicTarget(board);
             if (center !== null) {
                 chargeClicks.push({ skill: 'onClickPandemic', target: center });
@@ -682,11 +685,11 @@ function planOverflowCasts(c) {
             }
         }
         const intensifyCost = this.calculateAICost(costs.onClickIntensify, false, true, 'onClickIntensify');
-        if (availableSkills.includes(18) && magic - intensifyCost >= aiConstants_1.POISON_RICH_RESERVE) {
+        if (availableSkills.includes(18) && magic - intensifyCost >= aiConstants_2.POISON_RICH_RESERVE) {
             const foe = board.reduce((n, sq) => (this.isEnemy(sq.player) ? n + (0, poison_1.activePoison)(sq) : n), 0);
             // 敵の1マスの毒が十分大きい（ライフを超える）なら、もう倍にしても意味がない。🔑ロック中のコマは毒で死なないので、撃ち続けると毒が倍々に増えて試合が終わらなくなる
             const foeMax = board.reduce((m, sq) => (this.isEnemy(sq.player) ? Math.max(m, (0, poison_1.activePoison)(sq)) : m), 0);
-            if (foe >= aiConstants_1.INTENSIFY_MIN_FOE_POISON && foe > (0, poison_1.poisonCountFor)(board, this.playerSymbol) + 1 && foeMax < aiConstants_1.INTENSIFY_MAX_CELL_POISON) {
+            if (foe >= aiConstants_2.INTENSIFY_MIN_FOE_POISON && foe > (0, poison_1.poisonCountFor)(board, this.playerSymbol) + 1 && foeMax < aiConstants_2.INTENSIFY_MAX_CELL_POISON) {
                 chargeClicks.push({ skill: 'onClickIntensify' });
                 board = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
                 (0, poison_1.intensify)(board, this.characters);
@@ -698,11 +701,11 @@ function planOverflowCasts(c) {
     // 浄化（汎用スキル）: 自陣のコマ（ライフ>0）の状態異常が合計3スタック以上で撃つ。雷霆の巫の⚡無敵は数えない
     if (availableSkills.includes(32)) {
         const cost = this.calculateAICost(costs.onClickCleanse, false, false, 'onClickCleanse');
-        const stacks = board.reduce((n, sq, i) => (sq.player === this.playerSymbol && sq.bind > 0 ? n + (0, thermal_1.ailmentStacks)(sq) - (this.shield.has(i) ? (0, charge_1.chargeStacks)(sq) : 0) : n), 0);
+        const stacks = board.reduce((n, sq, i) => (sq.player === this.playerSymbol && sq.bind > 0 ? n + (0, thermal_2.ailmentStacks)(sq) - (this.shield.has(i) ? (0, charge_2.chargeStacks)(sq) : 0) : n), 0);
         if (magic >= cost && stacks >= 3) {
             chargeClicks.push({ skill: 'onClickCleanse' });
             board = board.slice();
-            (0, thermal_1.cleanse)(board, this.playerSymbol);
+            (0, thermal_2.cleanse)(board, this.playerSymbol);
             magic -= cost;
             this.updateShield(board);
         }
@@ -719,9 +722,9 @@ function planBudsAndFire(c) {
     {
         const size = this.sizeOf(board);
         const threatened = this.characters.some((c, seat) => seat !== (0, Player_1.seatOf)(this.playerSymbol) && (c === 'cryomancer' || c === 'pyromancer'));
-        const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + (0, thermal_1.activeBuds)(sq, this.budGuard) : n), 0);
+        const ownBuds = () => board.reduce((n, sq) => (sq.player === this.playerSymbol ? n + (0, thermal_2.activeBuds)(sq, this.budGuard) : n), 0);
         // 冬至の種子: 自陣の休眠マス（氷結中）の🌱が2以上あり、まだガード中でなければ（ガード中は🌱が働く）
-        const dormantBuds = board.reduce((n, sq) => (sq.player === this.playerSymbol && (0, thermal_1.isDormant)(sq) ? n + (0, thermal_1.budStacks)(sq) : n), 0);
+        const dormantBuds = board.reduce((n, sq) => (sq.player === this.playerSymbol && (0, thermal_2.isDormant)(sq) ? n + (0, thermal_2.budStacks)(sq) : n), 0);
         if (availableSkills.includes(34) && dormantBuds >= 2 && !this.budGuard && magic >= this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice')) {
             chargeClicks.push({ skill: 'onClickSolstice' });
             magic -= this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice');
@@ -729,14 +732,14 @@ function planBudsAndFire(c) {
         else if (availableSkills.includes(33) && threatened && this.character !== 'magician' && ownBuds() >= 4 && magic >= this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve')) {
             chargeClicks.push({ skill: 'onClickHarvestEve' });
             board = board.slice();
-            magic += (0, thermal_1.harvestBuds)(board, this.playerSymbol, this.budGuard) - this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve');
+            magic += (0, thermal_2.harvestBuds)(board, this.playerSymbol, this.budGuard) - this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve');
         }
         if (availableSkills.includes(35) && magic >= this.calculateAICost(costs.onClickSucker, false, false, 'onClickSucker')) {
             let best = -1, bestN = 1;
             board.forEach((sq, i) => {
-                if (sq.player !== this.playerSymbol || (0, thermal_1.budStacks)(sq) === 0 || this.shield.has(i))
+                if (sq.player !== this.playerSymbol || (0, thermal_2.budStacks)(sq) === 0 || this.shield.has(i))
                     return;
-                const n = (0, thermal_1.budReceivers)(board, i, this.playerSymbol, size).length;
+                const n = (0, thermal_2.budReceivers)(board, i, this.playerSymbol, size).length;
                 if (n > bestN) {
                     best = i;
                     bestN = n;
@@ -745,55 +748,55 @@ function planBudsAndFire(c) {
             if (best !== -1) {
                 chargeClicks.push({ skill: 'onClickSucker', target: best });
                 board = board.slice();
-                (0, thermal_1.graft)(board, best, this.playerSymbol, size, (0, thermal_1.budReceivers)(board, best, this.playerSymbol, size).slice(0, thermal_1.GRAFT_MAX));
+                (0, thermal_2.graft)(board, best, this.playerSymbol, size, (0, thermal_2.budReceivers)(board, best, this.playerSymbol, size).slice(0, thermal_2.GRAFT_MAX));
                 magic -= this.calculateAICost(costs.onClickSucker, false, false, 'onClickSucker');
             }
         }
         // 🍂落ち葉: 敵陣の🍂が2枚以上でコストが重いなら焚き火の唄で払う。自陣の🍂が3枚以上たまったら1枚を腐葉土で🌱に。
         // 一葉知秋は、自陣の🌱が多く敵に🌱が無く、相手がスキルに頼っている（魔力が多い）ときだけ（盤面の🌱が全部🍂になる）
         const leafCost = (key) => this.calculateAICost(costs[key], false, false, key);
-        if (availableSkills.includes(66) && (0, thermal_1.leafSurcharge)(board, this.playerSymbol) >= 2 && (0, thermal_1.bonfireTargets)(board, this.playerSymbol).length > 0 && magic >= leafCost('onClickBonfire')) {
+        if (availableSkills.includes(66) && (0, thermal_2.leafSurcharge)(board, this.playerSymbol) >= 2 && (0, thermal_2.bonfireTargets)(board, this.playerSymbol).length > 0 && magic >= leafCost('onClickBonfire')) {
             chargeClicks.push({ skill: 'onClickBonfire' });
             board = board.slice();
-            (0, thermal_1.bonfire)(board, this.playerSymbol);
+            (0, thermal_2.bonfire)(board, this.playerSymbol);
             magic -= leafCost('onClickBonfire');
         }
         if (availableSkills.includes(67) && magic >= leafCost('onClickMulch')) {
-            const leaves = (0, thermal_1.mulchCandidates)(board, this.playerSymbol);
+            const leaves = (0, thermal_2.mulchCandidates)(board, this.playerSymbol);
             if (leaves.length >= 3) {
                 chargeClicks.push({ skill: 'onClickMulch' });
                 board = board.slice();
-                (0, thermal_1.mulch)(board, leaves[0]);
+                (0, thermal_2.mulch)(board, leaves[0]);
                 magic -= leafCost('onClickMulch');
             }
         }
         if (availableSkills.includes(68) && opponentMagic >= 6 && ownBuds() >= 4 && magic >= leafCost('onClickAutumn')) {
-            const enemyBuds = board.reduce((n, sq) => (sq.player && sq.player !== this.playerSymbol ? n + (0, thermal_1.budStacks)(sq) : n), 0);
+            const enemyBuds = board.reduce((n, sq) => (sq.player && sq.player !== this.playerSymbol ? n + (0, thermal_2.budStacks)(sq) : n), 0);
             if (enemyBuds === 0) {
                 chargeClicks.push({ skill: 'onClickAutumn' });
                 board = board.slice();
-                (0, thermal_1.autumn)(board);
+                (0, thermal_2.autumn)(board);
                 magic -= leafCost('onClickAutumn');
             }
         }
         if (availableSkills.includes(36) && magic >= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne')) {
-            const cands = (0, thermal_1.sowCandidates)(board, this.playerSymbol);
-            if (cands.length >= thermal_1.SOW_COUNT && ownBuds() < thermal_1.SOW_COUNT) {
+            const cands = (0, thermal_2.sowCandidates)(board, this.playerSymbol);
+            if (cands.length >= thermal_2.SOW_COUNT && ownBuds() < thermal_2.SOW_COUNT) {
                 chargeClicks.push({ skill: 'onClickWindborne' });
                 // 実際の配置はランダム。AIの内部盤面は代表として先頭のマスに足して見積もる
                 board = board.slice();
-                (0, thermal_1.sow)(board, cands.slice(0, thermal_1.SOW_COUNT));
+                (0, thermal_2.sow)(board, cands.slice(0, thermal_2.SOW_COUNT));
                 magic -= this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne');
             }
         }
     }
     if (this.character === 'pyromancer') {
-        const targets = (0, thermal_1.infernoTargets)(board, this.playerSymbol, this.characters);
+        const targets = (0, thermal_2.infernoTargets)(board, this.playerSymbol, this.characters);
         const worth = targets.length > 0 && this.shouldInferno(board);
         // 業火は前回の業火から3回スキルを使うと無料。クリック不要の軽いスキルを足りない回数だけ先に撃ち、
         // その合計が業火の通常コスト以下なら連打してから無料で撃つ（旧sim AI の pyroChain と同方針）
         const kinds = new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]);
-        const need = this.infernoReady ? 0 : thermal_1.INFERNO_FREE_SKILLS - kinds.size;
+        const need = this.infernoReady ? 0 : thermal_2.INFERNO_FREE_SKILLS - kinds.size;
         const normal = this.calculateAICost(costs.onClickInferno, false, false, 'onClickInferno');
         // 無料権は手番を跨いで持ち越せるので、業火を撃てる状況でなくても先に貯める
         if (need > 0) {
@@ -805,10 +808,10 @@ function planBudsAndFire(c) {
                 { idx: 56, skill: 'onClickVitalMarkdown', cost: this.calculateAICost(costs.onClickVitalMarkdown, false, false, 'onClickVitalMarkdown'), ok: true },
                 { idx: 0, skill: 'onClickAddLife', cost: this.calculateAICost(costs.onClickAddLife, false, false, 'onClickAddLife'), ok: true },
                 { idx: 1, skill: 'onClickBibine', cost: this.calculateAICost(costs.onClickBibine, false, false, 'onClickBibine'), ok: true },
-                { idx: 36, skill: 'onClickWindborne', cost: this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne'), ok: (0, thermal_1.sowCandidates)(board, this.playerSymbol).length > 0 },
+                { idx: 36, skill: 'onClickWindborne', cost: this.calculateAICost(costs.onClickWindborne, false, false, 'onClickWindborne'), ok: (0, thermal_2.sowCandidates)(board, this.playerSymbol).length > 0 },
                 { idx: 34, skill: 'onClickSolstice', cost: this.calculateAICost(costs.onClickSolstice, false, false, 'onClickSolstice'), ok: !this.budGuard && mine(() => true) },
-                { idx: 32, skill: 'onClickCleanse', cost: this.calculateAICost(costs.onClickCleanse, false, false, 'onClickCleanse'), ok: mine((sq) => (0, thermal_1.ailmentStacks)(sq) > 0) },
-                { idx: 33, skill: 'onClickHarvestEve', cost: this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve'), ok: mine((sq) => (0, thermal_1.activeBuds)(sq, this.budGuard) > 0) },
+                { idx: 32, skill: 'onClickCleanse', cost: this.calculateAICost(costs.onClickCleanse, false, false, 'onClickCleanse'), ok: mine((sq) => (0, thermal_2.ailmentStacks)(sq) > 0) },
+                { idx: 33, skill: 'onClickHarvestEve', cost: this.calculateAICost(costs.onClickHarvestEve, false, false, 'onClickHarvestEve'), ok: mine((sq) => (0, thermal_2.activeBuds)(sq, this.budGuard) > 0) },
             ].filter((f) => availableSkills.includes(f.idx) && f.ok && !kinds.has(f.skill));
             const chosen = [...fillers].sort((a, b) => a.cost - b.cost).slice(0, need);
             const total = chosen.reduce((n, f) => n + f.cost, 0);
@@ -817,11 +820,11 @@ function planBudsAndFire(c) {
                     chargeClicks.push({ skill: f.skill });
                     board = board.slice();
                     if (f.idx === 36)
-                        (0, thermal_1.sow)(board, (0, thermal_1.sowCandidates)(board, this.playerSymbol).slice(0, thermal_1.SOW_COUNT));
+                        (0, thermal_2.sow)(board, (0, thermal_2.sowCandidates)(board, this.playerSymbol).slice(0, thermal_2.SOW_COUNT));
                     else if (f.idx === 32)
-                        (0, thermal_1.cleanse)(board, this.playerSymbol);
+                        (0, thermal_2.cleanse)(board, this.playerSymbol);
                     else if (f.idx === 33)
-                        magic += (0, thermal_1.harvestBuds)(board, this.playerSymbol, this.budGuard);
+                        magic += (0, thermal_2.harvestBuds)(board, this.playerSymbol, this.budGuard);
                     magic -= f.cost;
                 }
             }
@@ -829,7 +832,7 @@ function planBudsAndFire(c) {
         // 軽減札で業火が安くなる/撃てるようになるなら先に撃つ（旧sim AI の discountInferno と同方針）。
         // 計画中の軽減量は plannedCut に持ち、業火の見積もりから引く
         let plannedCut = 0;
-        const freeNow = () => this.infernoReady || new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]).size >= thermal_1.INFERNO_FREE_SKILLS;
+        const freeNow = () => this.infernoReady || new Set([...Array.from(this.skillKinds), ...chargeClicks.map((c) => c.skill)]).size >= thermal_2.INFERNO_FREE_SKILLS;
         const infernoBase = () => this.calculateAICost(costs.onClickInferno, false, false, 'onClickInferno');
         const infernoNow = () => (freeNow() ? 0 : Math.max(1, infernoBase() - plannedCut));
         if (worth && !freeNow()) {
@@ -878,7 +881,7 @@ function planBudsAndFire(c) {
             if (t !== null) {
                 chargeClicks.push({ skill: 'onClickTinder', target: t });
                 board = board.slice();
-                (0, thermal_1.ignite)(board, [t], this.sizeOf(board), 1);
+                (0, thermal_2.ignite)(board, [t], this.sizeOf(board), 1);
                 this.updateShield(board);
                 magic -= tinderCost;
             }
@@ -887,7 +890,7 @@ function planBudsAndFire(c) {
         const sparkCost = this.calculateAICost(costs.onClickSpark, false, false, 'onClickSpark');
         if (!necroFoe && availableSkills.includes(97) && !this.skillKinds.has('onClickSpark') && !chargeClicks.some((c) => c.skill === 'onClickSpark') && magic >= sparkCost
             && !(worth && magic >= infernoNow() && magic - sparkCost < infernoNow())
-            && (0, thermal_1.fireWheelTargets)(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2) {
+            && (0, thermal_2.fireWheelTargets)(board, this.playerSymbol, (sq, i) => this.shield.has(i) || sq.effects.some((e) => e.effect === '🔑')).length >= 2) {
             chargeClicks.push({ skill: 'onClickSpark' });
             magic -= sparkCost;
         }
@@ -896,7 +899,7 @@ function planBudsAndFire(c) {
             if (t !== null) {
                 chargeClicks.push({ skill: 'onClickIgnite', target: t });
                 board = board.slice();
-                (0, thermal_1.ignite)(board, [t], this.sizeOf(board), 1);
+                (0, thermal_2.ignite)(board, [t], this.sizeOf(board), 1);
                 this.updateShield(board);
                 magic -= igniteCost;
             }
@@ -905,19 +908,19 @@ function planBudsAndFire(c) {
         if (magic >= cost && worth) {
             chargeClicks.push({ skill: 'onClickInferno' });
             board = board.slice();
-            (0, thermal_1.ignite)(board, targets, this.sizeOf(board), thermal_1.INFERNO_STACKS);
+            (0, thermal_2.ignite)(board, targets, this.sizeOf(board), thermal_2.INFERNO_STACKS);
             magic -= cost;
         }
         // バーンアウト: 🔥のマスを全て壊す。敵のコマが自陣より2つ以上多く壊れるなら撃つ（業火の直後は敵全員が🔥2つなので、合計4以上でタダになりやすい）
         if (availableSkills.includes(61)) {
-            const burnTargets = (0, thermal_1.burnoutTargets)(board, this.characters);
+            const burnTargets = (0, thermal_2.burnoutTargets)(board, this.characters);
             const foes = burnTargets.filter((k) => this.isEnemy(board[k].player)).length;
             const own = burnTargets.filter((k) => board[k].player === this.playerSymbol).length;
-            const burnCost = (0, thermal_1.burnoutCostOf)(costs.onClickBurnout, (0, thermal_1.totalFlames)(board), (c) => this.calculateAICost(c, false, false, 'onClickBurnout'));
+            const burnCost = (0, thermal_2.burnoutCostOf)(costs.onClickBurnout, (0, thermal_2.totalFlames)(board), (c) => this.calculateAICost(c, false, false, 'onClickBurnout'));
             if (foes - own >= 2 && magic >= burnCost) {
                 chargeClicks.push({ skill: 'onClickBurnout' });
                 board = board.slice();
-                (0, thermal_1.burnout)(board, burnTargets);
+                (0, thermal_2.burnout)(board, burnTargets);
                 magic -= burnCost;
             }
         }
@@ -963,14 +966,14 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         // 氷室が相手のときは先にロックしない: 手札固定(縮地・特売・返し特売・一寸の虫)を入れた後は、ロックに魔力を回すほうが裏目（対氷室 35.0→66.0%, seed151/300。LC=0）。鍛冶師は先にロックが最良（81.7 vs 71.0/70.7, seed152/300）
         if (this.character === 'magician' && this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'pyromancer')) {
             const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
-            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_1.CRYO_LOCK_MAX;
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_2.CRYO_LOCK_MAX;
             const cells = [];
-            const unlocked = (sq) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && (0, thermal_1.lockable)(sq);
-            for (let i = 0; i < board.length && cells.length < Math.min(aiConstants_1.CRYO_LOCK_MAX, afford); i++) {
+            const unlocked = (sq) => sq.player === this.playerSymbol && !sq.effects.some((e) => e.effect === '🔑') && (0, thermal_2.lockable)(sq);
+            for (let i = 0; i < board.length && cells.length < Math.min(aiConstants_2.CRYO_LOCK_MAX, afford); i++) {
                 if (unlocked(board[i]) && board[i].effects.some((e) => e.effect === '🌱'))
                     cells.push(i);
             }
-            for (let i = 0; i < board.length && cells.length < Math.min(aiConstants_1.CRYO_LOCK_MAX, afford); i++) {
+            for (let i = 0; i < board.length && cells.length < Math.min(aiConstants_2.CRYO_LOCK_MAX, afford); i++) {
                 if (unlocked(board[i]) && !cells.includes(i))
                     cells.push(i);
             }
@@ -990,17 +993,17 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         }
         // 対ネクロ: 蘇生はライフ0のコマを吸収する（ロック中のコマは奪われない）。吸収されそうな自陣のコマ（ライフ1以下で未ロック）を先にロックし、
         // 切れそうなロック（残り NECRO_LOCK_REFRESH 以下）は重ねて延長する。効いたキャラだけ（NECRO_LOCK_CHARACTERS）
-        if (aiConstants_1.NECRO_LOCK_CHARACTERS.includes(this.character) && this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer')) {
+        if (aiConstants_2.NECRO_LOCK_CHARACTERS.includes(this.character) && this.opponents.some((o) => this.characters[(0, Player_1.seatOf)(o)] === 'necromancer')) {
             const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
-            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_1.NECRO_LOCK_MAX;
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_2.NECRO_LOCK_MAX;
             const guardCells = [];
-            for (let i = 0; i < board.length && guardCells.length < Math.min(aiConstants_1.NECRO_LOCK_MAX, afford); i++) {
+            for (let i = 0; i < board.length && guardCells.length < Math.min(aiConstants_2.NECRO_LOCK_MAX, afford); i++) {
                 const sq = board[i];
-                if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || !(0, thermal_1.lockable)(sq) || sq.bind > 1)
+                if (sq.player !== this.playerSymbol || (0, util_1.isObject)(sq) || !(0, thermal_2.lockable)(sq) || sq.bind > 1)
                     continue;
                 const locked = sq.effects.some((e) => e.effect === '🔑');
                 const stack = (0, lock_1.lockStack)(sq);
-                if (!locked || (stack > 0 && stack <= aiConstants_1.NECRO_LOCK_REFRESH))
+                if (!locked || (stack > 0 && stack <= aiConstants_2.NECRO_LOCK_REFRESH))
                     guardCells.push(i);
             }
             if (guardCells.length === 1)
@@ -1013,11 +1016,11 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         // A/B: 環境勝率 +2.9pt(seed2/200)・+3.0pt(seed3/400)・+3.5pt(seed4/400)）
         if (this.character === 'magician') {
             const lockCost = this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock');
-            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_1.MAGICIAN_MAX_LOCKS;
+            const afford = lockCost > 0 ? Math.floor(magic / lockCost) : aiConstants_2.MAGICIAN_MAX_LOCKS;
             const budCells = [];
-            for (let i = 0; i < board.length && budCells.length < Math.min(aiConstants_1.MAGICIAN_MAX_LOCKS, afford); i++) {
+            for (let i = 0; i < board.length && budCells.length < Math.min(aiConstants_2.MAGICIAN_MAX_LOCKS, afford); i++) {
                 const sq = board[i];
-                if (sq.player === this.playerSymbol && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && (0, thermal_1.lockable)(sq))
+                if (sq.player === this.playerSymbol && sq.effects.some((e) => e.effect === '🌱') && !sq.effects.some((e) => e.effect === '🔑') && (0, thermal_2.lockable)(sq))
                     budCells.push(i);
             }
             if (budCells.length === 1) {
@@ -1035,7 +1038,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     if (this.character === 'keysmith' &&
         this.countReaches(board, this.playerSymbol) === 0 &&
         this.opponents.every((o) => this.countReaches(board, o) === 0) &&
-        this.myEmptyLocks(board) < aiConstants_1.KEYSMITH_COMBO_EMPTY_LOCK_MAX &&
+        this.myEmptyLocks(board) < aiConstants_2.KEYSMITH_COMBO_EMPTY_LOCK_MAX &&
         magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock')) {
         const combo = this.bestLockCombo(board, life);
         if (combo !== null)
@@ -1071,7 +1074,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     if ((this.hasEmptyLock || this.character === 'keysmith') &&
         this.countReaches(board, this.playerSymbol) === 0 &&
         magic >= this.calculateAICost(costs.onClickUseLock, false, false, 'onClickUseLock') &&
-        this.myEmptyLocks(board) < aiConstants_1.EMPTY_LOCK_MAX) {
+        this.myEmptyLocks(board) < aiConstants_2.EMPTY_LOCK_MAX) {
         const target = this.bestEmptyLockTarget(board);
         if (target !== null) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
@@ -1086,7 +1089,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     // 「次に打つ」の軽減をそちらが消費してしまうので、そのときは行わない
     const holdNoSpend = holdFlood && this.opponents.every((o) => this.countReaches(board, o) === 0); // 相手のリーチがあるときは防御のため通常どおり
     let planned = holdNoSpend ? [] : [...this.chooseSkills(board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)];
-    if (chargeClicks.every((c) => (0, discount_1.isDiscountSkill)(c.skill)) && !planned.some((s) => aiConstants_1.TURN_ENDING_SKILLS.includes(s))) {
+    if (chargeClicks.every((c) => (0, discount_1.isDiscountSkill)(c.skill)) && !planned.some((s) => aiConstants_2.TURN_ENDING_SKILLS.includes(s))) {
         const baseLeft = magic - this.lastSpent;
         const reducers = [
             { idx: 60, key: 'onClickCounterMarkdown', cut: 3 },
@@ -1129,7 +1132,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     const skills = planned;
     // 大岩(136): 相手に即勝ちの手（リーチの要の空きマス）があるとき、そのマスに大岩を置いて塞ぐ。大岩は2ターンのロック付きでライフ5・減衰しないので、
     // ライフ1〜2で減衰してすぐ消える自コマの壁より持つ。コスト1で1手番に複数置ける。ネクロマンサーだけ（#399）
-    if (this.character === 'necromancer' && availableSkills.includes(objects_1.OBJECT_DEFS.boulder.idx) && !skills.some(sk => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+    if (this.character === 'necromancer' && availableSkills.includes(objects_1.OBJECT_DEFS.boulder.idx) && !skills.some(sk => aiConstants_2.TURN_ENDING_SKILLS.includes(sk))) {
         const threats = Array.from(new Set(this.opponents.flatMap((o) => this.findThreatSquares(board, o)))).filter((c) => (0, objects_1.objectLandable)(board[c]));
         const bcost = this.calculateAICost(costs.onClickBoulder, false, false, 'onClickBoulder');
         let left = magic - this.lastSpent;
@@ -1150,7 +1153,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
     }
     // オブジェクト(#399): ネクロマンサーだけ。相手のリーチが無く魔力に余裕がある手番に、聖域・砦・生命の泉・大木・市場などを自陣の近くに1つずつ設置する。
     // 設置は着手を消費しない（スキル→空きマスのクリック→通常の着手）ので、着手は設置後の盤面で選び直す
-    if (this.character === 'necromancer' && !skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
+    if (this.character === 'necromancer' && !skills.some(s => aiConstants_2.TURN_ENDING_SKILLS.includes(s)) && this.opponents.every((o) => this.countReaches(board, o) === 0)) {
         const pick = planObject.call(this, board, magic - this.lastSpent, costs, availableSkills, availableSkills.includes(92) || (necroRemain === 0 && turn_1.NECROMANCY.baseCost - necroCost >= 2));
         if (pick) {
             const post = board.map((sq) => ({ ...sq, effects: [...sq.effects] }));
@@ -1161,7 +1164,7 @@ function planMove(board, magic, costs, opponentMagic, life, availableSkills, tok
         }
     }
     // ターン終了スキルの場合は手を打たない
-    if (skills.some(s => aiConstants_1.TURN_ENDING_SKILLS.includes(s))) {
+    if (skills.some(s => aiConstants_2.TURN_ENDING_SKILLS.includes(s))) {
         return { move: null, skills, chargeClicks: chargeResult };
     }
     // 蘇生はこのターンから有効化し、敵マスを攻撃対象に含める
@@ -1182,7 +1185,141 @@ exports.planMoveMethods = {
      * 1手番の計画。魔力が大きく余っているのに使う額が少ない計画なら、手札を引き直す（引き直し回数を超えて RICH_EXTRA_REROLLS 回まで。
      * シャッフルは1コスト）。巨人のストンプのように手札の外で撃つ札があるキャラも、計画を立てたうえで額を見る
      */
+    /**
+     * 1手番の計画に、オブジェクトへの対応を足す:
+     *  - お一人様限りの札に縛られているとき: コマを置くスキルを計画しない（トークンを撃つと、選んだ着手が打てなくなる）
+     *  - 手札の解体・地ならしで、価値の高い敵のオブジェクトを壊す
+     *  - 手札のオブジェクトを、静かな手番に先に置く（早く置くほど働く手番が増える）。置いた分の魔力を引いて残りを計画する
+     */
     makeMove(...argsIn) {
+        var _a, _b, _c, _d, _e;
+        const real = argsIn[0];
+        const me = this.playerSymbol;
+        const solo = (0, objects_1.enemyObjectActive)(real, me, 'soloSign');
+        let args = argsIn;
+        if (solo && !args[6]) {
+            args = [...args];
+            args[6] = true;
+        }
+        const baseArgs = args;
+        const pre = this.planObjectPlays(args);
+        if (pre.clicks.length > 0) {
+            args = [...args];
+            args[0] = pre.board;
+            args[1] = args[1] - pre.spent;
+        }
+        let result = this.makeMoveCore(...args);
+        if (solo) {
+            const placing = (sk) => objects_1.ONE_PIECE_MULTI_KEYS.has(sk) || (result.move !== null && !real[result.move].player && lifeBan_1.LIFE_BAN_PLACING_KEYS.has(sk));
+            if (result.skills.some(placing) || ((_a = result.chargeClicks) === null || _a === void 0 ? void 0 : _a.some((c) => placing(c.skill)))) {
+                result = { ...result, skills: result.skills.filter((sk) => !placing(sk)), chargeClicks: (_b = result.chargeClicks) === null || _b === void 0 ? void 0 : _b.filter((c) => !placing(c.skill)) };
+            }
+        }
+        if (pre.clicks.length === 0)
+            return result;
+        // 引き直し・ヘイルメアリー・着地を見て打ち直す計画は、対象クリックの列に載せられない。オブジェクトは次の機会に回す
+        if (result.reroll || result.hailMary || result.skills.some((sk) => sk === 'onClickChargeToken' || sk === 'onClickDoubleChargeToken'))
+            return this.makeMoveCore(...baseArgs);
+        const used = new Set([...((_c = result.lockTargets) !== null && _c !== void 0 ? _c : []), ...(result.stompTarget !== undefined ? [result.stompTarget] : []), ...(result.move !== null ? [result.move] : []),
+            ...((_d = result.chargeClicks) !== null && _d !== void 0 ? _d : []).flatMap((c) => [c.target, c.target2].filter((t) => t !== undefined))]);
+        const clicks = pre.clicks.filter((c) => c.target === undefined || c.skill === 'onClickDemolish' || !used.has(c.target));
+        if (clicks.length === 0)
+            return result;
+        return { ...result, chargeClicks: [...clicks, ...((_e = result.chargeClicks) !== null && _e !== void 0 ? _e : [])] };
+    },
+    /** 解体・地ならし・手札のオブジェクト設置の対象クリックと、設置後の盤面・払う魔力。該当しなければ clicks は空 */
+    planObjectPlays(args) {
+        var _a;
+        const [real, magic, costs, , , hand] = args;
+        const me = this.playerSymbol;
+        const none = { clicks: [], board: real, spent: 0 };
+        if (this.character === 'dragonMiko' || this.character === 'necromancer')
+            return none; // 専用の計画がある
+        const clicks = [];
+        let board = real;
+        let left = magic;
+        const costOf = (key) => this.calculateAICost(costs[key], false, false, key);
+        // 敵の建造物（氷結・ロック中は壊せない）と、その価値（設置の基礎コスト。自分を縛る種類は相手表の値を魔力に直す）
+        const foes = real.map((sq, i) => ({ sq, i })).filter(({ sq }) => (0, ObjectKind_1.isBuilding)(sq) && !!sq.player && sq.player !== me && !(0, thermal_1.isDormant)(sq) && !sq.effects.some((e) => e.effect === '🔑') && !(0, charge_1.isGuarded)(sq, this.characters));
+        const worth = (sq) => {
+            var _a, _b;
+            const kind = sq.object;
+            const bind = ((_b = (_a = aiConstants_1.OBJECT_VS[kind]) === null || _a === void 0 ? void 0 : _a[this.character]) !== null && _b !== void 0 ? _b : 0) / aiConstants_1.OBJECT_PT_PER_MAGIC;
+            return Math.max(costs[objects_1.OBJECT_DEFS[kind].costKey], bind);
+        };
+        if (foes.length > 0) {
+            const total = foes.reduce((p, f) => p + worth(f.sq), 0);
+            if (hand.includes(116) && foes.length >= 2 && total >= aiConstants_1.LEVEL_ALL_MIN_VALUE && left >= costOf('onClickLevelAll')) {
+                clicks.push({ skill: 'onClickLevelAll' });
+                left -= costOf('onClickLevelAll');
+                board = board.map((sq, i) => (foes.some((f) => f.i === i) ? { player: undefined, bind: 0, effects: [] } : sq));
+            }
+            else if (hand.includes(114) && left >= costOf('onClickDemolish')) {
+                const best = foes.reduce((p, f) => (worth(f.sq) > worth(p.sq) ? f : p));
+                if (worth(best.sq) >= aiConstants_1.DEMOLISH_MIN_VALUE) {
+                    clicks.push({ skill: 'onClickDemolish', target: best.i });
+                    left -= costOf('onClickDemolish');
+                    board = board.map((sq, i) => (i === best.i ? { player: undefined, bind: 0, effects: [] } : sq));
+                }
+            }
+        }
+        // 設置: 相手にリーチも自分に勝ち筋も無い手番に、1手番1つ
+        const masked = board.map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq));
+        const quiet = this.opponents.every((o) => this.countReaches(masked, o) === 0) && this.countReaches(masked, me) === 0 && (0, util_1.findEmptyIndexes)(masked).length >= aiConstants_2.BIG_TREE_MIN_EMPTY;
+        const bespoke = { keysmith: ['fort', 'market'], witch: ['fort', 'market'], electrician: ['thundercloud', 'poisonSwamp'], poisoner: ['tongueKing'] };
+        if (quiet) {
+            const geo = (0, boardGeometry_1.geometryForCells)(board.length);
+            for (const kind of aiConstants_1.GENERIC_OBJECT_ORDER) {
+                const def = objects_1.OBJECT_DEFS[kind];
+                if (!hand.includes(def.idx) || ((_a = bespoke[this.character]) === null || _a === void 0 ? void 0 : _a.includes(kind)))
+                    continue;
+                if (board.some((sq) => sq.object === kind && sq.player === me))
+                    continue;
+                const cost = costOf(def.costKey);
+                if (left < cost)
+                    continue;
+                const table = aiConstants_1.OBJECT_VS[kind];
+                if (table && !this.opponents.some((o) => { var _a, _b; return ((_b = table[(_a = this.characterOf(o)) !== null && _a !== void 0 ? _a : 'you']) !== null && _b !== void 0 ? _b : 0) >= cost * aiConstants_1.OBJECT_PT_PER_MAGIC; }))
+                    continue;
+                let cell = null;
+                if (kind === 'fort' || kind === 'sanctuary') {
+                    let bestN = 1;
+                    board.forEach((sq, i) => {
+                        if (!(0, objects_1.objectLandable)(sq))
+                            return;
+                        const n = geo.surroundRange(i).filter((j) => board[j].player === me && !(0, util_1.isObject)(board[j])).length;
+                        if (n > bestN) {
+                            bestN = n;
+                            cell = i;
+                        }
+                    });
+                }
+                else if (kind === 'poisonSwamp' || kind === 'thundercloud') {
+                    let bestN = aiConstants_1.CLOUD_MIN_FOES - 1;
+                    board.forEach((sq, i) => {
+                        if (!(0, objects_1.objectLandable)(sq))
+                            return;
+                        const n = geo.surroundRange(i).filter((j) => this.isEnemy(board[j].player) && !(0, util_1.isObject)(board[j])).length;
+                        if (n > bestN) {
+                            bestN = n;
+                            cell = i;
+                        }
+                    });
+                }
+                else
+                    cell = this.bestTreeCell(masked);
+                if (cell === null || !(0, objects_1.objectLandable)(board[cell]))
+                    continue;
+                const at = cell;
+                clicks.push({ skill: def.costKey, target: at });
+                left -= cost;
+                board = board.map((sq, i) => (i === at ? { player: me, bind: def.life, effects: sq.effects.filter((e) => e.effect === '🔥'), object: kind } : sq));
+                break;
+            }
+        }
+        return { clicks, board, spent: magic - left };
+    },
+    makeMoveCore(...argsIn) {
         var _a, _b, _c, _d, _e;
         // 龍神の巫女（#527）: 建造物を置いて覚醒／咆哮。該当しなければ通常の計画に進む
         if (this.character === 'dragonMiko') {
@@ -1191,11 +1328,11 @@ exports.planMoveMethods = {
                 return dragonPlan;
         }
         // オブジェクト（大木など）は列に数えず、置けないマス。AI には『🔑ロック中の空きマス』として見せる（列を数える処理が自陣・敵のコマと誤認しない）
-        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownObjectCount = argsIn[0].filter((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
-        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_1.isDormant)(sq)).length;
+        this.ownSwamps = argsIn[0].filter((sq) => sq.object === 'poisonSwamp' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownClouds = argsIn[0].filter((sq) => sq.object === 'thundercloud' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownObjectCount = argsIn[0].filter((sq) => (0, ObjectKind_1.isBuilding)(sq) && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownTongues = argsIn[0].filter((sq) => sq.object === 'tongueKing' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
+        this.ownTrees = argsIn[0].filter((sq) => sq.object === 'bigTree' && sq.player === this.playerSymbol && !(0, thermal_2.isDormant)(sq)).length;
         this.corpseCut = this.character === 'necromancer' ? Math.min(graveSkills_1.NECRO_CORPSE_CUT_CAP, Math.max(0, turn_1.NECROMANCY.baseCost - ((_a = argsIn[8]) !== null && _a !== void 0 ? _a : turn_1.NECROMANCY.baseCost))) : 0;
         const args = argsIn[0].some((sq) => (0, ObjectKind_1.isBuilding)(sq))
             ? [argsIn[0].map((sq) => ((0, ObjectKind_1.isBuilding)(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' }] } : sq)), ...argsIn.slice(1)]
@@ -1204,7 +1341,7 @@ exports.planMoveMethods = {
         const magic = args[1];
         let saving = false;
         // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う
-        if (aiConstants_1.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
+        if (aiConstants_2.KEYSMITH_SEAL_SAVE > 0 && this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.includes('onClickSeal')
             && this.countReaches(args[0], this.playerSymbol) === 0 && this.opponents.every((o) => this.countReaches(args[0], o) === 0)) {
             const released = (0, keysmith_1.sealReleaseCells)(args[0], this.playerSymbol).length;
             const sealCost = this.calculateAICost((0, keysmith_1.sealBaseCost)(args[2].onClickSeal, released), false, false, 'onClickSeal');
@@ -1224,20 +1361,20 @@ exports.planMoveMethods = {
         // 以前は魔力24以上（RICH_REROLL_MAGIC）でしか足されず、鍵師（手番開始の魔力は平均7.5）では働いていなかった。ダブルトークンは払える手番が104あって12回しか撃たれず
         // （払えたのに先に撃ったのはロック69・封鎖の断11）、敵が1手番に平均1.2〜1.6個の駒を増やすのに鍵師は0.8〜0.9個だった。
         // 対強豪平均: seed9/200 21.4→26.3, seed7/100 21.3→28.8（+4.9/+7.5pt）。魔力のしきい値を1〜7で振ってもどれも26〜29%で、8以上では効果が消える
-        if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk))) {
+        if (this.character === 'keysmith' && !result.reroll && !result.hailMary && !result.win && !result.skills.some((sk) => aiConstants_2.TURN_ENDING_SKILLS.includes(sk))) {
             // 無料の1回（手番の最初のロック系）は、安いロックではなく封鎖の断（通常9〜10）に使いたい。魔力が足りて封鎖の断を撃つ判断なら、そちらを返す。
             // かつては先に安いロックの計画が返り、封鎖の断は落ちていた（魔力9以上の手番の約8割で、安いロックだけ撃って魔力が余った）。対強豪平均 38→53〜54%（docs/tune/keysmith.md 試行17）
             if (this.sealWanted(args))
                 return { move: null, skills: ['onClickSeal'] };
             return saving ? result : this.extendPlan(result, args);
         }
-        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_1.MAGICIAN_REROLL_MAGIC : aiConstants_1.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_1.RICH_EXTRA_REROLLS)
+        if (result.reroll || result.hailMary || result.win || magic < (this.character === 'magician' ? aiConstants_2.MAGICIAN_REROLL_MAGIC : aiConstants_2.RICH_REROLL_MAGIC) || this.rerollsLeft <= -aiConstants_2.RICH_EXTRA_REROLLS)
             return result;
         if (this.character === 'yinYangMaster')
             return result; // コンボ待ちの温存があるため別ロジック
-        if (result.skills.some((sk) => aiConstants_1.TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay'))
+        if (result.skills.some((sk) => aiConstants_2.TURN_ENDING_SKILLS.includes(sk) || sk === 'onClickJudgeDay'))
             return result;
-        const goal = Math.max(aiConstants_1.RICH_SPEND_GOAL, Math.min(aiConstants_1.RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
+        const goal = Math.max(aiConstants_2.RICH_SPEND_GOAL, Math.min(aiConstants_2.RICH_SPEND_GOAL_MAX, Math.floor(magic / 4)));
         if (this.plannedSpend(result, args[2]) >= goal)
             return result;
         // 固有スキルの計画（氷結・ロックなど）は手札の他の札を見ずに返ることがある。残りの魔力で、手札のトークンなどを足せるなら足す
@@ -1263,9 +1400,9 @@ exports.planMoveMethods = {
         const [board, magic, costs, opponentMagic, life, availableSkills, tokenUsed, necroRemain = 0, necroCost = 0, , assaultCost = 99, proliferateActive = false, seatMagic = [], necroPay = necroCost] = args;
         const planned = [...result.skills, ...((_a = result.chargeClicks) !== null && _a !== void 0 ? _a : []).map((c) => c.skill)];
         const left = magic - this.plannedSpend(result, costs);
-        const usedToken = tokenUsed || planned.some((sk) => aiConstants_1.TOKEN_SKILL_KEYS.has(sk));
+        const usedToken = tokenUsed || planned.some((sk) => aiConstants_2.TOKEN_SKILL_KEYS.has(sk));
         const extra = this.chooseSkills(board, left, costs, opponentMagic, life, availableSkills, usedToken, necroRemain, necroCost, assaultCost, proliferateActive, seatMagic, necroPay)
-            .filter((sk) => !planned.includes(sk) && !aiConstants_1.TURN_ENDING_SKILLS.includes(sk));
+            .filter((sk) => !planned.includes(sk) && !aiConstants_2.TURN_ENDING_SKILLS.includes(sk));
         if (extra.length === 0)
             return result;
         return { ...result, skills: [...result.skills, ...extra] };

@@ -2,7 +2,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MAGICIAN_HOLD_VS_YINYANG = exports.MAGICIAN_HOLD_VS_NECRO = exports.MAGICIAN_HOLD = exports.MAGICIAN_GIANT_OPEN_CHARGE_CAP = exports.YINYANG_GIANT_OPEN_CHARGE_CAP = exports.WITCH_GIANT_OPEN_CHARGE_CAP = exports.YOU_HOLD_VS = exports.NIGHT_VEIL_RAISE = exports.BUD_SEED_LIFE = exports.GLACIER_COST = exports.NIGHT_VEIL_OPP_MAGIC = exports.REROLL_REDUCERS = exports.TURN_ENDING_SKILLS = exports.TOKEN_SKILL_KEYS = exports.SH_COMBO_REAL = exports.NO_DIG_53_MIN = exports.SH_RESERVE = exports.SH_SMALL_FRY_MIN = exports.SH_PURGE_FREE = exports.SH_CURSE_MIN = exports.SH_BLESS_WEAK = exports.SH_RICH_GUARD = exports.SH_RICH_BLAST_MIN = exports.SH_BLAST_MIN = exports.SH_MAX = exports.YY_COVER_WEIGHT = exports.NO_CAP_NECRO_WEIGHT = exports.RICH_OPIUM_MIN_HIT = exports.RICH_EXTRA_REROLLS = exports.RICH_SPEND_GOAL_MAX = exports.RICH_SPEND_GOAL = exports.MAGICIAN_REROLL_MAGIC = exports.RICH_REROLL_MAGIC = exports.INTENSIFY_MIN_FOE_POISON = exports.PANDEMIC_MIN_SCORE = exports.MIST_MIASMA_MIN_SCORE = exports.POISON_RICH_RESERVE = exports.INTENSIFY_MAX_CELL_POISON = exports.STOMP_CHAIN_MAX = exports.PLUNDER_CHAIN_MAX = exports.SHATTER_RESERVE = exports.SHATTER_MAX_FREEZES = exports.SHATTER_MAX_PER_TURN = exports.RICH_MAGIC = exports.SURPLUS_MAGIC = exports.CHARGE_RANDOM_MARGIN = exports.JAMMER_MIN_DMG = exports.CHARGE_AREA_MIN_SCORE = exports.CHARGE_ONE_MIN_SCORE = exports.SKILL_POOL_SIZE = void 0;
-exports.TWO_LINE_DISJOINT_WEIGHT = exports.TWO_LINE_OVERLAP_WEIGHT = exports.ANTI_LOCK_REFRESH = exports.FORCED_WIN_PLIES = exports.MIASMA_MIN_SCORE = exports.MIASMA_FROZEN_WEIGHT = exports.BLOOM_MIN_BIND = exports.BLOOM_MAX_OWN_POISON = exports.EXCLUSIVE_MIN_MAGIC = exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.WITCH_DIG_MARGIN = exports.MAX_REROLLS = exports.EMPTY_LOCK_DENY = exports.IGNITE_BUD_WEIGHT = exports.KEYSMITH_COMBO_EMPTY_LOCK_MAX = exports.KEYSMITH_COMBO_MIN_BIND = exports.KEYSMITH_SEAL_SAVE = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.CRYO_LOCK_MAX = exports.NECRO_LOCK_CHARACTERS = exports.NECRO_LOCK_REFRESH = exports.NECRO_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.GRAVE_OFFERING_MAX_CORPSES = exports.GRAVE_OFFERING_MIN_PIECES = exports.POISON_WARD_MIN_PIECES = exports.PG_HOLD_FREE = exports.BIG_TREE_HOLD_GAP = exports.BIG_TREE_MIN_EMPTY = exports.CLOUD_MIN_FOES = exports.CLOUD_MIN_EMPTY = exports.CLOUD_MAX = exports.BIG_TREE_MAX = exports.BOLT_SILENCE_IDX = exports.PG_HOLD_GAP = void 0;
+exports.LEVEL_ALL_MIN_VALUE = exports.DEMOLISH_MIN_VALUE = exports.GENERIC_OBJECT_ORDER = exports.OBJECT_PT_PER_MAGIC = exports.OBJECT_VS = exports.TWO_LINE_DISJOINT_WEIGHT = exports.TWO_LINE_OVERLAP_WEIGHT = exports.ANTI_LOCK_REFRESH = exports.FORCED_WIN_PLIES = exports.MIASMA_MIN_SCORE = exports.MIASMA_FROZEN_WEIGHT = exports.BLOOM_MIN_BIND = exports.BLOOM_MAX_OWN_POISON = exports.EXCLUSIVE_MIN_MAGIC = exports.rerollBudget = exports.FLOOD_COVER_WEIGHT = exports.WITCH_DIG_MARGIN = exports.MAX_REROLLS = exports.EMPTY_LOCK_DENY = exports.IGNITE_BUD_WEIGHT = exports.KEYSMITH_COMBO_EMPTY_LOCK_MAX = exports.KEYSMITH_COMBO_MIN_BIND = exports.KEYSMITH_SEAL_SAVE = exports.KEYSMITH_OWN_LOCK_MIN_VALUE = exports.KEYSMITH_OWN_LOCK_MAX_BIND = exports.KEYSMITH_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MIN_VALUE = exports.EMPTY_LOCK_MAX = exports.CRYO_LOCK_MAX = exports.NECRO_LOCK_CHARACTERS = exports.NECRO_LOCK_REFRESH = exports.NECRO_LOCK_MAX = exports.MAGICIAN_MAX_LOCKS = exports.GRAVE_OFFERING_MAX_CORPSES = exports.GRAVE_OFFERING_MIN_PIECES = exports.POISON_WARD_MIN_PIECES = exports.PG_HOLD_FREE = exports.BIG_TREE_HOLD_GAP = exports.BIG_TREE_MIN_EMPTY = exports.CLOUD_MIN_FOES = exports.CLOUD_MIN_EMPTY = exports.CLOUD_MAX = exports.BIG_TREE_MAX = exports.BOLT_SILENCE_IDX = exports.PG_HOLD_GAP = void 0;
 // 汎用スキルプールの大きさ (idx 0..136)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
 exports.SKILL_POOL_SIZE = 137;
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
@@ -180,3 +180,21 @@ exports.ANTI_LOCK_REFRESH = 2;
 /** 龍神の巫女（二列勝利）の評価: 1本目が完成しているとき、1本目と重なる窓（共有2マス以上）の加点の倍率と、離れた窓の倍率（evaluateBoard） */
 exports.TWO_LINE_OVERLAP_WEIGHT = 0.2;
 exports.TWO_LINE_DISJOINT_WEIGHT = 1.5;
+/**
+ * 相手を縛るオブジェクトを置く相手（その相手に対して、置いた側の勝率がどれだけ上がるか・pt。2手番目に無料で置いて大岩と比べた実測。
+ * docs/skill-cost-rules.md『オブジェクトの算出』）。AI は『値 ≥ 実コスト × OBJECT_PT_PER_MAGIC』の相手がいるときだけ置く。表に無い相手は0
+ */
+exports.OBJECT_VS = {
+    soloSign: { electrician: 59, necromancer: 38, tactician: 36, witch: 35, poisoner: 20, yinYangMaster: 16, cryomancer: 5 },
+    oneWord: { electrician: 19, yinYangMaster: 17, witch: 15, necromancer: 5 },
+    tongueKing: { witch: 63, electrician: 25, tactician: 19, cryomancer: 19, poisoner: 17, keysmith: 14, yinYangMaster: 7 },
+    mudField: { witch: 53, tactician: 17, cryomancer: 10, electrician: 9, poisoner: 6 },
+};
+/** 序盤に魔力1を払う重さ（勝率pt。大岩を置いて魔力を払わせた実測） */
+exports.OBJECT_PT_PER_MAGIC = 2.7;
+/** 手札から置く汎用のオブジェクト（価値の高い順。縛る種類は OBJECT_VS の相手がいるときだけ） */
+exports.GENERIC_OBJECT_ORDER = ['soloSign', 'tongueKing', 'bigTree', 'mudField', 'sanctuary', 'poisonSwamp', 'luckyCat', 'oneWord', 'spring', 'fort', 'thundercloud'];
+/** 解体を撃つ敵のオブジェクトの価値の下限（設置の基礎コスト。解体4より高いものだけ壊す。自分を縛っているものは必ず壊す） */
+exports.DEMOLISH_MIN_VALUE = 5;
+/** 地ならしを撃つ敵のオブジェクトの価値の合計の下限 */
+exports.LEVEL_ALL_MIN_VALUE = 10;

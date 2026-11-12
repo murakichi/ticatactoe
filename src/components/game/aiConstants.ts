@@ -205,3 +205,22 @@ export const ANTI_LOCK_REFRESH = 2;
 /** 龍神の巫女（二列勝利）の評価: 1本目が完成しているとき、1本目と重なる窓（共有2マス以上）の加点の倍率と、離れた窓の倍率（evaluateBoard） */
 export const TWO_LINE_OVERLAP_WEIGHT = 0.2;
 export const TWO_LINE_DISJOINT_WEIGHT = 1.5;
+
+/**
+ * 相手を縛るオブジェクトを置く相手（その相手に対して、置いた側の勝率がどれだけ上がるか・pt。2手番目に無料で置いて大岩と比べた実測。
+ * docs/skill-cost-rules.md『オブジェクトの算出』）。AI は『値 ≥ 実コスト × OBJECT_PT_PER_MAGIC』の相手がいるときだけ置く。表に無い相手は0
+ */
+export const OBJECT_VS: Partial<Record<string, Partial<Record<CharacterId, number>>>> = {
+    soloSign: { electrician: 59, necromancer: 38, tactician: 36, witch: 35, poisoner: 20, yinYangMaster: 16, cryomancer: 5 },
+    oneWord: { electrician: 19, yinYangMaster: 17, witch: 15, necromancer: 5 },
+    tongueKing: { witch: 63, electrician: 25, tactician: 19, cryomancer: 19, poisoner: 17, keysmith: 14, yinYangMaster: 7 },
+    mudField: { witch: 53, tactician: 17, cryomancer: 10, electrician: 9, poisoner: 6 },
+};
+/** 序盤に魔力1を払う重さ（勝率pt。大岩を置いて魔力を払わせた実測） */
+export const OBJECT_PT_PER_MAGIC = 2.7;
+/** 手札から置く汎用のオブジェクト（価値の高い順。縛る種類は OBJECT_VS の相手がいるときだけ） */
+export const GENERIC_OBJECT_ORDER = ['soloSign', 'tongueKing', 'bigTree', 'mudField', 'sanctuary', 'poisonSwamp', 'luckyCat', 'oneWord', 'spring', 'fort', 'thundercloud'] as const;
+/** 解体を撃つ敵のオブジェクトの価値の下限（設置の基礎コスト。解体4より高いものだけ壊す。自分を縛っているものは必ず壊す） */
+export const DEMOLISH_MIN_VALUE = 5;
+/** 地ならしを撃つ敵のオブジェクトの価値の合計の下限 */
+export const LEVEL_ALL_MIN_VALUE = 10;
