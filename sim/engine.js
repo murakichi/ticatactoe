@@ -370,6 +370,8 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
+        objectBan: fill(false), // 普請停止令: 立っている席は次の手番、オブジェクトを設置できない（その席の手番が終わると解除）
+        objectIgnore: fill(false), // お構いなし: 立っている席は次の自分の手番の頭まで相手のオブジェクトの効果を無視する
         lifeBan: fill(false), // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
         chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
@@ -604,10 +606,10 @@ function placedThisTurn(s) {
 }
 // 相手のオブジェクト（一言居士・お一人様限りの札）に縛られて、そのスキルを今は使えないか（Game.tsx の restrictSkill と同じ）
 function skillRestrictedByObjects(s, key) {
-    return objectsMod.skillRestricted({ board: s.board, actor: curPlayer(s), skillKey: key, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(key), skillsThisTurn: s.gearSkills[s.turn], placedThisTurn: placedThisTurn(s) });
+    return objectsMod.skillRestricted({ board: s.board, actor: curPlayer(s), skillKey: key, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(key), skillsThisTurn: s.gearSkills[s.turn], placedThisTurn: placedThisTurn(s), ignoring: s.objectIgnore[s.turn], objectBanned: s.objectBan[s.turn] });
 }
 function calculateTokenBind(s) {
-    return objectsMod.mudAdjustedBind(s.board, curPlayer(s), costMod.tokenBindOf(curChar(s), s.gears[s.turn])); // 泥田坊: 相手の泥田坊が働いていればトークンのライフは0
+    return objectsMod.mudAdjustedBind(s.board, curPlayer(s), costMod.tokenBindOf(curChar(s), s.gears[s.turn]), s.objectIgnore[s.turn]); // 泥田坊: 相手の泥田坊が働いていればトークンのライフは0
 }
 
 // 魔力ボーナスに数える🌱（休眠マスの🌱は数えない。guarded=冬至の種子で🌱だけは休眠しない）
@@ -725,6 +727,7 @@ function advanceTurn(s) {
     }
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    s.objectBan[s.turn] = false;
     s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
     s.lifeBan[s.turn] = false;
     // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
@@ -742,7 +745,7 @@ function advanceTurn(s) {
     const ch = s.chars[next];
     // 席ごとのギア・導線・廃墟の状態の更新は本番(gearTurn.ts)の生成物。魔力などは戻り値を見て足す
     // 見ざる地蔵・閻魔の舌: 終わった手番で付いたエフェクトを処理する（手番の頭の盤面との差分。本番 objects.ts の enforceEffectRules）
-    const rules = objectsMod.enforceEffectRules(s.board, s.effectSnap, SYMBOLS[s.turn]);
+    const rules = objectsMod.enforceEffectRules(s.board, s.effectSnap, SYMBOLS[s.turn], s.objectIgnore[s.turn]);
     if (rules.removed.length > 0) bumpStat(s, 'blindMonkeyRemoved', rules.removed.length);
     if (rules.zeroed.length > 0) bumpStat(s, 'tongueKingZeroed', rules.zeroed.length);
     const change = gearTurnMod.advanceGearState(...gearTurnView(s), { board: s.board, symbols: SYMBOLS.slice(0, seatCount(s)), gears: s.gears, endSeat: s.turn, nextSeat: next });
@@ -766,7 +769,8 @@ function advanceTurn(s) {
     }
     // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（本番 objects.ts の生成物。魔力の分は下の手番開始の計算に足す）
     const burntTrees = objectsMod.sweepBurntTrees(s.board);
-    const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng);
+    const objRes = objectsMod.objectTurnStart(s.board, sym, s.chars, s.rng, new Set(SYMBOLS.filter((_, seat) => s.objectIgnore[seat])));
+    s.objectIgnore[next] = false; // お構いなし: 次の自分の手番の頭で切れる
     if (burntTrees.length > 0) bumpStat(s, 'objectBurnt', burntTrees.length);
     if (objRes.magic > 0) bumpStat(s, 'objectMagic', objRes.magic);
     if (objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length > 0) bumpStat(s, 'objectEffect', objRes.leaves.length + objRes.charged.length + objRes.fortified.length + objRes.poisoned.length);
@@ -1033,7 +1037,7 @@ function placeMove(s, i) {
     // ❄氷結中の自陣コマには重ねて強化できない（氷室の番人は除く）
     if (board[i].player === curPlayer(s) && thermal.overwriteBlocked(board[i])) return false;
     // お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない
-    if (!board[i].player && objectsMod.newPieceBlocked(board, curPlayer(s), placedThisTurn(s))) return false;
+    if (!board[i].player && objectsMod.newPieceBlocked(board, curPlayer(s), placedThisTurn(s), s.objectIgnore[s.turn])) return false;
 
     s.lastMoveCell = i; // 廃墟の底力: 通常の着手マス（攻撃で壊れた自コマは「スキル・エフェクトによる破壊」に数えない）
     // decay step (+ 毒: スタック数だけ追加で bind を減らす)。3人以上は手番が1周するごとに1回だけ (issue #30)
@@ -1808,6 +1812,8 @@ function onClickObjectSkill(s, skill) {
     const def = objectsMod.OBJECT_SKILLS[skill];
     const cost = calculateCost(s, costsOf(s)[def.costKey], false, false, def.costKey);
     if (def.target) s.objectTool = skill;
+    else if (skill === 'buildBan') otherSeats(s).forEach((seat) => { s.objectBan[seat] = true; }); // 普請停止令
+    else if (skill === 'ignoreObjects') s.objectIgnore[s.turn] = true; // お構いなし
     else {
         objectsMod.runObjectSkill(skill, s.board, curPlayer(s), s.chars, -1, s.rng);
     }
@@ -2757,6 +2763,9 @@ const SKILLS = {
     reinforce: (s) => onClickObjectSkill(s, 'reinforce'),
     expandAll: (s) => onClickObjectSkill(s, 'expandAll'),
     duplicate: (s) => onClickObjectSkill(s, 'duplicate'),
+    buildBan: (s) => onClickObjectSkill(s, 'buildBan'),
+    arson: (s) => onClickObjectSkill(s, 'arson'),
+    ignoreObjects: (s) => onClickObjectSkill(s, 'ignoreObjects'),
     sanctuary: (s) => onClickObject(s, 'sanctuary'),
     poisonSwamp: (s) => onClickObject(s, 'poisonSwamp'),
     helper: onClickHelper,

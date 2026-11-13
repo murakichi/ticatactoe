@@ -5,7 +5,8 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, objectLandable, enemyObjectActive } from './objects';
+import { OBJECT_DEFS, OBJECT_SKILLS, objectLandable, enemyObjectActive } from './objects';
+import { arsonTarget, buildBanWanted, ignoreObjectsWanted } from './aiObjectControl';
 import { calculateWinner, findEmptyIndexes, isObject, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
 import { geometryForCells } from './boardGeometry';
@@ -649,6 +650,30 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
             board = board.slice();
             board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
             magic -= cost;
+        }
+    }
+    // 新スキル（普請停止令・付け火・お構いなし）: 相手にリーチも自分に勝ち筋も無いときだけ。魔力は残りで払える分だけ
+    const objChars = this.seatCharacters() as Parameters<typeof arsonTarget>[2];
+    if (this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0) {
+        const arsonCost = this.calculateAICost(costs.onClickArson, false, false, 'onClickArson');
+        if (availableSkills.includes(OBJECT_SKILLS.arson.idx) && magic >= arsonCost) {
+            const cell = arsonTarget(board, this.playerSymbol, objChars);
+            if (cell !== null) {
+                chargeClicks.push({ skill: 'onClickArson', target: cell });
+                magic -= arsonCost;
+                board = board.slice();
+                board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🔥' }] }; // 以後の計画では燃えているものとして扱う（同じものを焼かない）
+            }
+        }
+        const banCost = this.calculateAICost(costs.onClickBuildBan, false, false, 'onClickBuildBan');
+        if (availableSkills.includes(OBJECT_SKILLS.buildBan.idx) && magic >= banCost && buildBanWanted(board, this.opponents, (p) => this.characterOf(p))) {
+            chargeClicks.push({ skill: 'onClickBuildBan' });
+            magic -= banCost;
+        }
+        const ignoreCost = this.calculateAICost(costs.onClickIgnoreObjects, false, false, 'onClickIgnoreObjects');
+        if (availableSkills.includes(OBJECT_SKILLS.ignoreObjects.idx) && magic >= ignoreCost && ignoreObjectsWanted(board, this.playerSymbol, objChars, magic - ignoreCost)) {
+            chargeClicks.push({ skill: 'onClickIgnoreObjects' });
+            magic -= ignoreCost;
         }
     }
     c.board = board;

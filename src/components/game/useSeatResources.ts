@@ -97,6 +97,10 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
     const proliferateMaxStacks = PROLIFERATE.maxStacks;
     // サイレンス: 立っている席は次の手番スキルを使えない（その席の手番が終わるたびに解除）
     const [silenced, setSilencedAt, setSilencedAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // 普請停止令: 立っている席は次の手番、オブジェクトを設置できない（その席の手番が終わるたびに解除）
+    const [objectBan, setObjectBanAt, setObjectBanAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
+    // お構いなし: 立っている席は、次の自分の手番の頭まで相手のオブジェクトの効果を無視する（自分の手番が始まるたびに解除）
+    const [objectIgnore, setObjectIgnoreAt, setObjectIgnoreAll] = useSeatArray<boolean>(() => Array(seatCount).fill(false));
     // オリジナルスキルの「コストn以下/n以上のスキル封じ」: 立っている席は、その席の次の手番の終わりまで、表示コストが範囲内のスキルを使えない
     // （チャージ・シャッフル・ロックを除く）。サイレンスと同じく、封じられた側の手番が終わるたびに解除
     const [skillBan, setSkillBanAt, setSkillBanAll] = useSeatArray<{ mode: 'max' | 'min'; n: number } | null>(() => Array(seatCount).fill(null));
@@ -148,5 +152,5 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
         if (n > 0) setGlacierChargeAll((prev) => prev.map((c) => c + n));
     };
 
-    return { yinYangMode, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, magic, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setChargeBuffAt, setLife, setUseToken, setSkills, reshuffledSkills, lockedSkills, life, lifeBan, skills, useToken, chargeBuff, currentYinYangMode, silenced, glacierCharge, setLockedSkillsAt, spendMagic, currentLockedSkills, harvestMagic, pendingFlag, useTokenCount, setUseTokenCountAt, proliferateTokenLife, keepBuds, proliferateUpkeepStep, useMagicCount, setUseMagicCountAt, setYinYangModeAt, bumpGlacierCharge, setGlacierChargeAt, proliferateMaxStacks, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setProliferateAll, setSilencedAll, setLifeBanAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setLockedSkillsAll, yinYangModeName, toggleLock, skillBan, setSkillBanAt, setSkillBanAll, bannedByCost, rampRef };
+    return { yinYangMode, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, magic, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setChargeBuffAt, setLife, setUseToken, setSkills, reshuffledSkills, lockedSkills, life, lifeBan, skills, useToken, chargeBuff, currentYinYangMode, silenced, objectBan, setObjectBanAt, setObjectBanAll, objectIgnore, setObjectIgnoreAt, setObjectIgnoreAll, glacierCharge, setLockedSkillsAt, spendMagic, currentLockedSkills, harvestMagic, pendingFlag, useTokenCount, setUseTokenCountAt, proliferateTokenLife, keepBuds, proliferateUpkeepStep, useMagicCount, setUseMagicCountAt, setYinYangModeAt, bumpGlacierCharge, setGlacierChargeAt, proliferateMaxStacks, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setProliferateAll, setSilencedAll, setLifeBanAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setLockedSkillsAll, yinYangModeName, toggleLock, skillBan, setSkillBanAt, setSkillBanAll, bannedByCost, rampRef };
 };

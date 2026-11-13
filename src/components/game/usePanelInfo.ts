@@ -10,6 +10,8 @@ export interface PanelInfoScope {
     skillBan: ({ mode: "max" | "min"; n: number; } | null)[];
     useAssault: number[];
     silenced: boolean[];
+    objectBan: boolean[];
+    objectIgnore: boolean[];
     lifeBan: boolean[];
     chargeBuff: number[];
     gearOff: boolean[];
@@ -37,7 +39,7 @@ export interface PanelInfoScope {
     dragon: { form: 'miko' | 'dragon'; n: number }[];
 }
 export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
-    const { dragon, prayerCost, roarCost, useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
+    const { objectBan, objectIgnore, dragon, prayerCost, roarCost, useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
 
 
     // 継続中スキルの残りターン数を返す
@@ -46,6 +48,8 @@ export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
         const assault = useAssault[seat];
         if (assault > 0) labels.push(`全軍突撃 残り${assault}ターン`);
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
+        if (objectBan[seat]) labels.push('普請停止令 次の手番オブジェクト設置不可');
+        if (objectIgnore[seat]) labels.push('お構いなし 次の手番の頭まで相手のオブジェクトを無視');
         const ban = skillBan[seat];
         if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');

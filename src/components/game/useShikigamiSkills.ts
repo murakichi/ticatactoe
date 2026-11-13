@@ -18,6 +18,9 @@ import { PlayEffectExtra } from './usePresentation';
 import { GameLate } from './gameLate';
 
 export interface ShikigamiSkillsScope {
+    otherSeats: (seat: number) => number[];
+    setObjectBanAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
+    setObjectIgnoreAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     addLog: (message: string) => void;
     playEffect: (type: SkillEffectType, index?: number | undefined, indexes?: number[] | undefined, label?: string | undefined, extra?: PlayEffectExtra | undefined) => void;
     currentYinYangMode: YingYangMode | undefined;
@@ -42,7 +45,7 @@ export interface ShikigamiSkillsScope {
     setUseToken: React.Dispatch<React.SetStateAction<boolean>>;
 }
 export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate) => {
-    const { addLog, playEffect, currentYinYangMode, setYinYangModeAt, turnSeat, spendMagic, gearCost, seatCosts, pendingFlag, currentBoard, currentTurnPlayer, characters, flashCells, setCurrentBoard, posName, gearTurn, playBurst, harvestMagic, toxicBloom, putTokens, turnGears, setUseToken } = g;
+    const { otherSeats, setObjectBanAt, setObjectIgnoreAt, addLog, playEffect, currentYinYangMode, setYinYangModeAt, turnSeat, spendMagic, gearCost, seatCosts, pendingFlag, currentBoard, currentTurnPlayer, characters, flashCells, setCurrentBoard, posName, gearTurn, playBurst, harvestMagic, toxicBloom, putTokens, turnGears, setUseToken } = g;
 
 
     const onClickToggleYingYang = () => {
@@ -77,6 +80,22 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
             pay();
             return;
         }
+        if (skill === 'buildBan') {
+            // 普請停止令: 相手全員の次の手番、オブジェクトを設置できない（手番が終わると解除）
+            otherSeats(turnSeat).forEach((seat) => setObjectBanAt(seat, true));
+            addLog(`「${def.name}」を使用（相手は次の手番、オブジェクトを設置できない）`);
+            playEffect('silence');
+            pay();
+            return;
+        }
+        if (skill === 'ignoreObjects') {
+            // お構いなし: 次の自分の手番の頭まで、相手のオブジェクトの効果を無視する
+            setObjectIgnoreAt(turnSeat, true);
+            addLog(`「${def.name}」を使用（次の自分の手番の頭まで、相手のオブジェクトの効果を無視）`);
+            playEffect('reinforce');
+            pay();
+            return;
+        }
         const board = currentBoard.slice();
         const r = runObjectSkill(skill, board, currentTurnPlayer, characters, -1) as NonNullable<ReturnType<typeof runObjectSkill>>;
         addLog(`「${def.name}」を使用（${skill === 'levelAll' ? `${r.destroyed.length}個のオブジェクトを破壊${r.blocked.length > 0 ? `・氷結${r.blocked.length}個が身代わり` : ''}` : `自陣${r.affected.length}個のオブジェクトのライフ+2`}）`);
@@ -98,6 +117,7 @@ export const useShikigamiSkills = (g: ShikigamiSkillsScope, late: () => GameLate
         if (objectTool === 'demolish') playEffect('demolish', i, toolCells);
         else if (objectTool === 'weather') playEffect('weather', i, toolCells);
         else if (objectTool === 'reinforce') playEffect('reinforce', i, toolCells);
+        else if (objectTool === 'arson') playEffect('flame', i, toolCells);
         else playEffect('duplicate', i, toolCells);
         setObjectTool(null);
         setCurrentBoard(board);

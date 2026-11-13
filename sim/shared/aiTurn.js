@@ -9,6 +9,7 @@ const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
 const keysmith_1 = require("./keysmith");
 const util_1 = require("./util");
+const objects_1 = require("./objects");
 /** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
 const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
 /** 計画のステップ: 文字列=スキル(onClickXxx。引き直しは 'aiReplan')、数値=マスのクリック */
@@ -66,6 +67,12 @@ const planAITurn = (ai, input, pickHailMary) => {
     if ((_b = result.lockTargets) === null || _b === void 0 ? void 0 : _b.some((t) => !canMark(t))) {
         result.skills = result.skills.filter((sk) => !sk.startsWith('onClickUse') || !sk.endsWith('Lock'));
         result.lockTargets = undefined;
+    }
+    // 普請停止令: オブジェクトを設置するスキル（祈り・分譲を含む）は撃てない。計画から外す（外さないと撃てないまま計画し直し続ける）
+    if (input.objectBanned) {
+        result.skills = result.skills.filter((sk) => !objects_1.OBJECT_BAN_KEYS.has(sk));
+        if (result.chargeClicks)
+            result.chargeClicks = result.chargeClicks.filter((c) => !objects_1.OBJECT_BAN_KEYS.has(c.skill));
     }
     // 一寸の虫に魂なし: ライフ3以下のコマは置けないので、通常の着手と置くスキルをやめる（残りが無ければチャージ）
     if (input.lifeBan) {

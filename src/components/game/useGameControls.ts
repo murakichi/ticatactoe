@@ -1,4 +1,5 @@
 // Game.tsx から切り出したハンドラ群: ログのコピー・保存、設定画面に戻る、再スタート
+import type { ObjectSkill } from './objects';
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { DragonState, newDragonState } from './dragon';
 import { DamageEffect } from './BoardEffects';
@@ -43,6 +44,8 @@ export interface GameControlsScope {
     setDragonAll: React.Dispatch<React.SetStateAction<DragonState[]>>;
     setProliferateAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setSilencedAll: React.Dispatch<React.SetStateAction<boolean[]>>;
+    setObjectBanAll: React.Dispatch<React.SetStateAction<boolean[]>>;
+    setObjectIgnoreAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setLifeBanAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setGearOffAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setChargeBuffAll: React.Dispatch<React.SetStateAction<number[]>>;
@@ -55,7 +58,7 @@ export interface GameControlsScope {
     setGlacierChargeAll: React.Dispatch<React.SetStateAction<number[]>>;
     setBudGuardAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null>>;
-    setObjectTool: React.Dispatch<React.SetStateAction<"demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null>>;
+    setObjectTool: React.Dispatch<React.SetStateAction<ObjectSkill | null>>;
     setCaptureChoice: React.Dispatch<React.SetStateAction<number | null>>;
     setIcicleCell: React.Dispatch<React.SetStateAction<number | null>>;
     setRemainNecroAll: React.Dispatch<React.SetStateAction<number[]>>;
@@ -79,7 +82,7 @@ export interface GameControlsScope {
     rollPriceTables: () => (SkillCosts | null)[];
 }
 export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
-    const { setDragonAll, geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
+    const { setObjectBanAll, setObjectIgnoreAll, setDragonAll, geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
 
 
     const buildLogText = (): string => {
@@ -139,6 +142,8 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
         setDragonAll(Array.from({ length: seatCount }, newDragonState));
         setProliferateAll(Array(seatCount).fill(false));
         setSilencedAll(Array(seatCount).fill(false));
+        setObjectBanAll(Array(seatCount).fill(false));
+        setObjectIgnoreAll(Array(seatCount).fill(false));
         setSkillBanAll(Array(seatCount).fill(null));
         setLifeBanAll(Array(seatCount).fill(false));
         setGearOffAll(Array(seatCount).fill(false));

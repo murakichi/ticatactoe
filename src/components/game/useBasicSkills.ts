@@ -333,7 +333,7 @@ export const useBasicSkills = (g: BasicSkillsScope, late: () => GameLate) => {
     };
 
     // 泥田坊: 相手の泥田坊が働いていると、トークンで置くコマのライフは0
-    const calculateTokenBind = (): number => mudAdjustedBind(currentBoard, currentTurnPlayer, tokenBindOf(currentCharacter, turnGears));
+    const calculateTokenBind = (): number => mudAdjustedBind(currentBoard, currentTurnPlayer, tokenBindOf(currentCharacter, turnGears), late().objectIgnore[turnSeat]);
 
     const onClickBudsToken = () => {
         const board = currentBoard.slice();

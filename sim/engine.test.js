@@ -10,6 +10,7 @@ require('./engine-tests/charge');
 require('./engine-tests/thermal');
 require('./engine-tests/buds');
 require('./engine-tests/thermalSkills');
+require('./engine-tests/objectFlags');
 require('./engine-tests/leaf');
 require('./engine-tests/charge2');
 require('./engine-tests/witch');

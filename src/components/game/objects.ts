@@ -18,7 +18,7 @@ import { addLock } from './lock';
 import { poisonStrike } from './poison';
 import { calculateWinner, isShikigami, lineSymbols } from '../../util';
 import { shikigamiLandable } from './shikigami';
-import { absorbDestroy, isDormant, zeroOut } from './thermal';
+import { absorbDestroy, ignite, isDormant, zeroOut } from './thermal';
 
 export { OBJECT_KINDS, isObject, isTree };
 export type { ObjectKind };
@@ -113,14 +113,14 @@ export const activeObjectCells = (board: SquareInfo[], player: Player, kind?: Ob
 // ---- 相手を縛るオブジェクト・招き猫・八卦の陣（idx 123〜129）----
 
 /** actor の敵（持ち主が actor でない）の働いている kind のオブジェクトがあるか（氷結中の休眠したものは働かない） */
-export const enemyObjectActive = (board: SquareInfo[], actor: Player, kind: ObjectKind): boolean =>
-    board.some((sq) => sq.object === kind && !!sq.player && sq.player !== actor && !isDormant(sq));
+export const enemyObjectActive = (board: SquareInfo[], actor: Player, kind: ObjectKind, ignoring: boolean = false): boolean =>
+    !ignoring && board.some((sq) => sq.object === kind && !!sq.player && sq.player !== actor && !isDormant(sq));
 
 /** player に招き猫が働いているか（自分のスキルのコスト-1。重ならない） */
 export const luckyCatActive = (board: SquareInfo[], player: Player): boolean => activeObjectCells(board, player, 'luckyCat').length > 0;
 
 /** 泥田坊: actor の敵に働いていれば、トークンのライフは0になる */
-export const mudAdjustedBind = (board: SquareInfo[], actor: Player, bind: number): number => (enemyObjectActive(board, actor, 'mudField') ? 0 : bind);
+export const mudAdjustedBind = (board: SquareInfo[], actor: Player, bind: number, ignoring: boolean = false): number => (enemyObjectActive(board, actor, 'mudField', ignoring) ? 0 : bind);
 
 /** 各マスのエフェクトの種類（手番の頭の盤面。手番の終わりに増えたエフェクトを調べるのに使う） */
 export type EffectSnapshot = string[][];
@@ -141,7 +141,7 @@ export type EffectRuleResult = {
  * （付いた瞬間のダメージ — 🔥の1ダメージ・⚡の着地ダメージ・☠の倍率 — は残る）。
  * @param endPlayer 終わった手番の席
  */
-export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | null, endPlayer: Player): EffectRuleResult => {
+export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | null, endPlayer: Player, ignoring: boolean = false): EffectRuleResult => {
     const res: EffectRuleResult = { removed: [], zeroed: [] };
     if (!snap) return res;
     const geo = geometryForCells(board.length);
@@ -150,7 +150,7 @@ export const enforceEffectRules = (board: SquareInfo[], snap: EffectSnapshot | n
         if (sq.object !== 'blindMonkey' || !sq.player || isDormant(sq)) return;
         for (const j of geo.surroundRange(k)) quiet[j] = true;
     });
-    const tongue = enemyObjectActive(board, endPlayer, 'tongueKing');
+    const tongue = enemyObjectActive(board, endPlayer, 'tongueKing', ignoring);
     board.forEach((sq, k) => {
         if (sq.effects.length === 0) return;
         const left = new Map<string, number>();
@@ -198,8 +198,8 @@ export const ONE_PIECE_MULTI_KEYS: ReadonlySet<string> = new Set([
 export const ownPieceCount = (board: SquareInfo[], player: Player): number => board.filter((sq) => sq.player === player && !isBuilding(sq)).length;
 
 /** お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない */
-export const newPieceBlocked = (board: SquareInfo[], actor: Player, placedThisTurn: number): boolean =>
-    placedThisTurn >= 1 && enemyObjectActive(board, actor, 'soloSign');
+export const newPieceBlocked = (board: SquareInfo[], actor: Player, placedThisTurn: number, ignoring: boolean = false): boolean =>
+    placedThisTurn >= 1 && enemyObjectActive(board, actor, 'soloSign', ignoring);
 
 export type SkillRestrictInput = {
     board: SquareInfo[];
@@ -209,13 +209,21 @@ export type SkillRestrictInput = {
     basic?: boolean;
     skillsThisTurn: number;
     placedThisTurn: number;
+    /** お構いなし: 相手のオブジェクトの縛りを無視している */
+    ignoring?: boolean;
+    /** 普請停止令: オブジェクトを設置するスキルを使えない */
+    objectBanned?: boolean;
 };
+
+/** 普請停止令で使えなくなるスキル: オブジェクトを設置する全てのスキル（祈り・分譲を含む。式神は含まない） */
+export const OBJECT_BAN_KEYS: ReadonlySet<string> = new Set([...Array.from(OBJECT_PLACE_KEYS), 'onClickDuplicate']);
 
 /** 相手のオブジェクトに縛られて、そのスキルを今は使えないか（一言居士: 1ターン1スキル／お一人様限りの札: コマを置くスキルを制限） */
 export const skillRestricted = (i: SkillRestrictInput): boolean => {
     if (i.basic) return false;
-    if (i.skillsThisTurn >= 1 && enemyObjectActive(i.board, i.actor, 'oneWord')) return true;
-    if (i.skillKey && enemyObjectActive(i.board, i.actor, 'soloSign')) {
+    if (i.objectBanned && i.skillKey && OBJECT_BAN_KEYS.has(i.skillKey)) return true;
+    if (i.skillsThisTurn >= 1 && enemyObjectActive(i.board, i.actor, 'oneWord', i.ignoring)) return true;
+    if (i.skillKey && enemyObjectActive(i.board, i.actor, 'soloSign', i.ignoring)) {
         if (ONE_PIECE_MULTI_KEYS.has(i.skillKey)) return true;
         if (i.placedThisTurn >= 1 && LIFE_BAN_PLACING_KEYS.has(i.skillKey)) return true;
     }
@@ -271,17 +279,21 @@ export type ObjectTurnResult = {
 };
 
 /** 枯れた大木・雷雲の標的にできるコマ: 周囲八マスのコマのうち、🔑ロック・⚡無敵でないもの */
-const randomTargets = (board: SquareInfo[], k: number, chars: PlayerCharacters): number[] =>
+const randomTargets = (board: SquareInfo[], k: number, chars: PlayerCharacters, ignoring: ReadonlySet<Player> = NO_IGNORING): number[] =>
     geometryForCells(board.length)
         .surroundRange(k)
-        .filter((j) => !!board[j].player && !isGuarded(board[j], chars));
+        .filter((j) => !!board[j].player && !isGuarded(board[j], chars) && !ignores(ignoring, board[j].player as Player, board[k].player as Player));
+
+const NO_IGNORING: ReadonlySet<Player> = new Set();
+/** お構いなし: victim が owner（敵）のオブジェクトの効果を無視しているか */
+const ignores = (ignoring: ReadonlySet<Player>, victim: Player, owner: Player): boolean => victim !== owner && ignoring.has(victim);
 
 /**
  * player の手番開始時に、player の働いているオブジェクトが効果を発揮する（生命の泉は objectLifeBonus で別に足す）。
  * 席順に昇順のマスから順に処理する。board を直接書き換える（マスは新しく作って差し替える）。
  * @param rng [0,1) を返す乱数。sim が種付きの乱数を渡す
  */
-export const objectTurnStart = (board: SquareInfo[], player: Player, chars: PlayerCharacters, rng: () => number = Math.random): ObjectTurnResult => {
+export const objectTurnStart = (board: SquareInfo[], player: Player, chars: PlayerCharacters, rng: () => number = Math.random, ignoring: ReadonlySet<Player> = NO_IGNORING): ObjectTurnResult => {
     const res: ObjectTurnResult = { magic: 0, leaves: [], charged: [], fortified: [], poisoned: [] };
     const geo = geometryForCells(board.length);
     for (const k of activeObjectCells(board, player)) {
@@ -290,7 +302,7 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 res.magic += OBJECT_PARAMS.bigTreeMagic;
                 break;
             case 'deadTree': {
-                const cands = randomTargets(board, k, chars);
+                const cands = randomTargets(board, k, chars, ignoring);
                 if (cands.length === 0) break;
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = { ...board[j], effects: [...board[j].effects, { effect: '🍂' }] };
@@ -298,7 +310,7 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 break;
             }
             case 'thundercloud': {
-                const cands = randomTargets(board, k, chars);
+                const cands = randomTargets(board, k, chars, ignoring);
                 if (cands.length === 0) break;
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = addCharge(board[j], chars);
@@ -311,7 +323,7 @@ export const objectTurnStart = (board: SquareInfo[], player: Player, chars: Play
                 break;
             }
             case 'poisonSwamp': {
-                const cands = geo.surroundRange(k).filter((j) => !!board[j].player && board[j].player !== player && !isGuarded(board[j], chars));
+                const cands = geo.surroundRange(k).filter((j) => !!board[j].player && board[j].player !== player && !isGuarded(board[j], chars) && !ignores(ignoring, board[j].player as Player, player));
                 if (cands.length === 0) break;
                 const j = cands[Math.floor(rng() * cands.length)];
                 board[j] = poisonStrike({ ...board[j], effects: [...board[j].effects, { effect: '☠' }] }, chars);
@@ -340,7 +352,7 @@ export type ObjectSkillDef = {
     idx: number;
     name: string;
     icon: string;
-    costKey: 'onClickDemolish' | 'onClickWeather' | 'onClickLevelAll' | 'onClickReinforce' | 'onClickExpandAll' | 'onClickDuplicate';
+    costKey: 'onClickDemolish' | 'onClickWeather' | 'onClickLevelAll' | 'onClickReinforce' | 'onClickExpandAll' | 'onClickDuplicate' | 'onClickBuildBan' | 'onClickArson' | 'onClickIgnoreObjects';
     /** true なら使ってからマスを選ぶ。false なら即座に発動する */
     target: boolean;
     desc: string;
@@ -353,7 +365,14 @@ export const OBJECT_SKILLS = {
     reinforce: { idx: 117, name: '補強工事', icon: '🏗️', costKey: 'onClickReinforce', target: true, desc: `自陣のオブジェクトを1つ選んで、ライフを+${OBJECT_PARAMS.reinforceLife}` },
     expandAll: { idx: 118, name: '増築', icon: '🧱', costKey: 'onClickExpandAll', target: false, desc: `自陣のオブジェクトの全てのライフを+${OBJECT_PARAMS.expandLife}` },
     duplicate: { idx: 119, name: '分譲', icon: '🏘️', costKey: 'onClickDuplicate', target: true, desc: '自陣のオブジェクトを1つ選んで、同じものをもう1つ設置' },
+    // 席の旗を立てるスキル（盤面は変わらない）: 普請停止令=相手の次の手番、お構いなし=自分の次の手番の頭まで。旗は Game / sim が持つ
+    buildBan: { idx: 137, name: '普請停止令', icon: '🚧', costKey: 'onClickBuildBan', target: false, desc: '次のターン、相手はオブジェクトを設置できない' },
+    arson: { idx: 138, name: '付け火', icon: '🏮', costKey: 'onClickArson', target: true, desc: 'オブジェクトを1つ選んで、🔥を付与' },
+    ignoreObjects: { idx: 139, name: 'お構いなし', icon: '🚶', costKey: 'onClickIgnoreObjects', target: false, desc: '次の自分のターンの初めまで、相手のオブジェクトの効果を無視する' },
 } as const;
+
+/** 盤面を変えず、席の旗を立てるスキル */
+export const OBJECT_FLAG_SKILLS: readonly ObjectSkill[] = ['buildBan', 'ignoreObjects'];
 
 // 型の確認用（OBJECT_SKILLS の各要素が ObjectSkillDef に合うこと）
 const _check: Record<string, ObjectSkillDef> = OBJECT_SKILLS;
@@ -364,6 +383,8 @@ export const OBJECT_SKILL_KEYS = Object.keys(OBJECT_SKILLS) as ObjectSkill[];
 
 const enemyObjects = (board: SquareInfo[], player: Player, chars: PlayerCharacters): number[] =>
     board.map((sq, i) => (sq.object && sq.player && sq.player !== player && !isGuarded(sq, chars) ? i : -1)).filter((i) => i !== -1);
+const anyObjects = (board: SquareInfo[], chars: PlayerCharacters): number[] =>
+    board.map((sq, i) => (sq.object && sq.player && !isGuarded(sq, chars) ? i : -1)).filter((i) => i !== -1);
 const ownObjects = (board: SquareInfo[], player: Player): number[] =>
     board.map((sq, i) => (sq.object && sq.player === player ? i : -1)).filter((i) => i !== -1);
 
@@ -375,6 +396,7 @@ export const objectSkillTargets = (skill: ObjectSkill, board: SquareInfo[], play
     switch (skill) {
         case 'demolish': return enemyObjects(board, player, chars);
         case 'weather': return enemyObjects(board, player, chars).filter((i) => board[i].bind > 0);
+        case 'arson': return anyObjects(board, chars);
         case 'reinforce': return ownObjects(board, player);
         case 'duplicate': return objectLandableCells(board).length > 0 ? ownObjects(board, player).filter((i) => board[i].object !== 'shikigami') : []; // 式神は複製できない（式神を置くスキルが別にある）
         default: return [];
@@ -384,6 +406,8 @@ export const objectSkillTargets = (skill: ObjectSkill, board: SquareInfo[], play
 /** そのスキルを今使えるか（対象が無いと使えない） */
 export const objectSkillUsable = (skill: ObjectSkill, board: SquareInfo[], player: Player, chars: PlayerCharacters): boolean => {
     if (OBJECT_SKILLS[skill].target) return objectSkillTargets(skill, board, player, chars).length > 0;
+    if (skill === 'buildBan') return true; // 相手の旗を立てるだけ（相手が設置するかどうかは問わない）
+    if (skill === 'ignoreObjects') return board.some((sq) => sq.object && sq.player && sq.player !== player); // 敵のオブジェクトがあるときだけ意味がある
     return skill === 'levelAll' ? enemyObjects(board, player, chars).length > 0 : ownObjects(board, player).length > 0;
 };
 
@@ -434,6 +458,17 @@ export const runObjectSkill = (skill: ObjectSkill, board: SquareInfo[], player: 
         case 'levelAll':
             for (const k of enemyObjects(board, player, chars)) destroyOne(board, k, res);
             break;
+        case 'arson': {
+            const wasFrozen = isDormant(board[i]);
+            ignite(board, [i], Math.round(Math.sqrt(board.length)));
+            if (wasFrozen) res.blocked.push(i); // 氷結中は🔥のかわりに❄が解ける
+            else if (!board[i].object) res.destroyed.push(i); // 大木系は燃え尽きる
+            else res.affected.push(i);
+            break;
+        }
+        case 'buildBan':
+        case 'ignoreObjects':
+            break; // 席の旗は呼び出し側が立てる
         case 'reinforce':
             board[i] = { ...board[i], bind: board[i].bind + OBJECT_PARAMS.reinforceLife };
             res.affected.push(i);

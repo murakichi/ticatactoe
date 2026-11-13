@@ -1,3 +1,4 @@
+import type { ObjectSkill } from './objects';
 import { YingYangMode } from '../../types/Character';
 import React from 'react';
 import { Player } from '../../types/Player';
@@ -30,7 +31,7 @@ export interface GameLate {
     setUseShikigamiCurse: (on: boolean) => void;
     setUseShikigamiPurge: (on: boolean) => void;
     setObjectPlacing: React.Dispatch<React.SetStateAction<"bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null>>;
-    setObjectTool: React.Dispatch<React.SetStateAction<"reinforce" | "demolish" | "weather" | "levelAll" | "expandAll" | "duplicate" | null>>;
+    setObjectTool: React.Dispatch<React.SetStateAction<ObjectSkill | null>>;
     setCaptureChoice: React.Dispatch<React.SetStateAction<number | null>>;
     activeBudsCount: (player: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
     poisonCount: (player: "💙" | "⭕" | "🟩" | "🔶" | "⭐" | "🟣" | "🟫" | "🩷") => number;
@@ -52,6 +53,8 @@ export interface GameLate {
     chargeBuff: number[];
     currentYinYangMode: YingYangMode | undefined;
     silenced: boolean[];
+    objectBan: boolean[];
+    objectIgnore: boolean[];
     glacierPending: boolean[];
     glacierCharge: number[];
     budGuard: boolean[];

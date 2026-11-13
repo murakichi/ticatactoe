@@ -1,4 +1,5 @@
 // Game.tsx から切り出したハンドラ群: AI が選んだスキルキーから実行関数への対応表
+import type { ObjectSkill } from './objects';
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { GearTurnState } from './gearTurn';
 import { SkillCosts } from './skillCosts';
@@ -101,7 +102,7 @@ export interface SkillDispatchScope {
     onClickNightVeil: () => void;
     onClickGraveDiscount: () => void;
     onClickPoisonWard: () => void;
-    onClickObjectSkill: (skill: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate") => void;
+    onClickObjectSkill: (skill: ObjectSkill) => void;
     onClickObject: (kind: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder") => void;
     onClickLockRaid: () => void;
     onClickLockExtend: () => void;
@@ -150,7 +151,7 @@ export const useSkillDispatch = (g: SkillDispatchScope, late: () => GameLate) =>
         const aiBase = (seatCosts as Record<string, unknown>)[skill];
         if (skillBan[turnSeat] && typeof aiBase === 'number' && !['onClickShuffle', 'onClickUseLock', 'onClickCharge'].includes(skill) && bannedByCost(turnSeat, late().calculateCost(aiBase, false, false, currentTurnPlayer, skill))) return; // スキル封じ
         if (placeBlocked(lifeBan[turnSeat], skill, calculateTokenBind())) return; // ライフ3以下のコマを置けない縛り
-        if (skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skill, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(skill), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn })) return; // 相手の一言居士・お一人様限りの札の縛り
+        if (skillRestricted({ board: currentBoard, actor: currentTurnPlayer, skillKey: skill, basic: ['onClickCharge', 'onClickShuffle', 'onClickUseLock'].includes(skill), skillsThisTurn: gearTurn.current.skills[turnSeat], placedThisTurn, ignoring: late().objectIgnore[turnSeat], objectBanned: late().objectBan[turnSeat] })) return; // 相手の一言居士・お一人様限りの札の縛り
         // ヘイルメアリーは 'onClickHailMary:当選スキル名' (AI が当選に合わせて対象を決めてある)
         if (skill.startsWith('onClickHailMary:')) {
             exeHailMary(skill.slice('onClickHailMary:'.length));
@@ -240,6 +241,9 @@ export const useSkillDispatch = (g: SkillDispatchScope, late: () => GameLate) =>
             onClickReinforce: () => onClickObjectSkill('reinforce'),
             onClickExpandAll: () => onClickObjectSkill('expandAll'),
             onClickDuplicate: () => onClickObjectSkill('duplicate'),
+            onClickBuildBan: () => onClickObjectSkill('buildBan'),
+            onClickArson: () => onClickObjectSkill('arson'),
+            onClickIgnoreObjects: () => onClickObjectSkill('ignoreObjects'),
             onClickWorkshop: () => onClickObject('workshop'),
             onClickBarrierStone: () => onClickObject('barrierStone'),
             onClickAmuletShrine: () => onClickObject('amuletShrine'),

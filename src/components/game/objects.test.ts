@@ -1,4 +1,5 @@
 import { CharacterId } from '../../types/Character';
+import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { calculateWinner, lineSymbols } from '../../util';
 import { isBuilding, isObject, isShikigami } from '../../types/ObjectKind';
@@ -257,9 +258,9 @@ describe('市場・聖域・毒沼', () => {
 describe('オブジェクトを壊す・強くするスキル', () => {
     const run = (skill: Parameters<typeof runObjectSkill>[0], b: SquareInfo[], i = -1, player: '💙' | '⭕' = '💙') => runObjectSkill(skill, b, player, chars, i, rngFirst);
 
-    it('6種類あり、マスを選ぶのは解体・風化・補強工事・分譲、即発動は地ならし・増築', () => {
-        expect(OBJECT_SKILL_KEYS.filter((k) => OBJECT_SKILLS[k].target)).toEqual(['demolish', 'weather', 'reinforce', 'duplicate']);
-        expect(OBJECT_SKILL_KEYS.filter((k) => !OBJECT_SKILLS[k].target)).toEqual(['levelAll', 'expandAll']);
+    it('9種類あり、マスを選ぶのは解体・風化・補強工事・分譲・付け火、即発動は地ならし・増築・普請停止令・お構いなし', () => {
+        expect(OBJECT_SKILL_KEYS.filter((k) => OBJECT_SKILLS[k].target)).toEqual(['demolish', 'weather', 'reinforce', 'duplicate', 'arson']);
+        expect(OBJECT_SKILL_KEYS.filter((k) => !OBJECT_SKILLS[k].target)).toEqual(['levelAll', 'expandAll', 'buildBan', 'ignoreObjects']);
     });
 
     it('解体: 敵のオブジェクトだけが対象。壊すと空きマスになる。氷結中は❄が1つ減るだけ。🔑ロックは対象外', () => {
@@ -483,5 +484,73 @@ describe('式神はオブジェクトの一種', () => {
         b[2] = newObject('💙', 'fort');
         expect(hasOwnObject(b, '💙')).toBe(true);
         expect(ownPieceCount(b, '💙')).toBe(1);
+    });
+});
+
+describe('新スキル: 普請停止令・付け火・お構いなし', () => {
+    it('付け火: 大木は燃え尽き、それ以外は🔥が付いてライフが1減る。氷結中は❄が解けるだけ。🔑ロック中は選べない', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'bigTree');
+        b[1] = newObject('⭕', 'fort');
+        b[10] = { ...newObject('⭕', 'fort'), effects: [{ effect: '❄' }] };
+        b[15] = { ...newObject('⭕', 'fort'), effects: [{ effect: '🔑', value: 2 }] };
+        expect(objectSkillTargets('arson', b, '💙', chars)).toEqual([0, 1, 10]);
+        const burn = runObjectSkill('arson', b, '💙', chars, 0) as NonNullable<ReturnType<typeof runObjectSkill>>;
+        expect(burn.destroyed).toEqual([0]);
+        expect(b[0].object).toBeUndefined();
+        const fire = runObjectSkill('arson', b, '💙', chars, 1) as NonNullable<ReturnType<typeof runObjectSkill>>;
+        expect(fire.affected).toEqual([1]);
+        expect(b[1].effects.some((e) => e.effect === '🔥')).toBe(true);
+        expect(b[1].bind).toBe(OBJECT_DEFS.fort.life - 1);
+        const thaw = runObjectSkill('arson', b, '💙', chars, 10) as NonNullable<ReturnType<typeof runObjectSkill>>;
+        expect(thaw.blocked).toEqual([10]);
+        expect(b[10].effects.some((e) => e.effect === '🔥')).toBe(false);
+        expect(runObjectSkill('arson', b, '💙', chars, 15)).toBeNull();
+    });
+    it('お構いなしは敵のオブジェクトがあるときだけ使える。普請停止令はいつでも使える', () => {
+        const b = board();
+        expect(objectSkillUsable('ignoreObjects', b, '💙', chars)).toBe(false);
+        expect(objectSkillUsable('buildBan', b, '💙', chars)).toBe(true);
+        b[0] = newObject('⭕', 'oneWord');
+        expect(objectSkillUsable('ignoreObjects', b, '💙', chars)).toBe(true);
+    });
+    it('普請停止令: オブジェクトを設置する全てのスキル（祈り・分譲を含む）が使えなくなる。通常のトークンは使える', () => {
+        const b = board();
+        const base = { board: b, actor: '💙' as const, skillsThisTurn: 0, placedThisTurn: 0, objectBanned: true };
+        for (const key of ['onClickBigTree', 'onClickFort', 'onClickPrayer', 'onClickDuplicate', 'onClickBoulder']) expect(skillRestricted({ ...base, skillKey: key })).toBe(true);
+        expect(skillRestricted({ ...base, skillKey: 'onClickToken' })).toBe(false);
+        expect(skillRestricted({ ...base, objectBanned: false, skillKey: 'onClickBigTree' })).toBe(false);
+        expect(skillRestricted({ ...base, skillKey: 'onClickBigTree', basic: true })).toBe(false);
+    });
+    it('お構いなし: 敵の一言居士・お一人様限りの札・泥田坊・閻魔の舌の縛りを受けない', () => {
+        const b = board();
+        b[0] = newObject('⭕', 'oneWord');
+        b[1] = newObject('⭕', 'soloSign');
+        b[2] = newObject('⭕', 'mudField');
+        b[3] = newObject('⭕', 'tongueKing');
+        const one = { board: b, actor: '💙' as const, skillsThisTurn: 1, placedThisTurn: 1, skillKey: 'onClickToken' };
+        expect(skillRestricted(one)).toBe(true);
+        expect(skillRestricted({ ...one, ignoring: true })).toBe(false);
+        expect(newPieceBlocked(b, '💙', 1)).toBe(true);
+        expect(newPieceBlocked(b, '💙', 1, true)).toBe(false);
+        expect(mudAdjustedBind(b, '💙', 5)).toBe(0);
+        expect(mudAdjustedBind(b, '💙', 5, true)).toBe(5);
+        const snap = effectSnapshot(b);
+        const after = b.map((sq, i) => (i === 5 ? { player: '💙' as const, bind: 4, effects: [{ effect: '🔥' as const }] } : sq));
+        snap[5] = [];
+        const zeroed = enforceEffectRules(after.slice(), snap, '💙', true);
+        expect(zeroed.zeroed).toEqual([]);
+        expect(enforceEffectRules(after.slice(), snap, '💙').zeroed).toEqual([5]);
+    });
+    it('お構いなし: 敵の毒沼・雷雲・枯れた大木の手番開始時の標的にならない（自分のコマだけが周囲にあれば何も起きない）', () => {
+        for (const kind of ['poisonSwamp', 'thundercloud', 'deadTree'] as const) {
+            const b = board();
+            b[5] = newObject('⭕', kind);
+            b[6] = { player: '💙', bind: 4, effects: [] };
+            const hit = objectTurnStart(b.map((sq) => ({ ...sq })), '⭕', chars, rngFirst);
+            expect(hit.poisoned.length + hit.charged.length + hit.leaves.length).toBe(1);
+            const safe = objectTurnStart(b.map((sq) => ({ ...sq })), '⭕', chars, rngFirst, new Set<Player>(['💙']));
+            expect(safe.poisoned.length + safe.charged.length + safe.leaves.length).toBe(0);
+        }
     });
 });

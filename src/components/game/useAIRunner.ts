@@ -65,7 +65,7 @@ export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
                 else if (rest.length === 0 && currentAI) {
                     // 着手マスはスキル実行前の盤面で決めてある。ランダム設置のトークンなどでそのマスが埋まり（⚡付き自陣コマは無敵で
                     // 触れない）クリックが無視されると、手番が進まず止まる。今の盤面で打ち直し、無ければチャージでパスする
-                    const cell = resolveMoveCell(currentAI, currentBoard, characters, late().life, next, late().lifeBan[turnSeat], newPieceBlocked(currentBoard, currentTurnPlayer, late().placedThisTurn));
+                    const cell = resolveMoveCell(currentAI, currentBoard, characters, late().life, next, late().lifeBan[turnSeat], newPieceBlocked(currentBoard, currentTurnPlayer, late().placedThisTurn, late().objectIgnore[turnSeat]));
                     if (cell !== null) late().onCellClick(cell);
                     else late().onClickCharge();
                 } else late().onCellClick(next);
@@ -107,6 +107,7 @@ export const useAIRunner = (g: AIRunnerScope, late: () => GameLate) => {
                 yinYangMode: late().currentYinYangMode === 'yang' ? 'yang' : 'ying',
                 dragonForm: dragon[turnSeat]?.form ?? 'miko',
                 silenced: late().silenced[turnSeat],
+                objectBanned: late().objectBan[turnSeat],
                 glacierPending: late().glacierPending[turnSeat],
                 glacierCharge: late().glacierCharge[turnSeat],
                 budGuard: late().budGuard[turnSeat],

@@ -78,6 +78,7 @@ function inputOf(s, reroll) {
         yinYangMode: s.yy[seat] === 'yang' ? 'yang' : 'ying',
         dragonForm: s.dragon[seat].form,
         silenced: s.silenced[seat],
+        objectBanned: s.objectBan[seat],
         glacierPending: s.glacierPending[seat],
         glacierCharge: s.glacierCharge[seat],
         budGuard: s.budGuard[seat],
@@ -92,7 +93,7 @@ function inputOf(s, reroll) {
 
 /** お一人様限りの札: 相手の札が働いていて、この手番にもう新しいコマを置いたか（空きマスに置けない） */
 function soloBlock(s) {
-    return require('./shared/objects').newPieceBlocked(s.board, E.symbolOfSeat(s.turn), E.placedThisTurn(s));
+    return require('./shared/objects').newPieceBlocked(s.board, E.symbolOfSeat(s.turn), E.placedThisTurn(s), s.objectIgnore[s.turn]);
 }
 
 /** 計画のスキルを1つ実行する。縛り(ライフ3以下を置けない)に掛かるスキルは Game.executeSkillForAI と同じく何もしない */

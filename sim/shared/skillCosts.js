@@ -180,6 +180,10 @@ exports.skillCosts = {
     onClickLockDiscount: 1,
     // 大岩(idx 136・ユーザー指定): 効果は無く2ターンのロック付きで設置するだけ。基準(docs/skill-cost-rules.md)の下限より安いが、ユーザー指定で1
     onClickBoulder: 1,
+    // 新スキル(idx 137〜139)。コストはユーザー指定（3 / 2 / 4）
+    onClickBuildBan: 3,
+    onClickArson: 2,
+    onClickIgnoreObjects: 4, // お構いなし(idx 139): 次の自分のターンの初めまで、相手のオブジェクトの効果（縛り・手番開始時の攻撃）を無視する
 };
 // ミアズマの実コスト下限。毒が増えるほど安くなる仕様だが、0だと連打で敵マスを確実に0にできてしまうため、
 // 最低1は払う（毒使いは魔力+1/ターンなので実質ターンに1回までになる）

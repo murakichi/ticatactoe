@@ -70,6 +70,9 @@ export interface TurnEffectsScope {
     setProliferateAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setProliferateCountAt: (seat: number, value: number | ((prev: number) => number)) => void;
     setSilencedAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
+    objectIgnore: boolean[];
+    setObjectBanAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
+    setObjectIgnoreAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setLifeBanAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setGearOffAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setChargeBuffAt: (seat: number, value: number | ((prev: number) => number)) => void;
@@ -84,7 +87,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
+    const { objectIgnore, setObjectBanAt, setObjectIgnoreAt, dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -198,7 +201,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             let startBoard = currentBoard;
             {
                 const eb = currentBoard.slice();
-                const er = enforceEffectRules(eb, effectSnap.current, symbols[turnSeat]);
+                const er = enforceEffectRules(eb, effectSnap.current, symbols[turnSeat], objectIgnore[turnSeat]);
                 if (er.removed.length > 0 || er.zeroed.length > 0) {
                     if (er.removed.length > 0) addLog(`見ざる地蔵: ${er.removed.map(posName).join('・')}に付いたエフェクトが消えた`);
                     if (er.zeroed.length > 0) addLog(`閻魔の舌: ${er.zeroed.map(posName).join('・')}のコマのライフが0になった`);
@@ -262,7 +265,8 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             // オブジェクト: 🔥で燃え尽きた大木を掃除し、次の手番の席のオブジェクトが効果を発揮する（objects.ts。魔力とライフの分は下の手番開始の計算に足す）
             const objBoard = turnBoard.slice();
             const burnt = sweepBurntTrees(objBoard);
-            const objRes = objectTurnStart(objBoard, nextSymbol, characters);
+            const objRes = objectTurnStart(objBoard, nextSymbol, characters, Math.random, new Set(symbols.filter((_, seat) => objectIgnore[seat])));
+            setObjectIgnoreAt(nextSeat, false); // お構いなし: 次の自分の手番の頭で切れる
             if (burnt.length > 0) {
                 addLog(`🔥で${burnt.map(posName).join('・')}のオブジェクトが燃え尽きた`);
                 flashCells(burnt);
@@ -348,6 +352,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         }
         // サイレンスは「封じられた側の手番が終わるたび」に解除
         setSilencedAt(turnSeat, false);
+        setObjectBanAt(turnSeat, false);
         setSkillBanAt(turnSeat, null);
         setLifeBanAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除

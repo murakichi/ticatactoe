@@ -15,6 +15,7 @@ import { canFreeze, lockable, emptyBlocked, overwriteBlocked } from './thermal';
 import { isShielded } from './charge';
 import { lockBlocksPlacement } from './keysmith';
 import { isShikigami } from '../../util';
+import { OBJECT_BAN_KEYS } from './objects';
 
 /** 着地がランダムな帯電トークン（撃った後の盤で着手を選び直す） */
 const RANDOM_CHARGE_TOKENS = ['onClickChargeToken', 'onClickDoubleChargeToken'];
@@ -57,6 +58,8 @@ export type AITurnInput = {
     oppLastStand: boolean;
     yinYangMode: 'ying' | 'yang';
     silenced: boolean;
+    /** 普請停止令: この手番、オブジェクトを設置するスキルを撃てない */
+    objectBanned: boolean;
     glacierPending: boolean;
     glacierCharge: number;
     budGuard: boolean;
@@ -137,6 +140,11 @@ export const planAITurn = (ai: AIPlayer, input: AITurnInput, pickHailMary: () =>
         result.lockTargets = undefined;
     }
 
+    // 普請停止令: オブジェクトを設置するスキル（祈り・分譲を含む）は撃てない。計画から外す（外さないと撃てないまま計画し直し続ける）
+    if (input.objectBanned) {
+        result.skills = result.skills.filter((sk) => !OBJECT_BAN_KEYS.has(sk));
+        if (result.chargeClicks) result.chargeClicks = result.chargeClicks.filter((c) => !OBJECT_BAN_KEYS.has(c.skill));
+    }
     // 一寸の虫に魂なし: ライフ3以下のコマは置けないので、通常の着手と置くスキルをやめる（残りが無ければチャージ）
     if (input.lifeBan) {
         result.skills = result.skills.filter((sk) => !placeBlocked(true, sk, input.tokenBind));

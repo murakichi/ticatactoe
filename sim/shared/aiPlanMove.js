@@ -8,6 +8,7 @@ const keysmith_1 = require("./keysmith");
 const Player_1 = require("./Player");
 const discount_1 = require("./discount");
 const objects_1 = require("./objects");
+const aiObjectControl_1 = require("./aiObjectControl");
 const util_1 = require("./util");
 const skillCosts_1 = require("./skillCosts");
 const boardGeometry_1 = require("./boardGeometry");
@@ -624,6 +625,30 @@ function planChargeAndObjects(c) {
             board = board.slice();
             board[cell] = { player: undefined, bind: 0, effects: [{ effect: '🔑' }] };
             magic -= cost;
+        }
+    }
+    // 新スキル（普請停止令・付け火・お構いなし）: 相手にリーチも自分に勝ち筋も無いときだけ。魔力は残りで払える分だけ
+    const objChars = this.seatCharacters();
+    if (this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0) {
+        const arsonCost = this.calculateAICost(costs.onClickArson, false, false, 'onClickArson');
+        if (availableSkills.includes(objects_1.OBJECT_SKILLS.arson.idx) && magic >= arsonCost) {
+            const cell = (0, aiObjectControl_1.arsonTarget)(board, this.playerSymbol, objChars);
+            if (cell !== null) {
+                chargeClicks.push({ skill: 'onClickArson', target: cell });
+                magic -= arsonCost;
+                board = board.slice();
+                board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🔥' }] }; // 以後の計画では燃えているものとして扱う（同じものを焼かない）
+            }
+        }
+        const banCost = this.calculateAICost(costs.onClickBuildBan, false, false, 'onClickBuildBan');
+        if (availableSkills.includes(objects_1.OBJECT_SKILLS.buildBan.idx) && magic >= banCost && (0, aiObjectControl_1.buildBanWanted)(board, this.opponents, (p) => this.characterOf(p))) {
+            chargeClicks.push({ skill: 'onClickBuildBan' });
+            magic -= banCost;
+        }
+        const ignoreCost = this.calculateAICost(costs.onClickIgnoreObjects, false, false, 'onClickIgnoreObjects');
+        if (availableSkills.includes(objects_1.OBJECT_SKILLS.ignoreObjects.idx) && magic >= ignoreCost && (0, aiObjectControl_1.ignoreObjectsWanted)(board, this.playerSymbol, objChars, magic - ignoreCost)) {
+            chargeClicks.push({ skill: 'onClickIgnoreObjects' });
+            magic -= ignoreCost;
         }
     }
     c.board = board;

@@ -141,6 +141,9 @@ exports.SKILL_CATALOG = [
     { idx: 134, name: '錠の転換', icon: '🗝️', category: 'control', costKey: 'onClickLockConvert', desc: 'ロックのかかっているマスを1つ選んで解除し、解除した分のライフを自分に加算' },
     { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面のロックのマス1つにつき、打つスキルのコストを1軽減' },
     { idx: 136, name: '大岩', icon: '⛰️', category: 'object', costKey: 'onClickBoulder', desc: '空きマスに大岩を設置。2ターンのロック付きで、効果は無い' },
+    { idx: 137, name: '普請停止令', icon: '🚧', category: 'object', costKey: 'onClickBuildBan', desc: '次のターン、相手はオブジェクトを設置できない' },
+    { idx: 138, name: '付け火', icon: '🏮', category: 'object', costKey: 'onClickArson', desc: 'オブジェクトを1つ選んで、🔥を付与' },
+    { idx: 139, name: 'お構いなし', icon: '🚶', category: 'object', costKey: 'onClickIgnoreObjects', desc: '次の自分のターンの初めまで、相手のオブジェクトの効果を無視する' },
 ];
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */
 exports.REMOVED_SKILL_IDX = [50];

@@ -1,4 +1,5 @@
 // Game.tsx から切り出したハンドラ群: マスのクリック（スキルの対象選択・通常の着手）
+import type { ObjectSkill } from './objects';
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { GearTurnState } from './gearTurn';
 import { seedBud } from './tokenAfter';
@@ -73,7 +74,7 @@ export interface CellClickScope {
     exeShikigamiPlace: (i: number) => void;
     objectPlacing: "bigTree" | "deadTree" | "spring" | "fort" | "thundercloud" | "market" | "sanctuary" | "poisonSwamp" | "workshop" | "barrierStone" | "amuletShrine" | "luckyCat" | "mudField" | "tongueKing" | "eightTrigrams" | "soloSign" | "oneWord" | "blindMonkey" | "boulder" | null;
     exeObjectPlace: (i: number) => void;
-    objectTool: "demolish" | "weather" | "levelAll" | "reinforce" | "expandAll" | "duplicate" | null;
+    objectTool: ObjectSkill | null;
     exeObjectTool: (i: number) => void;
     useShikigamiBlast: boolean;
     exeShikigamiBlast: (i: number) => void;
@@ -406,7 +407,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             return;
         }
         // お一人様限りの札: この手番に新しいコマを置いたあとは、空きマスに置けない
-        if (!currentBoard[i].player && newPieceBlocked(currentBoard, currentTurnPlayer, placedThisTurn)) {
+        if (!currentBoard[i].player && newPieceBlocked(currentBoard, currentTurnPlayer, placedThisTurn, late().objectIgnore[turnSeat])) {
             addLog('お一人様限りの札: この手番はもう新しいコマを置けない');
             return;
         }
