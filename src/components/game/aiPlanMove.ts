@@ -5,7 +5,7 @@ import type AIPlayer from './AIPlayer';
 import { seatOf } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { isDiscountSkill } from './discount';
-import { OBJECT_DEFS, OBJECT_SKILLS, objectLandable, enemyObjectActive } from './objects';
+import { OBJECT_DEFS, OBJECT_SKILLS, objectLandable, enemyObjectActive, objectSkillTargets } from './objects';
 import { arsonTarget, buildBanWanted, ignoreObjectsWanted } from './aiObjectControl';
 import { calculateWinner, findEmptyIndexes, isObject, lineSymbols } from '../../util';
 import { SkillCosts, MIASMA_MIN_COST } from './skillCosts';
@@ -652,30 +652,6 @@ function planChargeAndObjects(this: AIPlayer, c: PlanContext): AIResult | null {
             magic -= cost;
         }
     }
-    // 新スキル（普請停止令・付け火・お構いなし）: 相手にリーチも自分に勝ち筋も無いときだけ。魔力は残りで払える分だけ
-    const objChars = this.seatCharacters() as Parameters<typeof arsonTarget>[2];
-    if (this.opponents.every((o) => this.countReaches(board, o) === 0) && this.countReaches(board, this.playerSymbol) === 0) {
-        const arsonCost = this.calculateAICost(costs.onClickArson, false, false, 'onClickArson');
-        if (availableSkills.includes(OBJECT_SKILLS.arson.idx) && magic >= arsonCost) {
-            const cell = arsonTarget(board, this.playerSymbol, objChars);
-            if (cell !== null) {
-                chargeClicks.push({ skill: 'onClickArson', target: cell });
-                magic -= arsonCost;
-                board = board.slice();
-                board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🔥' }] }; // 以後の計画では燃えているものとして扱う（同じものを焼かない）
-            }
-        }
-        const banCost = this.calculateAICost(costs.onClickBuildBan, false, false, 'onClickBuildBan');
-        if (availableSkills.includes(OBJECT_SKILLS.buildBan.idx) && magic >= banCost && buildBanWanted(board, this.opponents, (p) => this.characterOf(p))) {
-            chargeClicks.push({ skill: 'onClickBuildBan' });
-            magic -= banCost;
-        }
-        const ignoreCost = this.calculateAICost(costs.onClickIgnoreObjects, false, false, 'onClickIgnoreObjects');
-        if (availableSkills.includes(OBJECT_SKILLS.ignoreObjects.idx) && magic >= ignoreCost && ignoreObjectsWanted(board, this.playerSymbol, objChars, magic - ignoreCost)) {
-            chargeClicks.push({ skill: 'onClickIgnoreObjects' });
-            magic -= ignoreCost;
-        }
-    }
     c.board = board;
     c.magic = magic;
     return null;
@@ -1288,6 +1264,42 @@ export const planMoveMethods = {
         return { move: block, skills: [] };
     },
 
+    /**
+     * 新スキル（普請停止令・付け火・お構いなし）。計画には建造物が『🔑ロック中の空きマス』に見えるので、本物の盤面（argsIn[0]）で判断して、
+     * 計画の先頭に足す（撃つと手番は進まないので、残りの計画はそのまま続く）。相手にリーチも自分に勝ち筋も無いときだけ
+     */
+    addObjectControl(this: AIPlayer, result: AIResult, argsIn: PlanMoveArgs): AIResult {
+        const [real, magicIn, costs, , , availableSkills] = argsIn;
+        if (result.win || result.reroll || result.hailMary || !real.some((sq) => !!sq.object)) return result;
+        if (!this.opponents.every((o) => this.countReaches(real, o) === 0) || this.countReaches(real, this.playerSymbol) !== 0) return result;
+        const objChars = this.seatCharacters() as Parameters<typeof arsonTarget>[2];
+        const clicks: { skill: string; target?: number }[] = [];
+        let magic = magicIn - this.lastSpent;
+        let board = real;
+        const arsonCost = this.calculateAICost(costs.onClickArson, false, false, 'onClickArson');
+        if (availableSkills.includes(OBJECT_SKILLS.arson.idx) && magic >= arsonCost) {
+            const cell = arsonTarget(board, this.playerSymbol, objChars);
+            if (cell !== null) {
+                clicks.push({ skill: 'onClickArson', target: cell });
+                magic -= arsonCost;
+                board = board.slice();
+                board[cell] = { ...board[cell], effects: [...board[cell].effects, { effect: '🔥' }] }; // 同じものを焼かない
+            }
+        }
+        const banCost = this.calculateAICost(costs.onClickBuildBan, false, false, 'onClickBuildBan');
+        if (availableSkills.includes(OBJECT_SKILLS.buildBan.idx) && magic >= banCost && buildBanWanted(board, this.opponents, (p) => this.characterOf(p))) {
+            clicks.push({ skill: 'onClickBuildBan' });
+            magic -= banCost;
+        }
+        const ignoreCost = this.calculateAICost(costs.onClickIgnoreObjects, false, false, 'onClickIgnoreObjects');
+        if (availableSkills.includes(OBJECT_SKILLS.ignoreObjects.idx) && magic >= ignoreCost && ignoreObjectsWanted(board, this.playerSymbol, objChars, magic - ignoreCost)) {
+            clicks.push({ skill: 'onClickIgnoreObjects' });
+            magic -= ignoreCost;
+        }
+        if (clicks.length === 0) return result;
+        return { ...result, chargeClicks: [...clicks, ...(result.chargeClicks ?? [])] };
+    },
+
     makeMoveCore(this: AIPlayer, ...argsIn: PlanMoveArgs): AIResult {
         // 1手で勝てるなら、スキルを撃たずにその手を打つ。スキルの発動条件は『空きマスで完成する自分のリーチ』しか見ないものが多く、
         // 敵コマの奪取で完成する勝ちがあるのにロック・封鎖の断・審判の日・引き直しなどを先に選んでいた（鍵師が魔力136を抱えたまま封鎖の断を撃ち続けた・#600）
@@ -1310,6 +1322,7 @@ export const planMoveMethods = {
             ? [argsIn[0].map((sq) => (isBuilding(sq) ? { player: undefined, bind: 0, effects: [{ effect: '🔑' as const }] } : sq)), ...argsIn.slice(1)] as PlanMoveArgs
             : argsIn;
         let result = this.planMove(...args);
+        result = this.addObjectControl(result, argsIn);
         const magic = args[1];
         let saving = false;
         // 鍵師: 守りが要らない間は魔力を貯めて、封鎖の断のコストに届かせる（魔力が足りれば封鎖の断は最初のロック系として無料）。ロック以外のスキルは見送って着手だけ行う

@@ -15,6 +15,7 @@
  *   node sim/probe-top.js --target X --scan deck --neighbors 30 --games 60                # デッキ1枚差し替えの近傍をランダムに N 個測る
  *   node sim/probe-top.js --target X --scan audit --games 60 --opp you,giant              # デッキの各札を1枚ずつ使用禁止(ban)・各ギアを1つずつ外した寄与。結果が基準と完全一致=「差なし」（未使用の疑い。probe-usage.js で確認）
  *   node sim/probe-top.js --target X --scan deck --swap 3 --cat ice --neighbors 40        # 3枚同時に入れ替え（シナジー探索）。--cat で入れる札のカテゴリを限る
+ *   node sim/probe-top.js --target X --scan deck --ins 137,138,139 --neighbors 12          # 入れる札を指定の idx に限る（新スキルの採用判定）
  *
 
  * 共通: --envDeck pick / --oppGears pick（相手が本番どおり主案と別案から選ぶ。完了判定の2条件目）, --oppGears recommended|none|random|lastStand（lastStand=相手全員が土壇場の防壁を1枠目に装備。相手のギア。既定は推奨。人間がギアなし/好きに選ぶ場合の頑健性確認用）, --size N（盤面。既定 4）, --envDeck varied（頑健性確認: 相手のデッキを推奨から3枚ランダムに入れ替える。本番のAIデッキはこう入れ替えないので、環境の基準ではなくストレステスト）, --workers N（既定=コア数）,
@@ -326,7 +327,8 @@ async function main() {
             const keep = base.slice();
             const outs = [], ins = [];
             for (let j = 0; j < k; j++) outs.push(keep.splice(Math.floor(rng() * keep.length), 1)[0]);
-            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!cat || (deckMod.SKILL_CATALOG.find((c) => c.idx === i) || {}).category === cat));
+            const ins0 = args.ins ? args.ins.split(',').map(Number) : null; // 入れる札をこの idx に限る（新スキルの採用判定用）
+            const pool = [...deckMod.AVAILABLE_SKILL_IDX].filter((i) => !base.includes(i) && (!ins0 || ins0.includes(i)) && (!cat || (deckMod.SKILL_CATALOG.find((c) => c.idx === i) || {}).category === cat));
             if (pool.length < k) break;
             for (let j = 0; j < k; j++) ins.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
             const key = outs.slice().sort().join('.') + '>' + ins.slice().sort().join('.');
