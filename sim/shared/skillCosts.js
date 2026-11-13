@@ -71,7 +71,7 @@ exports.skillCosts = {
     // 鍵師の固有スキル 封鎖の断（#439）: 自陣7・空きマス2のロック、敵陣のロックを解除して解除数ぶんダメージ。ターン終了。敵陣のロックの数だけ軽減（下限5, keysmith.ts の sealBaseCost）
     onClickSeal: 10,
     onClickPrayer: 4,
-    onClickRoar: 6,
+    onClickRoar: 8,
     // バッズ系の汎用スキル(idx 33-36)。氷結・火炎で🌱が消えやすくなった環境向け
     onClickHarvestEve: 2,
     onClickSolstice: 4,
