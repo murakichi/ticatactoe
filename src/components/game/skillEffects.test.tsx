@@ -124,6 +124,7 @@ const CATALOG_SKILL_EFFECTS: Record<string, Entry> = {
     onClickBurnOff: 'burnOff',
     onClickFreeToken: 'freeToken',
     onClickNightVeil: 'nightVeil',
+    onClickPassiveSeal: 'silence',
     onClickGraveDiscount: 'graveDiscount',
     onClickPoisonWard: 'poisonWard',
     onClickGraveOffering: 'graveOffering',

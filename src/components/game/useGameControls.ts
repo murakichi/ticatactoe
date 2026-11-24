@@ -44,6 +44,7 @@ export interface GameControlsScope {
     setProliferateAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setSilencedAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setLifeBanAll: React.Dispatch<React.SetStateAction<boolean[]>>;
+    setPassiveSealAll: React.Dispatch<React.SetStateAction<number[]>>;
     setGearOffAll: React.Dispatch<React.SetStateAction<boolean[]>>;
     setChargeBuffAll: React.Dispatch<React.SetStateAction<number[]>>;
     setProliferateCountAll: React.Dispatch<React.SetStateAction<number[]>>;
@@ -79,7 +80,7 @@ export interface GameControlsScope {
     rollPriceTables: () => (SkillCosts | null)[];
 }
 export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
-    const { setDragonAll, geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
+    const { setPassiveSealAll, setDragonAll, geo, seatCount, props, symbols, winner, gameLog, currentTurn, makeBoard, setCurrentBoard, setHistory, setCurrentTurn, setPlacements, setMagicAll, setUseMagicCountAll, setUseTokenCountAll, setUseToken, setUseAssaultAll, setProliferateAll, setSilencedAll, setLifeBanAll, setGearOffAll, setChargeBuffAll, setProliferateCountAll, setPendingMode, setUseBuds, setUseLock, setUseInjection, setGlacierPendingAll, setGlacierChargeAll, setBudGuardAll, setObjectPlacing, setObjectTool, setCaptureChoice, setIcicleCell, setRemainNecroAll, setNecroCostAll, baseNecromancyCost, setPendingAIMove, setGameLog, setHighlightedCells, setTurnSeat, setStepRequest, setRestartCount, setPreviewCells, setBoardEffect, setBoardBurst, setLockedSkillsAll, gearTurn, ruinState, lastStandUsed, setLastStandSaves, setPriceTables, rollPriceTables, gearsBySeat, rampRef, setSkillBanAll, setBoardDamage, damageHints } = g;
 
 
     const buildLogText = (): string => {
@@ -141,6 +142,7 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
         setSilencedAll(Array(seatCount).fill(false));
         setSkillBanAll(Array(seatCount).fill(null));
         setLifeBanAll(Array(seatCount).fill(false));
+        setPassiveSealAll(Array(seatCount).fill(0));
         setGearOffAll(Array(seatCount).fill(false));
         setChargeBuffAll(Array(seatCount).fill(0));
         setProliferateCountAll(zeros());

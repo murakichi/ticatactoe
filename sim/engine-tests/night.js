@@ -419,3 +419,46 @@ test('審判の日で置いたマスは🔑ロック付き（ライフは2のま
     e.placeMove(g, 5);
     assert.strictEqual(g.board[5].effects.find((x) => x.effect === '🔑').stack, 9);
 });
+
+// ---- 能ある鷹は爪を抜かれる(idx 137) ----
+test('能ある鷹は爪を抜かれる: 使うと相手全員のキャラが『あなた』扱いになり、使った席の手番が2回終わると元に戻る。コスト6', () => {
+    const s = e.newGame({ chars: ['you', 'poisoner', 'giant'], rng: e.makeRng(7) });
+    s.magic[0] = 30;
+    assert.strictEqual(e.skillCosts.onClickPassiveSeal, 6);
+    e.SKILLS.passiveSeal(s);
+    assert.strictEqual(s.magic[0], 24);
+    assert.deepStrictEqual(s.chars, ['you', 'you', 'you']);
+    assert.deepStrictEqual(s.baseChars, ['you', 'poisoner', 'giant']);
+    assert.strictEqual(s.passiveSeal[0], 2);
+    // 使った席の手番が終わる(1回目): まだ効いている
+    s.turn = 0; s.currentTurn = 1; e.advanceTurn(s);
+    assert.strictEqual(s.passiveSeal[0], 1);
+    assert.deepStrictEqual(s.chars, ['you', 'you', 'you']);
+    // 相手の手番が終わっても残る
+    s.turn = 1; e.advanceTurn(s);
+    assert.deepStrictEqual(s.chars, ['you', 'you', 'you']);
+    // 使った席の次の手番の終わりで切れる
+    s.turn = 0; e.advanceTurn(s);
+    assert.strictEqual(s.passiveSeal[0], 0);
+    assert.deepStrictEqual(s.chars, ['you', 'poisoner', 'giant']);
+});
+
+test('能ある鷹は爪を抜かれる: 無効の間は相手のパッシブが働かない（毒使いの毒のライフ1.5倍・軍師のトークンコストなど）', () => {
+    const s = e.newGame({ chars: ['you', 'poisoner'], rng: e.makeRng(8) });
+    s.magic[0] = 30;
+    const sharedPoison = require('../shared/poison');
+    const sq = () => ({ player: '⭕', bind: 4, effects: [{ effect: '☠' }] });
+    assert.strictEqual(sharedPoison.poisonStrike(sq(), s.chars).bind, 6, '封印前: 毒使いのコマは毒が付くとライフ1.5倍');
+    e.SKILLS.passiveSeal(s);
+    assert.strictEqual(sharedPoison.poisonStrike(sq(), s.chars).bind, 4, '封印中: 1.5倍にならない');
+});
+
+test('能ある鷹は爪を抜かれる: 自分には効かず、重ね掛けは残りターンを延ばす（2回の手番の終わりまで）', () => {
+    const s = e.newGame({ chars: ['necromancer', 'you'], rng: e.makeRng(9) });
+    s.magic[0] = 40;
+    e.SKILLS.passiveSeal(s);
+    assert.strictEqual(s.chars[0], 'necromancer', '使った席のキャラは変わらない');
+    s.turn = 0; e.advanceTurn(s); // 1回目が終わる(残り1)
+    e.SKILLS.passiveSeal(s);
+    assert.strictEqual(s.passiveSeal[0], 2, '再び使うと2に戻る');
+});
