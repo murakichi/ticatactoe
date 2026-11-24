@@ -46,6 +46,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     spellWard: 'passive', // スキルを使ったターンだけ効果ダメージが通らない
     lastStand: 'trigger', // 防壁の発動
     springThunder: 'trigger', // 氷結した空きマスの❄を解く
+    chargeRest: 'trigger', // チャージで静養が始まる
 };
 
 const gameSource = readGameSource();

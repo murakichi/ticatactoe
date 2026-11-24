@@ -425,7 +425,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
         const decayNow = shouldDecay(placements, seatCount);
         setPlacements(placements + 1);
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は decay.ts で sim と共有
-        const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols, isCrowded(nextBoard, seatCount)) : null; // 満杯の盤面は自然減衰がもう1回
+        const decayed = decayNow ? decayBoard(nextBoard, i, characters, symbols, isCrowded(nextBoard, seatCount), gearTurn.current.calm.map((c) => c > 0)) : null; // 満杯の盤面は自然減衰がもう1回
         const burnCells = decayed?.burnCells ?? [];
         // 受けたダメージの内訳(自然減衰は絵文字なし、🔥と☠は絵文字付き)
         decayed?.damage.forEach((d) => {

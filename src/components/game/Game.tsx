@@ -111,7 +111,7 @@ export const Game = (props: GameProps) => {
     const { wardRef, gearTurn, gearCost, lastStandUsed, lastStandSaves, lastStandHolderFor, setLastStandSaves, effectSnap, ruinState, lastStandActiveAgainst, costEnvFor, reaperSweeps, setReaperSweeps } = useGearRuntime({ seatCount, gearsBySeat, symbols, currentBoard, turnSeat, characters, necroCostRef }, late);
     wardRef.current = { gears: gearsBySeat, turnSeat };
     useEffect(() => {
-        setEffectWard((sq) => !!sq.player && hasGear(wardRef.current.gears[seatOf(sq.player)], 'spellWard') && gearTurn.current.skills[wardRef.current.turnSeat] > 0);
+        setEffectWard((sq) => !!sq.player && ((hasGear(wardRef.current.gears[seatOf(sq.player)], 'spellWard') && gearTurn.current.skills[wardRef.current.turnSeat] > 0) || gearTurn.current.calm[seatOf(sq.player)] > 0)); // 術中の加護 / 静養
         return () => setEffectWard(() => false);
     }, []);
 

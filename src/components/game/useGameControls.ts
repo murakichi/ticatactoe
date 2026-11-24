@@ -203,6 +203,8 @@ export const useGameControls = (g: GameControlsScope, late: () => GameLate) => {
             lockPrev: Array<boolean>(seatCount).fill(false),
             blessing: Array<number>(seatCount).fill(0),
             blessingFresh: Array<boolean>(seatCount).fill(false),
+            calm: Array<number>(seatCount).fill(0),
+            calmFresh: Array<boolean>(seatCount).fill(false),
             darkPotUsed: Array<boolean>(seatCount).fill(false),
             chargeBase: Array<number>(seatCount).fill(0),
             processedTurn: 1,

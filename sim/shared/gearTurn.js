@@ -70,6 +70,10 @@ const advanceGearState = (g, r, input) => {
         g.blessingFresh[endSeat] = false;
     else if (g.blessing[endSeat] > 0)
         g.blessing[endSeat] -= 1;
+    if (g.calmFresh[endSeat])
+        g.calmFresh[endSeat] = false;
+    else if (g.calm[endSeat] > 0)
+        g.calm[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;

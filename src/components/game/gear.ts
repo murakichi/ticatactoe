@@ -45,6 +45,7 @@ export type GearId =
     | 'budSeed'
     | 'groundRent'
     | 'sturdyBuild'
+    | 'chargeRest'
     | 'lockBloom'
     | 'rubbleBase';
 
@@ -119,6 +120,8 @@ export const GEAR_PARAMS = {
     rentMagic: 1,
     /** 頑丈な建材: 設置するオブジェクトの初期ライフへの加算 */
     buildLife: 3,
+    /** 静養: チャージしてから自陣のライフが減らない手番数（自分の手番が終わるたびに1減る） */
+    restTurns: 3,
     /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
     rubbleMagic: 1,
 } as const;
@@ -160,6 +163,7 @@ export const GEARS: GearDef[] = [
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
     { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
+    { id: 'chargeRest', name: '静養', icon: '🛌', desc: `チャージすると、${P.restTurns}ターンの間自陣のライフが減らない` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
     { id: 'lastStand', name: '土壇場の防壁', icon: '🏰', desc: `初めて相手が列を揃えて勝つとき、かわりにその列と自陣のコマが消滅。以降、相手の手番開始時のマジック+${P.lastStandMagic}・ライフ平均+${P.lastStandLife}` },
