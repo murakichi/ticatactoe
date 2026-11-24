@@ -56,11 +56,12 @@ export type DecayResult = {
  * 自然減衰・🔥の継続ダメージ・毒（氷結の扱いは thermal.ts の decayTick）、ロックの期限切れ、毒で0になったコマの消滅を行う。
  * 空蔵の持ち主が空きマスにかけたロックが切れたら、そのマスが持ち主のコマになる。board を直接書き換える（マスは新しく作って差し替える）。
  * @param crowded 満杯の盤面か（isCrowded）。自然減衰がもう1回かかる
+ * @param calmSeats 静養（ギア）が効いている席。その席のコマは自然減衰（満杯の追加分も）を受けない（🔥☠⚡は thermal の述語で防ぐ）
  * @param moveCell この着手のマス（毒で消える扱いから外す。着手でないなら -1）
  */
-export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false): DecayResult => {
+export const decayBoard = (board: SquareInfo[], moveCell: number, chars: readonly CharacterId[], symbols: readonly Player[], crowded: boolean = false, calmSeats: readonly boolean[] = []): DecayResult => {
     const res: DecayResult = { burnCells: [], flameKills: 0, spreadOrigins: [], emptyLockSpawns: [], damage: [] };
-    const sanctuary = sanctuaryProtected(board); // 聖域に守られたマスは自然減衰（満杯の追加分も）を受けない
+    const sanctuary = sanctuaryProtected(board).map((p, k) => p || (!!board[k].player && !!calmSeats[seatOf(board[k].player as Player)])); // 聖域・静養に守られたマスは自然減衰（満杯の追加分も）を受けない
     for (let k = 0; k < board.length; k++) {
         const before = board[k];
         if (burnDamageOf(before, chars) > 0) res.burnCells.push(k);

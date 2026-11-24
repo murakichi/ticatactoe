@@ -16,7 +16,7 @@ import { SkillEffectType, BurstType } from './BoardEffects';
 import { isGuarded } from './charge';
 import { activeBuds, applyDamage, absorbDestroy, zeroOut } from './thermal';
 import { MIASMA_MIN_COST, SkillCosts } from './skillCosts';
-import { GearId, hasGear, TokenEffect } from './gear';
+import { GearId, GEAR_PARAMS, hasGear, TokenEffect } from './gear';
 import { Discount } from './discount';
 import { BoardGeometry } from './boardGeometry';
 import { PendingMode } from './pendingMode';
@@ -69,6 +69,12 @@ export const useBasicSkills = (g: BasicSkillsScope, late: () => GameLate) => {
         playEffect('chargeUp', undefined, undefined, `チャージ+${charge}`);
         addLog(`「チャージ」を使用（ターン終了・マジック+${charge}）`);
         setMagicAt(turnSeat, (m) => m + charge);
+        // 静養: チャージすると、続く自分の手番 restTurns 回の間、自陣のライフが減らない（使った手番の終わりでは減らさない）
+        if (hasGear(turnGears, 'chargeRest')) {
+            gearTurn.current.calm[turnSeat] = GEAR_PARAMS.restTurns;
+            gearTurn.current.calmFresh[turnSeat] = true;
+            gearTrigger('chargeRest', `${GEAR_PARAMS.restTurns}ターン自陣のライフが減らない`);
+        }
         setCurrentTurn(currentTurn + 1);
     };
 

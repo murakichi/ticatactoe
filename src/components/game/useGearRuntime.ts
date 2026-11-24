@@ -64,6 +64,8 @@ export const useGearRuntime = (g: GearRuntimeScope, late: () => GameLate) => {
         lockPrev: Array<boolean>(seatCount).fill(false), // 今の手番の頭の時点での lockSeen
         blessing: Array<number>(seatCount).fill(0), // 施錠の加護: 残りの手番数（その席の手番が終わるたびに1減る）
         blessingFresh: Array<boolean>(seatCount).fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
+        calm: Array<number>(seatCount).fill(0), // 静養: 残りの手番数（その席の手番が終わるたびに1減る）
+        calmFresh: Array<boolean>(seatCount).fill(false), // 静養のチャージをした手番（その手番の終わりでは減らさない）
         chargeBase: Array<number>(seatCount).fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数。増えたぶんがこの手番に付与した⚡
         processedTurn: 1,
     });

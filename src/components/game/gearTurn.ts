@@ -60,6 +60,9 @@ export type GearTurnState = {
     /** 施錠の加護: blessing=残りの手番数（その席の手番が終わるたびに1減る。0で切れる）/ blessingFresh=使った手番（この手番の終わりでは減らさない） */
     blessing: number[];
     blessingFresh: boolean[];
+    /** 静養: calm=残りの手番数（その席の手番が終わるたびに1減る。0で切れる。その間は自陣のライフが減らない）/ calmFresh=チャージした手番（この手番の終わりでは減らさない） */
+    calm: number[];
+    calmFresh: boolean[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -147,6 +150,8 @@ export const advanceGearState = (
     else if (g.ward[endSeat] > 0) g.ward[endSeat] -= 1;
     if (g.blessingFresh[endSeat]) g.blessingFresh[endSeat] = false;
     else if (g.blessing[endSeat] > 0) g.blessing[endSeat] -= 1;
+    if (g.calmFresh[endSeat]) g.calmFresh[endSeat] = false;
+    else if (g.calm[endSeat] > 0) g.calm[endSeat] -= 1;
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;

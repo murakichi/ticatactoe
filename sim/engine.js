@@ -460,6 +460,8 @@ function newGame(opts = {}) {
         lockPrev: fill(false), // 今の手番の頭の時点での lockSeen
         blessing: fill(0), // 施錠の加護: 残りの手番数
         blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
+        calm: fill(0), // 静養: 残りの手番数（その席の手番が終わるたびに1減る）
+        calmFresh: fill(false), // 静養のチャージをした手番（その手番の終わりでは減らさない）
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -554,7 +556,7 @@ function gearCost(s, cost, isToken = false, seat = s.turn, key, withLeaf = true)
 }
 // 術中の加護: スキルを使った手番の間、装備した席のコマは効果(☠🔥⚡)のダメージを受けない。thermal の述語を、この試合の状態で差し込む
 function armWard(s) {
-    thermal.setEffectWard((sq) => hasGear(s.gears[SYMBOLS.indexOf(sq.player)], 'spellWard') && s.gearSkills[s.turn] > 0);
+    thermal.setEffectWard((sq) => (hasGear(s.gears[SYMBOLS.indexOf(sq.player)], 'spellWard') && s.gearSkills[s.turn] > 0) || s.calm[SYMBOLS.indexOf(sq.player)] > 0); // 術中の加護 / 静養
 }
 /** スキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻の入力） */
 function noteSkillUsed(s, skillId, paid = 0) {
@@ -636,7 +638,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh, calm: s.calm, calmFresh: s.calmFresh,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -1042,7 +1044,7 @@ function placeMove(s, i) {
     const spreadOrigins = [];
     if (decayNow) {
         // 自然減衰・🔥と毒の継続ダメージ・ロックの期限切れ・毒で0になったコマの消滅は本番(decay.ts)の生成物
-        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS, decayMod.isCrowded(board, seatCount(s))); // 満杯の盤面は自然減衰がもう1回
+        const d = decayMod.decayBoard(board, i, s.chars, SYMBOLS, decayMod.isCrowded(board, seatCount(s)), s.calm.map((c) => c > 0)); // 満杯の盤面は自然減衰がもう1回
         if (d.flameKills > 0) bumpStat(s, 'flameKill', d.flameKills);
         if (d.emptyLockSpawns.length > 0) bumpStat(s, 'emptyLockSpawn', d.emptyLockSpawns.length);
         for (const k of d.spreadOrigins) {
@@ -1155,6 +1157,8 @@ function endTurn(s) {
 
 function onClickCharge(s) {
     s.magic[s.turn] += costsOf(s).onClickCharge;
+    // 静養: チャージすると、続く自分の手番 restTurns 回の間、自陣のライフが減らない（使った手番の終わりでは減らさない）
+    if (hasGear(s.gears[s.turn], 'chargeRest')) { s.calm[s.turn] = GP.restTurns; s.calmFresh[s.turn] = true; bumpStat(s, 'chargeRest'); }
     endTurn(s);
 }
 function onClickAddLife(s) {

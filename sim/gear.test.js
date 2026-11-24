@@ -703,6 +703,35 @@ test('大岩: コスト1で、2ターンのロック付きの効果なしオブ�
     assert.strictEqual(place([['sturdyBuild'], []]).bind, 8);
 });
 
+test('静養: チャージすると、続く自分の手番3回の間、自陣のコマは自然減衰・🔥・☠を受けない(相手のコマは受ける)', () => {
+    const setup = (gears) => {
+        const s = game(gears);
+        s.board[5] = { player: H, bind: 40, effects: [{ effect: '🔥' }, { effect: '☠' }] };
+        s.board[6] = { player: C, bind: 40, effects: [{ effect: '🔥' }, { effect: '☠' }] };
+        return s;
+    };
+    const s = setup([['chargeRest'], []]);
+    e.SKILLS.charge(s); // 💙がチャージ(ターン終了)
+    assert.strictEqual(s.calm[0], 3);
+    assert.strictEqual(s.calmFresh[0], false, '使った手番の終わりで印は消える');
+    // 続く自分の手番3回(相手の手番をはさむ)の間は減らない
+    for (let k = 0; k < 3; k++) {
+        const before = s.board[6].bind;
+        e.placeMove(s, 8 + k * 2); // ⭕(着手のたびに減衰が走る)
+        assert.strictEqual(s.board[5].bind, 40, `${k + 1}回目の手番前まで減らない`);
+        assert.ok(s.board[6].bind < before, '相手のコマは減る');
+        e.placeMove(s, 9 + k * 2); // 💙(自分の手番が1回終わる)
+    }
+    assert.strictEqual(s.calm[0], 0, '3回の手番が終わると切れる');
+    e.placeMove(s, 15);
+    e.placeMove(s, 0);
+    assert.ok(s.board[5].bind < 40, '切れたあとは減る');
+    const t = setup([[], []]);
+    e.SKILLS.charge(t);
+    e.placeMove(t, 8); // ⭕の着手で減衰が走る
+    assert.ok(t.board[5].bind < 40, 'ギアなしなら減る');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {
