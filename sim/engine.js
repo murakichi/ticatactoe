@@ -465,6 +465,8 @@ function newGame(opts = {}) {
         blessingFresh: fill(false), // 施錠の加護を使った手番（その手番の終わりでは減らさない）
         calm: fill(0), // 静養: 残りの手番数（その席の手番が終わるたびに1減る）
         calmFresh: fill(false), // 静養のチャージをした手番（その手番の終わりでは減らさない）
+        loot: fill(0), // 戦利品: 次のスキルの割引の重ね数
+        surge: fill(0), // 昂り: 積み上がっているライフ期待値
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -586,6 +588,8 @@ function spendMagic(s, amount, skillId) {
     }
     s.magic[s.turn] -= amount;
     noteSkillUsed(s, skillId, amount);
+    // 昂り: スキルを使うたびにこの手番のライフが+1（積み上げは手番の終わりに-1され、次の抽選の平均にも足される）
+    if (hasGear(s.gears[s.turn], 'skillSurge')) s.life += GP.surgeStep;
 }
 // シャッフル: 手札をデッキ（なければプール）から引き直す。スキル扱いではないので無料権のカウントには入らない
 function shuffleHand(s) {
@@ -641,7 +645,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh, calm: s.calm, calmFresh: s.calmFresh,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh, calm: s.calm, calmFresh: s.calmFresh, loot: s.loot, surge: s.surge,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -814,7 +818,7 @@ function advanceTurn(s) {
     }
     // 雪だるま: 引いたライフを数えて、手番ごとに期待値が1段積み上がる。10以上が3回出たらリセット
     const rampOn = hasGear(s.gears[next], 'snowball');
-    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + objectsMod.objectLifeBonus(s.board, sym) + dragonMod.dragonLifeBonus(s.dragon[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
+    s.life = calculateLife(ch, s.yy[next], s.rng, (ch === 'poisoner' ? poisonCountFor(s.board, sym) : 0) + gear.gearLifeBonus(s.gears[next]) + (rampOn ? gear.rampBonus(s.ramp[next]) : 0) + (hasGear(s.gears[next], 'skillSurge') ? s.surge[next] * GP.surgeStep : 0) + objectsMod.objectLifeBonus(s.board, sym) + dragonMod.dragonLifeBonus(s.dragon[next]) + (lastStandActiveAgainst(s, next) ? GP.lastStandLife : 0), gear.gearLifeStd(s.gears[next], LIFE_STD));
     if (rampOn) {
         s.ramp[next] = gear.rampAfterRoll(s.ramp[next], s.life);
         if (s.ramp[next].stack === 0) bumpStat(s, 'snowballReset');
@@ -1086,6 +1090,7 @@ function placeMove(s, i) {
     // 復讐の刃: 奪われた側は魔力を得る（1手の獲得は上限あり）。奪った側が装備していれば魔力を失う
     const vengeanceGained = {};
     if (capturedFrom) {
+        if (hasGear(s.gears[s.turn], 'conquestDiscount')) { s.loot[s.turn] += 1; bumpStat(s, 'conquestLoot'); } // 戦利品
         vengeanceGain(s, seatOf(capturedFrom), vengeanceGained);
         if (hasGear(s.gears[s.turn], 'vengeance')) s.magic[s.turn] = Math.max(0, s.magic[s.turn] - GP.vengeancePenalty);
     }

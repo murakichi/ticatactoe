@@ -732,6 +732,47 @@ test('静養: チャージすると、続く自分の手番3回の間、自陣�
     assert.ok(t.board[5].bind < 40, 'ギアなしなら減る');
 });
 
+test('戦利品: 敵のコマを奪取するたびに次のスキルのコストが1下がり(重なる)、スキルを使うとリセット', () => {
+    const s = game([['conquestDiscount'], []]);
+    s.board[5] = { player: C, bind: 0, effects: [] };
+    s.board[6] = { player: C, bind: 0, effects: [] };
+    assert.strictEqual(e.gearCost(s, 5, false, 0, 'onClickShuffle'), 5);
+    s.life = 5;
+    e.placeMove(s, 5); // 💙がライフ0の⭕のコマを奪取 → ⭕の手番
+    e.placeMove(s, 0); // ⭕
+    s.life = 5;
+    assert.strictEqual(s.loot[0], 1);
+    e.placeMove(s, 6); // もう1つ奪取
+    assert.strictEqual(s.loot[0], 2, '重なる');
+    e.placeMove(s, 1); // ⭕
+    assert.strictEqual(e.gearCost(s, 5, false, 0, 'onClickShuffle'), 3, '次のスキルは-2');
+    assert.strictEqual(e.gearCost(s, 1, false, 0, 'onClickShuffle'), 1, '下限1');
+    s.magic[0] = 10;
+    e.SKILLS.addLife(s); // スキルを使う
+    assert.strictEqual(s.loot[0], 0, 'スキルを使うとリセット');
+    assert.strictEqual(e.gearCost(s, 5, false, 0, 'onClickShuffle'), 5);
+});
+
+test('昂り: スキルを使うたびにこの手番のライフ+1。積み上げは手番の終わりに-1され、次の抽選の平均に足される', () => {
+    const s = game([['skillSurge'], []]);
+    const base = s.life;
+    s.magic[0] = 20;
+    e.SKILLS.addLife(s);
+    e.SKILLS.addLife(s);
+    assert.strictEqual(s.surge[0], 2);
+    assert.ok(s.life >= base + 2, 'ライフがスキルの回数ぶん増える(ライフ3の効果もあるため以上)');
+    e.placeMove(s, 0); // 手番終了
+    assert.strictEqual(s.surge[0], 1, '手番の終わりに-1');
+    e.placeMove(s, 1); // ⭕ → 💙の手番(抽選の平均に+1)
+    e.placeMove(s, 2);
+    assert.strictEqual(s.surge[0], 0, 'さらに手番が終わると0');
+    const t = game([[], []]);
+    t.magic[0] = 20;
+    const tb = t.life;
+    e.SKILLS.addLife(t);
+    assert.ok(t.life === tb + 3, '装備なしは+3のみ');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

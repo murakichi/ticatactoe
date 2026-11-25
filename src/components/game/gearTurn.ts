@@ -63,6 +63,9 @@ export type GearTurnState = {
     /** 静養: calm=残りの手番数（その席の手番が終わるたびに1減る。0で切れる。その間は自陣のライフが減らない）/ calmFresh=チャージした手番（この手番の終わりでは減らさない） */
     calm: number[];
     calmFresh: boolean[];
+    /** 戦利品: 次のスキルの割引の重ね数 / 昂り: 積み上がっているライフ期待値（スキルを使うたびに+1、手番の終わりに-1） */
+    loot: number[];
+    surge: number[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -152,6 +155,7 @@ export const advanceGearState = (
     else if (g.blessing[endSeat] > 0) g.blessing[endSeat] -= 1;
     if (g.calmFresh[endSeat]) g.calmFresh[endSeat] = false;
     else if (g.calm[endSeat] > 0) g.calm[endSeat] -= 1;
+    if (g.surge[endSeat] > 0) g.surge[endSeat] -= 1; // 昂り: 手番の終わりに1減る
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -213,8 +217,8 @@ export const advanceGearState = (
  */
 export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, turnSeat: number, ailments: number, ownObjects: boolean = false): CostContext =>
     seat === turnSeat
-        ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects }
-        : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects };
+        ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects, loot: g.loot[seat] }
+        : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects, loot: g.loot[seat] };
 
 /**
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
@@ -222,6 +226,8 @@ export const gearCostContext = (g: GearTurnState, r: RuinState, seat: number, tu
  */
 export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, seat: number, skillId?: string, paid: number = 0): void => {
     g.skills[seat] += 1;
+    g.loot[seat] = 0; // 戦利品: スキルを使うとリセット
+    g.surge[seat] += 1; // 昂り: スキルを使うたびに+1（装備していない席は使わない）
     g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);

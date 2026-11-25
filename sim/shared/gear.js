@@ -79,6 +79,10 @@ exports.GEAR_PARAMS = {
     buildLife: 3,
     /** 静養: チャージしてから自陣のライフが減らない手番数（自分の手番が終わるたびに1減る） */
     restTurns: 3,
+    /** 戦利品: 敵のコマを奪取するたびに、次に使うスキルのコストから引く値（重ねがけ。スキルを使うとリセット） */
+    conquestCut: 1,
+    /** 昂り: スキルを使うたびに増えるライフ期待値（手番の終わりに1減る） */
+    surgeStep: 1,
     /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
     rubbleMagic: 1,
 };
@@ -116,6 +120,8 @@ exports.GEARS = [
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
     { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
+    { id: 'conquestDiscount', name: '戦利品', icon: '🏴', desc: `敵のコマを奪取するたびに、次に使うスキルのコストが${P.conquestCut}下がる（重なる。スキルを使うとリセット）` },
+    { id: 'skillSurge', name: '昂り', icon: '📈', desc: `スキルを使うたびにライフの期待値が${P.surgeStep}増える（手番の終わりに${P.surgeStep}減る）` },
     { id: 'chargeRest', name: '静養', icon: '🛌', desc: `チャージすると、${P.restTurns}ターンの間自陣のライフが減らない` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
@@ -212,7 +218,7 @@ exports.rampAfterRoll = rampAfterRoll;
  * 下げる方向の補正は下限1（もともと0のコストは0のまま）。四連の極意の無料だけは0にする。
  */
 const adjustCostByGear = (cost, gears, ctx, isToken = false, skillKey) => {
-    var _a, _b;
+    var _a, _b, _c;
     if (!gears || gears.length === 0)
         return cost;
     if ((0, exports.hasGear)(gears, 'quadMastery') && ctx.skillsThisTurn === P.quadCount)
@@ -234,6 +240,8 @@ const adjustCostByGear = (cost, gears, ctx, isToken = false, skillKey) => {
     if ((0, exports.hasGear)(gears, 'ashOffering'))
         delta -= P.ashDiscount * ((_b = ctx.ash) !== null && _b !== void 0 ? _b : 0);
     // 普請道楽: 自陣にオブジェクトが無いときはオブジェクトを設置するスキルが-2、ある間は全スキル-3（設置スキルの-2は無いときだけ。重ならない）
+    if ((0, exports.hasGear)(gears, 'conquestDiscount'))
+        delta -= P.conquestCut * ((_c = ctx.loot) !== null && _c !== void 0 ? _c : 0);
     if ((0, exports.hasGear)(gears, 'buildMania'))
         delta -= ctx.ownObjects ? P.buildAllCut : skillKey && objects_1.OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0;
     const next = cost + delta;

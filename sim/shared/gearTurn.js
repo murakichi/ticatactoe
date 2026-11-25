@@ -74,6 +74,8 @@ const advanceGearState = (g, r, input) => {
         g.calmFresh[endSeat] = false;
     else if (g.calm[endSeat] > 0)
         g.calm[endSeat] -= 1;
+    if (g.surge[endSeat] > 0)
+        g.surge[endSeat] -= 1; // 昂り: 手番の終わりに1減る
     r.active[endSeat] = false;
     r.active[nextSeat] = r.pending[nextSeat];
     r.pending[nextSeat] = false;
@@ -135,8 +137,8 @@ exports.advanceGearState = advanceGearState;
  * @param ownObjects 普請道楽の入力（自陣にオブジェクトがあるか。ギア未装備なら false）
  */
 const gearCostContext = (g, r, seat, turnSeat, ailments, ownObjects = false) => seat === turnSeat
-    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects }
-    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects };
+    ? { skillsThisTurn: g.skills[seat], echoReady: g.echoReady[seat], ailments, ruin: r.active[seat], ash: r.ashActive[seat], ownObjects, loot: g.loot[seat] }
+    : { skillsThisTurn: 0, echoReady: g.echoNext[seat], ailments, ruin: r.pending[seat], ash: r.ashPending[seat], ownObjects, loot: g.loot[seat] };
 exports.gearCostContext = gearCostContext;
 /**
  * 席 seat がスキルを1回使ったことを記録する（四連の極意・連鎖割引・余韻・軽減スキル・返し特売・業火の無料権の入力）。
@@ -145,6 +147,8 @@ exports.gearCostContext = gearCostContext;
 const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     var _a;
     g.skills[seat] += 1;
+    g.loot[seat] = 0; // 戦利品: スキルを使うとリセット
+    g.surge[seat] += 1; // 昂り: スキルを使うたびに+1（装備していない席は使わない）
     g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);

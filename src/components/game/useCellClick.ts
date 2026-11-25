@@ -490,6 +490,7 @@ export const useCellClick = (g: CellClickScope, late: () => GameLate) => {
             gearTrigger('vengeance', `魔力+${add}`);
         };
         if (capturedFrom) {
+            if (hasGear(turnGears, 'conquestDiscount')) gearTurn.current.loot[turnSeat] += 1; // 戦利品
             vengeanceGain(seatOf(capturedFrom));
             if (hasGear(turnGears, 'vengeance')) {
                 setMagicAt(turnSeat, (m) => Math.max(0, m - GEAR_PARAMS.vengeancePenalty));

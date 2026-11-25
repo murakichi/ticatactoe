@@ -46,6 +46,8 @@ export type GearId =
     | 'groundRent'
     | 'sturdyBuild'
     | 'chargeRest'
+    | 'conquestDiscount'
+    | 'skillSurge'
     | 'lockBloom'
     | 'rubbleBase';
 
@@ -122,6 +124,10 @@ export const GEAR_PARAMS = {
     buildLife: 3,
     /** 静養: チャージしてから自陣のライフが減らない手番数（自分の手番が終わるたびに1減る） */
     restTurns: 3,
+    /** 戦利品: 敵のコマを奪取するたびに、次に使うスキルのコストから引く値（重ねがけ。スキルを使うとリセット） */
+    conquestCut: 1,
+    /** 昂り: スキルを使うたびに増えるライフ期待値（手番の終わりに1減る） */
+    surgeStep: 1,
     /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
     rubbleMagic: 1,
 } as const;
@@ -163,6 +169,8 @@ export const GEARS: GearDef[] = [
     { id: 'budSeed', name: '芽吹き', icon: '🌷', desc: `ライフ${P.budSeedLife}以上のコマを設置するとき、バッズを付与` },
     { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
+    { id: 'conquestDiscount', name: '戦利品', icon: '🏴', desc: `敵のコマを奪取するたびに、次に使うスキルのコストが${P.conquestCut}下がる（重なる。スキルを使うとリセット）` },
+    { id: 'skillSurge', name: '昂り', icon: '📈', desc: `スキルを使うたびにライフの期待値が${P.surgeStep}増える（手番の終わりに${P.surgeStep}減る）` },
     { id: 'chargeRest', name: '静養', icon: '🛌', desc: `チャージすると、${P.restTurns}ターンの間自陣のライフが減らない` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },
     { id: 'buildMania', name: '普請道楽', icon: '🔨', desc: `自陣にオブジェクトが無いとき、オブジェクト設置スキルのコスト-${P.buildPlaceCut}、ある間は全スキルのコスト-${P.buildAllCut}` },
@@ -206,6 +214,8 @@ export type CostContext = {
     ash?: number;
     /** 普請道楽: 自陣にオブジェクトがあるか */
     ownObjects?: boolean;
+    /** 戦利品: 次のスキルに掛かる割引の重ね数（敵のコマを奪取した回数。スキルを使うと0） */
+    loot?: number;
 };
 
 /** キャラ固有のスキル（病炎の契りの対象外）。skillCosts のキー */
@@ -293,6 +303,7 @@ export const adjustCostByGear = (cost: number, gears: Gears, ctx: CostContext, i
     if (hasGear(gears, 'ruinSurge') && ctx.ruin) delta -= P.ruinDiscount;
     if (hasGear(gears, 'ashOffering')) delta -= P.ashDiscount * (ctx.ash ?? 0);
     // 普請道楽: 自陣にオブジェクトが無いときはオブジェクトを設置するスキルが-2、ある間は全スキル-3（設置スキルの-2は無いときだけ。重ならない）
+    if (hasGear(gears, 'conquestDiscount')) delta -= P.conquestCut * (ctx.loot ?? 0);
     if (hasGear(gears, 'buildMania')) delta -= ctx.ownObjects ? P.buildAllCut : skillKey && OBJECT_PLACE_KEYS.has(skillKey) ? P.buildPlaceCut : 0;
     const next = cost + delta;
     return delta < 0 ? Math.min(cost, Math.max(1, next)) : next;
