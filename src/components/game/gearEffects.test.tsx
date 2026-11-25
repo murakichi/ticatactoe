@@ -47,6 +47,8 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     lastStand: 'trigger', // 防壁の発動
     springThunder: 'trigger', // 氷結した空きマスの❄を解く
     chargeRest: 'trigger', // チャージで静養が始まる
+    conquestDiscount: 'passive', // コスト表示に反映される
+    skillSurge: 'passive', // ライフ表示に反映される
 };
 
 const gameSource = readGameSource();

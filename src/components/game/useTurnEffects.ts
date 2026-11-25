@@ -339,6 +339,7 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
             (nextCharacter === 'poisoner' ? late().poisonCount(nextSymbol) : 0) +
                 gearLifeBonus(nextGears) +
                 (rampOn ? ramp.bonus : 0) +
+                (hasGear(nextGears, 'skillSurge') ? gearTurn.current.surge[nextSeat] * GEAR_PARAMS.surgeStep : 0) + // 昂り
                 objectLifeForNext + // 生命の泉
                 dragonLifeBonus(dragon[nextSeat]) + // 龍神の巫女（龍）: ベース+N+4
                 (standBonus ? GEAR_PARAMS.lastStandLife : 0),

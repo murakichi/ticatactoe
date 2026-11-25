@@ -49,6 +49,8 @@ export const useSeatResources = (g: SeatResourcesScope, late: () => GameLate) =>
                 gearTrigger('luckyPurse', 'コスト0');
             }
             noteSkillUsed(gearTurn.current, turnSeat, skillId, pay);
+            // 昂り: スキルを使うたびにこの手番のライフが+1（積み上げは手番の終わりに-1され、次の抽選の平均にも足される）
+            if (hasGear(turnGears, 'skillSurge')) setLife((l) => l + GEAR_PARAMS.surgeStep);
             // 四連の極意: この回数に達したので、次のスキルは無料
             if (hasGear(turnGears, 'quadMastery') && gearTurn.current.skills[turnSeat] === GEAR_PARAMS.quadCount) gearTrigger('quadMastery', '次のスキルが無料');
         }
