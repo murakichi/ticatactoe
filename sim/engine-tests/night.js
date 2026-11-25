@@ -420,8 +420,8 @@ test('審判の日で置いたマスは🔑ロック付き（ライフは2のま
     assert.strictEqual(g.board[5].effects.find((x) => x.effect === '🔑').stack, 9);
 });
 
-// ---- 能ある鷹は爪を抜かれる(idx 137) ----
-test('能ある鷹は爪を抜かれる: 使うと相手全員のキャラが『あなた』扱いになり、使った席の手番が2回終わると元に戻る。コスト6', () => {
+// ---- 没個性の宴(idx 137) ----
+test('没個性の宴: 使うと相手全員のキャラが『あなた』扱いになり、使った席の手番が2回終わると元に戻る。コスト6', () => {
     const s = e.newGame({ chars: ['you', 'poisoner', 'giant'], rng: e.makeRng(7) });
     s.magic[0] = 30;
     assert.strictEqual(e.skillCosts.onClickPassiveSeal, 6);
@@ -443,7 +443,7 @@ test('能ある鷹は爪を抜かれる: 使うと相手全員のキャラが『
     assert.deepStrictEqual(s.chars, ['you', 'poisoner', 'giant']);
 });
 
-test('能ある鷹は爪を抜かれる: 無効の間は相手のパッシブが働かない（毒使いの毒のライフ1.5倍・軍師のトークンコストなど）', () => {
+test('没個性の宴: 無効の間は相手のパッシブが働かない（毒使いの毒のライフ1.5倍・軍師のトークンコストなど）', () => {
     const s = e.newGame({ chars: ['you', 'poisoner'], rng: e.makeRng(8) });
     s.magic[0] = 30;
     const sharedPoison = require('../shared/poison');
@@ -453,7 +453,7 @@ test('能ある鷹は爪を抜かれる: 無効の間は相手のパッシブが
     assert.strictEqual(sharedPoison.poisonStrike(sq(), s.chars).bind, 4, '封印中: 1.5倍にならない');
 });
 
-test('能ある鷹は爪を抜かれる: 自分には効かず、重ね掛けは残りターンを延ばす（2回の手番の終わりまで）', () => {
+test('没個性の宴: 自分には効かず、重ね掛けは残りターンを延ばす（2回の手番の終わりまで）', () => {
     const s = e.newGame({ chars: ['necromancer', 'you'], rng: e.makeRng(9) });
     s.magic[0] = 40;
     e.SKILLS.passiveSeal(s);

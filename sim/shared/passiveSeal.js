@@ -6,7 +6,7 @@ exports.tickPassiveSeal = exports.effectiveCharacters = exports.isPassiveSealed 
 exports.PASSIVE_SEAL_TURNS = 2;
 /** パッシブを無効にされたキャラ（パッシブも固有スキルも無い『あなた』） */
 exports.SEALED_CHARACTER = 'you';
-/** seat のキャラのパッシブが無効か: 自分以外の席が、まだ効いている『能ある鷹は爪を抜かれる』を使っている */
+/** seat のキャラのパッシブが無効か: 自分以外の席が、まだ効いている『没個性の宴』を使っている */
 const isPassiveSealed = (seal, seat) => seal.some((turns, caster) => caster !== seat && turns > 0);
 exports.isPassiveSealed = isPassiveSealed;
 /** 無効を反映した席ごとのキャラ。base は本来のキャラ */

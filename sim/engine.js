@@ -371,8 +371,8 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
-        baseChars: chars.slice(), // 能ある鷹は爪を抜かれる: 本来のキャラ（s.chars は無効中の席が『あなた』になる）
-        passiveSeal: fill(0), // 能ある鷹は爪を抜かれる: 使った席の残りターン（その席の手番が終わるたびに1減る）
+        baseChars: chars.slice(), // 没個性の宴: 本来のキャラ（s.chars は無効中の席が『あなた』になる）
+        passiveSeal: fill(0), // 没個性の宴: 使った席の残りターン（その席の手番が終わるたびに1減る）
         lifeBan: fill(false), // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
         chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
@@ -730,7 +730,7 @@ function advanceTurn(s) {
     }
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
-    // 能ある鷹は爪を抜かれる: 使った席の手番が終わるたびに1減り、無効だった席のキャラが元に戻る
+    // 没個性の宴: 使った席の手番が終わるたびに1減り、無効だった席のキャラが元に戻る
     s.passiveSeal[s.turn] = passiveSealMod.tickPassiveSeal(s.passiveSeal[s.turn]);
     applyPassiveSeal(s);
     s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
@@ -1687,7 +1687,7 @@ function onClickFreeToken(s) {
     bumpStat(s, 'freeToken');
 }
 
-// 能ある鷹は爪を抜かれる (idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）。
+// 没個性の宴 (idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）。
 // s.chars を in-place で書き換えるので、s.chars を持つ呼び出し側（コスト・電撃・毒など）はそのまま無効後のキャラを見る [FAITHFUL] Game.tsx onClickPassiveSeal
 function applyPassiveSeal(s) {
     passiveSealMod.effectiveCharacters(s.baseChars, s.passiveSeal).forEach((c, i) => { s.chars[i] = c; });

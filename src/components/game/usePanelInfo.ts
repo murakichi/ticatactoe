@@ -50,7 +50,7 @@ export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
         const ban = skillBan[seat];
         if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
-        if (isPassiveSealed(passiveSeal, seat)) labels.push('能ある鷹は爪を抜かれる パッシブと固有スキルが無効');
+        if (isPassiveSealed(passiveSeal, seat)) labels.push('没個性の宴 パッシブと固有スキルが無効');
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
         if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');

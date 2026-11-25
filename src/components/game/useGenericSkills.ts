@@ -164,12 +164,12 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         playEffect('nightVeil');
         spendMagic(pay, true, true, 'onClickNightVeil');
     };
-    // 能ある鷹は爪を抜かれる(idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）
+    // 没個性の宴(idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）
     const onClickPassiveSeal = () => {
         const pay = late().calculateCost(seatCosts.onClickPassiveSeal, false, false, currentTurnPlayer, 'onClickPassiveSeal');
         setPassiveSealAt(turnSeat, PASSIVE_SEAL_TURNS);
-        addLog('「能ある鷹は爪を抜かれる」を使用（次の自分の手番の終わりまで、相手のキャラのパッシブと固有スキルを無効化）');
-        playEffect('silence', undefined, undefined, '能ある鷹は爪を抜かれる');
+        addLog('「没個性の宴」を使用（次の自分の手番の終わりまで、相手のキャラのパッシブと固有スキルを無効化）');
+        playEffect('silence', undefined, undefined, '没個性の宴');
         spendMagic(pay, true, true, 'onClickPassiveSeal');
     };
     // 弔い割引(idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札なので「次に打つスキル」を消費せず、足す）

@@ -71,7 +71,7 @@ export const Game = (props: GameProps) => {
     const seatCount = props.players.length;
     const geo = geometryOf(props.boardSize !== undefined ? clampBoardSize(props.boardSize) : boardSizeFor(seatCount));
     const symbols: Player[] = PLAYER_SYMBOLS.slice(0, seatCount);
-    // 能ある鷹は爪を抜かれる: 立っている席(使った席)の手番が終わるたびに1減る。0より大きい間、使った席以外のキャラは『あなた』(パッシブも固有スキルも無い)扱い
+    // 没個性の宴: 立っている席(使った席)の手番が終わるたびに1減る。0より大きい間、使った席以外のキャラは『あなた』(パッシブも固有スキルも無い)扱い
     const [passiveSeal, setPassiveSealAt, setPassiveSealAll] = useSeatArray<number>(() => Array(seatCount).fill(0));
     const characters: CharacterId[] = effectiveCharacters(props.players.map((p) => p.character), passiveSeal);
     setWinNeeds(characters); // 席ごとの勝利に必要な4連の本数（#526）。描画のたびに同じ値を登録するだけなので副作用は無い

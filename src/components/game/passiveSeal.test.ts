@@ -3,7 +3,7 @@ import { CharacterId } from '../../types/Character';
 
 const base: CharacterId[] = ['giant', 'poisoner', 'electrician'];
 
-describe('能ある鷹は爪を抜かれる', () => {
+describe('没個性の宴', () => {
     it('使った席以外が『あなた』扱いになる。誰も使っていなければ全員そのまま', () => {
         expect(effectiveCharacters(base, [0, 0, 0])).toEqual(base);
         expect(effectiveCharacters(base, [2, 0, 0])).toEqual(['giant', SEALED_CHARACTER, SEALED_CHARACTER]);
