@@ -1,4 +1,5 @@
 // Game.tsx から切り出したスキルのハンドラ群: 汎用スキル（雷を食らわば皿まで・小物・初霜・吹き寄せ・山焼き・超助っ人 ほか）
+import { PASSIVE_SEAL_TURNS } from './passiveSeal';
 // 本体は Game.tsx の同じ位置にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { GearTurnState } from './gearTurn';
 import { SkillCosts } from './skillCosts';
@@ -38,6 +39,7 @@ export interface GenericSkillsScope {
     addCorpses: (n: number) => void;
     otherSeats: (seat: number) => number[];
     setLifeBanAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
+    setPassiveSealAt: (seat: number, value: number | ((prev: number) => number)) => void;
     useToken: boolean;
     bumpGlacierCharge: (n: number) => void;
     putTokens: (board: SquareInfo[], kind: TokenKind, n: number, extra?: Partial<PutContext>, afterPut?: ((board: SquareInfo[], idx: number) => void) | undefined) => { report: () => void; placed: PlacedToken[]; granted: number; };
@@ -61,7 +63,7 @@ export interface GenericSkillsScope {
     pendingFlag: (m: PendingMode) => [boolean, (on: boolean) => void];
 }
 export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) => {
-    const { currentBoard, currentTurnPlayer, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, gearTurn, turnSeat, characters, addCorpses, otherSeats, setLifeBanAt, useToken, bumpGlacierCharge, putTokens, posName, setUseToken, calculateTokenBind, geo, keepBuds, afterTokenPlaced, harvestMagic, applyLock, playBurst, baseNecromancyCost, necroCost, toxicBloom, withOverload, deckBySeat, lifeBan, setNecroCostAt, setMagicAt, pendingFlag } = g;
+    const { setPassiveSealAt, currentBoard, currentTurnPlayer, addLog, flashCells, playEffect, setCurrentBoard, spendMagic, seatCosts, gearTurn, turnSeat, characters, addCorpses, otherSeats, setLifeBanAt, useToken, bumpGlacierCharge, putTokens, posName, setUseToken, calculateTokenBind, geo, keepBuds, afterTokenPlaced, harvestMagic, applyLock, playBurst, baseNecromancyCost, necroCost, toxicBloom, withOverload, deckBySeat, lifeBan, setNecroCostAt, setMagicAt, pendingFlag } = g;
 
 
     // 雷を食らわば皿まで: ⚡が効いている自陣のコマのライフを、⚡のスタック1つにつき+2する。この手番に付与した⚡の数だけコスト軽減（撃つとリセット）
@@ -161,6 +163,14 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         addLog('「夜の帳」を使用（次の相手の手番の間、相手のスキルのコスト+3）');
         playEffect('nightVeil');
         spendMagic(pay, true, true, 'onClickNightVeil');
+    };
+    // 没個性の宴(idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）
+    const onClickPassiveSeal = () => {
+        const pay = late().calculateCost(seatCosts.onClickPassiveSeal, false, false, currentTurnPlayer, 'onClickPassiveSeal');
+        setPassiveSealAt(turnSeat, PASSIVE_SEAL_TURNS);
+        addLog('「没個性の宴」を使用（次の自分の手番の終わりまで、相手のキャラのパッシブと固有スキルを無効化）');
+        playEffect('silence', undefined, undefined, '没個性の宴');
+        spendMagic(pay, true, true, 'onClickPassiveSeal');
     };
     // 弔い割引(idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
     const graveDiscountNow = (): number => graveDiscountAmount(corpseCount(baseNecromancyCost, necroCost[turnSeat]));
@@ -336,7 +346,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         setCurrentBoard(board);
     };
 
-    return { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells };
+    return { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickPassiveSeal, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells };
 };
 
 export type GenericSkillsResult = ReturnType<typeof useGenericSkills>;

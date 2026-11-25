@@ -1,4 +1,5 @@
 // Game.tsx から切り出したハンドラ群: プレイヤーパネルに出す継続中の効果と、固有スキルの現在コスト
+import { isPassiveSealed } from './passiveSeal';
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { YingYangMode } from '../../types/Character';
 import { CharacterId } from '../../types/Character';
@@ -11,6 +12,7 @@ export interface PanelInfoScope {
     useAssault: number[];
     silenced: boolean[];
     lifeBan: boolean[];
+    passiveSeal: number[];
     chargeBuff: number[];
     gearOff: boolean[];
     discountLabel: (seat: number) => string | null;
@@ -37,7 +39,7 @@ export interface PanelInfoScope {
     dragon: { form: 'miko' | 'dragon'; n: number }[];
 }
 export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
-    const { dragon, prayerCost, roarCost, useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
+    const { passiveSeal, dragon, prayerCost, roarCost, useAssault, silenced, lifeBan, chargeBuff, gearOff, discountLabel, budGuard, remainNecro, proliferate, proliferateCount, costTableFor, gearCost, characters, useTokenCount, useMagicCount, yinYangMode, necroCost, miasmaCost, symbols, chargeSpreadCost, glacierCost, infernoCost, mogaribueCost, sealCost, skillBan } = g;
 
 
     // 継続中スキルの残りターン数を返す
@@ -48,6 +50,7 @@ export const usePanelInfo = (g: PanelInfoScope, late: () => GameLate) => {
         if (silenced[seat]) labels.push('サイレンス 次の手番スキル不可');
         const ban = skillBan[seat];
         if (ban) labels.push(`スキル封じ 次の手番、コスト${ban.n}${ban.mode === 'max' ? '以下' : '以上'}のスキル不可`);
+        if (isPassiveSealed(passiveSeal, seat)) labels.push('没個性の宴 パッシブと固有スキルが無効');
         if (lifeBan[seat]) labels.push('一寸の虫に魂なし ライフ3以下のコマを置けない');
         if (chargeBuff[seat] > 0) labels.push(`静電気の季節 残り${chargeBuff[seat]}ターン`);
         if (gearOff[seat]) labels.push('裸の王様 ギア無効（その手番の終わりまで）');

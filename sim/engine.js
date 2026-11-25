@@ -53,6 +53,7 @@ const deckMod = require('./shared/deck');
 const discountMod = require('./shared/discount');
 const comboMod = require('./shared/comboCost');
 const lifeBanMod = require('./shared/lifeBan');
+const passiveSealMod = require('./shared/passiveSeal');
 const bigMod = require('./shared/bigSkills');
 const objectsMod = require('./shared/objects');
 const darkPotMod = require('./shared/darkPot');
@@ -370,6 +371,8 @@ function newGame(opts = {}) {
         proliferate: fill(false),
         proliferateCount: fill(0),
         silenced: fill(false), // サイレンス: 立っている席は次の手番スキルを使えない
+        baseChars: chars.slice(), // 没個性の宴: 本来のキャラ（s.chars は無効中の席が『あなた』になる）
+        passiveSeal: fill(0), // 没個性の宴: 使った席の残りターン（その席の手番が終わるたびに1減る）
         lifeBan: fill(false), // 一寸の虫に魂なし: 立っている席は、その席の次の手番の終わりまでライフ3以下のコマを置けない
         chargeBuff: fill(0), // 静電気の季節: 残りターン数（その席が設置する駒に⚡）
         gearOff: fill(false), // 裸の王様: 立っている席のギアは、その席の次の手番の終わりまで無効（s.gears[seat] を空にして、元の装備を gearHeld に預かる）
@@ -727,6 +730,9 @@ function advanceTurn(s) {
     }
     // サイレンスは「封じられた側の手番が終わるたび」に解除 (s.turn = 直前に動いた席)
     s.silenced[s.turn] = false;
+    // 没個性の宴: 使った席の手番が終わるたびに1減り、無効だった席のキャラが元に戻る
+    s.passiveSeal[s.turn] = passiveSealMod.tickPassiveSeal(s.passiveSeal[s.turn]);
+    applyPassiveSeal(s);
     s.tokenFree[s.turn] = false; // 無礼講は手番が終わると切れる
     s.lifeBan[s.turn] = false;
     // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
@@ -1681,6 +1687,20 @@ function onClickFreeToken(s) {
     bumpStat(s, 'freeToken');
 }
 
+// 没個性の宴 (idx 137): 次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効にする（『あなた』扱い。ギアは対象外）。
+// s.chars を in-place で書き換えるので、s.chars を持つ呼び出し側（コスト・電撃・毒など）はそのまま無効後のキャラを見る [FAITHFUL] Game.tsx onClickPassiveSeal
+function applyPassiveSeal(s) {
+    passiveSealMod.effectiveCharacters(s.baseChars, s.passiveSeal).forEach((c, i) => { s.chars[i] = c; });
+}
+function passiveSealLegal() { return true; }
+function onClickPassiveSeal(s) {
+    const pay = calculateCost(s, costsOf(s).onClickPassiveSeal, false, false, 'onClickPassiveSeal');
+    s.passiveSeal[s.turn] = passiveSealMod.PASSIVE_SEAL_TURNS;
+    applyPassiveSeal(s);
+    spendMagic(s, pay, 'onClickPassiveSeal');
+    bumpMagicCount(s);
+    bumpStat(s, 'passiveSeal');
+}
 // 夜の帳 (idx 98): 次の相手全員の手番の間、相手のスキルコストを+3する（自分は影響を受けない） [FAITHFUL] Game.tsx onClickNightVeil
 function nightVeilLegal() { return true; }
 function onClickNightVeil(s) {
@@ -2769,6 +2789,7 @@ const SKILLS = {
     burnOff: onClickBurnOff,
     freeToken: onClickFreeToken,
     nightVeil: onClickNightVeil,
+    passiveSeal: onClickPassiveSeal,
     graveDiscount: onClickGraveDiscount,
     poisonWard: onClickPoisonWard,
     graveOffering: onClickGraveOffering,
@@ -2802,7 +2823,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    skillRestrictedByObjects, placedThisTurn, objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    skillRestrictedByObjects, placedThisTurn, objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, passiveSealLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, boltSilenceLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

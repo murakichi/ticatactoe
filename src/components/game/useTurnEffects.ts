@@ -1,4 +1,5 @@
 // Game.tsx から切り出したハンドラ群: ターン開始の効果・勝敗判定まわりの useEffect 群（実行順を保つため同じ位置で呼ぶ）
+import { tickPassiveSeal } from './passiveSeal';
 // 本体は Game.tsx にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragonMagicBonus, newDragonState } from './dragon';
 import { BurstType } from './BoardEffects';
@@ -71,6 +72,8 @@ export interface TurnEffectsScope {
     setProliferateCountAt: (seat: number, value: number | ((prev: number) => number)) => void;
     setSilencedAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setLifeBanAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
+    passiveSeal: number[];
+    setPassiveSealAt: (seat: number, value: number | ((prev: number) => number)) => void;
     setGearOffAt: (seat: number, value: boolean | ((prev: boolean) => boolean)) => void;
     setChargeBuffAt: (seat: number, value: number | ((prev: number) => number)) => void;
     currentCharacter: CharacterId;
@@ -84,7 +87,7 @@ export interface TurnEffectsScope {
     history: SquareInfo[][];
 }
 export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
-    const { dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
+    const { setPassiveSealAt, dragon, setDragonAt, currentBoard, lastStandHolderFor, lastStandUsed, geo, symbols, addLog, setCurrentBoard, setLastStandSaves, playEffect, gearTrigger, currentTurn, characters, placements, deadlockRef, seatCount, setGameLog, flashCells, gearTurn, effectSnap, turnSeat, posName, ruinState, gearsBySeat, setMagicAt, budGuard, setBudGuardAt, glacierPending, setGlacierPendingAt, withOverload, lastStandActiveAgainst, magic, yinYangMode, proliferate, proliferateCount, setProliferateAt, setProliferateCountAt, setSilencedAt, setLifeBanAt, setGearOffAt, setChargeBuffAt, currentCharacter, setLife, setUseToken, setTurnSeat, setSkills, reshuffledSkills, deckBySeat, lockedSkills, history, rampRef, setReaperSweeps, setSkillBanAt, playBurst } = g;
 
 
     // 土壇場の防壁: 初めて相手が列を揃えたとき、かわりにその列のマスを消滅させる（ロック・氷結を貫通）。
@@ -352,6 +355,8 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         setLifeBanAt(turnSeat, false);
         // 裸の王様も同じく、ギアを封じられた側の手番が終わるたびに解除
         setGearOffAt(turnSeat, false);
+        // 没個性の宴: 使った席の手番が終わるたびに1減る（使った手番の終わりと、次の自分の手番の終わりで切れる）
+        setPassiveSealAt(turnSeat, tickPassiveSeal);
         // 静電気の季節の残りターンは、自分の手番が終わるたびに1減る
         setChargeBuffAt(turnSeat, (v) => Math.max(0, v - 1));
         // 蘇生の残りターンは「発動した側の手番が終わるたび」に減る
