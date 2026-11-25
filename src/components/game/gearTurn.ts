@@ -3,9 +3,10 @@
 import { Player } from '../../types/Player';
 import { SquareInfo } from '../../types/SquareInfo';
 import { Discount, afterSkill, emptyDiscount } from './discount';
-import { CostContext, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
+import { CostContext, GEAR_PARAMS, Gears, budCounts, burnedBudCount, flameCounts, hasGear, ignitedCount, lostCells, scorchGain } from './gear';
 import { INFERNO_FREE_SKILLS, budStacks, fireStacksTotal, isFrozen, leafStacks } from './thermal';
-import { isShielded } from './charge';
+import { isGuarded, isShielded } from './charge';
+import { addPoison } from './poison';
 import { CharacterId } from '../../types/Character';
 import { ownCharges, ownLeaves } from './comboCost';
 import { wardTriggered } from './graveSkills';
@@ -66,6 +67,8 @@ export type GearTurnState = {
     /** 戦利品: 次のスキルの割引の重ね数 / 昂り: 積み上がっているライフ期待値（スキルを使うたびに+1、手番の終わりに-1） */
     loot: number[];
     surge: number[];
+    /** 毒杯の祝福: この手番に使ったスキルの数（手番の終わりにまとめて恩恵を適用して0に戻す） */
+    boon: number[];
 };
 
 /** 廃墟の底力・灰の供物・焦土の入力（手番開始時の盤面のスナップショットと、席ごとの割引の状態） */
@@ -228,6 +231,7 @@ export const noteSkillUsed = (g: GearTurnState & { infernoReady: boolean[] }, se
     g.skills[seat] += 1;
     g.loot[seat] = 0; // 戦利品: スキルを使うとリセット
     g.surge[seat] += 1; // 昂り: スキルを使うたびに+1（装備していない席は使わない）
+    g.boon[seat] += 1; // 毒杯の祝福: 手番の終わりにまとめて適用する（装備していない席は使わない）
     g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = afterSkill(g.discount[seat], skillId);
@@ -255,4 +259,28 @@ export const lifeZeroVictims = (board: readonly SquareInfo[], chars: readonly Ch
     return board
         .map((sq, i) => (sq.player && !isBuilding(sq) && sq.bind <= 0 && !isFrozen(sq) && !sq.effects.some((e) => e.effect === '🔑') && !isShielded(sq, chars) ? i : -1))
         .filter((i) => i >= 0);
+};
+
+/**
+ * 毒杯の祝福: player が times 回スキルを使った恩恵。1回ごとに、player の自陣全て（オブジェクトも）のライフ+venomLife、
+ * 自陣のコマ1つと敵陣のコマ1つ（🔑ロック・⚡無敵・オブジェクトを除く。ランダム）に毒を venomStacks 個。毒使いのコマはライフが増える。
+ * board を直接書き換える（マスは新しく作って差し替える）。毒を付けたマスを返す
+ */
+export const venomBoon = (board: SquareInfo[], player: Player, chars: readonly CharacterId[], rng: () => number, times: number): number[] => {
+    const poisoned: number[] = [];
+    for (let t = 0; t < times; t++) {
+        board.forEach((sq, k) => {
+            if (sq.player === player) board[k] = { ...sq, bind: sq.bind + GEAR_PARAMS.venomLife };
+        });
+        const ok = (sq: SquareInfo) => !!sq.player && !sq.object && !isGuarded(sq, chars);
+        const own = board.map((sq, k) => (ok(sq) && sq.player === player ? k : -1)).filter((k) => k >= 0);
+        const foe = board.map((sq, k) => (ok(sq) && sq.player !== player ? k : -1)).filter((k) => k >= 0);
+        for (const pool of [own, foe]) {
+            if (pool.length === 0) continue;
+            const k = pool[Math.floor(rng() * pool.length)];
+            addPoison(board, [k], chars, GEAR_PARAMS.venomStacks);
+            poisoned.push(k);
+        }
+    }
+    return poisoned;
 };

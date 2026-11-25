@@ -49,6 +49,7 @@ const GEAR_TRIGGERS: Record<GearId, 'trigger' | 'passive'> = {
     chargeRest: 'trigger', // チャージで静養が始まる
     conquestDiscount: 'passive', // コスト表示に反映される
     skillSurge: 'passive', // ライフ表示に反映される
+    venomBlessing: 'trigger', // スキルのあと自陣のライフ+と毒
 };
 
 const gameSource = readGameSource();

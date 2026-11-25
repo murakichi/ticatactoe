@@ -773,6 +773,32 @@ test('昂り: スキルを使うたびにこの手番のライフ+1。積み上�
     assert.ok(t.life === tb + 3, '装備なしは+3のみ');
 });
 
+test('毒杯の祝福: スキルを使った手番の終わりに、自陣全てのライフ+2と、自陣・敵陣のランダムな1コマずつに毒+1', () => {
+    const run = (gears, useSkill) => {
+        const s = game(gears);
+        s.life = 5;
+        s.board[5] = { player: H, bind: 20, effects: [] };
+        s.board[6] = { player: H, bind: 20, effects: [] };
+        s.board[10] = { player: C, bind: 20, effects: [] };
+        s.magic[0] = 10;
+        if (useSkill) e.SKILLS.addLife(s);
+        e.placeMove(s, 0);
+        return s;
+    };
+    const poison = (s, p) => s.board.filter((sq) => sq.player === p).reduce((n, sq) => n + sq.effects.filter((x) => x.effect === '☠').length, 0);
+    const s = run([['venomBlessing'], []], true);
+    // 自陣(5,6と着手した0)のライフ+2(減衰の-1も入る)
+    assert.strictEqual(s.board[5].bind, 20 - 1 + 2);
+    assert.strictEqual(s.board[6].bind, 20 - 1 + 2);
+    assert.strictEqual(poison(s, H), 1, '自陣に毒1');
+    assert.strictEqual(poison(s, C), 1, '敵陣に毒1');
+    assert.strictEqual(s.board[10].bind, 20 - 1, '敵のライフは増えない');
+    const n = run([['venomBlessing'], []], false);
+    assert.strictEqual(poison(n, H) + poison(n, C), 0, 'スキルを使わなければ何も起きない');
+    const g = run([[], []], true);
+    assert.strictEqual(poison(g, H) + poison(g, C), 0, 'ギアなしなら何も起きない');
+});
+
 test('ランダム付与: 重複なしで指定枠数、すべて既知のギア', () => {
     const rng = e.makeRng(3);
     for (let k = 0; k < 50; k++) {

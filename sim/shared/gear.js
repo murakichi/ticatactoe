@@ -83,6 +83,9 @@ exports.GEAR_PARAMS = {
     conquestCut: 1,
     /** 昂り: スキルを使うたびに増えるライフ期待値（手番の終わりに1減る） */
     surgeStep: 1,
+    /** 毒杯の祝福: スキルを使うたびに自陣全てのライフに足す値（と、自陣・敵陣のランダムな1コマに付ける毒の数） */
+    venomLife: 2,
+    venomStacks: 1,
     /** 瓦礫の礎: 自陣の大岩以外のオブジェクトが壊されたとき、1つにつきの魔力 */
     rubbleMagic: 1,
 };
@@ -121,6 +124,7 @@ exports.GEARS = [
     { id: 'rubbleBase', name: '瓦礫の礎', icon: '🪨', desc: `自陣の大岩以外のオブジェクトが壊されると、その位置に大岩を置きマジック+${P.rubbleMagic}` },
     { id: 'groundRent', name: '地代', icon: '💰', desc: `手番開始時、自陣のオブジェクト1つにつきマジック+${P.rentMagic}` },
     { id: 'conquestDiscount', name: '戦利品', icon: '🏴', desc: `敵のコマを奪取するたびに、次に使うスキルのコストが${P.conquestCut}下がる（重なる。スキルを使うとリセット）` },
+    { id: 'venomBlessing', name: '毒杯の祝福', icon: '🍷', desc: `スキルを使うたびに、自陣全てのライフ+${P.venomLife}。自陣と敵陣のランダムなコマ1つずつに毒+${P.venomStacks}` },
     { id: 'skillSurge', name: '昂り', icon: '📈', desc: `スキルを使うたびにライフの期待値が${P.surgeStep}増える（手番の終わりに${P.surgeStep}減る）` },
     { id: 'chargeRest', name: '静養', icon: '🛌', desc: `チャージすると、${P.restTurns}ターンの間自陣のライフが減らない` },
     { id: 'sturdyBuild', name: '頑丈な建材', icon: '🧱', desc: `設置するオブジェクトの初期ライフ+${P.buildLife}` },

@@ -68,6 +68,7 @@ export const useGearRuntime = (g: GearRuntimeScope, late: () => GameLate) => {
         calmFresh: Array<boolean>(seatCount).fill(false), // 静養のチャージをした手番（その手番の終わりでは減らさない）
         loot: Array<number>(seatCount).fill(0), // 戦利品: 次のスキルの割引の重ね数
         surge: Array<number>(seatCount).fill(0), // 昂り: 積み上がっているライフ期待値
+        boon: Array<number>(seatCount).fill(0), // 毒杯の祝福: この手番に使ったスキルの数
         chargeBase: Array<number>(seatCount).fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数。増えたぶんがこの手番に付与した⚡
         processedTurn: 1,
     });

@@ -1,11 +1,12 @@
 // 自動生成: src/components/game/gearTurn.ts (node scripts/gen-sim-shared.js)。手で編集しない。
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.lifeZeroVictims = exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
+exports.venomBoon = exports.lifeZeroVictims = exports.noteSkillUsed = exports.gearCostContext = exports.advanceGearState = exports.plantedStacksTotal = exports.SPARK_FREE_PLACED = void 0;
 const discount_1 = require("./discount");
 const gear_1 = require("./gear");
 const thermal_1 = require("./thermal");
 const charge_1 = require("./charge");
+const poison_1 = require("./poison");
 const comboCost_1 = require("./comboCost");
 const graveSkills_1 = require("./graveSkills");
 const bigSkills_1 = require("./bigSkills");
@@ -149,6 +150,7 @@ const noteSkillUsed = (g, seat, skillId, paid = 0) => {
     g.skills[seat] += 1;
     g.loot[seat] = 0; // 戦利品: スキルを使うとリセット
     g.surge[seat] += 1; // 昂り: スキルを使うたびに+1（装備していない席は使わない）
+    g.boon[seat] += 1; // 毒杯の祝福: 手番の終わりにまとめて適用する（装備していない席は使わない）
     g.turnSpent[seat] += paid; // 大工房の設置の無料条件（この手番にスキルへ払ったマジックの合計）
     if (skillId) {
         g.discount[seat] = (0, discount_1.afterSkill)(g.discount[seat], skillId);
@@ -183,3 +185,29 @@ const lifeZeroVictims = (board, chars, gears) => {
         .filter((i) => i >= 0);
 };
 exports.lifeZeroVictims = lifeZeroVictims;
+/**
+ * 毒杯の祝福: player が times 回スキルを使った恩恵。1回ごとに、player の自陣全て（オブジェクトも）のライフ+venomLife、
+ * 自陣のコマ1つと敵陣のコマ1つ（🔑ロック・⚡無敵・オブジェクトを除く。ランダム）に毒を venomStacks 個。毒使いのコマはライフが増える。
+ * board を直接書き換える（マスは新しく作って差し替える）。毒を付けたマスを返す
+ */
+const venomBoon = (board, player, chars, rng, times) => {
+    const poisoned = [];
+    for (let t = 0; t < times; t++) {
+        board.forEach((sq, k) => {
+            if (sq.player === player)
+                board[k] = { ...sq, bind: sq.bind + gear_1.GEAR_PARAMS.venomLife };
+        });
+        const ok = (sq) => !!sq.player && !sq.object && !(0, charge_1.isGuarded)(sq, chars);
+        const own = board.map((sq, k) => (ok(sq) && sq.player === player ? k : -1)).filter((k) => k >= 0);
+        const foe = board.map((sq, k) => (ok(sq) && sq.player !== player ? k : -1)).filter((k) => k >= 0);
+        for (const pool of [own, foe]) {
+            if (pool.length === 0)
+                continue;
+            const k = pool[Math.floor(rng() * pool.length)];
+            (0, poison_1.addPoison)(board, [k], chars, gear_1.GEAR_PARAMS.venomStacks);
+            poisoned.push(k);
+        }
+    }
+    return poisoned;
+};
+exports.venomBoon = venomBoon;

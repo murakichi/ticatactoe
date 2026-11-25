@@ -5,7 +5,7 @@ import { DragonState, applyBulwark, dragonBulwarkHolder, dragonLifeBonus, dragon
 import { BurstType } from './BoardEffects';
 import { RampState } from './gear';
 import { GearTurnState } from './gearTurn';
-import { lifeZeroVictims } from './gearTurn';
+import { lifeZeroVictims, venomBoon } from './gearTurn';
 import { rampAfterRoll, rampBonus } from './gear';
 import React from 'react';
 import { useEffect, useRef } from 'react';
@@ -369,21 +369,33 @@ export const useTurnEffects = (g: TurnEffectsScope, late: () => GameLate) => {
         setTurnSeat(nextSeat);
     }, [currentTurn]);
 
-    // 死神の鎌: ライフ0の駒を手番の終わりに壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
+    // 毒杯の祝福・死神の鎌: 手番の終わりに、使ったスキルの数だけ毒杯の恩恵を適用し、そのあとライフ0の駒を壊す（勝負が付いていなければ）。手番の効果のあとに走らせる
     useEffect(() => {
         if (currentTurn === 1) return;
+        const boons = gearTurn.current.boon.slice();
+        gearTurn.current.boon = gearTurn.current.boon.map(() => 0);
         if (calculateWinner(currentBoard.map((x) => x.player))) return;
-        const victims = lifeZeroVictims(currentBoard, characters, gearsBySeat);
-        if (victims.length === 0) return;
         const board = currentBoard.slice();
+        let changed = false;
+        boons.forEach((n, seat) => {
+            if (n <= 0 || !hasGear(gearsBySeat[seat], 'venomBlessing')) return;
+            const poisoned = venomBoon(board, symbols[seat], characters, Math.random, n);
+            addLog(`毒杯の祝福: ${symbols[seat]}の自陣のライフ+${GEAR_PARAMS.venomLife * n}、${poisoned.length}コマに毒`);
+            gearTrigger('venomBlessing', `ライフ+${GEAR_PARAMS.venomLife * n}・毒${poisoned.length}`);
+            flashCells(poisoned);
+            changed = true;
+        });
+        const victims = lifeZeroVictims(board, characters, gearsBySeat);
         for (const k of victims) board[k] = { player: undefined, bind: 0, effects: [] };
-        setCurrentBoard(board);
-        late().addCorpses(victims.length);
-        addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
-        gearTrigger('reaper', `${victims.length}コマが壊れた`);
-        playBurst('gearReap', victims);
-        flashCells(victims);
-        setReaperSweeps((c) => c + 1);
+        if (victims.length > 0) {
+            late().addCorpses(victims.length);
+            addLog(`死神の鎌: ライフ0の${victims.length}コマが壊れた`);
+            gearTrigger('reaper', `${victims.length}コマが壊れた`);
+            playBurst('gearReap', victims);
+            flashCells(victims);
+            setReaperSweeps((c) => c + 1);
+        }
+        if (changed || victims.length > 0) setCurrentBoard(board);
     }, [currentTurn]);
 
     useEffect(() => {

@@ -467,6 +467,7 @@ function newGame(opts = {}) {
         calmFresh: fill(false), // 静養のチャージをした手番（その手番の終わりでは減らさない）
         loot: fill(0), // 戦利品: 次のスキルの割引の重ね数
         surge: fill(0), // 昂り: 積み上がっているライフ期待値
+        boon: fill(0), // 毒杯の祝福: この手番に使ったスキルの数
         darkPotUsed: fill(false), // 一寸先は闇鍋をこの手番に使った（1手番に1度まで）
         chargeBase: fill(0), // 手番開始時点（と雷を食らわば皿までを撃った直後）の自陣の⚡の総数
         shikiPlaced: Array(n).fill(false), // 陰陽師: この手番に式神を置いたか（置くと以降の全スキルのコスト-1）
@@ -645,7 +646,7 @@ function gearTurnView(s) {
         skills: s.gearSkills, echoReady: s.echoReady, echoNext: s.echoNext, kinds: s.skillKinds, discount: s.discount,
         oppSkilled: s.oppSkilled, oppSkillPrev: s.oppSkillPrev, shikiPlaced: s.shikiPlaced, fireBase: s.fireBase, plantPrev: s.plantPrev, plantBase: s.plantBase, placedPrev: s.placedPrev, placeBase: s.placeBase,
         leafBase: s.leafBase, darkPotUsed: s.darkPotUsed, tokenFree: s.tokenFree, bigCast: s.bigCast, pieceBase: s.pieceBase, turnSpent: s.turnSpent, oppBigSeen: s.oppBigSeen, oppBigPrev: s.oppBigPrev, marketUsed: s.marketUsed, chargeBase: s.chargeBase,
-        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh, calm: s.calm, calmFresh: s.calmFresh, loot: s.loot, surge: s.surge,
+        veil: s.veil, veilNext: s.veilNext, ward: s.ward, wardFresh: s.wardFresh, lockSeen: s.lockSeen, lockPrev: s.lockPrev, lockFreeUsed: s.lockFreeUsed, blessing: s.blessing, blessingFresh: s.blessingFresh, calm: s.calm, calmFresh: s.calmFresh, loot: s.loot, surge: s.surge, boon: s.boon,
     };
     const r = {
         active: s.ruinActive, pending: s.ruinPending, ashActive: s.ashActive, ashPending: s.ashPending,
@@ -717,6 +718,15 @@ function advanceTurn(s) {
             bumpStat(s, 'rubbleBase', r.cells.length);
         }
     }
+    // 毒杯の祝福: 使ったスキルの数だけ、自陣全てのライフ+2と、自陣・敵陣のランダムな1コマに毒+1（手番の終わりにまとめて適用。勝負が付いていなければ）
+    const noWinner = !s.winner && !calculateWinner(symbolsOf(s.board));
+    s.boon.forEach((n, seat) => {
+        if (n > 0 && noWinner && hasGear(s.gears[seat], 'venomBlessing')) {
+            gearTurnMod.venomBoon(s.board, SYMBOLS[seat], s.chars, s.rng, n);
+            bumpStat(s, 'venomBoon', n);
+        }
+        s.boon[seat] = 0;
+    });
     // 死神の鎌: 勝負が付いていなければ、ライフ0の駒（誰のものでも）を壊す。氷結・ロック・⚡無敵は貫通しない
     if (!s.winner && !calculateWinner(symbolsOf(s.board))) {
         const victims = gearTurnMod.lifeZeroVictims(s.board, s.chars, s.gears);
