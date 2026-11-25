@@ -157,6 +157,9 @@ export const SKILL_CATALOG: CatalogEntry[] = [
     { idx: 135, name: '錠前割引', icon: '🧾', category: 'support', costKey: 'onClickLockDiscount', desc: 'このターン、盤面のロックのマス1つにつき、打つスキルのコストを1軽減' },
     { idx: 136, name: '大岩', icon: '⛰️', category: 'object', costKey: 'onClickBoulder', desc: '空きマスに大岩を設置。2ターンのロック付きで、効果は無い' },
     { idx: 137, name: '没個性の宴', icon: '🦅', category: 'control', costKey: 'onClickPassiveSeal', desc: '次の自分の手番の終わりまで、相手全員のキャラのパッシブと固有スキルを無効化' },
+    { idx: 138, name: '枯れ木に花を咲かせましょう', icon: '🌸', category: 'buds', costKey: 'onClickWitherBloom', desc: '自陣のコマのライフを全て0にして、🌱を1つずつ付与（🔑ロック・氷結中は除く）' },
+    { idx: 139, name: '弱り目に落ち葉', icon: '🍂', category: 'buds', costKey: 'onClickWitherLeaf', desc: '自陣のコマのライフを全て0にして、🍂を1つずつ付与（🔑ロック・氷結中は除く）' },
+    { idx: 140, name: '良薬は口に毒', icon: '💊', category: 'poison', costKey: 'onClickMedicinePoison', desc: '自陣のコマのライフを全て+10して、☠を1つずつ付与（🔑ロック・氷結中は除く）' },
 ];
 
 /** 削除したスキルの idx（欠番）。他の番号は変えない。手札・デッキ・探索の対象から外す。縮地(50)を削除（ユーザー指示） */

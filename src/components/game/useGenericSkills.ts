@@ -1,4 +1,5 @@
 // Game.tsx から切り出したスキルのハンドラ群: 汎用スキル（雷を食らわば皿まで・小物・初霜・吹き寄せ・山焼き・超助っ人 ほか）
+import { ownSweepTargets, witherAndSow, medicineAndPoison, MEDICINE_LIFE } from './ownSweep';
 import { PASSIVE_SEAL_TURNS } from './passiveSeal';
 // 本体は Game.tsx の同じ位置にあったものをそのまま移した。Game の変数は scope(g) で、あとで定義されるもの(calculateCost など)は late() 経由で受け取る
 import { GearTurnState } from './gearTurn';
@@ -171,6 +172,41 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         addLog('「没個性の宴」を使用（次の自分の手番の終わりまで、相手のキャラのパッシブと固有スキルを無効化）');
         playEffect('silence', undefined, undefined, '没個性の宴');
         spendMagic(pay, true, true, 'onClickPassiveSeal');
+    };
+    // 枯れ木に花を咲かせましょう(idx 138) / 弱り目に落ち葉(idx 139): 自陣のコマ（🔑ロック・❄氷結・オブジェクトを除く）のライフを全て0にして、🌱か🍂を1つずつ付ける
+    const onClickWitherBloom = () => {
+        const cells = ownSweepTargets(currentBoard, currentTurnPlayer);
+        if (cells.length === 0) return;
+        const board = currentBoard.slice();
+        witherAndSow(board, cells, '🌱');
+        addLog(`「枯れ木に花を咲かせましょう」を使用（自陣${cells.length}コマのライフを0にして🌱）`);
+        flashCells(cells);
+        playEffect('sprout', undefined, cells, '枯れ木に花を咲かせましょう');
+        setCurrentBoard(board);
+        spendMagic(late().calculateCost(seatCosts.onClickWitherBloom, false, false, currentTurnPlayer, 'onClickWitherBloom'), true, true, 'onClickWitherBloom');
+    };
+    const onClickWitherLeaf = () => {
+        const cells = ownSweepTargets(currentBoard, currentTurnPlayer);
+        if (cells.length === 0) return;
+        const board = currentBoard.slice();
+        witherAndSow(board, cells, '🍂');
+        addLog(`「弱り目に落ち葉」を使用（自陣${cells.length}コマのライフを0にして🍂）`);
+        flashCells(cells);
+        playEffect('autumn', undefined, cells, '弱り目に落ち葉');
+        setCurrentBoard(board);
+        spendMagic(late().calculateCost(seatCosts.onClickWitherLeaf, false, false, currentTurnPlayer, 'onClickWitherLeaf'), true, true, 'onClickWitherLeaf');
+    };
+    // 良薬は口に毒(idx 140): 自陣のコマ（同上）のライフを全て+10して、☠を1つずつ付ける
+    const onClickMedicinePoison = () => {
+        const cells = ownSweepTargets(currentBoard, currentTurnPlayer);
+        if (cells.length === 0) return;
+        const board = currentBoard.slice();
+        medicineAndPoison(board, cells, characters);
+        addLog(`「良薬は口に毒」を使用（自陣${cells.length}コマのライフ+${MEDICINE_LIFE}・☠）`);
+        flashCells(cells);
+        playEffect('poison', undefined, cells, '良薬は口に毒');
+        setCurrentBoard(board);
+        spendMagic(late().calculateCost(seatCosts.onClickMedicinePoison, false, false, currentTurnPlayer, 'onClickMedicinePoison'), true, true, 'onClickMedicinePoison');
     };
     // 弔い割引(idx 99): 墓地の死体の数（上限3）だけ、次に打つスキルのコストを軽減する（軽減札なので「次に打つスキル」を消費せず、足す）
     const graveDiscountNow = (): number => graveDiscountAmount(corpseCount(baseNecromancyCost, necroCost[turnSeat]));
@@ -346,7 +382,7 @@ export const useGenericSkills = (g: GenericSkillsScope, late: () => GameLate) =>
         setCurrentBoard(board);
     };
 
-    return { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickPassiveSeal, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells };
+    return { onClickChargeToken, onClickChargeOne, onClickChargeSpread, onClickChargeHeal, onClickSmallFry, onClickPerfectGame, onClickHelper, onClickSecondCatch, onClickFirstFrost, onClickGather, onClickBurnOff, onClickFreeToken, onClickDoubleChargeToken, onClickChargeArea, onClickChargeRandom, onClickJammer, onClickNightVeil, onClickPassiveSeal, onClickWitherBloom, onClickWitherLeaf, onClickMedicinePoison, onClickGraveDiscount, onClickPoisonWard, onClickGraveOffering, useJammer, exeJammer, useChargeOne, setUseChargeOne, useChargeArea, setUseChargeArea, useChargeSpread, setUseChargeSpread, chargeSpreadCost, chargeOneCost, graveDiscountNow, chargeHealCells };
 };
 
 export type GenericSkillsResult = ReturnType<typeof useGenericSkills>;

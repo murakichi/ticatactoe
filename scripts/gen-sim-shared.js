@@ -23,7 +23,7 @@ const OUT = path.join(ROOT, 'sim', 'shared');
 
 // sim が使う純粋モジュール(src/components/game/ 直下)。ここを増やすと生成物が増える
 const ENTRIES = [
-    'boardGeometry', 'skillCosts', 'gear', 'deck', 'discount', 'comboCost', 'lifeBan', 'passiveSeal', 'darkPot', 'generic', 'thermal',
+    'boardGeometry', 'skillCosts', 'gear', 'deck', 'discount', 'comboCost', 'lifeBan', 'passiveSeal', 'ownSweep', 'darkPot', 'generic', 'thermal',
     'charge', 'tokenSkills', 'giantAura', 'giantTurn', 'decay', 'lateMagic', '../../util',
     'AIPlayer', 'aiTurn', 'turn', 'cost', 'poison', 'blast', 'shikigami', 'deadlock', 'gearTurn', 'placement', 'proliferate', 'tokenAfter', 'tokenPlace', 'objects', 'dragon',
 ];

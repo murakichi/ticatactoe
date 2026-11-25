@@ -462,3 +462,68 @@ test('没個性の宴: 自分には効かず、重ね掛けは残りターンを
     e.SKILLS.passiveSeal(s);
     assert.strictEqual(s.passiveSeal[0], 2, '再び使うと2に戻る');
 });
+
+// ---- 枯れ木に花を咲かせましょう・弱り目に落ち葉・良薬は口に毒(idx 138〜140) ----
+const sweepBoard = (s) => {
+    s.board[0] = { player: '💙', bind: 5, effects: [] };
+    s.board[1] = { player: '💙', bind: 3, effects: [{ effect: '🔥' }] };               // 🔥はライフ0で消える
+    s.board[2] = { player: '💙', bind: 4, effects: [{ effect: '🔑' }] };               // ロック中は対象外
+    s.board[3] = { player: '💙', bind: 4, effects: [{ effect: '❄' }] };                // 氷結中は対象外
+    s.board[4] = { player: '💙', bind: 4, effects: [], object: 'bigTree' };            // オブジェクトは対象外
+    s.board[5] = { player: '⭕', bind: 4, effects: [] };                                // 敵は対象外
+};
+test('枯れ木に花を咲かせましょう: 自陣のコマ（🔑ロック・❄氷結・オブジェクトを除く）のライフを全て0にして🌱を1つずつ。コスト5', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    sweepBoard(s);
+    assert.strictEqual(e.skillCosts.onClickWitherBloom, 5);
+    e.SKILLS.witherBloom(s);
+    assert.strictEqual(s.board[0].bind, 0);
+    assert.deepStrictEqual(s.board[0].effects, [{ effect: '🌱' }]);
+    assert.strictEqual(s.board[1].bind, 0);
+    assert.deepStrictEqual(s.board[1].effects.map((x) => x.effect), ['🌱'], '🔥は消える');
+    assert.strictEqual(s.board[2].bind, 4); assert.strictEqual(s.board[2].effects.length, 1);
+    assert.strictEqual(s.board[3].bind, 4); assert.strictEqual(s.board[3].effects.length, 1);
+    assert.strictEqual(s.board[4].bind, 4);
+    assert.strictEqual(s.board[5].bind, 4);
+    assert.strictEqual(s.heartMagic, 25);
+});
+test('弱り目に落ち葉: 自陣のコマ（同上）のライフを全て0にして🍂を1つずつ。コスト4', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    sweepBoard(s);
+    assert.strictEqual(e.skillCosts.onClickWitherLeaf, 4);
+    e.SKILLS.witherLeaf(s);
+    assert.strictEqual(s.board[0].bind, 0);
+    assert.deepStrictEqual(s.board[0].effects, [{ effect: '🍂' }]);
+    assert.strictEqual(s.board[2].bind, 4);
+    assert.strictEqual(s.board[5].bind, 4);
+    assert.strictEqual(s.heartMagic, 26 - 0 - 0); // 自陣の🍂は自分のコストを増やさない
+});
+test('良薬は口に毒: 自陣のコマ（同上）のライフを全て+10して☠を1つずつ。毒使いは毒でライフ1.5倍。コスト8', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    sweepBoard(s);
+    assert.strictEqual(e.skillCosts.onClickMedicinePoison, 8);
+    e.SKILLS.medicinePoison(s);
+    assert.strictEqual(s.board[0].bind, 15);
+    assert.deepStrictEqual(s.board[0].effects, [{ effect: '☠' }]);
+    assert.strictEqual(s.board[1].bind, 13);
+    assert.strictEqual(s.board[2].bind, 4);
+    assert.strictEqual(s.board[3].bind, 4);
+    assert.strictEqual(s.board[5].bind, 4);
+    assert.strictEqual(s.heartMagic, 22);
+    const p = e.newGame({ chars: ['poisoner', 'you'], rng: e.makeRng(3) });
+    p.magic[0] = 30;
+    p.board[0] = { player: '💙', bind: 5, effects: [] };
+    e.SKILLS.medicinePoison(p);
+    assert.strictEqual(p.board[0].bind, 23, '(5+10)×1.5 を四捨五入');
+});
+test('自陣全体のスキル3つ: 対象のコマが無ければ使えず、魔力も減らない', () => {
+    const s = game('you', 'you');
+    s.heartTurn = true; s.heartMagic = 30;
+    s.board[0] = { player: '💙', bind: 4, effects: [{ effect: '🔑' }] };
+    assert.strictEqual(e.ownSweepLegal(s), false);
+    e.SKILLS.witherBloom(s); e.SKILLS.witherLeaf(s); e.SKILLS.medicinePoison(s);
+    assert.strictEqual(s.heartMagic, 30);
+});

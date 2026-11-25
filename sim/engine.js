@@ -54,6 +54,7 @@ const discountMod = require('./shared/discount');
 const comboMod = require('./shared/comboCost');
 const lifeBanMod = require('./shared/lifeBan');
 const passiveSealMod = require('./shared/passiveSeal');
+const ownSweepMod = require('./shared/ownSweep');
 const bigMod = require('./shared/bigSkills');
 const objectsMod = require('./shared/objects');
 const darkPotMod = require('./shared/darkPot');
@@ -1706,6 +1707,21 @@ function onClickPassiveSeal(s) {
     bumpMagicCount(s);
     bumpStat(s, 'passiveSeal');
 }
+// 枯れ木に花を咲かせましょう(idx 138) / 弱り目に落ち葉(idx 139) / 良薬は口に毒(idx 140): 自陣のコマ（🔑ロック・❄氷結・オブジェクトを除く）のライフを全て0にして🌱か🍂を、
+// または全て+10して☠を1つずつ付ける。対象が無ければ使えない [FAITHFUL] Game.tsx useGenericSkills
+function ownSweepLegal(s) { return ownSweepMod.ownSweepTargets(s.board, curPlayer(s)).length > 0; }
+function ownSweepSkill(s, key, stat, apply) {
+    const cells = ownSweepMod.ownSweepTargets(s.board, curPlayer(s));
+    if (cells.length === 0) return;
+    const pay = calculateCost(s, costsOf(s)[key], false, false, key);
+    apply(cells);
+    spendMagic(s, pay, key);
+    bumpMagicCount(s);
+    bumpStat(s, stat);
+}
+function onClickWitherBloom(s) { ownSweepSkill(s, 'onClickWitherBloom', 'witherBloom', (cells) => ownSweepMod.witherAndSow(s.board, cells, '🌱')); }
+function onClickWitherLeaf(s) { ownSweepSkill(s, 'onClickWitherLeaf', 'witherLeaf', (cells) => ownSweepMod.witherAndSow(s.board, cells, '🍂')); }
+function onClickMedicinePoison(s) { ownSweepSkill(s, 'onClickMedicinePoison', 'medicinePoison', (cells) => ownSweepMod.medicineAndPoison(s.board, cells, s.chars)); }
 // 夜の帳 (idx 98): 次の相手全員の手番の間、相手のスキルコストを+3する（自分は影響を受けない） [FAITHFUL] Game.tsx onClickNightVeil
 function nightVeilLegal() { return true; }
 function onClickNightVeil(s) {
@@ -2795,6 +2811,9 @@ const SKILLS = {
     freeToken: onClickFreeToken,
     nightVeil: onClickNightVeil,
     passiveSeal: onClickPassiveSeal,
+    witherBloom: onClickWitherBloom,
+    witherLeaf: onClickWitherLeaf,
+    medicinePoison: onClickMedicinePoison,
     graveDiscount: onClickGraveDiscount,
     poisonWard: onClickPoisonWard,
     graveOffering: onClickGraveOffering,
@@ -2828,7 +2847,7 @@ function renderBoard(s) {
 }
 
 module.exports = {
-    skillRestrictedByObjects, placedThisTurn, objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, passiveSealLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
+    skillRestrictedByObjects, placedThisTurn, objectSkillLegal, objectLegal, perfectGameLegal, smallFryTargets, nightVeilLegal, passiveSealLegal, ownSweepLegal, graveDiscountLegal, poisonWardLegal, graveOfferingLegal, firstFrostLegal, firstFrostTargets, gatherLegal, burnOffLegal, burnOffTargets, freeTokenLegal,
     tinderLegal, tinderCandidates, bonfireLegal, mulchLegal, autumnLegal, leafFrostLegal, springWindLegal, kimonCandidates, fireWheelLegal, stripLegal, boltSilenceLegal, chargeSeasonLegal, bristleLegal, chargeHealLegal, leafDropLegal, leafAllLegal, leafCloakLegal, kindlingLegal, releaseLegal, stashLegal, thunderFireLegal, thunderFireTargets,
     spendMagic, shuffleHand, HEART, CIRCLE, SYMBOLS, MAX_PLAYERS, seatOf, boardSizeFor, DECAY_PER_ROUND_MIN_PLAYERS, CHARACTERS, skillCosts, SKILLS,
     makeRng, normRand, calculateLife, calculateWinner, settleWinner, findEmptyIndexes, SHIKIGAMI_BLAST_DAMAGE, isShikigami, newShikigami, exeShikigamiBlast, SHIKIGAMI_LIFE,

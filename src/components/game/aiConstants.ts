@@ -1,8 +1,8 @@
 // AIPlayer の調整値・定数・型。AIPlayer.ts から分離（AIPlayer.ts が再エクスポートする）
 import { CharacterId } from '../../types/Character';
 
-// 汎用スキルプールの大きさ (idx 0..137)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
-export const SKILL_POOL_SIZE = 138;
+// 汎用スキルプールの大きさ (idx 0..140)。Game.tsx の SKILL_POOL_SIZE / sim/engine.js の POOL_SIZE と同値
+export const SKILL_POOL_SIZE = 141;
 
 // 帯電付与の採用しきい値 (旧sim AI の CHARGE_ONE_MIN_SCORE)
 export const CHARGE_ONE_MIN_SCORE = 2;
